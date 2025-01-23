@@ -1,0 +1,1 @@
+#!/bin/bash id=$(pgrep VoiceOver) if [ -n "$id" ]; then sudo renice -n -20 -p "$id" else say "VoiceOver is not running." fi killall Terminal

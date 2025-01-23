@@ -1,0 +1,62 @@
+ok, to na razie czas na podstawową aplikację
+to na razie będzie w kalendarzu lokalnym, zaszyfrowany plik
+to będzie aplikacja multi platform
+katalog ustawień będzie w
+w windowsie
+%appdata%\Titosoft\Titan\appsettings
+plik kalendarza (zaszyfrowana) calendar.tcal
+plik ustawień, settings.ini
+teraz podstawowa aplikacja
+tytół: Titan Organizer
+lista przypomnień/terminów
+nazwa, opis przypomnienia, data, godzina, priorytet
+menu
+ plik
+  &nowe przypomnienie, skrót ctrl+n
+  &ustawienia programu
+  usuń przypomnienie, skrót delete
+zminimalizuj do zasobnika systemowego, wtedy ikona będzie 
+Titan reminder - x przypomnień, x - wykonano, x - niewykonano
+wyjdź, skrót alt+f4
+ widok
+  sortuj wedłóg
+   nazwa &1
+   priorytet &2
+   data &3
+
+tts będzie też multiplatformowy, bez pyttsx3
+
+ ustawienia programu
+ dźwięki, pole wyboru
+ temat dźwiękowy, lista
+tematy dźwiękowe są w katalogu sfx/
+przykład, sfx/default
+ tekst na mowę, pole wyboru
+  widok listy przypomnień, lista
+  lista (zalecane dla osób z niepełnosprawnością wzroku)
+  widok kalendarza
+ ok
+ anuluj
+
+nowe przypomnienie, pola mają być zaetykietowane
+  nazwa przypomnienia
+  data, widok kalendarza, jak jest ustawiony widok kalendarza, widok 3 list, jak jest ustawiony widok listy, 
+   3 listy, dzień, miesiąc rok. 
+  czas: jak jest widok kalendarza, to widok zegara, jak nie to listy z etykietami, godzina, i minuta: 
+ powtórz przypomnienie, lista
+  2 razy co 3 minuty, 4 razy co minuta, co 15 minut, tylko raz
+
+powiadomienie
+kiedy jest przypomnienie, wtedy tts mówi tylko treść przypomnienia
+pojawi się okno dialogowe z przypomnieniem
+Okno dialogowe, z przypomnieniem i są dwie opcje
+Wykonano... DOdaje przypomnienie do wykonanych, a po 1 dniach usuwa przypomnienie z kalendarza
+przycisk moment, za 5 minut znowu pojawi się przypomnienie
+
+dźwięki
+dodano nowe przypomnienie: reminderadded.ogg
+przypominanie: reminder.ogg
+przypomnienie wykonano: reminderdone.ogg
+przypomnienie usunięte: reminderdeleted.ogg
+prezentacja tematu dźwiękowego, w liście, Odtwarza dźwięk prezentacji w trakcie wybrania tematu dźwiękowego: intro.ogg
+start aplikacji: reminderstarted.ogg

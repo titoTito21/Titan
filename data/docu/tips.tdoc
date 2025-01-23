@@ -1,0 +1,13 @@
+aby rozpocząć/zatrzymać dyktowanie w tDictate, naciśnij control+shift+d. Aby dyktować tekst, należy mieć fokus na polu edycyjnym, na przykład w TEdit, i mieć połączenie z internetem
+aby otworzyć menu ze wszystkimi programami systemu, naciśnij alt+f1. Jeśli chcesz szybko wyłączyć komputer, kliknij odpowiednią opcję w tym menu
+Różnica między aplikacją a komponentem Titana jest taka, że aplikacja nie ingeruje w interfejs i funkcjonalność titana. Można ją traktować jako swego rodzaju program w programie. Komponent ingeruje w zachowanie i interfejs główny Titana
+Jeśli chcesz ustawić temat dźwiękowy, lub zmienić którąś z opcji programu, należy przejść do paska menu, i wybrać odpowiednią opcję. Ogólne ustawienia programu są w plik, ustawienia. Niektóre komponenty, tak jak tDictate lub porady, można ustawić w odpowiednim menu, to jest ustawienia komponentów
+Więcej aplikacji Titana można znaleść w repozytorium aplikacji, lub, jeśli nie ma jej w repozytorium, na stronie twórcy lub możesz ją pobrać jako plik zip z linku
+Aplikacje titana składają się, z programu napisanego w języku python, skompilowanego programu do pliku PYC, lub pliku exe. Jeśli chcesz uruchomić aplikację windows, należy wejść do menu, alt+f1, i wybrać odpowiednią opcję
+Czy wiesz, że... Titan posiada modyfikowalny katalog mediów? Jeśli jesteś zaawansowanym użytkownikiem, i poeksplorujesz, znajdziesz plik konfiguracyjny. Możesz dodać adresy URL, które są katalogami. Najlepiej, żeby pliki nie posiadały polskich znaków typu ą, ę, ł, i tak dalej. 
+Czy wiesz, że... Titan może odtwarzać filmy youTube? w aplikacji TMedia jest odpowiednia opcja
+czy wiesz, że... Odtwarzacz youtube potrafi odtworzyć wideo, a nie samą ścieżkę audio? 
+czy wiesz, że... Titan ma swój prosty menedżer plików i edytor tekstu? Menedżer plików to TFM, a edytor tekstu, TEdit
+czy wiesz, że... Titan ma możliwość instalacji i utworzenia tematów dźwiękowych dla głównego interfejsu programu? Katalog tematów dźwiękowych jest w katalogu sfx, w głównym katalogu programu, to jest c:\titan
+Czy wiesz, że... Titan jest następcą bg4? To jest blinggo 4?
+Czy wiesz, że Titan posiada swoją odrębną przeglądarkę internetową? Jedynym wymaganiem do poprawnego działania tej przeglądarki jest windows 10 lub nowszy, ze środowiskiem uruchomieniowym microsoft edge
