@@ -1,0 +1,4 @@
+name="Menedżer pobierania - TDownloader"
+description=""
+openfile="downloader.py"
+shortname="tdm"

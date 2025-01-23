@@ -1,0 +1,4 @@
+name="Klient elevenlabs"
+description="corporate task reminder pozwala na zorganizowanie listy zadań do wykonania, przydaje się w pracy"
+openfile="main.py"
+shortname="elevenlabs"

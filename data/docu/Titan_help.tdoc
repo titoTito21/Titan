@@ -1,0 +1,39 @@
+&Pomoc titana
+#Co to jest Titan?
+Titan - Titan computer environment jest środowiskiem zawierającym aplikacje przystosowane dla niewidomych lub słabowidzących. Aplikacje dla titana charakteryzują się prostotą, intuicyjnością, a także można ją dostosować (o ile aplikacja na to pozwala)
+#minimalne wymagania systemowe
+system: windows 10 lub wyższy, 
+512 mb pamięci ram
+700 MB miejsca na dysku (z interpreterem pythona na aplikacje TCE), 60 MB bez interpretera i wsparcia aplikacji TCE
+#podstawy programu
+Program Titan składa się z trzech elementów interfejsu
+lista aplikacji - zawiera listę aplikacji TCE, lub odpowiednio przygotowanych aplikacji windows bądź skrutów
+pasek statusu - stan baterii, głośność, zegar, i status połączenia z siecią
+między paskiem statusu a listą aplikacji przełączamy się klawiszem TAB
+pasek menu - zawiera ustawienia programu, możliwość zamknięcia, a także dodatkowe elementy menu "w zależności od zainstalowanych lub stworzonych komponentów TCE"
+alt+f2 - jeśli komponent titanMenu jest zainstalowany, otwiera uproszczone menu start
+ctrl+shift+d- włącza, wyłącza dyktowanie, bądź wznawia/wstrzymuje dyktowanie Jeśli tDictate jest zainstalowany
+alt+f3 (jeśli komponent launcher jest zainstalowany) Uruchamia TCE Desktop - czyli pasek skrutów
+#rodzaje aplikacji TCE
+Titan może wspierać 2 rodzaje aplikacji
+Aplikacje TCE - robione w pythonie, z rozszeżeniem .py - kod źrudłowy, .pyc - skompilowany kod pythona
+aplikacje dla windows - .exe, Przydatne gdy programista/autor aplikacji nie chce upubliczniać kodu, lub napisał ją w innym języku skryptowym/programowym np. AutoHotkey, c++, c#, itd.
+#co to są komponenty?
+Komponenty to dodatki do Titana modyfikujące interfejs, ulepszające funkcje programu, dodające funkcje, które nie są w kodzie głównym. Wsparcie komponentów ułatwia wykrycie błędów, modyfikację Titana do swoich potrzeb, stworzenie skryptów automatyzujących. Komponenty odróżnia od aplikacji to, że z reguły aplikacje są uruchamiane w innym procesie, i zawierają więcej funkcji. W końcu menedżer plików, edytor tekstowy lub przypominacz zaliczamy do aplikacji. Komponenty nie wspierają modułów zewnętrznych z interpretera. Kolejną różnicą jest to, że komponent jest zależny od ustawień Titana, i innych jego danych. Aplikacja jest niezależna, jest uruchamiana przez środowisko, może być testowana osobno
+#tematy dźwiękowe
+Titan wspiera możliwość tworzenia/użycia tematu dźwiękowego, dźwięki są odtwarzane np. Kiedy Titan wykrył błąd w aplikacji, początek lub koniec listy, przeskakiwanie kursora. Temat dźwiękowy nie jest ustawiany ogólnie tj. Aplikacje nie są od tego zależne. Inaczej mówiąc, temat dźwiękowy jest tylko na środowisko
+#konfigurator
+Jeśli zainstalowałeś Titana, miałeś właśnie do czynienia z konfigurowatorem TCE
+konfigurator Titana pozwala na skonfigurowanie środowiska TCE do potrzeb użytkownika, tj, instalację programu, aplikacji, komponentów, tematów dźwiękowych jak i aplikacji dodatkowych. 
+Aplikacje dodatkowe to aplikacje, które są potencjalnie wbudowane w TCE. Wymagają dodatkowych bibliotek, więc konfigurator pozwala je zainstalować bądź nie
+Konfigurator uruchamia program, sprawdza aktualizacje, jest łącznikiem między systemem windows a Titanem
+#Titan, TCE, dlaczego dwie nazwy. 
+Czasami użytkownik może mieć doczynienia z nazwą Titan, czasami TCE. 
+TCE to skrót od, Titanic Computer Environment
+#wersja beta!
+Titan jest jeszcze w fazie tworzenia na etapie public beta. Niektóre komponenty mogą nie działać
+#rozwiązania błędów
+jeśli titan nie działa prawidłowo, można usunąć folder ustawień z %appdata%\titosoft\titan (w windows), To jest tymczasowy błąd, gdyby któraś z aplikacji przestała działać. 
+#Polecane narzędzia
+start All Back - program ten zamienia ekran startowy w windows 11 w menu start podobne do windows 7
+(współpracuje z TCE Sounds, i innymi komponentami Titana)
