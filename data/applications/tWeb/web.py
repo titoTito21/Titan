@@ -148,7 +148,7 @@ class BrowserFrame(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
         self.settings = config
-        self.home_url = 'http://titosofttitan.com'
+        self.home_url = 'http://titosofttitan.com/titan'
 
         # Lista pobranych plików (póki co pusta).
         self.downloads = []
