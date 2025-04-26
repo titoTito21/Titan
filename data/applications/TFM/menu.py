@@ -1,4 +1,8 @@
+# TFM/menu.py
 import wx
+
+# Define a custom ID for the Rename menu item
+ID_RENAME = wx.NewIdRef()
 
 def create_file_menu(parent):
     file_menu = wx.Menu()
@@ -23,13 +27,18 @@ def create_edit_menu(parent):
     paste = edit_menu.Append(wx.ID_PASTE, "Wklej\tCtrl+V")
     edit_menu.AppendSeparator()
     select_all = edit_menu.Append(wx.ID_SELECTALL, "Zaznacz wszystko\tCtrl+A")
+    # Use the custom ID for Rename
+    rename = edit_menu.Append(ID_RENAME, "Zmień nazwę\tF2")
     delete = edit_menu.Append(wx.ID_DELETE, "Usuń\tDelete")
+
 
     parent.Bind(wx.EVT_MENU, parent.on_copy, copy)
     parent.Bind(wx.EVT_MENU, parent.on_cut, cut)
     parent.Bind(wx.EVT_MENU, parent.on_paste, paste)
     parent.Bind(wx.EVT_MENU, parent.on_select_all, select_all)
     parent.Bind(wx.EVT_MENU, parent.on_delete, delete)
+    # Bind the custom ID for rename
+    parent.Bind(wx.EVT_MENU, parent.on_rename, id=ID_RENAME)
 
     return edit_menu
 
