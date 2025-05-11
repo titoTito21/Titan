@@ -3,16 +3,19 @@ import os
 import sys
 from threading import Lock
 
+# Inicjalizacja zmiennych globalnych
 current_theme = 'default'
 background_channel = None
-lock = Lock()  # Dodany lock do synchronizacji odtwarzania
+lock = Lock()  # Synchronizacja odtwarzania dźwięków
+sound_theme_volume = 1.0  # Domyślna głośność tematu dźwiękowego
+system_volume = 1.0  # Domyślna głośność systemu
 
 # Zainicjalizowanie miksera dźwięku
 pygame.mixer.init()
 
 
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
+    """Zwraca pełną ścieżkę do plików zasobów, obsługując PyInstaller."""
     try:
         base_path = sys._MEIPASS  # PyInstaller tworzy folder tymczasowy
     except Exception:
@@ -21,7 +24,7 @@ def resource_path(relative_path):
 
 
 def get_sfx_directory():
-    """Returns the path to the sfx directory within the application directory."""
+    """Zwraca ścieżkę do katalogu z dźwiękami dla aktualnego motywu."""
     sfx_dir = resource_path(os.path.join('sfx', current_theme))
     if not os.path.exists(sfx_dir):
         print(f"SFX directory does not exist: {sfx_dir}")
@@ -29,13 +32,14 @@ def get_sfx_directory():
 
 
 def initialize_sound():
+    """Inicjalizuje system dźwiękowy."""
     pygame.mixer.init()
     global background_channel
     background_channel = pygame.mixer.Channel(1)
 
 
 def play_sound(sound_file):
-    """Odtwarza dźwięk bez przerywania innych dźwięków."""
+    """Odtwarza dźwięk z uwzględnieniem ustawionej głośności tematu dźwiękowego."""
     sfx_dir = get_sfx_directory()
     sound_path = os.path.join(sfx_dir, sound_file)
 
@@ -43,13 +47,15 @@ def play_sound(sound_file):
         try:
             with lock:
                 sound = pygame.mixer.Sound(sound_path)
-                pygame.mixer.find_channel(True).play(sound)  # Znajduje wolny kanał do odtworzenia dźwięku
+                sound.set_volume(sound_theme_volume)  # Ustawienie głośności tematu
+                pygame.mixer.find_channel(True).play(sound)
         except pygame.error as e:
             print(f"Failed to play sound: {sound_path}, {e}")
     else:
         print(f"Sound {sound_path} does not exist, skipping.")
 
 
+# Funkcje odtwarzania dźwięków
 def play_startup_sound():
     play_sound('startup.ogg')
 
@@ -87,11 +93,15 @@ def play_dialogclose_sound():
 
 
 def play_loop_sound():
+    """Odtwarza dźwięk w pętli (np. tło muzyczne)."""
     sfx_dir = get_sfx_directory()
     loop_path = os.path.join(sfx_dir, 'loop.ogg')
+
     if os.path.exists(loop_path):
         try:
-            background_channel.play(pygame.mixer.Sound(loop_path), loops=-1)
+            sound = pygame.mixer.Sound(loop_path)
+            sound.set_volume(sound_theme_volume)
+            background_channel.play(sound, loops=-1)
         except pygame.error as e:
             print(f"Failed to play background sound: {loop_path}, {e}")
     else:
@@ -99,16 +109,42 @@ def play_loop_sound():
 
 
 def stop_loop_sound():
+    """Zatrzymuje odtwarzanie dźwięku w pętli."""
     if background_channel:
         background_channel.stop()
 
 
 def set_theme(theme):
+    """Ustawia nowy motyw dźwiękowy i restartuje pętlę dźwięku, jeśli jest aktywna."""
     global current_theme
     current_theme = theme
-    stop_loop_sound()  # Zatrzymuje poprzedni dźwięk pętli
-    play_loop_sound()  # Odtwarza nową ścieżkę dźwiękową jeśli istnieje
+    stop_loop_sound()
+    play_loop_sound()
 
 
-# Inicjalizacja dźwięku przy starcie programu
+def set_sound_theme_volume(volume):
+    """Ustawia głośność tematu dźwiękowego."""
+    global sound_theme_volume
+    sound_theme_volume = volume / 100.0  # Skala 0.0 - 1.0
+    print(f"Sound theme volume set to {sound_theme_volume}")
+
+
+def set_system_volume(volume):
+    """Ustawia głośność systemową (Windows)."""
+    global system_volume
+    system_volume = volume / 100.0  # Skala 0.0 - 1.0
+
+    try:
+        import ctypes
+        devices = ctypes.windll.winmm.waveOutSetVolume
+        volume_int = int(system_volume * 0xFFFF)
+        volume_value = (volume_int & 0xFFFF) | (volume_int << 16)
+        devices(0, volume_value)
+    except Exception as e:
+        print(f"Failed to set system volume: {e}")
+
+    print(f"System volume set to {system_volume}")
+
+
+# Inicjalizacja dźwięku na starcie programu
 initialize_sound()

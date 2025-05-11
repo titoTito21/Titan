@@ -10,6 +10,7 @@ from settings import load_settings, save_settings, SETTINGS_FILE_PATH
 from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH
 from shutdown_question import show_shutdown_dialog
 from app_manager import find_application_by_shortname, open_application
+from game_manager import *
 from component_manager import ComponentManager
 from menu import MenuBar  # Zakładam, że menu.py zawiera klasę MenuBar
 import pywinusb
@@ -20,7 +21,7 @@ import psutil
 import keyboard
 
 
-VERSION = "0.1.5"
+VERSION = "0.1.7"
 
 def main():
     settings = load_settings()
