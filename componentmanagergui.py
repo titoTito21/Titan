@@ -1,123 +1,205 @@
 # Filename: componentmanagergui.py
 import wx
-# Assuming component_manager is available in the Python path
-# import component_manager # We will receive the manager instance directly
+import os
+from accessible_output3.outputs.auto import Auto
+from sound import play_sound, play_focus_sound, play_endoflist_sound
+from translation import set_language
+from settings import get_setting
 
+# Get the translation function
+_ = set_language(get_setting('language', 'pl'))
 
-class ComponentManagerFrame(wx.Frame):
+class ComponentManagerDialog(wx.Dialog):
     def __init__(self, parent, title, component_manager=None):
         super().__init__(parent, title=title, size=(400, 400))
 
         self.component_manager = component_manager
-        self.components_list = [] # To store component modules
+        self.tts = Auto()
 
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        lbl = wx.StaticText(panel, label="Zainstalowane komponenty:")
+        lbl = wx.StaticText(panel, label=_("Installed components:"))
         vbox.Add(lbl, 0, wx.ALL | wx.EXPAND, 5)
 
         self.component_listbox = wx.ListBox(panel, wx.ID_ANY)
         vbox.Add(self.component_listbox, 1, wx.ALL | wx.EXPAND, 5)
 
-        self.settings_button = wx.Button(panel, label="Otwórz ustawienia komponentu")
-        vbox.Add(self.settings_button, 0, wx.ALL | wx.CENTER, 5)
+        self.actions_button = wx.Button(panel, label=_("&Actions"))
+        vbox.Add(self.actions_button, 0, wx.ALL | wx.ALIGN_CENTER, 5)
+        self.actions_button.Enable(False)
 
-        self.Bind(wx.EVT_BUTTON, self.on_open_component_settings, self.settings_button)
-        self.Bind(wx.EVT_LISTBOX_DCLICK, self.on_open_component_settings, self.component_listbox)
+        # --- Bindowanie zdarzeń ---
+        self.component_listbox.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
+        self.component_listbox.Bind(wx.EVT_LISTBOX, self.on_selection_change)
+        self.actions_button.Bind(wx.EVT_BUTTON, self.on_actions_button_press)
 
         panel.SetSizer(vbox)
         self.Centre()
-
         self.populate_component_list()
+        self.component_listbox.SetFocus()
 
     def populate_component_list(self):
         self.component_listbox.Clear()
-        self.components_list = []
-
-        if self.component_manager and hasattr(self.component_manager, 'components'):
-            for component_module in self.component_manager.components:
-                # Assuming component module has a __name__ or we can use the folder name
-                # The component_manager loads them using the folder name as module name
-                component_name = getattr(component_module, '__name__', 'Nieznany komponent')
-                self.component_listbox.Append(component_name)
-                self.components_list.append(component_module)
-        else:
-            self.component_listbox.Append("Menedżer komponentów niedostępny.")
-            self.settings_button.Enable(False)
-
-
-    def on_open_component_settings(self, event):
-        selected_index = self.component_listbox.GetSelection()
-        if selected_index == wx.NOT_FOUND:
-            wx.MessageBox("Proszę wybrać komponent z listy.", "Informacja", wx.OK | wx.ICON_INFORMATION)
+        if not self.component_manager:
+            self.component_listbox.Append(_("Component manager not available."))
             return
 
-        selected_component_module = self.components_list[selected_index]
-        component_name = self.component_listbox.GetString(selected_index)
+        components_dir = os.path.join(os.path.dirname(__file__), 'data', 'components')
+        for component_folder in sorted(os.listdir(components_dir)):
+            if os.path.isdir(os.path.join(components_dir, component_folder)):
+                display_name = self.component_manager.get_component_display_name(component_folder)
+                status = self.component_manager.component_states.get(component_folder, 1)
+                status_str = _("Enabled") if status == 0 else _("Disabled")
+                self.component_listbox.Append(f"{display_name} - {status_str}", clientData=component_folder)
+        
+        if self.component_listbox.GetCount() > 0:
+            self.component_listbox.SetSelection(0)
+            self.on_selection_change(None) # Ręczne wywołanie dla pierwszego elementu
 
-        # --- KONWENCJA DLA OTWIERANIA USTAWIEN KOMPONENTU ---
-        # Przyjmujemy, że moduł komponentu ma funkcję np. 'show_settings_dialog(parent)'
-        # lub zwraca klasę okna ustawień np. przez atrybut 'SettingsFrameClass'
-        # Musisz zaimplementować to w plikach init.py swoich komponentów.
+    def on_list_key_down(self, event):
+        key_code = event.GetKeyCode()
+        listbox = self.component_listbox
+        selected_index = listbox.GetSelection()
+        count = listbox.GetCount()
 
-        settings_opened = False
-        # Try calling a method on the component module
-        if hasattr(selected_component_module, 'show_settings_dialog'):
+        if count == 0:
+            event.Skip()
+            return
+
+        if key_code == wx.WXK_UP:
+            if selected_index == 0:
+                play_endoflist_sound()
+            else:
+                new_index = selected_index - 1
+                listbox.SetSelection(new_index)
+                play_focus_sound()
+                self.tts.output(listbox.GetString(new_index))
+        elif key_code == wx.WXK_DOWN:
+            if selected_index == count - 1:
+                play_endoflist_sound()
+            else:
+                new_index = selected_index + 1
+                listbox.SetSelection(new_index)
+                play_focus_sound()
+                self.tts.output(listbox.GetString(new_index))
+        elif key_code == wx.WXK_SPACE:
+            if selected_index != wx.NOT_FOUND:
+                component_folder = listbox.GetClientData(selected_index)
+                self.toggle_component(component_folder, selected_index)
+        elif key_code == wx.WXK_RETURN:
+            if selected_index != wx.NOT_FOUND:
+                self.on_actions_button_press(event)
+        else:
+            event.Skip()
+
+    def on_selection_change(self, event):
+        # Aktywuj przycisk akcji, jeśli coś jest zaznaczone
+        is_anything_selected = self.component_listbox.GetSelection() != wx.NOT_FOUND
+        self.actions_button.Enable(is_anything_selected)
+        if event: # Unikaj błędu przy ręcznym wywołaniu
+            event.Skip()
+
+    def on_actions_button_press(self, event):
+        selected_index = self.component_listbox.GetSelection()
+        if selected_index == wx.NOT_FOUND:
+            return
+        
+        component_folder = self.component_listbox.GetClientData(selected_index)
+        self.show_context_menu(component_folder)
+
+    def on_menu_close(self, event):
+        play_sound('contextmenuclose.ogg')
+        self.actions_button.SetFocus()
+        if event:
+            event.Skip()
+
+    def show_context_menu(self, component_folder):
+        component_module = next((c for c in self.component_manager.components if c.__name__ == component_folder), None)
+        display_name = self.component_manager.get_component_display_name(component_folder)
+
+        if not component_module:
+            wx.MessageBox(_("Component '{}' is not loaded.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            return
+
+        menu = wx.Menu()
+        has_open_action = hasattr(component_module, 'add_menu')
+        has_settings_action = hasattr(component_module, 'show_settings_dialog')
+
+        if not has_open_action and not has_settings_action:
+            wx.MessageBox(_("No available actions for component '{}'.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            return
+
+        play_sound('contextmenu.ogg')
+        self.tts.output(_("Context menu"))
+
+        if has_open_action:
+            open_item = menu.Append(wx.ID_ANY, _("Run"))
+            self.Bind(wx.EVT_MENU, lambda event, cf=component_folder: self.on_run_action(cf), open_item)
+
+        if has_settings_action:
+            settings_item = menu.Append(wx.ID_ANY, _("Settings"))
+            self.Bind(wx.EVT_MENU, lambda event, cf=component_folder: self.on_settings_action(cf), settings_item)
+
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def on_run_action(self, component_folder):
+        display_name = self.component_manager.get_component_display_name(component_folder)
+        self.tts.output(_("Running component {}").format(display_name))
+        
+        component_module = next((c for c in self.component_manager.components if c.__name__ == component_folder), None)
+        if not component_module: return
+
+        menu_funcs = self.component_manager.get_component_menu_functions()
+        func_to_run = next((func for name, func in menu_funcs.items() if component_folder.lower() in name.lower()), None)
+        
+        if func_to_run:
             try:
-                selected_component_module.show_settings_dialog(self) # Pass this frame as parent
-                settings_opened = True
+                func_to_run(self)
             except Exception as e:
-                wx.MessageBox(f"Błąd podczas otwierania ustawień dla '{component_name}':\n{e}", "Błąd ustawień komponentu", wx.OK | wx.ICON_ERROR)
-                settings_opened = True # Indicate attempt was made
+                wx.MessageBox(_("Error running component '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
+    def on_settings_action(self, component_folder):
+        display_name = self.component_manager.get_component_display_name(component_folder)
+        self.tts.output(_("Opening settings for component {}").format(display_name))
 
-        # Alternatively, if component exposes a settings frame class
-        if not settings_opened and hasattr(selected_component_module, 'SettingsFrameClass'):
-             try:
-                 settings_frame_class = selected_component_module.SettingsFrameClass
-                 settings_frame = settings_frame_class(self, title=f"Ustawienia: {component_name}")
-                 settings_frame.ShowModal() # Use ShowModal if it's a dialog, Show if it's a frame
-                 settings_frame.Destroy()
-                 settings_opened = True
-             except Exception as e:
-                 wx.MessageBox(f"Błąd podczas tworzenia/otwierania okna ustawień dla '{component_name}':\n{e}", "Błąd ustawień komponentu", wx.OK | wx.ICON_ERROR)
-                 settings_opened = True # Indicate attempt was made
+        component_module = next((c for c in self.component_manager.components if c.__name__ == component_folder), None)
+        if component_module and hasattr(component_module, 'show_settings_dialog'):
+            try:
+                component_module.show_settings_dialog(self)
+            except Exception as e:
+                wx.MessageBox(_("Error opening settings for '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
-
-        if not settings_opened:
-            wx.MessageBox(f"Ustawienia dla '{component_name}' nie są dostępne lub nie zaimplementowano mechanizmu ich otwierania.", "Informacja", wx.OK | wx.ICON_INFORMATION)
-
+    def toggle_component(self, component_folder, index):
+        new_status = self.component_manager.toggle_component_status(component_folder)
+        display_name = self.component_manager.get_component_display_name(component_folder)
+        status_str = _("Enabled") if new_status == 0 else _("Disabled")
+        
+        self.component_listbox.SetString(index, f"{display_name} - {status_str}")
+        self.tts.output(_("Component {} {}").format(display_name, status_str.lower()))
 
 if __name__ == '__main__':
-    # This block allows testing the GUI file independently with dummy data
+    # Dummy classes for testing
     class DummyComponentManager:
         def __init__(self):
-            # Create dummy component modules
-            class DummyTDictate:
-                __name__ = "TDictate"
-                def show_settings_dialog(self, parent):
-                    wx.MessageBox("Dummy TDictate Settings", f"Ustawienia: {self.__name__}", wx.OK | wx.ICON_INFORMATION)
-
-            class DummyTitanMenu:
-                 __name__ = "TitanMenu"
-                 # This one doesn't have a settings method/class
-                 pass
-
-            class DummyTSounds:
-                 __name__ = "tSounds"
-                 # Example of exposing a frame class
-                 class SettingsFrameClass(wx.Frame):
-                     def __init__(self, parent, title):
-                         super().__init__(parent, title=title, size=(200, 100))
-                         panel = wx.Panel(self)
-                         wx.StaticText(panel, label="Dummy tSounds Settings Frame", pos=(10, 10))
-                         self.Centre()
-
-            self.components = [DummyTDictate(), DummyTitanMenu(), DummyTSounds()]
+            self.components = []
+            self.component_states = {"TTerm": 0, "Tips": 1, "titan_help": 0}
+            self.component_friendly_names = {
+                "TTerm": "Terminal",
+                "Tips": "Porady",
+                "titan_help": "Pomoc Titana (F1)"
+            }
+        def get_component_display_name(self, folder_name):
+            return self.component_friendly_names.get(folder_name, folder_name)
+        def toggle_component_status(self, folder_name):
+            self.component_states[folder_name] = 1 if self.component_states[folder_name] == 0 else 0
+            return self.component_states[folder_name]
+        def get_component_menu_functions(self):
+            return {}
 
     app = wx.App(False)
     dummy_manager = DummyComponentManager()
-    frame = ComponentManagerFrame(None, "Menedżer komponentów - Test", component_manager=dummy_manager)
-    frame.Show()
-    app.MainLoop()
+    dialog = ComponentManagerDialog(None, "Menedżer komponentów - Test", component_manager=dummy_manager)
+    dialog.ShowModal()
+    dialog.Destroy()

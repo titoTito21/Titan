@@ -3,25 +3,23 @@ import threading
 import time
 import os
 import sys
+import accessible_output3.outputs.auto
 from gui import TitanApp
 from sound import play_startup_sound, initialize_sound, set_theme, play_sound
-from bg5reader import speak
-from settings import load_settings, save_settings, SETTINGS_FILE_PATH
+from settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
+from translation import set_language
 from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH
 from shutdown_question import show_shutdown_dialog
 from app_manager import find_application_by_shortname, open_application
 from game_manager import *
 from component_manager import ComponentManager
-from menu import MenuBar  # Zakładam, że menu.py zawiera klasę MenuBar
-import pywinusb
-import pyaudio
-import time
-import speech_recognition as sr
-import psutil
-import keyboard
+from menu import MenuBar
 
+# Initialize translation system
+_ = set_language(get_setting('language', 'pl'))
 
-VERSION = "0.1.7"
+VERSION = "0.1.7.5"
+speaker = accessible_output3.outputs.auto.Auto()
 
 def main():
     settings = load_settings()
@@ -31,20 +29,13 @@ def main():
     theme = settings.get('sound', {}).get('theme', 'default')  # Pobierz temat dźwiękowy z ustawień
     set_theme(theme)
     
-    # Inicjalizacja aplikacji wxPython
-    app = wx.App(False)
-    
-    # Wyświetlenie okna dialogowego przed uruchomieniem głównego programu
-    show_alpha_warning_dialog()
-    
     if not settings.get('general', {}).get('quick_start', 'False').lower() in ['true', '1']:
         # Odtwarzanie dźwięku w osobnym wątku
         threading.Thread(target=play_startup_sound).start()
         time.sleep(1)  # Poczekaj 1 sekundę
         
         # Mówienie tekstu w osobnym wątku
-        threading.Thread(target=speak, args=(f"Witamy w Titan: Wersja {VERSION}",)).start()
-        time.sleep(3)  # Poczekaj 3 sekundy
+        threading.Thread(target=speaker.speak, args=(_("Welcome to Titan: Version {}").format(VERSION),)).start()
     
     # Dodajemy główny katalog do sys.path
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -56,58 +47,9 @@ def main():
         if app_info:
             file_path = sys.argv[2] if len(sys.argv) > 2 else None
             open_application(app_info, file_path)
-            return
-
-    # Uruchomienie GUI
-    frame = TitanApp(None, title="Titan App Suite", version=VERSION)
-    
-    if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
-        frame.Bind(wx.EVT_CLOSE, on_close)
-    
-    # Tworzenie paska menu
-    menubar = MenuBar(frame)  # Tworzy pasek menu przy użyciu klasy MenuBar z menu.py
-    frame.SetMenuBar(menubar)
-    
-    # Tworzenie okna ustawień
-    from settingsgui import SettingsFrame
-    settings_frame = SettingsFrame(None, title="Ustawienia")
-
-    # Inicjalizacja ComponentManager
-    component_manager = ComponentManager(menubar, settings_frame)
-    component_manager.initialize_components(app)
-    
-    frame.Show()
-    app.MainLoop()
-
-def show_alpha_warning_dialog():
-    # Odtwarzanie dźwięku dialog.ogg
-    threading.Thread(target=play_sound, args=('dialog.ogg',)).start()
-    
-    # Treść dialogu
-    dialog_content = (
-        "Program Titan jest w fazie rozwoju alpha. Zaleca się nie używanie tego programu na codzienny użytek. "
-        "Wersja alpha może zawierać poważne błędy, w aplikacjach Titana, jak i samym Titanie. "
-        "Jeśli nie jesteś testerem lub nie jesteś gotów na test, natychmiast zamknij ten program. "
-        "\u00A9 2024 TitoSoft"
-    )  # \u00A9 to symbol ©
-    
-    # Utworzenie okna dialogowego
-    dialog = wx.MessageDialog(
-        None,
-        dialog_content,
-        "Titan Alpha",
-        wx.OK | wx.CANCEL | wx.ICON_WARNING
-    )
-    
-    # Wyświetlenie dialogu i oczekiwanie na odpowiedź użytkownika
-    result = dialog.ShowModal()
-    dialog.Destroy()
-    
-    # Odtwarzanie dźwięku dialogclose.ogg
-    threading.Thread(target=play_sound, args=('dialogclose.ogg',)).start()
-    
-    if result == wx.ID_CANCEL:
-        sys.exit()  # Zakończenie programu
+            return True # Zwróć informację, że aplikacja została uruchomiona w trybie specjalnym
+            
+    return False
 
 def on_close(event):
     result = show_shutdown_dialog()
@@ -117,11 +59,46 @@ def on_close(event):
         event.Veto()  # Anuluj zamykanie
 
 if __name__ == "__main__":
-    # Upewnij się, że pliki ustawień i powiadomień istnieją
+    # Set default settings if the file doesn't exist
     if not os.path.exists(SETTINGS_FILE_PATH):
-        save_settings({'sound': {'theme': 'default'}})
+        set_setting('language', 'pl')
+        set_setting('theme', 'default', section='sound')
 
     if not os.path.exists(NOTIFICATIONS_FILE_PATH):
         create_notifications_file()
     
-    main()
+    # Uruchom logikę przed-GUI. Jeśli zwróci True, zakończ program.
+    if main():
+        sys.exit()
+
+    # Inicjalizacja aplikacji wxPython w głównym zakresie
+    app = wx.App(False)
+    settings = load_settings()
+    
+    # Show language warning if not Polish
+    if get_setting('language', 'pl') != 'pl':
+        play_sound('dialog.ogg')
+        wx.MessageBox(
+            _("Currently, translation system and international support is limited. To fully enjoy Titan, please use translation addon for your screen reader, or switch to Polish Language"),
+            _("Titan"),
+            wx.OK | wx.ICON_INFORMATION
+        )
+        play_sound('dialogclose.ogg')
+
+    frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings)
+    
+    if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
+        frame.Bind(wx.EVT_CLOSE, on_close)
+    
+    from settingsgui import SettingsFrame
+    settings_frame = SettingsFrame(None, title=_("Settings"))
+
+    component_manager = ComponentManager(settings_frame)
+    component_manager.initialize_components(app)
+
+    frame.component_manager = component_manager
+    menubar = MenuBar(frame)
+    frame.SetMenuBar(menubar)
+    
+    frame.Show()
+    app.MainLoop()

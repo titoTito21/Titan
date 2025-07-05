@@ -107,9 +107,9 @@ class TipManager(threading.Thread):
         self.running = False
 
 # Okno ustawień
-def show_settings_dialog():
+def show_settings_dialog(parent):
     app = wx.App(False)
-    frame = wx.Frame(None, wx.ID_ANY, "Ustawienia porad")
+    frame = wx.Frame(parent, wx.ID_ANY, "Ustawienia porad")
     panel = wx.Panel(frame, wx.ID_ANY)
 
     vbox = wx.BoxSizer(wx.VERTICAL)
@@ -150,11 +150,11 @@ def show_settings_dialog():
     app.MainLoop()
 
 # Funkcja dodająca menu
-def add_menu(menubar):
-    component_menu = wx.Menu()
-    tips_item = component_menu.Append(wx.ID_ANY, "Ustawienia porad...")
-    menubar.Append(component_menu, "Ustawienia komponentów")
-    menubar.Bind(wx.EVT_MENU, lambda event: show_settings_dialog(), tips_item)
+def on_tips_settings_action(parent_frame):
+    show_settings_dialog()
+
+def add_menu(component_manager):
+    component_manager.register_menu_function("Ustawienia porad", on_tips_settings_action)
 
 # Inicjalizacja komponentu
 def initialize(app=None):

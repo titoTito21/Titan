@@ -39,3 +39,16 @@ def save_settings(settings):
             for key, value in values.items():
                 file.write(f'{key}={value}\n')
             file.write('\n')
+
+def get_setting(key, default=None, section='general'):
+    """Retrieves a specific setting value from a section."""
+    settings = load_settings()
+    return settings.get(section, {}).get(key, default)
+
+def set_setting(key, value, section='general'):
+    """Sets a specific setting value in a section."""
+    settings = load_settings()
+    if section not in settings:
+        settings[section] = {}
+    settings[section][key] = value
+    save_settings(settings)

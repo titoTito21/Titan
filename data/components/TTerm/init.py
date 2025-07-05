@@ -45,18 +45,19 @@ class TerminalFrame(wx.Frame):
         output = result.stdout if result.stdout else result.stderr
         wx.CallAfter(self.output_display.AppendText, f"{command}\n{output}\n")
 
-def add_menu(menubar):
-    system_tools_menu = wx.Menu()
-    platform_name = platform.system()
-    if platform_name == "Windows":
-        terminal_item = system_tools_menu.Append(wx.ID_ANY, "Terminal (Windows)")
-    elif platform_name == "Darwin":
-        terminal_item = system_tools_menu.Append(wx.ID_ANY, "Terminal (Mac OS)")
-    else:
-        terminal_item = system_tools_menu.Append(wx.ID_ANY, "Terminal (Bash)")
+def on_tterm_menu_action(parent_frame):
+    show_terminal()
 
-    menubar.Append(system_tools_menu, "Narzędzia systemowe")
-    menubar.Bind(wx.EVT_MENU, on_open_terminal, terminal_item)
+def add_menu(component_manager):
+    platform_name = platform.system()
+    menu_label = "Terminal"
+    if platform_name == "Windows":
+        menu_label += " (Windows)"
+    elif platform_name == "Darwin":
+        menu_label += " (Mac OS)"
+    else:
+        menu_label += " (Bash)"
+    component_manager.register_menu_function(menu_label, on_tterm_menu_action)
 
 def on_open_terminal(event):
     play_sound('terminal.ogg')

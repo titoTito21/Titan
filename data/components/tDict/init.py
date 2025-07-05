@@ -228,11 +228,11 @@ def show_settings_dialog():
     frame.Show()
     app.MainLoop()
 
-def add_menu(menubar):
-    component_menu = wx.Menu()
-    tdictate_item = component_menu.Append(wx.ID_ANY, "tDictate...")
-    menubar.Append(component_menu, "Ustawienia komponentów")
-    menubar.Bind(wx.EVT_MENU, lambda event: show_settings_dialog(), tdictate_item)
+def on_tdictate_menu_action(parent_frame):
+    show_settings_dialog()
+
+def add_menu(component_manager):
+    component_manager.register_menu_function("tDictate Settings", on_tdictate_menu_action)
 
 # Initialize component
 def initialize(app=None):

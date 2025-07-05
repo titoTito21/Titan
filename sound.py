@@ -2,6 +2,7 @@ import pygame
 import os
 import sys
 from threading import Lock
+from settings import load_settings
 
 # Inicjalizacja zmiennych globalnych
 current_theme = 'default'
@@ -38,8 +39,11 @@ def initialize_sound():
     background_channel = pygame.mixer.Channel(1)
 
 
-def play_sound(sound_file):
-    """Odtwarza dźwięk z uwzględnieniem ustawionej głośności tematu dźwiękowego."""
+def play_sound(sound_file, pan=None):
+    """Odtwarza dźwięk z uwzględnieniem ustawionej głośności tematu dźwiękowego i panoramy."""
+    settings = load_settings()
+    stereo_enabled = settings.get('sound', {}).get('stereo_sound', 'False').lower() in ['true', '1']
+
     sfx_dir = get_sfx_directory()
     sound_path = os.path.join(sfx_dir, sound_file)
 
@@ -47,12 +51,23 @@ def play_sound(sound_file):
         try:
             with lock:
                 sound = pygame.mixer.Sound(sound_path)
-                sound.set_volume(sound_theme_volume)  # Ustawienie głośności tematu
-                pygame.mixer.find_channel(True).play(sound)
+                channel = pygame.mixer.find_channel(True)
+                
+                # Zastosuj panoramowanie tylko jeśli stereo jest włączone i podano konkretną wartość pan
+                if stereo_enabled and pan is not None:
+                    left_volume = 1.0 - pan
+                    right_volume = pan
+                    channel.set_volume(left_volume * sound_theme_volume, right_volume * sound_theme_volume)
+                else:
+                    # W przeciwnym razie odtwarzaj jako mono (wyśrodkowany)
+                    channel.set_volume(sound_theme_volume)
+                
+                channel.play(sound)
         except pygame.error as e:
             print(f"Failed to play sound: {sound_path}, {e}")
     else:
         print(f"Sound {sound_path} does not exist, skipping.")
+
 
 
 # Funkcje odtwarzania dźwięków
@@ -60,8 +75,8 @@ def play_startup_sound():
     play_sound('startup.ogg')
 
 
-def play_focus_sound():
-    play_sound('focus.ogg')
+def play_focus_sound(pan=None):
+    play_sound('focus.ogg', pan=pan)
 
 
 def play_select_sound():

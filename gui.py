@@ -1,4 +1,5 @@
 import wx
+import wx.adv
 import os
 import platform
 import threading
@@ -11,18 +12,61 @@ from app_manager import get_applications, open_application
 from game_manager import get_games, open_game
 from notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 from sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound, play_endoflist_sound, play_sound
+import accessible_output3.outputs.auto
 from menu import MenuBar
-from bg5reader import speak
+from invisibleui import InvisibleUI
+from translation import set_language
+from settings import get_setting
+
+# Get the translation function
+_ = set_language(get_setting('language', 'pl'))
 
 SKINS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'skins')
-DEFAULT_SKIN_NAME = "Domyślna"
+DEFAULT_SKIN_NAME = _("Default")
+speaker = accessible_output3.outputs.auto.Auto()
+
+class TaskBarIcon(wx.adv.TaskBarIcon):
+    def __init__(self, frame, version, skin_data):
+        super(TaskBarIcon, self).__init__()
+        self.frame = frame
+        
+        icon_path = None
+        if skin_data and 'Icons' in skin_data and 'taskbar_icon' in skin_data['Icons']:
+            icon_path = skin_data['Icons']['taskbar_icon']
+
+        if icon_path and os.path.exists(icon_path):
+            icon = wx.Icon(icon_path)
+            if not icon.IsOk():
+                print(f"WARNING: Could not load taskbar icon from: {icon_path}")
+                icon = wx.Icon(wx.ArtProvider.GetBitmap(wx.ART_MISSING_IMAGE, wx.ART_OTHER, (16, 16)))
+        else:
+            # Default icon if not defined in skin or file does not exist
+            icon = wx.Icon(wx.ArtProvider.GetBitmap(wx.ART_QUESTION, wx.ART_OTHER, (16, 16)))
+
+        self.SetIcon(icon, _("Titan v{}").format(version))
+        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_left_dclick)
+
+    def CreatePopupMenu(self):
+        menu = wx.Menu()
+        menu.Append(wx.ID_ANY, _("Back to Titan"), _("Restores the application window"))
+        menu.Bind(wx.EVT_MENU, self.on_restore)
+        return menu
+
+    def on_left_dclick(self, event):
+        self.frame.restore_from_tray()
+
+    def on_restore(self, event):
+        self.frame.restore_from_tray()
 
 
 class TitanApp(wx.Frame):
-    def __init__(self, *args, version, settings=None, **kw):
+    def __init__(self, *args, version, settings=None, component_manager=None, **kw):
         super(TitanApp, self).__init__(*args, **kw)
         self.version = version
         self.settings = settings
+        self.component_manager = component_manager
+        self.task_bar_icon = None
+        self.invisible_ui = InvisibleUI(self)
 
         initialize_sound()
 
@@ -50,8 +94,8 @@ class TitanApp(wx.Frame):
 
         empty_bitmap = wx.Bitmap(1, 1)
 
-        self.tool_apps = self.toolbar.AddTool(wx.ID_ANY, "Lista Aplikacji", empty_bitmap, shortHelp="Pokaż listę aplikacji")
-        self.tool_games = self.toolbar.AddTool(wx.ID_ANY, "Lista Gier", empty_bitmap, shortHelp="Pokaż listę gier")
+        self.tool_apps = self.toolbar.AddTool(wx.ID_ANY, _("Application List"), empty_bitmap, shortHelp=_("Show application list"))
+        self.tool_games = self.toolbar.AddTool(wx.ID_ANY, _("Game List"), empty_bitmap, shortHelp=_("Show game list"))
 
         self.toolbar.Realize()
 
@@ -59,7 +103,7 @@ class TitanApp(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.on_show_games, self.tool_games)
 
 
-        self.list_label = wx.StaticText(panel, label="Lista Aplikacji:")
+        self.list_label = wx.StaticText(panel, label=_("Application List:"))
         main_vbox.Add(self.list_label, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
         self.app_listbox = wx.ListBox(panel)
@@ -72,7 +116,7 @@ class TitanApp(wx.Frame):
 
         main_vbox.Add(list_sizer, proportion=1, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
 
-        main_vbox.Add(wx.StaticText(panel, label="Pasek statusu:"), flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
+        main_vbox.Add(wx.StaticText(panel, label=_("Status Bar:")), flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
         self.statusbar_listbox = wx.ListBox(panel)
         self.populate_statusbar()
@@ -87,15 +131,13 @@ class TitanApp(wx.Frame):
         self.app_listbox.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
         self.game_listbox.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
 
-        self.app_listbox.Bind(wx.EVT_MOTION, self.on_focus_change)
-        self.game_listbox.Bind(wx.EVT_MOTION, self.on_focus_change)
         self.statusbar_listbox.Bind(wx.EVT_MOTION, self.on_focus_change_status)
 
 
         panel.SetSizer(main_vbox)
 
         self.SetSize((600, 800))
-        self.SetTitle("Titan App Suite")
+        self.SetTitle(_("Titan App Suite"))
         self.Centre()
 
     def load_skin_data(self, skin_name):
@@ -108,7 +150,7 @@ class TitanApp(wx.Frame):
         skin_ini_path = os.path.join(skin_path, 'skin.ini')
 
         if skin_name == DEFAULT_SKIN_NAME or not os.path.exists(skin_ini_path):
-            print(f"INFO: Ładowanie domyślnej skórki lub plik skin.ini nie znaleziono w {skin_path}")
+            print(f"INFO: Loading default skin or skin.ini file not found in {skin_path}")
             skin_data['Colors'] = {
                 'frame_background_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_FRAMEBK),
                 'panel_background_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE),
@@ -117,7 +159,7 @@ class TitanApp(wx.Frame):
                 'listbox_selection_background_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT),
                 'listbox_selection_foreground_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHTTEXT),
                 'label_foreground_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT),
-                'toolbar_background_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE) # Zmieniono z wx.SYS_COLOUR_TOOLBAR
+                'toolbar_background_color': wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE) # Changed from wx.SYS_COLOUR_TOOLBAR
             }
             skin_data['Fonts']['default_font_size'] = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetPointSize()
             skin_data['Fonts']['listbox_font_face'] = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
@@ -127,7 +169,7 @@ class TitanApp(wx.Frame):
 
 
         else:
-            print(f"INFO: Ładowanie skórki z: {skin_ini_path}")
+            print(f"INFO: Loading skin from: {skin_ini_path}")
             config = configparser.ConfigParser()
             try:
                 config.read(skin_ini_path, encoding='utf-8')
@@ -139,10 +181,10 @@ class TitanApp(wx.Frame):
                             if color.IsOk():
                                 skin_data['Colors'][key] = color
                             else:
-                                print(f"WARNING: Niepoprawny format koloru w skin.ini: {value} dla klucza {key}")
+                                print(f"WARNING: Invalid color format in skin.ini: {value} for key {key}")
                                 skin_data['Colors'][key] = wx.NullColour
                         except ValueError:
-                             print(f"WARNING: Niepoprawny format koloru w skin.ini: {value} dla klucza {key}")
+                             print(f"WARNING: Invalid color format in skin.ini: {value} for key {key}")
                              skin_data['Colors'][key] = wx.NullColour
 
 
@@ -151,7 +193,7 @@ class TitanApp(wx.Frame):
                          try:
                              skin_data['Fonts']['default_font_size'] = int(config['Fonts']['default_font_size'])
                          except ValueError:
-                             print(f"WARNING: Niepoprawny format rozmiaru czcionki w skin.ini: {config['Fonts']['default_font_size']}")
+                             print(f"WARNING: Invalid font size format in skin.ini: {config['Fonts']['default_font_size']}")
 
                     if 'listbox_font_face' in config['Fonts']:
                          skin_data['Fonts']['listbox_font_face'] = config['Fonts']['listbox_font_face']
@@ -167,21 +209,21 @@ class TitanApp(wx.Frame):
                         if os.path.exists(icon_full_path):
                              skin_data['Icons'][key] = icon_full_path
                         else:
-                             print(f"WARNING: Plik ikony nie znaleziono: {icon_full_path}")
+                             print(f"WARNING: Icon file not found: {icon_full_path}")
                              skin_data['Icons'][key] = None
 
 
             except configparser.Error as e:
-                print(f"ERROR: Błąd podczas czytania pliku skin.ini: {e}")
+                print(f"ERROR: Error reading skin.ini file: {e}")
             except Exception as e:
-                 print(f"ERROR: Nieoczekiwany błąd podczas ładowania skórki: {e}")
+                 print(f"ERROR: Unexpected error while loading skin: {e}")
 
 
         return skin_data
 
     def apply_skin(self, skin_data):
         if not skin_data:
-            print("WARNING: Brak danych skórki do zastosowania.")
+            print("WARNING: No skin data to apply.")
             return
 
         colors = skin_data.get('Colors', {})
@@ -236,9 +278,9 @@ class TitanApp(wx.Frame):
                      self.toolbar.SetToolNormalBitmap(self.tool_apps.GetId(), icon_bitmap)
                      self.toolbar.Realize()
                  else:
-                     print(f"WARNING: Nie udało się wczytać bitmapy ikony: {icons['app_list_icon']}")
+                     print(f"WARNING: Could not load icon bitmap: {icons['app_list_icon']}")
             except Exception as e:
-                 print(f"ERROR: Błąd podczas stosowania ikony {icons['app_list_icon']}: {e}")
+                 print(f"ERROR: Error applying icon {icons['app_list_icon']}: {e}")
 
         if 'game_list_icon' in icons and icons['game_list_icon']:
              try:
@@ -247,9 +289,9 @@ class TitanApp(wx.Frame):
                       self.toolbar.SetToolNormalBitmap(self.tool_games.GetId(), icon_bitmap)
                       self.toolbar.Realize()
                   else:
-                      print(f"WARNING: Nie udało się wczytać bitmapy ikony: {icons['game_list_icon']}")
+                      print(f"WARNING: Could not load icon bitmap: {icons['game_list_icon']}")
              except Exception as e:
-                  print(f"ERROR: Błąd podczas stosowania ikony {icons['game_list_icon']}: {e}")
+                  print(f"ERROR: Error applying icon {icons['game_list_icon']}: {e}")
 
 
         self.Refresh()
@@ -262,7 +304,7 @@ class TitanApp(wx.Frame):
         if self.settings and 'interface' in self.settings and 'skin' in self.settings['interface']:
              skin_name = self.settings['interface']['skin']
 
-        print(f"INFO: Stosowanie skórki: {skin_name}")
+        print(f"INFO: Applying skin: {skin_name}")
         skin_data = self.load_skin_data(skin_name)
         self.apply_skin(skin_data)
 
@@ -271,27 +313,27 @@ class TitanApp(wx.Frame):
         applications = get_applications()
         self.app_listbox.Clear()
         for app in applications:
-            self.app_listbox.Append(app.get("name", "Unknown App"), clientData=app)
+            self.app_listbox.Append(app.get("name", _("Unknown App")), clientData=app)
 
 
     def populate_game_list(self):
         games = get_games()
         self.game_listbox.Clear()
         for game in games:
-            self.game_listbox.Append(game.get("name", "Unknown Game"), clientData=game)
+            self.game_listbox.Append(game.get("name", _("Unknown Game")), clientData=game)
 
 
     def populate_statusbar(self):
         self.statusbar_listbox.Clear()
-        self.statusbar_listbox.Append(f"zegar: {get_current_time()}")
-        self.statusbar_listbox.Append(f"poziom baterii: {get_battery_status()}")
-        self.statusbar_listbox.Append(f"głośność: {get_volume_level()}")
+        self.statusbar_listbox.Append(_("Clock: {}").format(get_current_time()))
+        self.statusbar_listbox.Append(_("Battery level: {}").format(get_battery_status()))
+        self.statusbar_listbox.Append(_("Volume: {}").format(get_volume_level()))
         self.statusbar_listbox.Append(get_network_status())
 
     def update_statusbar(self, event):
-        self.statusbar_listbox.SetString(0, f"zegar: {get_current_time()}")
-        self.statusbar_listbox.SetString(1, f"poziom baterii: {get_battery_status()}")
-        self.statusbar_listbox.SetString(2, f"głośność: {get_volume_level()}")
+        self.statusbar_listbox.SetString(0, _("Clock: {}").format(get_current_time()))
+        self.statusbar_listbox.SetString(1, _("Battery level: {}").format(get_battery_status()))
+        self.statusbar_listbox.SetString(2, _("Volume: {}").format(get_volume_level()))
         self.statusbar_listbox.SetString(3, get_network_status())
 
 
@@ -303,7 +345,7 @@ class TitanApp(wx.Frame):
                  play_select_sound()
                  open_application(app_info)
             else:
-                 print("WARNING: Brak danych ClientData dla wybranej aplikacji.")
+                 print("WARNING: No ClientData for selected application.")
 
 
     def on_game_selected(self, event):
@@ -314,7 +356,7 @@ class TitanApp(wx.Frame):
                  play_select_sound()
                  open_game(game_info)
             else:
-                 print("WARNING: Brak danych ClientData dla wybranej gry.")
+                 print("WARNING: No ClientData for selected game.")
 
     def on_list_context_menu(self, event):
         listbox = event.GetEventObject()
@@ -323,7 +365,7 @@ class TitanApp(wx.Frame):
         if selected_index != wx.NOT_FOUND:
             item_data = listbox.GetClientData(selected_index)
             if not item_data:
-                 print("WARNING: Brak danych ClientData dla zaznaczonego elementu menu kontekstowego.")
+                 print("WARNING: No ClientData for selected context menu item.")
                  event.Skip()
                  return
 
@@ -334,7 +376,7 @@ class TitanApp(wx.Frame):
                  item_type = "game"
 
             if not item_type:
-                 print("ERROR: Nie można określić typu elementu menu kontekstowego.")
+                 print("ERROR: Could not determine context menu item type.")
                  event.Skip()
                  return
 
@@ -342,11 +384,11 @@ class TitanApp(wx.Frame):
 
             menu = wx.Menu()
 
-            run_label = f"Uruchom {item_data.get('name', 'element')}..."
+            run_label = _("Run {}...").format(item_data.get('name', _('item')))
             run_item = menu.Append(wx.ID_ANY, run_label)
             self.Bind(wx.EVT_MENU, lambda evt, data=item_data, type=item_type: self.on_run_from_context_menu(evt, item_data=data, item_type=type), run_item)
 
-            uninstall_label = f"Odinstaluj {item_data.get('name', 'element')}"
+            uninstall_label = _("Uninstall {}").format(item_data.get('name', _('item')))
             uninstall_item = menu.Append(wx.ID_ANY, uninstall_label)
             self.Bind(wx.EVT_MENU, lambda evt, data=item_data, type=item_type: self.on_uninstall(evt, item_data=data, item_type=type), uninstall_item)
 
@@ -361,8 +403,8 @@ class TitanApp(wx.Frame):
 
     def on_run_from_context_menu(self, event, item_data=None, item_type=None):
         if not item_data or not item_type:
-            print("ERROR: Brak danych elementu do uruchomienia z menu kontekstowego.")
-            wx.MessageBox("Wystąpił błąd: Brak danych do uruchomienia.", "Błąd", wx.OK | wx.ICON_ERROR)
+            print("ERROR: No item data to run from context menu.")
+            wx.MessageBox(_("An error occurred: No data to run."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         if item_type == "app":
@@ -372,27 +414,27 @@ class TitanApp(wx.Frame):
             play_select_sound()
             open_game(item_data)
         else:
-            print(f"ERROR: Nieznany typ elementu ({item_type}) do uruchomienia z menu kontekstowego.")
+            print(f"ERROR: Unknown item type ({item_type}) to run from context menu.")
 
 
     def on_uninstall(self, event, item_data=None, item_type=None):
         if not item_data or not item_type:
-            print("ERROR: Brak danych elementu lub typu do odinstalowania z menu kontekstowego.")
-            wx.MessageBox("Wystąpił błąd: Brak danych do odinstalowania.", "Błąd", wx.OK | wx.ICON_ERROR)
+            print("ERROR: No item data or type to uninstall from context menu.")
+            wx.MessageBox(_("An error occurred: No data to uninstall."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
-        item_name = item_data.get('name', 'nieznany element')
+        item_name = item_data.get('name', _('unknown item'))
         item_path = item_data.get('path')
 
         if not item_path or not os.path.exists(item_path):
-            print(f"ERROR: Ścieżka do odinstalowania niepoprawna lub katalog nie istnieje: {item_path}")
-            wx.MessageBox(f"Błąd: Nie można odnaleźć katalogu '{item_name}' do odinstalowania.", "Błąd", wx.OK | wx.ICON_ERROR)
+            print(f"ERROR: Uninstall path is invalid or directory does not exist: {item_path}")
+            wx.MessageBox(_("Error: Cannot find the directory '{}' to uninstall.").format(item_name), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         confirm_dialog = wx.MessageDialog(
             self,
-            f"Czy na pewno chcesz odinstalować '{item_name}' z Titana?\n\nSpowoduje to usunięcie całego katalogu: {item_path}",
-            "Potwierdź odinstalowanie",
+            _("Are you sure you want to uninstall '{}' from Titan?\n\nThis will delete the entire directory: {}").format(item_name, item_path),
+            _("Confirm Uninstall"),
             wx.YES_NO | wx.ICON_QUESTION | wx.NO_DEFAULT
         )
 
@@ -400,33 +442,33 @@ class TitanApp(wx.Frame):
         confirm_dialog.Destroy()
 
         if result == wx.ID_YES:
-            print(f"INFO: Użytkownik potwierdził odinstalowanie '{item_name}'. Usuwanie katalogu: {item_path}")
+            print(f"INFO: User confirmed uninstall of '{item_name}'. Deleting directory: {item_path}")
             try:
                 shutil.rmtree(item_path)
-                print(f"INFO: Katalog '{item_path}' usunięty pomyślnie.")
+                print(f"INFO: Directory '{item_path}' deleted successfully.")
 
                 if item_type == "app":
                     self.populate_app_list()
-                    print(f"INFO: Lista aplikacji odświeżona.")
+                    print(f"INFO: Application list refreshed.")
                 elif item_type == "game":
                     self.populate_game_list()
-                    print(f"INFO: Lista gier odświeżona.")
+                    print(f"INFO: Game list refreshed.")
 
                 play_select_sound()
-                wx.MessageBox(f"'{item_name}' został pomyślnie odinstalowany.", "Sukces", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(_("'{}' has been successfully uninstalled.").format(item_name), _("Success"), wx.OK | wx.ICON_INFORMATION)
 
 
             except OSError as e:
-                print(f"ERROR: Błąd podczas usuwania katalogu '{item_path}': {e}")
+                print(f"ERROR: Error deleting directory '{item_path}': {e}")
                 play_endoflist_sound()
-                wx.MessageBox(f"Błąd podczas odinstalowywania '{item_name}':\n{e}\n\nUpewnij się, że katalog nie jest używany.", "Błąd", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
             except Exception as e:
-                 print(f"ERROR: Nieoczekiwany błąd podczas odinstalowywania '{item_name}': {e}")
+                 print(f"ERROR: Unexpected error during uninstall of '{item_name}': {e}")
                  play_endoflist_sound()
-                 wx.MessageBox(f"Nieoczekiwany błąd podczas odinstalowywania '{item_name}':\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("An unexpected error occurred while uninstalling '{}':\n{}").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
         else:
-            print(f"INFO: Odinstalowanie '{item_name}' anulowane przez użytkownika.")
+            print(f"INFO: Uninstall of '{item_name}' canceled by user.")
             play_focus_sound()
 
 
@@ -481,49 +523,47 @@ class TitanApp(wx.Frame):
 
 
         if keycode in [wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_HOME, wx.WXK_END]:
-             self.handle_navigation_key_sound(keycode, current_focus)
-             event.Skip()
+             self.handle_navigation(event, keycode, current_focus)
              return
 
         event.Skip()
 
-    def handle_navigation_key_sound(self, keycode, current_focus):
+    def handle_navigation(self, event, keycode, current_focus):
         target_listbox = None
         if current_focus == self.app_listbox and self.app_listbox.IsShown():
             target_listbox = self.app_listbox
-            list_type = "app"
         elif current_focus == self.game_listbox and self.game_listbox.IsShown():
             target_listbox = self.game_listbox
-            list_type = "game"
         elif current_focus == self.statusbar_listbox:
-             target_listbox = self.statusbar_listbox
-             list_type = "status"
+            target_listbox = self.statusbar_listbox
         else:
-             return
+            event.Skip()
+            return
 
         if target_listbox:
             current_selection = target_listbox.GetSelection()
             item_count = target_listbox.GetCount()
+            
+            new_selection = current_selection
 
-            if keycode in [wx.WXK_UP, wx.WXK_DOWN]:
-                if keycode == wx.WXK_UP and current_selection <= 0:
-                     play_endoflist_sound()
-                elif keycode == wx.WXK_DOWN and current_selection >= item_count - 1:
-                     play_endoflist_sound()
-                else:
-                     play_focus_sound()
+            if keycode == wx.WXK_UP or keycode == wx.WXK_LEFT:
+                new_selection -= 1
+            elif keycode == wx.WXK_DOWN or keycode == wx.WXK_RIGHT:
+                new_selection += 1
+            elif keycode == wx.WXK_HOME:
+                new_selection = 0
+            elif keycode == wx.WXK_END:
+                new_selection = item_count - 1
 
-            elif keycode in [wx.WXK_LEFT, wx.WXK_RIGHT]:
-                 play_focus_sound()
-
-
-            elif keycode in [wx.WXK_HOME, wx.WXK_END]:
+            if new_selection >= 0 and new_selection < item_count:
+                target_listbox.SetSelection(new_selection)
+                pan = 0
+                if item_count > 1:
+                    pan = new_selection / (item_count - 1)
+                play_focus_sound(pan=pan)
+            else:
                 play_endoflist_sound()
 
-
-    def on_focus_change(self, event):
-        play_focus_sound()
-        event.Skip()
 
     def on_focus_change_status(self, event):
          play_statusbar_sound()
@@ -538,23 +578,24 @@ class TitanApp(wx.Frame):
             threading.Thread(target=self.handle_status_action, args=(status_item,)).start()
 
     def handle_status_action(self, item):
-        if "zegar:" in item:
+        if _("Clock:") in item:
             self.open_time_settings()
-        elif "poziom baterii:" in item:
+        elif _("Battery level:") in item:
             self.open_power_settings()
-        elif "głośność:" in item:
+        elif _("Volume:") in item:
             self.open_volume_mixer()
-        elif "status sieci:" in item:
+        elif _("Network status:") in item:
              self.open_network_settings()
         else:
-            print(f"WARNING: Nieznany element statusbaru wybrany: {item}")
+            print(f"WARNING: Unknown statusbar item selected: {item}")
 
 
     def show_app_list(self):
         self.app_listbox.Show()
         self.game_listbox.Hide()
-        self.list_label.SetLabel("Lista Aplikacji:")
+        self.list_label.SetLabel(_("Application List:"))
         self.current_list = "apps"
+        speaker.speak(_("Application list, 1 of 2"))
         self.Layout()
         if self.app_listbox.GetCount() > 0:
              self.app_listbox.SetFocus()
@@ -563,8 +604,9 @@ class TitanApp(wx.Frame):
     def show_game_list(self):
         self.app_listbox.Hide()
         self.game_listbox.Show()
-        self.list_label.SetLabel("Lista Gier:")
+        self.list_label.SetLabel(_("Game List:"))
         self.current_list = "games"
+        speaker.speak(_("Game list, 2 of 2"))
         self.Layout()
         if self.game_listbox.GetCount() > 0:
              self.game_listbox.SetFocus()
@@ -595,42 +637,42 @@ class TitanApp(wx.Frame):
             try:
                 subprocess.run(["timedate.cpl"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień daty/czasu:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień daty/czasu:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox("Ta funkcja nie jest wspierana na tej platformie.", "Informacja", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_power_settings(self):
         if platform.system() == "Windows":
             try:
                 subprocess.run(["powercfg.cpl"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień zasilania:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień zasilania:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox("Ta funkcja nie jest wspierana na tej platformie.", "Informacja", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_volume_mixer(self):
         if platform.system() == "Windows":
             try:
                 subprocess.run(["sndvol.exe"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć miksera głośności:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/Applications/Utilities/Audio MIDI Setup.app"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień audio:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open audio settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox("Ta funkcja nie jest wspierana na tej platformie.", "Informacja", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
 
     def open_network_settings(self):
@@ -638,48 +680,27 @@ class TitanApp(wx.Frame):
             try:
                 subprocess.run(["explorer", "ms-settings:network-status"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień sieciowych:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(f"Nie można otworzyć ustawień sieciowych:\n{e}", "Błąd", wx.OK | wx.ICON_ERROR)
+                 wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox("Ta funkcja nie jest wspierana na tej platformie.", "Informacja", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
+    def minimize_to_tray(self):
+        self.Hide()
+        skin_name = self.settings.get('interface', {}).get('skin', DEFAULT_SKIN_NAME)
+        skin_data = self.load_skin_data(skin_name)
+        self.task_bar_icon = TaskBarIcon(self, self.version, skin_data)
+        play_sound('minimalize.ogg')
+        self.invisible_ui.start_listening()
 
-if __name__ == "__main__":
-    def get_applications():
-        return [{"name": "Dummy App 1", "openfile": "dummy1.exe", "path": "."},
-                {"name": "Dummy App 2", "openfile": "dummy2.py", "path": "."}]
-
-    def open_application(app_info):
-        speak(f"Uruchamiam {app_info.get('name', 'Unknown App')}")
-
-    def get_games():
-        return [{"name": "Dummy Game A", "openfile": "dummya.exe", "path": "."},
-                {"name": "Dummy Game B", "openfile": "dummyb.py", "path": "."}]
-
-    def open_game(game_info):
-         speak(f"Uruchamiam grę {game_info.get('name', 'Unknown Game')}")
-
-    def get_current_time(): return "12:00"
-    def get_battery_status(): return "100%"
-    def get_volume_level(): return "50%"
-    def get_network_status(): return "Online"
-
-    def initialize_sound(): pass
-    def play_focus_sound(): pass
-    def play_select_sound(): pass
-    def play_statusbar_sound(): pass
-    def play_applist_sound(): pass
-    def play_endoflist_sound(): pass
-    def play_sound(sound_file): pass
-
-    def speak(text): pass
-    def MenuBar(parent): pass
-
-    app = wx.App(False)
-    frame = TitanApp(None, title="Interfejs graficzny Titana - Test", version="Test")
-    frame.Show()
-    app.MainLoop()
+    def restore_from_tray(self):
+        self.Show()
+        self.Raise()
+        self.task_bar_icon.Destroy()
+        self.task_bar_icon = None
+        play_sound('normalize.ogg')
+        self.invisible_ui.stop_listening()
