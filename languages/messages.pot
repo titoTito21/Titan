@@ -1,0 +1,692 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-05 16:26+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: componentmanagergui.py:22
+msgid "Installed components:"
+msgstr ""
+
+#: componentmanagergui.py:28
+msgid "&Actions"
+msgstr ""
+
+#: componentmanagergui.py:45
+msgid "Component manager not available."
+msgstr ""
+
+#: componentmanagergui.py:53 componentmanagergui.py:177
+msgid "Enabled"
+msgstr ""
+
+#: componentmanagergui.py:53 componentmanagergui.py:177
+msgid "Disabled"
+msgstr ""
+
+#: componentmanagergui.py:122
+#, python-brace-format
+msgid "Component '{}' is not loaded."
+msgstr ""
+
+#: componentmanagergui.py:122 componentmanagergui.py:130 gui.py:647 gui.py:661
+#: gui.py:675 gui.py:690
+msgid "Information"
+msgstr ""
+
+#: componentmanagergui.py:130
+#, python-brace-format
+msgid "No available actions for component '{}'."
+msgstr ""
+
+#: componentmanagergui.py:134
+msgid "Context menu"
+msgstr ""
+
+#: componentmanagergui.py:137
+msgid "Run"
+msgstr ""
+
+#: componentmanagergui.py:141 invisibleui.py:50 main.py:94 menu.py:150
+#: settingsgui.py:124
+msgid "Settings"
+msgstr ""
+
+#: componentmanagergui.py:149
+#, python-brace-format
+msgid "Running component {}"
+msgstr ""
+
+#: componentmanagergui.py:161
+#, python-brace-format
+msgid ""
+"Error running component '{}':\n"
+"{}"
+msgstr ""
+
+#: componentmanagergui.py:161 componentmanagergui.py:172 gui.py:407 gui.py:423
+#: gui.py:431 gui.py:464 gui.py:468 gui.py:640 gui.py:645 gui.py:654 gui.py:659
+#: gui.py:668 gui.py:673 gui.py:683 gui.py:688 menu.py:70 menu.py:72
+#: menu.py:123 menu.py:139 settingsgui.py:324 settingsgui.py:327
+#: settingsgui.py:345 settingsgui.py:351 settingsgui.py:354
+msgid "Error"
+msgstr ""
+
+#: componentmanagergui.py:165
+#, python-brace-format
+msgid "Opening settings for component {}"
+msgstr ""
+
+#: componentmanagergui.py:172
+#, python-brace-format
+msgid ""
+"Error opening settings for '{}':\n"
+"{}"
+msgstr ""
+
+#: componentmanagergui.py:180
+#, python-brace-format
+msgid "Component {} {}"
+msgstr ""
+
+#: gui.py:25 settingsgui.py:204 settingsgui.py:206 settingsgui.py:302
+#: settingsgui.py:303
+msgid "Default"
+msgstr ""
+
+#: gui.py:46
+#, python-brace-format
+msgid "Titan v{}"
+msgstr ""
+
+#: gui.py:51
+msgid "Back to Titan"
+msgstr ""
+
+#: gui.py:51
+msgid "Restores the application window"
+msgstr ""
+
+#: gui.py:97
+msgid "Application List"
+msgstr ""
+
+#: gui.py:97
+msgid "Show application list"
+msgstr ""
+
+#: gui.py:98
+msgid "Game List"
+msgstr ""
+
+#: gui.py:98
+msgid "Show game list"
+msgstr ""
+
+#: gui.py:106 gui.py:596
+msgid "Application List:"
+msgstr ""
+
+#: gui.py:119
+msgid "Status Bar:"
+msgstr ""
+
+#: gui.py:140 main.py:88
+msgid "Titan App Suite"
+msgstr ""
+
+#: gui.py:316
+msgid "Unknown App"
+msgstr ""
+
+#: gui.py:323
+msgid "Unknown Game"
+msgstr ""
+
+#: gui.py:328 gui.py:334
+#, python-brace-format
+msgid "Clock: {}"
+msgstr ""
+
+#: gui.py:329 gui.py:335
+#, python-brace-format
+msgid "Battery level: {}"
+msgstr ""
+
+#: gui.py:330 gui.py:336
+#, python-brace-format
+msgid "Volume: {}"
+msgstr ""
+
+#: gui.py:387
+#, python-brace-format
+msgid "Run {}..."
+msgstr ""
+
+#: gui.py:387 gui.py:391
+msgid "item"
+msgstr ""
+
+#: gui.py:391
+#, python-brace-format
+msgid "Uninstall {}"
+msgstr ""
+
+#: gui.py:407
+msgid "An error occurred: No data to run."
+msgstr ""
+
+#: gui.py:423
+msgid "An error occurred: No data to uninstall."
+msgstr ""
+
+#: gui.py:426
+msgid "unknown item"
+msgstr ""
+
+#: gui.py:431
+#, python-brace-format
+msgid "Error: Cannot find the directory '{}' to uninstall."
+msgstr ""
+
+#: gui.py:436
+#, python-brace-format
+msgid ""
+"Are you sure you want to uninstall '{}' from Titan?\n"
+"\n"
+"This will delete the entire directory: {}"
+msgstr ""
+
+#: gui.py:437
+msgid "Confirm Uninstall"
+msgstr ""
+
+#: gui.py:458
+#, python-brace-format
+msgid "'{}' has been successfully uninstalled."
+msgstr ""
+
+#: gui.py:458 menu.py:146
+msgid "Success"
+msgstr ""
+
+#: gui.py:464
+#, python-brace-format
+msgid ""
+"Error uninstalling '{}':\n"
+"{}\n"
+"\n"
+"Make sure the directory is not in use."
+msgstr ""
+
+#: gui.py:468
+#, python-brace-format
+msgid ""
+"An unexpected error occurred while uninstalling '{}':\n"
+"{}"
+msgstr ""
+
+#: gui.py:581
+msgid "Clock:"
+msgstr ""
+
+#: gui.py:583
+msgid "Battery level:"
+msgstr ""
+
+#: gui.py:585
+msgid "Volume:"
+msgstr ""
+
+#: gui.py:587
+msgid "Network status:"
+msgstr ""
+
+#: gui.py:598
+msgid "Application list, 1 of 2"
+msgstr ""
+
+#: gui.py:607
+msgid "Game List:"
+msgstr ""
+
+#: gui.py:609
+msgid "Game list, 2 of 2"
+msgstr ""
+
+#: gui.py:640 gui.py:645
+#, python-brace-format
+msgid ""
+"Could not open date/time settings:\n"
+"{}"
+msgstr ""
+
+#: gui.py:647 gui.py:661 gui.py:675 gui.py:690
+msgid "This feature is not supported on this platform."
+msgstr ""
+
+#: gui.py:654 gui.py:659
+#, python-brace-format
+msgid ""
+"Could not open power settings:\n"
+"{}"
+msgstr ""
+
+#: gui.py:668
+#, python-brace-format
+msgid ""
+"Could not open volume mixer:\n"
+"{}"
+msgstr ""
+
+#: gui.py:673
+#, python-brace-format
+msgid ""
+"Could not open audio settings:\n"
+"{}"
+msgstr ""
+
+#: gui.py:683 gui.py:688
+#, python-brace-format
+msgid ""
+"Could not open network settings:\n"
+"{}"
+msgstr ""
+
+#: invisibleui.py:42 invisibleui.py:54 menu.py:66
+msgid "Component Manager"
+msgstr ""
+
+#: invisibleui.py:46
+msgid "Component manager is not available"
+msgstr ""
+
+#: invisibleui.py:55 menu.py:39
+msgid "Program settings"
+msgstr ""
+
+#: invisibleui.py:56 invisibleui.py:174
+msgid "Back to graphical interface"
+msgstr ""
+
+#: invisibleui.py:57 invisibleui.py:174 menu.py:41
+msgid "Exit"
+msgstr ""
+
+#: invisibleui.py:62 invisibleui.py:117 invisibleui.py:118
+msgid "Applications"
+msgstr ""
+
+#: invisibleui.py:64
+msgid "No applications"
+msgstr ""
+
+#: invisibleui.py:68 invisibleui.py:117 invisibleui.py:118
+msgid "Games"
+msgstr ""
+
+#: invisibleui.py:70
+msgid "No games"
+msgstr ""
+
+#: invisibleui.py:74 invisibleui.py:113 invisibleui.py:115 invisibleui.py:124
+#: invisibleui.py:158
+msgid "Status Bar"
+msgstr ""
+
+#: invisibleui.py:80 invisibleui.py:129
+msgid "Menu"
+msgstr ""
+
+#: invisibleui.py:91
+msgid "No status bar data"
+msgstr ""
+
+#: invisibleui.py:125
+msgid "Status bar"
+msgstr ""
+
+#: invisibleui.py:130
+msgid "Titan Menu"
+msgstr ""
+
+#: invisibleui.py:172
+#, python-brace-format
+msgid "Activated: {}"
+msgstr ""
+
+#: invisibleui.py:182
+#, python-brace-format
+msgid "Error during activation: {}"
+msgstr ""
+
+#: invisibleui.py:192
+#, python-brace-format
+msgid "Application not found: {}"
+msgstr ""
+
+#: invisibleui.py:199
+#, python-brace-format
+msgid "Game not found: {}"
+msgstr ""
+
+#: invisibleui.py:203
+msgid "clock:"
+msgstr ""
+
+#: invisibleui.py:205
+msgid "battery level:"
+msgstr ""
+
+#: invisibleui.py:207
+msgid "volume:"
+msgstr ""
+
+#: invisibleui.py:209
+msgid "network status:"
+msgstr ""
+
+#: invisibleui.py:212
+msgid "No action for this item"
+msgstr ""
+
+#: invisibleui.py:221
+msgid "Invisible interface active"
+msgstr ""
+
+#: main.py:38
+#, python-brace-format
+msgid "Welcome to Titan: Version {}"
+msgstr ""
+
+#: main.py:82
+msgid ""
+"Currently, translation system and international support is limited. To "
+"fully enjoy Titan, please use translation addon for your screen reader, "
+"or switch to Polish Language"
+msgstr ""
+
+#: main.py:83
+msgid "Titan"
+msgstr ""
+
+#: menu.py:35
+msgid "Install data package..."
+msgstr ""
+
+#: menu.py:37
+msgid "Component Manager..."
+msgstr ""
+
+#: menu.py:40
+msgid "Minimize"
+msgstr ""
+
+#: menu.py:51
+msgid "Program"
+msgstr ""
+
+#: menu.py:55
+msgid "Select data package"
+msgstr ""
+
+#: menu.py:55
+msgid "Data packages (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
+msgstr ""
+
+#: menu.py:60
+msgid "Package installation"
+msgstr ""
+
+#: menu.py:60
+msgid "Preparing for installation..."
+msgstr ""
+
+#: menu.py:70
+msgid "Cannot load Component Manager (componentmanagergui.py not found)"
+msgstr ""
+
+#: menu.py:72
+msgid "Component Manager has not been initialized."
+msgstr ""
+
+#: menu.py:97
+msgid "Unpacking ZIP package..."
+msgstr ""
+
+#: menu.py:108
+msgid ""
+"Error: 7z executable not found. Make sure it is in the 'data/bin/' "
+"directory."
+msgstr ""
+
+#: menu.py:108
+msgid "Executable file error"
+msgstr ""
+
+#: menu.py:115
+msgid "Unpacking 7z package..."
+msgstr ""
+
+#: menu.py:117
+msgid "Starting 7z process..."
+msgstr ""
+
+#: menu.py:123
+#, python-brace-format
+msgid ""
+"Error during package installation:\n"
+"{}"
+msgstr ""
+
+#: menu.py:126
+msgid "Finished unpacking 7z."
+msgstr ""
+
+#: menu.py:130
+msgid "Unpacking .tcepackage package..."
+msgstr ""
+
+#: menu.py:132
+msgid "Unpacking archive..."
+msgstr ""
+
+#: menu.py:134
+msgid "Finished unpacking .tcepackage."
+msgstr ""
+
+#: menu.py:139
+#, python-brace-format
+msgid ""
+"Error during package installation: {}\n"
+"\n"
+"Details:\n"
+"{}"
+msgstr ""
+
+#: menu.py:146
+msgid "Data package has been installed!"
+msgstr ""
+
+#: settingsgui.py:91
+msgid "Sound"
+msgstr ""
+
+#: settingsgui.py:92
+msgid "General"
+msgstr ""
+
+#: settingsgui.py:93
+msgid "Interface"
+msgstr ""
+
+#: settingsgui.py:101
+msgid "Windows"
+msgstr ""
+
+#: settingsgui.py:106
+msgid "Save"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:29
+#: settingsgui.py:110 shutdown_question.py:30
+msgid "Cancel"
+msgstr ""
+
+#: settingsgui.py:130
+msgid "Select sound theme:"
+msgstr ""
+
+#: settingsgui.py:144 settingsgui.py:393
+msgid "No themes"
+msgstr ""
+
+#: settingsgui.py:151
+msgid "Stereo sounds"
+msgstr ""
+
+#: settingsgui.py:162
+msgid "Language:"
+msgstr ""
+
+#: settingsgui.py:175
+msgid "Quick start"
+msgstr ""
+
+#: settingsgui.py:180
+msgid "Confirm exit from Titan"
+msgstr ""
+
+#: settingsgui.py:190
+msgid "Select interface skin:"
+msgstr ""
+
+#: settingsgui.py:221
+msgid "Change SAPI settings"
+msgstr ""
+
+#: settingsgui.py:226
+msgid "Ease of Access"
+msgstr ""
+
+#: settingsgui.py:231
+msgid "System volume:"
+msgstr ""
+
+#: settingsgui.py:258
+msgid "Disable sound card mute when Titan is running"
+msgstr ""
+
+#: settingsgui.py:324
+#, python-brace-format
+msgid "Error: File {} not found. Make sure Windows is working correctly."
+msgstr ""
+
+#: settingsgui.py:327
+#, python-brace-format
+msgid ""
+"Unexpected error while opening SAPI settings:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:339
+#, python-brace-format
+msgid "Command '{}' finished with error code {}.\n"
+msgstr ""
+
+#: settingsgui.py:345
+#, python-brace-format
+msgid ""
+"Cannot open Ease of Access:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:351
+msgid ""
+"Error: Executable control.exe not found. Make sure Windows is working "
+"correctly."
+msgstr ""
+
+#: settingsgui.py:354
+#, python-brace-format
+msgid ""
+"Unexpected error while opening Ease of Access:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:425
+msgid ""
+"Settings have been saved. Please restart the application for the language"
+" change to take full effect."
+msgstr ""
+
+#: shutdown_question.py:15
+msgid "Confirm Exit"
+msgstr ""
+
+#: shutdown_question.py:22
+msgid "Are you sure you want to exit Titan?"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:28
+#: shutdown_question.py:26
+msgid "OK"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:7
+msgid "Voice Cloning"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:12
+msgid "Voice Name:"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:14
+msgid "Voice Description:"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:16
+msgid "Path to Voice:"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:18
+msgid "Browse..."
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:38
+msgid "Choose a file"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:35
+msgid "Download"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:73
+msgid "Voice downloaded"
+msgstr ""
+
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:73
+msgid ""
+"Do you want to clone this voice and add it to your elevenLabs voice "
+"library?"
+msgstr ""
+

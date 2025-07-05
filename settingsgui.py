@@ -55,12 +55,17 @@ else:
     CLSCTX_ALL = None
 
 
-from settings import load_settings, save_settings
+import accessible_output3.outputs.auto
+from settings import load_settings, save_settings, get_setting, set_setting
 from sound import set_theme, initialize_sound, play_sound, resource_path
-from tts import speak
+from translation import get_available_languages, set_language
+
+# Get the translation function
+_ = set_language(get_setting('language', 'pl'))
 
 SFX_DIR = resource_path('sfx')
 SKINS_DIR = resource_path('skins')
+speaker = accessible_output3.outputs.auto.Auto()
 
 
 class SettingsFrame(wx.Frame):
@@ -83,9 +88,9 @@ class SettingsFrame(wx.Frame):
         self.general_panel = wx.Panel(self.notebook)
         self.interface_panel = wx.Panel(self.notebook)
 
-        self.notebook.AddPage(self.sound_panel, "Dźwięk")
-        self.notebook.AddPage(self.general_panel, "Ogólne")
-        self.notebook.AddPage(self.interface_panel, "Interfejs")
+        self.notebook.AddPage(self.sound_panel, _("Sound"))
+        self.notebook.AddPage(self.general_panel, _("General"))
+        self.notebook.AddPage(self.interface_panel, _("Interface"))
 
         self.InitSoundPanel()
         self.InitGeneralPanel()
@@ -93,16 +98,16 @@ class SettingsFrame(wx.Frame):
 
         if sys.platform == 'win32':
             self.windows_panel = wx.Panel(self.notebook)
-            self.notebook.AddPage(self.windows_panel, "Windows")
+            self.notebook.AddPage(self.windows_panel, _("Windows"))
             self.InitWindowsPanel()
 
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        save_button = wx.Button(panel, label="Zapisz")
+        save_button = wx.Button(panel, label=_("Save"))
         save_button.Bind(wx.EVT_BUTTON, self.OnSave)
         save_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
-        cancel_button = wx.Button(panel, label="Anuluj")
+        cancel_button = wx.Button(panel, label=_("Cancel"))
         cancel_button.Bind(wx.EVT_BUTTON, self.OnCancel)
         cancel_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
@@ -116,13 +121,13 @@ class SettingsFrame(wx.Frame):
         panel.SetSizer(vbox)
 
         self.SetSize((450, 450))
-        self.SetTitle("Ustawienia")
+        self.SetTitle(_("Settings"))
         self.Centre()
 
     def InitSoundPanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        theme_label = wx.StaticText(self.sound_panel, label="Wybierz temat dźwiękowy:")
+        theme_label = wx.StaticText(self.sound_panel, label=_("Select sound theme:"))
         vbox.Add(theme_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.theme_choice = wx.Choice(self.sound_panel)
@@ -133,27 +138,46 @@ class SettingsFrame(wx.Frame):
         if os.path.exists(SFX_DIR):
             themes = [d for d in os.listdir(SFX_DIR) if os.path.isdir(os.path.join(SFX_DIR, d))]
         else:
-            print(f"WARNING: Katalog SFX nie istnieje: {SFX_DIR}. Brak tematów dźwiękowych do wyboru.")
+            print(f"WARNING: SFX directory does not exist: {SFX_DIR}. No sound themes to choose from.")
 
         if not themes:
-             themes = ["Brak tematów"]
+             themes = [_("No themes")]
              self.theme_choice.Enable(False)
 
         self.theme_choice.AppendItems(themes)
 
         vbox.Add(self.theme_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
+        self.stereo_sound_cb = wx.CheckBox(self.sound_panel, label=_("Stereo sounds"))
+        self.stereo_sound_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.stereo_sound_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.stereo_sound_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         self.sound_panel.SetSizer(vbox)
 
     def InitGeneralPanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        self.quick_start_cb = wx.CheckBox(self.general_panel, label="Szybki start")
+        # Language selection
+        lang_label = wx.StaticText(self.general_panel, label=_("Language:"))
+        vbox.Add(lang_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.lang_choice = wx.Choice(self.general_panel)
+        self.lang_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        
+        available_languages = get_available_languages()
+        self.lang_choice.AppendItems(available_languages)
+        vbox.Add(self.lang_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Add a small spacer
+        vbox.AddSpacer(10)
+
+        self.quick_start_cb = wx.CheckBox(self.general_panel, label=_("Quick start"))
         self.quick_start_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.quick_start_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.quick_start_cb, flag=wx.LEFT | wx.TOP, border=10)
 
-        self.confirm_exit_cb = wx.CheckBox(self.general_panel, label="Potwierdź wyjście z Titana")
+        self.confirm_exit_cb = wx.CheckBox(self.general_panel, label=_("Confirm exit from Titan"))
         self.confirm_exit_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.confirm_exit_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.confirm_exit_cb, flag=wx.LEFT | wx.TOP, border=10)
@@ -163,7 +187,7 @@ class SettingsFrame(wx.Frame):
     def InitInterfacePanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        skin_label = wx.StaticText(self.interface_panel, label="Wybierz skórkę interfejsu:")
+        skin_label = wx.StaticText(self.interface_panel, label=_("Select interface skin:"))
         vbox.Add(skin_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.skin_choice = wx.Choice(self.interface_panel)
@@ -174,15 +198,15 @@ class SettingsFrame(wx.Frame):
         if os.path.exists(SKINS_DIR):
             skins = [d for d in os.listdir(SKINS_DIR) if os.path.isdir(os.path.join(SKINS_DIR, d))]
         else:
-             print(f"WARNING: Katalog skórek nie istnieje: {SKINS_DIR}. Brak skórek do wyboru.")
+             print(f"WARNING: Skins directory does not exist: {SKINS_DIR}. No skins to choose from.")
 
 
-        skins.insert(0, "Domyślna") # Zawsze dodaj opcję "Domyślna"
+        skins.insert(0, _("Default")) # Always add "Default" option
 
-        if len(skins) == 1 and skins[0] == "Domyślna": # Jeśli tylko domyślna dostępna
+        if len(skins) == 1 and skins[0] == _("Default"): # If only default is available
              self.skin_choice.Enable(False)
         else:
-             self.skin_choice.Enable(True) # Upewnij się, że jest włączony jeśli są skórki
+             self.skin_choice.Enable(True) # Make sure it's enabled if there are skins
 
         self.skin_choice.AppendItems(skins)
 
@@ -194,17 +218,17 @@ class SettingsFrame(wx.Frame):
     def InitWindowsPanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        sapi_settings_button = wx.Button(self.windows_panel, label="Zmień ustawienia SAPI")
+        sapi_settings_button = wx.Button(self.windows_panel, label=_("Change SAPI settings"))
         sapi_settings_button.Bind(wx.EVT_BUTTON, self.OnSapiSettings)
         sapi_settings_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(sapi_settings_button, flag=wx.ALL | wx.EXPAND, border=10)
 
-        ease_of_access_button = wx.Button(self.windows_panel, label="Ułatwienia dostępu")
+        ease_of_access_button = wx.Button(self.windows_panel, label=_("Ease of Access"))
         ease_of_access_button.Bind(wx.EVT_BUTTON, self.OnEaseOfAccess)
         ease_of_access_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(ease_of_access_button, flag=wx.ALL | wx.EXPAND, border=10)
 
-        volume_label = wx.StaticText(self.windows_panel, label="Głośność systemu:")
+        volume_label = wx.StaticText(self.windows_panel, label=_("System volume:"))
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.volume_slider = wx.Slider(self.windows_panel, value=50, minValue=0, maxValue=100,
@@ -212,26 +236,26 @@ class SettingsFrame(wx.Frame):
         self.volume_slider.Bind(wx.EVT_SLIDER, self.OnVolumeChange)
         self.volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
-        # Wczytaj początkową wartość głośności systemu przy użyciu pycaw (jeśli zainicjalizowano)
-        global volume # Użyj globalnej zmiennej volume
-        if volume: # Sprawdź czy inicjalizacja pycaw się powiodła
+        # Load initial system volume using pycaw (if initialized)
+        global volume # Use the global volume variable
+        if volume: # Check if pycaw initialization was successful
             try:
-                 # GetMasterVolumeLevelScalar zwraca wartość od 0.0 do 1.0
+                 # GetMasterVolumeLevelScalar returns a value from 0.0 to 1.0
                  current_volume = int(volume.GetMasterVolumeLevelScalar() * 100)
                  self.volume_slider.SetValue(current_volume)
-                 print(f"INFO: Wczytano początkową głośność systemu: {current_volume}%")
+                 print(f"INFO: Initial system volume loaded: {current_volume}%")
             except Exception as e:
-                 print(f"WARNING: Błąd odczytu początkowej głośności systemu: {e}")
-                 # traceback.print_exc() # Opcjonalnie: pokaż pełny traceback
+                 print(f"WARNING: Error reading initial system volume: {e}")
+                 # traceback.print_exc() # Optionally: show full traceback
         else:
-             # Jeśli pycaw niedostępny, wyłącz suwak głośności
+             # If pycaw is not available, disable the volume slider
              self.volume_slider.Enable(False)
-             print("INFO: Kontrola głośności systemu niedostępna, suwak wyłączony.")
+             print("INFO: System volume control not available, slider disabled.")
 
 
         vbox.Add(self.volume_slider, flag=wx.ALL | wx.EXPAND, border=10)
 
-        self.mute_checkbox = wx.CheckBox(self.windows_panel, label="Wyłącz wyciszenie karty dźwiękowej, kiedy Titan jest uruchomiony")
+        self.mute_checkbox = wx.CheckBox(self.windows_panel, label=_("Disable sound card mute when Titan is running"))
         self.mute_checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.mute_checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
 
@@ -242,6 +266,13 @@ class SettingsFrame(wx.Frame):
 
 
     def load_settings_to_ui(self):
+        # Language
+        current_lang = get_setting('language', 'pl')
+        if self.lang_choice.FindString(current_lang) != wx.NOT_FOUND:
+            self.lang_choice.SetStringSelection(current_lang)
+        else:
+            self.lang_choice.SetStringSelection('pl')
+
         sound_settings = self.settings.get('sound', {})
         current_theme = sound_settings.get('theme', 'default')
         if self.theme_choice.FindString(current_theme) != wx.NOT_FOUND:
@@ -251,6 +282,9 @@ class SettingsFrame(wx.Frame):
                  self.theme_choice.SetStringSelection("default")
              else:
                  self.theme_choice.SetSelection(0)
+
+        stereo_sound_value = sound_settings.get('stereo_sound', 'False')
+        self.stereo_sound_cb.SetValue(str(stereo_sound_value).lower() in ['true', '1'])
 
 
         general_settings = self.settings.get('general', {})
@@ -265,8 +299,8 @@ class SettingsFrame(wx.Frame):
         if self.skin_choice.FindString(current_skin) != wx.NOT_FOUND:
              self.skin_choice.SetStringSelection(current_skin)
         elif self.skin_choice.GetCount() > 0:
-             if self.skin_choice.FindString("Domyślna") != wx.NOT_FOUND:
-                  self.skin_choice.SetStringSelection("Domyślna")
+             if self.skin_choice.FindString(_("Default")) != wx.NOT_FOUND:
+                  self.skin_choice.SetStringSelection(_("Default"))
              else:
                   self.skin_choice.SetSelection(0)
 
@@ -275,22 +309,22 @@ class SettingsFrame(wx.Frame):
             windows_settings = self.settings.get('windows', {})
             mute_disabled = windows_settings.get('disable_mute_on_start', 'False')
             self.mute_checkbox.SetValue(str(mute_disabled).lower() in ['true', '1'])
-            # Wczytywanie głośności początkowej jest teraz w InitWindowsPanel przy użyciu pycaw
+            # Loading initial volume is now in InitWindowsPanel using pycaw
 
 
     def OnSapiSettings(self, event):
         try:
             cpl_file = "sapi.cpl"
-            print(f"INFO: Próba otwarcia pliku CPL przy użyciu os.startfile: {cpl_file}")
+            print(f"INFO: Attempting to open CPL file using os.startfile: {cpl_file}")
             os.startfile(cpl_file)
-            print(f"INFO: os.startfile('{cpl_file}') uruchomione pomyślnie w OnSapiSettings.")
+            print(f"INFO: os.startfile('{cpl_file}') executed successfully in OnSapiSettings.")
 
         except FileNotFoundError:
-             print(f"ERROR: Nie znaleziono pliku {cpl_file}. (Bardzo mało prawdopodobne dla sapi.cpl)")
-             wx.MessageBox(f"Błąd: Nie znaleziono pliku {cpl_file}. Upewnij się, że system Windows działa poprawnie.", "Błąd", wx.OK | wx.ICON_ERROR)
+             print(f"ERROR: File {cpl_file} not found. (Very unlikely for sapi.cpl)")
+             wx.MessageBox(_("Error: File {} not found. Make sure Windows is working correctly.").format(cpl_file), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
-            print(f"ERROR: Nieoczekiwany błąd podczas otwierania pliku CPL w OnSapiSettings: {e}")
-            wx.MessageBox(f"Nieoczekiwany błąd podczas otwierania ustawień SAPI:\n{e}\n\nSzczegóły techniczne w konsoli.", "Błąd", wx.OK | wx.ICON_ERROR)
+            print(f"ERROR: Unexpected error while opening CPL file in OnSapiSettings: {e}")
+            wx.MessageBox(_("Unexpected error while opening SAPI settings:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
 
@@ -298,57 +332,57 @@ class SettingsFrame(wx.Frame):
     def OnEaseOfAccess(self, event):
         try:
             command = ["control.exe", "access.cpl"]
-            print(f"INFO: Próba uruchomienia komendy: {' '.join(command)}")
+            print(f"INFO: Attempting to run command: {' '.join(command)}")
             result = subprocess.run(command, check=False, capture_output=True, text=True)
 
             if result.returncode != 0:
-                error_message = f"Komenda '{' '.join(command)}' zakończyła się błędem {result.returncode}.\n"
+                error_message = _("Command '{}' finished with error code {}.\n").format(' '.join(command), result.returncode)
                 if result.stdout:
                     error_message += f"Stdout:\n{result.stdout}\n"
                 if result.stderr:
                     error_message += f"Stderr:\n{result.stderr}"
-                print(f"ERROR: Błąd subprocess w OnEaseOfAccess:\n{error_message}")
-                wx.MessageBox(f"Nie można otworzyć ułatwień dostępu:\n{error_message}\n\nSzczegóły techniczne w konsoli.", "Błąd", wx.OK | wx.ICON_ERROR)
+                print(f"ERROR: Subprocess error in OnEaseOfAccess:\n{error_message}")
+                wx.MessageBox(_("Cannot open Ease of Access:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
             else:
-                print("INFO: Komenda uruchomiona pomyślnie w OnEaseOfAccess.")
+                print("INFO: Command executed successfully in OnEaseOfAccess.")
 
         except FileNotFoundError:
-             print("ERROR: Nie znaleziono pliku wykonywalnego control.exe.")
-             wx.MessageBox("Błąd: Nie znaleziono pliku wykonywalnego control.exe. Upewnij się, że system Windows działa poprawnie.", "Błąd", wx.OK | wx.ICON_ERROR)
+             print("ERROR: Executable control.exe not found.")
+             wx.MessageBox(_("Error: Executable control.exe not found. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
-            print(f"ERROR: Nieoczekiwany błąd podczas uruchamiania subprocess w OnEaseOfAccess: {e}")
-            wx.MessageBox(f"Nieoczekiwany błąd podczas otwierania ułatwień dostępu:\n{e}\n\nSzczegóły techniczne w konsoli.", "Błąd", wx.OK | wx.ICON_ERROR)
+            print(f"ERROR: Unexpected error while running subprocess in OnEaseOfAccess: {e}")
+            wx.MessageBox(_("Unexpected error while opening Ease of Access:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
 
     def OnVolumeChange(self, event):
-        # Handler dla suwaka głośności - zmienia głośność systemu przy użyciu pycaw
+        # Handler for the volume slider - changes system volume using pycaw
         volume_value = self.volume_slider.GetValue()
-        print(f"Suwak głośności zmieniony na: {volume_value}")
+        print(f"Volume slider changed to: {volume_value}")
 
-        global volume # Użyj globalnej zmiennej volume
-        if volume: # Sprawdź czy inicjalizacja pycaw się powiodła
+        global volume # Use the global volume variable
+        if volume: # Check if pycaw initialization was successful
             try:
-                # SetMasterVolumeLevelScalar ustawia głośność od 0.0 do 1.0
+                # SetMasterVolumeLevelScalar sets the volume from 0.0 to 1.0
                 volume.SetMasterVolumeLevelScalar(volume_value / 100.0, None)
-                print(f"INFO: Ustawiono głośność systemu na: {volume_value}%")
+                print(f"INFO: System volume set to: {volume_value}%")
             except Exception as e:
-                print(f"WARNING: Błąd ustawiania głośności systemu: {e}")
-                # traceback.print_exc() # Opcjonalnie: pokaż pełny traceback
+                print(f"WARNING: Error setting system volume: {e}")
+                # traceback.print_exc() # Optionally: show full traceback
         else:
-            print("WARNING: Kontrola głośności systemu niedostępna.")
+            print("WARNING: System volume control not available.")
 
 
         event.Skip()
 
     def OnSkinSelected(self, event):
         selected_skin = self.skin_choice.GetStringSelection()
-        print(f"INFO: Wybrano skórkę: {selected_skin}")
-        # TODO: Zaimplementować logikę zmiany skórki interfejsu w głównej części aplikacji
-        # Ta metoda tylko zapisuje wybraną skórkę w ustawieniach.
-        # Logika zastosowania skórki (np. zmiana kolorów, czcionek, układu)
-        # musi być zaimplementowana w kodzie, który buduje/zarządza interfejsem GUI,
-        # odczytując to ustawienie przy starcie lub po zmianie.
+        print(f"INFO: Skin selected: {selected_skin}")
+        # TODO: Implement the logic for changing the interface skin in the main part of the application
+        # This method only saves the selected skin in the settings.
+        # The logic for applying the skin (e.g., changing colors, fonts, layout)
+        # must be implemented in the code that builds/manages the GUI,
+        # reading this setting on startup or after a change.
 
 
         event.Skip()
@@ -356,36 +390,44 @@ class SettingsFrame(wx.Frame):
 
     def OnThemeSelected(self, event):
         theme = self.theme_choice.GetStringSelection()
-        if theme != "Brak tematów":
+        if theme != _("No themes"):
              set_theme(theme)
              initialize_sound()
-             print(f"INFO: Wybrano temat dźwiękowy: {theme}")
+             print(f"INFO: Sound theme selected: {theme}")
 
     def OnSave(self, event):
-        self.settings['sound'] = {'theme': self.theme_choice.GetStringSelection()}
+        # Save language setting
+        selected_language = self.lang_choice.GetStringSelection()
+        set_setting('language', selected_language)
+
+        self.settings['sound'] = {
+            'theme': self.theme_choice.GetStringSelection(),
+            'stereo_sound': str(self.stereo_sound_cb.GetValue())
+        }
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
-            'confirm_exit': str(self.confirm_exit_cb.GetValue())
+            'confirm_exit': str(self.confirm_exit_cb.GetValue()),
+            'language': selected_language
         }
 
-        self.settings['interface'] = {
-            'skin': self.skin_choice.GetStringSelection()
-        }
+        if 'interface' not in self.settings:
+            self.settings['interface'] = {}
+        self.settings['interface']['skin'] = self.skin_choice.GetStringSelection()
 
         if hasattr(self, 'windows_panel'):
             self.settings['windows'] = {
                 'disable_mute_on_start': str(self.mute_checkbox.GetValue())
-                # TODO: Zapisać aktualną wartość głośności suwaka jeśli jest potrzebna przy starcie
-                # (zazwyczaj nie jest potrzebne, bo system pamięta głośność)
+                # TODO: Save the current slider volume value if needed on startup
+                # (usually not necessary, as the system remembers the volume)
             }
 
         save_settings(self.settings)
-        speak('Ustawienia zostały zapisane')
-        print("INFO: Ustawienia zapisane.")
+        speaker.speak(_('Settings have been saved. Please restart the application for the language change to take full effect.'))
+        print("INFO: Settings saved.")
         self.Close()
 
     def OnCancel(self, event):
-        print("INFO: Ustawienia anulowane.")
+        print("INFO: Settings canceled.")
         self.Close()
 
     def OnFocus(self, event):
