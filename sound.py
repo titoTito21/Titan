@@ -66,7 +66,25 @@ def play_sound(sound_file, pan=None):
         except pygame.error as e:
             print(f"Failed to play sound: {sound_path}, {e}")
     else:
-        print(f"Sound {sound_path} does not exist, skipping.")
+        # Check for the sound in the default theme as a fallback
+        sfx_dir = resource_path(os.path.join('sfx', 'default'))
+        sound_path = os.path.join(sfx_dir, sound_file)
+        if os.path.exists(sound_path):
+            try:
+                with lock:
+                    sound = pygame.mixer.Sound(sound_path)
+                    channel = pygame.mixer.find_channel(True)
+                    
+                    if stereo_enabled and pan is not None:
+                        left_volume = 1.0 - pan
+                        right_volume = pan
+                        channel.set_volume(left_volume * sound_theme_volume, right_volume * sound_theme_volume)
+                    else:
+                        channel.set_volume(sound_theme_volume)
+                    
+                    channel.play(sound)
+            except pygame.error as e:
+                print(f"Failed to play sound from default theme: {sound_path}, {e}")
 
 
 

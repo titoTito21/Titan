@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-05 16:26+0200\n"
-"PO-Revision-Date: 2025-07-05 15:53+0200\n"
+"POT-Creation-Date: 2025-07-06 10:55+0200\n"
+"PO-Revision-Date: 2025-07-06 08:38+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
@@ -29,7 +29,7 @@ msgstr "&Akcje"
 
 #: componentmanagergui.py:45
 msgid "Component manager not available."
-msgstr "Menedżer komponentów niedostępny."
+msgstr "Menedżer komponentów nie jest dostępny."
 
 #: componentmanagergui.py:53 componentmanagergui.py:177
 msgid "Enabled"
@@ -44,8 +44,8 @@ msgstr "Wyłączony"
 msgid "Component '{}' is not loaded."
 msgstr "Komponent '{}' nie jest załadowany."
 
-#: componentmanagergui.py:122 componentmanagergui.py:130 gui.py:647 gui.py:661
-#: gui.py:675 gui.py:690
+#: componentmanagergui.py:122 componentmanagergui.py:130 gui.py:654 gui.py:668
+#: gui.py:682 gui.py:697
 msgid "Information"
 msgstr "Informacja"
 
@@ -62,7 +62,7 @@ msgstr "Menu kontekstowe"
 msgid "Run"
 msgstr "Uruchom"
 
-#: componentmanagergui.py:141 invisibleui.py:50 main.py:94 menu.py:150
+#: componentmanagergui.py:141 invisibleui.py:81 main.py:87 menu.py:150
 #: settingsgui.py:124
 msgid "Settings"
 msgstr "Ustawienia"
@@ -74,13 +74,14 @@ msgstr "Uruchamianie komponentu {}"
 
 #: componentmanagergui.py:161
 #, python-brace-format
-msgid """Error running component '{}':\n"""
+msgid ""
+"Error running component '{}':\n"
 "{}"
 msgstr "Błąd podczas uruchamiania komponentu '{}':\n{}"
 
-#: componentmanagergui.py:161 componentmanagergui.py:172 gui.py:407 gui.py:423
-#: gui.py:431 gui.py:464 gui.py:468 gui.py:640 gui.py:645 gui.py:654 gui.py:659
-#: gui.py:668 gui.py:673 gui.py:683 gui.py:688 menu.py:70 menu.py:72
+#: componentmanagergui.py:161 componentmanagergui.py:172 gui.py:409 gui.py:425
+#: gui.py:433 gui.py:466 gui.py:470 gui.py:647 gui.py:652 gui.py:661 gui.py:666
+#: gui.py:675 gui.py:680 gui.py:690 gui.py:695 menu.py:70 menu.py:72
 #: menu.py:123 menu.py:139 settingsgui.py:324 settingsgui.py:327
 #: settingsgui.py:345 settingsgui.py:351 settingsgui.py:354
 msgid "Error"
@@ -93,7 +94,8 @@ msgstr "Otwieranie ustawień dla komponentu {}"
 
 #: componentmanagergui.py:172
 #, python-brace-format
-msgid """Error opening settings for '{}':\n"""
+msgid ""
+"Error opening settings for '{}':\n"
 "{}"
 msgstr "Błąd podczas otwierania ustawień dla '{}':\n{}"
 
@@ -102,326 +104,336 @@ msgstr "Błąd podczas otwierania ustawień dla '{}':\n{}"
 msgid "Component {} {}"
 msgstr "Komponent {} {}"
 
-#: gui.py:25 settingsgui.py:204 settingsgui.py:206 settingsgui.py:302
+#: gui.py:26 settingsgui.py:204 settingsgui.py:206 settingsgui.py:302
 #: settingsgui.py:303
 msgid "Default"
-msgstr "Domyślna"
+msgstr "Domyślny"
 
-#: gui.py:46
+#: gui.py:47
 #, python-brace-format
 msgid "Titan v{}"
 msgstr "Titan v{}"
 
-#: gui.py:51
+#: gui.py:52
 msgid "Back to Titan"
 msgstr "Powrót do Titana"
 
-#: gui.py:51
+#: gui.py:52
 msgid "Restores the application window"
 msgstr "Przywraca okno aplikacji"
 
-#: gui.py:97
+#: gui.py:98
 msgid "Application List"
-msgstr "Lista Aplikacji"
+msgstr "Lista aplikacji"
 
-#: gui.py:97
+#: gui.py:98
 msgid "Show application list"
 msgstr "Pokaż listę aplikacji"
 
-#: gui.py:98
+#: gui.py:99
 msgid "Game List"
-msgstr "Lista Gier"
+msgstr "Lista gier"
 
-#: gui.py:98
+#: gui.py:99
 msgid "Show game list"
 msgstr "Pokaż listę gier"
 
-#: gui.py:106 gui.py:596
+#: gui.py:107 gui.py:598
 msgid "Application List:"
-msgstr "Lista Aplikacji:"
+msgstr "Lista aplikacji:"
 
-#: gui.py:119
+#: gui.py:120
 msgid "Status Bar:"
 msgstr "Pasek stanu:"
 
-#: gui.py:140 main.py:88
+#: gui.py:142 main.py:81
 msgid "Titan App Suite"
-msgstr "Pakiet Aplikacji Titan"
+msgstr "Pakiet aplikacji Titan"
 
-#: gui.py:316
+#: gui.py:318
 msgid "Unknown App"
 msgstr "Nieznana aplikacja"
 
-#: gui.py:323
+#: gui.py:325
 msgid "Unknown Game"
 msgstr "Nieznana gra"
 
-#: gui.py:328 gui.py:334
+#: gui.py:330 gui.py:336
 #, python-brace-format
 msgid "Clock: {}"
 msgstr "Zegar: {}"
 
-#: gui.py:329 gui.py:335
+#: gui.py:331 gui.py:337
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr "Poziom baterii: {}"
 
-#: gui.py:330 gui.py:336
+#: gui.py:332 gui.py:338
 #, python-brace-format
 msgid "Volume: {}"
 msgstr "Głośność: {}"
 
-#: gui.py:387
+#: gui.py:389
 #, python-brace-format
 msgid "Run {}..."
 msgstr "Uruchom {}..."
 
-#: gui.py:387 gui.py:391
+#: gui.py:389 gui.py:393
 msgid "item"
 msgstr "element"
 
-#: gui.py:391
+#: gui.py:393
 #, python-brace-format
 msgid "Uninstall {}"
 msgstr "Odinstaluj {}"
 
-#: gui.py:407
+#: gui.py:409
 msgid "An error occurred: No data to run."
 msgstr "Wystąpił błąd: Brak danych do uruchomienia."
 
-#: gui.py:423
+#: gui.py:425
 msgid "An error occurred: No data to uninstall."
 msgstr "Wystąpił błąd: Brak danych do odinstalowania."
 
-#: gui.py:426
+#: gui.py:428
 msgid "unknown item"
 msgstr "nieznany element"
 
-#: gui.py:431
+#: gui.py:433
 #, python-brace-format
 msgid "Error: Cannot find the directory '{}' to uninstall."
-msgstr "Błąd: Nie można odnaleźć katalogu '{}' do odinstalowania."
+msgstr "Błąd: Nie można znaleźć katalogu '{}' do odinstalowania."
 
-#: gui.py:436
+#: gui.py:438
 #, python-brace-format
-msgid """Are you sure you want to uninstall '{}' from Titan?\n"""
+msgid ""
+"Are you sure you want to uninstall '{}' from Titan?\n"
 "\n"
 "This will delete the entire directory: {}"
-msgstr """Czy na pewno chcesz odinstalować '{}' z Titana?\n"""
-"\n"
-"Spowoduje to usunięcie całego katalogu: {}"
+msgstr "Czy na pewno chcesz odinstalować '{}' z Titana?\n\nTo spowoduje usunięcie całego katalogu: {}"
 
-#: gui.py:437
+#: gui.py:439
 msgid "Confirm Uninstall"
 msgstr "Potwierdź odinstalowanie"
 
-#: gui.py:458
+#: gui.py:460
 #, python-brace-format
 msgid "'{}' has been successfully uninstalled."
 msgstr "'{}' został pomyślnie odinstalowany."
 
-#: gui.py:458 menu.py:146
+#: gui.py:460 menu.py:146
 msgid "Success"
 msgstr "Sukces"
 
-#: gui.py:464
+#: gui.py:466
 #, python-brace-format
-msgid """Error uninstalling '{}':\n"""
-"{}"
+msgid ""
+"Error uninstalling '{}':\n"
+"{}\n"
 "\n"
 "Make sure the directory is not in use."
-msgstr """Błąd podczas odinstalowywania '{}':\n"""
-"{}"
-"\n"
-"Upewnij się, że katalog nie jest używany."
+msgstr "Błąd podczas odinstalowywania '{}':\n{}\n\nUpewnij się, że katalog nie jest w użyciu."
 
-#: gui.py:468
+#: gui.py:470
 #, python-brace-format
-msgid """An unexpected error occurred while uninstalling '{}':\n"""
+msgid ""
+"An unexpected error occurred while uninstalling '{}':\n"
 "{}"
-msgstr """Wystąpił nieoczekiwany błąd podczas odinstalowywania '{}':\n"""
-"{}"
+msgstr "Wystąpił nieoczekiwany błąd podczas odinstalowywania '{}':\n{}"
 
-#: gui.py:581
+#: gui.py:583
 msgid "Clock:"
 msgstr "Zegar:"
 
-#: gui.py:583
+#: gui.py:585
 msgid "Battery level:"
 msgstr "Poziom baterii:"
 
-#: gui.py:585
+#: gui.py:587
 msgid "Volume:"
 msgstr "Głośność:"
 
-#: gui.py:587
+#: gui.py:589
 msgid "Network status:"
 msgstr "Stan sieci:"
 
-#: gui.py:598
+#: gui.py:600
 msgid "Application list, 1 of 2"
 msgstr "Lista aplikacji, 1 z 2"
 
-#: gui.py:607
-msgid "Game List:"
-msgstr "Lista Gier:"
-
 #: gui.py:609
+msgid "Game List:"
+msgstr "Lista gier:"
+
+#: gui.py:611
 msgid "Game list, 2 of 2"
 msgstr "Lista gier, 2 z 2"
 
-#: gui.py:640 gui.py:645
+#: gui.py:647 gui.py:652
 #, python-brace-format
-msgid """Could not open date/time settings:\n"""
+msgid ""
+"Could not open date/time settings:\n"
 "{}"
-msgstr """Nie można otworzyć ustawień daty/czasu:\n"""
-"{}"
+msgstr "Nie można otworzyć ustawień daty i godziny:\n{}"
 
-#: gui.py:647 gui.py:661 gui.py:675 gui.py:690
+#: gui.py:654 gui.py:668 gui.py:682 gui.py:697
 msgid "This feature is not supported on this platform."
-msgstr "Ta funkcja nie jest wspierana na tej platformie."
+msgstr "Ta funkcja nie jest obsługiwana na tej platformie."
 
-#: gui.py:654 gui.py:659
+#: gui.py:661 gui.py:666
 #, python-brace-format
-msgid """Could not open power settings:\n"""
+msgid ""
+"Could not open power settings:\n"
 "{}"
-msgstr """Nie można otworzyć ustawień zasilania:\n"""
-"{}"
+msgstr "Nie można otworzyć ustawień zasilania:\n{}"
 
-#: gui.py:668
+#: gui.py:675
 #, python-brace-format
-msgid """Could not open volume mixer:\n"""
+msgid ""
+"Could not open volume mixer:\n"
 "{}"
-msgstr """Nie można otworzyć miksera głośności:\n"""
-"{}"
+msgstr "Nie można otworzyć miksera głośności:\n{}"
 
-#: gui.py:673
+#: gui.py:680
 #, python-brace-format
-msgid """Could not open audio settings:\n"""
+msgid ""
+"Could not open audio settings:\n"
 "{}"
-msgstr """Nie można otworzyć ustawień audio:\n"""
-"{}"
+msgstr "Nie można otworzyć ustawień dźwięku:\n{}"
 
-#: gui.py:683 gui.py:688
+#: gui.py:690 gui.py:695
 #, python-brace-format
-msgid """Could not open network settings:\n"""
+msgid ""
+"Could not open network settings:\n"
 "{}"
-msgstr """Nie można otworzyć ustawień sieciowych:\n"""
-"{}"
+msgstr "Nie można otworzyć ustawień sieci:\n{}"
 
-#: invisibleui.py:42 invisibleui.py:54 menu.py:66
-msgid "Component Manager"
-msgstr "Menedżer komponentów"
-
-#: invisibleui.py:46
-msgid "Component manager is not available"
-msgstr "Menedżer komponentów jest niedostępny"
-
-#: invisibleui.py:55 menu.py:39
-msgid "Program settings"
-msgstr "Ustawienia programu"
-
-#: invisibleui.py:56 invisibleui.py:174
-msgid "Back to graphical interface"
-msgstr "Powrót do interfejsu graficznego"
-
-#: invisibleui.py:57 invisibleui.py:174 menu.py:41
-msgid "Exit"
-msgstr "Wyjście"
-
-#: invisibleui.py:62 invisibleui.py:117 invisibleui.py:118
-msgid "Applications"
-msgstr "Aplikacje"
-
-#: invisibleui.py:64
-msgid "No applications"
-msgstr "Brak aplikacji"
-
-#: invisibleui.py:68 invisibleui.py:117 invisibleui.py:118
-msgid "Games"
-msgstr "Gry"
-
-#: invisibleui.py:70
-msgid "No games"
-msgstr "Brak gier"
-
-#: invisibleui.py:74 invisibleui.py:113 invisibleui.py:115 invisibleui.py:124
-#: invisibleui.py:158
+#: invisibleui.py:58 invisibleui.py:95
 msgid "Status Bar"
 msgstr "Pasek stanu"
 
-#: invisibleui.py:80 invisibleui.py:129
+#: invisibleui.py:74 invisibleui.py:85 menu.py:66
+msgid "Component Manager"
+msgstr "Menedżer komponentów"
+
+#: invisibleui.py:78
+msgid "Component manager is not available"
+msgstr "Menedżer komponentów nie jest dostępny"
+
+#: invisibleui.py:86 menu.py:39
+msgid "Program settings"
+msgstr "Ustawienia programu"
+
+#: invisibleui.py:87 invisibleui.py:178
+msgid "Back to graphical interface"
+msgstr "Powrót do interfejsu graficznego"
+
+#: invisibleui.py:88 invisibleui.py:178 menu.py:41
+msgid "Exit"
+msgstr "Wyjście"
+
+#: invisibleui.py:92
+msgid "Applications"
+msgstr "Aplikacje"
+
+#: invisibleui.py:92 invisibleui.py:172
+msgid "No applications"
+msgstr "Brak aplikacji"
+
+#: invisibleui.py:93
+msgid "Games"
+msgstr "Gry"
+
+#: invisibleui.py:93 invisibleui.py:172
+msgid "No games"
+msgstr "Brak gier"
+
+#: invisibleui.py:94 invisibleui.py:184
+msgid "Widgets"
+msgstr "Widgety"
+
+#: invisibleui.py:94 invisibleui.py:172
+msgid "No widgets found"
+msgstr "Nie znaleziono widgetów"
+
+#: invisibleui.py:96
 msgid "Menu"
 msgstr "Menu"
 
-#: invisibleui.py:91
+#: invisibleui.py:122
+#, python-brace-format
+msgid "Error loading widget: {}"
+msgstr "Błąd ładowania widgetu: {}"
+
+#: invisibleui.py:128
 msgid "No status bar data"
 msgstr "Brak danych paska stanu"
 
-#: invisibleui.py:125
-msgid "Status bar"
-msgstr "Pasek stanu"
-
-#: invisibleui.py:130
-msgid "Titan Menu"
-msgstr "Menu Titan"
-
-#: invisibleui.py:172
-#, python-brace-format
-msgid "Activated: {}"
-msgstr "Aktywowano: {}"
-
-#: invisibleui.py:182
+#: invisibleui.py:190
 #, python-brace-format
 msgid "Error during activation: {}"
 msgstr "Błąd podczas aktywacji: {}"
 
-#: invisibleui.py:192
+#: invisibleui.py:203
+#, python-brace-format
+msgid "Invalid widget type: {}"
+msgstr "Nieprawidłowy typ widżetu: {}"
+
+#: invisibleui.py:209
+msgid "In widget"
+msgstr "W widgecie"
+
+#: invisibleui.py:229
+msgid "Out of widget"
+msgstr "Poza widgetem"
+
+#: invisibleui.py:241
 #, python-brace-format
 msgid "Application not found: {}"
 msgstr "Nie znaleziono aplikacji: {}"
 
-#: invisibleui.py:199
+#: invisibleui.py:246
 #, python-brace-format
 msgid "Game not found: {}"
 msgstr "Nie znaleziono gry: {}"
 
-#: invisibleui.py:203
+#: invisibleui.py:250
 msgid "clock:"
 msgstr "zegar:"
 
-#: invisibleui.py:205
+#: invisibleui.py:251
 msgid "battery level:"
 msgstr "poziom baterii:"
 
-#: invisibleui.py:207
+#: invisibleui.py:252
 msgid "volume:"
 msgstr "głośność:"
 
-#: invisibleui.py:209
+#: invisibleui.py:253
 msgid "network status:"
 msgstr "stan sieci:"
 
-#: invisibleui.py:212
+#: invisibleui.py:259
 msgid "No action for this item"
 msgstr "Brak akcji dla tego elementu"
 
-#: invisibleui.py:221
+#: invisibleui.py:272
 msgid "Invisible interface active"
 msgstr "Niewidzialny interfejs aktywny"
 
 #: main.py:38
 #, python-brace-format
 msgid "Welcome to Titan: Version {}"
-msgstr "Witamy w Titan: Wersja {}"
+msgstr "Witaj w Titan: Wersja {}"
 
-#: main.py:82
-msgid """Currently, translation system and international support is limited. To """
+#: main.py:75
+msgid ""
+"Currently, translation system and international support is limited. To "
 "fully enjoy Titan, please use translation addon for your screen reader, "
 "or switch to Polish Language"
-msgstr "Obecnie system tłumaczeń i wsparcie międzynarodowe są ograniczone. Aby w pełni cieszyć się Titanem, użyj dodatku tłumaczącego dla swojego czytnika ekranu lub przełącz się na język polski."
+msgstr "Obecnie system tłumaczeń i wsparcie międzynarodowe są ograniczone. Aby w pełni cieszyć się Titanem, użyj dodatku tłumaczącego dla czytnika ekranu lub przełącz się na język polski"
 
-#: main.py:83
+#: main.py:76
 msgid "Titan"
 msgstr "Titan"
 
@@ -467,12 +479,13 @@ msgstr "Menedżer komponentów nie został zainicjowany."
 
 #: menu.py:97
 msgid "Unpacking ZIP package..."
-msgstr "Rozpakowywanie paczki ZIP..."
+msgstr "Rozpakowywanie pakietu ZIP..."
 
 #: menu.py:108
-msgid """Error: 7z executable not found. Make sure it is in the 'data/bin/' """
+msgid ""
+"Error: 7z executable not found. Make sure it is in the 'data/bin/' "
 "directory."
-msgstr "Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się w katalogu 'data/bin/'."
+msgstr "Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się on w katalogu 'data/bin/'."
 
 #: menu.py:108
 msgid "Executable file error"
@@ -480,7 +493,7 @@ msgstr "Błąd pliku wykonywalnego"
 
 #: menu.py:115
 msgid "Unpacking 7z package..."
-msgstr "Rozpakowywanie paczki 7z..."
+msgstr "Rozpakowywanie pakietu 7z..."
 
 #: menu.py:117
 msgid "Starting 7z process..."
@@ -488,7 +501,8 @@ msgstr "Uruchamianie procesu 7z..."
 
 #: menu.py:123
 #, python-brace-format
-msgid """Error during package installation:\n"""
+msgid ""
+"Error during package installation:\n"
 "{}"
 msgstr "Błąd podczas instalacji pakietu:\n{}"
 
@@ -498,7 +512,7 @@ msgstr "Zakończono rozpakowywanie 7z."
 
 #: menu.py:130
 msgid "Unpacking .tcepackage package..."
-msgstr "Rozpakowywanie paczki .tcepackage..."
+msgstr "Rozpakowywanie pakietu .tcepackage..."
 
 #: menu.py:132
 msgid "Unpacking archive..."
@@ -510,7 +524,8 @@ msgstr "Zakończono rozpakowywanie .tcepackage."
 
 #: menu.py:139
 #, python-brace-format
-msgid """Error during package installation: {}\n"""
+msgid ""
+"Error during package installation: {}\n"
 "\n"
 "Details:\n"
 "{}"
@@ -540,7 +555,7 @@ msgstr "Windows"
 msgid "Save"
 msgstr "Zapisz"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:29
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:29
 #: settingsgui.py:110 shutdown_question.py:30
 msgid "Cancel"
 msgstr "Anuluj"
@@ -587,7 +602,7 @@ msgstr "Głośność systemu:"
 
 #: settingsgui.py:258
 msgid "Disable sound card mute when Titan is running"
-msgstr "Wyłącz wyciszenie karty dźwiękowej, gdy Titan jest uruchomiony"
+msgstr "Wyłącz wyciszanie karty dźwiękowej, gdy Titan jest uruchomiony"
 
 #: settingsgui.py:324
 #, python-brace-format
@@ -596,11 +611,12 @@ msgstr "Błąd: Nie znaleziono pliku {}. Upewnij się, że system Windows dział
 
 #: settingsgui.py:327
 #, python-brace-format
-msgid """Unexpected error while opening SAPI settings:\n"""
-"{}"
+msgid ""
+"Unexpected error while opening SAPI settings:\n"
+"{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Wystąpił nieoczekiwany błąd podczas otwierania ustawień SAPI:\n{}\n\nSzczegóły w konsoli."
+msgstr "Nieoczekiwany błąd podczas otwierania ustawień SAPI:\n{}\n\nSzczegóły techniczne w konsoli."
 
 #: settingsgui.py:339
 #, python-brace-format
@@ -609,76 +625,108 @@ msgstr "Polecenie '{}' zakończyło się kodem błędu {}.\n"
 
 #: settingsgui.py:345
 #, python-brace-format
-msgid """Cannot open Ease of Access:\n"""
-"{}"
+msgid ""
+"Cannot open Ease of Access:\n"
+"{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Nie można otworzyć Ułatwień dostępu:\n{}\n\nSzczegóły w konsoli."
+msgstr "Nie można otworzyć Ułatwień dostępu:\n{}\n\nSzczegóły techniczne w konsoli."
 
 #: settingsgui.py:351
-msgid """Error: Executable control.exe not found. Make sure Windows is working """
+msgid ""
+"Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr "Błąd: Nie znaleziono pliku wykonywalnego control.exe. Upewnij się, że system Windows działa poprawnie."
 
 #: settingsgui.py:354
 #, python-brace-format
-msgid """Unexpected error while opening Ease of Access:\n"""
-"{}"
+msgid ""
+"Unexpected error while opening Ease of Access:\n"
+"{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Wystąpił nieoczekiwany błąd podczas otwierania Ułatwień dostępu:\n{}\n\nSzczegóły w konsoli."
+msgstr "Nieoczekiwany błąd podczas otwierania Ułatwień dostępu:\n{}\n\nSzczegóły techniczne w konsoli."
 
 #: settingsgui.py:425
-msgid """Settings have been saved. Please restart the application for the language"""
+msgid ""
+"Settings have been saved. Please restart the application for the language"
 " change to take full effect."
-msgstr "Ustawienia zostały zapisane. Uruchom aplikację ponownie, aby zmiany języka odniosły skutek."
+msgstr "Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zmiana języka w pełni zadziałała."
 
 #: shutdown_question.py:15
 msgid "Confirm Exit"
-msgstr "Potwierdź Wyjście"
+msgstr "Potwierdź wyjście"
 
 #: shutdown_question.py:22
 msgid "Are you sure you want to exit Titan?"
 msgstr "Czy na pewno chcesz wyjść z Titana?"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:28
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:28
 #: shutdown_question.py:26
 msgid "OK"
 msgstr "OK"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:7
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:7
 msgid "Voice Cloning"
 msgstr "Klonowanie głosu"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:12
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:12
 msgid "Voice Name:"
 msgstr "Nazwa głosu:"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:14
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:14
 msgid "Voice Description:"
 msgstr "Opis głosu:"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:16
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:16
 msgid "Path to Voice:"
 msgstr "Ścieżka do głosu:"
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:18
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:18
 msgid "Browse..."
 msgstr "Przeglądaj..."
 
-#: data/applications/elevenlabs client TCE Version/clonegen.py:38
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:38
 msgid "Choose a file"
 msgstr "Wybierz plik"
 
-#: data/applications/elevenlabs client TCE Version/database.py:35
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:35
 msgid "Download"
 msgstr "Pobierz"
 
-#: data/applications/elevenlabs client TCE Version/database.py:73
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:73
 msgid "Voice downloaded"
 msgstr "Głos pobrany"
 
-#: data/applications/elevenlabs client TCE Version/database.py:73
-msgid """Do you want to clone this voice and add it to your elevenLabs voice """
+#: ⁨data/applications/elevenlabs client TCE Version/database.py⁩:73
+msgid ""
+"Do you want to clone this voice and add it to your elevenLabs voice "
 "library?"
-msgstr "Czy chcesz sklonować ten głos i dodać go do biblioteki głosów elevenLabs?"
+msgstr "Czy chcesz sklonować ten głos i dodać go do swojej biblioteki głosów elevenLabs?"
+
+#: data/components/charging_sound/init.py:106
+#, python-brace-format
+msgid "Podłączono do zasilacza, poziom baterii wynosi {}%"
+msgstr "Podłączono do zasilacza, poziom baterii wynosi {}%"
+
+#: data/components/charging_sound/init.py:111
+#, python-brace-format
+msgid "Odłączono zasilacz, poziom baterii wynosi {}%"
+msgstr "Odłączono zasilacz, poziom baterii wynosi {}%"
+
+#: data/components/charging_sound/init.py:114
+#, python-brace-format
+msgid "Ładowanie baterii, poziom baterii {}%"
+msgstr "Ładowanie baterii, poziom baterii {}%"
+
+#: data/components/charging_sound/init.py:117
+msgid "Bateria jest naładowana"
+msgstr "Bateria jest naładowana"
+
+#: data/components/charging_sound/init.py:156
+#, python-brace-format
+msgid "Głośność: {}%"
+msgstr "Głośność: {}%"
+
+msgid "button"
+msgstr "przycisk"

@@ -51,13 +51,6 @@ def main():
             
     return False
 
-def on_close(event):
-    result = show_shutdown_dialog()
-    if result == wx.ID_OK:
-        event.Skip()  # Kontynuuj zamykanie
-    else:
-        event.Veto()  # Anuluj zamykanie
-
 if __name__ == "__main__":
     # Set default settings if the file doesn't exist
     if not os.path.exists(SETTINGS_FILE_PATH):
@@ -71,7 +64,7 @@ if __name__ == "__main__":
     if main():
         sys.exit()
 
-    # Inicjalizacja aplikacji wxPython w głównym zakresie
+    # Inicjalizacja aplikacji wxPython w gł��wnym zakresie
     app = wx.App(False)
     settings = load_settings()
     
@@ -88,7 +81,7 @@ if __name__ == "__main__":
     frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings)
     
     if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
-        frame.Bind(wx.EVT_CLOSE, on_close)
+        frame.Bind(wx.EVT_CLOSE, frame.on_close)
     
     from settingsgui import SettingsFrame
     settings_frame = SettingsFrame(None, title=_("Settings"))

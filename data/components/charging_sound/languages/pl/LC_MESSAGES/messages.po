@@ -1,0 +1,32 @@
+# Polish translations for charging_sound component.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-06 12:00+0200\n"
+"PO-Revision-Date: 2025-07-06 12:00+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: pl <LL@li.org>\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Podłączono do zasilacza, poziom baterii wynosi {}%"
+msgstr "Podłączono do zasilacza, poziom baterii wynosi {}%"
+
+msgid "Odłączono zasilacz, poziom baterii wynosi {}%"
+msgstr "Odłączono zasilacz, poziom baterii wynosi {}%"
+
+msgid "Ładowanie baterii, poziom baterii {}%"
+msgstr "Ładowanie baterii, poziom baterii {}%"
+
+msgid "Bateria jest naładowana"
+msgstr "Bateria jest naładowana"
+
+msgid "Głośność: {}%"
+msgstr "Głośność: {}%"
