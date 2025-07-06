@@ -17,6 +17,7 @@ from menu import MenuBar
 from invisibleui import InvisibleUI
 from translation import set_language
 from settings import get_setting
+from shutdown_question import show_shutdown_dialog
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -127,6 +128,7 @@ class TitanApp(wx.Frame):
         self.game_listbox.Bind(wx.EVT_LISTBOX_DCLICK, self.on_game_selected)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
+        self.Bind(wx.EVT_ICONIZE, self.on_minimize)
 
         self.app_listbox.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
         self.game_listbox.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
@@ -632,6 +634,11 @@ class TitanApp(wx.Frame):
         event.Skip()
 
 
+    def on_minimize(self, event):
+        if self.IsIconized():
+            self.minimize_to_tray()
+        event.Skip()
+
     def open_time_settings(self):
         if platform.system() == "Windows":
             try:
@@ -704,3 +711,11 @@ class TitanApp(wx.Frame):
         self.task_bar_icon = None
         play_sound('normalize.ogg')
         self.invisible_ui.stop_listening()
+
+    def on_close(self, event):
+        result = show_shutdown_dialog()
+        if result == wx.ID_OK:
+            self.timer.Stop()
+            event.Skip()
+        else:
+            event.Veto()

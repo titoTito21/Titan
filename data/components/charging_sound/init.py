@@ -7,6 +7,15 @@ import platform
 import subprocess
 import accessible_output3.outputs.auto
 from sound import resource_path, play_sound, initialize_sound
+import gettext
+import settings
+from translation import set_language
+
+# Setup component-specific translation
+localedir = os.path.join(os.path.dirname(__file__), 'languages')
+_ = gettext.translation('messages', localedir, languages=[settings.get_setting('language', 'pl')], fallback=True).gettext
+
+
 
 speaker = accessible_output3.outputs.auto.Auto()
 
@@ -94,18 +103,18 @@ class ChargerMonitor(threading.Thread):
 
     def on_charger_connect(self, percentage):
         play_sound('charger_connect.ogg')
-        speaker.speak(f"Podłączono do zasilacza, poziom baterii wynosi {percentage}%")
+        speaker.speak(_("Podłączono do zasilacza, poziom baterii wynosi {}%").format(percentage))
 
     def on_charger_disconnect(self, percentage):
         self.charged_notification_sent = False
         play_sound('charger_disconnect.ogg')
-        speaker.speak(f"Odłączono zasilacz, poziom baterii wynosi {percentage}%")
+        speaker.speak(_("Odłączono zasilacz, poziom baterii wynosi {}%").format(percentage))
 
     def on_battery_charging(self, percentage):
-        speaker.speak(f"Ładowanie baterii, poziom baterii {percentage}%")
+        speaker.speak(_("Ładowanie baterii, poziom baterii {}%").format(percentage))
 
     def on_battery_charged(self):
-        speaker.speak("Bateria jest naładowana")
+        speaker.speak(_("Bateria jest naładowana"))
 
     def stop(self):
         self.running = False
@@ -144,7 +153,7 @@ class AudioMonitor(threading.Thread):
                 current_volume = self.get_volume_percentage()
                 if current_volume != -1 and current_volume != self.previous_volume:
                     play_sound('volume.ogg')
-                    speaker.speak(f"Głośność: {current_volume}%", interrupt=True)
+                    speaker.speak(_("Głośność: {}%").format(current_volume), interrupt=True)
                     
                     self.previous_volume = current_volume
                 time.sleep(0.05)
