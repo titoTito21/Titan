@@ -1,0 +1,237 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 14:53+0200\n"
+"PO-Revision-Date: 2025-07-11 14:53+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: reminder.py:53 reminder.py:369
+msgid "Titan Organizer"
+msgstr "Titan Organizer"
+
+#: reminder.py:142
+msgid "&Nowe przypomnienie\tCtrl+N"
+msgstr "&New Reminder\tCtrl+N"
+
+#: reminder.py:143
+msgid "&Ustawienia programu"
+msgstr "&Program Settings"
+
+#: reminder.py:144
+msgid "&Usuń przypomnienie\tDelete"
+msgstr "&Delete Reminder\tDelete"
+
+#: reminder.py:145
+msgid "&Zminimalizuj do zasobnika"
+msgstr "&Minimize to Tray"
+
+#: reminder.py:146
+msgid "&Wyjdź\tAlt+F4"
+msgstr "&Exit\tAlt+F4"
+
+#: reminder.py:147
+msgid "&Plik"
+msgstr "&File"
+
+#: reminder.py:151
+msgid "Nazwa &1"
+msgstr "Name &1"
+
+#: reminder.py:152
+msgid "Priorytet &2"
+msgstr "Priority &2"
+
+#: reminder.py:153
+msgid "Data &3"
+msgstr "Date &3"
+
+#: reminder.py:154
+msgid "Sortuj według"
+msgstr "Sort by"
+
+#: reminder.py:155
+msgid "&Widok"
+msgstr "&View"
+
+#: reminder.py:180
+msgid "Nazwa"
+msgstr "Name"
+
+#: reminder.py:181
+msgid "Opis"
+msgstr "Description"
+
+#: reminder.py:182
+msgid "Data"
+msgstr "Date"
+
+#: reminder.py:183
+msgid "Godzina"
+msgstr "Time"
+
+#: reminder.py:184
+msgid "Priorytet"
+msgstr "Priority"
+
+#: reminder.py:262 reminder.py:464
+msgid "Niski"
+msgstr "Low"
+
+#: reminder.py:262 reminder.py:464
+msgid "Średni"
+msgstr "Medium"
+
+#: reminder.py:262 reminder.py:464
+msgid "Wysoki"
+msgstr "High"
+
+#: reminder.py:327
+#, python-brace-format
+msgid "Plik dźwiękowy {} nie został znaleziony."
+msgstr "Sound file {} not found."
+
+#: reminder.py:348
+msgid "Nie znaleziono silnika TTS."
+msgstr "TTS engine not found."
+
+#: reminder.py:360
+#, python-brace-format
+msgid "Titan reminder - {} przypomnień, {} - wykonano, {} - niewykonano"
+msgstr "Titan reminder - {} reminders, {} - done, {} - not done"
+
+#: reminder.py:382
+msgid "Przywróć"
+msgstr "Restore"
+
+#: reminder.py:383
+msgid "Wyjdź"
+msgstr "Exit"
+
+#: reminder.py:398
+msgid "Nowe przypomnienie"
+msgstr "New Reminder"
+
+#: reminder.py:411
+msgid "Nazwa przypomnienia:"
+msgstr "Reminder Name:"
+
+#: reminder.py:419
+msgid "Opis:"
+msgstr "Description:"
+
+#: reminder.py:427
+msgid "Data:"
+msgstr "Date:"
+
+#: reminder.py:436
+msgid "Dzień:"
+msgstr "Day:"
+
+#: reminder.py:438
+msgid "Miesiąc:"
+msgstr "Month:"
+
+#: reminder.py:440
+msgid "Rok:"
+msgstr "Year:"
+
+#: reminder.py:446
+msgid "Czas:"
+msgstr "Time:"
+
+#: reminder.py:454
+msgid "Godzina:"
+msgstr "Hour:"
+
+#: reminder.py:456
+msgid "Minuta:"
+msgstr "Minute:"
+
+#: reminder.py:462
+msgid "Priorytet:"
+msgstr "Priority:"
+
+#: reminder.py:471
+msgid "Powtórz:"
+msgstr "Repeat:"
+
+#: reminder.py:474
+msgid "2 razy co 3 minuty"
+msgstr "2 times every 3 minutes"
+
+#: reminder.py:475
+msgid "4 razy co minutę"
+msgstr "4 times every minute"
+
+#: reminder.py:476
+msgid "Co 15 minut"
+msgstr "Every 15 minutes"
+
+#: reminder.py:477
+msgid "Tylko raz"
+msgstr "Only once"
+
+#: reminder.py:485 reminder.py:594
+msgid "OK"
+msgstr "OK"
+
+#: reminder.py:486 reminder.py:595
+msgid "Anuluj"
+msgstr "Cancel"
+
+#: reminder.py:516
+msgid "Przypomnienie"
+msgstr "Reminder"
+
+#: reminder.py:531
+msgid "Wykonano"
+msgstr "Done"
+
+#: reminder.py:532
+msgid "Moment"
+msgstr "Snooze"
+
+#: reminder.py:541
+msgid "Ustawienia programu"
+msgstr "Program Settings"
+
+#: reminder.py:554
+msgid "Dźwięki"
+msgstr "Sounds"
+
+#: reminder.py:561
+msgid "Temat dźwiękowy:"
+msgstr "Sound Theme:"
+
+#: reminder.py:575
+msgid "Tekst na mowę"
+msgstr "Text-to-speech"
+
+#: reminder.py:582
+msgid "Widok listy przypomnień:"
+msgstr "Reminder list view:"
+
+#: reminder.py:584
+msgid "Lista (zalecane dla osób z niepełnosprawnością wzroku)"
+msgstr "List (recommended for visually impaired)"
+
+#: reminder.py:584
+msgid "Widok kalendarza"
+msgstr "Calendar view"
+
+#: reminder.py:613
+msgid "Moduł pygame nie jest dostępny."
+msgstr "Pygame module is not available."

@@ -3,6 +3,7 @@ import os
 import datetime
 import json
 import platform
+from translation import _
 
 class tNotesApp(wx.Frame):
     def __init__(self, *args, **kw):
@@ -48,27 +49,27 @@ class tNotesApp(wx.Frame):
 
     def init_ui(self):
         self.SetSize((800, 600))
-        self.SetTitle('tNotes')
+        self.SetTitle(_('tNotes'))
 
         self.panel = wx.Panel(self)
 
         self.notebook = wx.ListCtrl(self.panel, style=wx.LC_REPORT)
-        self.notebook.InsertColumn(0, 'Tytuł notatki', width=200)
-        self.notebook.InsertColumn(1, 'Data utworzenia', width=150)
-        self.notebook.InsertColumn(2, 'Data edytowania', width=150)
+        self.notebook.InsertColumn(0, _('Tytuł notatki'), width=200)
+        self.notebook.InsertColumn(1, _('Data utworzenia'), width=150)
+        self.notebook.InsertColumn(2, _('Data edytowania'), width=150)
         self.notebook.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_open_note)
         self.notebook.Bind(wx.EVT_KEY_DOWN, self.on_list_key_down)
 
-        self.new_note_btn = wx.Button(self.panel, label='Nowa notatka')
+        self.new_note_btn = wx.Button(self.panel, label=_('Nowa notatka'))
         self.new_note_btn.Bind(wx.EVT_BUTTON, self.on_new_note)
 
-        self.new_folder_btn = wx.Button(self.panel, label='Nowy katalog')
+        self.new_folder_btn = wx.Button(self.panel, label=_('Nowy katalog'))
         self.new_folder_btn.Bind(wx.EVT_BUTTON, self.on_new_folder)
 
-        self.delete_btn = wx.Button(self.panel, label='Usuń')
+        self.delete_btn = wx.Button(self.panel, label=_('Usuń'))
         self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete)
 
-        self.back_btn = wx.Button(self.panel, label='Powrót')
+        self.back_btn = wx.Button(self.panel, label=_('Powrót'))
         self.back_btn.Bind(wx.EVT_BUTTON, self.on_back)
 
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -91,24 +92,24 @@ class tNotesApp(wx.Frame):
         menubar = wx.MenuBar()
 
         file_menu = wx.Menu()
-        new_note_item = file_menu.Append(wx.ID_NEW, '&Nowa notatka\tCtrl+N')
-        new_folder_item = file_menu.Append(wx.ID_ANY, 'Nowy &katalog\tCtrl+Shift+N')
+        new_note_item = file_menu.Append(wx.ID_NEW, _('&Nowa notatka\tCtrl+N'))
+        new_folder_item = file_menu.Append(wx.ID_ANY, _('Nowy &katalog\tCtrl+Shift+N'))
         file_menu.AppendSeparator()
-        settings_item = file_menu.Append(wx.ID_ANY, 'Ustawienia tNotes...')
+        settings_item = file_menu.Append(wx.ID_ANY, _('Ustawienia tNotes...'))
         file_menu.AppendSeparator()
-        exit_item = file_menu.Append(wx.ID_EXIT, '&Zamknij tNotes\tCtrl+W')
+        exit_item = file_menu.Append(wx.ID_EXIT, _('&Zamknij tNotes\tCtrl+W'))
 
         self.Bind(wx.EVT_MENU, self.on_new_note, new_note_item)
         self.Bind(wx.EVT_MENU, self.on_new_folder, new_folder_item)
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
-        menubar.Append(file_menu, '&Plik')
+        menubar.Append(file_menu, _('&Plik'))
         self.SetMenuBar(menubar)
 
     def load_notes_list(self):
         if not os.path.exists(self.current_dir):
-            self.speak(f'Katalog {self.current_dir} nie istnieje.')
+            self.speak(_('Katalog {} nie istnieje.').format(self.current_dir))
             self.current_dir = self.notes_dir
 
         self.notebook.DeleteAllItems()
@@ -116,7 +117,7 @@ class tNotesApp(wx.Frame):
             item_path = os.path.join(self.current_dir, item)
             if os.path.isdir(item_path):
                 note_count = len([f for f in os.listdir(item_path) if f.endswith('.tnote')])
-                display_text = f"[Katalog] {item}" if not self.settings['announce_folders'] else f"Katalog {item}, zawiera {note_count} notatek"
+                display_text = _("[Katalog] {}").format(item) if not self.settings['announce_folders'] else _("Katalog {}, zawiera {} notatek").format(item, note_count)
                 self.notebook.Append([display_text, "", ""])
             else:
                 if item.endswith('.tnote'):
@@ -147,26 +148,26 @@ class tNotesApp(wx.Frame):
         os.system(f"spd-say {text}")
 
     def on_new_note(self, event):
-        dialog = wx.TextEntryDialog(self, 'Wprowadź tytuł notatki:', 'Nowa notatka')
+        dialog = wx.TextEntryDialog(self, _('Wprowadź tytuł notatki:'), _('Nowa notatka'))
         if dialog.ShowModal() == wx.ID_OK:
             title = dialog.GetValue()
             self.create_note_dialog(title)
         dialog.Destroy()
 
     def create_note_dialog(self, title):
-        self.note_dialog = wx.Dialog(self, title='Nowa notatka', size=(400, 300))
+        self.note_dialog = wx.Dialog(self, title=_('Nowa notatka'), size=(400, 300))
         panel = wx.Panel(self.note_dialog)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        title_label = wx.StaticText(panel, label='Tytuł:')
+        title_label = wx.StaticText(panel, label=_('Tytuł:'))
         self.note_title = wx.TextCtrl(panel, value=title)
-        content_label = wx.StaticText(panel, label='Treść:')
+        content_label = wx.StaticText(panel, label=_('Treść:'))
         self.note_content = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
 
-        save_button = wx.Button(panel, label='Zapisz')
+        save_button = wx.Button(panel, label=_('Zapisz'))
         save_button.Bind(wx.EVT_BUTTON, self.on_save_note)
 
-        cancel_button = wx.Button(panel, label='Anuluj')
+        cancel_button = wx.Button(panel, label=_('Anuluj'))
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
@@ -190,34 +191,34 @@ class tNotesApp(wx.Frame):
             f.write(title + '\n' + content)
         self.note_dialog.Destroy()
         self.load_notes_list()
-        self.speak('Notatka została zapisana!')
+        self.speak(_('Notatka została zapisana!'))
 
     def on_cancel(self, event):
         self.note_dialog.Destroy()
 
     def on_new_folder(self, event):
-        dialog = wx.TextEntryDialog(self, 'Wprowadź nazwę katalogu:', 'Nowy katalog')
+        dialog = wx.TextEntryDialog(self, _('Wprowadź nazwę katalogu:'), _('Nowy katalog'))
         if dialog.ShowModal() == wx.ID_OK:
             folder_name = dialog.GetValue()
             folder_path = os.path.join(self.current_dir, folder_name)
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
                 self.load_notes_list()
-                self.speak('Katalog został utworzony!')
+                self.speak(_('Katalog został utworzony!'))
             else:
-                self.speak(f'Katalog {folder_path} już istnieje.')
+                self.speak(_('Katalog {} już istnieje.').format(folder_path))
         dialog.Destroy()
 
     def on_open_note(self, event):
         index = event.GetIndex()
         item = self.notebook.GetItemText(index)
-        if item.startswith('[Katalog]'):
+        if item.startswith(_('[Katalog]')):
             folder_name = item.split(' ', 1)[1]
             if self.settings['announce_folders']:
                 folder_name = folder_name.split(', zawiera')[0]
             self.current_dir = os.path.join(self.current_dir, folder_name)
             self.load_notes_list()
-        elif item.startswith('Katalog'):
+        elif item.startswith(_('Katalog')):
             folder_name = item.split(' ', 1)[1]
             if self.settings['announce_folders']:
                 folder_name = folder_name.split(', zawiera')[0]
@@ -231,22 +232,22 @@ class tNotesApp(wx.Frame):
                     content = f.read().strip()
                 self.edit_note_dialog(title, content)
             else:
-                self.speak(f'Plik {note_path} nie istnieje.')
+                self.speak(_('Plik {} nie istnieje.').format(note_path))
 
     def edit_note_dialog(self, title, content):
-        self.note_dialog = wx.Dialog(self, title='Edytuj notatkę', size=(400, 300))
+        self.note_dialog = wx.Dialog(self, title=_('Edytuj notatkę'), size=(400, 300))
         panel = wx.Panel(self.note_dialog)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        title_label = wx.StaticText(panel, label='Tytuł:')
+        title_label = wx.StaticText(panel, label=_('Tytuł:'))
         self.note_title = wx.TextCtrl(panel, value=title)
-        content_label = wx.StaticText(panel, label='Treść:')
+        content_label = wx.StaticText(panel, label=_('Treść:'))
         self.note_content = wx.TextCtrl(panel, style=wx.TE_MULTILINE, value=content)
 
-        save_button = wx.Button(panel, label='Zapisz')
+        save_button = wx.Button(panel, label=_('Zapisz'))
         save_button.Bind(wx.EVT_BUTTON, self.on_save_note)
 
-        cancel_button = wx.Button(panel, label='Anuluj')
+        cancel_button = wx.Button(panel, label=_('Anuluj'))
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
@@ -266,31 +267,31 @@ class tNotesApp(wx.Frame):
         index = self.notebook.GetFirstSelected()
         if index != -1:
             item = self.notebook.GetItemText(index)
-            if item.startswith('[Katalog]'):
+            if item.startswith(_('[Katalog]')):
                 folder_name = item.split(' ', 1)[1]
                 if self.settings['announce_folders']:
                     folder_name = folder_name.split(', zawiera')[0]
                 folder_path = os.path.join(self.current_dir, folder_name)
                 try:
                     os.rmdir(folder_path)
-                    self.speak('Katalog został usunięty!')
+                    self.speak(_('Katalog został usunięty!'))
                 except OSError:
-                    self.speak(f'Katalog {folder_path} nie jest pusty.')
-            elif item.startswith('Katalog'):
+                    self.speak(_('Katalog {} nie jest pusty.').format(folder_path))
+            elif item.startswith(_('Katalog')):
                 folder_name = item.split(' ', 1)[1]
                 if self.settings['announce_folders']:
                     folder_name = folder_name.split(', zawiera')[0]
                 folder_path = os.path.join(self.current_dir, folder_name)
                 try:
                     os.rmdir(folder_path)
-                    self.speak('Katalog został usunięty!')
+                    self.speak(_('Katalog został usunięty!'))
                 except OSError:
-                    self.speak(f'Katalog {folder_path} nie jest pusty.')
+                    self.speak(_('Katalog {} nie jest pusty.').format(folder_path))
             else:
                 note_path = os.path.join(self.current_dir, f"{item}.tnote")
                 if os.path.exists(note_path):
                     os.remove(note_path)
-                    self.speak('Notatka została usunięta!')
+                    self.speak(_('Notatka została usunięta!'))
             self.load_notes_list()
 
     def on_back(self, event):
@@ -299,19 +300,19 @@ class tNotesApp(wx.Frame):
             self.load_notes_list()
 
     def on_settings(self, event):
-        self.settings_dialog = wx.Dialog(self, title='Ustawienia tNotes', size=(300, 200))
+        self.settings_dialog = wx.Dialog(self, title=_('Ustawienia tNotes'), size=(300, 200))
         panel = wx.Panel(self.settings_dialog)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        self.announce_folders_cb = wx.CheckBox(panel, label='Oznajmij katalogi')
+        self.announce_folders_cb = wx.CheckBox(panel, label=_('Oznajmij katalogi'))
         self.announce_folders_cb.SetValue(self.settings['announce_folders'])
-        self.announce_shortcuts_cb = wx.CheckBox(panel, label='Oznajmij skróty klawiszowe')
+        self.announce_shortcuts_cb = wx.CheckBox(panel, label=_('Oznajmij skróty klawiszowe'))
         self.announce_shortcuts_cb.SetValue(self.settings['announce_shortcuts'])
 
-        save_button = wx.Button(panel, label='Zapisz')
+        save_button = wx.Button(panel, label=_('Zapisz'))
         save_button.Bind(wx.EVT_BUTTON, self.on_save_settings)
 
-        cancel_button = wx.Button(panel, label='Anuluj')
+        cancel_button = wx.Button(panel, label=_('Anuluj'))
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel_settings)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
@@ -329,7 +330,7 @@ class tNotesApp(wx.Frame):
         self.settings['announce_folders'] = self.announce_folders_cb.GetValue()
         self.settings['announce_shortcuts'] = self.announce_shortcuts_cb.GetValue()
         self.save_settings()
-        self.speak('Ustawienia zostały zapisane!')
+        self.speak(_('Ustawienia zostały zapisane!'))
         self.settings_dialog.Destroy()
         self.load_notes_list()
 

@@ -9,3 +9,38 @@ system: windows 10 lub wyższy,
 ctrl+tab, przełącza nas między listą aplikacji a listą gier. Dla użytkowników słabowidzących jest pasek narzędzi, aby można było spokojnie przełączyć też myszką
 tab, przełącza nas między listą aplikacji lub gier a paskiem statusu
 shift+f10, uaktywnia menu kontekstowe dla zaznaczonej pozycji tj, aplikacji lub gry TCE
+#interfejs
+Titan posiada 2 interfejsy. 
+Interfejs graficzny - uniwersalny, zawiera 2 listy i pasek menu. Lista aplikacji lub gier TCE, oraz pasek stanu
+aby przełączyć się pomiędzy listą aplikacji a listą gier, ewentualnie innymi listami, naciśnij ctrl+tab
+aby wejść lub wyjść z pasku stanu, naciśnij tab
+każda aplikacja lub gra ma też swoje własne menu kontekstowe, w którym możemy uruchomić lub odinstalować wybraną opcję
+aby przejść na pasek menu, należy nacisnąć klawisz alt, lub vo+m, jeśli jesteśmy w MAC OS
+#aplikacje
+Aplikacje w TCE są to niezależne, autonomiczne programy napisane w python. Titan zawiera kilka podstawowych aplikacji TCE takie jak: Edytor tekstowy, eksplorator plików, przeglądarka internetowa, i wiele więcej. Aplikacje Titana są w katalogu titana/data/applications.
+#gry
+Gry w TCE nie różnią się niczym od aplikacji, lecz ta kategoria jest stosowana po prostu do gier. Czy to w python, czy to w pliku binarnym .exe. Gry znajdują się w katalog titana/data/games
+#komponenty
+Komponenty są to ulepszenia dla środowiska Titan, jak i samego systemu windows. Przykładaami takich komponentów są TDictate, pomoc, którą właśnie czytasz oraz monitor systemowy. 
+Monitor systemowy powiadamia o poziomie baterii w trakcie ładowania, oraz dla zmiany głośności systemowej. 
+komponenty możemy znaleść w katalog titana/data/components
+#tematy dźwiękowe. 
+Czy to otwieramy jakiś program, przemieszczamy się po nim, czy otwieramy jakiś proces systemowy, Titan powiadamia nas o tym przy pomocy tematów dźwiękowych. Tematy dźwiękowe możemy znaleść w katalog titana/sfx
+#skórki
+skórki są to pakiety ikon dla interfejsu graficznego Titana. zmieniają wygląd listy aplikacji, paska menu, a także ikony reprezentujące poszczególny element. Są w katalogu titana/skins
+#Języki (beta)
+obecnie system tłumaczeń w Titanie jest w wersji zapoznawczej. Pakiety językowe są w katalog titana/languages
+#alternatywny interfejs Titana
+Titan, po zminimalizowaniu interfejsu graficznego uaktywnia niewidzialny interfejs, po którym możemy się przemieszczać następująco
+ctrl+shift+strzałki, 
+W lewo, w prawo, przemieszczają nas po elementach listy danej kategorii, 
+W górę, w dół, przemieszczają nas po kategoriach
+Ctrl+shift+enter, uaktywnia dany element. 
+#widgety
+Widgety są to nakładki na niewidzialny interfejs Titana, które znajdują się w odpowiedniej kategorii. Aby uaktywnić widget, należy nacisnąć
+Ctrl+shift, będzie od tej pory jako Klawisz modyfikujący
+Titan+enter
+Widgety mogą być zwykłymi przyciskami, które uaktywnią daną funkcję widgetu, oraz siatką/widgetem, po którym możemy się Przemieszczać
+#interakcja z widgetami
+titan+strzałki, przemieszczają nas po siatce widgetu
+titan+backspace, powraca do niewidzialnego interfejsu

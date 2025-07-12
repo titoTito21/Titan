@@ -1,0 +1,169 @@
+# Polish translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 14:33+0200\n"
+"PO-Revision-Date: 2025-07-11 14:33+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: pl <LL@li.org>\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: notes.py:65
+msgid "tNotes"
+msgstr "tNotes"
+
+#: notes.py:70
+msgid "Tytuł notatki"
+msgstr "Tytuł notatki"
+
+#: notes.py:71
+msgid "Data utworzenia"
+msgstr "Data utworzenia"
+
+#: notes.py:72
+msgid "Data edytowania"
+msgstr "Data edytowania"
+
+#: notes.py:76 notes.py:164 notes.py:171
+msgid "Nowa notatka"
+msgstr "Nowa notatka"
+
+#: notes.py:79 notes.py:213
+msgid "Nowy katalog"
+msgstr "Nowy katalog"
+
+#: notes.py:82
+msgid "Usuń"
+msgstr "Usuń"
+
+#: notes.py:85
+msgid "Powrót"
+msgstr "Powrót"
+
+#: notes.py:108
+msgid "&Nowa notatka\tCtrl+N"
+msgstr "&Nowa notatka\tCtrl+N"
+
+#: notes.py:109
+msgid "Nowy &katalog\tCtrl+Shift+N"
+msgstr "Nowy &katalog\tCtrl+Shift+N"
+
+#: notes.py:111
+msgid "Ustawienia tNotes..."
+msgstr "Ustawienia tNotes..."
+
+#: notes.py:113
+msgid "&Zamknij tNotes\tCtrl+W"
+msgstr "&Zamknij tNotes\tCtrl+W"
+
+#: notes.py:120
+msgid "&Plik"
+msgstr "&Plik"
+
+#: notes.py:125
+#, python-brace-format
+msgid "Katalog {} nie istnieje."
+msgstr "Katalog {} nie istnieje."
+
+#: notes.py:133
+#, python-brace-format
+msgid "[Katalog] {}"
+msgstr "[Katalog] {}"
+
+#: notes.py:133
+#, python-brace-format
+msgid "Katalog {}, zawiera {} notatek"
+msgstr "Katalog {}, zawiera {} notatek"
+
+#: notes.py:164
+msgid "Wprowadź tytuł notatki:"
+msgstr "Wprowadź tytuł notatki:"
+
+#: notes.py:175 notes.py:255
+msgid "Tytuł:"
+msgstr "Tytuł:"
+
+#: notes.py:177 notes.py:257
+msgid "Treść:"
+msgstr "Treść:"
+
+#: notes.py:180 notes.py:260 notes.py:325
+msgid "Zapisz"
+msgstr "Zapisz"
+
+#: notes.py:183 notes.py:263 notes.py:328
+msgid "Anuluj"
+msgstr "Anuluj"
+
+#: notes.py:207
+msgid "Notatka została zapisana!"
+msgstr "Notatka została zapisana!"
+
+#: notes.py:213
+msgid "Wprowadź nazwę katalogu:"
+msgstr "Wprowadź nazwę katalogu:"
+
+#: notes.py:220
+msgid "Katalog został utworzony!"
+msgstr "Katalog został utworzony!"
+
+#: notes.py:222
+#, python-brace-format
+msgid "Katalog {} już istnieje."
+msgstr "Katalog {} już istnieje."
+
+#: notes.py:228 notes.py:283
+msgid "[Katalog]"
+msgstr "[Katalog]"
+
+#: notes.py:234 notes.py:293
+msgid "Katalog"
+msgstr "Katalog"
+
+#: notes.py:248
+#, python-brace-format
+msgid "Plik {} nie istnieje."
+msgstr "Plik {} nie istnieje."
+
+#: notes.py:251
+msgid "Edytuj notatkę"
+msgstr "Edytuj notatkę"
+
+#: notes.py:290 notes.py:300
+msgid "Katalog został usunięty!"
+msgstr "Katalog został usunięty!"
+
+#: notes.py:292 notes.py:302
+#, python-brace-format
+msgid "Katalog {} nie jest pusty."
+msgstr "Katalog {} nie jest pusty."
+
+#: notes.py:307
+msgid "Notatka została usunięta!"
+msgstr "Notatka została usunięta!"
+
+#: notes.py:316
+msgid "Ustawienia tNotes"
+msgstr "Ustawienia tNotes"
+
+#: notes.py:320
+msgid "Oznajmij katalogi"
+msgstr "Oznajmij katalogi"
+
+#: notes.py:322
+msgid "Oznajmij skróty klawiszowe"
+msgstr "Oznajmij skróty klawiszowe"
+
+#: notes.py:346
+msgid "Ustawienia zostały zapisane!"
+msgstr "Ustawienia zostały zapisane!"

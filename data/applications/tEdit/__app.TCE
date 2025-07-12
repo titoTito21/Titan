@@ -1,4 +1,5 @@
-name="Edytor Tekstowy - TEdit - beta"
+name_pl="Edytor Tekstowy"
+name_en="Text Editor"
 description=""
-openfile="tedit.py"
+openfile="tedit.pyc"
 shortname="tedit"

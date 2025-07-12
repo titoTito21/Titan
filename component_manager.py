@@ -182,3 +182,15 @@ class ComponentManager:
                     print(f"Failed to initialize component {component.__name__}: {e}")
             else:
                 print(f"No initialize function in component: {component.__name__}")
+
+    def shutdown_components(self):
+        """Shuts down all loaded components."""
+        for component in self.components:
+            if hasattr(component, 'shutdown'):
+                try:
+                    component.shutdown()
+                    print(f"Shutdown component: {component.__name__}")
+                except Exception as e:
+                    print(f"Failed to shutdown component {component.__name__}: {e}")
+            else:
+                print(f"No shutdown function in component: {component.__name__}")

@@ -1,0 +1,89 @@
+# Polish translations for quick_settings.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the quick_settings
+# project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-07 19:58+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: pl\n"
+"Language-Team: pl <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: main.py:40 main.py:42
+msgid "Default"
+msgstr "Domyślny"
+
+#: main.py:54
+msgid "Quick start"
+msgstr "Szybki start"
+
+#: main.py:55
+msgid "Confirm exit"
+msgstr "Potwierdź wyjście"
+
+#: main.py:56
+msgid "Language"
+msgstr "Język"
+
+#: main.py:58
+msgid "Sound theme"
+msgstr "Motyw dźwiękowy"
+
+#: main.py:59
+msgid "Stereo sounds"
+msgstr "Dźwięki stereo"
+
+#: main.py:61
+msgid "Skin"
+msgstr "Skórka"
+
+#: main.py:63
+msgid "Announce item index"
+msgstr "Informuj o indeksie elementów"
+
+#: main.py:64
+msgid "Announce widget type"
+msgstr "Ogłaszaj typ widżetu"
+
+#: main.py:65
+msgid "Enable TitanUI support"
+msgstr "Włącz obsługę TitanUI"
+
+#: main.py:66
+msgid "Announce first item in category"
+msgstr "Oznajmiaj pierwszy element w kategorii"
+
+#: main.py:72
+msgid "Empty space"
+msgstr "Puste miejsce"
+
+#: main.py:79
+msgid "(requires restart)"
+msgstr "(wymaga ponownego uruchomienia)"
+
+#: main.py:82 main.py:125
+msgid "On"
+msgstr "Włączony"
+
+#: main.py:82 main.py:125
+msgid "Off"
+msgstr "Wyłączony"
+
+#: main.py:150
+msgid "Quick Settings"
+msgstr "Szybkie ustawienia"
+
+#~ msgid "No settings available"
+#~ msgstr "Brak dostępnych ustawień"
+

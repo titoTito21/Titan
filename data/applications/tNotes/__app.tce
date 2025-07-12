@@ -1,4 +1,5 @@
-name="notatki - TNotes"
+name_pl="Notatki"
+name_en="Notes"
 description=""
 openfile="notes.py"
 shortname="tnotes"

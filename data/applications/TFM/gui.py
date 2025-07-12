@@ -6,6 +6,7 @@ import datetime
 import shutil
 import pygame
 import platform
+from translation import _
 # Import the custom ID from menu.py
 from menu import create_file_menu, create_edit_menu, create_view_menu, ID_RENAME
 from tfm_settings import SettingsManager, SettingsDialog
@@ -23,11 +24,20 @@ def get_app_sfx_path():
 
 class FileManager(wx.Frame):
     def __init__(self):
-        wx.Frame.__init__(self, None, title="Menedżer Plików", size=(800, 600))
+        wx.Frame.__init__(self, None, title=_("Menedżer Plików"), size=(800, 600))
         self.settings = SettingsManager()
+        self.clipboard = []
+        self.active_panel = None
+
+        # Commander mode paths and selections
+        self.left_path = os.path.expanduser("~")
+        self.right_path = os.path.expanduser("~")
+        self.left_selected_items = set()
+        self.right_selected_items = set()
+
+        # Single list and classic mode path and selection
         self.current_path = os.path.expanduser("~")
-        self.clipboard = [] # Stores tuples of (path, action), e.g., ('/path/to/file', 'copy') or ('/path/to/file', 'cut')
-        self.selected_items = set() # Stores names of selected items in the current directory
+        self.selected_items = set()
 
         self.view_settings = self.settings.get_view_settings()
         self.show_hidden = self.settings.get_show_hidden()
@@ -57,9 +67,9 @@ class FileManager(wx.Frame):
         edit_menu = create_edit_menu(self)
         view_menu = create_view_menu(self)
 
-        menubar.Append(file_menu, '&Plik')
-        menubar.Append(edit_menu, '&Edycja')
-        menubar.Append(view_menu, '&Widok')
+        menubar.Append(file_menu, _('&Plik'))
+        menubar.Append(edit_menu, _('&Edycja'))
+        menubar.Append(view_menu, _('&Widok'))
 
         self.SetMenuBar(menubar)
 
@@ -103,6 +113,8 @@ class FileManager(wx.Frame):
             self.left_list.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_item_deselected_commander_left)
             self.right_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_item_selected_commander_right)
             self.right_list.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_item_deselected_commander_right)
+            self.left_list.Bind(wx.EVT_SET_FOCUS, self.on_focus_commander)
+            self.right_list.Bind(wx.EVT_SET_FOCUS, self.on_focus_commander)
 
 
         elif explorer_view_mode == "wiele kart":
@@ -111,7 +123,7 @@ class FileManager(wx.Frame):
             self.file_list = wx.ListCtrl(self.notebook, style=wx.LC_REPORT | wx.LC_SINGLE_SEL) # This will be the first tab's list
             self.update_file_list_columns()
             self.populate_file_list() # Call populate_file_list without ctrl, it will use the active list ctrl (the first tab's list)
-            self.notebook.AddPage(self.file_list, "Karta 1") # Consider how to add/manage multiple tabs
+            self.notebook.AddPage(self.file_list, _("Karta 1")) # Consider how to add/manage multiple tabs
             self.main_sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, 10)
 
             # Bind events for the list control within the first tab
@@ -171,13 +183,20 @@ class FileManager(wx.Frame):
 
     def update_window_title(self):
         mode = self.settings.get_window_title_mode()
+        path = self.current_path
+        if self.settings.get_explorer_view_mode() == 'commander':
+            if self.active_panel == 'left':
+                path = self.left_path
+            else:
+                path = self.right_path
+
         if mode == 'nazwa katalogu':
-            self.SetTitle(os.path.basename(self.current_path) or "Menedżer Plików")
+            self.SetTitle(os.path.basename(path) or _("Menedżer Plików"))
         elif mode == 'ścieżka':
-            self.SetTitle(self.current_path)
+            self.SetTitle(path)
         else:
             # nazwa aplikacji
-            self.SetTitle("Menedżer Plików")
+            self.SetTitle(_("Menedżer Plików"))
 
     def update_file_list_columns(self, ctrl=None):
         if ctrl is None:
@@ -205,17 +224,27 @@ class FileManager(wx.Frame):
         ctrl.ClearAll()
         col_index = 0
         if 'name' in self.view_settings:
-            ctrl.InsertColumn(col_index, 'Nazwa', width=300)
+            ctrl.InsertColumn(col_index, _('Nazwa'), width=300)
             col_index += 1
         if 'date' in self.view_settings:
-            ctrl.InsertColumn(col_index, 'Data modyfikacji', width=200)
+            ctrl.InsertColumn(col_index, _('Data modyfikacji'), width=200)
             col_index += 1
         if 'type' in self.view_settings:
-            ctrl.InsertColumn(col_index, 'Typ', width=100)
+            ctrl.InsertColumn(col_index, _('Typ'), width=100)
 
-    def populate_file_list(self, ctrl=None):
-        # Use self.current_path consistently
-        current_path_to_list = self.current_path
+    def populate_file_list(self, ctrl=None, path=None):
+        if ctrl is None:
+            ctrl = self.get_active_list_ctrl()
+
+        if path is None:
+            if hasattr(self, 'left_list') and ctrl == self.left_list:
+                path = self.left_path
+            elif hasattr(self, 'right_list') and ctrl == self.right_list:
+                path = self.right_path
+            else:
+                path = self.current_path
+
+        current_path_to_list = path
 
         if ctrl is None:
              # Determine which list control to populate based on the current view mode
@@ -250,14 +279,14 @@ class FileManager(wx.Frame):
             entries = [e for e in entries if e != '.DS_Store']  # Ignoruj .DS_Store na macOS
 
             if not entries:
-                index = ctrl.InsertItem(ctrl.GetItemCount(), 'Ten folder jest pusty')
+                index = ctrl.InsertItem(ctrl.GetItemCount(), _('Ten folder jest pusty'))
                 # Uzułnij ewentualnie pozostałe kolumny pustymi danymi
                 if 'date' in self.view_settings:
                     # Find the column index for 'date' using the corrected method
                     col_index_date = -1
                     for i in range(ctrl.GetColumnCount()):
                         # Corrected: Use GetColumn(i).GetText()
-                        if ctrl.GetColumn(i).GetText() == 'Data modyfikacji':
+                        if ctrl.GetColumn(i).GetText() == _('Data modyfikacji'):
                             col_index_date = i
                             break
                     if col_index_date != -1:
@@ -268,7 +297,7 @@ class FileManager(wx.Frame):
                      col_index_type = -1
                      for i in range(ctrl.GetColumnCount()):
                          # Corrected: Use GetColumn(i).GetText()
-                         if ctrl.GetColumn(i).GetText() == 'Typ':
+                         if ctrl.GetColumn(i).GetText() == _('Typ'):
                              col_index_type = i
                              break
                      if col_index_type != -1:
@@ -290,7 +319,7 @@ class FileManager(wx.Frame):
                     # Use current_path_to_list for joining
                     path = os.path.join(current_path_to_list, entry)
                     modified = datetime.datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y-%m-%d %H:%M:%S')
-                    entry_type = 'Folder' if os.path.isdir(path) else 'Plik'
+                    entry_type = _('Folder') if os.path.isdir(path) else _('Plik')
                     display_name = entry if self.show_extensions else os.path.splitext(entry)[0]
                     index = ctrl.InsertItem(ctrl.GetItemCount(), display_name)
 
@@ -307,7 +336,7 @@ class FileManager(wx.Frame):
                         col_index_date = -1
                         for i in range(ctrl.GetColumnCount()):
                              # Corrected: Use GetColumn(i).GetText()
-                            if ctrl.GetColumn(i).GetText() == 'Data modyfikacji':
+                            if ctrl.GetColumn(i).GetText() == _('Data modyfikacji'):
                                 col_index_date = i
                                 break
                         if col_index_date != -1:
@@ -319,7 +348,7 @@ class FileManager(wx.Frame):
                         col_index_type = -1
                         for i in range(ctrl.GetColumnCount()):
                             # Corrected: Use GetColumn(i).GetText()
-                            if ctrl.GetColumn(i).GetText() == 'Typ':
+                            if ctrl.GetColumn(i).GetText() == _('Typ'):
                                 col_index_type = i
                                 break
                         if col_index_type != -1:
@@ -330,7 +359,7 @@ class FileManager(wx.Frame):
                 items_to_reselect = [i for i in range(ctrl.GetItemCount())
                                       # Get the actual name without any prefixes for comparison
                                       if ctrl.GetItemText(i) in self.selected_items # Simplified check now that prefix is removed
-                                      and ctrl.GetItemText(i) != 'Ten folder jest pusty']
+                                      and ctrl.GetItemText(i) != _('Ten folder jest pusty')]
                 for i in items_to_reselect:
                      ctrl.Select(i)
 
@@ -341,8 +370,8 @@ class FileManager(wx.Frame):
 
 
         except PermissionError:
-            wx.MessageBox("Brak dostępu do katalogu", "Błąd", wx.OK | wx.ICON_ERROR)
-            self.announce("Brak dostępu do katalogu.")
+            wx.MessageBox(_("Brak dostępu do katalogu"), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            self.announce(_("Brak dostępu do katalogu."))
             # Optionally, navigate back to the previous directory or a default directory
             if self.current_path != os.path.expanduser("~"):
                  self.current_path = os.path.dirname(self.current_path)
@@ -375,7 +404,7 @@ class FileManager(wx.Frame):
         self.Close()
 
     def on_new_file(self, event):
-        dlg = wx.TextEntryDialog(self, 'Podaj nazwę nowego pliku:', 'Nowy Plik')
+        dlg = wx.TextEntryDialog(self, _('Podaj nazwę nowego pliku:'), _('Nowy Plik'))
         if dlg.ShowModal() == wx.ID_OK:
             file_name = dlg.GetValue()
             if file_name: # Check if the user entered a file name
@@ -383,15 +412,15 @@ class FileManager(wx.Frame):
                 try:
                     open(new_file_path, 'w').close()
                     self.populate_file_list()
-                    self.announce(f"Utworzono nowy plik {file_name}")
+                    self.announce(_("Utworzono nowy plik {}").format(file_name))
                 except Exception as e:
-                    wx.MessageBox(f"Nie udało się utworzyć pliku {file_name}: {e}", "Błąd Tworzenia Pliku", wx.OK | wx.ICON_ERROR)
-                    self.announce(f"Błąd tworzenia pliku {file_name}")
+                    wx.MessageBox(_("Nie udało się utworzyć pliku {}: {}").format(file_name, e), _("Błąd Tworzenia Pliku"), wx.OK | wx.ICON_ERROR)
+                    self.announce(_("Błąd tworzenia pliku {}").format(file_name))
 
         dlg.Destroy()
 
     def on_new_folder(self, event):
-        dlg = wx.TextEntryDialog(self, 'Podaj nazwę nowego folderu:', 'Nowy Folder')
+        dlg = wx.TextEntryDialog(self, _('Podaj nazwę nowego folderu:'), _('Nowy Folder'))
         if dlg.ShowModal() == wx.ID_OK:
             folder_name = dlg.GetValue()
             if folder_name: # Check if the user entered a folder name
@@ -399,17 +428,17 @@ class FileManager(wx.Frame):
                 try:
                     os.makedirs(new_folder_path, exist_ok=True)
                     self.populate_file_list()
-                    self.announce(f"Utworzono nowy folder {folder_name}")
+                    self.announce(_("Utworzono nowy folder {}").format(folder_name))
                 except Exception as e:
-                    wx.MessageBox(f"Nie udało się utworzyć folderu {folder_name}: {e}", "Błąd Tworzenia Folderu", wx.OK | wx.ICON_ERROR)
-                    self.announce(f"Błąd tworzenia folderu {folder_name}")
+                    wx.MessageBox(_("Nie udało się utworzyć folderu {}: {}").format(folder_name, e), _("Błąd Tworzenia Folderu"), wx.OK | wx.ICON_ERROR)
+                    self.announce(_("Błąd tworzenia folderu {}").format(folder_name))
         dlg.Destroy()
 
     def on_rename(self, event):
         # Determine which list control is active
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do zmiany nazwy.")
+            self.announce(_("Brak aktywnej listy plików do zmiany nazwy."))
             return
 
         item_index = ctrl.GetFocusedItem()
@@ -417,8 +446,8 @@ class FileManager(wx.Frame):
             # Get the actual name without expecting any prefix
             old_name = ctrl.GetItemText(item_index)
 
-            if old_name == 'Ten folder jest pusty':
-                 self.announce("Nie można zmienić nazwy wpisu 'Ten folder jest pusty'.")
+            if old_name == _('Ten folder jest pusty'):
+                 self.announce(_("Nie można zmienić nazwy wpisu 'Ten folder jest pusty'."))
                  return
 
             # Find the real file name with extension if extensions are hidden
@@ -435,7 +464,7 @@ class FileManager(wx.Frame):
                      pass
 
 
-            dlg = wx.TextEntryDialog(self, "Podaj nową nazwę:", "Zmiana nazwy", real_old_name) # Use real_old_name for the dialog
+            dlg = wx.TextEntryDialog(self, _("Podaj nową nazwę:"), _("Zmiana nazwy"), real_old_name) # Use real_old_name for the dialog
             if dlg.ShowModal() == wx.ID_OK:
                 new_name = dlg.GetValue()
                 if new_name and new_name != real_old_name:
@@ -449,72 +478,93 @@ class FileManager(wx.Frame):
                             self.selected_items.add(new_name)
 
                         self.populate_file_list(ctrl=ctrl) # Repopulate the active list
-                        self.announce(f"Zmieniono nazwę z {real_old_name} na {new_name}")
+                        self.announce(_("Zmieniono nazwę z {} na {}").format(real_old_name, new_name))
                     except Exception as e:
-                        wx.MessageBox(str(e), "Błąd zmiany nazwy", wx.OK | wx.ICON_ERROR)
-                        self.announce(f"Błąd zmiany nazwy {real_old_name}")
+                        wx.MessageBox(str(e), _("Błąd zmiany nazwy"), wx.OK | wx.ICON_ERROR)
+                        self.announce(_("Błąd zmiany nazwy {}").format(real_old_name))
                 elif new_name == real_old_name:
-                     self.announce("Nazwa nie została zmieniona.")
+                     self.announce(_("Nazwa nie została zmieniona."))
                 else:
-                     self.announce("Anulowano zmianę nazwy.")
+                     self.announce(_("Anulowano zmianę nazwy."))
             else:
-                 self.announce("Anulowano zmianę nazwy.")
+                 self.announce(_("Anulowano zmianę nazwy."))
             dlg.Destroy()
         else:
-            self.announce("Nie wybrano elementu do zmiany nazwy.")
+            self.announce(_("Nie wybrano elementu do zmiany nazwy."))
 
 
     def on_copy(self, event):
         # Determine which list control is active
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do skopiowania.")
+            self.announce(_("Brak aktywnej listy plików do skopiowania."))
             return
 
         # Get selected names without expecting any prefix
         selected_names = {ctrl.GetItemText(i)
                           for i in range(ctrl.GetItemCount()) if ctrl.IsSelected(i)
-                          and ctrl.GetItemText(i) != 'Ten folder jest pusty'}
+                          and ctrl.GetItemText(i) != _('Ten folder jest pusty')}
 
 
         if selected_names:
+            path = self.current_path
+            if self.settings.get_explorer_view_mode() == 'commander':
+                if self.active_panel == 'left':
+                    path = self.left_path
+                else:
+                    path = self.right_path
             # Store full paths and action in clipboard
-            self.clipboard = [(os.path.join(self.current_path, name), 'copy') for name in selected_names]
-            self.announce(f"Skopiowano {len(selected_names)} elementów do schowka.")
+            self.clipboard = [(os.path.join(path, name), 'copy') for name in selected_names]
+            self.announce(_("Skopiowano {} elementów do schowka.").format(len(selected_names)))
         else:
             self.clipboard = []
-            self.announce("Nie wybrano elementów do skopiowania.")
+            self.announce(_("Nie wybrano elementów do skopiowania."))
 
 
     def on_cut(self, event):
         # Determine which list control is active
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do wycięcia.")
+            self.announce(_("Brak aktywnej listy plików do wycięcia."))
             return
 
         # Get selected names without expecting any prefix
         selected_names = {ctrl.GetItemText(i)
                           for i in range(ctrl.GetItemCount()) if ctrl.IsSelected(i)
-                          and ctrl.GetItemText(i) != 'Ten folder jest pusty'}
+                          and ctrl.GetItemText(i) != _('Ten folder jest pusty')}
 
 
         if selected_names:
+            path = self.current_path
+            if self.settings.get_explorer_view_mode() == 'commander':
+                if self.active_panel == 'left':
+                    path = self.left_path
+                else:
+                    path = self.right_path
             # Store full paths and action in clipboard
-            self.clipboard = [(os.path.join(self.current_path, name), 'cut') for name in selected_names]
-            self.announce(f"Wycięto {len(selected_names)} elementów do schowka.")
+            self.clipboard = [(os.path.join(path, name), 'cut') for name in selected_names]
+            self.announce(_("Wycięto {} elementów do schowka.").format(len(selected_names)))
         else:
             self.clipboard = []
-            self.announce("Nie wybrano elementów do wycięcia.")
+            self.announce(_("Nie wybrano elementów do wycięcia."))
 
 
     def on_paste(self, event):
         if not self.clipboard:
-            self.announce("Schowek jest pusty.")
+            self.announce(_("Schowek jest pusty."))
             return
 
-        # Determine the destination folder (current path of the active panel)
-        dst_folder = self.current_path # Assuming paste happens in the current directory of the active panel
+        explorer_view_mode = self.settings.get_explorer_view_mode()
+        if explorer_view_mode == 'commander':
+            if self.active_panel == 'left':
+                dst_folder = self.right_path
+                ctrl_to_refresh = self.right_list
+            else:
+                dst_folder = self.left_path
+                ctrl_to_refresh = self.left_list
+        else:
+            dst_folder = self.current_path
+            ctrl_to_refresh = self.get_active_list_ctrl()
 
         copy_dialog_mode = self.settings.get_copy_dialog_mode()
 
@@ -534,21 +584,21 @@ class FileManager(wx.Frame):
                     else:
                         shutil.copy2(src, dst)
                 except Exception as e:
-                    wx.MessageBox(f"Błąd kopiowania {os.path.basename(src)}: {e}", "Błąd Kopiowania", wx.OK | wx.ICON_ERROR)
-                    self.announce(f"Błąd kopiowania {os.path.basename(src)}")
+                    wx.MessageBox(_("Błąd kopiowania {}: {}").format(os.path.basename(src), e), _("Błąd Kopiowania"), wx.OK | wx.ICON_ERROR)
+                    self.announce(_("Błąd kopiowania {}").format(os.path.basename(src)))
 
             for src in move_files:
                 dst = os.path.join(dst_folder, os.path.basename(src))
                 try:
                     shutil.move(src, dst)
                 except Exception as e:
-                    wx.MessageBox(f"Błąd przenoszenia {os.path.basename(src)}: {e}", "Błąd Przenoszenia", wx.OK | wx.ICON_ERROR)
-                    self.announce(f"Błąd przenoszenia {os.path.basename(src)}")
+                    wx.MessageBox(_("Błąd przenoszenia {}: {}").format(os.path.basename(src), e), _("Błąd Przenoszenia"), wx.OK | wx.ICON_ERROR)
+                    self.announce(_("Błąd przenoszenia {}").format(os.path.basename(src)))
 
             # Clear clipboard only after attempting system operations
             self.clipboard = []
-            self.populate_file_list(ctrl=ctrl) # Refresh the active list after pasting
-            self.announce("Zakończono operację wklejania.")
+            self.populate_file_list(ctrl=ctrl_to_refresh)
+            self.announce(_("Zakończono operację wklejania."))
 
         else:
             # klasyczny dialog with progress
@@ -565,7 +615,7 @@ class FileManager(wx.Frame):
                 self.clipboard = [] # Clear clipboard when using classic dialog
 
             if not copy_files and not move_files:
-                 self.announce("Brak elementów do wklejenia w schowku.")
+                 self.announce(_("Brak elementów do wklejenia w schowku."))
             # The list population and announcement will be handled by the dialog completion in copy_move.py
 
 
@@ -573,14 +623,14 @@ class FileManager(wx.Frame):
         # Determine which list control is active
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do zaznaczenia.")
+            self.announce(_("Brak aktywnej listy plików do zaznaczenia."))
             return
 
         self.selected_items.clear() # Clear existing selections
         items_selected_count = 0
         for i in range(ctrl.GetItemCount()):
             name = ctrl.GetItemText(i) # Get the actual item text
-            if name != 'Ten folder jest pusty':
+            if name != _('Ten folder jest pusty'):
                 self.selected_items.add(name)
                 ctrl.Select(i) # Select the item in the list control visually
                 items_selected_count += 1
@@ -589,9 +639,9 @@ class FileManager(wx.Frame):
         # No longer update display names with prefix
         # self.update_display_names(ctrl=ctrl) # Update display names with '(wybrany)' prefix
         if items_selected_count > 0:
-            self.announce(f"Zaznaczono wszystkie ({items_selected_count}) elementy.")
+            self.announce(_("Zaznaczono wszystkie ({}) elementy.").format(items_selected_count))
         else:
-            self.announce("Brak elementów do zaznaczenia w obecnym folderze.")
+            self.announce(_("Brak elementów do zaznaczenia w obecnym folderze."))
 
 
     def on_item_selected(self, event):
@@ -599,7 +649,7 @@ class FileManager(wx.Frame):
         item_index = event.GetItem().GetId()
         ctrl = event.GetEventObject() # Get the list control that triggered the event
         name = ctrl.GetItemText(item_index) # Get the actual item text
-        if name != 'Ten folder jest pusty':
+        if name != _('Ten folder jest pusty'):
             self.selected_items.add(name)
             # No longer update display names with prefix
             # self.update_display_names(ctrl=ctrl)
@@ -628,7 +678,7 @@ class FileManager(wx.Frame):
 
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do otwarcia.")
+            self.announce(_("Brak aktywnej listy plików do otwarcia."))
             return
 
         item_index = -1
@@ -645,9 +695,9 @@ class FileManager(wx.Frame):
             # Get the actual name without expecting any prefix
             name = ctrl.GetItemText(item_index)
 
-            if name == 'Ten folder jest pusty':
+            if name == _('Ten folder jest pusty'):
                 play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
-                self.announce("Folder jest pusty.")
+                self.announce(_("Folder jest pusty."))
                 return
 
             # Find the real path, considering hidden extensions
@@ -672,22 +722,22 @@ class FileManager(wx.Frame):
                 self.populate_file_list(ctrl=ctrl) # Populate the list in the current view mode
                 self.update_window_title()
                 play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-                self.announce(f"Otwarto folder: {name}")
+                self.announce(_("Otwarto folder: {}").format(name))
             elif os.path.exists(real_path): # Check if it's a file and exists
                 try:
                     self.open_file_in_system(real_path)
                     play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-                    self.announce(f"Otwarto plik: {name}")
+                    self.announce(_("Otwarto plik: {}").format(name))
                 except Exception as e:
-                    wx.MessageBox(f"Nie udało się otworzyć pliku {name}: {e}", "Błąd Otwierania Pliku", wx.OK | wx.ICON_ERROR)
+                    wx.MessageBox(_("Nie udało się otworzyć pliku {}: {}").format(name, e), _("Błąd Otwierania Pliku"), wx.OK | wx.ICON_ERROR)
                     play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
-                    self.announce(f"Błąd otwierania pliku: {name}")
+                    self.announce(_("Błąd otwierania pliku: {}").format(name))
             else:
                  play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
-                 self.announce(f"Element nie istnieje: {name}")
+                 self.announce(_("Element nie istnieje: {}").format(name))
         else:
             # This case should ideally not happen if triggered by key/list event on an item
-            self.announce("Nie wybrano elementu do otwarcia.")
+            self.announce(_("Nie wybrano elementu do otwarcia."))
 
 
     def open_file_in_system(self, path):
@@ -715,11 +765,11 @@ class FileManager(wx.Frame):
         # When focus changes to the list control, announce the current directory and focused item if any
         ctrl = event.GetEventObject()
         focused_item_index = ctrl.GetFocusedItem()
-        current_dir_annonce = f"Aktualny katalog: {os.path.basename(self.current_path) or self.current_path}"
+        current_dir_annonce = _("Aktualny katalog: {}").format(os.path.basename(self.current_path) or self.current_path)
         if focused_item_index != -1:
              # Get the actual focused item name without expecting any prefix
              focused_item_name = ctrl.GetItemText(focused_item_index)
-             self.announce(f"{current_dir_annonce}. Fokus na: {focused_item_name}.") # Announce focus, not selection
+             self.announce(_("{}. Fokus na: {}.").format(current_dir_annonce, focused_item_name)) # Announce focus, not selection
         else:
              self.announce(current_dir_annonce)
 
@@ -731,19 +781,7 @@ class FileManager(wx.Frame):
         keycode = event.GetKeyCode()
 
         if keycode == wx.WXK_BACK:
-            parent_path = os.path.dirname(self.current_path)
-            # Check if we are not at the root of the filesystem (os.path.dirname('/') is '/')
-            if parent_path != self.current_path and os.path.isdir(parent_path):
-                # Clear selected items when navigating to parent directory
-                self.selected_items.clear()
-                self.current_path = parent_path
-                self.populate_file_list(ctrl=ctrl) # Populate the list in the current view mode
-                self.update_window_title()
-                play_sound(os.path.join(get_sfx_directory(), 'select.ogg')) # Or a different sound for going up?
-                self.announce(f"Przejście do katalogu nadrzędnego: {os.path.basename(self.current_path) or '/'}")
-            else:
-                 play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
-                 self.announce("Jesteś w katalogu głównym.")
+            self.go_back()
 
         elif keycode == wx.WXK_F2:
             self.on_rename(None) # Trigger rename action (event=None is fine as on_rename gets active ctrl)
@@ -761,37 +799,78 @@ class FileManager(wx.Frame):
                 # Get the actual item name without expecting any prefix
                 name = ctrl.GetItemText(item_index)
 
-                if name != 'Ten folder jest pusty':
+                if name != _('Ten folder jest pusty'):
                     if name in self.selected_items:
                         self.selected_items.remove(name)
                         # Deselect the item visually
                         ctrl.Select(item_index, 0)
-                        self.announce(f"Odznaczono: {name}. Razem: {len(self.selected_items)}")
+                        self.announce(_("Odznaczono: {}. Razem: {}").format(name, len(self.selected_items)))
                     else:
                         self.selected_items.add(name)
                         # Select the item visually
                         ctrl.Select(item_index)
-                        self.announce(f"Wybrano: {name}. Razem: {len(self.selected_items)}")
+                        self.announce(_("Wybrano: {}. Razem: {}").format(name, len(self.selected_items)))
                 else:
                      play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
-                     self.announce("Nie można zaznaczyć wpisu 'Ten folder jest pusty'.")
+                     self.announce(_("Nie można zaznaczyć wpisu 'Ten folder jest pusty'."))
             event.Skip() # Still allow default space behavior if any
 
         else:
             event.Skip() # Process other keys normally
 
 
+    def go_back(self):
+        active_ctrl = self.get_active_list_ctrl()
+        if not active_ctrl:
+            return
+
+        current_path_attr = 'current_path'
+        selected_items_attr = 'selected_items'
+        
+        if self.settings.get_explorer_view_mode() == 'commander':
+            if self.active_panel == 'left':
+                current_path_attr = 'left_path'
+                selected_items_attr = 'left_selected_items'
+            else:
+                current_path_attr = 'right_path'
+                selected_items_attr = 'right_selected_items'
+
+        current_path = getattr(self, current_path_attr)
+        folder_to_select = os.path.basename(current_path)
+        parent_path = os.path.dirname(current_path)
+
+        if parent_path != current_path and os.path.isdir(parent_path):
+            setattr(self, current_path_attr, parent_path)
+            getattr(self, selected_items_attr).clear()
+            
+            self.populate_file_list(ctrl=active_ctrl, path=parent_path)
+            
+            # Find and select the item
+            for i in range(active_ctrl.GetItemCount()):
+                if active_ctrl.GetItemText(i) == folder_to_select:
+                    active_ctrl.Select(i)
+                    active_ctrl.Focus(i)
+                    break
+            
+            self.update_window_title()
+            play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+            self.announce(_("Przejście do katalogu nadrzędnego: {}").format(os.path.basename(parent_path) or '/'))
+        else:
+            play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+            self.announce(_("Jesteś w katalogu głównym."))
+
+
     def on_delete(self, event=None):
         # Determine which list control is active
         ctrl = self.get_active_list_ctrl()
         if ctrl is None:
-            self.announce("Brak aktywnej listy plików do usunięcia.")
+            self.announce(_("Brak aktywnej listy plików do usunięcia."))
             return
 
         selected_names = list(self.selected_items) # Work with a copy of selected items
 
         if not selected_names:
-            self.announce("Nie wybrano elementów do usunięcia.")
+            self.announce(_("Nie wybrano elementów do usunięcia."))
             play_sound(os.path.join(get_sfx_directory(), 'error.ogg')) # Play error sound
             return
 
@@ -800,27 +879,33 @@ class FileManager(wx.Frame):
 
         # Potwierdzenie jeśli włączone
         if self.settings.get_confirm_delete():
-            message = f"Czy na pewno chcesz usunąć te elementy? {names_display}" if selected_count > 1 else f"Czy na pewno chcesz usunąć ten element? {names_display}"
-            if wx.MessageBox(message, "Potwierdzenie Usunięcia", wx.YES_NO | wx.ICON_WARNING) != wx.YES:
-                self.announce("Anulowano usunięcie.")
+            message = _("Czy na pewno chcesz usunąć te elementy? {}").format(names_display) if selected_count > 1 else _("Czy na pewno chcesz usunąć ten element? {}").format(names_display)
+            if wx.MessageBox(message, _("Potwierdzenie Usunięcia"), wx.YES_NO | wx.ICON_WARNING) != wx.YES:
+                self.announce(_("Anulowano usunięcie."))
                 return
 
         deleted_count = 0
         items_to_remove_from_selection = [] # Track items successfully deleted to remove from self.selected_items
 
         for name in selected_names:
-            path = os.path.join(self.current_path, name)
-            try:
-                if os.path.isdir(path):
-                    shutil.rmtree(path)
+            path = self.current_path
+            if self.settings.get_explorer_view_mode() == 'commander':
+                if self.active_panel == 'left':
+                    path = self.left_path
                 else:
-                    os.remove(path)
+                    path = self.right_path
+            item_path = os.path.join(path, name)
+            try:
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
                 items_to_remove_from_selection.append(name) # Mark for removal from selected_items
                 deleted_count += 1
-                self.announce(f"Usunięto: {name}") # Announce each deletion
+                self.announce(_("Usunięto: {}").format(name)) # Announce each deletion
             except Exception as e:
-                wx.MessageBox(f"Nie udało się usunąć {name}: {e}", "Błąd Usuwania", wx.OK | wx.ICON_ERROR)
-                self.announce(f"Błąd usuwania: {name}") # Announce deletion error
+                wx.MessageBox(_("Nie udało się usunąć {}: {}").format(name, e), _("Błąd Usuwania"), wx.OK | wx.ICON_ERROR)
+                self.announce(_("Błąd usuwania: {}").format(name)) # Announce deletion error
 
         # Remove successfully deleted items from the selected_items set
         for item in items_to_remove_from_selection:
@@ -831,9 +916,9 @@ class FileManager(wx.Frame):
         if deleted_count > 0:
             play_delete_sound() # Play a delete sound if any item was deleted
             self.populate_file_list(ctrl=ctrl) # Refresh the list after deletion
-            self.announce(f"Usunięto {deleted_count} z {selected_count} elementów.")
+            self.announce(_("Usunięto {} z {} elementów.").format(deleted_count, selected_count))
         else:
-            self.announce("Nie udało się usunąć żadnych elementów.")
+            self.announce(_("Nie udało się usunąć żadnych elementów."))
 
 
     def on_settings(self, event):
@@ -846,9 +931,9 @@ class FileManager(wx.Frame):
             self.sort_mode = self.settings.get_sort_mode()
             self.refresh_interface() # Refresh interface based on new settings
             self.update_window_title() # Update window title based on new setting
-            self.announce("Ustawienia zapisane i zastosowane.")
+            self.announce(_("Ustawienia zapisane i zastosowane."))
         else:
-            self.announce("Anulowano ustawienia.")
+            self.announce(_("Anulowano ustawienia."))
 
         settings_dialog.Destroy()
 
@@ -856,20 +941,20 @@ class FileManager(wx.Frame):
         self.settings.set_sort_mode('name')
         self.sort_mode = 'name'
         self.populate_file_list()
-        self.announce("Sortowanie według nazwy.")
+        self.announce(_("Sortowanie według nazwy."))
 
     def on_sort_by_date(self, event):
         self.settings.set_sort_mode('date')
         self.sort_mode = 'date'
         self.populate_file_list()
-        self.announce("Sortowanie według daty modyfikacji.")
+        self.announce(_("Sortowanie według daty modyfikacji."))
 
 
     def on_sort_by_type(self, event):
         self.settings.set_sort_mode('type')
         self.sort_mode = 'type'
         self.populate_file_list()
-        self.announce("Sortowanie według typu.")
+        self.announce(_("Sortowanie według typu."))
 
 
     def refresh_interface(self):
@@ -942,110 +1027,146 @@ class FileManager(wx.Frame):
     # Need to manage current paths and selections for both left and right panels independently
 
     def on_open_commander_left(self, event):
-        # Placeholder: Implement opening item in the left panel
-        ctrl = self.left_list
-        item_index = event.GetItem().GetId()
-        if item_index != -1:
-             # Get the actual name without expecting any prefix
-             name = ctrl.GetItemText(item_index)
-             if name == 'Ten folder jest pusty':
-                 play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-                 self.announce("Folder jest pusty (lewy panel).")
-                 return
-
-             # Implement logic to get the real path and handle opening for the left panel
-             # This requires a separate current path for the left panel
-             # For now, assuming self.current_path is for the left panel in commander mode
-             real_path = os.path.join(self.current_path, name)
-             if not self.show_extensions and os.path.splitext(name)[1] == '':
-                 matches = [entry for entry in os.listdir(self.current_path) if os.path.splitext(entry)[0] == name]
-                 if matches: real_path = os.path.join(self.current_path, matches[0])
-
-             if os.path.isdir(real_path):
-                 self.current_path = real_path # Update current path for the left panel
-                 # Clear selected items when navigating into a directory in the left panel
-                 self.selected_items.clear() # Need separate selected_items for left panel
-                 self.populate_file_list(ctrl=ctrl) # Repopulate the left list
-                 self.update_window_title() # Update window title based on the left panel's path
-                 play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-                 self.announce(f"Otwarto folder (lewy panel): {name}")
-             elif os.path.exists(real_path):
-                  try:
-                      self.open_file_in_system(real_path)
-                      play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-                      self.announce(f"Otwarto plik (lewy panel): {name}")
-                  except Exception as e:
-                      wx.MessageBox(f"Nie udało się otworzyć pliku {name}: {e}", "Błąd Otwierania Pliku", wx.OK | wx.ICON_ERROR)
-                      play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-                      self.announce(f"Błąd otwierania pliku (lewy panel): {name}")
-             else:
-                  play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-                  self.announce(f"Element nie istnieje (lewy panel): {name}")
-
-        event.Skip()
+        self.on_open_commander(event, 'left')
 
     def on_open_commander_right(self, event):
-        # Placeholder: Implement opening item in the right panel
-        print("on_open_commander_right - Not fully implemented")
-        play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-        self.announce("Funkcja prawego panelu nie jest jeszcze w pełni zaimplementowana.")
+        self.on_open_commander(event, 'right')
+
+    def on_open_commander(self, event, panel_side):
+        ctrl = self.left_list if panel_side == 'left' else self.right_list
+        item_index = event.GetItem().GetId()
+        if item_index == -1:
+            return
+
+        name = ctrl.GetItemText(item_index)
+        if name == _('Ten folder jest pusty'):
+            play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+            self.announce(_("Folder jest pusty."))
+            return
+
+        path = self.left_path if panel_side == 'left' else self.right_path
+        real_path = os.path.join(path, name)
+
+        if os.path.isdir(real_path):
+            if panel_side == 'left':
+                self.left_path = real_path
+                self.left_selected_items.clear()
+            else:
+                self.right_path = real_path
+                self.right_selected_items.clear()
+            self.populate_file_list(ctrl=ctrl, path=real_path)
+            self.update_window_title()
+            play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+            self.announce(_("Otwarto folder: {}").format(name))
+        elif os.path.exists(real_path):
+            try:
+                self.open_file_in_system(real_path)
+                play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+                self.announce(_("Otwarto plik: {}").format(name))
+            except Exception as e:
+                wx.MessageBox(_("Nie udało się otworzyć pliku {}: {}").format(name, e), _("Błąd Otwierania Pliku"), wx.OK | wx.ICON_ERROR)
+                play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+                self.announce(_("Błąd otwierania pliku: {}").format(name))
+        else:
+            play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+            self.announce(_("Element nie istnieje: {}").format(name))
+
         event.Skip()
 
     def on_key_down_commander_left(self, event):
-        # Placeholder: Implement key handling for the left panel (e.g., Backspace to go up)
-        ctrl = self.left_list
-        keycode = event.GetKeyCode()
-        if keycode == wx.WXK_BACK:
-             # Need to manage the path for the left panel separately
-             # For now, let's just use the main current_path as a placeholder
-             parent_path = os.path.dirname(self.current_path)
-             if parent_path != self.current_path and os.path.isdir(parent_path):
-                 # Clear selected items when navigating to parent directory in the left panel
-                 self.selected_items.clear() # Need separate selected_items for left panel
-                 self.current_path = parent_path # Update the path for the left panel
-                 self.populate_file_list(ctrl=ctrl) # Repopulate the left list
-                 self.update_window_title() # Update window title based on the left panel's path
-                 play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-                 self.announce(f"Przejście do katalogu nadrzędnego (lewy panel): {os.path.basename(self.current_path) or '/'}")
-             else:
-                  play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-                  self.announce("Jesteś w katalogu głównym (lewy panel).")
-        elif keycode == wx.WXK_RETURN:
-             # Handle Enter key for the left panel
-             self.on_open_commander_left(event) # Call the open handler for the left panel
-        # Need to add handlers for other keys (Space, Delete, F2, etc.) for the left panel
-        else:
-             event.Skip()
+        self.on_key_down_commander(event, 'left')
 
     def on_key_down_commander_right(self, event):
-        # Placeholder: Implement key handling for the right panel
-        print("on_key_down_commander_right - Not fully implemented")
-        play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-        self.announce("Funkcja prawego panelu nie jest jeszcze w pełni zaimplementowana.")
-        event.Skip()
+        self.on_key_down_commander(event, 'right')
+
+    def on_key_down_commander(self, event, panel_side):
+        ctrl = self.left_list if panel_side == 'left' else self.right_list
+        keycode = event.GetKeyCode()
+
+        if keycode == wx.WXK_BACK:
+            self.go_back()
+
+        elif keycode == wx.WXK_RETURN:
+            self.on_open_commander(event, panel_side)
+
+        elif keycode == wx.WXK_SPACE:
+            item_index = ctrl.GetFocusedItem()
+            if item_index != -1:
+                name = ctrl.GetItemText(item_index)
+                if name != _('Ten folder jest pusty'):
+                    selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+                    if name in selected_items:
+                        selected_items.remove(name)
+                        ctrl.Select(item_index, 0)
+                        self.announce(_("Odznaczono: {}. Razem: {}").format(name, len(selected_items)))
+                    else:
+                        selected_items.add(name)
+                        ctrl.Select(item_index)
+                        self.announce(_("Wybrano: {}. Razem: {}").format(name, len(selected_items)))
+                else:
+                    play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+                    self.announce(_("Nie można zaznaczyć wpisu 'Ten folder jest pusty'."))
+            event.Skip()
+
+        else:
+            event.Skip()
 
     def on_item_selected_commander_left(self, event):
-         # Placeholder: Handle selection in the left panel
-         # Need a separate set for selected items in the left panel
-         print("on_item_selected_commander_left - Not fully implemented")
-         event.Skip()
+        self.on_item_selected_commander(event, 'left')
 
     def on_item_deselected_commander_left(self, event):
-         # Placeholder: Handle deselection in the left panel
-         print("on_item_deselected_commander_left - Not fully implemented")
-         event.Skip()
+        self.on_item_deselected_commander(event, 'left')
 
     def on_item_selected_commander_right(self, event):
-         # Placeholder: Handle selection in the right panel
-         # Need a separate set for selected items in the right panel
-         print("on_item_selected_commander_right - Not fully implemented")
-         event.Skip()
+        self.on_item_selected_commander(event, 'right')
 
     def on_item_deselected_commander_right(self, event):
-         # Placeholder: Handle deselection in the right panel
-         print("on_item_deselected_commander_right - Not fully implemented")
-         event.Skip()
+        self.on_item_deselected_commander(event, 'right')
 
+    def on_item_selected_commander(self, event, panel_side):
+        item_index = event.GetItem().GetId()
+        ctrl = self.left_list if panel_side == 'left' else self.right_list
+        name = ctrl.GetItemText(item_index)
+        if name != _('Ten folder jest pusty'):
+            selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+            selected_items.add(name)
+        event.Skip()
+
+    def on_item_deselected_commander(self, event, panel_side):
+        item_index = event.GetItem().GetId()
+        ctrl = self.left_list if panel_side == 'left' else self.right_list
+        name = ctrl.GetItemText(item_index)
+        selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+        if name in selected_items:
+            selected_items.remove(name)
+        event.Skip()
+
+
+    def on_focus_commander(self, event):
+        ctrl = event.GetEventObject()
+        if ctrl == self.left_list:
+            self.active_panel = 'left'
+        else:
+            self.active_panel = 'right'
+        self.update_panel_styles()
+        event.Skip()
+
+    def update_panel_styles(self):
+        if not hasattr(self, 'left_list'):
+            return
+        
+        active_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
+        inactive_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        
+        if self.active_panel == 'left':
+            self.left_list.SetBackgroundColour(active_color)
+            self.right_list.SetBackgroundColour(inactive_color)
+        else:
+            self.left_list.SetBackgroundColour(inactive_color)
+            self.right_list.SetBackgroundColour(active_color)
+        
+        self.left_list.Refresh()
+        self.right_list.Refresh()
 
     # --- End Commander Mode Handlers ---
 
