@@ -1,0 +1,202 @@
+# Polish translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 15:02+0200\n"
+"PO-Revision-Date: 2025-07-11 15:02+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: pl <LL@li.org>\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: web.py:87
+#, python-brace-format
+msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgstr "Nie znaleziono pliku dźwiękowego: {}"
+
+#: web.py:93
+#, python-brace-format
+msgid "Nie można odtworzyć dźwięku: {}"
+msgstr "Nie można odtworzyć dźwięku: {}"
+
+#: web.py:100
+msgid "Pobrane pliki"
+msgstr "Pobrane pliki"
+
+#: web.py:107
+msgid "Lista plików pobranych przez tBrowser:"
+msgstr "Lista plików pobranych przez tBrowser:"
+
+#: web.py:168
+msgid "tBrowser"
+msgstr "tBrowser"
+
+#: web.py:179
+msgid "Wstecz"
+msgstr "Wstecz"
+
+#: web.py:180
+msgid "Dalej"
+msgstr "Dalej"
+
+#: web.py:181
+msgid "Odśwież"
+msgstr "Odśwież"
+
+#: web.py:183
+msgid "Przycisk Wstecz"
+msgstr "Przycisk Wstecz"
+
+#: web.py:184
+msgid "Przycisk Dalej"
+msgstr "Przycisk Dalej"
+
+#: web.py:185
+msgid "Przycisk Odśwież"
+msgstr "Przycisk Odśwież"
+
+#: web.py:188
+msgid "Wpisz adres lub wyszukaj w Google"
+msgstr "Wpisz adres lub wyszukaj w Google"
+
+#: web.py:257
+msgid "Ustawienia..."
+msgstr "Ustawienia..."
+
+#: web.py:258
+msgid "Aplikacja"
+msgstr "Aplikacja"
+
+#: web.py:273
+msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
+msgstr "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
+
+#: web.py:274 web.py:282 web.py:425 web.py:662
+msgid "Informacja"
+msgstr "Informacja"
+
+#: web.py:281
+msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
+msgstr "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
+
+#: web.py:293 web.py:300 web.py:472
+msgid "Ładowanie strony..."
+msgstr "Ładowanie strony..."
+
+#: web.py:304 web.py:499
+msgid "Strona załadowana."
+msgstr "Strona załadowana."
+
+#: web.py:313
+#, python-brace-format
+msgid "Załadowano stronę {}"
+msgstr "Załadowano stronę {}"
+
+#: web.py:425
+#, python-brace-format
+msgid "Kliknięto przycisk: {}"
+msgstr "Kliknięto przycisk: {}"
+
+#: web.py:459 web.py:467
+#, python-brace-format
+msgid ""
+"Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgstr ""
+"Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+
+#: web.py:503
+msgid "Załadowano stronę"
+msgstr "Załadowano stronę"
+
+#: web.py:516
+#, python-brace-format
+msgid "Błąd podczas ładowania strony: {}"
+msgstr "Błąd podczas ładowania strony: {}"
+
+#: web.py:517
+msgid "Błąd podczas ładowania strony."
+msgstr "Błąd podczas ładowania strony."
+
+#: web.py:545
+#, python-brace-format
+msgid "Łącze: {}"
+msgstr "Łącze: {}"
+
+#: web.py:558
+#, python-brace-format
+msgid "Przycisk: {}"
+msgstr "Przycisk: {}"
+
+#: web.py:569
+#, python-brace-format
+msgid ""
+"\n"
+"Nagłówek: {}\n"
+msgstr ""
+"\n"
+"Nagłówek: {}\n"
+
+#: web.py:581
+msgid "Ustawienia tBrowser"
+msgstr "Ustawienia tBrowser"
+
+#: web.py:588
+msgid "Oznajmianie"
+msgstr "Oznajmianie"
+
+#: web.py:591
+msgid "Oznajmiaj podsumowanie strony"
+msgstr "Oznajmiaj podsumowanie strony"
+
+#: web.py:594
+msgid "Komunikaty o ładowaniu strony"
+msgstr "Komunikaty o ładowaniu strony"
+
+#: web.py:601
+msgid "Interfejs"
+msgstr "Interfejs"
+
+#: web.py:604
+msgid "Wybierz tryb przeglądania strony:"
+msgstr "Wybierz tryb przeglądania strony:"
+
+#: web.py:606
+msgid "Widok sieciowy (edge)"
+msgstr "Widok sieciowy (edge)"
+
+#: web.py:606
+msgid "Tryb wirtualnego bufora"
+msgstr "Tryb wirtualnego bufora"
+
+#: web.py:617
+msgid "Prywatność"
+msgstr "Prywatność"
+
+#: web.py:621
+msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
+msgstr "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
+
+#: web.py:628
+msgid "Zapisz"
+msgstr "Zapisz"
+
+#: web.py:629
+msgid "Anuluj"
+msgstr "Anuluj"
+
+#: web.py:661
+msgid ""
+"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
+"zmiany."
+msgstr ""
+"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
+"zmiany."

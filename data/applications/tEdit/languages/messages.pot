@@ -1,0 +1,385 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 14:22+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: tedit.py:75
+msgid "Znajdź"
+msgstr ""
+
+#: tedit.py:80 tedit.py:117
+msgid "Szukaj:"
+msgstr ""
+
+#: tedit.py:87
+msgid "Znajdź dalej"
+msgstr ""
+
+#: tedit.py:91 tedit.py:135 tedit.py:172 tedit.py:321
+msgid "Anuluj"
+msgstr ""
+
+#: tedit.py:112
+msgid "Zamień tekst"
+msgstr ""
+
+#: tedit.py:124
+msgid "Zamień na:"
+msgstr ""
+
+#: tedit.py:131
+msgid "Zamień"
+msgstr ""
+
+#: tedit.py:157
+msgid "Wstaw znak Unicode"
+msgstr ""
+
+#: tedit.py:161
+msgid "Podaj kod punktu kodowego (np. U+00A9):"
+msgstr ""
+
+#: tedit.py:168 tedit.py:320
+msgid "OK"
+msgstr ""
+
+#: tedit.py:198
+msgid "Ustawienia programu"
+msgstr ""
+
+#: tedit.py:233
+msgid "Automatyczny zapis"
+msgstr ""
+
+#: tedit.py:234
+msgid "Zapis co:"
+msgstr ""
+
+#: tedit.py:237
+msgid "5 minut"
+msgstr ""
+
+#: tedit.py:237
+msgid "10 minut"
+msgstr ""
+
+#: tedit.py:237
+msgid "wyłączone"
+msgstr ""
+
+#: tedit.py:249
+msgid "Sprawdzanie pisowni"
+msgstr ""
+
+#: tedit.py:251
+msgid "Włącz sprawdzanie pisowni (wymaga słownika)"
+msgstr ""
+
+#: tedit.py:257
+msgid ""
+"Program spróbuje pobrać słownik pl_PL do podkatalogu data/dicts\n"
+"jeśli nie będzie dostępny systemowo."
+msgstr ""
+
+#: tedit.py:261
+msgid ""
+"Biblioteka 'enchant' jest niedostępna.\n"
+"Funkcja sprawdzania pisowni jest wyłączona."
+msgstr ""
+
+#: tedit.py:275
+msgid "Znaki końca linii"
+msgstr ""
+
+#: tedit.py:276
+msgid "Symbol końca linii:"
+msgstr ""
+
+#: tedit.py:279
+msgid "windows"
+msgstr ""
+
+#: tedit.py:279
+msgid "MAC OS/linux/unix"
+msgstr ""
+
+#: tedit.py:279
+msgid "inny symbol..."
+msgstr ""
+
+#: tedit.py:291
+msgid "Napisz symbol końca linii:"
+msgstr ""
+
+#: tedit.py:313
+msgid "Ogólne"
+msgstr ""
+
+#: tedit.py:314
+msgid "Tekst"
+msgstr ""
+
+#: tedit.py:447 tedit.py:745
+msgid "Edytor tekstowy TEdit"
+msgstr ""
+
+#: tedit.py:453
+msgid "Treść dokumentu:"
+msgstr ""
+
+#: tedit.py:548
+#, python-brace-format
+msgid ""
+"Błąd podczas pobierania słownika:\n"
+"{e}"
+msgstr ""
+
+#: tedit.py:548 tedit.py:570
+msgid "Błąd pobierania"
+msgstr ""
+
+#: tedit.py:559
+#, python-brace-format
+msgid ""
+"Błąd zapisu plików słownika:\n"
+"{e}"
+msgstr ""
+
+#: tedit.py:559
+msgid "Błąd zapisu"
+msgstr ""
+
+#: tedit.py:570
+#, python-brace-format
+msgid ""
+"Nieoczekiwany błąd podczas pobierania:\n"
+"{e}"
+msgstr ""
+
+#: tedit.py:635
+msgid ""
+"Słownik języka polskiego (pl_PL) jest niedostępny.\n"
+"Użyto słownika angielskiego (en_US)."
+msgstr ""
+
+#: tedit.py:636
+msgid "Informacja o słowniku"
+msgstr ""
+
+#: tedit.py:640
+msgid ""
+"Brak dostępnych słowników (pl_PL, en_US). Sprawdzanie pisowni zostanie "
+"wyłączone."
+msgstr ""
+
+#: tedit.py:641
+msgid "Brak słownika"
+msgstr ""
+
+#: tedit.py:650
+#, python-brace-format
+msgid ""
+"Wystąpił błąd podczas inicjalizacji słownika:\n"
+"{e}\n"
+"Sprawdzanie pisowni zostanie wyłączone."
+msgstr ""
+
+#: tedit.py:651
+msgid "Błąd słownika"
+msgstr ""
+
+#: tedit.py:684
+msgid "&Nowy dokument\tCtrl+N"
+msgstr ""
+
+#: tedit.py:685
+msgid "&Otwórz dokument...\tCtrl+O"
+msgstr ""
+
+#: tedit.py:686
+msgid "&Zapisz plik\tCtrl+S"
+msgstr ""
+
+#: tedit.py:687
+msgid "Zapisz jako...\tCtrl+Shift+S"
+msgstr ""
+
+#: tedit.py:689
+msgid "Ustawienia programu..."
+msgstr ""
+
+#: tedit.py:691
+msgid "&Zamknij TEdit"
+msgstr ""
+
+#: tedit.py:694
+msgid "Cofnij...\tCtrl+Z"
+msgstr ""
+
+#: tedit.py:697
+msgid "Wytnij...\tCtrl+X"
+msgstr ""
+
+#: tedit.py:698
+msgid "Kopiuj...\tCtrl+C"
+msgstr ""
+
+#: tedit.py:699
+msgid "Wklej...\tCtrl+V"
+msgstr ""
+
+#: tedit.py:701
+msgid "Zaznacz wszystko...\tCtrl+A"
+msgstr ""
+
+#: tedit.py:703
+msgid "Znajdź...\tCtrl+F"
+msgstr ""
+
+#: tedit.py:704
+msgid "Zamień tekst...\tCtrl+H"
+msgstr ""
+
+#: tedit.py:711
+msgid "Sprawdź pisownię"
+msgstr ""
+
+#: tedit.py:717
+msgid "Wstaw datę i godzinę..."
+msgstr ""
+
+#: tedit.py:718
+msgid "Wstaw znak Unicode..."
+msgstr ""
+
+#: tedit.py:721
+msgid "O Programie..."
+msgstr ""
+
+#: tedit.py:723
+msgid "&Plik"
+msgstr ""
+
+#: tedit.py:724
+msgid "&Edycja"
+msgstr ""
+
+#: tedit.py:725
+msgid "&Wstaw"
+msgstr ""
+
+#: tedit.py:726
+msgid "Pomoc"
+msgstr ""
+
+#: tedit.py:735
+msgid "Dokument został zmodyfikowany. Zapisać przed utworzeniem nowego?"
+msgstr ""
+
+#: tedit.py:735 tedit.py:753 tedit.py:883
+msgid "Potwierdzenie"
+msgstr ""
+
+#: tedit.py:753
+msgid "Dokument został zmodyfikowany. Zapisać przed otwarciem nowego?"
+msgstr ""
+
+#: tedit.py:761
+msgid "Otwórz plik"
+msgstr ""
+
+#: tedit.py:761 tedit.py:798
+msgid "Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*"
+msgstr ""
+
+#: tedit.py:785
+#, python-brace-format
+msgid "Nie można otworzyć pliku '{path}': {e}"
+msgstr ""
+
+#: tedit.py:798
+msgid "Zapisz plik jako"
+msgstr ""
+
+#: tedit.py:833
+#, python-brace-format
+msgid "Nie można zapisać pliku '{path}': {e}"
+msgstr ""
+
+#: tedit.py:867
+msgid ""
+"TEdit jest edytorem tekstowym,\n"
+"aplikacja jest jednym z podstawowych składników tSuite."
+msgstr ""
+
+#: tedit.py:870
+msgid "Licencja (np. MIT, GPL - opcjonalnie)"
+msgstr ""
+
+#: tedit.py:883
+msgid "Dokument został zmodyfikowany. Czy chcesz zapisać zmiany?"
+msgstr ""
+
+#: tedit.py:915
+msgid "Nie znaleziono szukanego tekstu."
+msgstr ""
+
+#: tedit.py:915 tedit.py:933 tedit.py:1041 tedit.py:1043
+msgid "Informacja"
+msgstr ""
+
+#: tedit.py:933
+msgid "Nie znaleziono tekstu do zamiany."
+msgstr ""
+
+#: tedit.py:949
+msgid ""
+"Nieprawidłowy kod Unicode. Użyj formatu Hex (np. 00A9) lub U+Hex (np. "
+"U+00A9)."
+msgstr ""
+
+#: tedit.py:950
+msgid "Błąd"
+msgstr ""
+
+#: tedit.py:1006
+msgid ""
+"Sprawdzanie pisowni jest wyłączone w ustawieniach lub słownik nie został "
+"poprawnie załadowany."
+msgstr ""
+
+#: tedit.py:1007
+msgid "Sprawdzanie pisowni - Status"
+msgstr ""
+
+#: tedit.py:1014
+msgid "Spróbuj włączyć sprawdzanie pisowni w Ustawieniach programu."
+msgstr ""
+
+#: tedit.py:1015
+msgid "Wskazówka"
+msgstr ""
+
+#: tedit.py:1041
+msgid "Nie znaleziono błędów pisowni."
+msgstr ""
+
+#: tedit.py:1043
+#, python-brace-format
+msgid "Zakończono sprawdzanie pisowni. Znaleziono {errors_found} błędów."
+msgstr ""
+

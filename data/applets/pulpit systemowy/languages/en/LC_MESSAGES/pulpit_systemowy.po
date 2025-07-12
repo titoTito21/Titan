@@ -1,0 +1,25 @@
+# English translations for pulpit_systemowy.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the pulpit_systemowy project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-07 20:01+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.py:58
+msgid "Puste miejsce"
+msgstr "Empty space"
+
+#: main.py:104
+msgid "Pulpit systemowy"
+msgstr "System Desktop"

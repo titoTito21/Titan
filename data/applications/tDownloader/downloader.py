@@ -12,6 +12,7 @@ from datetime import datetime
 import pyttsx3
 from wx.lib.newevent import NewCommandEvent
 import shutil
+from translation import _
 
 # Inicjalizacja Pygame do efektów dźwiękowych
 pygame.mixer.init()
@@ -40,7 +41,7 @@ def get_notifications_path():
     elif platform.system() == 'Darwin':  # macOS
         return os.path.expanduser('~/Library/Application Support/titosoft/Titan/bg5notifications.tno')
     else:
-        raise NotImplementedError('Unsupported platform')
+        raise NotImplementedError(_('Unsupported platform'))
 
 NOTIFICATIONS_FILE_PATH = get_notifications_path()
 
@@ -105,15 +106,15 @@ class TitanDownloadManager(wx.Frame):
         vbox = wx.BoxSizer(wx.VERTICAL)
         hbox_top = wx.BoxSizer(wx.HORIZONTAL)
         
-        open_folder_btn = wx.Button(panel, label="Otwórz folder pobrań")
+        open_folder_btn = wx.Button(panel, label=_("Otwórz folder pobrań"))
         open_folder_btn.Bind(wx.EVT_BUTTON, self.OnOpenDownloadFolder)
         hbox_top.Add(open_folder_btn, flag=wx.ALL, border=5)
 
         vbox.Add(hbox_top, flag=wx.ALIGN_LEFT)
         
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT)
-        self.list_ctrl.InsertColumn(0, 'Nazwa Pliku', width=140)
-        self.list_ctrl.InsertColumn(1, 'Link do Pobrania', width=300)
+        self.list_ctrl.InsertColumn(0, _('Nazwa Pliku'), width=140)
+        self.list_ctrl.InsertColumn(1, _('Link do Pobrania'), width=300)
 
         self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.OnRightClick, self.list_ctrl)
 
@@ -124,16 +125,16 @@ class TitanDownloadManager(wx.Frame):
         menubar = wx.MenuBar()
         
         fileMenu = wx.Menu()
-        newDownload = fileMenu.Append(wx.ID_NEW, '&Nowe Pobranie')
+        newDownload = fileMenu.Append(wx.ID_NEW, _('&Nowe Pobranie'))
         self.Bind(wx.EVT_MENU, self.OnNewDownload, newDownload)
-        settings = fileMenu.Append(wx.ID_PREFERENCES, '&Ustawienia')
+        settings = fileMenu.Append(wx.ID_PREFERENCES, _('&Ustawienia'))
         self.Bind(wx.EVT_MENU, self.OnSettings, settings)
         
-        menubar.Append(fileMenu, '&Plik')
+        menubar.Append(fileMenu, _('&Plik'))
         
         self.SetMenuBar(menubar)
         
-        self.SetTitle('Titan Download Manager')
+        self.SetTitle(_('Titan Download Manager'))
         self.Centre()
 
     def OnOpenDownloadFolder(self, event):
@@ -203,7 +204,7 @@ class TitanDownloadManager(wx.Frame):
 
         def download_wget():
             play_sound(START_SOUND)
-            wx.CallAfter(self.show_progress_dialog, "Pobieranie", "Pobieranie wget.exe")
+            wx.CallAfter(self.show_progress_dialog, _("Pobieranie"), _("Pobieranie wget.exe"))
             try:
                 with requests.get(wget_url, stream=True) as r:
                     r.raise_for_status()
@@ -231,8 +232,8 @@ class TitanDownloadManager(wx.Frame):
         threading.Thread(target=download_wget).start()
 
     def notify_completion(self, file_name):
-        message = f'Pobieranie {file_name} zakończone'
-        add_notification("Titan Download Manager", message)
+        message = _('Pobieranie {} zakończone').format(file_name)
+        add_notification(_("Titan Download Manager"), message)
         speak_message(message)
 
     def show_progress_dialog(self, title, message):
@@ -250,10 +251,10 @@ class TitanDownloadManager(wx.Frame):
 
     def show_error_message(self, message):
         wx.CallAfter(self.show_error_message_gui, message)
-        speak_message(f'Błąd podczas pobierania: {message}')
+        speak_message(_('Błąd podczas pobierania: {}').format(message))
 
     def show_error_message_gui(self, message):
-        wx.MessageBox(f'Błąd podczas pobierania: {message}', 'Błąd', wx.OK | wx.ICON_ERROR)
+        wx.MessageBox(_('Błąd podczas pobierania: {}').format(message), _('Błąd'), wx.OK | wx.ICON_ERROR)
 
     def load_download_list(self):
         self.list_ctrl.DeleteAllItems()
@@ -283,43 +284,43 @@ class RightClickMenu(wx.Menu):
         self.parent = parent
         self.file_name = file_name
         
-        pause_item = wx.MenuItem(self, wx.NewId(), 'Wstrzymaj')
+        pause_item = wx.MenuItem(self, wx.NewId(), _('Wstrzymaj'))
         self.Append(pause_item)
         self.Bind(wx.EVT_MENU, self.OnPause, pause_item)
         
-        stop_item = wx.MenuItem(self, wx.NewId(), 'Zatrzymaj')
+        stop_item = wx.MenuItem(self, wx.NewId(), _('Zatrzymaj'))
         self.Append(stop_item)
         self.Bind(wx.EVT_MENU, self.OnStop, stop_item)
 
-        delete_file_item = wx.MenuItem(self, wx.NewId(), 'Usuń Plik')
+        delete_file_item = wx.MenuItem(self, wx.NewId(), _('Usuń Plik'))
         self.Append(delete_file_item)
         self.Bind(wx.EVT_MENU, self.OnDeleteFile, delete_file_item)
 
-        delete_list_item = wx.MenuItem(self, wx.NewId(), 'Usuń z Listy')
+        delete_list_item = wx.MenuItem(self, wx.NewId(), _('Usuń z Listy'))
         self.Append(delete_list_item)
         self.Bind(wx.EVT_MENU, self.OnDeleteList, delete_list_item)
         
     def OnPause(self, event):
-        wx.MessageBox(f'Wstrzymaj pobieranie dla {self.file_name}')
+        wx.MessageBox(_('Wstrzymaj pobieranie dla {}').format(self.file_name))
     
     def OnStop(self, event):
-        wx.MessageBox(f'Zatrzymaj pobieranie dla {self.file_name}')
+        wx.MessageBox(_('Zatrzymaj pobieranie dla {}').format(self.file_name))
     
     def OnDeleteFile(self, event):
         file_path = os.path.join(self.parent.download_directory, self.file_name)
         if os.path.exists(file_path):
             os.remove(file_path)
-            wx.MessageBox(f'Plik {self.file_name} został usunięty')
+            wx.MessageBox(_('Plik {} został usunięty').format(self.file_name))
         else:
-            wx.MessageBox(f'Plik {self.file_name} nie istnieje')
+            wx.MessageBox(_('Plik {} nie istnieje').format(self.file_name))
 
     def OnDeleteList(self, event):
         self.parent.remove_download_from_list(self.file_name)
-        wx.MessageBox(f'Plik {self.file_name} został usunięty z listy')
+        wx.MessageBox(_('Plik {} został usunięty z listy').format(self.file_name))
 
 class NewDownloadDialog(wx.Dialog):
     def __init__(self, parent, url_preset=None):
-        super(NewDownloadDialog, self).__init__(parent, title="Nowe Pobranie", size=(400, 200))
+        super(NewDownloadDialog, self).__init__(parent, title=_("Nowe Pobranie"), size=(400, 200))
         
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -337,13 +338,13 @@ class NewDownloadDialog(wx.Dialog):
                 wx.TheClipboard.Close()
         
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        ok_button = wx.Button(panel, label='OK')
-        close_button = wx.Button(panel, label='Zamknij')
+        ok_button = wx.Button(panel, label=_('OK'))
+        close_button = wx.Button(panel, label=_('Zamknij'))
         
         self.Bind(wx.EVT_BUTTON, self.OnOk, ok_button)
         self.Bind(wx.EVT_BUTTON, self.OnClose, close_button)
         
-        vbox.Add(wx.StaticText(panel, label="Wprowadź lub wklej link do pliku, który chcesz pobrać:"), flag=wx.ALL, border=10)
+        vbox.Add(wx.StaticText(panel, label=_("Wprowadź lub wklej link do pliku, który chcesz pobrać:")), flag=wx.ALL, border=10)
         vbox.Add(self.url, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
         
         hbox.Add(ok_button)
@@ -369,8 +370,8 @@ class NewDownloadDialog(wx.Dialog):
     def start_wget_download(self, url, file_name):
         def download():
             play_sound(START_SOUND)
-            add_notification("Titan Download Manager", f"Rozpoczęto pobieranie wget: {file_name}")
-            wx.CallAfter(self.show_progress_dialog, "Pobieranie", f"Pobieranie {file_name}")
+            add_notification(_("Titan Download Manager"), _("Rozpoczęto pobieranie wget: {}").format(file_name))
+            wx.CallAfter(self.show_progress_dialog, _("Pobieranie"), _("Pobieranie {}").format(file_name))
             try:
                 download_path = os.path.join(self.GetParent().download_directory, file_name)
                 if platform.system() == 'Windows':
@@ -391,8 +392,8 @@ class NewDownloadDialog(wx.Dialog):
     def start_python_download(self, url, file_name):
         def download():
             play_sound(START_SOUND)
-            add_notification("Titan Download Manager", f"Rozpoczęto pobieranie pliku: {file_name}")
-            wx.CallAfter(self.show_progress_dialog, "Pobieranie", f"Pobieranie {file_name}")
+            add_notification(_("Titan Download Manager"), _("Rozpoczęto pobieranie pliku: {}").format(file_name))
+            wx.CallAfter(self.show_progress_dialog, _("Pobieranie"), _("Pobieranie {}").format(file_name))
             try:
                 download_path = os.path.join(self.GetParent().download_directory, file_name)
                 with requests.get(url, stream=True) as r:
@@ -423,8 +424,8 @@ class NewDownloadDialog(wx.Dialog):
         threading.Thread(target=download).start()
 
     def notify_completion(self, file_name):
-        message = f'Pobieranie {file_name} zakończone'
-        add_notification("Titan Download Manager", message)
+        message = _('Pobieranie {} zakończone').format(file_name)
+        add_notification(_("Titan Download Manager"), message)
         speak_message(message)
 
     def show_progress_dialog(self, title, message):
@@ -442,41 +443,41 @@ class NewDownloadDialog(wx.Dialog):
 
     def show_error_message(self, message):
         wx.CallAfter(self.show_error_message_gui, message)
-        speak_message(f'Błąd podczas pobierania: {message}')
+        speak_message(_('Błąd podczas pobierania: {}').format(message))
 
     def show_error_message_gui(self, message):
-        wx.MessageBox(f'Błąd podczas pobierania: {message}', 'Błąd', wx.OK | wx.ICON_ERROR)
+        wx.MessageBox(_('Błąd podczas pobierania: {}').format(message), _('Błąd'), wx.OK | wx.ICON_ERROR)
     
     def OnClose(self, event):
         self.Close()
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent):
-        super(SettingsDialog, self).__init__(parent, title="Ustawienia", size=(400, 300))
+        super(SettingsDialog, self).__init__(parent, title=_("Ustawienia"), size=(400, 300))
         
         panel = wx.Panel(self)
         main_vbox = wx.BoxSizer(wx.VERTICAL)
         
         # Sekcja metody pobierania
-        method_box = wx.StaticBox(panel, label="Metoda pobierania plików")
+        method_box = wx.StaticBox(panel, label=_("Metoda pobierania plików"))
         method_sizer = wx.StaticBoxSizer(method_box, wx.VERTICAL)
 
         self.method_choice = wx.Choice(panel, choices=["python", "wget"])
         self.method_choice.SetStringSelection(parent.download_method)
         
-        method_label = wx.StaticText(panel, label="Wybierz metodę pobierania:")
+        method_label = wx.StaticText(panel, label=_("Wybierz metodę pobierania:"))
         method_sizer.Add(method_label, flag=wx.LEFT | wx.TOP, border=10)
         method_sizer.Add(self.method_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
         
         main_vbox.Add(method_sizer, flag=wx.EXPAND | wx.ALL, border=10)
 
         # Sekcja folderu pobrań
-        folder_box = wx.StaticBox(panel, label="Folder pobranych plików")
+        folder_box = wx.StaticBox(panel, label=_("Folder pobranych plików"))
         folder_sizer = wx.StaticBoxSizer(folder_box, wx.VERTICAL)
         
-        folder_label = wx.StaticText(panel, label="Wybierz folder, w którym zapisywane będą pobrane pliki:")
+        folder_label = wx.StaticText(panel, label=_("Wybierz folder, w którym zapisywane będą pobrane pliki:"))
         self.dir_picker = wx.DirPickerCtrl(panel, path=parent.download_directory, style=wx.DIRP_USE_TEXTCTRL)
-        self.dir_picker.SetToolTip("Wskaż folder, w którym mają być zapisywane pobrane pliki")
+        self.dir_picker.SetToolTip(_("Wskaż folder, w którym mają być zapisywane pobrane pliki"))
 
         folder_sizer.Add(folder_label, flag=wx.LEFT | wx.TOP, border=10)
         folder_sizer.Add(self.dir_picker, flag=wx.EXPAND | wx.ALL, border=10)
@@ -485,8 +486,8 @@ class SettingsDialog(wx.Dialog):
         
         # Przyciski
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        save_button = wx.Button(panel, label='Zapisz')
-        close_button = wx.Button(panel, label='Zamknij')
+        save_button = wx.Button(panel, label=_('Zapisz'))
+        close_button = wx.Button(panel, label=_('Zamknij'))
         
         self.Bind(wx.EVT_BUTTON, self.OnSave, save_button)
         self.Bind(wx.EVT_BUTTON, self.OnClose, close_button)

@@ -6,7 +6,10 @@ import sys
 import wx
 import shutil
 import importlib.util
+import settings
 from sound import play_sound, play_error_sound, play_dialog_sound, play_dialogclose_sound, resource_path
+from translation import language_code
+
 
 APP_DIR = resource_path(os.path.join('data', 'applications'))
 SITEPACKAGES_DIR = resource_path(os.path.join('data', 'Titan', 'python_interpreter', 'sitepackages'))
@@ -16,16 +19,17 @@ if not os.path.exists(SITEPACKAGES_DIR):
     os.makedirs(SITEPACKAGES_DIR)
 
 def get_applications():
+    lang = language_code
     applications = []
     for app_folder in os.listdir(APP_DIR):
         app_path = os.path.join(APP_DIR, app_folder)
         if os.path.isdir(app_path) and app_folder != '.DS_Store':  # Ignore .DS_Store
-            app_info = read_app_info(app_path)
+            app_info = read_app_info(app_path, lang)
             if app_info and not app_info.get('hidden', 'false').lower() == 'true':
                 applications.append(app_info)
     return applications
 
-def read_app_info(app_path):
+def read_app_info(app_path, lang='pl'):
     app_info_path = os.path.join(app_path, '__app.tce')
     if not os.path.exists(app_info_path):
         return None
@@ -40,6 +44,9 @@ def read_app_info(app_path):
             key, value = line.split('=', 1)
             app_info[key.strip()] = value.strip().strip('"')
     
+    # Wybierz tłumaczoną nazwę
+    app_info['name'] = app_info.get(f'name_{lang}', app_info.get('name_en', app_info.get('name', '')))
+
     app_info['path'] = app_path
     return app_info
 
@@ -106,10 +113,13 @@ def get_python_executable():
 
 def open_application(app_info, file_path=None):
     def run_app():
+        lang = language_code
         app_file = os.path.join(app_info['path'], app_info['openfile'])
         
         # Set PYTHONPATH so the application can use local libraries, Titan Launcher modules, and sitepackages
         env = os.environ.copy()
+        # Set the language for the subprocess
+        env['LANG'] = lang
         launcher_path = os.path.dirname(os.path.abspath(__file__))
         app_path = app_info['path']
         env['PYTHONPATH'] = os.pathsep.join([
@@ -127,30 +137,29 @@ def open_application(app_info, file_path=None):
         python_executable = get_python_executable()
 
         try:
+            command_to_run = None
             if app_file.endswith('.py'):
                 pyc_file = app_file + 'c'
                 if os.path.exists(pyc_file):
-                    command = [python_executable, pyc_file]
-                    if file_path:
-                        command.append(file_path)
-                    subprocess.run(command, cwd=app_info['path'], env=env)
+                    command_to_run = [python_executable, pyc_file]
                 else:
                     compiled_file = compile_python_file(app_file)
                     if compiled_file:
-                        command = [python_executable, compiled_file]
-                        if file_path:
-                            command.append(file_path)
-                        subprocess.run(command, cwd=app_info['path'], env=env)
+                        command_to_run = [python_executable, compiled_file]
             elif app_file.endswith('.pyc'):
-                command = [python_executable, app_file]
-                if file_path:
-                    command.append(file_path)
-                subprocess.run(command, cwd=app_info['path'], env=env)
+                command_to_run = [python_executable, app_file]
             elif app_file.endswith('.exe'):
-                command = [app_file]
+                command_to_run = [app_file]
+
+            if command_to_run:
+                is_python_script = app_file.endswith(('.py', '.pyc'))
+                
                 if file_path:
-                    command.append(file_path)
-                subprocess.run(command, cwd=app_info['path'])
+                    command_to_run.append(file_path)
+                
+                current_env = env if is_python_script else None
+                subprocess.run(command_to_run, cwd=app_info['path'], env=current_env)
+
         except Exception as e:
             play_error_sound()
             wx.MessageBox(f'Błąd podczas uruchamiania aplikacji: {str(e)}', 'Błąd', wx.OK | wx.ICON_ERROR)
@@ -165,11 +174,12 @@ def find_application_by_shortname(shortname):
     return None
 
 def get_hidden_applications():
+    lang = language_code
     hidden_applications = []
     for app_folder in os.listdir(APP_DIR):
         app_path = os.path.join(APP_DIR, app_folder)
         if os.path.isdir(app_path) and app_folder != '.DS_Store':  # Ignore .DS_Store
-            app_info = read_app_info(app_path)
+            app_info = read_app_info(app_path, lang)
             if app_info and app_info.get('hidden', 'false').lower() == 'true':
                 hidden_applications.append(app_info)
     return hidden_applications

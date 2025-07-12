@@ -1,4 +1,5 @@
 import wx
+from translation import _
 from elevenlabs import voices, set_api_key
 import os
 import configparser

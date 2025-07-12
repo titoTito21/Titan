@@ -1,0 +1,174 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 14:37+0200\n"
+"PO-Revision-Date: 2025-07-11 14:37+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: downloader.py:57
+msgid "Unsupported platform"
+msgstr "Unsupported platform"
+
+#: downloader.py:122
+msgid "Otwórz folder pobrań"
+msgstr "Open Download Folder"
+
+#: downloader.py:129
+msgid "Nazwa Pliku"
+msgstr "File Name"
+
+#: downloader.py:130
+msgid "Link do Pobrania"
+msgstr "Download Link"
+
+#: downloader.py:141
+msgid "&Nowe Pobranie"
+msgstr "&New Download"
+
+#: downloader.py:143
+msgid "&Ustawienia"
+msgstr "&Settings"
+
+#: downloader.py:146
+msgid "&Plik"
+msgstr "&File"
+
+#: downloader.py:150 downloader.py:249 downloader.py:386 downloader.py:408
+#: downloader.py:441
+msgid "Titan Download Manager"
+msgstr "Titan Download Manager"
+
+#: downloader.py:220 downloader.py:387 downloader.py:409
+msgid "Pobieranie"
+msgstr "Downloading"
+
+#: downloader.py:220
+msgid "Pobieranie wget.exe"
+msgstr "Downloading wget.exe"
+
+#: downloader.py:248 downloader.py:440
+#, python-brace-format
+msgid "Pobieranie {} zakończone"
+msgstr "Download of {} finished"
+
+#: downloader.py:267 downloader.py:270 downloader.py:459 downloader.py:462
+#, python-brace-format
+msgid "Błąd podczas pobierania: {}"
+msgstr "Error while downloading: {}"
+
+#: downloader.py:270 downloader.py:462
+msgid "Błąd"
+msgstr "Error"
+
+#: downloader.py:300
+msgid "Wstrzymaj"
+msgstr "Pause"
+
+#: downloader.py:304
+msgid "Zatrzymaj"
+msgstr "Stop"
+
+#: downloader.py:308
+msgid "Usuń Plik"
+msgstr "Delete File"
+
+#: downloader.py:312
+msgid "Usuń z Listy"
+msgstr "Remove from List"
+
+#: downloader.py:317
+#, python-brace-format
+msgid "Wstrzymaj pobieranie dla {}"
+msgstr "Pause download for {}"
+
+#: downloader.py:320
+#, python-brace-format
+msgid "Zatrzymaj pobieranie dla {}"
+msgstr "Stop download for {}"
+
+#: downloader.py:326
+#, python-brace-format
+msgid "Plik {} został usunięty"
+msgstr "File {} has been deleted"
+
+#: downloader.py:328
+#, python-brace-format
+msgid "Plik {} nie istnieje"
+msgstr "File {} does not exist"
+
+#: downloader.py:332
+#, python-brace-format
+msgid "Plik {} został usunięty z listy"
+msgstr "File {} has been removed from the list"
+
+#: downloader.py:336
+msgid "Nowe Pobranie"
+msgstr "New Download"
+
+#: downloader.py:354
+msgid "OK"
+msgstr "OK"
+
+#: downloader.py:355 downloader.py:503
+msgid "Zamknij"
+msgstr "Close"
+
+#: downloader.py:360
+msgid "Wprowadź lub wklej link do pliku, który chcesz pobrać:"
+msgstr "Enter or paste the link to the file you want to download:"
+
+#: downloader.py:386
+#, python-brace-format
+msgid "Rozpoczęto pobieranie wget: {}"
+msgstr "Started downloading wget: {}"
+
+#: downloader.py:387 downloader.py:409
+#, python-brace-format
+msgid "Pobieranie {}"
+msgstr "Downloading {}"
+
+#: downloader.py:408
+#, python-brace-format
+msgid "Rozpoczęto pobieranie pliku: {}"
+msgstr "Started downloading file: {}"
+
+#: downloader.py:469
+msgid "Ustawienia"
+msgstr "Settings"
+
+#: downloader.py:475
+msgid "Metoda pobierania plików"
+msgstr "File Download Method"
+
+#: downloader.py:481
+msgid "Wybierz metodę pobierania:"
+msgstr "Choose download method:"
+
+#: downloader.py:488
+msgid "Folder pobranych plików"
+msgstr "Downloaded Files Folder"
+
+#: downloader.py:491
+msgid "Wybierz folder, w którym zapisywane będą pobrane pliki:"
+msgstr "Select the folder where downloaded files will be saved:"
+
+#: downloader.py:493
+msgid "Wskaż folder, w którym mają być zapisywane pobrane pliki"
+msgstr "Point to the folder where downloaded files should be saved"
+
+#: downloader.py:502
+msgid "Zapisz"
+msgstr "Save"

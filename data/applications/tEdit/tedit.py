@@ -5,6 +5,8 @@ import datetime
 import platform
 import configparser
 import re
+from translation import _
+
 
 # Dodaj importy dla pobierania
 try:
@@ -55,23 +57,23 @@ ID_SPELL_CHECK = wx.NewIdRef() # Nowy identyfikator dla sprawdzania pisowni
 
 class FindDialog(wx.Dialog):
     def __init__(self, parent):
-        super(FindDialog, self).__init__(parent, title="Znajdź", size=(300, 150))
+        super(FindDialog, self).__init__(parent, title=_("Znajdź"), size=(300, 150))
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-        label_find = wx.StaticText(panel, label="Szukaj:")
+        label_find = wx.StaticText(panel, label=_("Szukaj:"))
         hbox1.Add(label_find, flag=wx.ALL|wx.CENTER, border=5)
         self.text_find = wx.TextCtrl(panel)
         hbox1.Add(self.text_find, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
         vbox.Add(hbox1, flag=wx.EXPAND|wx.ALL, border=5)
 
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
-        btn_find = wx.Button(panel, label="Znajdź dalej")
+        btn_find = wx.Button(panel, label=_("Znajdź dalej"))
         btn_find.Bind(wx.EVT_BUTTON, self.OnFind)
         hbox2.Add(btn_find, flag=wx.ALL, border=5)
 
-        btn_cancel = wx.Button(panel, label="Anuluj")
+        btn_cancel = wx.Button(panel, label=_("Anuluj"))
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         hbox2.Add(btn_cancel, flag=wx.ALL, border=5)
 
@@ -92,30 +94,30 @@ class FindDialog(wx.Dialog):
 
 class ReplaceDialog(wx.Dialog):
     def __init__(self, parent):
-        super(ReplaceDialog, self).__init__(parent, title="Zamień tekst", size=(300, 200))
+        super(ReplaceDialog, self).__init__(parent, title=_("Zamień tekst"), size=(300, 200))
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-        label_find = wx.StaticText(panel, label="Szukaj:")
+        label_find = wx.StaticText(panel, label=_("Szukaj:"))
         hbox1.Add(label_find, flag=wx.ALL|wx.CENTER, border=5)
         self.text_find = wx.TextCtrl(panel)
         hbox1.Add(self.text_find, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
         vbox.Add(hbox1, flag=wx.EXPAND|wx.ALL, border=5)
 
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
-        label_replace = wx.StaticText(panel, label="Zamień na:")
+        label_replace = wx.StaticText(panel, label=_("Zamień na:"))
         hbox2.Add(label_replace, flag=wx.ALL|wx.CENTER, border=5)
         self.text_replace = wx.TextCtrl(panel)
         hbox2.Add(self.text_replace, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
         vbox.Add(hbox2, flag=wx.EXPAND|wx.ALL, border=5)
 
         hbox3 = wx.BoxSizer(wx.HORIZONTAL)
-        btn_replace = wx.Button(panel, label="Zamień")
+        btn_replace = wx.Button(panel, label=_("Zamień"))
         btn_replace.Bind(wx.EVT_BUTTON, self.OnReplace)
         hbox3.Add(btn_replace, flag=wx.ALL, border=5)
 
-        btn_cancel = wx.Button(panel, label="Anuluj")
+        btn_cancel = wx.Button(panel, label=_("Anuluj"))
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         hbox3.Add(btn_cancel, flag=wx.ALL, border=5)
 
@@ -137,22 +139,22 @@ class ReplaceDialog(wx.Dialog):
 
 class UnicodeDialog(wx.Dialog):
     def __init__(self, parent):
-        super(UnicodeDialog, self).__init__(parent, title="Wstaw znak Unicode", size=(300, 150))
+        super(UnicodeDialog, self).__init__(parent, title=_("Wstaw znak Unicode"), size=(300, 150))
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        label = wx.StaticText(panel, label="Podaj kod punktu kodowego (np. U+00A9):")
+        label = wx.StaticText(panel, label=_("Podaj kod punktu kodowego (np. U+00A9):"))
         vbox.Add(label, flag=wx.ALL, border=5)
 
         self.unicode_input = wx.TextCtrl(panel)
         vbox.Add(self.unicode_input, flag=wx.ALL|wx.EXPAND, border=5)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        btn_ok = wx.Button(panel, label="OK")
+        btn_ok = wx.Button(panel, label=_("OK"))
         btn_ok.Bind(wx.EVT_BUTTON, self.OnOK)
         hbox.Add(btn_ok, flag=wx.ALL, border=5)
 
-        btn_cancel = wx.Button(panel, label="Anuluj")
+        btn_cancel = wx.Button(panel, label=_("Anuluj"))
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         hbox.Add(btn_cancel, flag=wx.ALL, border=5)
 
@@ -178,7 +180,7 @@ class UnicodeDialog(wx.Dialog):
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, ini_path):
-        super(SettingsDialog, self).__init__(parent, title="Ustawienia programu", size=(400, 350)) # Zwiększono wysokość
+        super(SettingsDialog, self).__init__(parent, title=_("Ustawienia programu"), size=(400, 350)) # Zwiększono wysokość
         self.ini_path = ini_path
         self.config = configparser.ConfigParser()
 
@@ -206,19 +208,20 @@ class SettingsDialog(wx.Dialog):
         panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        notebook = wx.Notebook(panel)
+        notebook = wx.Notebook(panel);
 
         # -------- Zakładka Ogólne --------
         ogolne_panel = wx.Panel(notebook)
         ogolne_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Ustawienia Autozapisu
-        autosave_box = wx.StaticBoxSizer(wx.StaticBox(ogolne_panel, label="Automatyczny zapis"), wx.VERTICAL)
-        autosave_label = wx.StaticText(ogolne_panel, label="Zapis co:")
+        autosave_box = wx.StaticBoxSizer(wx.StaticBox(ogolne_panel, label=_("Automatyczny zapis")), wx.VERTICAL)
+        autosave_label = wx.StaticText(ogolne_panel, label=_("Zapis co:"))
         autosave_box.Add(autosave_label, flag=wx.LEFT|wx.TOP|wx.RIGHT, border=5)
 
-        self.autosave_choices = ["5 minut", "10 minut", "wyłączone"]
-        self.autosave_choice = wx.Choice(ogolne_panel, choices=self.autosave_choices)
+        self.autosave_choices_map = {'5 minut': _("5 minut"), '10 minut': _("10 minut"), 'wyłączone': _("wyłączone")}
+        self.autosave_choices = list(self.autosave_choices_map.keys())
+        self.autosave_choice = wx.Choice(ogolne_panel, choices=list(self.autosave_choices_map.values()))
         current_auto = self.config['Ogólne'].get('auto_save', 'wyłączone')
         if current_auto in self.autosave_choices:
             self.autosave_choice.SetSelection(self.autosave_choices.index(current_auto))
@@ -228,19 +231,19 @@ class SettingsDialog(wx.Dialog):
         ogolne_sizer.Add(autosave_box, flag=wx.EXPAND|wx.ALL, border=5)
 
         # Ustawienia Sprawdzania Pisowni
-        spell_check_box = wx.StaticBoxSizer(wx.StaticBox(ogolne_panel, label="Sprawdzanie pisowni"), wx.VERTICAL)
+        spell_check_box = wx.StaticBoxSizer(wx.StaticBox(ogolne_panel, label=_("Sprawdzanie pisowni")), wx.VERTICAL)
         if ENCHANT_AVAILABLE:
-            self.spell_check_checkbox = wx.CheckBox(ogolne_panel, label="Włącz sprawdzanie pisowni (wymaga słownika)")
+            self.spell_check_checkbox = wx.CheckBox(ogolne_panel, label=_("Włącz sprawdzanie pisowni (wymaga słownika)"))
             current_spell = self.config['Ogólne'].getboolean('spell_check_enabled', False) # Read boolean
             self.spell_check_checkbox.SetValue(current_spell)
             spell_check_box.Add(self.spell_check_checkbox, flag=wx.ALL|wx.EXPAND, border=5)
 
             # Informacja o słowniku
-            spell_info_label = wx.StaticText(ogolne_panel, label="Program spróbuje pobrać słownik pl_PL do podkatalogu data/dicts\njeśli nie będzie dostępny systemowo.")
+            spell_info_label = wx.StaticText(ogolne_panel, label=_("Program spróbuje pobrać słownik pl_PL do podkatalogu data/dicts\njeśli nie będzie dostępny systemowo."))
             spell_check_box.Add(spell_info_label, flag=wx.ALL|wx.EXPAND, border=5)
 
         else:
-             no_enchant_label = wx.StaticText(ogolne_panel, label="Biblioteka 'enchant' jest niedostępna.\nFunkcja sprawdzania pisowni jest wyłączona.")
+             no_enchant_label = wx.StaticText(ogolne_panel, label=_("Biblioteka 'enchant' jest niedostępna.\nFunkcja sprawdzania pisowni jest wyłączona."))
              spell_check_box.Add(no_enchant_label, flag=wx.ALL|wx.EXPAND, border=5)
 
 
@@ -254,12 +257,13 @@ class SettingsDialog(wx.Dialog):
         tekst_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Ustawienia Znaków Końca Linii
-        line_ending_box = wx.StaticBoxSizer(wx.StaticBox(tekst_panel, label="Znaki końca linii"), wx.VERTICAL)
-        line_ending_label = wx.StaticText(tekst_panel, label="Symbol końca linii:")
+        line_ending_box = wx.StaticBoxSizer(wx.StaticBox(tekst_panel, label=_("Znaki końca linii")), wx.VERTICAL)
+        line_ending_label = wx.StaticText(tekst_panel, label=_("Symbol końca linii:"))
         line_ending_box.Add(line_ending_label, flag=wx.LEFT|wx.TOP|wx.RIGHT, border=5)
 
-        self.line_ending_choices = ["windows", "MAC OS/linux/unix", "inny symbol..."]
-        self.line_ending_choice = wx.Choice(tekst_panel, choices=self.line_ending_choices)
+        self.line_ending_choices_map = {"windows": _("windows"), "MAC OS/linux/unix": _("MAC OS/linux/unix"), "inny symbol...": _("inny symbol...")}
+        self.line_ending_choices = list(self.line_ending_choices_map.keys())
+        self.line_ending_choice = wx.Choice(tekst_panel, choices=list(self.line_ending_choices_map.values()))
         current_le = self.config['Tekst'].get('line_ending', 'windows')
         if current_le in self.line_ending_choices:
             self.line_ending_choice.SetSelection(self.line_ending_choices.index(current_le))
@@ -269,12 +273,12 @@ class SettingsDialog(wx.Dialog):
 
         line_ending_box.Add(self.line_ending_choice, flag=wx.ALL|wx.EXPAND, border=5)
 
-        self.custom_line_ending_label = wx.StaticText(tekst_panel, label="Napisz symbol końca linii:")
+        self.custom_line_ending_label = wx.StaticText(tekst_panel, label=_("Napisz symbol końca linii:"))
         self.custom_line_ending_text = wx.TextCtrl(tekst_panel)
         self.custom_line_ending_text.SetValue(self.config['Tekst'].get('custom_line_ending', ''))
 
         # Pokazuj/ukrywaj pole w zależności od wyboru
-        if self.line_ending_choice.GetStringSelection() == "inny symbol...":
+        if self.line_ending_choices[self.line_ending_choice.GetSelection()] == "inny symbol...":
              self.custom_line_ending_label.Show(True)
              self.custom_line_ending_text.Show(True)
         else:
@@ -291,15 +295,15 @@ class SettingsDialog(wx.Dialog):
 
         tekst_panel.SetSizer(tekst_sizer)
 
-        notebook.AddPage(ogolne_panel, "Ogólne")
-        notebook.AddPage(tekst_panel, "Tekst")
+        notebook.AddPage(ogolne_panel, _("Ogólne"))
+        notebook.AddPage(tekst_panel, _("Tekst"))
 
         main_sizer.Add(notebook, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
 
         # Przyciski OK/Anuluj
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_ok = wx.Button(panel, label="OK")
-        btn_cancel = wx.Button(panel, label="Anuluj")
+        btn_ok = wx.Button(panel, label=_("OK"))
+        btn_cancel = wx.Button(panel, label=_("Anuluj"))
         btn_ok.Bind(wx.EVT_BUTTON, self.OnOK)
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         btn_sizer.Add(btn_ok, flag=wx.ALL, border=5)
@@ -311,7 +315,7 @@ class SettingsDialog(wx.Dialog):
         self.Layout() # Przelicz layout po ukryciu/pokazaniu pól
 
     def OnLineEndingChoice(self, event):
-        choice = self.line_ending_choice.GetStringSelection()
+        choice = self.line_ending_choices[self.line_ending_choice.GetSelection()]
         if choice == "inny symbol...":
             self.custom_line_ending_label.Show(True)
             self.custom_line_ending_text.Show(True)
@@ -322,14 +326,14 @@ class SettingsDialog(wx.Dialog):
 
     def OnOK(self, event):
         # Zapisz ustawienia
-        auto_val = self.autosave_choice.GetStringSelection()
+        auto_val = self.autosave_choices[self.autosave_choice.GetSelection()]
         self.config['Ogólne']['auto_save'] = auto_val
 
         # Zapisz stan sprawdzania pisowni
         if ENCHANT_AVAILABLE:
              self.config['Ogólne']['spell_check_enabled'] = str(self.spell_check_checkbox.GetValue()).lower()
 
-        line_ending_val = self.line_ending_choice.GetStringSelection()
+        line_ending_val = self.line_ending_choices[self.line_ending_choice.GetSelection()]
         self.config['Tekst']['line_ending'] = line_ending_val
         if line_ending_val == 'inny symbol...':
             self.config['Tekst']['custom_line_ending'] = self.custom_line_ending_text.GetValue()
@@ -404,8 +408,8 @@ class TextEditor(wx.Frame):
         underline_style_attr = wx.TextAttr()
         try:
             # Sprawdź czy stałe potrzebne do podkreślenia istnieją
-            _ = wx.TEXT_ATTR_UNDERLINE_TYPE
-            _ = wx.TEXT_CTRL_UNDERLINE_RED_WAVY
+            wx.TEXT_ATTR_UNDERLINE_TYPE
+            wx.TEXT_CTRL_UNDERLINE_RED_WAVY
 
             underline_style_attr.SetFlags(wx.TEXT_ATTR_UNDERLINE_TYPE)
             underline_style_attr.SetUnderlineStyle(wx.TEXT_CTRL_UNDERLINE_RED_WAVY)
@@ -425,13 +429,13 @@ class TextEditor(wx.Frame):
         self.LoadSettings() # Wczytaj ustawienia, w tym spell_check_enabled i spróbuj zainicjować słownik
 
         # Ustawienie tytułu
-        self.SetTitle("Edytor tekstowy TEdit")
+        self.SetTitle(_("Edytor tekstowy TEdit"))
 
         # Tworzenie panelu i pola tekstowego
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        label = wx.StaticText(panel, label="Treść dokumentu:")
+        label = wx.StaticText(panel, label=_("Treść dokumentu:"))
         vbox.Add(label, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, border=10)
 
         # Dodaj styl wx.TE_RICH lub wx.TE_RICH2 dla kolorowania tekstu/podkreślania
@@ -476,7 +480,6 @@ class TextEditor(wx.Frame):
         # self.text_ctrl.Bind(wx.EVT_TEXT, self.OnTextChange)
 
 
-        self.Show()
 
         # Timer do automatycznego zapisu
         self.auto_save_timer = wx.Timer(self)
@@ -526,7 +529,7 @@ class TextEditor(wx.Frame):
             return True
 
         except requests.exceptions.RequestException as e:
-            wx.MessageBox(f"Błąd podczas pobierania słownika:\n{e}", "Błąd pobierania", wx.OK|wx.ICON_ERROR)
+            wx.MessageBox(_("Błąd podczas pobierania słownika:\n{e}").format(e=e), _("Błąd pobierania"), wx.OK|wx.ICON_ERROR)
             print(f"Błąd podczas pobierania słownika: {e}")
             # Usuń niekompletne pliki, jeśli istnieją
             if os.path.exists(dic_path):
@@ -537,7 +540,7 @@ class TextEditor(wx.Frame):
                  except OSError: pass # Ignoruj błędy usuwania
             return False
         except IOError as e:
-             wx.MessageBox(f"Błąd zapisu plików słownika:\n{e}", "Błąd zapisu", wx.OK|wx.ICON_ERROR)
+             wx.MessageBox(_("Błąd zapisu plików słownika:\n{e}").format(e=e), _("Błąd zapisu"), wx.OK|wx.ICON_ERROR)
              print(f"Błąd zapisu plików słownika: {e}")
              # Usuń niekompletne pliki po błędzie zapisu
              if os.path.exists(dic_path):
@@ -548,7 +551,7 @@ class TextEditor(wx.Frame):
                  except OSError: pass
              return False
         except Exception as e:
-             wx.MessageBox(f"Nieoczekiwany błąd podczas pobierania:\n{e}", "Błąd pobierania", wx.OK|wx.ICON_ERROR)
+             wx.MessageBox(_("Nieoczekiwany błąd podczas pobierania:\n{e}").format(e=e), _("Błąd pobierania"), wx.OK|wx.ICON_ERROR)
              print(f"Nieoczekiwany błąd podczas pobierania: {e}")
              return False
 
@@ -613,13 +616,13 @@ class TextEditor(wx.Frame):
                          if enchant.dict_exists("en_US"):
                               self.spell_dict = enchant.Dict("en_US")
                               print("Użyto słownika en_US jako alternatywy.")
-                              wx.MessageBox("Słownik języka polskiego (pl_PL) jest niedostępny.\nUżyto słownika angielskiego (en_US).",
-                                            "Informacja o słowniku", wx.OK|wx.ICON_INFORMATION)
+                              wx.MessageBox(_("Słownik języka polskiego (pl_PL) jest niedostępny.\nUżyto słownika angielskiego (en_US)."),
+                                            _("Informacja o słowniku"), wx.OK|wx.ICON_INFORMATION)
                          else:
                               print("Słowniki pl_PL i en_US niedostępne. Sprawdzanie pisowni zostanie wyłączone.")
                               self.spell_check_enabled = False # Wyłącz jeśli brak słownika głównego i alternatywnego
-                              wx.MessageBox("Brak dostępnych słowników (pl_PL, en_US). Sprawdzanie pisowni zostanie wyłączone.",
-                                            "Brak słownika", wx.OK|wx.ICON_WARNING)
+                              wx.MessageBox(_("Brak dostępnych słowników (pl_PL, en_US). Sprawdzanie pisowni zostanie wyłączone."),
+                                            _("Brak słownika"), wx.OK|wx.ICON_WARNING)
 
                 except enchant.errors.DictNotFoundError as e:
                     # Ten błąd powinien być złapany przez dict_exists, ale na wszelki wypadek
@@ -628,8 +631,8 @@ class TextEditor(wx.Frame):
                 except Exception as e:
                      print(f"Nieoczekiwany błąd przy inicjalizacji słownika: {e}")
                      self.spell_check_enabled = False
-                     wx.MessageBox(f"Wystąpił błąd podczas inicjalizacji słownika:\n{e}\nSprawdzanie pisowni zostanie wyłączone.",
-                                   "Błąd słownika", wx.OK|wx.ICON_ERROR)
+                     wx.MessageBox(_("Wystąpił błąd podczas inicjalizacji słownika:\n{e}\nSprawdzanie pisowni zostanie wyłączone.").format(e=e),
+                                   _("Błąd słownika"), wx.OK|wx.ICON_ERROR)
 
 
         # Jeśli spell_check_enabled został wyłączony z powodu błędu (brak enchant, brak słownika),
@@ -662,49 +665,49 @@ class TextEditor(wx.Frame):
         menubar = wx.MenuBar()
 
         file_menu = wx.Menu()
-        file_menu.Append(wx.ID_NEW, "&Nowy dokument\tCtrl+N")
-        file_menu.Append(wx.ID_OPEN, "&Otwórz dokument...\tCtrl+O")
-        file_menu.Append(wx.ID_SAVE, "&Zapisz plik\tCtrl+S")
-        file_menu.Append(wx.ID_SAVEAS, "Zapisz jako...\tCtrl+Shift+S")
+        file_menu.Append(wx.ID_NEW, _("&Nowy dokument\tCtrl+N"))
+        file_menu.Append(wx.ID_OPEN, _("&Otwórz dokument...\tCtrl+O"))
+        file_menu.Append(wx.ID_SAVE, _("&Zapisz plik\tCtrl+S"))
+        file_menu.Append(wx.ID_SAVEAS, _("Zapisz jako...\tCtrl+Shift+S"))
         file_menu.AppendSeparator()
-        file_menu.Append(ID_SETTINGS, "Ustawienia programu...")
+        file_menu.Append(ID_SETTINGS, _("Ustawienia programu..."))
         file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_EXIT, "&Zamknij TEdit")
+        file_menu.Append(wx.ID_EXIT, _("&Zamknij TEdit"))
 
         edit_menu = wx.Menu()
-        edit_menu.Append(wx.ID_UNDO, "Cofnij...\tCtrl+Z")
+        edit_menu.Append(wx.ID_UNDO, _("Cofnij...\tCtrl+Z"))
         # edit_menu.Append(wx.ID_REDO, "Ponów...\tCtrl+Y") # Ponów może nie działać natywnie z TE_RICH2
         edit_menu.AppendSeparator() # Dodaj separator przed standardowymi operacjami
-        edit_menu.Append(wx.ID_CUT, "Wytnij...\tCtrl+X")
-        edit_menu.Append(wx.ID_COPY, "Kopiuj...\tCtrl+C")
-        edit_menu.Append(wx.ID_PASTE, "Wklej...\tCtrl+V")
+        edit_menu.Append(wx.ID_CUT, _("Wytnij...\tCtrl+X"))
+        edit_menu.Append(wx.ID_COPY, _("Kopiuj...\tCtrl+C"))
+        edit_menu.Append(wx.ID_PASTE, _("Wklej...\tCtrl+V"))
         edit_menu.AppendSeparator() # Dodaj separator przed zaznacz wszystko
-        edit_menu.Append(wx.ID_SELECTALL, "Zaznacz wszystko...\tCtrl+A")
+        edit_menu.Append(wx.ID_SELECTALL, _("Zaznacz wszystko...\tCtrl+A"))
         edit_menu.AppendSeparator() # Dodaj separator przed znajdź/zamień
-        edit_menu.Append(ID_FIND, "Znajdź...\tCtrl+F")
-        edit_menu.Append(ID_REPLACE, "Zamień tekst...\tCtrl+H")
+        edit_menu.Append(ID_FIND, _("Znajdź...\tCtrl+F"))
+        edit_menu.Append(ID_REPLACE, _("Zamień tekst...\tCtrl+H"))
 
         # Dodaj opcję sprawdzania pisowni
         # Pokaż opcję w menu tylko jeśli enchant jest w ogóle dostępny
         if ENCHANT_AVAILABLE:
              edit_menu.AppendSeparator()
              # Stan włączenia/wyłączenia funkcji sprawdzania pisowni będzie zarządzany w ustawieniach
-             menu_item_spell = edit_menu.Append(ID_SPELL_CHECK, "Sprawdź pisownię")
+             menu_item_spell = edit_menu.Append(ID_SPELL_CHECK, _("Sprawdź pisownię"))
              # Opcjonalnie: wyłącz pozycję menu, jeśli funkcja jest wyłączona w ustawieniach LUB słownik nie został załadowany
              # menu_item_spell.Enable(self.spell_check_enabled and self.spell_dict is not None)
 
 
         insert_menu = wx.Menu()
-        insert_menu.Append(ID_INSERT_DATETIME, "Wstaw datę i godzinę...")
-        insert_menu.Append(ID_INSERT_UNICODE, "Wstaw znak Unicode...")
+        insert_menu.Append(ID_INSERT_DATETIME, _("Wstaw datę i godzinę..."))
+        insert_menu.Append(ID_INSERT_UNICODE, _("Wstaw znak Unicode..."))
 
         help_menu = wx.Menu()
-        help_menu.Append(wx.ID_ABOUT, "O Programie...")
+        help_menu.Append(wx.ID_ABOUT, _("O Programie..."))
 
-        menubar.Append(file_menu, "&Plik")
-        menubar.Append(edit_menu, "&Edycja")
-        menubar.Append(insert_menu, "&Wstaw")
-        menubar.Append(help_menu, "Pomoc")
+        menubar.Append(file_menu, _("&Plik"))
+        menubar.Append(edit_menu, _("&Edycja"))
+        menubar.Append(insert_menu, _("&Wstaw"))
+        menubar.Append(help_menu, _("Pomoc"))
 
         self.SetMenuBar(menubar)
         self.Layout() # Odśwież layout okna, może być potrzebne po zmianie menu bar
@@ -713,7 +716,7 @@ class TextEditor(wx.Frame):
     def OnNew(self, event):
         """Tworzy nowy, pusty dokument."""
         if self.text_ctrl.IsModified():
-            res = wx.MessageBox("Dokument został zmodyfikowany. Zapisać przed utworzeniem nowego?", "Potwierdzenie",
+            res = wx.MessageBox(_("Dokument został zmodyfikowany. Zapisać przed utworzeniem nowego?"), _("Potwierdzenie"),
                                  wx.ICON_QUESTION | wx.YES_NO | wx.CANCEL, self)
             if res == wx.YES:
                 if not self.OnSave(event): # Jeśli zapis się nie udał, przerwij tworzenie nowego
@@ -723,7 +726,7 @@ class TextEditor(wx.Frame):
 
         self.text_ctrl.Clear()
         self.current_file = None
-        self.SetTitle("Edytor tekstowy TEdit")
+        self.SetTitle(_("Edytor tekstowy TEdit"))
         self.text_ctrl.SetModified(False) # Upewnij się, że flaga modyfikacji jest czysta
         self.ClearSpellCheckHighlights() # Wyczyść ewentualne stare podkreślenia
 
@@ -731,7 +734,7 @@ class TextEditor(wx.Frame):
     def OnOpen(self, event):
         """Otwiera istniejący plik tekstowy."""
         if self.text_ctrl.IsModified():
-            res = wx.MessageBox("Dokument został zmodyfikowany. Zapisać przed otwarciem nowego?", "Potwierdzenie",
+            res = wx.MessageBox(_("Dokument został zmodyfikowany. Zapisać przed otwarciem nowego?"), _("Potwierdzenie"),
                                  wx.ICON_QUESTION | wx.YES_NO | wx.CANCEL, self)
             if res == wx.YES:
                  if not self.OnSave(event):
@@ -739,7 +742,7 @@ class TextEditor(wx.Frame):
             elif res == wx.CANCEL:
                  return
 
-        with wx.FileDialog(self, "Otwórz plik", wildcard="Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*",
+        with wx.FileDialog(self, _("Otwórz plik"), wildcard=_("Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*"),
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return
@@ -763,7 +766,7 @@ class TextEditor(wx.Frame):
             #    self.OnCheckSpelling(None) # Wywołaj sprawdzanie pisowni
 
         except IOError as e:
-            wx.LogError(f"Nie można otworzyć pliku '{path}': {e}")
+            wx.LogError(_("Nie można otworzyć pliku '{path}': {e}").format(path=path, e=e))
             self.current_file = None # Resetuj current_file w przypadku błędu
 
 
@@ -776,7 +779,7 @@ class TextEditor(wx.Frame):
 
     def OnSaveAs(self, event):
         """Zapisuje dokument pod nową nazwą."""
-        with wx.FileDialog(self, "Zapisz plik jako", wildcard="Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*",
+        with wx.FileDialog(self, _("Zapisz plik jako"), wildcard=_("Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*"),
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return False # Użytkownik anulował
@@ -811,7 +814,7 @@ class TextEditor(wx.Frame):
             self.SetTitle(f"{os.path.basename(path)} - TEdit")
             return True # Zapisano pomyślnie
         except IOError as e:
-            wx.LogError(f"Nie można zapisać pliku '{path}': {e}")
+            wx.LogError(_("Nie można zapisać pliku '{path}': {e}").format(path=path, e=e))
             return False # Błąd zapisu
 
     def OnUndo(self, event):
@@ -845,10 +848,10 @@ class TextEditor(wx.Frame):
         info = wx.AboutDialogInfo()
         info.SetName("TEdit")
         info.SetVersion("0.1")
-        info.SetDescription("TEdit jest edytorem tekstowym,\naplikacja jest jednym z podstawowych składników tSuite.")
+        info.SetDescription(_("TEdit jest edytorem tekstowym,\naplikacja jest jednym z podstawowych składników tSuite."))
         info.SetCopyright("(c) 2024 TitoSoft")
         info.AddDeveloper("Twoje Imię/Nazwa (opcjonalnie)") # Możesz dodać swoje imię/nazwę
-        info.SetLicence("Licencja (np. MIT, GPL - opcjonalnie)") # Dodaj informację o licencji, jeśli jest
+        info.SetLicence(_("Licencja (np. MIT, GPL - opcjonalnie)")) # Dodaj informację o licencji, jeśli jest
         # info.SetWebSite("Twoja strona (opcjonalnie)") # Dodaj stronę projektu
         # info.SetIcon(wx.Icon("ikonka.png", wx.BITMAP_TYPE_PNG)) # Opcjonalnie: ustaw ikonkę
 
@@ -861,7 +864,7 @@ class TextEditor(wx.Frame):
     def OnCloseWindow(self, event):
         """Obsługa zamknięcia okna (pytanie o zapis)."""
         if self.text_ctrl.IsModified():
-            res = wx.MessageBox("Dokument został zmodyfikowany. Czy chcesz zapisać zmiany?", "Potwierdzenie",
+            res = wx.MessageBox(_("Dokument został zmodyfikowany. Czy chcesz zapisać zmiany?"), _("Potwierdzenie"),
                                  wx.ICON_QUESTION | wx.YES_NO | wx.CANCEL, self)
             if res == wx.YES:
                 if not self.OnSave(event):
@@ -893,7 +896,7 @@ class TextEditor(wx.Frame):
                     # Przewiń do zaznaczenia (opcjonalnie, wymagałoby dodatkowej logiki przewijania)
                     # self.text_ctrl.ShowPosition(pos)
                 else:
-                    wx.MessageBox("Nie znaleziono szukanego tekstu.", "Informacja", wx.OK|wx.ICON_INFORMATION)
+                    wx.MessageBox(_("Nie znaleziono szukanego tekstu."), _("Informacja"), wx.OK|wx.ICON_INFORMATION)
         dlg.Destroy()
 
     def OnReplace(self, event):
@@ -911,7 +914,7 @@ class TextEditor(wx.Frame):
                     self.text_ctrl.SetValue(new_content)
                     self.text_ctrl.SetModified(True) # Oznacz jako zmodyfikowany
                 else:
-                    wx.MessageBox("Nie znaleziono tekstu do zamiany.", "Informacja", wx.OK|wx.ICON_INFORMATION)
+                    wx.MessageBox(_("Nie znaleziono tekstu do zamiany."), _("Informacja"), wx.OK|wx.ICON_INFORMATION)
         dlg.Destroy()
 
     def OnInsertDateTime(self, event):
@@ -927,8 +930,8 @@ class TextEditor(wx.Frame):
             if uch:
                 self.text_ctrl.WriteText(uch)
             else:
-                wx.MessageBox("Nieprawidłowy kod Unicode. Użyj formatu Hex (np. 00A9) lub U+Hex (np. U+00A9).",
-                              "Błąd", wx.OK|wx.ICON_ERROR)
+                wx.MessageBox(_("Nieprawidłowy kod Unicode. Użyj formatu Hex (np. 00A9) lub U+Hex (np. U+00A9)."),
+                              _("Błąd"), wx.OK|wx.ICON_ERROR)
         dlg.Destroy()
 
     def OnSettings(self, event):
@@ -984,16 +987,16 @@ class TextEditor(wx.Frame):
     def OnCheckSpelling(self, event):
         """Sprawdza pisownię w całym dokumencie i wyróżnia błędy."""
         if not self.spell_check_enabled or not self.spell_dict:
-            wx.MessageBox("Sprawdzanie pisowni jest wyłączone w ustawieniach lub słownik nie został poprawnie załadowany.",
-                          "Sprawdzanie pisowni - Status", wx.OK|wx.ICON_INFORMATION)
+            wx.MessageBox(_("Sprawdzanie pisowni jest wyłączone w ustawieniach lub słownik nie został poprawnie załadowany."),
+                          _("Sprawdzanie pisowni - Status"), wx.OK|wx.ICON_INFORMATION)
             # Jeśli enchant jest dostępny, ale słownik nie, spróbuj wczytać słownik ponownie
             if ENCHANT_AVAILABLE and not self.spell_dict:
                  # wx.CallAfter(self.LoadSettings) # Wywołanie LoadSettings może być asynchroniczne
                  # Zamiast tego, możemy spróbować zainicjować słownik bezpośrednio tutaj,
                  # choć LoadSettings robi więcej rzeczy (ustawienia, timer).
                  # Prostsze jest poproszenie użytkownika o wejście w ustawienia.
-                 wx.MessageBox("Spróbuj włączyć sprawdzanie pisowni w Ustawieniach programu.",
-                               "Wskazówka", wx.OK|wx.ICON_INFORMATION)
+                 wx.MessageBox(_("Spróbuj włączyć sprawdzanie pisowni w Ustawieniach programu."),
+                               _("Wskazówka"), wx.OK|wx.ICON_INFORMATION)
             return # Przerwij, jeśli sprawdzanie jest wyłączone lub słownik brak
 
         self.ClearSpellCheckHighlights() # Wyczyść poprzednie wyróżnienia
@@ -1019,12 +1022,13 @@ class TextEditor(wx.Frame):
                 errors_found += 1
 
         if errors_found == 0:
-            wx.MessageBox("Nie znaleziono błędów pisowni.", "Informacja", wx.OK|wx.ICON_INFORMATION)
+            wx.MessageBox(_("Nie znaleziono błędów pisowni."), _("Informacja"), wx.OK|wx.ICON_INFORMATION)
         else:
-            wx.MessageBox(f"Zakończono sprawdzanie pisowni. Znaleziono {errors_found} błędów.", "Informacja", wx.OK|wx.ICON_INFORMATION)
+            wx.MessageBox(_("Zakończono sprawdzanie pisowni. Znaleziono {errors_found} błędów.").format(errors_found=errors_found), _("Informacja"), wx.OK|wx.ICON_INFORMATION)
 
 
 if __name__ == "__main__":
-    app = wx.App(False)
+    app = wx.App()
     frame = TextEditor(None) # Usunięto title="TEdit" z Frame, bo ustawiamy je w __init__
+    frame.Show()
     app.MainLoop()

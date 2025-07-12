@@ -1,4 +1,5 @@
-name="Przeglądarka internetowa - TWeb"
+name_pl="Przeglądarka internetowa"
+name_en="Web Browser"
 description=""
 openfile="web.py"
 shortname="web"

@@ -57,7 +57,7 @@ else:
 
 import accessible_output3.outputs.auto
 from settings import load_settings, save_settings, get_setting, set_setting
-from sound import set_theme, initialize_sound, play_sound, resource_path
+from sound import set_theme, initialize_sound, play_sound, resource_path, set_sound_theme_volume
 from translation import get_available_languages, set_language
 
 # Get the translation function
@@ -91,10 +91,13 @@ class SettingsFrame(wx.Frame):
         self.notebook.AddPage(self.sound_panel, _("Sound"))
         self.notebook.AddPage(self.general_panel, _("General"))
         self.notebook.AddPage(self.interface_panel, _("Interface"))
+        self.invisible_interface_panel = wx.Panel(self.notebook)
+        self.notebook.AddPage(self.invisible_interface_panel, _("Invisible Interface"))
 
         self.InitSoundPanel()
         self.InitGeneralPanel()
         self.InitInterfacePanel()
+        self.InitInvisibleInterfacePanel()
 
         if sys.platform == 'win32':
             self.windows_panel = wx.Panel(self.notebook)
@@ -125,12 +128,13 @@ class SettingsFrame(wx.Frame):
         self.Centre()
 
     def InitSoundPanel(self):
+        panel = self.sound_panel
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        theme_label = wx.StaticText(self.sound_panel, label=_("Select sound theme:"))
+        theme_label = wx.StaticText(panel, label=_("Select sound theme:"))
         vbox.Add(theme_label, flag=wx.LEFT | wx.TOP, border=10)
 
-        self.theme_choice = wx.Choice(self.sound_panel)
+        self.theme_choice = wx.Choice(panel)
         self.theme_choice.Bind(wx.EVT_CHOICE, self.OnThemeSelected)
         self.theme_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
@@ -145,15 +149,26 @@ class SettingsFrame(wx.Frame):
              self.theme_choice.Enable(False)
 
         self.theme_choice.AppendItems(themes)
-
         vbox.Add(self.theme_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
-        self.stereo_sound_cb = wx.CheckBox(self.sound_panel, label=_("Stereo sounds"))
+        self.stereo_sound_cb = wx.CheckBox(panel, label=_("Stereo sounds"))
         self.stereo_sound_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.stereo_sound_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.stereo_sound_cb, flag=wx.LEFT | wx.TOP, border=10)
 
-        self.sound_panel.SetSizer(vbox)
+        volume_label_text = _("Sound theme volume:")
+        volume_label = wx.StaticText(panel, label=volume_label_text)
+        vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.theme_volume_slider = wx.Slider(panel, value=100, minValue=0, maxValue=100,
+                                              style=wx.SL_HORIZONTAL | wx.SL_LABELS)
+        self.theme_volume_slider.SetName(volume_label_text)
+        self.theme_volume_slider.Bind(wx.EVT_SLIDER, self.OnThemeVolumeChange)
+        self.theme_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.theme_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        panel.SetSizer(vbox)
+        panel.Layout()
 
     def InitGeneralPanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -215,24 +230,59 @@ class SettingsFrame(wx.Frame):
         self.interface_panel.SetSizer(vbox)
 
 
-    def InitWindowsPanel(self):
+    def InitInvisibleInterfacePanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        sapi_settings_button = wx.Button(self.windows_panel, label=_("Change SAPI settings"))
+        self.announce_index_cb = wx.CheckBox(self.invisible_interface_panel, label=_("Announce item index"))
+        self.announce_index_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.announce_index_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.announce_index_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.announce_widget_type_cb = wx.CheckBox(self.invisible_interface_panel, label=_("Announce widget type"))
+        self.announce_widget_type_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.announce_widget_type_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.announce_widget_type_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.enable_titan_ui_cb = wx.CheckBox(self.invisible_interface_panel, label=_("Enable TitanUI support"))
+        self.enable_titan_ui_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.enable_titan_ui_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.enable_titan_ui_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.announce_first_item_cb = wx.CheckBox(self.invisible_interface_panel, label=_("Announce first item in category"))
+        self.announce_first_item_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.announce_first_item_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.announce_first_item_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        titan_hotkey_label = wx.StaticText(self.invisible_interface_panel, label=_("Titan key:"))
+        vbox.Add(titan_hotkey_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.titan_hotkey_ctrl = wx.TextCtrl(self.invisible_interface_panel)
+        self.titan_hotkey_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.titan_hotkey_ctrl, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        self.invisible_interface_panel.SetSizer(vbox)
+
+    def InitWindowsPanel(self):
+        panel = self.windows_panel
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        sapi_settings_button = wx.Button(panel, label=_("Change SAPI settings"))
         sapi_settings_button.Bind(wx.EVT_BUTTON, self.OnSapiSettings)
         sapi_settings_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(sapi_settings_button, flag=wx.ALL | wx.EXPAND, border=10)
 
-        ease_of_access_button = wx.Button(self.windows_panel, label=_("Ease of Access"))
+        ease_of_access_button = wx.Button(panel, label=_("Ease of Access"))
         ease_of_access_button.Bind(wx.EVT_BUTTON, self.OnEaseOfAccess)
         ease_of_access_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(ease_of_access_button, flag=wx.ALL | wx.EXPAND, border=10)
 
-        volume_label = wx.StaticText(self.windows_panel, label=_("System volume:"))
+        volume_label_text = _("System volume:")
+        volume_label = wx.StaticText(panel, label=volume_label_text)
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
 
-        self.volume_slider = wx.Slider(self.windows_panel, value=50, minValue=0, maxValue=100,
+        self.volume_slider = wx.Slider(panel, value=50, minValue=0, maxValue=100,
                                        style=wx.SL_HORIZONTAL | wx.SL_LABELS)
+        self.volume_slider.SetName(volume_label_text)
         self.volume_slider.Bind(wx.EVT_SLIDER, self.OnVolumeChange)
         self.volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
@@ -255,14 +305,14 @@ class SettingsFrame(wx.Frame):
 
         vbox.Add(self.volume_slider, flag=wx.ALL | wx.EXPAND, border=10)
 
-        self.mute_checkbox = wx.CheckBox(self.windows_panel, label=_("Disable sound card mute when Titan is running"))
+        self.mute_checkbox = wx.CheckBox(panel, label=_("Disable sound card mute when Titan is running"))
         self.mute_checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.mute_checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
 
         vbox.Add(self.mute_checkbox, flag=wx.ALL | wx.EXPAND, border=10)
 
-
-        self.windows_panel.SetSizer(vbox)
+        panel.SetSizer(vbox)
+        panel.Layout()
 
 
     def load_settings_to_ui(self):
@@ -286,6 +336,10 @@ class SettingsFrame(wx.Frame):
         stereo_sound_value = sound_settings.get('stereo_sound', 'False')
         self.stereo_sound_cb.SetValue(str(stereo_sound_value).lower() in ['true', '1'])
 
+        theme_volume_value = sound_settings.get('theme_volume', '100')
+        self.theme_volume_slider.SetValue(int(theme_volume_value))
+        set_sound_theme_volume(int(theme_volume_value))
+
 
         general_settings = self.settings.get('general', {})
         quick_start_value = general_settings.get('quick_start', 'False')
@@ -303,6 +357,13 @@ class SettingsFrame(wx.Frame):
                   self.skin_choice.SetStringSelection(_("Default"))
              else:
                   self.skin_choice.SetSelection(0)
+
+        invisible_interface_settings = self.settings.get('invisible_interface', {})
+        self.announce_index_cb.SetValue(str(invisible_interface_settings.get('announce_index', 'False')).lower() in ['true', '1'])
+        self.announce_widget_type_cb.SetValue(str(invisible_interface_settings.get('announce_widget_type', 'False')).lower() in ['true', '1'])
+        self.enable_titan_ui_cb.SetValue(str(invisible_interface_settings.get('enable_titan_ui', 'False')).lower() in ['true', '1'])
+        self.announce_first_item_cb.SetValue(str(invisible_interface_settings.get('announce_first_item', 'False')).lower() in ['true', '1'])
+        self.titan_hotkey_ctrl.SetValue(invisible_interface_settings.get('titan_hotkey', ''))
 
 
         if hasattr(self, 'windows_panel'):
@@ -395,6 +456,12 @@ class SettingsFrame(wx.Frame):
              initialize_sound()
              print(f"INFO: Sound theme selected: {theme}")
 
+    def OnThemeVolumeChange(self, event):
+        volume = self.theme_volume_slider.GetValue()
+        set_sound_theme_volume(volume)
+        play_sound('volume.ogg')
+        event.Skip()
+
     def OnSave(self, event):
         # Save language setting
         selected_language = self.lang_choice.GetStringSelection()
@@ -402,7 +469,8 @@ class SettingsFrame(wx.Frame):
 
         self.settings['sound'] = {
             'theme': self.theme_choice.GetStringSelection(),
-            'stereo_sound': str(self.stereo_sound_cb.GetValue())
+            'stereo_sound': str(self.stereo_sound_cb.GetValue()),
+            'theme_volume': str(self.theme_volume_slider.GetValue())
         }
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
@@ -413,6 +481,14 @@ class SettingsFrame(wx.Frame):
         if 'interface' not in self.settings:
             self.settings['interface'] = {}
         self.settings['interface']['skin'] = self.skin_choice.GetStringSelection()
+
+        self.settings['invisible_interface'] = {
+            'announce_index': str(self.announce_index_cb.GetValue()),
+            'announce_widget_type': str(self.announce_widget_type_cb.GetValue()),
+            'enable_titan_ui': str(self.enable_titan_ui_cb.GetValue()),
+            'announce_first_item': str(self.announce_first_item_cb.GetValue()),
+            'titan_hotkey': self.titan_hotkey_ctrl.GetValue()
+        }
 
         if hasattr(self, 'windows_panel'):
             self.settings['windows'] = {

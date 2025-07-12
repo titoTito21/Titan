@@ -1,5 +1,10 @@
 # TFM/tfm.py
 import wx
+import os
+from translation import _
+
+
+# Now, import the rest of the application modules
 from gui import FileManager
 from sound import initialize_sound, play_startup_sound # Import initialize_sound and play_startup_sound
 

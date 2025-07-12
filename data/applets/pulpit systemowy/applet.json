@@ -1,0 +1,7 @@
+{
+    "name": "Pulpit systemowy",
+    "type": "grid",
+    "version": "1.0",
+    "description": "Wyświetla skróty na pulpicie i pozwala je uruchamiać.",
+    "author": "Tito"
+}

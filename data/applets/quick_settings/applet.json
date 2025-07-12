@@ -1,0 +1,7 @@
+{
+    "name": "Szybkie ustawienia",
+    "type": "grid",
+    "version": "1.0",
+    "description": "Wyświetla i pozwala zmieniać podstawowe ustawienia Titana.",
+    "author": "Tito"
+}

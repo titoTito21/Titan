@@ -23,6 +23,13 @@ speaker = accessible_output3.outputs.auto.Auto()
 
 def main():
     settings = load_settings()
+    # Set the LANG environment variable for the entire application and subprocesses
+    lang = get_setting('language', 'pl')
+    os.environ['LANG'] = lang
+    os.environ['LANGUAGE'] = lang
+    # Initialize translation system with the correct language
+    global _
+    _ = set_language(lang)
 
     initialize_sound()
 
@@ -80,8 +87,11 @@ if __name__ == "__main__":
 
     frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings)
     
+    # Bind the close event to the appropriate handler
     if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
         frame.Bind(wx.EVT_CLOSE, frame.on_close)
+    else:
+        frame.Bind(wx.EVT_CLOSE, frame.on_close_unconfirmed)
     
     from settingsgui import SettingsFrame
     settings_frame = SettingsFrame(None, title=_("Settings"))

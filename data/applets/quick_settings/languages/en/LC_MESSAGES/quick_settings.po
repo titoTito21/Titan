@@ -1,0 +1,88 @@
+# English translations for quick_settings.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the quick_settings
+# project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-07 19:58+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: main.py:40 main.py:42
+msgid "Default"
+msgstr "Default"
+
+#: main.py:54
+msgid "Quick start"
+msgstr "Quick start"
+
+#: main.py:55
+msgid "Confirm exit"
+msgstr "Confirm exit"
+
+#: main.py:56
+msgid "Language"
+msgstr "Language"
+
+#: main.py:58
+msgid "Sound theme"
+msgstr "Sound theme"
+
+#: main.py:59
+msgid "Stereo sounds"
+msgstr "Stereo sounds"
+
+#: main.py:61
+msgid "Skin"
+msgstr "Skin"
+
+#: main.py:63
+msgid "Announce item index"
+msgstr "Announce item index"
+
+#: main.py:64
+msgid "Announce widget type"
+msgstr "Announce widget type"
+
+#: main.py:65
+msgid "Enable TitanUI support"
+msgstr "Enable TitanUI support"
+
+#: main.py:66
+msgid "Announce first item in category"
+msgstr "Announce first item in category"
+
+#: main.py:72
+msgid "Empty space"
+msgstr "Empty space"
+
+#: main.py:79
+msgid "(requires restart)"
+msgstr "(requires restart)"
+
+#: main.py:82 main.py:125
+msgid "On"
+msgstr "On"
+
+#: main.py:82 main.py:125
+msgid "Off"
+msgstr "Off"
+
+#: main.py:150
+msgid "Quick Settings"
+msgstr "Quick Settings"
+
+#~ msgid "No settings available"
+#~ msgstr "No settings available"
+

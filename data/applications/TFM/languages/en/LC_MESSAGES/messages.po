@@ -1,0 +1,622 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 14:47+0200\n"
+"PO-Revision-Date: 2025-07-11 14:47+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: copy_move.py:33
+msgid "Kopiowanie plików"
+msgstr "Copying files"
+
+#: copy_move.py:43
+#, python-brace-format
+msgid "Skopiowano: {}"
+msgstr "Copied: {}"
+
+#: copy_move.py:45 gui.py:537
+#, python-brace-format
+msgid "Błąd kopiowania {}: {}"
+msgstr "Error copying {}: {}"
+
+#: copy_move.py:45 gui.py:537
+msgid "Błąd Kopiowania"
+msgstr "Copy Error"
+
+#: copy_move.py:46
+#, python-brace-format
+msgid "B��ąd kopiowania: {}"
+msgstr ""
+
+#: copy_move.py:55
+msgid "Przenoszenie plików"
+msgstr "Moving files"
+
+#: copy_move.py:62
+#, python-brace-format
+msgid "Przeniesiono: {}"
+msgstr "Moved: {}"
+
+#: copy_move.py:64 gui.py:545
+#, python-brace-format
+msgid "Błąd przenoszenia {}: {}"
+msgstr "Error moving {}: {}"
+
+#: copy_move.py:64 gui.py:545
+msgid "Błąd Przenoszenia"
+msgstr "Move Error"
+
+#: copy_move.py:65
+#, python-brace-format
+msgid "Błąd przenoszenia: {}"
+msgstr ""
+
+#: gui.py:26 gui.py:175 gui.py:180
+msgid "Menedżer Plików"
+msgstr "File Manager"
+
+#: gui.py:60
+msgid "&Plik"
+msgstr "&File"
+
+#: gui.py:61
+msgid "&Edycja"
+msgstr "&Edit"
+
+#: gui.py:62
+msgid "&Widok"
+msgstr "&View"
+
+#: gui.py:114
+msgid "Karta 1"
+msgstr "Tab 1"
+
+#: gui.py:208 menu.py:49 tfm_settings.py:223
+msgid "Nazwa"
+msgstr "Name"
+
+#: gui.py:211 gui.py:260 gui.py:310 menu.py:50 tfm_settings.py:224
+msgid "Data modyfikacji"
+msgstr "Date modified"
+
+#: gui.py:214 gui.py:271 gui.py:322 menu.py:51 tfm_settings.py:225
+msgid "Typ"
+msgstr "Type"
+
+#: gui.py:253 gui.py:333 gui.py:420 gui.py:477 gui.py:499 gui.py:583
+#: gui.py:602 gui.py:648 gui.py:764 gui.py:951
+msgid "Ten folder jest pusty"
+msgstr "This folder is empty"
+
+#: gui.py:293
+msgid "Folder"
+msgstr "Folder"
+
+#: gui.py:293
+msgid "Plik"
+msgstr "File"
+
+#: gui.py:344
+msgid "Brak dostępu do katalogu"
+msgstr "Access to directory denied"
+
+#: gui.py:344
+msgid "Błąd"
+msgstr "Error"
+
+#: gui.py:345
+msgid "Brak dostępu do katalogu."
+msgstr "Access to directory denied."
+
+#: gui.py:378
+msgid "Podaj nazwę nowego pliku:"
+msgstr "Enter new file name:"
+
+#: gui.py:378
+msgid "Nowy Plik"
+msgstr "New File"
+
+#: gui.py:386
+#, python-brace-format
+msgid "Utworzono nowy plik {}"
+msgstr "Created new file {}"
+
+#: gui.py:388
+#, python-brace-format
+msgid "Nie udało się utworzyć pliku {}: {}"
+msgstr "Failed to create file {}: {}"
+
+#: gui.py:388
+msgid "Błąd Tworzenia Pliku"
+msgstr "File Creation Error"
+
+#: gui.py:389
+#, python-brace-format
+msgid "Błąd tworzenia pliku {}"
+msgstr "Error creating file {}"
+
+#: gui.py:394
+msgid "Podaj nazwę nowego folderu:"
+msgstr "Enter new folder name:"
+
+#: gui.py:394
+msgid "Nowy Folder"
+msgstr "New Folder"
+
+#: gui.py:402
+#, python-brace-format
+msgid "Utworzono nowy folder {}"
+msgstr "Created new folder {}"
+
+#: gui.py:404
+#, python-brace-format
+msgid "Nie udało się utworzyć folderu {}: {}"
+msgstr "Failed to create folder {}: {}"
+
+#: gui.py:404
+msgid "Błąd Tworzenia Folderu"
+msgstr "Folder Creation Error"
+
+#: gui.py:405
+#, python-brace-format
+msgid "Błąd tworzenia folderu {}"
+msgstr "Error creating folder {}"
+
+#: gui.py:412
+msgid "Brak aktywnej listy plików do zmiany nazwy."
+msgstr "No active file list to rename."
+
+#: gui.py:421
+msgid "Nie można zmienić nazwy wpisu 'Ten folder jest pusty'."
+msgstr "Cannot rename the entry 'This folder is empty'."
+
+#: gui.py:438
+msgid "Podaj nową nazwę:"
+msgstr "Enter new name:"
+
+#: gui.py:438
+msgid "Zmiana nazwy"
+msgstr "Rename"
+
+#: gui.py:452
+#, python-brace-format
+msgid "Zmieniono nazwę z {} na {}"
+msgstr "Renamed from {} to {}"
+
+#: gui.py:454
+msgid "Błąd zmiany nazwy"
+msgstr "Rename Error"
+
+#: gui.py:455
+#, python-brace-format
+msgid "Błąd zmiany nazwy {}"
+msgstr "Error renaming {}"
+
+#: gui.py:457
+msgid "Nazwa nie została zmieniona."
+msgstr "Name was not changed."
+
+#: gui.py:459 gui.py:461
+msgid "Anulowano zmianę nazwy."
+msgstr "Rename cancelled."
+
+#: gui.py:464
+msgid "Nie wybrano elementu do zmiany nazwy."
+msgstr "No item selected to rename."
+
+#: gui.py:471
+msgid "Brak aktywnej listy plików do skopiowania."
+msgstr "No active file list to copy."
+
+#: gui.py:483
+#, python-brace-format
+msgid "Skopiowano {} elementów do schowka."
+msgstr "Copied {} items to clipboard."
+
+#: gui.py:486
+msgid "Nie wybrano elementów do skopiowania."
+msgstr "No items selected to copy."
+
+#: gui.py:493
+msgid "Brak aktywnej listy plików do wycięcia."
+msgstr "No active file list to cut."
+
+#: gui.py:505
+#, python-brace-format
+msgid "Wycięto {} elementów do schowka."
+msgstr "Cut {} items to clipboard."
+
+#: gui.py:508
+msgid "Nie wybrano elementów do wycięcia."
+msgstr "No items selected to cut."
+
+#: gui.py:513
+msgid "Schowek jest pusty."
+msgstr "Clipboard is empty."
+
+#: gui.py:538
+#, python-brace-format
+msgid "Błąd kopiowania {}"
+msgstr "Error copying {}"
+
+#: gui.py:546
+#, python-brace-format
+msgid "Błąd przenoszenia {}"
+msgstr "Error moving {}"
+
+#: gui.py:551
+msgid "Zakończono operację wklejania."
+msgstr "Paste operation finished."
+
+#: gui.py:568
+msgid "Brak elementów do wklejenia w schowku."
+msgstr "No items to paste in clipboard."
+
+#: gui.py:576
+msgid "Brak aktywnej listy plików do zaznaczenia."
+msgstr "No active file list to select."
+
+#: gui.py:592
+#, python-brace-format
+msgid "Zaznaczono wszystkie ({}) elementy."
+msgstr "Selected all ({}) items."
+
+#: gui.py:594
+msgid "Brak elementów do zaznaczenia w obecnym folderze."
+msgstr "No items to select in the current folder."
+
+#: gui.py:631
+msgid "Brak aktywnej listy plików do otwarcia."
+msgstr "No active file list to open."
+
+#: gui.py:650
+msgid "Folder jest pusty."
+msgstr "Folder is empty."
+
+#: gui.py:675
+#, python-brace-format
+msgid "Otwarto folder: {}"
+msgstr "Opened folder: {}"
+
+#: gui.py:680
+#, python-brace-format
+msgid "Otwarto plik: {}"
+msgstr "Opened file: {}"
+
+#: gui.py:682 gui.py:978
+#, python-brace-format
+msgid "Nie udało się otworzyć pliku {}: {}"
+msgstr "Failed to open file {}: {}"
+
+#: gui.py:682 gui.py:978
+msgid "Błąd Otwierania Pliku"
+msgstr "File Open Error"
+
+#: gui.py:684
+#, python-brace-format
+msgid "Błąd otwierania pliku: {}"
+msgstr "Error opening file: {}"
+
+#: gui.py:687
+#, python-brace-format
+msgid "Element nie istnieje: {}"
+msgstr "Element does not exist: {}"
+
+#: gui.py:690
+msgid "Nie wybrano elementu do otwarcia."
+msgstr "No item selected to open."
+
+#: gui.py:718
+#, python-brace-format
+msgid "Aktualny katalog: {}"
+msgstr "Current directory: {}"
+
+#: gui.py:722
+#, python-brace-format
+msgid "{}. Fokus na: {}."
+msgstr "{}. Focus on: {}."
+
+#: gui.py:743
+#, python-brace-format
+msgid "Przejście do katalogu nadrzędnego: {}"
+msgstr "Go to parent directory: {}"
+
+#: gui.py:746
+msgid "Jesteś w katalogu głównym."
+msgstr "You are in the root directory."
+
+#: gui.py:769
+#, python-brace-format
+msgid "Odznaczono: {}. Razem: {}"
+msgstr "Deselected: {}. Total: {}"
+
+#: gui.py:774
+#, python-brace-format
+msgid "Wybrano: {}. Razem: {}"
+msgstr "Selected: {}. Total: {}"
+
+#: gui.py:777
+msgid "Nie można zaznaczyć wpisu 'Ten folder jest pusty'."
+msgstr "Cannot select the entry 'This folder is empty'."
+
+#: gui.py:788
+msgid "Brak aktywnej listy plików do usunięcia."
+msgstr "No active file list to delete."
+
+#: gui.py:794
+msgid "Nie wybrano elementów do usunięcia."
+msgstr "No items selected for deletion."
+
+#: gui.py:803
+#, python-brace-format
+msgid "Czy na pewno chcesz usunąć te elementy? {}"
+msgstr "Are you sure you want to delete these items? {}"
+
+#: gui.py:803
+#, python-brace-format
+msgid "Czy na pewno chcesz usunąć ten element? {}"
+msgstr "Are you sure you want to delete this item? {}"
+
+#: gui.py:804
+msgid "Potwierdzenie Usunięcia"
+msgstr "Confirm Deletion"
+
+#: gui.py:805
+msgid "Anulowano usunięcie."
+msgstr "Deletion cancelled."
+
+#: gui.py:820
+#, python-brace-format
+msgid "Usunięto: {}"
+msgstr "Deleted: {}"
+
+#: gui.py:822
+#, python-brace-format
+msgid "Nie udało się usunąć {}: {}"
+msgstr "Failed to delete {}: {}"
+
+#: gui.py:822
+msgid "Błąd Usuwania"
+msgstr "Deletion Error"
+
+#: gui.py:823
+#, python-brace-format
+msgid "Błąd usuwania: {}"
+msgstr "Error deleting: {}"
+
+#: gui.py:834
+#, python-brace-format
+msgid "Usunięto {} z {} elementów."
+msgstr "Deleted {} of {} items."
+
+#: gui.py:836
+msgid "Nie udało się usunąć żadnych elementów."
+msgstr "Failed to delete any items."
+
+#: gui.py:849
+msgid "Ustawienia zapisane i zastosowane."
+msgstr "Settings saved and applied."
+
+#: gui.py:851
+msgid "Anulowano ustawienia."
+msgstr "Settings cancelled."
+
+#: gui.py:859
+msgid "Sortowanie według nazwy."
+msgstr "Sort by name."
+
+#: gui.py:865
+msgid "Sortowanie według daty modyfikacji."
+msgstr "Sort by modification date."
+
+#: gui.py:872
+msgid "Sortowanie według typu."
+msgstr "Sort by type."
+
+#: gui.py:953
+msgid "Folder jest pusty (lewy panel)."
+msgstr "Folder is empty (left panel)."
+
+#: gui.py:971
+#, python-brace-format
+msgid "Otwarto folder (lewy panel): {}"
+msgstr "Opened folder (left panel): {}"
+
+#: gui.py:976
+#, python-brace-format
+msgid "Otwarto plik (lewy panel): {}"
+msgstr "Opened file (left panel): {}"
+
+#: gui.py:980
+#, python-brace-format
+msgid "Błąd otwierania pliku (lewy panel): {}"
+msgstr "Error opening file (left panel): {}"
+
+#: gui.py:983
+#, python-brace-format
+msgid "Element nie istnieje (lewy panel): {}"
+msgstr "Element does not exist (left panel): {}"
+
+#: gui.py:991 gui.py:1024
+msgid "Funkcja prawego panelu nie jest jeszcze w pełni zaimplementowana."
+msgstr "Right panel function is not yet fully implemented."
+
+#: gui.py:1009
+#, python-brace-format
+msgid "Przejście do katalogu nadrzędnego (lewy panel): {}"
+msgstr "Go to parent directory (left panel): {}"
+
+#: gui.py:1012
+msgid "Jesteś w katalogu głównym (lewy panel)."
+msgstr "You are in the root directory (left panel)."
+
+#: menu.py:10
+msgid "&Nowy plik\tCtrl+N"
+msgstr "&New File\tCtrl+N"
+
+#: menu.py:11
+msgid "Nowy folder\tCtrl+Shift+N"
+msgstr "New Folder\tCtrl+Shift+N"
+
+#: menu.py:13
+msgid "Ustawienia\tCtrl+S"
+msgstr "Settings\tCtrl+S"
+
+#: menu.py:15
+msgid "Zakończ"
+msgstr "Exit"
+
+#: menu.py:26
+msgid "Kopiuj\tCtrl+C"
+msgstr "Copy\tCtrl+C"
+
+#: menu.py:27
+msgid "Wytnij\tCtrl+X"
+msgstr "Cut\tCtrl+X"
+
+#: menu.py:28
+msgid "Wklej\tCtrl+V"
+msgstr "Paste\tCtrl+V"
+
+#: menu.py:30
+msgid "Zaznacz wszystko\tCtrl+A"
+msgstr "Select All\tCtrl+A"
+
+#: menu.py:32
+msgid "Zmień nazwę\tF2"
+msgstr "Rename\tF2"
+
+#: menu.py:33
+msgid "Usuń\tDelete"
+msgstr "Delete\tDelete"
+
+#: menu.py:57
+msgid "Sortuj według"
+msgstr "Sort by"
+
+#: tfm_settings.py:193
+msgid "Ustawienia Eksploratora"
+msgstr "Explorer Settings"
+
+#: tfm_settings.py:205
+msgid "Pokaż ukryte pliki"
+msgstr "Show hidden files"
+
+#: tfm_settings.py:210
+msgid "Pokaż rozszerzenia plików"
+msgstr "Show file extensions"
+
+#: tfm_settings.py:215
+msgid "Potwierdzenie przed usunięciem"
+msgstr "Confirm before deletion"
+
+#: tfm_settings.py:220
+msgid "Wyświetlanie danych pliku"
+msgstr "File Data Display"
+
+#: tfm_settings.py:249
+msgid "Widok Eksploratora"
+msgstr "Explorer View"
+
+#: tfm_settings.py:252
+msgid "Tryb widoku eksploratora:"
+msgstr "Explorer view mode:"
+
+#: tfm_settings.py:259
+msgid "Tytuł okna"
+msgstr "Window Title"
+
+#: tfm_settings.py:262
+msgid "Tryb tytułu okna:"
+msgstr "Window title mode:"
+
+#: tfm_settings.py:270
+msgid "Dialog kopiowania plik��w"
+msgstr ""
+
+#: tfm_settings.py:273
+msgid "Tryb dialogu kopiowania:"
+msgstr "Copy dialog mode:"
+
+#: tfm_settings.py:285
+msgid "Ogólne"
+msgstr "General"
+
+#: tfm_settings.py:286
+msgid "Wygląd"
+msgstr "Appearance"
+
+#: tfm_settings.py:288
+msgid "Zatwierdź"
+msgstr "Apply"
+
+#: tfm_settings.py:289
+msgid "Anuluj"
+msgstr "Cancel"
+
+#: tfm_settings.py:305
+msgid "Zaznacz, aby wyświetlić ukryte pliki w liście."
+msgstr "Check to show hidden files in the list."
+
+#: tfm_settings.py:306
+msgid "Zaznacz, aby wyświetlić rozszerzenia plików w liście."
+msgstr "Check to show file extensions in the list."
+
+#: tfm_settings.py:307
+msgid "Zaznacz, aby program pytał o potwierdzenie przed usunięciem plików."
+msgstr "Check to have the program ask for confirmation before deleting files."
+
+#: tfm_settings.py:308
+msgid "Zaznacz, aby wyświetlić nazwę pliku w liście."
+msgstr "Check to show the file name in the list."
+
+#: tfm_settings.py:309
+msgid "Zaznacz, aby wyświetlić datę modyfikacji pliku w liście."
+msgstr "Check to show the file modification date in the list."
+
+#: tfm_settings.py:310
+msgid "Zaznacz, aby wyświetlić typ pliku (folder/plik) w liście."
+msgstr "Check to show the file type (folder/file) in the list."
+
+#: tfm_settings.py:311
+msgid ""
+"Wybierz tryb wyświetlania plików: lista, commander (dwa panele), klasyczny, "
+"wiele kart."
+msgstr ""
+"Choose file display mode: list, commander (two panels), classic, multiple "
+"tabs."
+
+#: tfm_settings.py:312
+msgid ""
+"Wybierz co będzie wyświetlane w tytule okna: nazwa aplikacji, nazwa "
+"bieżącego folderu, pełna ścieżka."
+msgstr ""
+"Choose what will be displayed in the window title: application name, current"
+" folder name, full path."
+
+#: tfm_settings.py:313
+msgid ""
+"Wybierz tryb dialogu kopiowania/przenoszenia: klasyczny (z paskiem postępu) "
+"lub systemowy."
+msgstr "Choose copy/move dialog mode: classic (with progress bar) or system."
+
+#: tfm_settings.py:314
+msgid "Zapisz zmiany ustawień."
+msgstr "Save settings changes."
+
+#: tfm_settings.py:315
+msgid "Anuluj zmiany ustawień."
+msgstr "Cancel settings changes."

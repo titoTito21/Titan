@@ -1,4 +1,5 @@
-name="eksplorator - TFM - Beta"
+name_pl="Menedżer Plików"
+name_en="File Manager"
 description=""
 openfile="tfm.py"
 shortname="tfm"

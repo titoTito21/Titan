@@ -1,0 +1,199 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-07-11 15:02+0200\n"
+"PO-Revision-Date: 2025-07-11 15:02+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: web.py:87
+#, python-brace-format
+msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgstr "Sound file not found: {}"
+
+#: web.py:93
+#, python-brace-format
+msgid "Nie można odtworzyć dźwięku: {}"
+msgstr "Cannot play sound: {}"
+
+#: web.py:100
+msgid "Pobrane pliki"
+msgstr "Downloaded files"
+
+#: web.py:107
+msgid "Lista plików pobranych przez tBrowser:"
+msgstr "List of files downloaded by tBrowser:"
+
+#: web.py:168
+msgid "tBrowser"
+msgstr "tBrowser"
+
+#: web.py:179
+msgid "Wstecz"
+msgstr "Back"
+
+#: web.py:180
+msgid "Dalej"
+msgstr "Forward"
+
+#: web.py:181
+msgid "Odśwież"
+msgstr "Refresh"
+
+#: web.py:183
+msgid "Przycisk Wstecz"
+msgstr "Back Button"
+
+#: web.py:184
+msgid "Przycisk Dalej"
+msgstr "Forward Button"
+
+#: web.py:185
+msgid "Przycisk Odśwież"
+msgstr "Refresh Button"
+
+#: web.py:188
+msgid "Wpisz adres lub wyszukaj w Google"
+msgstr "Enter address or search in Google"
+
+#: web.py:257
+msgid "Ustawienia..."
+msgstr "Settings..."
+
+#: web.py:258
+msgid "Aplikacja"
+msgstr "Application"
+
+#: web.py:273
+msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
+msgstr "Back navigation is not available in virtual buffer mode."
+
+#: web.py:274 web.py:282 web.py:425 web.py:662
+msgid "Informacja"
+msgstr "Information"
+
+#: web.py:281
+msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
+msgstr "Forward navigation is not available in virtual buffer mode."
+
+#: web.py:293 web.py:300 web.py:472
+msgid "Ładowanie strony..."
+msgstr "Loading page..."
+
+#: web.py:304 web.py:499
+msgid "Strona załadowana."
+msgstr "Page loaded."
+
+#: web.py:313
+#, python-brace-format
+msgid "Załadowano stronę {}"
+msgstr "Loaded page {}"
+
+#: web.py:425
+#, python-brace-format
+msgid "Kliknięto przycisk: {}"
+msgstr "Clicked button: {}"
+
+#: web.py:459 web.py:467
+#, python-brace-format
+msgid ""
+"Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgstr "Page contains {} forms, {} links, {} buttons and {} rows."
+
+#: web.py:503
+msgid "Załadowano stronę"
+msgstr "Page loaded"
+
+#: web.py:516
+#, python-brace-format
+msgid "Błąd podczas ładowania strony: {}"
+msgstr "Error loading page: {}"
+
+#: web.py:517
+msgid "Błąd podczas ładowania strony."
+msgstr "Error loading page."
+
+#: web.py:545
+#, python-brace-format
+msgid "Łącze: {}"
+msgstr "Link: {}"
+
+#: web.py:558
+#, python-brace-format
+msgid "Przycisk: {}"
+msgstr "Button: {}"
+
+#: web.py:569
+#, python-brace-format
+msgid ""
+"\n"
+"Nagłówek: {}\n"
+msgstr ""
+"\n"
+"Heading: {}\n"
+
+#: web.py:581
+msgid "Ustawienia tBrowser"
+msgstr "tBrowser Settings"
+
+#: web.py:588
+msgid "Oznajmianie"
+msgstr "Announcements"
+
+#: web.py:591
+msgid "Oznajmiaj podsumowanie strony"
+msgstr "Announce page summary"
+
+#: web.py:594
+msgid "Komunikaty o ładowaniu strony"
+msgstr "Page loading messages"
+
+#: web.py:601
+msgid "Interfejs"
+msgstr "Interface"
+
+#: web.py:604
+msgid "Wybierz tryb przeglądania strony:"
+msgstr "Select page view mode:"
+
+#: web.py:606
+msgid "Widok sieciowy (edge)"
+msgstr "Web view (edge)"
+
+#: web.py:606
+msgid "Tryb wirtualnego bufora"
+msgstr "Virtual buffer mode"
+
+#: web.py:617
+msgid "Prywatność"
+msgstr "Privacy"
+
+#: web.py:621
+msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
+msgstr "Do not display cookie alerts (if possible)"
+
+#: web.py:628
+msgid "Zapisz"
+msgstr "Save"
+
+#: web.py:629
+msgid "Anuluj"
+msgstr "Cancel"
+
+#: web.py:661
+msgid ""
+"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
+"zmiany."
+msgstr "Settings have been saved. Restart the application to apply changes."

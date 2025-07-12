@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import traceback
 import configparser
+import sys
 
 from app_manager import get_applications, open_application
 from game_manager import get_games, open_game
@@ -712,10 +713,29 @@ class TitanApp(wx.Frame):
         play_sound('normalize.ogg')
         self.invisible_ui.stop_listening()
 
+    def shutdown_app(self):
+        """Handles the complete shutdown of the application by terminating the process after a delay."""
+        print("INFO: Scheduling application termination in 1 second.")
+        
+        # This ensures that any final sounds have a moment to play before the process is killed.
+        def delayed_exit():
+            os._exit(0)
+        
+        # Using a threading.Timer to call os._exit without blocking the main thread.
+        threading.Timer(1.0, delayed_exit).start()
+        
+        # We can hide the window immediately to give the user feedback that the command was received.
+        self.Hide()
+
     def on_close(self, event):
+        """Handles the close event when confirmation is required."""
         result = show_shutdown_dialog()
         if result == wx.ID_OK:
-            self.timer.Stop()
-            event.Skip()
+            self.shutdown_app()
         else:
+            print("INFO: Shutdown canceled by user.")
             event.Veto()
+
+    def on_close_unconfirmed(self, event):
+        """Handles the close event when no confirmation is required."""
+        self.shutdown_app()

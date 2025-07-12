@@ -1,4 +1,5 @@
-name="Organizer - tReminder"
+name_pl="Organizer"
+name_en="Organizer"
 description=""
 openfile="reminder.py"
 shortname="reminder"

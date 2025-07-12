@@ -13,6 +13,8 @@ import sys
 import wx
 import os
 import importlib.util
+import json
+import traceback
 
 _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
@@ -80,6 +82,7 @@ class InvisibleUI:
         self.in_widget_mode = False
         self.active_widget = None
         self.active_widget_name = None
+        self.titan_ui_mode = False
         self.build_structure()
 
     def refresh_status_bar(self):
@@ -132,12 +135,16 @@ class InvisibleUI:
         if not os.path.exists(applets_dir):
             return widgets
 
-        for widget_name in os.listdir(applets_dir):
-            widget_dir = os.path.join(applets_dir, widget_name)
-            init_file = os.path.join(widget_dir, 'init.py')
-            if os.path.isdir(widget_dir) and os.path.exists(init_file):
+        for applet_name in os.listdir(applets_dir):
+            applet_dir = os.path.join(applets_dir, applet_name)
+            if not os.path.isdir(applet_dir):
+                continue
+
+            # Sprawdź plik init.py dla wstecznej zgodności
+            init_file = os.path.join(applet_dir, 'init.py')
+            if os.path.exists(init_file):
                 try:
-                    spec = importlib.util.spec_from_file_location(widget_name, init_file)
+                    spec = importlib.util.spec_from_file_location(applet_name, init_file)
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                     
@@ -147,9 +154,34 @@ class InvisibleUI:
                         "type": info["type"],
                         "module": module
                     })
+                    continue # Przejdź do następnego apletu
                 except Exception as e:
-                    print(f"Error loading widget '{widget_name}': {e}")
-                    self.speak(_("Error loading widget: {}").format(widget_name))
+                    print(f"Error loading widget from init.py '{applet_name}': {e}")
+                    self.speak(_("Error loading widget: {}").format(applet_name))
+
+            # Nowy system oparty na applet.json i main.py
+            json_path = os.path.join(applet_dir, 'applet.json')
+            main_py_path = os.path.join(applet_dir, 'main.py')
+
+            if os.path.exists(json_path) and os.path.exists(main_py_path):
+                try:
+                    spec = importlib.util.spec_from_file_location(f"applets.{applet_name}.main", main_py_path)
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[spec.name] = module
+                    spec.loader.exec_module(module)
+                    
+                    # Po załadowaniu modułu, gettext wewnątrz niego jest już aktywny
+                    info = module.get_widget_info()
+                    
+                    widgets.append({
+                        "name": info.get("name", applet_name),
+                        "type": info.get("type", "grid"),
+                        "module": module
+                    })
+                except Exception as e:
+                    print(f"Error loading applet '{applet_name}': {e}")
+                    traceback.print_exc() # Print full traceback for debugging
+                    self.speak(_("Error loading widget: {}").format(applet_name))
         return widgets
 
     def get_statusbar_items(self):
@@ -181,12 +213,19 @@ class InvisibleUI:
                 if statusbar_index != -1 and old_index == statusbar_index and (new_index == statusbar_index - 1 or new_index == statusbar_index + 1):
                     play_applist_sound()
                 else:
-                    pan = 0.5
-                    if num_categories > 1:
-                        pan = new_index / (num_categories - 1)
-                    play_sound(new_category.get('sound', 'focus.ogg'), pan=pan)
+                    if new_category['name'] == _("Status Bar"):
+                        play_statusbar_sound()
+                    else:
+                        pan = 0.5
+                        if num_categories > 1:
+                            pan = new_index / (num_categories - 1)
+                        play_sound(new_category.get('sound', 'focus.ogg'), pan=pan)
                 
-                self.speak(new_category['name'])
+                speak_text = new_category['name']
+                if get_setting('announce_first_item', 'False', section='invisible_interface').lower() == 'true':
+                    if new_category['elements']:
+                        speak_text += f", {new_category['elements'][0]}"
+                self.speak(speak_text)
             else:
                 play_endoflist_sound()
 
@@ -211,11 +250,18 @@ class InvisibleUI:
                     pan = new_index / (num_elements - 1)
                 play_focus_sound(pan=pan)
                 
-                if category['name'] == _("Widgets") and 'widget_data' in category:
+                announce_index = get_setting('announce_index', 'False', section='invisible_interface').lower() == 'true'
+                announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
+                
+                speak_text = element_name
+                if announce_index:
+                    speak_text += ", " + _("{} of {}").format(self.current_element_index + 1, num_elements)
+                
+                if announce_widget_type and category['name'] == _("Widgets") and 'widget_data' in category:
                     widget_type = category['widget_data'][self.current_element_index]['type']
-                    self.speak(f"{element_name}, {_('button') if widget_type == 'button' else _('widget')}")
-                else:
-                    self.speak(element_name)
+                    speak_text += f", {_('button') if widget_type == 'button' else _('widget')}"
+                
+                self.speak(speak_text)
             else:
                 play_endoflist_sound()
 
@@ -263,33 +309,21 @@ class InvisibleUI:
 
     def enter_widget_mode(self):
         self.in_widget_mode = True
-        self.hotkey_thread.stop()
         if self.active_widget:
             self.active_widget.set_border()
         play_sound("widget.ogg")
         self.speak(_("In widget"))
         self.speak(f"{self.active_widget_name}, {self.active_widget.get_current_element()}")
-        
-        widget_hotkeys = {
-            '<ctrl>+<shift>+<up>': lambda: self.navigate_widget('up'),
-            '<ctrl>+<shift>+<down>': lambda: self.navigate_widget('down'),
-            '<ctrl>+<shift>+<left>': lambda: self.navigate_widget('left'),
-            '<ctrl>+<shift>+<right>': lambda: self.navigate_widget('right'),
-            '<ctrl>+<shift>+<enter>': lambda: self.activate_element(),
-            '<ctrl>+<shift>+<101>': lambda: self.activate_element(),
-            '<ctrl>+<shift>+<backspace>': self.exit_widget_mode,
-        }
-        self.hotkey_thread = GlobalHotKeys(widget_hotkeys)
-        self.hotkey_thread.start()
+        self._update_hotkeys()
 
     def exit_widget_mode(self):
+        if not self.in_widget_mode: return
         self.in_widget_mode = False
         self.active_widget = None
         self.active_widget_name = None
-        self.hotkey_thread.stop()
         play_sound("widgetclose.ogg")
         self.speak(_("Out of widget"))
-        self.start_listening(rebuild=False) # Wznów główne skróty
+        self._update_hotkeys()
 
     def navigate_widget(self, direction):
         navigation_result = self.active_widget.navigate(direction)
@@ -340,13 +374,6 @@ class InvisibleUI:
         self.speak(_("No action for this item"))
 
     def start_listening(self, rebuild=True):
-        if self.active and not rebuild:
-             # Reaktywacja głównych skrótów po wyjściu z widgetu
-            hotkeys = self.get_main_hotkeys()
-            self.hotkey_thread = GlobalHotKeys(hotkeys)
-            self.hotkey_thread.start()
-            return
-
         if self.active: return
         self.active = True
         self.stop_event.clear()
@@ -357,24 +384,92 @@ class InvisibleUI:
         self.refresh_thread = threading.Thread(target=self._run, daemon=True)
         self.refresh_thread.start()
 
-        hotkeys = self.get_main_hotkeys()
-        self.hotkey_thread = GlobalHotKeys(hotkeys)
-        self.hotkey_thread.start()
-
-    def get_main_hotkeys(self):
-        return {
-            '<ctrl>+<shift>+<up>': lambda: self.navigate_category(-1),
-            '<ctrl>+<shift>+<down>': lambda: self.navigate_category(1),
-            '<ctrl>+<shift>+<left>': lambda: self.navigate_element(-1),
-            '<ctrl>+<shift>+<right>': lambda: self.navigate_element(1),
-            '<ctrl>+<shift>+<enter>': lambda: self.activate_element(),
-            '<ctrl>+<shift>+<101>': lambda: self.activate_element()
-        }
+        self._update_hotkeys()
 
     def stop_listening(self):
         if not self.active: return
         self.active = False
+        self.titan_ui_mode = False
+        self.in_widget_mode = False
         self.stop_event.set()
         if self.refresh_thread: self.refresh_thread.join()
-        if self.hotkey_thread: self.hotkey_thread.stop()
+        if self.hotkey_thread:
+            self.hotkey_thread.stop()
         self.hotkey_thread = None
+
+    def _update_hotkeys(self):
+        if self.hotkey_thread:
+            self.hotkey_thread.stop()
+
+        hotkeys = {}
+        
+        # The tilde key is always available to toggle TUI mode if enabled
+        if get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true':
+            hotkeys['`'] = self.toggle_titan_ui_mode
+
+        if self.in_widget_mode:
+            if self.titan_ui_mode:
+                # TUI mode inside a widget
+                hotkeys.update({
+                    '<up>': lambda: self.navigate_widget('up'),
+                    '<down>': lambda: self.navigate_widget('down'),
+                    '<left>': lambda: self.navigate_widget('left'),
+                    '<right>': lambda: self.navigate_widget('right'),
+                    '<enter>': self.activate_element,
+                    '<space>': self.activate_element,
+                    '<backspace>': self.exit_widget_mode,
+                    '<esc>': self.exit_widget_mode,
+                })
+            else:
+                # Normal mode inside a widget
+                hotkeys.update({
+                    '<ctrl>+<shift>+<up>': lambda: self.navigate_widget('up'),
+                    '<ctrl>+<shift>+<down>': lambda: self.navigate_widget('down'),
+                    '<ctrl>+<shift>+<left>': lambda: self.navigate_widget('left'),
+                    '<ctrl>+<shift>+<right>': lambda: self.navigate_widget('right'),
+                    '<ctrl>+<shift>+<enter>': self.activate_element,
+                    '<ctrl>+<shift>+<101>': self.activate_element,
+                    '<ctrl>+<shift>+<backspace>': self.exit_widget_mode,
+                })
+                # Block simple keys
+                for key in ['<up>', '<down>', '<left>', '<right>', '<enter>', '<space>', '<backspace>', '<esc>']:
+                    hotkeys[key] = lambda: None
+        else:
+            if self.titan_ui_mode:
+                # TUI mode in main view
+                hotkeys.update({
+                    '<up>': lambda: self.navigate_category(-1),
+                    '<down>': lambda: self.navigate_category(1),
+                    '<left>': lambda: self.navigate_element(-1),
+                    '<right>': lambda: self.navigate_element(1),
+                    '<enter>': self.activate_element,
+                    '<space>': self.activate_element,
+                    '<backspace>': lambda: None,  # No action in main view
+                    '<esc>': lambda: None,       # No action in main view
+                })
+            else:
+                # Normal mode in main view
+                hotkeys.update({
+                    '<ctrl>+<shift>+<up>': lambda: self.navigate_category(-1),
+                    '<ctrl>+<shift>+<down>': lambda: self.navigate_category(1),
+                    '<ctrl>+<shift>+<left>': lambda: self.navigate_element(-1),
+                    '<ctrl>+<shift>+<right>': lambda: self.navigate_element(1),
+                    '<ctrl>+<shift>+<enter>': self.activate_element,
+                    '<ctrl>+<shift>+<101>': self.activate_element,
+                })
+                # Block simple keys
+                for key in ['<up>', '<down>', '<left>', '<right>', '<enter>', '<space>', '<backspace>', '<esc>']:
+                    hotkeys[key] = lambda: None
+
+        self.hotkey_thread = GlobalHotKeys(hotkeys)
+        self.hotkey_thread.start()
+
+    def toggle_titan_ui_mode(self):
+        self.titan_ui_mode = not self.titan_ui_mode
+        if self.titan_ui_mode:
+            play_sound('TUI_open.ogg')
+            self.speak(_("Titan UI on"))
+        else:
+            play_sound('TUI_close.ogg')
+            self.speak(_("Titan UI off"))
+        self._update_hotkeys()

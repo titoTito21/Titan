@@ -1,4 +1,5 @@
-name="Menedżer pobierania - TDownloader"
+name_pl="Menedżer pobierania"
+name_en="Download Manager"
 description=""
 openfile="downloader.py"
 shortname="tdm"
