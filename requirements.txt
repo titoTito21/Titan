@@ -1,0 +1,17 @@
+wxPython
+pygame
+accessible-output3
+polib
+Nuitka
+requests
+psutil
+wmi; platform_system == "Windows"
+pywinusb; platform_system == "Windows"
+pywin32; platform_system == "Windows"
+pyenchant
+pytube
+beautifulsoup4
+yt-dlp
+python-vlc
+keyboard
+SpeechRecognition
