@@ -26,29 +26,34 @@ except ImportError:
 class MenuBar(wx.MenuBar):
     def __init__(self, parent):
         super().__init__()
-        self.parent = parent # This parent should ideally be your main application frame
-        # Get component_manager from parent. Print its value for debugging.
+        self.parent = parent
         self.component_manager = getattr(parent, 'component_manager', None)
 
         program_menu = wx.Menu()
-
         install_data_item = program_menu.Append(wx.ID_ANY, _("Install data package..."))
-
         component_manager_item = program_menu.Append(wx.ID_ANY, _("Component Manager..."))
-
         settings_item = program_menu.Append(wx.ID_ANY, _("Program settings"))
         minimize_item = program_menu.Append(wx.ID_ANY, _("Minimize"))
         exit_item = program_menu.Append(wx.ID_EXIT, _("Exit"))
 
         self.Bind(wx.EVT_MENU, self.on_install_data_package, install_data_item)
-
         self.Bind(wx.EVT_MENU, self.on_open_component_manager, component_manager_item)
-
         self.Bind(wx.EVT_MENU, self.on_open_settings, settings_item)
         self.Bind(wx.EVT_MENU, self.on_minimize, minimize_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
         self.Append(program_menu, _("Program"))
+
+        # Add components menu
+        if self.component_manager:
+            component_menu = wx.Menu()
+            menu_functions = self.component_manager.get_component_menu_functions()
+            for name, func in menu_functions.items():
+                menu_item = component_menu.Append(wx.ID_ANY, name)
+                self.Bind(wx.EVT_MENU, func, menu_item)
+            
+            if component_menu.GetMenuItemCount() > 0:
+                self.Append(component_menu, _("Components"))
 
 
     def on_install_data_package(self, event):

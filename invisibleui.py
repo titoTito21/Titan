@@ -69,8 +69,9 @@ class BaseWidget:
         raise NotImplementedError
 
 class InvisibleUI:
-    def __init__(self, main_frame):
+    def __init__(self, main_frame, component_manager=None):
         self.main_frame = main_frame
+        self.component_manager = component_manager
         self.categories = []
         self.current_category_index = 0
         self.current_element_index = 0
@@ -103,8 +104,8 @@ class InvisibleUI:
         widgets = self.load_widgets()
 
         def show_component_manager():
-            if hasattr(self.main_frame, 'component_manager'):
-                dialog = componentmanagergui.ComponentManagerDialog(self.main_frame, _("Component Manager"), self.main_frame.component_manager)
+            if self.component_manager:
+                dialog = componentmanagergui.ComponentManagerDialog(self.main_frame, _("Component Manager"), self.component_manager)
                 dialog.ShowModal()
                 dialog.Destroy()
             else:
@@ -114,20 +115,34 @@ class InvisibleUI:
             settings_frame = settingsgui.SettingsFrame(None, title=_("Settings"))
             settings_frame.Show()
 
-        menu_actions = {
+        # Main menu actions
+        main_menu_actions = {
             _("Component Manager"): lambda: wx.CallAfter(show_component_manager),
             _("Program settings"): lambda: wx.CallAfter(show_settings),
             _("Back to graphical interface"): self.main_frame.restore_from_tray,
             _("Exit"): lambda: wx.CallAfter(self.main_frame.Close)
         }
 
+        # Component menu actions
+        component_menu_actions = {}
+        if self.component_manager:
+            component_menu_functions = self.component_manager.get_component_menu_functions()
+            for name, func in component_menu_functions.items():
+                component_menu_actions[name] = func
+
         self.categories = [
             {"name": _("Applications"), "sound": "focus.ogg", "elements": apps if apps else [_("No applications")], "action": self.launch_app_by_name},
             {"name": _("Games"), "sound": "focus.ogg", "elements": games if games else [_("No games")], "action": self.launch_game_by_name},
             {"name": _("Widgets"), "sound": "focus.ogg", "elements": [w['name'] for w in widgets] if widgets else [_("No widgets found")], "action": self.activate_widget, "widget_data": widgets},
             {"name": _("Status Bar"), "sound": "statusbar.ogg", "elements": self.get_statusbar_items(), "action": self.activate_statusbar_item},
-            {"name": _("Menu"), "sound": "applist.ogg", "elements": list(menu_actions.keys()), "action": lambda name: menu_actions[name]()}
+            {"name": _("Menu"), "sound": "applist.ogg", "elements": list(main_menu_actions.keys()), "action": lambda name: main_menu_actions[name]()}
         ]
+
+        # Add Components as a sub-menu if there are any component menu actions
+        if component_menu_actions:
+            self.categories[-1]["elements"].append(_("Components"))
+            self.categories.append({"name": _("Components"), "sound": "applist.ogg", "elements": list(component_menu_actions.keys()), "action": lambda name: component_menu_actions[name]()})
+
 
     def load_widgets(self):
         widgets = []
