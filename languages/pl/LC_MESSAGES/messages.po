@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-06 10:55+0200\n"
-"PO-Revision-Date: 2025-07-06 08:38+0200\n"
+"POT-Creation-Date: 2025-08-11 11:18+0200\n"
+"PO-Revision-Date: 2025-08-06 22:00+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
@@ -25,515 +25,1015 @@ msgstr "Zainstalowane komponenty:"
 
 #: componentmanagergui.py:28
 msgid "&Actions"
-msgstr "&Akcje"
+msgstr "&Działania"
 
 #: componentmanagergui.py:45
 msgid "Component manager not available."
-msgstr "Menedżer komponentów nie jest dostępny."
+msgstr "Menedżer komponentów niedostępny."
 
-#: componentmanagergui.py:53 componentmanagergui.py:177
+#: componentmanagergui.py:54 componentmanagergui.py:180
 msgid "Enabled"
 msgstr "Włączony"
 
-#: componentmanagergui.py:53 componentmanagergui.py:177
+#: componentmanagergui.py:54 componentmanagergui.py:180
 msgid "Disabled"
 msgstr "Wyłączony"
 
-#: componentmanagergui.py:122
+#: componentmanagergui.py:123
 #, python-brace-format
 msgid "Component '{}' is not loaded."
 msgstr "Komponent '{}' nie jest załadowany."
 
-#: componentmanagergui.py:122 componentmanagergui.py:130 gui.py:654 gui.py:668
-#: gui.py:682 gui.py:697
+#: componentmanagergui.py:123 componentmanagergui.py:131 gui.py:806 gui.py:915
+#: gui.py:966 gui.py:980 gui.py:994 gui.py:1009
 msgid "Information"
-msgstr "Informacja"
+msgstr "Informacje"
 
-#: componentmanagergui.py:130
+#: componentmanagergui.py:131
 #, python-brace-format
 msgid "No available actions for component '{}'."
 msgstr "Brak dostępnych akcji dla komponentu '{}'."
 
-#: componentmanagergui.py:134
+#: componentmanagergui.py:135
 msgid "Context menu"
 msgstr "Menu kontekstowe"
 
-#: componentmanagergui.py:137
+#: componentmanagergui.py:138
 msgid "Run"
 msgstr "Uruchom"
 
-#: componentmanagergui.py:141 invisibleui.py:81 main.py:87 menu.py:150
-#: settingsgui.py:124
+#: componentmanagergui.py:142 gui.py:914 invisibleui.py:115 main.py:89
+#: menu.py:155 settingsgui.py:127
 msgid "Settings"
 msgstr "Ustawienia"
 
-#: componentmanagergui.py:149
+#: componentmanagergui.py:150
 #, python-brace-format
 msgid "Running component {}"
 msgstr "Uruchamianie komponentu {}"
 
-#: componentmanagergui.py:161
+#: componentmanagergui.py:162
 #, python-brace-format
 msgid ""
 "Error running component '{}':\n"
 "{}"
-msgstr "Błąd podczas uruchamiania komponentu '{}':\n{}"
+msgstr ""
 
-#: componentmanagergui.py:161 componentmanagergui.py:172 gui.py:409 gui.py:425
-#: gui.py:433 gui.py:466 gui.py:470 gui.py:647 gui.py:652 gui.py:661 gui.py:666
-#: gui.py:675 gui.py:680 gui.py:690 gui.py:695 menu.py:70 menu.py:72
-#: menu.py:123 menu.py:139 settingsgui.py:324 settingsgui.py:327
-#: settingsgui.py:345 settingsgui.py:351 settingsgui.py:354
+#: componentmanagergui.py:162 componentmanagergui.py:173 gui.py:489 gui.py:505
+#: gui.py:513 gui.py:546 gui.py:550 gui.py:850 gui.py:883 gui.py:959 gui.py:964
+#: gui.py:973 gui.py:978 gui.py:987 gui.py:992 gui.py:1002 gui.py:1007
+#: gui.py:1238 menu.py:75 menu.py:77 menu.py:128 menu.py:144
+#: messenger_gui.py:245 settingsgui.py:385 settingsgui.py:388
+#: settingsgui.py:406 settingsgui.py:412 settingsgui.py:415 telegram_gui.py:208
+#: telegram_gui.py:288 telegram_windows.py:554
 msgid "Error"
 msgstr "Błąd"
 
-#: componentmanagergui.py:165
+#: componentmanagergui.py:166
 #, python-brace-format
 msgid "Opening settings for component {}"
 msgstr "Otwieranie ustawień dla komponentu {}"
 
-#: componentmanagergui.py:172
+#: componentmanagergui.py:173
 #, python-brace-format
 msgid ""
 "Error opening settings for '{}':\n"
 "{}"
-msgstr "Błąd podczas otwierania ustawień dla '{}':\n{}"
+msgstr ""
 
-#: componentmanagergui.py:180
+#: componentmanagergui.py:183
 #, python-brace-format
 msgid "Component {} {}"
 msgstr "Komponent {} {}"
 
-#: gui.py:26 settingsgui.py:204 settingsgui.py:206 settingsgui.py:302
-#: settingsgui.py:303
+#: data/applets/quick_settings/main.py:45
+#: data/applets/quick_settings/main.py:47 gui.py:30 settingsgui.py:219
+#: settingsgui.py:221 settingsgui.py:356 settingsgui.py:357
 msgid "Default"
 msgstr "Domyślny"
 
-#: gui.py:47
+#: gui.py:51
 #, python-brace-format
 msgid "Titan v{}"
 msgstr "Titan v{}"
 
-#: gui.py:52
+#: gui.py:56
 msgid "Back to Titan"
-msgstr "Powrót do Titana"
+msgstr "Powrót do Titan"
 
-#: gui.py:52
+#: gui.py:56
 msgid "Restores the application window"
-msgstr "Przywraca okno aplikacji"
+msgstr "Przywróć okno aplikacji"
 
-#: gui.py:98
+#: gui.py:109
 msgid "Application List"
 msgstr "Lista aplikacji"
 
-#: gui.py:98
+#: gui.py:109
 msgid "Show application list"
 msgstr "Pokaż listę aplikacji"
 
-#: gui.py:99
+#: gui.py:110
 msgid "Game List"
 msgstr "Lista gier"
 
-#: gui.py:99
+#: gui.py:110
 msgid "Show game list"
 msgstr "Pokaż listę gier"
 
-#: gui.py:107 gui.py:598
+#: gui.py:111
+msgid "Titan IM"
+msgstr "Titan IM"
+
+#: gui.py:111
+msgid "Show Titan IM"
+msgstr "Pokaż Titan IM"
+
+#: gui.py:120 gui.py:747
 msgid "Application List:"
 msgstr "Lista aplikacji:"
 
-#: gui.py:120
+#: gui.py:138
+msgid "Numer telefonu (z kodem kraju):"
+msgstr "Numer telefonu (z kodem kraju):"
+
+#: gui.py:145
+msgid "Hasło 2FA (jeśli włączone):"
+msgstr "Hasło 2FA (jeśli włączone):"
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:28
+#: data/applications/tDownloader/downloader.py:341
+#: data/applications/tEdit/tedit.py:178 data/applications/tEdit/tedit.py:330
+#: data/applications/tReminder/reminder.py:472
+#: data/applications/tReminder/reminder.py:581 gui.py:147
+#: shutdown_question.py:26
+msgid "OK"
+msgstr "OK"
+
+#: gui.py:165
+msgid "Logout"
+msgstr "Wyloguj"
+
+#: gui.py:178
+msgid "Chat:"
+msgstr "Czat:"
+
+#: gui.py:185 telegram_windows.py:98
+msgid "Wyślij"
+msgstr ""
+
+#: gui.py:197
 msgid "Status Bar:"
 msgstr "Pasek stanu:"
 
-#: gui.py:142 main.py:81
+#: gui.py:222 main.py:94
 msgid "Titan App Suite"
 msgstr "Pakiet aplikacji Titan"
 
-#: gui.py:318
+#: gui.py:398
 msgid "Unknown App"
 msgstr "Nieznana aplikacja"
 
-#: gui.py:325
+#: gui.py:405
 msgid "Unknown Game"
 msgstr "Nieznana gra"
 
-#: gui.py:330 gui.py:336
+#: gui.py:410 gui.py:416
 #, python-brace-format
 msgid "Clock: {}"
 msgstr "Zegar: {}"
 
-#: gui.py:331 gui.py:337
+#: gui.py:411 gui.py:417
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr "Poziom baterii: {}"
 
-#: gui.py:332 gui.py:338
+#: gui.py:412 gui.py:418
 #, python-brace-format
 msgid "Volume: {}"
 msgstr "Głośność: {}"
 
-#: gui.py:389
+#: gui.py:469
 #, python-brace-format
 msgid "Run {}..."
 msgstr "Uruchom {}..."
 
-#: gui.py:389 gui.py:393
+#: gui.py:469 gui.py:473
 msgid "item"
 msgstr "element"
 
-#: gui.py:393
+#: gui.py:473
 #, python-brace-format
 msgid "Uninstall {}"
 msgstr "Odinstaluj {}"
 
-#: gui.py:409
+#: gui.py:489
 msgid "An error occurred: No data to run."
 msgstr "Wystąpił błąd: Brak danych do uruchomienia."
 
-#: gui.py:425
+#: gui.py:505
 msgid "An error occurred: No data to uninstall."
 msgstr "Wystąpił błąd: Brak danych do odinstalowania."
 
-#: gui.py:428
+#: gui.py:508
 msgid "unknown item"
 msgstr "nieznany element"
 
-#: gui.py:433
+#: gui.py:513
 #, python-brace-format
 msgid "Error: Cannot find the directory '{}' to uninstall."
 msgstr "Błąd: Nie można znaleźć katalogu '{}' do odinstalowania."
 
-#: gui.py:438
+#: gui.py:518
 #, python-brace-format
 msgid ""
 "Are you sure you want to uninstall '{}' from Titan?\n"
 "\n"
 "This will delete the entire directory: {}"
-msgstr "Czy na pewno chcesz odinstalować '{}' z Titana?\n\nTo spowoduje usunięcie całego katalogu: {}"
+msgstr ""
+"Czy na pewno chcesz odinstalować '{}' z Titan?\n"
+"\n"
+"To usunie cały katalog: {}"
 
-#: gui.py:439
+#: gui.py:519
 msgid "Confirm Uninstall"
 msgstr "Potwierdź odinstalowanie"
 
-#: gui.py:460
+#: gui.py:540
 #, python-brace-format
 msgid "'{}' has been successfully uninstalled."
 msgstr "'{}' został pomyślnie odinstalowany."
 
-#: gui.py:460 menu.py:146
+#: gui.py:540 menu.py:151
 msgid "Success"
-msgstr "Sukces"
+msgstr "Powodzenie"
 
-#: gui.py:466
+#: gui.py:546
 #, python-brace-format
 msgid ""
 "Error uninstalling '{}':\n"
 "{}\n"
 "\n"
 "Make sure the directory is not in use."
-msgstr "Błąd podczas odinstalowywania '{}':\n{}\n\nUpewnij się, że katalog nie jest w użyciu."
+msgstr ""
+"Błąd odinstalowywania '{}':\n"
+"{}\n"
+"\n"
+"Upewnij się, że katalog nie jest używany."
 
-#: gui.py:470
+#: gui.py:550
 #, python-brace-format
 msgid ""
 "An unexpected error occurred while uninstalling '{}':\n"
 "{}"
-msgstr "Wystąpił nieoczekiwany błąd podczas odinstalowywania '{}':\n{}"
+msgstr ""
+"Nieoczekiwany błąd podczas odinstalowywania '{}':\n"
+"{}"
 
-#: gui.py:583
+#: gui.py:727
 msgid "Clock:"
 msgstr "Zegar:"
 
-#: gui.py:585
+#: gui.py:729
 msgid "Battery level:"
 msgstr "Poziom baterii:"
 
-#: gui.py:587
+#: gui.py:731
 msgid "Volume:"
 msgstr "Głośność:"
 
-#: gui.py:589
+#: gui.py:733
 msgid "Network status:"
-msgstr "Stan sieci:"
+msgstr "Status sieci:"
 
-#: gui.py:600
-msgid "Application list, 1 of 2"
-msgstr "Lista aplikacji, 1 z 2"
+#: gui.py:749
+msgid "Application list, 1 of 3"
+msgstr "Lista aplikacji, 1 z 3"
 
-#: gui.py:609
+#: gui.py:763
 msgid "Game List:"
 msgstr "Lista gier:"
 
-#: gui.py:611
-msgid "Game list, 2 of 2"
-msgstr "Lista gier, 2 z 2"
+#: gui.py:765
+msgid "Game list, 2 of 3"
+msgstr "Lista gier, 2 z 3"
 
-#: gui.py:647 gui.py:652
+#: gui.py:778
+msgid "Titan IM:"
+msgstr "Titan IM:"
+
+#: gui.py:780
+msgid "Titan IM, 3 of 3"
+msgstr "Titan IM, 3 z 3"
+
+#: gui.py:791 gui.py:907
+msgid "Telegram"
+msgstr "Telegram"
+
+#: gui.py:792 gui.py:908
+msgid "Facebook Messenger"
+msgstr ""
+
+#: gui.py:806
+msgid "Other communicators will be available soon."
+msgstr "Inne komunikatory będą dostępne wkrótce."
+
+#: gui.py:829
+msgid "Telegram Login"
+msgstr "Logowanie do Telegram"
+
+#: gui.py:850
+msgid "Enter phone number with country code (e.g. +48123456789)."
+msgstr "Wprowadź numer telefonu z kodem kraju (np. +48123456789)."
+
+#: gui.py:863
+#, fuzzy
+msgid "Connecting to Telegram..."
+msgstr "Łączenie z Telegramem..."
+
+#: gui.py:866
+msgid "TCE User"
+msgstr "Użytkownik TCE"
+
+#: gui.py:909
+msgid "Other communicators"
+msgstr "Inne komunikatory"
+
+#: gui.py:912 gui.py:1067
+#, fuzzy
+msgid "Contacts"
+msgstr "Kontakty"
+
+#: gui.py:913 gui.py:1089
+#, fuzzy
+msgid "Group Chats"
+msgstr "Chaty grupowe"
+
+#: gui.py:959 gui.py:964
 #, python-brace-format
 msgid ""
 "Could not open date/time settings:\n"
 "{}"
-msgstr "Nie można otworzyć ustawień daty i godziny:\n{}"
+msgstr ""
+"Nie można otworzyć ustawień daty/czasu:\n"
+"{}"
 
-#: gui.py:654 gui.py:668 gui.py:682 gui.py:697
+#: gui.py:966 gui.py:980 gui.py:994 gui.py:1009
 msgid "This feature is not supported on this platform."
 msgstr "Ta funkcja nie jest obsługiwana na tej platformie."
 
-#: gui.py:661 gui.py:666
+#: gui.py:973 gui.py:978
 #, python-brace-format
 msgid ""
 "Could not open power settings:\n"
 "{}"
-msgstr "Nie można otworzyć ustawień zasilania:\n{}"
+msgstr ""
+"Nie można otworzyć ustawień zasilania:\n"
+"{}"
 
-#: gui.py:675
+#: gui.py:987
 #, python-brace-format
 msgid ""
 "Could not open volume mixer:\n"
 "{}"
-msgstr "Nie można otworzyć miksera głośności:\n{}"
+msgstr ""
+"Nie można otworzyć miksera głośności:\n"
+"{}"
 
-#: gui.py:680
+#: gui.py:992
 #, python-brace-format
 msgid ""
 "Could not open audio settings:\n"
 "{}"
-msgstr "Nie można otworzyć ustawień dźwięku:\n{}"
+msgstr ""
 
-#: gui.py:690 gui.py:695
+#: gui.py:1002 gui.py:1007
 #, python-brace-format
 msgid ""
 "Could not open network settings:\n"
 "{}"
-msgstr "Nie można otworzyć ustawień sieci:\n{}"
+msgstr ""
+"Nie można otworzyć ustawień sieci:\n"
+"{}"
 
-#: invisibleui.py:58 invisibleui.py:95
+#: gui.py:1103
+msgid "Ustawienia sieciowe - w przygotowaniu"
+msgstr "Ustawienia sieciowe - w przygotowaniu"
+
+#: data/applications/tEdit/tedit.py:943 data/applications/tEdit/tedit.py:961
+#: data/applications/tEdit/tedit.py:1069 data/applications/tEdit/tedit.py:1071
+#: data/applications/tWeb/web.py:261 data/applications/tWeb/web.py:269
+#: data/applications/tWeb/web.py:420 data/applications/tWeb/web.py:794
+#: gui.py:1103
+msgid "Informacja"
+msgstr "Informacja"
+
+#: gui.py:1110
+msgid "Zalogowany jako"
+msgstr "Zalogowany jako"
+
+#: gui.py:1110
+msgid "Nieznany"
+msgstr "Nieznany"
+
+#: gui.py:1111
+msgid "Użytkowników online"
+msgstr "Użytkowników online"
+
+#: gui.py:1112
+msgid "Status połączenia"
+msgstr "Status połączenia"
+
+#: gui.py:1112
+msgid "Połączony"
+msgstr "Połączony"
+
+#: gui.py:1114
+msgid "Connection status"
+msgstr "Status połączenia"
+
+#: gui.py:1114
+msgid "Disconnected"
+msgstr "Rozłączony"
+
+#: gui.py:1116
+msgid "Telegram Information"
+msgstr "Informacje o Telegramie"
+
+#: gui.py:1124
+#, fuzzy
+msgid "Refreshing contacts list, found"
+msgstr "Odświeżanie listy kontaktów, znaleziono"
+
+#: gui.py:1124
+#, fuzzy
+msgid "contacts"
+msgstr "kontaktów"
+
+#: gui.py:1130 gui.py:1147
+msgid "unread"
+msgstr "nieprzeczytanych"
+
+#: gui.py:1132
+msgid "Added contact"
+msgstr "Dodano kontakt"
+
+#: gui.py:1134
+#, fuzzy
+msgid "No connection or client to refresh contacts"
+msgstr "Brak połączenia lub klienta do odświeżenia kontaktów"
+
+#: gui.py:1141
+#, fuzzy
+msgid "Refreshing group chats, found"
+msgstr "Odświeżanie chatów grupowych, znaleziono"
+
+#: gui.py:1141
+msgid "groups"
+msgstr "grup"
+
+#: gui.py:1149
+#, fuzzy
+msgid "Added group"
+msgstr "Dodano grupę"
+
+#: gui.py:1151
+#, fuzzy
+msgid "No connection or client to refresh groups"
+msgstr "Brak połączenia lub klienta do odświeżenia grup"
+
+#: gui.py:1192 gui.py:1207
+msgid "Private message"
+msgstr "Wiadomość prywatna"
+
+#: gui.py:1192 gui.py:1207
+msgid "Send private message"
+msgstr "Wyślij wiadomość prywatną"
+
+#: gui.py:1193 gui.py:1208
+msgid "Call"
+msgstr "Zadzwoń"
+
+#: gui.py:1193 gui.py:1208
+msgid "Start voice call"
+msgstr "Rozpocznij rozmowę głosową"
+
+#: gui.py:1200
+msgid "Open group chat"
+msgstr "Otwórz czat grupowy"
+
+#: gui.py:1200
+msgid "Open group chat window"
+msgstr "Otwórz okno czatu grupowego"
+
+#: gui.py:1237
+msgid ""
+"Voice calls are not available.\n"
+"Check if py-tgcalls is installed."
+msgstr ""
+"Rozmowy głosowe nie są dostępne.\n"
+"Sprawdź czy py-tgcalls jest zainstalowane."
+
+#: gui.py:1242
+#, python-brace-format
+msgid "Do you want to start a voice call with {}?"
+msgstr "Czy chcesz rozpocząć rozmowę głosową z {}?"
+
+#: gui.py:1243
+msgid "Voice call"
+msgstr "Rozmowa głosowa"
+
+#: gui.py:1254
+msgid "Nie udało się rozpocząć rozmowy."
+msgstr "Nie udało się rozpocząć rozmowy."
+
+#: data/applications/TFM/gui.py:425
+#: data/applications/tDownloader/downloader.py:257
+#: data/applications/tDownloader/downloader.py:449
+#: data/applications/tEdit/tedit.py:978 gui.py:1254 telegram_windows.py:158
+msgid "Błąd"
+msgstr "Błąd"
+
+#: gui.py:1292
+#, python-brace-format
+msgid "Połączenie nie powiodło się: {}"
+msgstr "Połączenie nie powiodło się: {}"
+
+#: gui.py:1293
+msgid "Błąd połączenia"
+msgstr "Błąd połączenia"
+
+#: gui.py:1368
+msgid "Otrzymano zmianę statusu"
+msgstr "Otrzymano zmianę statusu"
+
+#: gui.py:1368
+msgid "dane"
+msgstr "dane"
+
+#: gui.py:1372
+msgid "Zaktualizowano listę użytkowników online"
+msgstr "Zaktualizowano listę użytkowników online"
+
+#: gui.py:1372
+msgid "użytkowników"
+msgstr "użytkowników"
+
+#: gui.py:1381
+#, python-brace-format
+msgid "{} dołączył do Telegramem"
+msgstr "{} dołączył do Telegram"
+
+#: gui.py:1384
+#, python-brace-format
+msgid "{} opuścił Telegrama"
+msgstr "{} opuścił Telegram"
+
+#: gui.py:1398
+#, python-brace-format
+msgid "{} pisze..."
+msgstr "{} pisze..."
+
+#: gui.py:1401
+#, python-brace-format
+msgid "Rozmowa z {}"
+msgstr "Rozmowa z {}"
+
+#: invisibleui.py:92 invisibleui.py:137 invisibleui.py:224 invisibleui.py:231
 msgid "Status Bar"
 msgstr "Pasek stanu"
 
-#: invisibleui.py:74 invisibleui.py:85 menu.py:66
+#: invisibleui.py:108 invisibleui.py:120 menu.py:71
 msgid "Component Manager"
 msgstr "Menedżer komponentów"
 
-#: invisibleui.py:78
+#: invisibleui.py:112
 msgid "Component manager is not available"
-msgstr "Menedżer komponentów nie jest dostępny"
+msgstr "Menedżer komponentów jest niedostępny"
 
-#: invisibleui.py:86 menu.py:39
+#: invisibleui.py:121 menu.py:35
 msgid "Program settings"
-msgstr "Ustawienia programu"
+msgstr ""
 
-#: invisibleui.py:87 invisibleui.py:178
+#: invisibleui.py:122 invisibleui.py:296
 msgid "Back to graphical interface"
 msgstr "Powrót do interfejsu graficznego"
 
-#: invisibleui.py:88 invisibleui.py:178 menu.py:41
+#: invisibleui.py:123 invisibleui.py:296 menu.py:37
 msgid "Exit"
 msgstr "Wyjście"
 
-#: invisibleui.py:92
+#: invisibleui.py:134
 msgid "Applications"
 msgstr "Aplikacje"
 
-#: invisibleui.py:92 invisibleui.py:172
+#: invisibleui.py:134 invisibleui.py:290
 msgid "No applications"
-msgstr "Brak aplikacji"
+msgstr ""
 
-#: invisibleui.py:93
+#: invisibleui.py:135
 msgid "Games"
 msgstr "Gry"
 
-#: invisibleui.py:93 invisibleui.py:172
+#: invisibleui.py:135 invisibleui.py:290
 msgid "No games"
-msgstr "Brak gier"
+msgstr ""
 
-#: invisibleui.py:94 invisibleui.py:184
+#: invisibleui.py:136 invisibleui.py:275 invisibleui.py:302
 msgid "Widgets"
-msgstr "Widgety"
+msgstr ""
 
-#: invisibleui.py:94 invisibleui.py:172
+#: invisibleui.py:136 invisibleui.py:290
 msgid "No widgets found"
-msgstr "Nie znaleziono widgetów"
+msgstr ""
 
-#: invisibleui.py:96
+#: invisibleui.py:138
 msgid "Menu"
 msgstr "Menu"
 
-#: invisibleui.py:122
+#: invisibleui.py:143 invisibleui.py:144 menu.py:56
+msgid "Components"
+msgstr ""
+
+#: invisibleui.py:175 invisibleui.py:199
 #, python-brace-format
 msgid "Error loading widget: {}"
-msgstr "Błąd ładowania widgetu: {}"
+msgstr "Błąd ładowania widżetu: {}"
 
-#: invisibleui.py:128
+#: invisibleui.py:205
 msgid "No status bar data"
 msgstr "Brak danych paska stanu"
 
-#: invisibleui.py:190
+#: invisibleui.py:273
+#, python-brace-format
+msgid "{} of {}"
+msgstr ""
+
+#: invisibleui.py:277
+msgid "button"
+msgstr ""
+
+#: invisibleui.py:277
+msgid "widget"
+msgstr ""
+
+#: invisibleui.py:308
 #, python-brace-format
 msgid "Error during activation: {}"
 msgstr "Błąd podczas aktywacji: {}"
 
-#: invisibleui.py:203
+#: invisibleui.py:323
 #, python-brace-format
 msgid "Invalid widget type: {}"
-msgstr "Nieprawidłowy typ widżetu: {}"
+msgstr ""
 
-#: invisibleui.py:209
+#: invisibleui.py:330
 msgid "In widget"
-msgstr "W widgecie"
+msgstr ""
 
-#: invisibleui.py:229
+#: invisibleui.py:340
 msgid "Out of widget"
-msgstr "Poza widgetem"
+msgstr ""
 
-#: invisibleui.py:241
+#: invisibleui.py:371
 #, python-brace-format
 msgid "Application not found: {}"
 msgstr "Nie znaleziono aplikacji: {}"
 
-#: invisibleui.py:246
+#: invisibleui.py:376
 #, python-brace-format
 msgid "Game not found: {}"
 msgstr "Nie znaleziono gry: {}"
 
-#: invisibleui.py:250
+#: invisibleui.py:380
 msgid "clock:"
-msgstr "zegar:"
+msgstr ""
 
-#: invisibleui.py:251
+#: invisibleui.py:381
 msgid "battery level:"
-msgstr "poziom baterii:"
+msgstr ""
 
-#: invisibleui.py:252
+#: invisibleui.py:382
 msgid "volume:"
-msgstr "głośność:"
+msgstr ""
 
-#: invisibleui.py:253
+#: invisibleui.py:383
 msgid "network status:"
-msgstr "stan sieci:"
+msgstr "status sieci:"
 
-#: invisibleui.py:259
+#: invisibleui.py:389
 msgid "No action for this item"
-msgstr "Brak akcji dla tego elementu"
+msgstr ""
 
-#: invisibleui.py:272
+#: invisibleui.py:395
 msgid "Invisible interface active"
-msgstr "Niewidzialny interfejs aktywny"
+msgstr ""
 
-#: main.py:38
+#: invisibleui.py:486
+msgid "Titan UI on"
+msgstr ""
+
+#: invisibleui.py:489
+msgid "Titan UI off"
+msgstr ""
+
+#: main.py:45
 #, python-brace-format
 msgid "Welcome to Titan: Version {}"
-msgstr "Witaj w Titan: Wersja {}"
+msgstr "Witamy w Titan: Wersja {}"
 
-#: main.py:75
+#: main.py:82
 msgid ""
 "Currently, translation system and international support is limited. To "
 "fully enjoy Titan, please use translation addon for your screen reader, "
 "or switch to Polish Language"
-msgstr "Obecnie system tłumaczeń i wsparcie międzynarodowe są ograniczone. Aby w pełni cieszyć się Titanem, użyj dodatku tłumaczącego dla czytnika ekranu lub przełącz się na język polski"
+msgstr ""
 
-#: main.py:76
+#: main.py:83
 msgid "Titan"
-msgstr "Titan"
+msgstr ""
 
-#: menu.py:35
+#: menu.py:33
 msgid "Install data package..."
-msgstr "Zainstaluj pakiet danych..."
+msgstr "Instaluj pakiet danych..."
 
-#: menu.py:37
+#: menu.py:34
 msgid "Component Manager..."
-msgstr "Menedżer komponentów..."
+msgstr ""
 
-#: menu.py:40
+#: menu.py:36
 msgid "Minimize"
-msgstr "Minimalizuj"
+msgstr ""
 
-#: menu.py:51
+#: menu.py:45
 msgid "Program"
-msgstr "Program"
+msgstr ""
 
-#: menu.py:55
+#: menu.py:60
 msgid "Select data package"
 msgstr "Wybierz pakiet danych"
 
-#: menu.py:55
+#: menu.py:60
 msgid "Data packages (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
-msgstr "Pakiety danych (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
+msgstr ""
 
-#: menu.py:60
+#: menu.py:65
 msgid "Package installation"
-msgstr "Instalacja pakietu"
+msgstr ""
 
-#: menu.py:60
+#: menu.py:65
 msgid "Preparing for installation..."
-msgstr "Przygotowywanie do instalacji..."
+msgstr ""
 
-#: menu.py:70
+#: menu.py:75
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr "Nie można załadować Menedżera komponentów (nie znaleziono componentmanagergui.py)"
+msgstr ""
+"Nie można załadować Menedżera Komponentów (nie znaleziono "
+"componentmanagergui.py)"
 
-#: menu.py:72
+#: menu.py:77
 msgid "Component Manager has not been initialized."
-msgstr "Menedżer komponentów nie został zainicjowany."
+msgstr ""
 
-#: menu.py:97
+#: menu.py:102
 msgid "Unpacking ZIP package..."
-msgstr "Rozpakowywanie pakietu ZIP..."
+msgstr ""
 
-#: menu.py:108
+#: menu.py:113
 msgid ""
 "Error: 7z executable not found. Make sure it is in the 'data/bin/' "
 "directory."
-msgstr "Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się on w katalogu 'data/bin/'."
+msgstr ""
 
-#: menu.py:108
+#: menu.py:113
 msgid "Executable file error"
 msgstr "Błąd pliku wykonywalnego"
 
-#: menu.py:115
+#: menu.py:120
 msgid "Unpacking 7z package..."
-msgstr "Rozpakowywanie pakietu 7z..."
+msgstr ""
 
-#: menu.py:117
+#: menu.py:122
 msgid "Starting 7z process..."
-msgstr "Uruchamianie procesu 7z..."
+msgstr ""
 
-#: menu.py:123
+#: menu.py:128
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
 "{}"
-msgstr "Błąd podczas instalacji pakietu:\n{}"
+msgstr ""
 
-#: menu.py:126
+#: menu.py:131
 msgid "Finished unpacking 7z."
-msgstr "Zakończono rozpakowywanie 7z."
+msgstr ""
 
-#: menu.py:130
+#: menu.py:135
 msgid "Unpacking .tcepackage package..."
-msgstr "Rozpakowywanie pakietu .tcepackage..."
+msgstr ""
 
-#: menu.py:132
+#: menu.py:137
 msgid "Unpacking archive..."
-msgstr "Rozpakowywanie archiwum..."
-
-#: menu.py:134
-msgid "Finished unpacking .tcepackage."
-msgstr "Zakończono rozpakowywanie .tcepackage."
+msgstr ""
 
 #: menu.py:139
+msgid "Finished unpacking .tcepackage."
+msgstr ""
+
+#: menu.py:144
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
 "\n"
 "Details:\n"
 "{}"
-msgstr "Błąd podczas instalacji pakietu: {}\n\nSzczegóły:\n{}"
+msgstr ""
 
-#: menu.py:146
+#: menu.py:151
 msgid "Data package has been installed!"
-msgstr "Pakiet danych został zainstalowany!"
+msgstr ""
+
+#: messenger_client.py:364
+#, fuzzy, python-brace-format
+msgid "New Messenger message from {}: {}"
+msgstr "Nowa wiadomość grupowa od {}, {}, {}"
+
+#: messenger_client.py:511 messenger_client.py:516
+#, fuzzy, python-brace-format
+msgid "Connected to Facebook Messenger as {}"
+msgstr "Połączono z Telegramem jako {}"
+
+#: messenger_client.py:535
+#, fuzzy
+msgid "Messenger Error"
+msgstr "Błąd Telegram"
+
+#: messenger_client.py:540
+msgid ""
+"Please log in to Facebook Messenger in the opened browser window.\n"
+"The connection will continue automatically after successful login."
+msgstr ""
+
+#: messenger_client.py:542
+msgid "Manual Login Required"
+msgstr ""
+
+#: messenger_client.py:560
+#, fuzzy
+msgid "Disconnected from Facebook Messenger"
+msgstr "Rozłączono z Telegramem"
+
+#: messenger_gui.py:15
+#, fuzzy
+msgid "Connect to Facebook Messenger"
+msgstr "Połącz z Telegramem"
+
+#: messenger_gui.py:22
+msgid ""
+"Connect to Facebook Messenger through web interface.\n"
+"You can either provide login credentials or log in manually\n"
+"in the opened browser window."
+msgstr ""
+
+#: messenger_gui.py:29
+msgid "Email/Phone (optional):"
+msgstr ""
+
+#: messenger_gui.py:33 messenger_gui.py:41
+msgid "Leave empty for manual login"
+msgstr ""
+
+#: messenger_gui.py:37
+#, fuzzy
+msgid "Password (optional):"
+msgstr "ID czatu grupowego (opcjonalne):"
+
+#: messenger_gui.py:46
+msgid ""
+"Login sessions are saved with cookies for automatic login.\n"
+"Manual login is recommended for better security."
+msgstr ""
+
+#: messenger_gui.py:55 telegram_gui.py:52
+msgid "Connect"
+msgstr "Połącz"
+
+#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:29
+#: messenger_gui.py:58 settingsgui.py:113 shutdown_question.py:30
+#: telegram_gui.py:55
+msgid "Cancel"
+msgstr "Anuluj"
+
+#: messenger_gui.py:112
+msgid "Conversations:"
+msgstr ""
+
+#: messenger_gui.py:120
+msgid "Refresh"
+msgstr ""
+
+#: messenger_gui.py:137
+#, fuzzy
+msgid "Connected to Facebook Messenger - select a conversation"
+msgstr "Połączono z Telegramem - wybierz użytkownika lub pisz ogólnie"
+
+#: messenger_gui.py:147 telegram_gui.py:134 telegram_windows.py:499
+msgid "Send"
+msgstr "Wyślij"
+
+#: messenger_gui.py:164
+#, fuzzy, python-brace-format
+msgid "Refresh Conversations"
+msgstr "Prywatna rozmowa z {}"
+
+#: messenger_gui.py:164
+#, fuzzy, python-brace-format
+msgid "Refresh conversation list"
+msgstr "Prywatna rozmowa z {}"
+
+#: messenger_gui.py:169 telegram_gui.py:150
+msgid "Disconnect"
+msgstr "Rozłącz"
+
+#: messenger_gui.py:169
+#, fuzzy
+msgid "Disconnect from Messenger"
+msgstr "Rozłącz z Telegramem"
+
+#: messenger_gui.py:172
+msgid "Messenger"
+msgstr ""
+
+#: messenger_gui.py:177 messenger_gui.py:284
+#, fuzzy
+msgid "Connected to Facebook Messenger"
+msgstr "Połączony z Telegramem"
+
+#: messenger_gui.py:204
+#, python-brace-format
+msgid "Loaded {} conversations"
+msgstr ""
+
+#: messenger_gui.py:206
+#, fuzzy
+msgid "No conversations found - try refreshing"
+msgstr "Brak połączenia lub klienta do odświeżenia grup"
+
+#: messenger_gui.py:221
+#, fuzzy, python-brace-format
+msgid "Conversation with {}"
+msgstr "Prywatna rozmowa z {}"
+
+#: messenger_gui.py:227
+#, fuzzy, python-brace-format
+msgid ""
+"=== Conversation with {} ===\n"
+"\n"
+msgstr "Prywatna rozmowa z {}"
+
+#: messenger_gui.py:234
+#, fuzzy, python-brace-format
+msgid "Please select a conversation first"
+msgstr "Prywatna rozmowa z {}"
+
+#: messenger_gui.py:234
+msgid "No Conversation Selected"
+msgstr ""
+
+#: messenger_gui.py:245 telegram_gui.py:208 telegram_windows.py:554
+msgid "Failed to send message"
+msgstr "Nie udało się wysłać wiadomości"
+
+#: messenger_gui.py:291
+msgid "Refreshing conversations..."
+msgstr ""
+
+#: messenger_gui.py:314
+#, fuzzy
+msgid "Connecting to Messenger"
+msgstr "Łączenie z Telegramem..."
+
+#: messenger_gui.py:315
+msgid ""
+"Connecting to Facebook Messenger...\n"
+"This may take a few moments."
+msgstr ""
+
+#: messenger_gui.py:327
+#, fuzzy
+msgid "Connecting to Messenger..."
+msgstr "Łączenie z Telegramem..."
+
+#: messenger_gui.py:341
+msgid ""
+"Failed to connect to Facebook Messenger.\n"
+"Please check your internet connection and try again."
+msgstr ""
+
+#: messenger_gui.py:343
+#, fuzzy
+msgid "Connection Error"
+msgstr "Błąd połączenia"
 
 #: settingsgui.py:91
 msgid "Sound"
@@ -547,111 +1047,144 @@ msgstr "Ogólne"
 msgid "Interface"
 msgstr "Interfejs"
 
-#: settingsgui.py:101
+#: settingsgui.py:95
+msgid "Invisible Interface"
+msgstr "Niewidzialny interfejs"
+
+#: settingsgui.py:104
 msgid "Windows"
 msgstr "Windows"
 
-#: settingsgui.py:106
+#: settingsgui.py:109
 msgid "Save"
 msgstr "Zapisz"
 
-#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:29
-#: settingsgui.py:110 shutdown_question.py:30
-msgid "Cancel"
-msgstr "Anuluj"
-
-#: settingsgui.py:130
+#: settingsgui.py:134
 msgid "Select sound theme:"
 msgstr "Wybierz motyw dźwiękowy:"
 
-#: settingsgui.py:144 settingsgui.py:393
+#: settingsgui.py:148 settingsgui.py:454
 msgid "No themes"
 msgstr "Brak motywów"
 
-#: settingsgui.py:151
+#: data/applets/quick_settings/main.py:69 settingsgui.py:154
 msgid "Stereo sounds"
 msgstr "Dźwięki stereo"
 
-#: settingsgui.py:162
+#: settingsgui.py:159
+msgid "Sound theme volume:"
+msgstr "Głośność motywu dźwiękowego:"
+
+#: settingsgui.py:177
 msgid "Language:"
 msgstr "Język:"
 
-#: settingsgui.py:175
+#: data/applets/quick_settings/main.py:64 settingsgui.py:190
 msgid "Quick start"
 msgstr "Szybki start"
 
-#: settingsgui.py:180
+#: settingsgui.py:195
 msgid "Confirm exit from Titan"
-msgstr "Potwierdź wyjście z Titana"
+msgstr "Potwierdź wyjście z Titan"
 
-#: settingsgui.py:190
+#: settingsgui.py:205
 msgid "Select interface skin:"
 msgstr "Wybierz skórkę interfejsu:"
 
-#: settingsgui.py:221
+#: data/applets/quick_settings/main.py:73 settingsgui.py:236
+msgid "Announce item index"
+msgstr "Zapowiadaj numer elementu"
+
+#: data/applets/quick_settings/main.py:74 settingsgui.py:241
+msgid "Announce widget type"
+msgstr "Zapowiadaj typ widżetu"
+
+#: data/applets/quick_settings/main.py:75 settingsgui.py:246
+msgid "Enable TitanUI support"
+msgstr "Włącz obsługę TitanUI"
+
+#: data/applets/quick_settings/main.py:76 settingsgui.py:251
+msgid "Announce first item in category"
+msgstr "Zapowiadaj pierwszy element w kategorii"
+
+#: settingsgui.py:256
+msgid "Titan key:"
+msgstr "Klawisz Titan:"
+
+#: settingsgui.py:269
 msgid "Change SAPI settings"
 msgstr "Zmień ustawienia SAPI"
 
-#: settingsgui.py:226
+#: settingsgui.py:274
 msgid "Ease of Access"
 msgstr "Ułatwienia dostępu"
 
-#: settingsgui.py:231
+#: settingsgui.py:279
 msgid "System volume:"
-msgstr "Głośność systemu:"
+msgstr "Głośność systemowa:"
 
-#: settingsgui.py:258
+#: settingsgui.py:308
 msgid "Disable sound card mute when Titan is running"
-msgstr "Wyłącz wyciszanie karty dźwiękowej, gdy Titan jest uruchomiony"
+msgstr "Wyłącz wyciszanie karty dźwiękowej gdy Titan jest uruchomiony"
 
-#: settingsgui.py:324
+#: settingsgui.py:385
 #, python-brace-format
 msgid "Error: File {} not found. Make sure Windows is working correctly."
-msgstr "Błąd: Nie znaleziono pliku {}. Upewnij się, że system Windows działa poprawnie."
+msgstr "Błąd: Plik {} nie znaleziony. Upewnij się, że Windows działa prawidłowo."
 
-#: settingsgui.py:327
+#: settingsgui.py:388
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
 "{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Nieoczekiwany błąd podczas otwierania ustawień SAPI:\n{}\n\nSzczegóły techniczne w konsoli."
+msgstr ""
+"Nieoczekiwany błąd podczas otwierania ustawień SAPI:\n"
+"{}\n"
+"\n"
+"Szczegóły techniczne w konsoli."
 
-#: settingsgui.py:339
+#: settingsgui.py:400
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
-msgstr "Polecenie '{}' zakończyło się kodem błędu {}.\n"
+msgstr ""
 
-#: settingsgui.py:345
+#: settingsgui.py:406
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
 "{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Nie można otworzyć Ułatwień dostępu:\n{}\n\nSzczegóły techniczne w konsoli."
+msgstr ""
 
-#: settingsgui.py:351
+#: settingsgui.py:412
 msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
-msgstr "Błąd: Nie znaleziono pliku wykonywalnego control.exe. Upewnij się, że system Windows działa poprawnie."
+msgstr ""
 
-#: settingsgui.py:354
+#: settingsgui.py:415
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
 "{}\n"
 "\n"
 "Technical details in the console."
-msgstr "Nieoczekiwany błąd podczas otwierania Ułatwień dostępu:\n{}\n\nSzczegóły techniczne w konsoli."
+msgstr ""
+"Nieoczekiwany błąd podczas otwierania Ułatwień dostępu:\n"
+"{}\n"
+"\n"
+"Szczegóły techniczne w konsoli."
 
-#: settingsgui.py:425
+#: settingsgui.py:501
 msgid ""
 "Settings have been saved. Please restart the application for the language"
 " change to take full effect."
-msgstr "Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zmiana języka w pełni zadziałała."
+msgstr ""
+"Ustawienia zostały zapisane. Proszę zrestartować aplikację, aby zmiana "
+"języka odniosła pełny efekt."
 
 #: shutdown_question.py:15
 msgid "Confirm Exit"
@@ -659,16 +1192,884 @@ msgstr "Potwierdź wyjście"
 
 #: shutdown_question.py:22
 msgid "Are you sure you want to exit Titan?"
-msgstr "Czy na pewno chcesz wyjść z Titana?"
+msgstr "Czy na pewno chcesz wyjść z Titan?"
 
-#: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:28
-#: shutdown_question.py:26
-msgid "OK"
-msgstr "OK"
+#: telegram_client.py:97 telegram_gui.py:286
+msgid "Connection error"
+msgstr "Błąd połączenia"
+
+#: telegram_client.py:165
+msgid "Invalid phone number"
+msgstr "Nieprawidłowy numer telefonu"
+
+#: telegram_client.py:167
+msgid "Invalid verification code"
+msgstr "Nieprawidłowy kod weryfikacyjny"
+
+#: telegram_client.py:169
+msgid "Login error"
+msgstr "Błąd logowania"
+
+#: telegram_client.py:178
+msgid "Enter the verification code received by SMS or Telegram:"
+msgstr "Wprowadź kod weryfikacyjny otrzymany w SMS lub Telegramie:"
+
+#: telegram_client.py:179
+msgid "Verification code"
+msgstr "Kod weryfikacyjny"
+
+#: telegram_client.py:199
+msgid "Enter two-factor authentication password:"
+msgstr "Wprowadź hasło dwustopniowego uwierzytelniania:"
+
+#: telegram_client.py:200
+msgid "2FA Password"
+msgstr "Hasło 2FA"
+
+#: telegram_client.py:256 telegram_client.py:563 telegram_windows.py:214
+#: telegram_windows.py:611
+msgid "Unknown"
+msgstr ""
+
+#: telegram_client.py:286
+#, fuzzy, python-brace-format
+msgid "New group message from {}, {}, {}"
+msgstr "Nowa wiadomość grupowa od {}, {}, {}"
+
+#: telegram_client.py:293
+#, python-brace-format
+msgid "Message from: {}, {}"
+msgstr "Wiadomość od: {}, {}"
+
+#: telegram_client.py:386 telegram_client.py:391
+#, python-brace-format
+msgid "Connected to Telegram as {}"
+msgstr "Połączono z Telegramem jako {}"
+
+#: telegram_client.py:410
+msgid "Telegram Error"
+msgstr "Błąd Telegram"
+
+#: telegram_client.py:748
+msgid "Disconnected from Telegram"
+msgstr "Rozłączono z Telegramem"
+
+#: telegram_client.py:755
+msgid "Start login by providing phone number"
+msgstr "Rozpocznij logowanie podając numer telefonu"
+
+#: telegram_client.py:760
+msgid "Phone number is required"
+msgstr "Numer telefonu jest wymagany"
+
+#: telegram_client.py:761
+msgid "Preparing connection to Telegram..."
+msgstr "Przygotowywanie połączenia z Telegramem..."
+
+#: telegram_gui.py:15
+msgid "Connect to Telegram"
+msgstr "Połącz z Telegramem"
+
+#: telegram_gui.py:22
+msgid ""
+"To connect to Telegram, you need a bot token.\n"
+"Create a bot with @BotFather in Telegram and copy the token."
+msgstr ""
+
+#: telegram_gui.py:28
+msgid "Bot token:"
+msgstr "Token bota:"
+
+#: telegram_gui.py:35
+msgid "Group chat ID (optional):"
+msgstr "ID czatu grupowego (opcjonalne):"
+
+#: telegram_gui.py:39
+msgid "Leave empty for private messages"
+msgstr "Zostaw puste dla prywatnych wiadomości"
+
+#: telegram_gui.py:43
+msgid "Your username in TCE:"
+msgstr "Twoja nazwa użytkownika w TCE:"
+
+#: telegram_gui.py:104
+msgid "Users in chat:"
+msgstr "Użytkownicy w czacie:"
+
+#: telegram_gui.py:124
+msgid "Connected to Telegram - select a user or chat generally"
+msgstr "Połączono z Telegramem - wybierz użytkownika lub pisz ogólnie"
+
+#: telegram_gui.py:150
+msgid "Disconnect from Telegram"
+msgstr "Rozłącz z Telegramem"
+
+#: telegram_gui.py:158 telegram_gui.py:250
+msgid "Connected to Telegram"
+msgstr "Połączony z Telegramem"
+
+#: telegram_gui.py:183
+#, python-brace-format
+msgid "Private conversation with {}"
+msgstr "Prywatna rozmowa z {}"
+
+#: telegram_gui.py:188
+msgid "General chat"
+msgstr "Czat ogólny"
+
+#: telegram_gui.py:286
+msgid "Failed to connect to Telegram"
+msgstr "Nie udało się połączyć z Telegramem"
+
+#: telegram_gui.py:288
+msgid "Invalid bot token"
+msgstr "Nieprawidłowy token bota"
+
+#: telegram_windows.py:23 telegram_windows.py:195
+msgid "Wiadomości prywatne z"
+msgstr "Wiadomości prywatne z"
+
+#: telegram_windows.py:65
+msgid "Online"
+msgstr "Online"
+
+#: telegram_windows.py:158
+msgid "Nie udało się wysłać wiadomości"
+msgstr ""
+
+#: telegram_windows.py:211
+msgid "Historia rozmowy z"
+msgstr ""
+
+#: telegram_windows.py:247
+msgid "Połączenie wychodzące"
+msgstr ""
+
+#: telegram_windows.py:247
+msgid "Połączenie przychodzące"
+msgstr ""
+
+#: telegram_windows.py:248
+msgid "Rozmowa z"
+msgstr ""
+
+#: telegram_windows.py:297
+msgid "Dzwonisz do"
+msgstr ""
+
+#: telegram_windows.py:297
+msgid "Połączenie przychodzące od"
+msgstr ""
+
+#: telegram_windows.py:309
+msgid "Łączenie..."
+msgstr ""
+
+#: telegram_windows.py:322 telegram_windows.py:392 telegram_windows.py:397
+msgid "Wycisz"
+msgstr ""
+
+#: data/applications/TFM/menu.py:15 telegram_windows.py:326
+msgid "Zakończ"
+msgstr ""
+
+#: telegram_windows.py:337
+msgid "Skróty: Spacja=Wycisz/Włącz • Escape=Zakończ"
+msgstr ""
+
+#: telegram_windows.py:363 telegram_windows.py:398
+msgid "Połączono - rozmowa aktywna"
+msgstr ""
+
+#: telegram_windows.py:387
+msgid "Łączenie"
+msgstr ""
+
+#: telegram_windows.py:393
+msgid "Włącz"
+msgstr ""
+
+#: telegram_windows.py:394
+msgid "Mikrofon wyciszony"
+msgstr ""
+
+#: telegram_windows.py:424 telegram_windows.py:592
+msgid "Group chat"
+msgstr "Czat grupowy"
+
+#: telegram_windows.py:466
+msgid "Active"
+msgstr "Aktywny"
+
+#: telegram_windows.py:549
+msgid "Me"
+msgstr "Ja"
+
+#: telegram_windows.py:608
+msgid "Group chat history"
+msgstr "Historia czatu grupowego"
+
+#: ⁨data/applets/pulpit systemowy/main.py⁩:61
+msgid "Puste miejsce"
+msgstr ""
+
+#: ⁨data/applets/pulpit systemowy/main.py⁩:113
+msgid "Pulpit systemowy"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:65
+msgid "Confirm exit"
+msgstr "Potwierdź wyjście"
+
+#: data/applets/quick_settings/main.py:66
+msgid "Language"
+msgstr "Język"
+
+#: data/applets/quick_settings/main.py:68
+msgid "Sound theme"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:71
+msgid "Skin"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:82
+msgid "Empty space"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:89
+msgid "(requires restart)"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:92
+#: data/applets/quick_settings/main.py:137
+msgid "On"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:92
+#: data/applets/quick_settings/main.py:137
+msgid "Off"
+msgstr ""
+
+#: data/applets/quick_settings/main.py:166
+msgid "Quick Settings"
+msgstr "Szybkie ustawienia"
+
+#: data/applications/TFM/copy_move.py:33
+msgid "Kopiowanie plików"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:43
+#, python-brace-format
+msgid "Skopiowano: {}"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:45 data/applications/TFM/gui.py:639
+#, python-brace-format
+msgid "Błąd kopiowania {}: {}"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:45 data/applications/TFM/gui.py:639
+msgid "Błąd Kopiowania"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:46
+#, python-brace-format
+msgid "B��ąd kopiowania: {}"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:55
+msgid "Przenoszenie plików"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:62
+#, python-brace-format
+msgid "Przeniesiono: {}"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:64 data/applications/TFM/gui.py:647
+#, python-brace-format
+msgid "Błąd przenoszenia {}: {}"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:64 data/applications/TFM/gui.py:647
+msgid "Błąd Przenoszenia"
+msgstr ""
+
+#: data/applications/TFM/copy_move.py:65
+#, python-brace-format
+msgid "Błąd przenoszenia: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:38 data/applications/TFM/gui.py:216
+#: data/applications/TFM/gui.py:221
+msgid "Menedżer Plików"
+msgstr "Menedżer Plików"
+
+#: data/applications/TFM/gui.py:62
+msgid ""
+"Nie można uzyskać dostępu do ostatniego katalogu. Przełączam na widok "
+"wyboru dysku."
+msgstr ""
+
+#: data/applications/TFM/gui.py:87
+#: data/applications/tDownloader/downloader.py:133
+#: data/applications/tEdit/tedit.py:732 data/applications/tNotes/notes.py:107
+#: data/applications/tReminder/reminder.py:134
+msgid "&Plik"
+msgstr ""
+
+#: data/applications/TFM/gui.py:88 data/applications/tEdit/tedit.py:733
+msgid "&Edycja"
+msgstr ""
+
+#: data/applications/TFM/gui.py:89 data/applications/tReminder/reminder.py:142
+msgid "&Widok"
+msgstr ""
+
+#: data/applications/TFM/gui.py:143
+msgid "Karta 1"
+msgstr ""
+
+#: data/applications/TFM/gui.py:204
+msgid "Wybór dysku"
+msgstr ""
+
+#: data/applications/TFM/gui.py:249 data/applications/TFM/menu.py:49
+#: data/applications/TFM/tfm_settings.py:223
+#: data/applications/tReminder/reminder.py:167
+msgid "Nazwa"
+msgstr ""
+
+#: data/applications/TFM/gui.py:252 data/applications/TFM/gui.py:307
+#: data/applications/TFM/gui.py:341 data/applications/TFM/gui.py:391
+#: data/applications/TFM/menu.py:50 data/applications/TFM/tfm_settings.py:224
+msgid "Data modyfikacji"
+msgstr ""
+
+#: data/applications/TFM/gui.py:255 data/applications/TFM/gui.py:316
+#: data/applications/TFM/gui.py:352 data/applications/TFM/gui.py:403
+#: data/applications/TFM/menu.py:51 data/applications/TFM/tfm_settings.py:225
+msgid "Typ"
+msgstr ""
+
+#: data/applications/TFM/gui.py:299
+msgid "Brak dostępnych dysków"
+msgstr ""
+
+#: data/applications/TFM/gui.py:320
+msgid "Dysk"
+msgstr ""
+
+#: data/applications/TFM/gui.py:334 data/applications/TFM/gui.py:414
+#: data/applications/TFM/gui.py:501 data/applications/TFM/gui.py:558
+#: data/applications/TFM/gui.py:586 data/applications/TFM/gui.py:685
+#: data/applications/TFM/gui.py:704 data/applications/TFM/gui.py:750
+#: data/applications/TFM/gui.py:868 data/applications/TFM/gui.py:1122
+#: data/applications/TFM/gui.py:1193 data/applications/TFM/gui.py:1227
+msgid "Ten folder jest pusty"
+msgstr ""
+
+#: data/applications/TFM/gui.py:374
+msgid "Folder"
+msgstr ""
+
+#: data/applications/TFM/gui.py:374
+msgid "Plik"
+msgstr ""
+
+#: data/applications/TFM/gui.py:425
+msgid "Brak dostępu do katalogu"
+msgstr ""
+
+#: data/applications/TFM/gui.py:426
+msgid "Brak dostępu do katalogu."
+msgstr ""
+
+#: data/applications/TFM/gui.py:459
+msgid "Podaj nazwę nowego pliku:"
+msgstr ""
+
+#: data/applications/TFM/gui.py:459
+msgid "Nowy Plik"
+msgstr ""
+
+#: data/applications/TFM/gui.py:467
+#, python-brace-format
+msgid "Utworzono nowy plik {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:469
+#, python-brace-format
+msgid "Nie udało się utworzyć pliku {}: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:469
+msgid "Błąd Tworzenia Pliku"
+msgstr ""
+
+#: data/applications/TFM/gui.py:470
+#, python-brace-format
+msgid "Błąd tworzenia pliku {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:475
+msgid "Podaj nazwę nowego folderu:"
+msgstr ""
+
+#: data/applications/TFM/gui.py:475
+msgid "Nowy Folder"
+msgstr ""
+
+#: data/applications/TFM/gui.py:483
+#, python-brace-format
+msgid "Utworzono nowy folder {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:485
+#, python-brace-format
+msgid "Nie udało się utworzyć folderu {}: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:485
+msgid "Błąd Tworzenia Folderu"
+msgstr ""
+
+#: data/applications/TFM/gui.py:486
+#, python-brace-format
+msgid "Błąd tworzenia folderu {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:493
+msgid "Brak aktywnej listy plików do zmiany nazwy."
+msgstr ""
+
+#: data/applications/TFM/gui.py:502
+msgid "Nie można zmienić nazwy wpisu 'Ten folder jest pusty'."
+msgstr ""
+
+#: data/applications/TFM/gui.py:519
+msgid "Podaj nową nazwę:"
+msgstr ""
+
+#: data/applications/TFM/gui.py:519
+msgid "Zmiana nazwy"
+msgstr ""
+
+#: data/applications/TFM/gui.py:533
+#, python-brace-format
+msgid "Zmieniono nazwę z {} na {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:535
+msgid "Błąd zmiany nazwy"
+msgstr ""
+
+#: data/applications/TFM/gui.py:536
+#, python-brace-format
+msgid "Błąd zmiany nazwy {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:538
+msgid "Nazwa nie została zmieniona."
+msgstr ""
+
+#: data/applications/TFM/gui.py:540 data/applications/TFM/gui.py:542
+msgid "Anulowano zmianę nazwy."
+msgstr ""
+
+#: data/applications/TFM/gui.py:545
+msgid "Nie wybrano elementu do zmiany nazwy."
+msgstr ""
+
+#: data/applications/TFM/gui.py:552
+msgid "Brak aktywnej listy plików do skopiowania."
+msgstr ""
+
+#: data/applications/TFM/gui.py:570
+#, python-brace-format
+msgid "Skopiowano {} elementów do schowka."
+msgstr ""
+
+#: data/applications/TFM/gui.py:573
+msgid "Nie wybrano elementów do skopiowania."
+msgstr ""
+
+#: data/applications/TFM/gui.py:580
+msgid "Brak aktywnej listy plików do wycięcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:598
+#, python-brace-format
+msgid "Wycięto {} elementów do schowka."
+msgstr ""
+
+#: data/applications/TFM/gui.py:601
+msgid "Nie wybrano elementów do wycięcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:606
+msgid "Schowek jest pusty."
+msgstr ""
+
+#: data/applications/TFM/gui.py:640
+#, python-brace-format
+msgid "Błąd kopiowania {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:648
+#, python-brace-format
+msgid "Błąd przenoszenia {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:653
+msgid "Zakończono operację wklejania."
+msgstr ""
+
+#: data/applications/TFM/gui.py:670
+msgid "Brak elementów do wklejenia w schowku."
+msgstr ""
+
+#: data/applications/TFM/gui.py:678
+msgid "Brak aktywnej listy plików do zaznaczenia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:694
+#, python-brace-format
+msgid "Zaznaczono wszystkie ({}) elementy."
+msgstr ""
+
+#: data/applications/TFM/gui.py:696
+msgid "Brak elementów do zaznaczenia w obecnym folderze."
+msgstr ""
+
+#: data/applications/TFM/gui.py:733
+msgid "Brak aktywnej listy plików do otwarcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:752 data/applications/TFM/gui.py:1124
+msgid "Folder jest pusty."
+msgstr ""
+
+#: data/applications/TFM/gui.py:763 data/applications/TFM/gui.py:1138
+#, python-brace-format
+msgid "Przejście na dysk: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:766 data/applications/TFM/gui.py:1141
+#, python-brace-format
+msgid "Wybrany dysk nie istnieje: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:791 data/applications/TFM/gui.py:1157
+#, python-brace-format
+msgid "Otwarto folder: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:796 data/applications/TFM/gui.py:1162
+#, python-brace-format
+msgid "Otwarto plik: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:798 data/applications/TFM/gui.py:1164
+#, python-brace-format
+msgid "Nie udało się otworzyć pliku {}: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:798 data/applications/TFM/gui.py:1164
+msgid "Błąd Otwierania Pliku"
+msgstr ""
+
+#: data/applications/TFM/gui.py:800 data/applications/TFM/gui.py:1166
+#, python-brace-format
+msgid "Błąd otwierania pliku: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:803 data/applications/TFM/gui.py:1169
+#, python-brace-format
+msgid "Element nie istnieje: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:806
+msgid "Nie wybrano elementu do otwarcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:834
+#, python-brace-format
+msgid "Aktualny katalog: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:838
+#, python-brace-format
+msgid "{}. Fokus na: {}."
+msgstr ""
+
+#: data/applications/TFM/gui.py:873 data/applications/TFM/gui.py:1198
+#, python-brace-format
+msgid "Odznaczono: {}. Razem: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:878 data/applications/TFM/gui.py:1202
+#, python-brace-format
+msgid "Wybrano: {}. Razem: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:881 data/applications/TFM/gui.py:1205
+msgid "Nie można zaznaczyć wpisu 'Ten folder jest pusty'."
+msgstr ""
+
+#: data/applications/TFM/gui.py:913
+msgid "Jesteś w widoku wyboru dysku."
+msgstr ""
+
+#: data/applications/TFM/gui.py:921
+msgid "Przejście do widoku wyboru dysku."
+msgstr ""
+
+#: data/applications/TFM/gui.py:937
+#, python-brace-format
+msgid "Przejście do katalogu nadrzędnego: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:940
+msgid "Jesteś w katalogu głównym."
+msgstr ""
+
+#: data/applications/TFM/gui.py:947
+msgid "Brak aktywnej listy plików do usunięcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:953
+msgid "Nie wybrano elementów do usunięcia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:962
+#, python-brace-format
+msgid "Czy na pewno chcesz usunąć te elementy? {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:962
+#, python-brace-format
+msgid "Czy na pewno chcesz usunąć ten element? {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:963
+msgid "Potwierdzenie Usunięcia"
+msgstr ""
+
+#: data/applications/TFM/gui.py:964
+msgid "Anulowano usunięcie."
+msgstr ""
+
+#: data/applications/TFM/gui.py:985
+#, python-brace-format
+msgid "Usunięto: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:987
+#, python-brace-format
+msgid "Nie udało się usunąć {}: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:987
+msgid "Błąd Usuwania"
+msgstr ""
+
+#: data/applications/TFM/gui.py:988
+#, python-brace-format
+msgid "Błąd usuwania: {}"
+msgstr ""
+
+#: data/applications/TFM/gui.py:999
+#, python-brace-format
+msgid "Usunięto {} z {} elementów."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1001
+msgid "Nie udało się usunąć żadnych elementów."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1014
+msgid "Ustawienia zapisane i zastosowane."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1016
+msgid "Anulowano ustawienia."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1024
+msgid "Sortowanie według nazwy."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1030
+msgid "Sortowanie według daty modyfikacji."
+msgstr ""
+
+#: data/applications/TFM/gui.py:1037
+msgid "Sortowanie według typu."
+msgstr ""
+
+#: data/applications/TFM/menu.py:10
+msgid "&Nowy plik\tCtrl+N"
+msgstr "&Nowy plik\tCtrl+N"
+
+#: data/applications/TFM/menu.py:11
+msgid "Nowy folder\tCtrl+Shift+N"
+msgstr "Nowy folder\tCtrl+Shift+N"
+
+#: data/applications/TFM/menu.py:13
+msgid "Ustawienia\tCtrl+S"
+msgstr "Ustawienia\tCtrl+S"
+
+#: data/applications/TFM/menu.py:26
+msgid "Kopiuj\tCtrl+C"
+msgstr "Kopiuj\tCtrl+C"
+
+#: data/applications/TFM/menu.py:27
+msgid "Wytnij\tCtrl+X"
+msgstr "Wytnij\tCtrl+X"
+
+#: data/applications/TFM/menu.py:28
+msgid "Wklej\tCtrl+V"
+msgstr "Wklej\tCtrl+V"
+
+#: data/applications/TFM/menu.py:30
+msgid "Zaznacz wszystko\tCtrl+A"
+msgstr "Zaznacz wszystko\tCtrl+A"
+
+#: data/applications/TFM/menu.py:32
+msgid "Zmień nazwę\tF2"
+msgstr ""
+
+#: data/applications/TFM/menu.py:33
+msgid "Usuń\tDelete"
+msgstr ""
+
+#: data/applications/TFM/menu.py:57 data/applications/tReminder/reminder.py:141
+msgid "Sortuj według"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:193
+msgid "Ustawienia Eksploratora"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:205
+msgid "Pokaż ukryte pliki"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:210
+msgid "Pokaż rozszerzenia plików"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:215
+msgid "Potwierdzenie przed usunięciem"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:220
+msgid "Wyświetlanie danych pliku"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:249
+msgid "Widok Eksploratora"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:252
+msgid "Tryb widoku eksploratora:"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:259
+msgid "Tytuł okna"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:262
+msgid "Tryb tytułu okna:"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:270
+msgid "Dialog kopiowania plik��w"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:273
+msgid "Tryb dialogu kopiowania:"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:285
+#: data/applications/tEdit/tedit.py:323
+msgid "Ogólne"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:286
+msgid "Wygląd"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:288
+msgid "Zatwierdź"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:289
+#: data/applications/tEdit/tedit.py:101 data/applications/tEdit/tedit.py:145
+#: data/applications/tEdit/tedit.py:182 data/applications/tEdit/tedit.py:331
+#: data/applications/tNotes/notes.py:170 data/applications/tNotes/notes.py:250
+#: data/applications/tNotes/notes.py:315
+#: data/applications/tReminder/reminder.py:473
+#: data/applications/tReminder/reminder.py:582
+#: data/applications/tWeb/web.py:761
+msgid "Anuluj"
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:305
+msgid "Zaznacz, aby wyświetlić ukryte pliki w liście."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:306
+msgid "Zaznacz, aby wyświetlić rozszerzenia plików w liście."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:307
+msgid "Zaznacz, aby program pytał o potwierdzenie przed usunięciem plików."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:308
+msgid "Zaznacz, aby wyświetlić nazwę pliku w liście."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:309
+msgid "Zaznacz, aby wyświetlić datę modyfikacji pliku w liście."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:310
+msgid "Zaznacz, aby wyświetlić typ pliku (folder/plik) w liście."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:311
+msgid ""
+"Wybierz tryb wyświetlania plików: lista, commander (dwa panele), "
+"klasyczny, wiele kart."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:312
+msgid ""
+"Wybierz co będzie wyświetlane w tytule okna: nazwa aplikacji, nazwa "
+"bieżącego folderu, pełna ścieżka."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:313
+msgid ""
+"Wybierz tryb dialogu kopiowania/przenoszenia: klasyczny (z paskiem "
+"postępu) lub systemowy."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:314
+msgid "Zapisz zmiany ustawień."
+msgstr ""
+
+#: data/applications/TFM/tfm_settings.py:315
+msgid "Anuluj zmiany ustawień."
+msgstr ""
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:7
 msgid "Voice Cloning"
-msgstr "Klonowanie głosu"
+msgstr ""
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:12
 msgid "Voice Name:"
@@ -676,15 +2077,15 @@ msgstr "Nazwa głosu:"
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:14
 msgid "Voice Description:"
-msgstr "Opis głosu:"
+msgstr ""
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:16
 msgid "Path to Voice:"
-msgstr "Ścieżka do głosu:"
+msgstr ""
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:18
 msgid "Browse..."
-msgstr "Przeglądaj..."
+msgstr ""
 
 #: ⁨data/applications/elevenlabs client TCE Version/clonegen.py⁩:38
 msgid "Choose a file"
@@ -702,31 +2103,1316 @@ msgstr "Głos pobrany"
 msgid ""
 "Do you want to clone this voice and add it to your elevenLabs voice "
 "library?"
-msgstr "Czy chcesz sklonować ten głos i dodać go do swojej biblioteki głosów elevenLabs?"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:44
+msgid "Unsupported platform"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:109
+msgid "Otwórz folder pobrań"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:116
+msgid "Nazwa Pliku"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:117
+msgid "Link do Pobrania"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:128
+msgid "&Nowe Pobranie"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:130
+msgid "&Ustawienia"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:137
+#: data/applications/tDownloader/downloader.py:236
+#: data/applications/tDownloader/downloader.py:373
+#: data/applications/tDownloader/downloader.py:395
+#: data/applications/tDownloader/downloader.py:428
+msgid "Titan Download Manager"
+msgstr "Menedżer pobierania Titan"
+
+#: data/applications/tDownloader/downloader.py:207
+#: data/applications/tDownloader/downloader.py:374
+#: data/applications/tDownloader/downloader.py:396
+msgid "Pobieranie"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:207
+msgid "Pobieranie wget.exe"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:235
+#: data/applications/tDownloader/downloader.py:427
+#, python-brace-format
+msgid "Pobieranie {} zakończone"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:254
+#: data/applications/tDownloader/downloader.py:257
+#: data/applications/tDownloader/downloader.py:446
+#: data/applications/tDownloader/downloader.py:449
+#, python-brace-format
+msgid "Błąd podczas pobierania: {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:287
+msgid "Wstrzymaj"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:291
+msgid "Zatrzymaj"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:295
+msgid "Usuń Plik"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:299
+msgid "Usuń z Listy"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:304
+#, python-brace-format
+msgid "Wstrzymaj pobieranie dla {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:307
+#, python-brace-format
+msgid "Zatrzymaj pobieranie dla {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:313
+#, python-brace-format
+msgid "Plik {} został usunięty"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:315
+#, python-brace-format
+msgid "Plik {} nie istnieje"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:319
+#, python-brace-format
+msgid "Plik {} został usunięty z listy"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:323
+msgid "Nowe Pobranie"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:342
+#: data/applications/tDownloader/downloader.py:490
+msgid "Zamknij"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:347
+msgid "Wprowadź lub wklej link do pliku, który chcesz pobrać:"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:373
+#, python-brace-format
+msgid "Rozpoczęto pobieranie wget: {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:374
+#: data/applications/tDownloader/downloader.py:396
+#, python-brace-format
+msgid "Pobieranie {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:395
+#, python-brace-format
+msgid "Rozpoczęto pobieranie pliku: {}"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:456
+msgid "Ustawienia"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:462
+msgid "Metoda pobierania plików"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:468
+msgid "Wybierz metodę pobierania:"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:475
+msgid "Folder pobranych plików"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:478
+msgid "Wybierz folder, w którym zapisywane będą pobrane pliki:"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:480
+msgid "Wskaż folder, w którym mają być zapisywane pobrane pliki"
+msgstr ""
+
+#: data/applications/tDownloader/downloader.py:489
+#: data/applications/tNotes/notes.py:167 data/applications/tNotes/notes.py:247
+#: data/applications/tNotes/notes.py:312 data/applications/tWeb/web.py:760
+msgid "Zapisz"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:85
+msgid "Znajdź"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:90 data/applications/tEdit/tedit.py:127
+msgid "Szukaj:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:97
+msgid "Znajdź dalej"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:122
+msgid "Zamień tekst"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:134
+msgid "Zamień na:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:141
+msgid "Zamień"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:167
+msgid "Wstaw znak Unicode"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:171
+msgid "Podaj kod punktu kodowego (np. U+00A9):"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:208
+#: data/applications/tReminder/reminder.py:528
+msgid "Ustawienia programu"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:243
+msgid "Automatyczny zapis"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:244
+msgid "Zapis co:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:247
+msgid "5 minut"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:247
+msgid "10 minut"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:247
+msgid "wyłączone"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:259
+msgid "Sprawdzanie pisowni"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:261
+msgid "Włącz sprawdzanie pisowni (wymaga słownika)"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:267
+msgid ""
+"Program spróbuje pobrać słownik pl_PL do podkatalogu data/dicts\n"
+"jeśli nie będzie dostępny systemowo."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:271
+msgid ""
+"Biblioteka 'enchant' jest niedostępna.\n"
+"Funkcja sprawdzania pisowni jest wyłączona."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:285
+msgid "Znaki końca linii"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:286
+msgid "Symbol końca linii:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:289
+msgid "windows"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:289
+msgid "MAC OS/linux/unix"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:289
+msgid "inny symbol..."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:301
+msgid "Napisz symbol końca linii:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:324
+msgid "Tekst"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:457 data/applications/tEdit/tedit.py:754
+msgid "Edytor tekstowy TEdit"
+msgstr "Edytor tekstowy TEdit"
+
+#: data/applications/tEdit/tedit.py:463
+msgid "Treść dokumentu:"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:557
+#, python-brace-format
+msgid ""
+"Błąd podczas pobierania słownika:\n"
+"{e}"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:557 data/applications/tEdit/tedit.py:579
+msgid "Błąd pobierania"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:568
+#, python-brace-format
+msgid ""
+"Błąd zapisu plików słownika:\n"
+"{e}"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:568
+msgid "Błąd zapisu"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:579
+#, python-brace-format
+msgid ""
+"Nieoczekiwany błąd podczas pobierania:\n"
+"{e}"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:644
+msgid ""
+"Słownik języka polskiego (pl_PL) jest niedostępny.\n"
+"Użyto słownika angielskiego (en_US)."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:645
+msgid "Informacja o słowniku"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:649
+msgid ""
+"Brak dostępnych słowników (pl_PL, en_US). Sprawdzanie pisowni zostanie "
+"wyłączone."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:650
+msgid "Brak słownika"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:659
+#, python-brace-format
+msgid ""
+"Wystąpił błąd podczas inicjalizacji słownika:\n"
+"{e}\n"
+"Sprawdzanie pisowni zostanie wyłączone."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:660
+msgid "Błąd słownika"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:693
+msgid "&Nowy dokument\tCtrl+N"
+msgstr "&Nowy dokument\tCtrl+N"
+
+#: data/applications/tEdit/tedit.py:694
+msgid "&Otwórz dokument...\tCtrl+O"
+msgstr "&Otwórz dokument...\tCtrl+O"
+
+#: data/applications/tEdit/tedit.py:695
+msgid "&Zapisz plik\tCtrl+S"
+msgstr "&Zapisz plik\tCtrl+S"
+
+#: data/applications/tEdit/tedit.py:696
+msgid "Zapisz jako...\tCtrl+Shift+S"
+msgstr "Zapisz jako...\tCtrl+Shift+S"
+
+#: data/applications/tEdit/tedit.py:698
+msgid "Ustawienia programu..."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:700
+msgid "&Zamknij TEdit"
+msgstr "&Zamknij TEdit"
+
+#: data/applications/tEdit/tedit.py:703
+msgid "Cofnij...\tCtrl+Z"
+msgstr "Cofnij...\tCtrl+Z"
+
+#: data/applications/tEdit/tedit.py:706
+msgid "Wytnij...\tCtrl+X"
+msgstr "Wytnij...\tCtrl+X"
+
+#: data/applications/tEdit/tedit.py:707
+msgid "Kopiuj...\tCtrl+C"
+msgstr "Kopiuj...\tCtrl+C"
+
+#: data/applications/tEdit/tedit.py:708
+msgid "Wklej...\tCtrl+V"
+msgstr "Wklej...\tCtrl+V"
+
+#: data/applications/tEdit/tedit.py:710
+msgid "Zaznacz wszystko...\tCtrl+A"
+msgstr "Zaznacz wszystko...\tCtrl+A"
+
+#: data/applications/tEdit/tedit.py:712
+msgid "Znajdź...\tCtrl+F"
+msgstr "Znajdź...\tCtrl+F"
+
+#: data/applications/tEdit/tedit.py:713
+msgid "Zamień tekst...\tCtrl+H"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:720
+msgid "Sprawdź pisownię"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:726
+msgid "Wstaw datę i godzinę..."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:727
+msgid "Wstaw znak Unicode..."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:730
+msgid "O Programie..."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:734
+msgid "&Wstaw"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:735
+msgid "Pomoc"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:744
+msgid "Dokument został zmodyfikowany. Zapisać przed utworzeniem nowego?"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:744 data/applications/tEdit/tedit.py:762
+#: data/applications/tEdit/tedit.py:911
+msgid "Potwierdzenie"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:762
+msgid "Dokument został zmodyfikowany. Zapisać przed otwarciem nowego?"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:771
+msgid "Pliki tekstowe (*.txt)|*.txt|"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:772
+msgid "Dokumenty Word (*.docx, *.doc)|*.docx;*.doc|"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:773
+msgid "Pliki PDF (*.pdf)|*.pdf|"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:774
+msgid "Wszystkie pliki (*.*)|*.*"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:776
+msgid "Otwórz plik"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:810
+msgid ""
+"Plik został zaimportowany jako tekst. Zapisanie go spowoduje utratę "
+"oryginalnego formatowania i zapisanie jako plik tekstowy."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:810
+msgid "Ostrzeżenie"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:813
+#, python-brace-format
+msgid "Nie można otworzyć pliku '{path}': {e}"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:826
+msgid "Zapisz plik jako"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:826
+msgid "Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:861
+#, python-brace-format
+msgid "Nie można zapisać pliku '{path}': {e}"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:895
+msgid ""
+"TEdit jest edytorem tekstowym,\n"
+"aplikacja jest jednym z podstawowych składników tSuite."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:898
+msgid "Licencja (np. MIT, GPL - opcjonalnie)"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:911
+msgid "Dokument został zmodyfikowany. Czy chcesz zapisać zmiany?"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:943
+msgid "Nie znaleziono szukanego tekstu."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:961
+msgid "Nie znaleziono tekstu do zamiany."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:977
+msgid ""
+"Nieprawidłowy kod Unicode. Użyj formatu Hex (np. 00A9) lub U+Hex (np. "
+"U+00A9)."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1034
+msgid ""
+"Sprawdzanie pisowni jest wyłączone w ustawieniach lub słownik nie został "
+"poprawnie załadowany."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1035
+msgid "Sprawdzanie pisowni - Status"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1042
+msgid "Spróbuj włączyć sprawdzanie pisowni w Ustawieniach programu."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1043
+msgid "Wskazówka"
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1069
+msgid "Nie znaleziono błędów pisowni."
+msgstr ""
+
+#: data/applications/tEdit/tedit.py:1071
+#, python-brace-format
+msgid "Zakończono sprawdzanie pisowni. Znaleziono {errors_found} błędów."
+msgstr ""
+
+#: data/applications/tMedia/YoutubeSearch.py:14
+msgid "Wyszukiwarka YouTube"
+msgstr ""
+
+#: data/applications/tMedia/YoutubeSearch.py:23
+msgid "Szukaj"
+msgstr ""
+
+#: data/applications/tMedia/YoutubeSearch.py:65
+msgid "Wyniki zostały załadowane"
+msgstr ""
+
+#: data/applications/tMedia/YoutubeSearch.py:67
+#, python-format
+msgid "Błąd podczas wyszukiwania: %s"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:52
+msgid "tNotes"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:57
+msgid "Tytuł notatki"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:58
+msgid "Data utworzenia"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:59
+msgid "Data edytowania"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:63 data/applications/tNotes/notes.py:151
+#: data/applications/tNotes/notes.py:158
+msgid "Nowa notatka"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:66 data/applications/tNotes/notes.py:200
+msgid "Nowy katalog"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:69
+msgid "Usuń"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:72
+msgid "Powrót"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:95
+msgid "&Nowa notatka\tCtrl+N"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:96
+msgid "Nowy &katalog\tCtrl+Shift+N"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:98
+msgid "Ustawienia tNotes..."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:100
+msgid "&Zamknij tNotes\tCtrl+W"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:112
+#, python-brace-format
+msgid "Katalog {} nie istnieje."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:120
+#, python-brace-format
+msgid "[Katalog] {}"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:120
+#, python-brace-format
+msgid "Katalog {}, zawiera {} notatek"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:151
+msgid "Wprowadź tytuł notatki:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:162 data/applications/tNotes/notes.py:242
+msgid "Tytuł:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:164 data/applications/tNotes/notes.py:244
+msgid "Treść:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:194
+msgid "Notatka została zapisana!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:200
+msgid "Wprowadź nazwę katalogu:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:207
+msgid "Katalog został utworzony!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:209
+#, python-brace-format
+msgid "Katalog {} już istnieje."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:215 data/applications/tNotes/notes.py:270
+msgid "[Katalog]"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:221 data/applications/tNotes/notes.py:280
+msgid "Katalog"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:235
+#, python-brace-format
+msgid "Plik {} nie istnieje."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:238
+msgid "Edytuj notatkę"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:277 data/applications/tNotes/notes.py:287
+msgid "Katalog został usunięty!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:279 data/applications/tNotes/notes.py:289
+#, python-brace-format
+msgid "Katalog {} nie jest pusty."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:294
+msgid "Notatka została usunięta!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:303
+msgid "Ustawienia tNotes"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:307
+msgid "Oznajmij katalogi"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:309
+msgid "Oznajmij skróty klawiszowe"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:333
+msgid "Ustawienia zostały zapisane!"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:40
+#: data/applications/tReminder/reminder.py:356
+msgid "Titan Organizer"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:129
+msgid "&Nowe przypomnienie\tCtrl+N"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:130
+msgid "&Ustawienia programu"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:131
+msgid "&Usuń przypomnienie\tDelete"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:132
+msgid "&Zminimalizuj do zasobnika"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:133
+msgid "&Wyjdź\tAlt+F4"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:138
+msgid "Nazwa &1"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:139
+msgid "Priorytet &2"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:140
+msgid "Data &3"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:168
+msgid "Opis"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:169
+msgid "Data"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:170
+msgid "Godzina"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:171
+msgid "Priorytet"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:249
+#: data/applications/tReminder/reminder.py:451
+msgid "Niski"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:249
+#: data/applications/tReminder/reminder.py:451
+msgid "Średni"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:249
+#: data/applications/tReminder/reminder.py:451
+msgid "Wysoki"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:314
+#, python-brace-format
+msgid "Plik dźwiękowy {} nie został znaleziony."
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:335
+msgid "Nie znaleziono silnika TTS."
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:347
+#, python-brace-format
+msgid "Titan reminder - {} przypomnień, {} - wykonano, {} - niewykonano"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:369
+msgid "Przywróć"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:370
+msgid "Wyjdź"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:385
+msgid "Nowe przypomnienie"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:398
+msgid "Nazwa przypomnienia:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:406
+msgid "Opis:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:414
+msgid "Data:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:423
+msgid "Dzień:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:425
+msgid "Miesiąc:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:427
+msgid "Rok:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:433
+msgid "Czas:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:441
+msgid "Godzina:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:443
+msgid "Minuta:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:449
+msgid "Priorytet:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:458
+msgid "Powtórz:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:461
+msgid "2 razy co 3 minuty"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:462
+msgid "4 razy co minutę"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:463
+msgid "Co 15 minut"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:464
+msgid "Tylko raz"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:503
+msgid "Przypomnienie"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:518
+msgid "Wykonano"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:519
+msgid "Moment"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:541
+msgid "Dźwięki"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:548
+msgid "Temat dźwiękowy:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:562
+msgid "Tekst na mowę"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:569
+msgid "Widok listy przypomnień:"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:571
+msgid "Lista (zalecane dla osób z niepełnosprawnością wzroku)"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:571
+msgid "Widok kalendarza"
+msgstr ""
+
+#: data/applications/tReminder/reminder.py:600
+msgid "Moduł pygame nie jest dostępny."
+msgstr ""
+
+#: data/applications/tWeb/web.py:74
+#, python-brace-format
+msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:80
+#, python-brace-format
+msgid "Nie można odtworzyć dźwięku: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:87
+msgid "Pobrane pliki"
+msgstr ""
+
+#: data/applications/tWeb/web.py:94
+msgid "Lista plików pobranych przez tBrowser:"
+msgstr ""
+
+#: data/applications/tWeb/web.py:155
+msgid "tBrowser"
+msgstr ""
+
+#: data/applications/tWeb/web.py:166
+msgid "Wstecz"
+msgstr ""
+
+#: data/applications/tWeb/web.py:167
+msgid "Dalej"
+msgstr ""
+
+#: data/applications/tWeb/web.py:168
+msgid "Odśwież"
+msgstr ""
+
+#: data/applications/tWeb/web.py:170
+msgid "Przycisk Wstecz"
+msgstr ""
+
+#: data/applications/tWeb/web.py:171
+msgid "Przycisk Dalej"
+msgstr ""
+
+#: data/applications/tWeb/web.py:172
+msgid "Przycisk Odśwież"
+msgstr ""
+
+#: data/applications/tWeb/web.py:175
+msgid "Wpisz adres lub wyszukaj w Google"
+msgstr ""
+
+#: data/applications/tWeb/web.py:244
+msgid "Ustawienia..."
+msgstr ""
+
+#: data/applications/tWeb/web.py:245
+msgid "Aplikacja"
+msgstr ""
+
+#: data/applications/tWeb/web.py:260
+msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
+msgstr ""
+
+#: data/applications/tWeb/web.py:268
+msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
+msgstr ""
+
+#: data/applications/tWeb/web.py:280 data/applications/tWeb/web.py:287
+#: data/applications/tWeb/web.py:602
+msgid "Ładowanie strony..."
+msgstr ""
+
+#: data/applications/tWeb/web.py:291 data/applications/tWeb/web.py:629
+msgid "Strona załadowana."
+msgstr ""
+
+#: data/applications/tWeb/web.py:300
+#, python-brace-format
+msgid "Załadowano stronę {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:420
+#, python-brace-format
+msgid "Kliknięto przycisk: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:458 data/applications/tWeb/web.py:466
+#, python-brace-format
+msgid "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgstr ""
+
+#: data/applications/tWeb/web.py:506
+#, python-brace-format
+msgid "Pole edycji: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:508 data/applications/tWeb/web.py:540
+#, python-brace-format
+msgid ", Wartość: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:514
+msgid "Przycisk bez etykiety"
+msgstr ""
+
+#: data/applications/tWeb/web.py:515 data/applications/tWeb/web.py:694
+#, python-brace-format
+msgid "Przycisk: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:520 data/applications/tWeb/web.py:597
+msgid "zaznaczone"
+msgstr ""
+
+#: data/applications/tWeb/web.py:520 data/applications/tWeb/web.py:597
+msgid "niezaznaczone"
+msgstr ""
+
+#: data/applications/tWeb/web.py:522
+#, python-brace-format
+msgid "Pole wyboru: {} ({})"
+msgstr ""
+
+#: data/applications/tWeb/web.py:524
+#, python-brace-format
+msgid "Przycisk radiowy: {} ({})"
+msgstr ""
+
+#: data/applications/tWeb/web.py:538
+#, python-brace-format
+msgid "Pole tekstowe: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:557
+#, python-brace-format
+msgid "Wprowadź tekst dla: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:557
+msgid "Edycja pola"
+msgstr ""
+
+#: data/applications/tWeb/web.py:568
+#, python-brace-format
+msgid "Wpisano: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:598
+#, python-brace-format
+msgid "{} {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:633
+msgid "Załadowano stronę"
+msgstr ""
+
+#: data/applications/tWeb/web.py:646
+#, python-brace-format
+msgid "Błąd podczas ładowania strony: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:647
+msgid "Błąd podczas ładowania strony."
+msgstr ""
+
+#: data/applications/tWeb/web.py:684
+#, python-brace-format
+msgid "Łącze: {}"
+msgstr ""
+
+#: data/applications/tWeb/web.py:692
+msgid "Przycisk"
+msgstr ""
+
+#: data/applications/tWeb/web.py:713
+msgid "Ustawienia tBrowser"
+msgstr ""
+
+#: data/applications/tWeb/web.py:720
+msgid "Oznajmianie"
+msgstr ""
+
+#: data/applications/tWeb/web.py:723
+msgid "Oznajmiaj podsumowanie strony"
+msgstr ""
+
+#: data/applications/tWeb/web.py:726
+msgid "Komunikaty o ładowaniu strony"
+msgstr ""
+
+#: data/applications/tWeb/web.py:733
+msgid "Interfejs"
+msgstr ""
+
+#: data/applications/tWeb/web.py:736
+msgid "Wybierz tryb przeglądania strony:"
+msgstr ""
+
+#: data/applications/tWeb/web.py:738
+msgid "Widok sieciowy (edge)"
+msgstr ""
+
+#: data/applications/tWeb/web.py:738
+msgid "Tryb wirtualnego bufora"
+msgstr ""
+
+#: data/applications/tWeb/web.py:749
+msgid "Prywatność"
+msgstr ""
+
+#: data/applications/tWeb/web.py:753
+msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
+msgstr ""
+
+#: data/applications/tWeb/web.py:793
+msgid ""
+"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
+"zmiany."
+msgstr ""
 
 #: data/components/charging_sound/init.py:106
 #, python-brace-format
 msgid "Podłączono do zasilacza, poziom baterii wynosi {}%"
-msgstr "Podłączono do zasilacza, poziom baterii wynosi {}%"
+msgstr ""
 
 #: data/components/charging_sound/init.py:111
 #, python-brace-format
 msgid "Odłączono zasilacz, poziom baterii wynosi {}%"
-msgstr "Odłączono zasilacz, poziom baterii wynosi {}%"
+msgstr ""
 
 #: data/components/charging_sound/init.py:114
 #, python-brace-format
 msgid "Ładowanie baterii, poziom baterii {}%"
-msgstr "Ładowanie baterii, poziom baterii {}%"
+msgstr ""
 
 #: data/components/charging_sound/init.py:117
 msgid "Bateria jest naładowana"
-msgstr "Bateria jest naładowana"
+msgstr ""
 
 #: data/components/charging_sound/init.py:156
 #, python-brace-format
 msgid "Głośność: {}%"
-msgstr "Głośność: {}%"
+msgstr ""
 
-msgid "button"
-msgstr "przycisk"
+#~ msgid "Network Features"
+#~ msgstr ""
+
+#~ msgid "Show network features"
+#~ msgstr ""
+
+#~ msgid "Username:"
+#~ msgstr ""
+
+#~ msgid "Password:"
+#~ msgstr ""
+
+#~ msgid "Login"
+#~ msgstr ""
+
+#~ msgid "Create Account"
+#~ msgstr ""
+
+#~ msgid "Network Features:"
+#~ msgstr ""
+
+#~ msgid "Network features, 3 of 3"
+#~ msgstr ""
+
+#~ msgid "Please enter both username and password."
+#~ msgstr ""
+
+#~ msgid "Info"
+#~ msgstr ""
+
+#~ msgid "Messages"
+#~ msgstr ""
+
+#~ msgid "Forum"
+#~ msgstr ""
+
+#~ msgid "Chat"
+#~ msgstr ""
+
+#~ msgid "Files"
+#~ msgstr ""
+
+#~ msgid "Inne komunikatory będą dostępne wkrótce."
+#~ msgstr ""
+
+#~ msgid "Wprowadź numer telefonu z kodem kraju (np. +48123456789)."
+#~ msgstr ""
+
+#~ msgid "Inne komunikatory"
+#~ msgstr ""
+
+#~ msgid "Wiadomości prywatne"
+#~ msgstr ""
+
+#~ msgid "Informacje"
+#~ msgstr ""
+
+#~ msgid "Rozłączony"
+#~ msgstr ""
+
+#~ msgid "Informacje o Telegramie"
+#~ msgstr ""
+
+#~ msgid "Odświeżanie listy użytkowników, znaleziono"
+#~ msgstr ""
+
+#~ msgid "nieprzeczytanych"
+#~ msgstr ""
+
+#~ msgid "Dodano użytkownika"
+#~ msgstr ""
+
+#~ msgid "Brak połączenia lub klienta do odświeżenia użytkowników"
+#~ msgstr ""
+
+#~ msgid "Wiadomość prywatna"
+#~ msgstr ""
+
+#~ msgid "Wyślij wiadomość prywatną"
+#~ msgstr ""
+
+#~ msgid "Zadzwoń"
+#~ msgstr ""
+
+#~ msgid "Rozpocznij rozmowę głosową"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Rozmowy głosowe nie są dostępne.\n"
+#~ "Sprawdź czy py-tgcalls jest zainstalowane."
+#~ msgstr ""
+
+#~ msgid "Czy chcesz rozpocząć rozmowę głosową z {}?"
+#~ msgstr ""
+
+#~ msgid "Rozmowa głosowa"
+#~ msgstr ""
+
+#~ msgid "Nieprawidłowy numer telefonu"
+#~ msgstr ""
+
+#~ msgid "Nieprawidłowy kod weryfikacyjny"
+#~ msgstr ""
+
+#~ msgid "Błąd logowania"
+#~ msgstr ""
+
+#~ msgid "Wprowadź kod weryfikacyjny otrzymany w SMS lub Telegramie:"
+#~ msgstr ""
+
+#~ msgid "Kod weryfikacyjny"
+#~ msgstr ""
+
+#~ msgid "Wprowadź hasło dwustopniowego uwierzytelniania:"
+#~ msgstr ""
+
+#~ msgid "Hasło 2FA"
+#~ msgstr ""
+
+#~ msgid "Połączono z Telegramem jako {}"
+#~ msgstr ""
+
+#~ msgid "Błąd Telegram"
+#~ msgstr ""
+
+#~ msgid "Rozłączono z Telegramem"
+#~ msgstr ""
+
+#~ msgid "Rozpocznij logowanie podając numer telefonu"
+#~ msgstr ""
+
+#~ msgid "Numer telefonu jest wymagany"
+#~ msgstr ""
+
+#~ msgid "Przygotowywanie połączenia z Telegramem..."
+#~ msgstr ""
+
+#~ msgid "Połączenie z Telegramem"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Aby połączyć się z Telegramem, potrzebujesz tokena bota.\n"
+#~ "Utwórz bota u @BotFather w Telegramie i skopiuj token."
+#~ msgstr ""
+
+#~ msgid "Token bota:"
+#~ msgstr ""
+
+#~ msgid "ID czatu grupowego (opcjonalne):"
+#~ msgstr ""
+
+#~ msgid "Zostaw puste dla prywatnych wiadomości"
+#~ msgstr ""
+
+#~ msgid "Twoja nazwa użytkownika w TCE:"
+#~ msgstr ""
+
+#~ msgid "Połącz"
+#~ msgstr ""
+
+#~ msgid "Użytkownicy w czacie:"
+#~ msgstr ""
+
+#~ msgid "Połączono z Telegramem - wybierz użytkownika lub pisz ogólnie"
+#~ msgstr ""
+
+#~ msgid "Rozłącz"
+#~ msgstr ""
+
+#~ msgid "Rozłącz z Telegramem"
+#~ msgstr ""
+
+#~ msgid "Połączony z Telegramem"
+#~ msgstr ""
+
+#~ msgid "Czat ogólny"
+#~ msgstr ""
+
+#~ msgid "Nie udało się połączyć z Telegramem"
+#~ msgstr ""
+
+#~ msgid "Nieprawidłowy token bota"
+#~ msgstr ""
+
+#~ msgid "Private Messages"
+#~ msgstr "Wiadomości prywatne"
+
+#~ msgid "Online Users"
+#~ msgstr "Użytkownicy online"
+
+#~ msgid "Użytkownicy online"
+#~ msgstr ""
+
+#~ msgid "users"
+#~ msgstr "użytkowników"
+

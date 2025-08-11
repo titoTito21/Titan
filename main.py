@@ -8,7 +8,7 @@ from gui import TitanApp
 from sound import play_startup_sound, initialize_sound, set_theme, play_sound
 from settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
 from translation import set_language
-from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH
+from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
 from shutdown_question import show_shutdown_dialog
 from app_manager import find_application_by_shortname, open_application
 from game_manager import *
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     if main():
         sys.exit()
 
-    # Inicjalizacja aplikacji wxPython w gł��wnym zakresie
+    # Inicjalizacja aplikacji wxPython w gł  wnym zakresie
     app = wx.App(False)
     settings = load_settings()
     
@@ -85,7 +85,13 @@ if __name__ == "__main__":
         )
         play_sound('dialogclose.ogg')
 
-    frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings)
+    from settingsgui import SettingsFrame
+    settings_frame = SettingsFrame(None, title=_("Settings"))
+
+    component_manager = ComponentManager(settings_frame)
+    component_manager.initialize_components(app)
+
+    frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings, component_manager=component_manager)
     
     # Bind the close event to the appropriate handler
     if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
@@ -93,15 +99,11 @@ if __name__ == "__main__":
     else:
         frame.Bind(wx.EVT_CLOSE, frame.on_close_unconfirmed)
     
-    from settingsgui import SettingsFrame
-    settings_frame = SettingsFrame(None, title=_("Settings"))
-
-    component_manager = ComponentManager(settings_frame)
-    component_manager.initialize_components(app)
-
     frame.component_manager = component_manager
     menubar = MenuBar(frame)
     frame.SetMenuBar(menubar)
+
+    
     
     frame.Show()
     app.MainLoop()

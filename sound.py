@@ -92,6 +92,9 @@ def play_sound(sound_file, pan=None):
 def play_startup_sound():
     play_sound('startup.ogg')
 
+def play_connecting_sound():
+    play_sound('connecting.ogg')
+
 
 def play_focus_sound(pan=None):
     play_sound('focus.ogg', pan=pan)
@@ -152,7 +155,7 @@ def set_theme(theme):
     global current_theme
     current_theme = theme
     stop_loop_sound()
-    play_loop_sound()
+    # play_loop_sound()
 
 
 def set_sound_theme_volume(volume):
