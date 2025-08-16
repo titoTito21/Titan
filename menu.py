@@ -32,6 +32,8 @@ class MenuBar(wx.MenuBar):
         program_menu = wx.Menu()
         install_data_item = program_menu.Append(wx.ID_ANY, _("Install data package..."))
         component_manager_item = program_menu.Append(wx.ID_ANY, _("Component Manager..."))
+        
+        
         settings_item = program_menu.Append(wx.ID_ANY, _("Program settings"))
         minimize_item = program_menu.Append(wx.ID_ANY, _("Minimize"))
         exit_item = program_menu.Append(wx.ID_EXIT, _("Exit"))

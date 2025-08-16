@@ -1,4 +1,5 @@
 import wx
+from translation import _
 
 class MenuBar(wx.MenuBar):
     def __init__(self, parent):
@@ -12,11 +13,11 @@ class MenuBar(wx.MenuBar):
         voice_db_id = wx.NewId()
         voice_clone_id = wx.NewId()
 
-        client_menu.Append(settings_id, 'Ustawienia klienta...\tCtrl+K')
-        client_menu.Append(voice_db_id, 'Baza danych głosów...\tCtrl+D')
-        client_menu.Append(voice_clone_id, 'Klonowanie głosu...\tCtrl+C')
+        client_menu.Append(settings_id, _("Ustawienia klienta...") + '\tCtrl+K')
+        client_menu.Append(voice_db_id, _("Baza danych głosów...") + '\tCtrl+D')
+        client_menu.Append(voice_clone_id, _("Klonowanie głosu...") + '\tCtrl+C')
         
-        self.Append(client_menu, 'Klient')
+        self.Append(client_menu, _("Klient"))
 
         # Połączenie opcji z metodami
         parent.Bind(wx.EVT_MENU, parent.OnClientSettings, id=settings_id)

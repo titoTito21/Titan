@@ -1,4 +1,5 @@
-name="Klient elevenlabs"
-description="corporate task reminder pozwala na zorganizowanie listy zadań do wykonania, przydaje się w pracy"
+name_pl="Klient elevenlabs"
+name_en="ElevenLabs Client"
+description="Klient do generowania mowy z tekstu przy użyciu usługi ElevenLabs AI"
 openfile="main.py"
 shortname="elevenlabs"

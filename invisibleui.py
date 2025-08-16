@@ -2,7 +2,7 @@ from pynput import keyboard
 import threading
 import time
 import accessible_output3.outputs.auto
-from sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound
+from sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused
 from settings import load_settings, get_setting
 from translation import set_language
 from app_manager import get_applications, open_application
@@ -15,6 +15,15 @@ import os
 import importlib.util
 import json
 import traceback
+import re
+from key_blocker import start_key_blocking, stop_key_blocking, is_key_blocking_active
+try:
+    import telegram_client
+    import messenger_client
+except ImportError:
+    telegram_client = None
+    messenger_client = None
+    print("Warning: Telegram/Messenger clients not available")
 
 _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
@@ -84,6 +93,14 @@ class InvisibleUI:
         self.active_widget = None
         self.active_widget_name = None
         self.titan_ui_mode = False
+        self.titan_im_mode = None  # 'telegram', 'messenger', or None
+        self.current_contacts = []
+        self.current_groups = []
+        self.current_chat_history = []
+        self.current_chat_user = None
+        self.titan_im_submenu = None  # 'contacts', 'groups', 'history'
+        self.current_voice_message_path = None
+        self.current_selected_message = None
         self.build_structure()
 
     def refresh_status_bar(self):
@@ -130,10 +147,21 @@ class InvisibleUI:
             for name, func in component_menu_functions.items():
                 component_menu_actions[name] = func
 
+        # Build Titan IM menu
+        titan_im_elements = []
+        if telegram_client:
+            titan_im_elements.append(_("Telegram"))
+        if messenger_client:
+            titan_im_elements.append(_("Messenger"))
+        
+        if not titan_im_elements:
+            titan_im_elements = [_("No IM clients available")]
+
         self.categories = [
             {"name": _("Applications"), "sound": "focus.ogg", "elements": apps if apps else [_("No applications")], "action": self.launch_app_by_name},
             {"name": _("Games"), "sound": "focus.ogg", "elements": games if games else [_("No games")], "action": self.launch_game_by_name},
             {"name": _("Widgets"), "sound": "focus.ogg", "elements": [w['name'] for w in widgets] if widgets else [_("No widgets found")], "action": self.activate_widget, "widget_data": widgets},
+            {"name": _("Titan IM"), "sound": "titannet/iui.ogg", "elements": titan_im_elements, "action": self.activate_titan_im},
             {"name": _("Status Bar"), "sound": "statusbar.ogg", "elements": self.get_statusbar_items(), "action": self.activate_statusbar_item},
             {"name": _("Menu"), "sound": "applist.ogg", "elements": list(main_menu_actions.keys()), "action": lambda name: main_menu_actions[name]()}
         ]
@@ -291,6 +319,17 @@ class InvisibleUI:
                 return
             
             element_name = category['elements'][self.current_element_index]
+            
+            # Special handling for chat history with voice messages
+            if (self.titan_ui_mode and self.titan_im_mode and 
+                self.titan_im_submenu == 'history'):
+                # Check if current element contains voice message
+                self.check_for_voice_message(element_name)
+                if self.current_voice_message_path:
+                    # This is a voice message - toggle play/pause
+                    self.handle_voice_message_toggle()
+                    return
+            
             play_sound('select.ogg')
             
             if element_name in [_("Back to graphical interface"), _("Exit")]:
@@ -387,6 +426,416 @@ class InvisibleUI:
                 wx.CallAfter(action)
                 return
         self.speak(_("No action for this item"))
+    
+    def activate_titan_im(self, platform_name):
+        """Activate Titan IM platform (Telegram/Messenger)"""
+        if platform_name == _("No IM clients available"):
+            self.speak(_("No IM clients available"))
+            return
+            
+        # Set current platform
+        if platform_name == _("Telegram"):
+            self.titan_im_mode = 'telegram'
+        elif platform_name == _("Messenger"):
+            self.titan_im_mode = 'messenger'
+        else:
+            return
+        
+        # Check if connected
+        is_connected = False
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            is_connected = telegram_client.is_connected()
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            is_connected = messenger_client.is_connected()
+        
+        if not is_connected:
+            self.speak(_("Not connected to {}").format(platform_name))
+            return
+        
+        # Create submenu
+        submenu_elements = [_("Contacts"), _("Groups"), _("Back")]
+        
+        # Add submenu category
+        titan_im_submenu_category = {
+            "name": _("{} Menu").format(platform_name),
+            "sound": "titannet/iui.ogg",
+            "elements": submenu_elements,
+            "action": self.activate_titan_im_submenu,
+            "parent_mode": self.titan_im_mode
+        }
+        
+        # Insert submenu after current category
+        current_index = self.current_category_index
+        self.categories.insert(current_index + 1, titan_im_submenu_category)
+        
+        # Navigate to submenu
+        self.current_category_index += 1
+        self.current_element_index = 0
+        
+        category = self.categories[self.current_category_index]
+        play_sound(category.get('sound', 'focus.ogg'))
+        self.speak(f"{category['name']}, {category['elements'][0]}")
+    
+    def activate_titan_im_submenu(self, submenu_name):
+        """Activate Titan IM submenu item"""
+        if submenu_name == _("Back"):
+            # Remove submenu and go back
+            self.categories.pop(self.current_category_index)
+            self.current_category_index -= 1
+            self.current_element_index = 0
+            self.titan_im_submenu = None
+            
+            category = self.categories[self.current_category_index]
+            play_sound(category.get('sound', 'focus.ogg'))
+            self.speak(f"{category['name']}, {category['elements'][self.current_element_index]}")
+            return
+        
+        if submenu_name == _("Contacts"):
+            self.load_titan_im_contacts()
+        elif submenu_name == _("Groups"):
+            self.load_titan_im_groups()
+    
+    def load_titan_im_contacts(self):
+        """Load contacts for current IM platform"""
+        contacts = []
+        
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            contacts = telegram_client.get_contacts()
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            conversations = messenger_client.get_conversations()
+            # Convert conversations to contact format
+            contacts = [{'username': conv['name'], 'type': 'contact'} for conv in conversations]
+        
+        if not contacts:
+            contacts = [_("No contacts")]
+        else:
+            contacts = [contact['username'] for contact in contacts]
+        
+        self.current_contacts = contacts
+        
+        # Create contacts category
+        platform_name = _("Telegram") if self.titan_im_mode == 'telegram' else _("Messenger")
+        contacts_category = {
+            "name": _("{} Contacts").format(platform_name),
+            "sound": "titannet/iui.ogg",
+            "elements": contacts + [_("Back")],
+            "action": self.activate_titan_im_contact,
+            "parent_mode": self.titan_im_mode
+        }
+        
+        # Replace current submenu with contacts
+        self.categories[self.current_category_index] = contacts_category
+        self.current_element_index = 0
+        
+        category = self.categories[self.current_category_index]
+        play_sound(category.get('sound', 'focus.ogg'))
+        self.speak(f"{category['name']}, {len(contacts)} {_('contacts')}, {category['elements'][0]}")
+    
+    def load_titan_im_groups(self):
+        """Load groups for current IM platform"""
+        groups = []
+        
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            groups = telegram_client.get_group_chats()
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            # Messenger doesn't separate groups clearly, so we skip for now
+            groups = []
+        
+        if not groups:
+            groups = [_("No groups")]
+        else:
+            groups = [group['name'] if 'name' in group else group.get('title', 'Unknown') for group in groups]
+        
+        self.current_groups = groups
+        
+        # Create groups category
+        platform_name = _("Telegram") if self.titan_im_mode == 'telegram' else _("Messenger")
+        groups_category = {
+            "name": _("{} Groups").format(platform_name),
+            "sound": "titannet/iui.ogg",
+            "elements": groups + [_("Back")],
+            "action": self.activate_titan_im_group,
+            "parent_mode": self.titan_im_mode
+        }
+        
+        # Replace current submenu with groups
+        self.categories[self.current_category_index] = groups_category
+        self.current_element_index = 0
+        
+        category = self.categories[self.current_category_index]
+        play_sound(category.get('sound', 'focus.ogg'))
+        self.speak(f"{category['name']}, {len(groups)} {_('groups')}, {category['elements'][0]}")
+    
+    def activate_titan_im_contact(self, contact_name):
+        """Activate contact to view chat history"""
+        if contact_name == _("Back") or contact_name == _("No contacts"):
+            self.go_back_to_titan_im_submenu()
+            return
+        
+        self.current_chat_user = contact_name
+        self.load_chat_history(contact_name)
+    
+    def activate_titan_im_group(self, group_name):
+        """Activate group to view chat history"""
+        if group_name == _("Back") or group_name == _("No groups"):
+            self.go_back_to_titan_im_submenu()
+            return
+        
+        self.current_chat_user = group_name
+        self.load_group_chat_history(group_name)
+    
+    def load_chat_history(self, contact_name):
+        """Load private chat history"""
+        self.current_chat_history = []
+        
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            # Request chat history - this will be received via callback
+            telegram_client.get_chat_history(contact_name)
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            # Messenger doesn't have direct history API in current implementation
+            pass
+        
+        # Create temporary history view
+        self.show_chat_history_view(contact_name, is_group=False)
+    
+    def load_group_chat_history(self, group_name):
+        """Load group chat history"""
+        self.current_chat_history = []
+        
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            # Request group chat history - this will be received via callback
+            telegram_client.get_group_chat_history(group_name)
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            # Messenger group history not implemented
+            pass
+        
+        # Create temporary history view
+        self.show_chat_history_view(group_name, is_group=True)
+    
+    def show_chat_history_view(self, chat_name, is_group=False):
+        """Show chat history interface"""
+        # Create history elements - will be populated by callback
+        history_elements = [_("Loading messages..."), _("Send message"), _("Back")]
+        
+        chat_type = _("Group") if is_group else _("Contact")
+        platform_name = _("Telegram") if self.titan_im_mode == 'telegram' else _("Messenger")
+        
+        history_category = {
+            "name": _("{} {} - {}").format(platform_name, chat_type, chat_name),
+            "sound": "titannet/iui.ogg",
+            "elements": history_elements,
+            "action": self.activate_chat_history_item,
+            "parent_mode": self.titan_im_mode,
+            "chat_name": chat_name,
+            "is_group": is_group
+        }
+        
+        # Replace current category with history view
+        self.categories[self.current_category_index] = history_category
+        self.current_element_index = 0
+        
+        category = self.categories[self.current_category_index]
+        play_sound(category.get('sound', 'focus.ogg'))
+        self.speak(f"{category['name']}, {category['elements'][0]}")
+    
+    def activate_chat_history_item(self, item_name):
+        """Activate chat history item"""
+        if item_name == _("Back"):
+            self.go_back_to_titan_im_submenu()
+            return
+        elif item_name == _("Send message"):
+            self.show_send_message_dialog()
+            return
+        elif item_name == _("Loading messages..."):
+            self.speak(_("Messages are loading, please wait"))
+            return
+        
+        # Store current selected message
+        self.current_selected_message = item_name
+        
+        # Check if this message contains voice message
+        self.check_for_voice_message(item_name)
+        
+        # This is a message - read it
+        self.speak(item_name)
+    
+    def check_for_voice_message(self, message_text):
+        """Check if message contains voice message and extract path"""
+        # Look for voice message patterns like [Voice: path/to/file.ogg]
+        voice_pattern = r'\[Voice:\s*([^\]]+)\]'
+        match = re.search(voice_pattern, message_text)
+        
+        if match:
+            voice_path = match.group(1).strip()
+            self.current_voice_message_path = voice_path
+            play_sound('titannet/voice_select.ogg')
+        else:
+            self.current_voice_message_path = None
+    
+    def handle_voice_message_toggle(self):
+        """Handle play/pause of voice messages"""
+        if self.current_voice_message_path:
+            success = toggle_voice_message()
+            if success:
+                if is_voice_message_playing():
+                    play_sound('titannet/voice_play.ogg')
+                    self.speak(_("Playing voice message"))
+                elif is_voice_message_paused():
+                    play_sound('titannet/voice_pause.ogg')
+                    self.speak(_("Voice message paused"))
+            else:
+                # Try to start playing the voice message
+                if play_voice_message(self.current_voice_message_path):
+                    play_sound('titannet/voice_play.ogg')
+                    self.speak(_("Playing voice message"))
+                else:
+                    play_sound('error.ogg')
+                    self.speak(_("Error playing voice message"))
+        else:
+            self.speak(_("No voice message selected"))
+    
+    def handle_titan_enter(self):
+        """Handle Titan+Enter key combination for voice message playback and widget actions"""
+        # Handle widget mode first
+        if self.in_widget_mode and self.active_widget:
+            # Check if widget has handle_titan_enter method
+            if hasattr(self.active_widget, 'handle_titan_enter'):
+                self.active_widget.handle_titan_enter()
+                return
+        
+        if (self.titan_ui_mode and self.titan_im_mode and 
+            self.titan_im_submenu == 'history'):
+            # Check if current element contains voice message
+            category = self.categories[self.current_category_index]
+            if category['elements']:
+                element_name = category['elements'][self.current_element_index]
+                self.check_for_voice_message(element_name)
+                if self.current_voice_message_path:
+                    self.handle_voice_message_toggle()
+                    return
+        
+        # If not in a voice message context, just speak current element
+        if self.titan_ui_mode:
+            category = self.categories[self.current_category_index]
+            if category['elements']:
+                element_name = category['elements'][self.current_element_index]
+                self.speak(element_name)
+    
+    def show_send_message_dialog(self):
+        """Show dialog to send message"""
+        if not self.current_chat_user:
+            return
+        
+        def show_dialog():
+            dlg = wx.TextEntryDialog(
+                None,
+                _("Enter message to send to {}:").format(self.current_chat_user),
+                _("Send Message")
+            )
+            
+            if dlg.ShowModal() == wx.ID_OK:
+                message = dlg.GetValue()
+                if message.strip():
+                    self.send_titan_im_message(self.current_chat_user, message)
+            
+            dlg.Destroy()
+        
+        wx.CallAfter(show_dialog)
+    
+    def send_titan_im_message(self, recipient, message):
+        """Send message through current IM platform"""
+        success = False
+        
+        if self.titan_im_mode == 'telegram' and telegram_client:
+            # Check if it's a group
+            category = self.categories[self.current_category_index]
+            if category.get('is_group', False):
+                success = telegram_client.send_group_message(recipient, message)
+            else:
+                success = telegram_client.send_message(recipient, message)
+        elif self.titan_im_mode == 'messenger' and messenger_client:
+            success = messenger_client.send_message(recipient, message)
+        
+        if success:
+            self.speak(_("Message sent to {}").format(recipient))
+        else:
+            self.speak(_("Failed to send message"))
+    
+    def go_back_to_titan_im_submenu(self):
+        """Go back to Titan IM submenu"""
+        platform_name = _("Telegram") if self.titan_im_mode == 'telegram' else _("Messenger")
+        submenu_elements = [_("Contacts"), _("Groups"), _("Back")]
+        
+        titan_im_submenu_category = {
+            "name": _("{} Menu").format(platform_name),
+            "sound": "titannet/iui.ogg",
+            "elements": submenu_elements,
+            "action": self.activate_titan_im_submenu,
+            "parent_mode": self.titan_im_mode
+        }
+        
+        self.categories[self.current_category_index] = titan_im_submenu_category
+        self.current_element_index = 0
+        
+        category = self.categories[self.current_category_index]
+        play_sound(category.get('sound', 'focus.ogg'))
+        self.speak(f"{category['name']}, {category['elements'][0]}")
+    
+    def update_chat_history(self, history_data):
+        """Update chat history when received from callback"""
+        if not history_data or history_data.get('type') not in ['chat_history', 'group_chat_history']:
+            return
+        
+        messages = history_data.get('messages', [])
+        
+        # Format messages for display
+        formatted_messages = []
+        for msg in messages[-10:]:  # Show last 10 messages
+            sender = msg.get('sender_username', 'Unknown')
+            text = msg.get('message', '')
+            timestamp = msg.get('timestamp', '')
+            voice_file = msg.get('voice_file', '')  # Path to voice message file
+            
+            # Format timestamp
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                time_str = dt.strftime('%H:%M')
+            except:
+                time_str = ''
+            
+            if text or voice_file:
+                message_content = text
+                
+                # Add voice message indicator
+                if voice_file:
+                    voice_indicator = f"[Voice: {voice_file}]"
+                    if message_content:
+                        message_content += f" {voice_indicator}"
+                    else:
+                        message_content = f"{_('Voice message')} {voice_indicator}"
+                
+                if time_str:
+                    formatted_msg = f"[{time_str}] {sender}: {message_content}"
+                else:
+                    formatted_msg = f"{sender}: {message_content}"
+                formatted_messages.append(formatted_msg)
+        
+        # Update current category if it's a chat history view
+        if (self.current_category_index < len(self.categories) and 
+            'chat_name' in self.categories[self.current_category_index]):
+            
+            category = self.categories[self.current_category_index]
+            
+            # Replace loading message with actual history
+            new_elements = formatted_messages + [_("Send message"), _("Back")]
+            category['elements'] = new_elements
+            
+            # Announce update
+            if formatted_messages:
+                self.speak(_("Chat history loaded, {} messages").format(len(formatted_messages)))
+            else:
+                self.speak(_("No messages in chat history"))
 
     def start_listening(self, rebuild=True):
         if self.active: return
@@ -396,16 +845,36 @@ class InvisibleUI:
         if rebuild:
             self.build_structure()
         
+        # Register callbacks for message history updates
+        if telegram_client:
+            telegram_client.add_message_callback(self._handle_im_message_callback)
+        if messenger_client:
+            messenger_client.add_message_callback(self._handle_im_message_callback)
+        
         self.refresh_thread = threading.Thread(target=self._run, daemon=True)
         self.refresh_thread.start()
 
         self._update_hotkeys()
+        
+    def _handle_im_message_callback(self, message_data):
+        """Handle incoming message callbacks from IM clients"""
+        try:
+            if message_data.get('type') in ['chat_history', 'group_chat_history']:
+                # Update chat history in UI thread
+                wx.CallAfter(self.update_chat_history, message_data)
+        except Exception as e:
+            print(f"Error handling IM message callback: {e}")
 
     def stop_listening(self):
         if not self.active: return
         self.active = False
         self.titan_ui_mode = False
         self.in_widget_mode = False
+        self.titan_im_mode = None
+        self.titan_im_submenu = None
+        self.current_chat_user = None
+        # Stop key blocking when stopping invisible UI
+        stop_key_blocking()
         self.stop_event.set()
         if self.refresh_thread: self.refresh_thread.join()
         if self.hotkey_thread:
@@ -421,6 +890,13 @@ class InvisibleUI:
         # The tilde key is always available to toggle TUI mode if enabled
         if get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true':
             hotkeys['`'] = self.toggle_titan_ui_mode
+            # Titan+Enter for voice message playback (works in both modes)
+            hotkeys['`+<enter>'] = self.handle_titan_enter
+        
+        # Alt+F1 for Start Menu (when minimized to tray) - Linux style only
+        import platform
+        if platform.system() == "Windows":
+            hotkeys['<alt>+<f1>'] = self.show_start_menu
 
         if self.in_widget_mode:
             if self.titan_ui_mode:
@@ -446,9 +922,7 @@ class InvisibleUI:
                     '<ctrl>+<shift>+<101>': self.activate_element,
                     '<ctrl>+<shift>+<backspace>': self.exit_widget_mode,
                 })
-                # Block simple keys
-                for key in ['<up>', '<down>', '<left>', '<right>', '<enter>', '<space>', '<backspace>', '<esc>']:
-                    hotkeys[key] = lambda: None
+                # Don't register simple keys at all when in normal mode - they'll be blocked by key_blocker
         else:
             if self.titan_ui_mode:
                 # TUI mode in main view
@@ -472,9 +946,7 @@ class InvisibleUI:
                     '<ctrl>+<shift>+<enter>': self.activate_element,
                     '<ctrl>+<shift>+<101>': self.activate_element,
                 })
-                # Block simple keys
-                for key in ['<up>', '<down>', '<left>', '<right>', '<enter>', '<space>', '<backspace>', '<esc>']:
-                    hotkeys[key] = lambda: None
+                # Don't register simple keys at all when in normal mode - they'll be blocked by key_blocker
 
         self.hotkey_thread = GlobalHotKeys(hotkeys)
         self.hotkey_thread.start()
@@ -484,7 +956,27 @@ class InvisibleUI:
         if self.titan_ui_mode:
             play_sound('TUI_open.ogg')
             self.speak(_("Titan UI on"))
+            # Start blocking navigation keys when Titan UI is enabled
+            keys_to_block = {'up', 'down', 'left', 'right', 'enter', 'space', 'escape', 'backspace'}
+            success = start_key_blocking(keys_to_block)
+            if not success:
+                print("Warning: Could not enable full key blocking. Some keys may still reach other applications.")
         else:
             play_sound('TUI_close.ogg')
             self.speak(_("Titan UI off"))
+            # Stop blocking keys when Titan UI is disabled
+            stop_key_blocking()
         self._update_hotkeys()
+    
+    def show_start_menu(self):
+        """Pokaż klasyczne Menu Start gdy aplikacja jest zminimalizowana"""
+        try:
+            # Sprawdź czy aplikacja główna ma start menu
+            if hasattr(self.main_frame, 'start_menu') and self.main_frame.start_menu:
+                import platform
+                if platform.system() == "Windows":
+                    # Pokaż menu Start
+                    wx.CallAfter(self.main_frame.start_menu.show_menu)
+                    self.speak(_("Menu Start"))
+        except Exception as e:
+            print(f"Error showing start menu from invisible UI: {e}")

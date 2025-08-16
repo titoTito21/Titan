@@ -12,17 +12,18 @@ class ComponentManager:
         self.components = []
         self.settings_frame = settings_frame
         self.component_menu_functions = {}
-        self.component_states = {}  # Zmieniono z self.component_statuses
-        self.component_friendly_names = {
-            "TTerm": "Terminal",
-            "Tips": "Porady",
-            "titan_help": "Pomoc Titana (F1)",
-            "charging_sound": "Monitor systemowy Titana"
-        }
+        self.component_states = {}
+        self.component_friendly_names = {}
         self.load_components()
 
-    def get_component_display_name(self, folder_name):
-        return self.component_friendly_names.get(folder_name, folder_name)
+    def get_component_display_name(self, component_path, folder_name):
+        config_path = os.path.join(component_path, '__component__.TCE')
+        config = configparser.ConfigParser()
+        try:
+            config.read(config_path, encoding='utf-8')
+            return config.get('component', 'name', fallback=folder_name)
+        except Exception:
+            return folder_name
 
     def load_components(self):
         """Loads all components from the data/components directory."""
@@ -39,6 +40,9 @@ class ComponentManager:
                 self.ensure_component_config(component_path, component_folder)
                 status = self.get_component_status(component_path)
                 self.component_states[component_folder] = status
+                
+                friendly_name = self.get_component_display_name(component_path, component_folder)
+                self.component_friendly_names[component_folder] = friendly_name
 
                 if status == 0:  # Load only enabled components
                     print(f"Loading component from folder: {component_folder}")
@@ -55,10 +59,10 @@ class ComponentManager:
         if not os.path.exists(config_path):
             config = configparser.ConfigParser()
             config['component'] = {
-                'name': self.get_component_display_name(component_folder),
+                'name': component_folder,
                 'status': '0'
             }
-            with open(config_path, 'w') as configfile:
+            with open(config_path, 'w', encoding='utf-8') as configfile:
                 config.write(configfile)
 
     def get_component_status(self, component_path):

@@ -9,9 +9,10 @@ import wx
 import time
 from datetime import datetime
 import telegram_client
-from sound import play_sound
+from sound import play_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused
 from translation import set_language
 from settings import get_setting
+import re
 
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -25,6 +26,8 @@ class TelegramPrivateMessageWindow(wx.Frame):
         self.parent_frame = parent
         self.username = username
         self.typing_timer = None
+        self.current_voice_message_path = None
+        self.current_selected_message = None
         
         self.setup_ui()
         self.Center()
@@ -110,18 +113,128 @@ class TelegramPrivateMessageWindow(wx.Frame):
         
         # Keyboard shortcuts
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
+        
+        # Mouse click on chat display to select message
+        self.chat_display.Bind(wx.EVT_LEFT_UP, self.on_chat_click)
+    
+    def on_chat_click(self, event):
+        """Handle click on chat display to select message with voice"""
+        # Get clicked position
+        pos = event.GetPosition()
+        hit_test = self.chat_display.HitTest(pos)
+        
+        if hit_test[0] != wx.TE_HT_UNKNOWN:
+            # Get the line at clicked position
+            line_start = self.chat_display.XYToPosition(0, hit_test[1])
+            line_end = line_start
+            
+            # Find end of line
+            while line_end < self.chat_display.GetLastPosition():
+                char = self.chat_display.GetRange(line_end, line_end + 1)
+                if char == '\n':
+                    break
+                line_end += 1
+            
+            # Get the line text
+            line_text = self.chat_display.GetRange(line_start, line_end)
+            self.current_selected_message = line_text
+            
+            # Check if this line contains voice message indicator
+            self.check_for_voice_message(line_text)
+        
+        event.Skip()
+    
+    def check_for_voice_message(self, message_text):
+        """Check if message contains voice message and extract path"""
+        # Look for voice message patterns like [Voice: path/to/file.ogg]
+        voice_pattern = r'\[Voice:\s*([^\]]+)\]'
+        match = re.search(voice_pattern, message_text)
+        
+        if match:
+            voice_path = match.group(1).strip()
+            self.current_voice_message_path = voice_path
+            play_sound('titannet/voice_select.ogg')
+        else:
+            self.current_voice_message_path = None
     
     def on_key_press(self, event):
         """Handle keyboard shortcuts"""
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
+        current_focus = self.FindFocus()
         
         if keycode == wx.WXK_ESCAPE:
             self.Close()
         elif keycode == wx.WXK_RETURN and modifiers == wx.MOD_CONTROL:
             self.on_send_message(None)
+        elif keycode == wx.WXK_RETURN and modifiers == wx.MOD_NONE:
+            # Enter on chat display - play/pause voice message if available
+            if current_focus == self.chat_display:
+                self.handle_voice_message_at_cursor()
+                return
+            else:
+                event.Skip()
+        elif keycode == wx.WXK_SPACE and modifiers == wx.MOD_NONE:
+            # Space on chat display - same as Enter for voice messages
+            if current_focus == self.chat_display:
+                self.handle_voice_message_at_cursor()
+                return
+            else:
+                event.Skip()
         else:
             event.Skip()
+    
+    def handle_voice_message_toggle(self):
+        """Handle play/pause of voice messages"""
+        if self.current_voice_message_path:
+            success = toggle_voice_message()
+            if success:
+                if is_voice_message_playing():
+                    play_sound('titannet/voice_play.ogg')
+                elif is_voice_message_paused():
+                    play_sound('titannet/voice_pause.ogg')
+            else:
+                # Try to start playing the voice message
+                if play_voice_message(self.current_voice_message_path):
+                    play_sound('titannet/voice_play.ogg')
+                else:
+                    play_sound('error.ogg')
+    
+    def handle_voice_message_at_cursor(self):
+        """Handle voice message at current cursor position"""
+        # Get current cursor position
+        cursor_pos = self.chat_display.GetInsertionPoint()
+        
+        # Find the line containing the cursor
+        line_start = cursor_pos
+        line_end = cursor_pos
+        
+        # Find start of line
+        while line_start > 0:
+            char = self.chat_display.GetRange(line_start - 1, line_start)
+            if char == '\n':
+                break
+            line_start -= 1
+        
+        # Find end of line
+        while line_end < self.chat_display.GetLastPosition():
+            char = self.chat_display.GetRange(line_end, line_end + 1)
+            if char == '\n':
+                break
+            line_end += 1
+        
+        # Get the line text
+        line_text = self.chat_display.GetRange(line_start, line_end)
+        
+        # Check if this line contains voice message
+        self.check_for_voice_message(line_text)
+        
+        # If voice message found, toggle playback
+        if self.current_voice_message_path:
+            self.handle_voice_message_toggle()
+        else:
+            # No voice message on this line
+            play_sound('error.ogg')
     
     def on_text_change(self, event):
         """Handle text change for typing indicator"""
@@ -157,7 +270,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
             play_sound('error.ogg')
             wx.MessageBox(_("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
     
-    def append_message(self, sender, message, timestamp, is_own=False):
+    def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""
         if is_own:
             # Own message - right aligned
@@ -168,8 +281,17 @@ class TelegramPrivateMessageWindow(wx.Frame):
             color = wx.Colour(32, 32, 32)  # Dark gray
             prefix = "<<"
         
+        # Add voice message indicator
+        message_content = message
+        if voice_file:
+            voice_indicator = f"[Voice: {voice_file}]"
+            if message_content:
+                message_content += f" {voice_indicator}"
+            else:
+                message_content = f"{_('Voice message')} {voice_indicator}"
+        
         # Format message
-        formatted_msg = f"[{timestamp}] {prefix} {sender}: {message}\n"
+        formatted_msg = f"[{timestamp}] {prefix} {sender}: {message_content}\n"
         
         # Append with color
         self.chat_display.SetDefaultStyle(wx.TextAttr(color))
@@ -179,6 +301,10 @@ class TelegramPrivateMessageWindow(wx.Frame):
     
     def on_message_received(self, message_data):
         """Handle incoming messages for this user"""
+        # Check if window is still valid
+        if not self or not hasattr(self, 'chat_display') or not self.chat_display:
+            return
+            
         msg_type = message_data.get('type')
         
         if msg_type == 'new_message':
@@ -214,6 +340,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
                     sender = msg.get('sender_username', _('Unknown'))
                     content = msg.get('message', '')
                     timestamp = msg.get('timestamp', '')
+                    voice_file = msg.get('voice_file', '')
                     
                     # Format timestamp
                     try:
@@ -223,7 +350,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
                         time_str = time.strftime('%H:%M')
                     
                     is_own = sender == telegram_client.get_user_data().get('username', '')
-                    self.append_message(sender, content, time_str, is_own)
+                    self.append_message(sender, content, time_str, is_own, voice_file)
     
     def on_close(self, event):
         """Handle window close"""
@@ -426,6 +553,8 @@ class TelegramGroupChatWindow(wx.Frame):
         self.parent_frame = parent
         self.group_name = group_name
         self.typing_timer = None
+        self.current_voice_message_path = None
+        self.current_selected_message = None
         
         self.setup_ui()
         self.Center()
@@ -511,18 +640,128 @@ class TelegramGroupChatWindow(wx.Frame):
         
         # Keyboard shortcuts
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
+        
+        # Mouse click on chat display to select message
+        self.chat_display.Bind(wx.EVT_LEFT_UP, self.on_chat_click)
+    
+    def on_chat_click(self, event):
+        """Handle click on chat display to select message with voice"""
+        # Get clicked position
+        pos = event.GetPosition()
+        hit_test = self.chat_display.HitTest(pos)
+        
+        if hit_test[0] != wx.TE_HT_UNKNOWN:
+            # Get the line at clicked position
+            line_start = self.chat_display.XYToPosition(0, hit_test[1])
+            line_end = line_start
+            
+            # Find end of line
+            while line_end < self.chat_display.GetLastPosition():
+                char = self.chat_display.GetRange(line_end, line_end + 1)
+                if char == '\n':
+                    break
+                line_end += 1
+            
+            # Get the line text
+            line_text = self.chat_display.GetRange(line_start, line_end)
+            self.current_selected_message = line_text
+            
+            # Check if this line contains voice message indicator
+            self.check_for_voice_message(line_text)
+        
+        event.Skip()
+    
+    def check_for_voice_message(self, message_text):
+        """Check if message contains voice message and extract path"""
+        # Look for voice message patterns like [Voice: path/to/file.ogg]
+        voice_pattern = r'\[Voice:\s*([^\]]+)\]'
+        match = re.search(voice_pattern, message_text)
+        
+        if match:
+            voice_path = match.group(1).strip()
+            self.current_voice_message_path = voice_path
+            play_sound('titannet/voice_select.ogg')
+        else:
+            self.current_voice_message_path = None
     
     def on_key_press(self, event):
         """Handle keyboard shortcuts"""
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
+        current_focus = self.FindFocus()
         
         if keycode == wx.WXK_ESCAPE:
             self.Close()
         elif keycode == wx.WXK_RETURN and modifiers == wx.MOD_CONTROL:
             self.on_send_message(None)
+        elif keycode == wx.WXK_RETURN and modifiers == wx.MOD_NONE:
+            # Enter on chat display - play/pause voice message if available
+            if current_focus == self.chat_display:
+                self.handle_voice_message_at_cursor()
+                return
+            else:
+                event.Skip()
+        elif keycode == wx.WXK_SPACE and modifiers == wx.MOD_NONE:
+            # Space on chat display - same as Enter for voice messages
+            if current_focus == self.chat_display:
+                self.handle_voice_message_at_cursor()
+                return
+            else:
+                event.Skip()
         else:
             event.Skip()
+    
+    def handle_voice_message_toggle(self):
+        """Handle play/pause of voice messages"""
+        if self.current_voice_message_path:
+            success = toggle_voice_message()
+            if success:
+                if is_voice_message_playing():
+                    play_sound('titannet/voice_play.ogg')
+                elif is_voice_message_paused():
+                    play_sound('titannet/voice_pause.ogg')
+            else:
+                # Try to start playing the voice message
+                if play_voice_message(self.current_voice_message_path):
+                    play_sound('titannet/voice_play.ogg')
+                else:
+                    play_sound('error.ogg')
+    
+    def handle_voice_message_at_cursor(self):
+        """Handle voice message at current cursor position"""
+        # Get current cursor position
+        cursor_pos = self.chat_display.GetInsertionPoint()
+        
+        # Find the line containing the cursor
+        line_start = cursor_pos
+        line_end = cursor_pos
+        
+        # Find start of line
+        while line_start > 0:
+            char = self.chat_display.GetRange(line_start - 1, line_start)
+            if char == '\n':
+                break
+            line_start -= 1
+        
+        # Find end of line
+        while line_end < self.chat_display.GetLastPosition():
+            char = self.chat_display.GetRange(line_end, line_end + 1)
+            if char == '\n':
+                break
+            line_end += 1
+        
+        # Get the line text
+        line_text = self.chat_display.GetRange(line_start, line_end)
+        
+        # Check if this line contains voice message
+        self.check_for_voice_message(line_text)
+        
+        # If voice message found, toggle playback
+        if self.current_voice_message_path:
+            self.handle_voice_message_toggle()
+        else:
+            # No voice message on this line
+            play_sound('error.ogg')
     
     def on_text_change(self, event):
         """Handle text change for typing indicator"""
@@ -553,7 +792,7 @@ class TelegramGroupChatWindow(wx.Frame):
             play_sound('error.ogg')
             wx.MessageBox(_("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
     
-    def append_message(self, sender, message, timestamp, is_own=False):
+    def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""
         if is_own:
             # Own message - right aligned
@@ -564,8 +803,17 @@ class TelegramGroupChatWindow(wx.Frame):
             color = wx.Colour(32, 32, 32)  # Dark gray
             prefix = "<<"
         
+        # Add voice message indicator
+        message_content = message
+        if voice_file:
+            voice_indicator = f"[Voice: {voice_file}]"
+            if message_content:
+                message_content += f" {voice_indicator}"
+            else:
+                message_content = f"{_('Voice message')} {voice_indicator}"
+        
         # Format message
-        formatted_msg = f"[{timestamp}] {prefix} {sender}: {message}\n"
+        formatted_msg = f"[{timestamp}] {prefix} {sender}: {message_content}\n"
         
         # Append with color
         self.chat_display.SetDefaultStyle(wx.TextAttr(color))
@@ -575,6 +823,10 @@ class TelegramGroupChatWindow(wx.Frame):
     
     def on_message_received(self, message_data):
         """Handle incoming messages for this group"""
+        # Check if window is still valid
+        if not self or not hasattr(self, 'chat_display') or not self.chat_display:
+            return
+            
         msg_type = message_data.get('type')
         
         if msg_type == 'new_message':
@@ -611,6 +863,7 @@ class TelegramGroupChatWindow(wx.Frame):
                     sender = msg.get('sender_username', _('Unknown'))
                     content = msg.get('message', '')
                     timestamp = msg.get('timestamp', '')
+                    voice_file = msg.get('voice_file', '')
                     
                     # Format timestamp
                     try:
@@ -620,7 +873,7 @@ class TelegramGroupChatWindow(wx.Frame):
                         time_str = time.strftime('%H:%M')
                     
                     is_own = sender == telegram_client.get_user_data().get('username', '')
-                    self.append_message(sender, content, time_str, is_own)
+                    self.append_message(sender, content, time_str, is_own, voice_file)
     
     def on_close(self, event):
         """Handle window close"""

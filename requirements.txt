@@ -8,6 +8,7 @@ psutil
 wmi; platform_system == "Windows"
 pywinusb; platform_system == "Windows"
 pywin32; platform_system == "Windows"
+pywinctl
 
 pyenchant
 pytube

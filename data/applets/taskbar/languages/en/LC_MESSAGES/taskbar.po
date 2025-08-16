@@ -1,0 +1,70 @@
+# English translation for taskbar widget
+# Copyright (C) 2025 TCE Launcher
+# This file is distributed under the same license as the taskbar package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: taskbar 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 12:00+0000\n"
+"PO-Revision-Date: 2025-01-01 12:00+0000\n"
+"Last-Translator: TCE Launcher\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Activate window"
+msgstr "Activate"
+
+msgid "Close window"
+msgstr "Close"
+
+msgid "Minimize window"
+msgstr "Minimize"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "No window selected"
+msgstr "No window selected"
+
+msgid "Context menu for {}"
+msgstr "Menu"
+
+msgid "Window activated: {}"
+msgstr "Window activated: {}"
+
+msgid "Failed to activate window"
+msgstr "Failed to activate window"
+
+msgid "Window closed: {}"
+msgstr "Window closed: {}"
+
+msgid "Failed to close window"
+msgstr "Failed to close window"
+
+msgid "Window minimized: {}"
+msgstr "Window minimized: {}"
+
+msgid "Failed to minimize window"
+msgstr "Failed to minimize window"
+
+msgid "No windows found"
+msgstr "No windows found"
+
+msgid " (active)"
+msgstr " (active)"
+
+msgid "No window to activate"
+msgstr "No window to activate"
+
+msgid "Activated: {}"
+msgstr "Activated: {}"
+
+msgid "Taskbar"
+msgstr "Taskbar"
+
+msgid "Window switching taskbar widget"
+msgstr "Window switching taskbar widget"

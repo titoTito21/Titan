@@ -1,28 +1,29 @@
 import wx
 import configparser
 import os
+from translation import _
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title="Ustawienia klienta", size=(400, 300))
+        super().__init__(parent, title=_("Ustawienia klienta"), size=(400, 300))
 
         self.panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        api_key_label = wx.StaticText(self.panel, label="Klucz API:")
+        api_key_label = wx.StaticText(self.panel, label=_("Klucz API:"))
         vbox.Add(api_key_label, 0, wx.ALL, 5)
         self.api_key_text = wx.TextCtrl(self.panel)
         vbox.Add(self.api_key_text, 0, wx.EXPAND | wx.ALL, 5)
 
-        playback_mode_label = wx.StaticText(self.panel, label="Tryb odtwarzania:")
+        playback_mode_label = wx.StaticText(self.panel, label=_("Tryb odtwarzania:"))
         vbox.Add(playback_mode_label, 0, wx.ALL, 5)
 
-        self.playback_mode_choice = wx.Choice(self.panel, choices=["mpv (domyślny)", "t player (nowy, lecz mniej stabilny)"])
+        self.playback_mode_choice = wx.Choice(self.panel, choices=[_("mpv (domyślny)"), _("t player (nowy, lecz mniej stabilny)")])
         vbox.Add(self.playback_mode_choice, 0, wx.EXPAND | wx.ALL, 5)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
-        ok_button = wx.Button(self.panel, label="OK")
-        close_button = wx.Button(self.panel, label="Anuluj")
+        ok_button = wx.Button(self.panel, label=_("OK"))
+        close_button = wx.Button(self.panel, label=_("Anuluj"))
         hbox.Add(ok_button, 1, wx.EXPAND | wx.ALL, 5)
         hbox.Add(close_button, 1, wx.EXPAND | wx.ALL, 5)
 
@@ -37,7 +38,8 @@ class SettingsDialog(wx.Dialog):
 
     def load_settings(self):
         config = configparser.ConfigParser()
-        config.read(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
+        settings_path = os.path.expandvars(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
+        config.read(settings_path)
 
         api_key = config.get('Settings', 'api_key', fallback="")
         playback_mode = config.get('Settings', 'playback_mode', fallback='mpv')
@@ -55,8 +57,9 @@ class SettingsDialog(wx.Dialog):
             'playback_mode': 'mpv' if self.playback_mode_choice.GetSelection() == 0 else 'tplayer'
         }
 
-        os.makedirs(r'%appdata%\Titosoft\Titan\Additional apps', exist_ok=True)
-        with open(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini', 'w') as configfile:
+        settings_path = os.path.expandvars(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
+        os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+        with open(settings_path, 'w') as configfile:
             config.write(configfile)
 
         self.Close()

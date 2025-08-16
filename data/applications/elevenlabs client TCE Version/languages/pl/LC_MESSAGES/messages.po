@@ -1,0 +1,214 @@
+# Polish translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-08-15 10:12+0200\n"
+"PO-Revision-Date: 2025-08-15 10:06+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: pl\n"
+"Language-Team: pl <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: clonegen.py:9
+msgid "Voice Cloning"
+msgstr "Klonowanie głosu"
+
+#: clonegen.py:14
+msgid "Voice Name:"
+msgstr "Nazwa głosu:"
+
+#: clonegen.py:16
+msgid "Voice Description:"
+msgstr "Opis głosu:"
+
+#: clonegen.py:18
+msgid "Path to Voice:"
+msgstr "Ścieżka do głosu:"
+
+#: clonegen.py:20
+msgid "Browse..."
+msgstr "Przeglądaj..."
+
+#: clonegen.py:30 key_dialog.py:18 settings.py:25 support_dialog.py:20
+msgid "OK"
+msgstr "OK"
+
+#: clonegen.py:31
+msgid "Cancel"
+msgstr "Anuluj"
+
+#: clonegen.py:40
+msgid "Choose a file"
+msgstr "Wybierz plik"
+
+#: clonegen.py:52 clonegen.py:60
+msgid "Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."
+msgstr "Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."
+
+#: clonegen.py:52 clonegen.py:60 clonegen.py:75 clonegen.py:88 database.py:26
+#: database.py:51 database.py:82 generator.py:22 main.py:78
+msgid "Błąd"
+msgstr "Błąd"
+
+#: clonegen.py:75
+msgid "Nie znaleziono plików audio do klonowania."
+msgstr "Nie znaleziono plików audio do klonowania."
+
+#: clonegen.py:85
+msgid "Sukces"
+msgstr "Sukces"
+
+#: database.py:16
+msgid "Baza danych głosów"
+msgstr "Baza danych głosów"
+
+#: database.py:26
+msgid "Nie można połączyć się z serwerem bazy danych głosów"
+msgstr "Nie można połączyć się z serwerem bazy danych głosów"
+
+#: database.py:36
+msgid "Download"
+msgstr "Pobierz"
+
+#: database.py:51
+#, fuzzy
+msgid "Proszę najpierw wybrać głos."
+msgstr "Proszę wybrać głos"
+
+#: database.py:74
+msgid "Voice downloaded"
+msgstr "Głos pobrany"
+
+#: database.py:74
+msgid ""
+"Do you want to clone this voice and add it to your elevenLabs voice "
+"library?"
+msgstr ""
+"Czy chcesz sklonować ten głos i dodać go do swojej biblioteki głosów "
+"elevenLabs?"
+
+#: generator.py:26
+msgid "Generowanie..."
+msgstr "Generowanie..."
+
+#: generator.py:35
+msgid "Proszę wybrać głos"
+msgstr "Proszę wybrać głos"
+
+#: generator.py:64 main.py:51
+msgid "Generuj"
+msgstr "Generuj"
+
+#: generator.py:95
+msgid "Zapisz plik na dysku"
+msgstr "Zapisz plik na dysku"
+
+#: generator.py:95
+msgid "Pliki MP3 (*.mp3)|*.mp3"
+msgstr "Pliki MP3 (*.mp3)|*.mp3"
+
+#: key_dialog.py:6
+msgid "Ustaw klucz API"
+msgstr "Ustaw klucz API"
+
+#: key_dialog.py:10
+msgid "Twój klucz API elevenlabs.io:"
+msgstr "Twój klucz API elevenlabs.io:"
+
+#: key_dialog.py:19 settings.py:26
+msgid "Anuluj"
+msgstr "Anuluj"
+
+#: main.py:45
+msgid "Głosy:"
+msgstr "Głosy:"
+
+#: main.py:55
+msgid "&Odtwórz"
+msgstr "&Odtwórz"
+
+#: main.py:60
+msgid "&Zapisz na dysku"
+msgstr "&Zapisz na dysku"
+
+#: main.py:96
+msgid ""
+"Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć "
+"listę głosów i odblokować funkcje premium elevenlabs.io"
+msgstr ""
+"Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć "
+"listę głosów i odblokować funkcje premium elevenlabs.io"
+
+#: main.py:97
+msgid "Klient Eleven Labs"
+msgstr "Klient Eleven Labs"
+
+#: main.py:113
+msgid "Ustawienia zostały zapisane."
+msgstr "Ustawienia zostały zapisane."
+
+#: main.py:113 settings.py:8
+msgid "Ustawienia klienta"
+msgstr "Ustawienia klienta"
+
+#: main.py:126
+msgid "Klient ElevenLabs"
+msgstr "Klient ElevenLabs"
+
+#: menu_bar.py:16
+msgid "Ustawienia klienta..."
+msgstr "Ustawienia klienta..."
+
+#: menu_bar.py:17
+msgid "Baza danych głosów..."
+msgstr "Baza danych głosów..."
+
+#: menu_bar.py:18
+msgid "Klonowanie głosu..."
+msgstr "Klonowanie głosu..."
+
+#: menu_bar.py:20
+msgid "Klient"
+msgstr "Klient"
+
+#: settings.py:13
+msgid "Klucz API:"
+msgstr "Klucz API:"
+
+#: settings.py:18
+msgid "Tryb odtwarzania:"
+msgstr "Tryb odtwarzania:"
+
+#: settings.py:21
+msgid "mpv (domyślny)"
+msgstr "mpv (domyślny)"
+
+#: settings.py:21
+msgid "t player (nowy, lecz mniej stabilny)"
+msgstr "t player (nowy, lecz mniej stabilny)"
+
+#: support_dialog.py:7
+msgid "Dziękuję za używanie klienta elevenLabs"
+msgstr "Dziękuję za używanie klienta elevenLabs"
+
+#: support_dialog.py:11
+msgid ""
+"Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie kawą, "
+"piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy "
+"danych."
+msgstr "Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie kawą, piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy danych."
+
+#: support_dialog.py:16
+msgid "Dotacja"
+msgstr "Dotacja"
+

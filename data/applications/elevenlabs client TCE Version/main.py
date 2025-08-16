@@ -1,6 +1,6 @@
 import wx
 from translation import _
-from elevenlabs import voices, set_api_key
+from elevenlabs.client import ElevenLabs
 import os
 import configparser
 import key_dialog
@@ -10,15 +10,30 @@ from generator import Generator
 from support_dialog import SupportDialog
 from clonegen import VoiceCloningDialog, clone_and_notify
 from settings import SettingsDialog
-from tplayer import TPlayer  # Upewniamy się, że importujemy poprawną klasę
+from tplayer import TPlayer
 
 class ElevenLabsClient(wx.Frame):
     def __init__(self, parent, title):
         super(ElevenLabsClient, self).__init__(parent, title=title, size=(500, 400))
-
+        
+        self.client = None
+        self.init_elevenlabs_client()
         self.generator = Generator(self)
         self.InitUI()
         self.Centre()
+        
+    def init_elevenlabs_client(self):
+        """Initialize ElevenLabs client with API key if available"""
+        settings_path = os.path.expandvars(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
+        if os.path.exists(settings_path):
+            config = configparser.ConfigParser()
+            config.read(settings_path)
+            api_key = config.get('Settings', 'api_key', fallback=None)
+            if api_key:
+                self.client = ElevenLabs(api_key=api_key)
+        
+        if not self.client:
+            self.client = ElevenLabs()
 
     def InitUI(self):
         panel = wx.Panel(self)
@@ -27,22 +42,22 @@ class ElevenLabsClient(wx.Frame):
         self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
         vbox.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
-        voices_label = wx.StaticText(panel, label="Głosy:")
+        voices_label = wx.StaticText(panel, label=_("Głosy:"))
         vbox.Add(voices_label, 0, wx.LEFT | wx.TOP, 10)
-        self.voices = [voice.name for voice in voices()]
-        self.voice_choice = wx.Choice(panel, choices=self.voices)
+        self.voices = self.get_available_voices()
+        self.voice_choice = wx.Choice(panel, choices=[voice['name'] for voice in self.voices])
         vbox.Add(self.voice_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-        self.generate_button = wx.Button(panel, label="Generuj")
+        self.generate_button = wx.Button(panel, label=_("Generuj"))
         self.generate_button.Bind(wx.EVT_BUTTON, self.generator.OnGenerate)
         vbox.Add(self.generate_button, 0, wx.EXPAND | wx.ALL, 10)
 
-        self.play_button = wx.Button(panel, label="&Odtwórz")
+        self.play_button = wx.Button(panel, label=_("&Odtwórz"))
         self.play_button.Bind(wx.EVT_BUTTON, self.generator.OnPlay)
-        self.play_button.Disable()  # Domyślnie wyłączony
+        self.play_button.Disable()
         vbox.Add(self.play_button, 0, wx.EXPAND | wx.ALL, 10)
 
-        self.save_button = wx.Button(panel, label="&Zapisz na dysku")
+        self.save_button = wx.Button(panel, label=_("&Zapisz na dysku"))
         self.save_button.Bind(wx.EVT_BUTTON, self.generator.OnSave)
         vbox.Add(self.save_button, 0, wx.EXPAND | wx.ALL, 10)
 
@@ -53,6 +68,15 @@ class ElevenLabsClient(wx.Frame):
         menu_bar = MenuBar(self)
         self.SetMenuBar(menu_bar)
         panel.SetSizer(vbox)
+        
+    def get_available_voices(self):
+        """Get available voices from ElevenLabs API"""
+        try:
+            response = self.client.voices.search()
+            return [{'name': voice.name, 'id': voice.voice_id} for voice in response.voices]
+        except Exception as e:
+            wx.MessageBox(_(f"Błąd podczas pobierania głosów: {str(e)}"), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            return [{'name': 'Default', 'id': 'default'}]
 
     def OnVoiceCloning(self, event):
         dialog = VoiceCloningDialog(self)
@@ -69,8 +93,8 @@ class ElevenLabsClient(wx.Frame):
                 file.write(f'API_key="{dialog.api_key_value}"')
                 
             wx.MessageBox(
-                "Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć listę głosów i odblokować funkcje premium elevenlabs.io",
-                "Klient Eleven Labs",
+                _("Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć listę głosów i odblokować funkcje premium elevenlabs.io"),
+                _("Klient Eleven Labs"),
                 wx.OK | wx.ICON_INFORMATION
             )
 
@@ -86,7 +110,7 @@ class ElevenLabsClient(wx.Frame):
         settings_dlg = SettingsDialog(self)
         if settings_dlg.ShowModal() == wx.ID_OK:
             settings_dlg.SaveSettings()
-            wx.MessageBox("Ustawienia zostały zapisane.", "Ustawienia klienta", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(_("Ustawienia zostały zapisane."), _("Ustawienia klienta"), wx.OK | wx.ICON_INFORMATION)
         settings_dlg.Destroy()
 
     def OnPlayTPlayer(self, event):
@@ -95,16 +119,10 @@ class ElevenLabsClient(wx.Frame):
         tplayer_dlg.Destroy()
 
 if __name__ == '__main__':
-    settings_path = r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini'
+    settings_path = os.path.expandvars(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
     os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-    if os.path.exists(settings_path):
-        config = configparser.ConfigParser()
-        config.read(settings_path)
-        api_key = config.get('Settings', 'api_key', fallback=None)
-        if api_key:
-            set_api_key(api_key)
     
     app = wx.App()
-    frame = ElevenLabsClient(None, title='Klient ElevenLabs')
+    frame = ElevenLabsClient(None, title=_("Klient ElevenLabs"))
     frame.Show()
     app.MainLoop()

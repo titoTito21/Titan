@@ -1,5 +1,5 @@
 name_pl="Edytor Tekstowy"
 name_en="Text Editor"
 description=""
-openfile="tedit.pyc"
+openfile="tedit.py"
 shortname="tedit"

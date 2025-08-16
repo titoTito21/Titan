@@ -1,6 +1,8 @@
 import wx
-import gettext
-_ = gettext.gettext
+from translation import _
+from elevenlabs.client import ElevenLabs
+import os
+import configparser
 
 class VoiceCloningDialog(wx.Dialog):
     def __init__(self, parent):
@@ -42,5 +44,45 @@ class VoiceCloningDialog(wx.Dialog):
             self.path_text_ctrl.SetValue(fileDialog.GetPath())
 
 def clone_and_notify(parent, voice_name, voice_description, path):
-    # Implementacja klonowania głosu
-    pass
+    """Clone voice using ElevenLabs API"""
+    try:
+        # Get API key from settings
+        settings_path = os.path.expandvars(r'%appdata%\Titosoft\Titan\Additional apps\elevenlabsclient.ini')
+        if not os.path.exists(settings_path):
+            wx.MessageBox(_("Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            return
+            
+        config = configparser.ConfigParser()
+        config.read(settings_path)
+        api_key = config.get('Settings', 'api_key', fallback=None)
+        
+        if not api_key:
+            wx.MessageBox(_("Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            return
+            
+        client = ElevenLabs(api_key=api_key)
+        
+        # Find audio files in the path
+        audio_files = []
+        if os.path.isdir(path):
+            for file in os.listdir(path):
+                if file.lower().endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')):
+                    audio_files.append(os.path.join(path, file))
+        elif os.path.isfile(path) and path.lower().endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')):
+            audio_files = [path]
+            
+        if not audio_files:
+            wx.MessageBox(_("Nie znaleziono plików audio do klonowania."), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            return
+            
+        # Clone voice using new API
+        voice = client.voices.ivc.create(
+            name=voice_name,
+            description=voice_description,
+            files=audio_files[:5]  # Limit to 5 files as per API limits
+        )
+        
+        wx.MessageBox(_(f"Głos '{voice_name}' został pomyślnie sklonowany!"), _("Sukces"), wx.OK | wx.ICON_INFORMATION)
+        
+    except Exception as e:
+        wx.MessageBox(_(f"Błąd podczas klonowania głosu: {str(e)}"), _("Błąd"), wx.OK | wx.ICON_ERROR)
