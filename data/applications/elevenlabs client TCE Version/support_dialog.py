@@ -1,23 +1,23 @@
 import wx
 import webbrowser
+from translation import _
 
 class SupportDialog(wx.Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title="Thank you for using elevenLabs client", size=(400, 200))
+        super().__init__(parent, title=_("Dziękuję za używanie klienta elevenLabs"), size=(400, 200))
         
         vbox = wx.BoxSizer(wx.VERTICAL)
         
-        message = ("If you think that my program is useful, consider supporting me "
-                   "with a cup of beer or a cigarette package etc. to maintain database "
-                   "server costs.")
+        message = _("Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie "
+                     "kawą, piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy danych.")
         msg_text = wx.StaticText(self, label=message)
         vbox.Add(msg_text, 1, flag=wx.ALL | wx.EXPAND, border=10)
         
-        donate_button = wx.Button(self, label="Donate")
+        donate_button = wx.Button(self, label=_("Dotacja"))
         donate_button.Bind(wx.EVT_BUTTON, self.on_donate)
         vbox.Add(donate_button, 0, flag=wx.ALL, border=10)
         
-        ok_button = wx.Button(self, label="OK")
+        ok_button = wx.Button(self, label=_("OK"))
         ok_button.Bind(wx.EVT_BUTTON, self.on_ok)
         vbox.Add(ok_button, 0, flag=wx.ALL, border=10)
 

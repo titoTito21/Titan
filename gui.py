@@ -23,6 +23,7 @@ from invisibleui import InvisibleUI
 from translation import set_language
 from settings import get_setting
 from shutdown_question import show_shutdown_dialog
+from classic_start_menu import create_classic_start_menu
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -73,6 +74,11 @@ class TitanApp(wx.Frame):
         self.component_manager = component_manager
         self.task_bar_icon = None
         self.invisible_ui = InvisibleUI(self, component_manager=self.component_manager)
+        # Multi-service session management
+        self.active_services = {}  # Dict to store active service connections
+        self.current_service = None  # Currently selected service for chat
+        
+        # Legacy compatibility - will be removed gradually
         self.logged_in = False
         self.telegram_client = None
         self.online_users = []
@@ -80,10 +86,20 @@ class TitanApp(wx.Frame):
         self.unread_messages = {}
         self.call_active = False
         self.call_window = None
+        
+        # Debouncing for mouse motion sounds
+        self.last_statusbar_sound_time = 0
+        self.statusbar_sound_delay = 0.2  # 200ms delay for statusbar sounds
 
         initialize_sound()
 
         self.current_list = "apps"
+        
+        # Inicjalizacja Start Menu (tylko dla Windows) - zawsze klasyczne
+        if platform.system() == "Windows":
+            self.start_menu = create_classic_start_menu(self)
+        else:
+            self.start_menu = None
 
         self.InitUI()
 
@@ -97,6 +113,84 @@ class TitanApp(wx.Frame):
         self.apply_selected_skin()
 
         self.show_app_list()
+    
+    def get_skin_start_menu_style(self, skin_name):
+        """Pobierz styl Start Menu ze skórki"""
+        try:
+            skin_data = self.load_skin_data(skin_name)
+            start_menu_config = skin_data.get('StartMenu', {})
+            return start_menu_config.get('style', 'modern')
+        except:
+            return 'modern'
+    
+    def get_available_skins(self):
+        """Pobierz listę dostępnych skórek"""
+        skins = [DEFAULT_SKIN_NAME]
+        
+        if os.path.exists(SKINS_DIR):
+            for item in os.listdir(SKINS_DIR):
+                skin_path = os.path.join(SKINS_DIR, item)
+                if os.path.isdir(skin_path):
+                    skin_ini = os.path.join(skin_path, 'skin.ini')
+                    if os.path.exists(skin_ini):
+                        skins.append(item)
+        
+        return skins
+    
+    def switch_skin(self, skin_name):
+        """Przełącz skórkę dynamicznie"""
+        # Zapisz nową skórkę w ustawieniach
+        if not self.settings:
+            self.settings = {}
+        if 'interface' not in self.settings:
+            self.settings['interface'] = {}
+        
+        self.settings['interface']['skin'] = skin_name
+        
+        # Zastosuj nową skórkę
+        self.apply_selected_skin()
+        
+        # Przełącz motyw dźwiękowy jeśli jest określony w skórce
+        self.apply_skin_sound_theme(skin_name)
+        
+        # Odśwież Start Menu z nową skórką
+        if platform.system() == "Windows" and self.start_menu:
+            try:
+                self.start_menu.apply_skin_settings()
+            except Exception as e:
+                print(f"Error refreshing start menu skin: {e}")
+        
+        # Zapisz ustawienia
+        from settings import save_settings
+        save_settings()
+        
+        print(f"Switched to skin: {skin_name}")
+    
+    def apply_skin_to_start_menu(self, skin_data):
+        """Zastosuj ustawienia skórki do Start Menu"""
+        if not self.start_menu or not skin_data:
+            return
+        
+        start_menu_config = skin_data.get('StartMenu', {})
+        colors = skin_data.get('Colors', {})
+        
+        # Konfiguracja Start Menu
+        if hasattr(self.start_menu, 'configure_from_skin'):
+            self.start_menu.configure_from_skin(start_menu_config, colors)
+    
+    def apply_skin_sound_theme(self, skin_name):
+        """Zastosuj motyw dźwiękowy ze skórki"""
+        try:
+            skin_data = self.load_skin_data(skin_name)
+            sounds_config = skin_data.get('Sounds', {})
+            sound_theme = sounds_config.get('theme')
+            
+            if sound_theme:
+                from sound import set_theme
+                set_theme(sound_theme)
+                print(f"Applied sound theme: {sound_theme} for skin: {skin_name}")
+        except Exception as e:
+            print(f"Error applying sound theme for skin {skin_name}: {e}")
 
 
     def InitUI(self):
@@ -559,6 +653,12 @@ class TitanApp(wx.Frame):
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
+        
+        # Handle Alt+F1 (Start Menu) - Linux style only
+        if keycode == wx.WXK_F1 and modifiers == wx.MOD_ALT:
+            if self.start_menu and platform.system() == "Windows":
+                self.start_menu.toggle_menu()
+                return
 
         if keycode == wx.WXK_TAB and modifiers == wx.MOD_CONTROL:
             self.on_toggle_list()
@@ -713,8 +813,13 @@ class TitanApp(wx.Frame):
 
 
     def on_focus_change_status(self, event):
-         play_statusbar_sound()
-         event.Skip()
+        import time
+        # Debouncing - odtwórz dźwięk tylko jeśli minęło wystarczająco czasu
+        current_time = time.time()
+        if current_time - self.last_statusbar_sound_time >= self.statusbar_sound_delay:
+            play_statusbar_sound()
+            self.last_statusbar_sound_time = current_time
+        event.Skip()
 
 
     def on_status_selected(self, event):
@@ -796,26 +901,64 @@ class TitanApp(wx.Frame):
         # self.network_listbox.Append(_("Matrix"))
 
     def on_network_option_selected(self, event):
-        if not self.logged_in:
-            selection = self.network_listbox.GetSelection()
-            if selection != wx.NOT_FOUND:
-                if selection == 0: # Telegram
+        selection = self.network_listbox.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+            
+        selected_text = self.network_listbox.GetString(selection)
+        
+        # Handle different contexts
+        if self.current_list == "network":
+            # Main network menu
+            play_select_sound()  # Play select sound for network options
+            if "Telegram" in selected_text:
+                if "telegram" in self.active_services:
+                    # Already logged in - show Telegram options
+                    self.current_service = "telegram"
+                    self.show_telegram_options()
+                else:
+                    # Not logged in - show login
                     self.show_telegram_login()
-                elif selection == 1: # Facebook Messenger
+            elif "Facebook Messenger" in selected_text:
+                if "messenger" in self.active_services:
+                    # Already logged in - show Messenger options
+                    self.current_service = "messenger"  
+                    self.show_messenger_options()
+                else:
+                    # Not logged in - show login
                     self.show_messenger_login()
-                elif selection == 2: # Other communicators
-                    wx.MessageBox(_("Other communicators will be available soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
-        else:
-            selection = self.network_listbox.GetSelection()
-            if selection != wx.NOT_FOUND:
-                if selection == 0: # Contacts
-                    self.show_contacts_view()
-                elif selection == 1: # Group Chats
-                    self.show_group_chats_view()
-                elif selection == 2: # Settings
-                    self.show_network_settings()
-                elif selection == 3: # Info
-                    self.show_network_info()
+            elif selected_text == _("Other communicators"):
+                wx.MessageBox(_("Other communicators will be available soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+        
+        elif self.current_list == "telegram_options":
+            # Handle Telegram options
+            play_select_sound()  # Play select sound for Telegram options
+            if selected_text == _("Contacts"):
+                self.show_contacts_view()
+            elif selected_text == _("Group Chats"):
+                self.show_group_chats_view()
+            elif selected_text == _("Settings"):
+                self.show_network_settings()
+            elif selected_text == _("Information"):
+                self.show_network_info()
+            elif selected_text == _("Logout"):
+                self.logout_from_service("telegram")
+            elif selected_text == _("Back to main menu"):
+                self.show_network_list()
+        
+        elif self.current_list == "messenger_options":
+            # Handle Messenger options
+            play_select_sound()  # Play select sound for Messenger options
+            if selected_text == _("Contacts"):
+                self.show_messenger_contacts_view()
+            elif selected_text == _("Settings"):
+                self.show_network_settings()
+            elif selected_text == _("Information"):
+                self.show_network_info()
+            elif selected_text == _("Logout"):
+                self.logout_from_service("messenger")
+            elif selected_text == _("Back to main menu"):
+                self.show_network_list()
 
     def show_telegram_login(self):
         """Show Telegram login interface"""
@@ -838,7 +981,11 @@ class TitanApp(wx.Frame):
     def show_messenger_login(self):
         """Show Facebook Messenger WebView interface"""
         try:
-            messenger_webview.show_messenger_webview(self)
+            messenger_window = messenger_webview.show_messenger_webview(self)
+            if messenger_window:
+                # Add Messenger to active services when successfully connected
+                # This will be handled by callback from messenger_window
+                self.setup_messenger_callbacks(messenger_window)
         except Exception as e:
             print(f"WebView Messenger error: {e}")
             wx.MessageBox(
@@ -848,6 +995,139 @@ class TitanApp(wx.Frame):
                 wx.OK | wx.ICON_ERROR
             )
         
+    def setup_messenger_callbacks(self, messenger_window):
+        """Setup callbacks for Messenger integration"""
+        # Create a callback to handle successful Messenger connection
+        def on_messenger_connected(user_data):
+            self.active_services["messenger"] = {
+                "client": messenger_window,
+                "type": "messenger", 
+                "name": "Facebook Messenger",
+                "online_users": [],
+                "unread_messages": {},
+                "user_data": user_data
+            }
+            
+            # Update UI to show messenger as connected
+            wx.CallAfter(self.populate_network_list)
+            wx.CallAfter(self.show_network_list)
+            
+        # TODO: Add actual callback setup when messenger_window supports it
+        # For now, we'll assume connection when window is created
+        
+    def show_telegram_options(self):
+        """Show Telegram service options (Contacts, Groups, Settings, Logout)"""
+        self.app_listbox.Hide()
+        self.game_listbox.Hide()
+        self.users_listbox.Hide()
+        self.chat_display.Hide()
+        self.message_input.Hide()
+        self.login_panel.Hide()
+        
+        self.network_listbox.Show()
+        self.network_listbox.Clear()
+        
+        # Show Telegram specific options
+        self.network_listbox.Append(_("Contacts"))
+        self.network_listbox.Append(_("Group Chats"))
+        self.network_listbox.Append(_("Settings"))
+        self.network_listbox.Append(_("Information"))
+        self.network_listbox.Append(_("Logout"))
+        self.network_listbox.Append(_("Back to main menu"))
+        
+        self.list_label.SetLabel(_("Telegram Options"))
+        self.current_list = "telegram_options"
+        self.Layout()
+        
+        if self.network_listbox.GetCount() > 0:
+            self.network_listbox.SetFocus()
+    
+    def show_messenger_options(self):
+        """Show Messenger service options"""
+        self.app_listbox.Hide()
+        self.game_listbox.Hide()
+        self.users_listbox.Hide()
+        self.chat_display.Hide()
+        self.message_input.Hide()
+        self.login_panel.Hide()
+        
+        self.network_listbox.Show()
+        self.network_listbox.Clear()
+        
+        # Show Messenger specific options
+        self.network_listbox.Append(_("Contacts"))
+        self.network_listbox.Append(_("Settings"))
+        self.network_listbox.Append(_("Information"))
+        self.network_listbox.Append(_("Logout"))
+        self.network_listbox.Append(_("Back to main menu"))
+        
+        self.list_label.SetLabel(_("Messenger Options"))
+        self.current_list = "messenger_options"
+        self.Layout()
+        
+        if self.network_listbox.GetCount() > 0:
+            self.network_listbox.SetFocus()
+    
+    def show_messenger_contacts_view(self):
+        """Show Messenger contacts view"""
+        if "messenger" in self.active_services:
+            messenger_service = self.active_services["messenger"]
+            # TODO: Implement messenger contacts view
+            wx.MessageBox(_("Messenger contacts view will be implemented soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+    
+    def logout_from_service(self, service_name):
+        """Logout from specific service"""
+        if service_name not in self.active_services:
+            return
+            
+        service = self.active_services[service_name]
+        
+        try:
+            if service_name == "telegram":
+                # Disconnect from Telegram
+                if service["client"]:
+                    import telegram_client
+                    telegram_client.disconnect_from_server()
+                
+                # Clear legacy compatibility variables if this was the primary client
+                if self.telegram_client == service["client"]:
+                    self.telegram_client = None
+                    
+            elif service_name == "messenger":
+                # Close Messenger WebView
+                if service["client"]:
+                    try:
+                        service["client"].Close()
+                    except:
+                        pass
+            
+            # Remove from active services
+            del self.active_services[service_name]
+            
+            # Update legacy logged_in status
+            self.logged_in = len(self.active_services) > 0
+            
+            # Hide logout button if no services are active
+            if not self.active_services and hasattr(self, 'logout_button'):
+                self.logout_button.Hide()
+            
+            # Return to main network menu
+            self.show_network_list()
+                
+            wx.MessageBox(
+                _("Successfully logged out from {}.").format(service["name"]), 
+                _("Logout"), 
+                wx.OK | wx.ICON_INFORMATION
+            )
+            
+        except Exception as e:
+            print(f"Error logging out from {service_name}: {e}")
+            wx.MessageBox(
+                _("Error logging out from {}: {}").format(service["name"], str(e)),
+                _("Logout Error"),
+                wx.OK | wx.ICON_ERROR
+            )
+    
     def show_login_panel(self, mode):
         """Legacy method - redirects to show_telegram_login"""
         self.show_telegram_login()
@@ -873,19 +1153,36 @@ class TitanApp(wx.Frame):
             speaker.speak(_("Connecting to Telegram..."))
             
             # Start Telegram connection
-            self.telegram_client = telegram_client.connect_to_server(phone_number, twofa_password, _("TCE User"))
+            telegram_client_instance = telegram_client.connect_to_server(phone_number, twofa_password, _("TCE User"))
             
-            # Setup callbacks for real-time events
-            self.telegram_client.add_message_callback(self.on_message_received)
-            self.telegram_client.add_status_callback(self.on_user_status_change)
-            self.telegram_client.add_typing_callback(self.on_typing_indicator)
-            telegram_client.add_call_callback(self.on_call_event)
+            if telegram_client_instance:
+                # Store in active services
+                self.active_services["telegram"] = {
+                    "client": telegram_client_instance,
+                    "type": "telegram",
+                    "name": "Telegram",
+                    "online_users": [],
+                    "unread_messages": {}
+                }
+                
+                # Setup callbacks for real-time events
+                telegram_client_instance.add_message_callback(self.on_message_received)
+                telegram_client_instance.add_status_callback(self.on_user_status_change)
+                telegram_client_instance.add_typing_callback(self.on_typing_indicator)
+                telegram_client.add_call_callback(self.on_call_event)
+                
+                # Legacy compatibility
+                self.telegram_client = telegram_client_instance
+                self.logged_in = True
+            else:
+                wx.MessageBox(_("Failed to connect to Telegram server."), _("Connection Error"), wx.OK | wx.ICON_ERROR)
+                return
             
-            # No dialog - just TTS announcement
+            # Update UI
             self.populate_network_list()
             self.show_network_list()
-            self.logout_button.Show()
-            self.logged_in = True
+            if hasattr(self, 'logout_button'):
+                self.logout_button.Show()
             
             # Wait a bit for connection and then refresh users
             wx.CallLater(1000, self.refresh_online_users)
@@ -963,17 +1260,42 @@ class TitanApp(wx.Frame):
     def populate_network_list(self):
         self.network_listbox.Clear()
         
-        if not self.logged_in:
-            # Show communicator options when not logged in
+        if not self.active_services:
+            # Show communicator options when not logged in to any service
             self.network_listbox.Append(_("Telegram"))
             self.network_listbox.Append(_("Facebook Messenger"))
             self.network_listbox.Append(_("Other communicators"))
         else:
-            # Show logged in options
-            self.network_listbox.Append(_("Contacts"))
-            self.network_listbox.Append(_("Group Chats"))
-            self.network_listbox.Append(_("Settings"))
-            self.network_listbox.Append(_("Information"))
+            # Show logged in services with connection status
+            if "telegram" in self.active_services:
+                # Try to get username from service data or telegram_client
+                username = "user"  # Default
+                try:
+                    if self.telegram_client:
+                        import telegram_client
+                        user_data = telegram_client.get_user_data()
+                        if user_data and 'username' in user_data:
+                            username = user_data['username']
+                except:
+                    pass
+                self.network_listbox.Append(_("Telegram - connected as {}").format(username))
+            else:
+                self.network_listbox.Append(_("Telegram"))
+            
+            if "messenger" in self.active_services:
+                # Try to get username from messenger service
+                username = "user"  # Default
+                try:
+                    messenger_service = self.active_services["messenger"]
+                    if "user_data" in messenger_service and messenger_service["user_data"]:
+                        username = messenger_service["user_data"].get("username", "user")
+                except:
+                    pass
+                self.network_listbox.Append(_("Facebook Messenger - connected as {}").format(username))
+            else:
+                self.network_listbox.Append(_("Facebook Messenger"))
+                
+            self.network_listbox.Append(_("Other communicators"))
 
     def on_toggle_list(self):
         play_sound('sectionchange.ogg')
@@ -1195,38 +1517,73 @@ class TitanApp(wx.Frame):
     
     def refresh_contacts(self):
         """Refresh the contacts list (private chats)"""
-        if self.telegram_client and telegram_client.is_connected():
-            contacts = telegram_client.get_contacts()
-            self.online_users = contacts  # Keep compatibility
+        contacts = []
+        service_name = self.current_service or "telegram"  # Default to telegram for legacy compatibility
+        
+        if service_name in self.active_services:
+            service = self.active_services[service_name]
             
-            print(f"DEBUG: {_('Refreshing contacts list, found')}: {len(contacts)} {_('contacts')}")
-            
-            self.users_listbox.Clear()
-            for contact in contacts:
-                username = contact.get('username', contact)
-                unread_count = self.unread_messages.get(username, 0)
-                display_name = f"{username} ({unread_count} {_('unread')})" if unread_count > 0 else username
-                self.users_listbox.Append(display_name)
-                print(f"DEBUG: {_('Added contact')}: {display_name}")
-        else:
-            print(f"DEBUG: {_('No connection or client to refresh contacts')}")
+            if service["type"] == "telegram":
+                import telegram_client
+                if service["client"] and telegram_client.is_connected():
+                    contacts = telegram_client.get_contacts()
+            elif service["type"] == "messenger":
+                # TODO: Implement messenger contacts retrieval
+                contacts = []  # Placeholder
+        
+        # Legacy compatibility
+        if self.telegram_client and telegram_client and hasattr(telegram_client, 'is_connected'):
+            if telegram_client.is_connected():
+                contacts = telegram_client.get_contacts()
+        
+        self.online_users = contacts  # Keep compatibility
+        
+        print(f"DEBUG: {_('Refreshing contacts list, found')}: {len(contacts)} {_('contacts')} for {service_name}")
+        
+        self.users_listbox.Clear()
+        for contact in contacts:
+            username = contact.get('username', contact)
+            unread_count = self.unread_messages.get(username, 0)
+            display_name = f"{username} ({unread_count} {_('unread')})" if unread_count > 0 else username
+            self.users_listbox.Append(display_name)
+            print(f"DEBUG: {_('Added contact')}: {display_name}")
+        
+        if not contacts:
+            print(f"DEBUG: {_('No connection or client to refresh contacts')} for {service_name}")
     
     def refresh_group_chats(self):
         """Refresh the group chats list"""
-        if self.telegram_client and telegram_client.is_connected():
-            groups = telegram_client.get_group_chats()
+        groups = []
+        service_name = self.current_service or "telegram"  # Default to telegram for legacy compatibility
+        
+        if service_name in self.active_services:
+            service = self.active_services[service_name]
             
-            print(f"DEBUG: {_('Refreshing group chats, found')}: {len(groups)} {_('groups')}")
-            
-            self.users_listbox.Clear()
-            for group in groups:
-                group_name = group.get('name', group.get('title', 'Unknown Group'))
-                unread_count = self.unread_messages.get(group_name, 0)
-                display_name = f"{group_name} ({unread_count} {_('unread')})" if unread_count > 0 else group_name
-                self.users_listbox.Append(display_name)
-                print(f"DEBUG: {_('Added group')}: {display_name}")
-        else:
-            print(f"DEBUG: {_('No connection or client to refresh groups')}")
+            if service["type"] == "telegram":
+                import telegram_client
+                if service["client"] and telegram_client.is_connected():
+                    groups = telegram_client.get_group_chats()
+            elif service["type"] == "messenger":
+                # TODO: Implement messenger group chats retrieval
+                groups = []  # Placeholder
+        
+        # Legacy compatibility
+        if self.telegram_client and telegram_client and hasattr(telegram_client, 'is_connected'):
+            if telegram_client.is_connected():
+                groups = telegram_client.get_group_chats()
+        
+        print(f"DEBUG: {_('Refreshing group chats, found')}: {len(groups)} {_('groups')} for {service_name}")
+        
+        self.users_listbox.Clear()
+        for group in groups:
+            group_name = group.get('name', group.get('title', 'Unknown Group'))
+            unread_count = self.unread_messages.get(group_name, 0)
+            display_name = f"{group_name} ({unread_count} {_('unread')})" if unread_count > 0 else group_name
+            self.users_listbox.Append(display_name)
+            print(f"DEBUG: {_('Added group')}: {display_name}")
+        
+        if not groups:
+            print(f"DEBUG: {_('No connection or client to refresh groups')} for {service_name}")
     
     def refresh_online_users(self):
         """Legacy method - redirects to refresh_contacts"""

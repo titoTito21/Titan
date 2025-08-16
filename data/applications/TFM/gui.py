@@ -14,6 +14,17 @@ from copy_move import copy_files_with_progress, move_files_with_progress
 # Import sound functions (will use sound effects, but remove direct TTS calls)
 from sound import initialize_sound, play_startup_sound, get_sfx_directory, play_sound, play_delete_sound, play_focus_sound, play_error_sound, play_select_sound
 
+import string
+
+def _get_drives():
+    drives = []
+    if platform.system() == "Windows":
+        for letter in string.ascii_uppercase:
+            drive = f"{letter}:\\"
+            if os.path.exists(drive):
+                drives.append(drive)
+    return drives
+
 # Inicjalizacja pygame do dźwięku
 # Initialize sound AFTER wx.App is created in tfm.py (handled there now)
 # initialize_sound()
@@ -23,26 +34,35 @@ def get_app_sfx_path():
     return get_sfx_directory() # Use the function from sound.py
 
 class FileManager(wx.Frame):
-    def __init__(self):
+    def __init__(self, initial_path=None):
         wx.Frame.__init__(self, None, title=_("Menedżer Plików"), size=(800, 600))
         self.settings = SettingsManager()
         self.clipboard = []
         self.active_panel = None
 
+        # Set initial path or default to home
+        default_path = initial_path if initial_path and os.path.exists(initial_path) else os.path.expanduser("~")
+
         # Commander mode paths and selections
-        self.left_path = os.path.expanduser("~")
-        self.right_path = os.path.expanduser("~")
+        self.left_path = default_path
+        self.right_path = default_path
         self.left_selected_items = set()
         self.right_selected_items = set()
 
         # Single list and classic mode path and selection
-        self.current_path = os.path.expanduser("~")
+        self.current_path = default_path
         self.selected_items = set()
+        self.is_drive_selection_mode = False # New flag for drive selection mode
 
         self.view_settings = self.settings.get_view_settings()
         self.show_hidden = self.settings.get_show_hidden()
         self.show_extensions = self.settings.get_show_extensions()
         self.sort_mode = self.settings.get_sort_mode()
+
+        # Validate initial path and switch to drive selection mode if path is invalid
+        if not os.path.isdir(self.current_path):
+            self.is_drive_selection_mode = True
+            self.announce(_("Nie można uzyskać dostępu do ostatniego katalogu. Przełączam na widok wyboru dysku."))
 
         # Removed direct TTS initialization
         # self.init_tts()
@@ -178,10 +198,15 @@ class FileManager(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_rename, id=ID_RENAME)
 
 
+        self.populate_file_list() # Initial population based on current_path or drive selection mode
         self.update_window_title()
         self.Show()
 
     def update_window_title(self):
+        if self.is_drive_selection_mode:
+            self.SetTitle(_("Wybór dysku"))
+            return
+
         mode = self.settings.get_window_title_mode()
         path = self.current_path
         if self.settings.get_explorer_view_mode() == 'commander':
@@ -270,6 +295,36 @@ class FileManager(wx.Frame):
         ctrl.DeleteAllItems()
         self.selected_items.clear() # Clear selections when repopulating
         # No need to call update_display_names here as items are newly inserted without the prefix
+
+        if self.is_drive_selection_mode:
+            drives = _get_drives()
+            if not drives:
+                index = ctrl.InsertItem(ctrl.GetItemCount(), _('Brak dostępnych dysków'))
+            else:
+                for drive in drives:
+                    index = ctrl.InsertItem(ctrl.GetItemCount(), drive)
+                    # Uzułnij ewentualnie pozostałe kolumny pustymi danymi
+                    if 'date' in self.view_settings:
+                        col_index_date = -1
+                        for i in range(ctrl.GetColumnCount()):
+                            if ctrl.GetColumn(i).GetText() == _('Data modyfikacji'):
+                                col_index_date = i
+                                break
+                        if col_index_date != -1:
+                            ctrl.SetItem(index, col_index_date, '')
+
+                    if 'type' in self.view_settings:
+                        col_index_type = -1
+                        for i in range(ctrl.GetColumnCount()):
+                            if ctrl.GetColumn(i).GetText() == _('Typ'):
+                                col_index_type = i
+                                break
+                        if col_index_type != -1:
+                            ctrl.SetItem(index, col_index_type, _('Dysk'))
+            if ctrl.GetItemCount() > 0:
+                ctrl.Select(0)
+                ctrl.Focus(0)
+            return
 
         try:
             # Use the determined path for listing
@@ -700,6 +755,20 @@ class FileManager(wx.Frame):
                 self.announce(_("Folder jest pusty."))
                 return
 
+            if self.is_drive_selection_mode:
+                selected_drive = name
+                if os.path.exists(selected_drive):
+                    self.current_path = selected_drive
+                    self.is_drive_selection_mode = False
+                    self.populate_file_list(ctrl=ctrl)
+                    self.update_window_title()
+                    play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+                    self.announce(_("Przejście na dysk: {}").format(selected_drive))
+                else:
+                    play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+                    self.announce(_("Wybrany dysk nie istnieje: {}").format(selected_drive))
+                return
+
             # Find the real path, considering hidden extensions
             real_path = os.path.join(self.current_path, name)
             if not self.show_extensions and os.path.splitext(name)[1] == '':
@@ -839,7 +908,21 @@ class FileManager(wx.Frame):
         folder_to_select = os.path.basename(current_path)
         parent_path = os.path.dirname(current_path)
 
-        if parent_path != current_path and os.path.isdir(parent_path):
+        # Check if current_path is a drive root (e.g., 'C:\')
+        is_drive_root = (len(current_path) == 3 and current_path[1] == ':' and current_path[2] == '\\')
+
+        if self.is_drive_selection_mode:
+            play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+            self.announce(_("Jesteś w widoku wyboru dysku."))
+            return
+
+        if is_drive_root:
+            self.is_drive_selection_mode = True
+            self.populate_file_list(ctrl=active_ctrl)
+            self.update_window_title()
+            play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+            self.announce(_("Przejście do widoku wyboru dysku."))
+        elif parent_path != current_path and os.path.isdir(parent_path):
             setattr(self, current_path_attr, parent_path)
             getattr(self, selected_items_attr).clear()
             
@@ -854,7 +937,7 @@ class FileManager(wx.Frame):
             
             self.update_window_title()
             play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-            self.announce(_("Przejście do katalogu nadrzędnego: {}").format(os.path.basename(parent_path) or '/'))
+            self.announce(_("Przejście do katalogu nadrzędnego: {}")).format(os.path.basename(parent_path) or '/')
         else:
             play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
             self.announce(_("Jesteś w katalogu głównym."))
@@ -1042,6 +1125,23 @@ class FileManager(wx.Frame):
         if name == _('Ten folder jest pusty'):
             play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
             self.announce(_("Folder jest pusty."))
+            return
+
+        if self.is_drive_selection_mode:
+            selected_drive = name
+            if os.path.exists(selected_drive):
+                if panel_side == 'left':
+                    self.left_path = selected_drive
+                else:
+                    self.right_path = selected_drive
+                self.is_drive_selection_mode = False
+                self.populate_file_list(ctrl=ctrl)
+                self.update_window_title()
+                play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
+                self.announce(_("Przejście na dysk: {}").format(selected_drive))
+            else:
+                play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+                self.announce(_("Wybrany dysk nie istnieje: {}").format(selected_drive))
             return
 
         path = self.left_path if panel_side == 'left' else self.right_path

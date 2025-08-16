@@ -47,8 +47,9 @@ class ComponentManagerDialog(wx.Dialog):
 
         components_dir = os.path.join(os.path.dirname(__file__), 'data', 'components')
         for component_folder in sorted(os.listdir(components_dir)):
-            if os.path.isdir(os.path.join(components_dir, component_folder)):
-                display_name = self.component_manager.get_component_display_name(component_folder)
+            component_path = os.path.join(components_dir, component_folder)
+            if os.path.isdir(component_path):
+                display_name = self.component_manager.get_component_display_name(component_path, component_folder)
                 status = self.component_manager.component_states.get(component_folder, 1)
                 status_str = _("Enabled") if status == 0 else _("Disabled")
                 self.component_listbox.Append(f"{display_name} - {status_str}", clientData=component_folder)
@@ -173,7 +174,9 @@ class ComponentManagerDialog(wx.Dialog):
 
     def toggle_component(self, component_folder, index):
         new_status = self.component_manager.toggle_component_status(component_folder)
-        display_name = self.component_manager.get_component_display_name(component_folder)
+        components_dir = os.path.join(os.path.dirname(__file__), 'data', 'components')
+        component_path = os.path.join(components_dir, component_folder)
+        display_name = self.component_manager.get_component_display_name(component_path, component_folder)
         status_str = _("Enabled") if new_status == 0 else _("Disabled")
         
         self.component_listbox.SetString(index, f"{display_name} - {status_str}")

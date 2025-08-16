@@ -1,0 +1,71 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: taskbar 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Activate window"
+msgstr ""
+
+msgid "Close window"
+msgstr ""
+
+msgid "Minimize window"
+msgstr ""
+
+msgid "Back"
+msgstr ""
+
+msgid "No window selected"
+msgstr ""
+
+msgid "Context menu for {}"
+msgstr ""
+
+msgid "Window activated: {}"
+msgstr ""
+
+msgid "Failed to activate window"
+msgstr ""
+
+msgid "Window closed: {}"
+msgstr ""
+
+msgid "Failed to close window"
+msgstr ""
+
+msgid "Window minimized: {}"
+msgstr ""
+
+msgid "Failed to minimize window"
+msgstr ""
+
+msgid "No windows found"
+msgstr ""
+
+msgid " (active)"
+msgstr ""
+
+msgid "No window to activate"
+msgstr ""
+
+msgid "Activated: {}"
+msgstr ""
+
+msgid "Taskbar"
+msgstr ""
+
+msgid "Window switching taskbar widget"
+msgstr ""

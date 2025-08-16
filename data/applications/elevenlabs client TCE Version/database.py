@@ -6,13 +6,14 @@ import os
 import zipfile
 import support_dialog
 from clonegen import clone_and_notify
+from translation import _
 
 VOICE_DB_URL = "http://194.233.161.10/elevenDB/dblist.txt"
 VOICE_ZIP_URL_TEMPLATE = "http://194.233.161.10/elevenDB/voicedb/{}.zip"
 
 class VoiceDatabaseDialog(wx.Dialog):
     def __init__(self, parent):
-        super(VoiceDatabaseDialog, self).__init__(parent, title="Voice Database", size=(400, 300))
+        super(VoiceDatabaseDialog, self).__init__(parent, title=_("Baza danych głosów"), size=(400, 300))
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         # Download voice list from server
@@ -22,7 +23,7 @@ class VoiceDatabaseDialog(wx.Dialog):
             voices_data = response.text.splitlines()
             self.voices = {line.split('=')[0]: line.split('=')[1] for line in voices_data}
         except:
-            wx.MessageBox("Error", "Cannot connect to voice database server", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_("Nie można połączyć się z serwerem bazy danych głosów"), _("Błąd"), wx.OK | wx.ICON_ERROR)
             self.EndModal(wx.ID_CANCEL)
             return
 
@@ -47,7 +48,7 @@ class VoiceDatabaseDialog(wx.Dialog):
     def OnDownload(self, event):
         selected_voice = self.voice_listbox.GetStringSelection()
         if not selected_voice:
-            wx.MessageBox("Error", "Please select a voice first.", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_("Proszę najpierw wybrać głos."), _("Błąd"), wx.OK | wx.ICON_ERROR)
             return
 
         zip_url = VOICE_ZIP_URL_TEMPLATE.format(selected_voice)
@@ -78,5 +79,5 @@ class VoiceDatabaseDialog(wx.Dialog):
             self.EndModal(wx.ID_OK)
 
         except:
-            wx.MessageBox("Error", f"Failed to download and clone the voice: {selected_voice}", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_(f"Nie udało się pobrać i sklonować głosu: {selected_voice}"), _("Błąd"), wx.OK | wx.ICON_ERROR)
 

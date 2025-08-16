@@ -1,46 +1,92 @@
-&Pomoc titana
-#Co to jest Titan?
-Titan - Titan computer environment jest środowiskiem zawierającym aplikacje przystosowane dla niewidomych lub słabowidzących. Aplikacje dla titana charakteryzują się prostotą, intuicyjnością, a także można ją dostosować (o ile aplikacja na to pozwala)
-#minimalne wymagania systemowe
-system: windows 10 lub wyższy, 
-512 mb pamięci ram
-700 MB miejsca na dysku (z interpreterem pythona na aplikacje TCE), 60 MB bez interpretera i wsparcia aplikacji TCE
-#spis klawiszy do interfejsu graficznego
-ctrl+tab, przełącza nas między listą aplikacji a listą gier. Dla użytkowników słabowidzących jest pasek narzędzi, aby można było spokojnie przełączyć też myszką
-tab, przełącza nas między listą aplikacji lub gier a paskiem statusu
-shift+f10, uaktywnia menu kontekstowe dla zaznaczonej pozycji tj, aplikacji lub gry TCE
-#interfejs
-Titan posiada 2 interfejsy. 
-Interfejs graficzny - uniwersalny, zawiera 2 listy i pasek menu. Lista aplikacji lub gier TCE, oraz pasek stanu
-aby przełączyć się pomiędzy listą aplikacji a listą gier, ewentualnie innymi listami, naciśnij ctrl+tab
-aby wejść lub wyjść z pasku stanu, naciśnij tab
-każda aplikacja lub gra ma też swoje własne menu kontekstowe, w którym możemy uruchomić lub odinstalować wybraną opcję
-aby przejść na pasek menu, należy nacisnąć klawisz alt, lub vo+m, jeśli jesteśmy w MAC OS
-#aplikacje
-Aplikacje w TCE są to niezależne, autonomiczne programy napisane w python. Titan zawiera kilka podstawowych aplikacji TCE takie jak: Edytor tekstowy, eksplorator plików, przeglądarka internetowa, i wiele więcej. Aplikacje Titana są w katalogu titana/data/applications.
-#gry
-Gry w TCE nie różnią się niczym od aplikacji, lecz ta kategoria jest stosowana po prostu do gier. Czy to w python, czy to w pliku binarnym .exe. Gry znajdują się w katalog titana/data/games
-#komponenty
-Komponenty są to ulepszenia dla środowiska Titan, jak i samego systemu windows. Przykładaami takich komponentów są TDictate, pomoc, którą właśnie czytasz oraz monitor systemowy. 
-Monitor systemowy powiadamia o poziomie baterii w trakcie ładowania, oraz dla zmiany głośności systemowej. 
-komponenty możemy znaleść w katalog titana/data/components
-#tematy dźwiękowe. 
-Czy to otwieramy jakiś program, przemieszczamy się po nim, czy otwieramy jakiś proces systemowy, Titan powiadamia nas o tym przy pomocy tematów dźwiękowych. Tematy dźwiękowe możemy znaleść w katalog titana/sfx
-#skórki
-skórki są to pakiety ikon dla interfejsu graficznego Titana. zmieniają wygląd listy aplikacji, paska menu, a także ikony reprezentujące poszczególny element. Są w katalogu titana/skins
-#Języki (beta)
-obecnie system tłumaczeń w Titanie jest w wersji zapoznawczej. Pakiety językowe są w katalog titana/languages
-#alternatywny interfejs Titana
-Titan, po zminimalizowaniu interfejsu graficznego uaktywnia niewidzialny interfejs, po którym możemy się przemieszczać następująco
-ctrl+shift+strzałki, 
-W lewo, w prawo, przemieszczają nas po elementach listy danej kategorii, 
-W górę, w dół, przemieszczają nas po kategoriach
-Ctrl+shift+enter, uaktywnia dany element. 
-#widgety
-Widgety są to nakładki na niewidzialny interfejs Titana, które znajdują się w odpowiedniej kategorii. Aby uaktywnić widget, należy nacisnąć
-Ctrl+shift, będzie od tej pory jako Klawisz modyfikujący
-Titan+enter
-Widgety mogą być zwykłymi przyciskami, które uaktywnią daną funkcję widgetu, oraz siatką/widgetem, po którym możemy się Przemieszczać
-#interakcja z widgetami
-titan+strzałki, przemieszczają nas po siatce widgetu
-titan+backspace, powraca do niewidzialnego interfejsu
+&Pomoc Titana
+#Czym jest Titan?
+Titan (Titan Computer Environment) to zintegrowane środowisko graficzne, zaprojektowane z myślą o osobach niewidomych i słabowidzących. Aplikacje tworzone dla Titana cechują się prostotą, intuicyjnością oraz możliwością personalizacji (jeśli dana aplikacja na to pozwala).
+
+#Minimalne wymagania systemowe
+- System operacyjny: Windows 10 lub nowszy
+- Pamięć RAM: 512 MB
+- Miejsce na dysku: 700 MB (z interpreterem Pythona dla aplikacji TCE) lub 60 MB (bez interpretera i wsparcia dla aplikacji TCE)
+
+#Nawigacja i skróty klawiszowe
+Interfejs graficzny Titana został zaprojektowany z myślą o łatwej i szybkiej nawigacji przy użyciu klawiatury.
+
+- **Ctrl+Tab**: Przełącza widok między listą aplikacji a listą gier.
+- **Tab**: Przełącza fokus między aktywną listą (aplikacji lub gier) a paskiem stanu.
+- **Shift+F10** lub **klawisz Aplikacji**: Otwiera menu kontekstowe dla zaznaczonego elementu na liście, umożliwiaj��c jego uruchomienie lub odinstalowanie.
+- **Alt**: Aktywuje główne menu programu.
+
+#Główne elementy interfejsu
+Titan składa się z kilku kluczowych elementów, które tworzą jego środowisko.
+
+##Aplikacje
+Aplikacje TCE to niezależne programy napisane w języku Python, zintegrowane z Titanem. Wśród domyślnie dostępnych aplikacji znajdują się m.in. edytor tekstowy, eksplorator plików i przeglądarka internetowa. Wszystkie aplikacje przechowywane są w katalogu `data/applications`.
+
+##Gry
+Gry działają na podobnej zasadzie co aplikacje, ale zostały wydzielone do osobnej kategorii dla większej przejrzystości. Mogą to być zarówno programy w Pythonie, jak i pliki wykonywalne (.exe). Gry znajdują się w katalogu `data/games`.
+
+##Komponenty
+Komponenty to rozszerzenia, które dodają nowe funkcje do środowiska Titan lub integrują się z systemem Windows. Przykłady to:
+- **TDictate**: Komponent do dyktowania tekstu.
+- **Pomoc Titana**: System pomocy, który właśnie czytasz (wywoływany klawiszem F1).
+- **Monitor systemowy**: Powiadamia o stanie baterii, zmianach głośności systemowej oraz podłączeniu/odłączeniu urządzeń.
+Komponenty można znaleźć w katalogu `data/components`.
+
+##Tematy dźwiękowe
+Titan wykorzystuje dźwięki do informowania o różnych zdarzeniach, takich jak nawigacja po listach, otwieranie programów czy błędy. Użytkownik może personalizować te dźwięki, wybierając jeden z dostępnych tematów. Tematy dźwiękowe znajdują się w katalogu `sfx`.
+
+##Skórki
+Skórki pozwalają na zmianę wizualnego wyglądu interfejsu Titana, w tym ikon, kolorów i czcionek. Pakiety skórek przechowywane są w katalogu `skins`.
+
+##Tłumaczenia (funkcja eksperymentalna)
+System tłumaczeń Titana jest obecnie w fazie rozwoju. Pakiety językowe można znaleźć w katalogu `languages`.
+
+#Menu programu (Alt)
+Główne menu programu, dostępne po naciśnięciu klawisza Alt, zawiera kluczowe funkcje zarządzania środowiskiem.
+
+- **Zainstaluj pakiet danych...**: Otwiera okno dialogowe, które pozwala na instalację nowych aplikacji, gier, komponentów, skórek lub motywów dźwiękowych z plików `.zip`, `.7z` lub `.tcepackage`.
+- **Menedżer komponentów...**: Otwiera okno do zarządzania zainstalowanymi komponentami.
+- **Ustawienia programu**: Otwiera okno ustawień Titana.
+- **Zminimalizuj**: Minimalizuje główne okno programu do zasobnika systemowego i aktywuje alternatywny, niewidzialny interfejs.
+- **Zakończ**: Zamyka program Titan.
+
+#Menedżer komponentów
+Menedżer komponentów to narzędzie do zarządzania dodatkami rozszerzającymi funkcjonalność Titana.
+
+- **Włączanie/Wyłączanie**: Użyj klawisza spacji, aby włączyć lub wyłączyć zaznaczony komponent. Zmiany są zapisywane natychmiast. Wyłączone komponenty nie będą ładowane przy starcie programu, co może przyspieszyć jego uruchamianie.
+- **Akcje (Enter lub przycisk "Akcje")**: Dla niektórych komponentów dostępne są dodatkowe akcje, takie jak "Uruchom" lub "Ustawienia", które można wywołać z menu kontekstowego.
+
+#Ustawienia programu
+Okno ustawień jest podzielone na kilka kart, które grupują opcje konfiguracyjne.
+
+##Karta "Dźwięk"
+- **Wybierz motyw dźwiękowy**: Pozwala zmienić zestaw dźwięków używanych przez interfejs.
+- **Dźwięki stereo**: Włącza lub wyłącza pozycjonowanie dźwięków w przestrzeni stereo, co może ułatwić orientację.
+
+##Karta "Ogólne"
+- **Język**: Umożliwia zmianę języka interfejsu. Zmiana wymaga ponownego uruchomienia programu.
+- **Szybki start**: Wyłącza odtwarzanie dźwięku powitalnego i komunikatu o wersji przy uruchamianiu, co przyspiesza start programu.
+- **Potwierdź wyjście z Titana**: Jeśli opcja jest zaznaczona, program zapyta o potwierdzenie przed zamknięciem.
+
+##Karta "Interfejs"
+- **Wybierz skórkę interfejsu**: Pozwala na zmianę wyglądu graficznego aplikacji (kolory, ikony, czcionki).
+
+##Karta "Windows" (dostępna tylko w systemie Windows)
+- **Zmień ustawienia SAPI**: Otwiera systemowe okno konfiguracji głosów SAPI (Speech Application Programming Interface).
+- **Ułatwienia dostępu**: Otwiera systemowe centrum ułatwień dostępu.
+- **Głośność systemowa**: Suwak do regulacji ogólnej głośności systemu operacyjnego.
+- **Wyłącz wyciszenie karty dźwiękowej...**: Zapobiega wyciszaniu dźwięku przez system, gdy Titan jest uruchomiony.
+
+#Alternatywny interfejs (tryb niewidzialny)
+Po zminimalizowaniu głównego okna, Titan aktywuje "niewidzialny interfejs", który działa w tle i umożliwia szybki dostęp do funkcji bez widocznego okna.
+
+- **Ctrl+Shift+Strzałki w lewo/prawo**: Nawigacja po elementach w danej kategorii.
+- **Ctrl+Shift+Strzałki w górę/dół**: Zmiana kategorii (np. aplikacje, gry, widgety).
+- **Ctrl+Shift+Enter**: Uruchomienie zaznaczonego elementu.
+
+#Widgety
+Widgety to interaktywne nakładki na niewidzialny interfejs, oferujące dodatkowe funkcje.
+
+- **Klawisz Modyfikujący (Titan)**: Domyślnie Ctrl+Shift.
+- **Titan+Enter**: Aktywacja widgetu.
+- **Titan+Strzałki**: Nawigacja wewnątrz aktywnego widgetu (np. po siatce).
+- **Titan+Backspace**: Powrót z widgetu do niewidzialnego interfejsu.

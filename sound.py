@@ -11,6 +11,12 @@ lock = Lock()  # Synchronizacja odtwarzania dźwięków
 sound_theme_volume = 1.0  # Domyślna głośność tematu dźwiękowego
 system_volume = 1.0  # Domyślna głośność systemu
 
+# System wiadomości głosowych
+voice_message_channel = None
+current_voice_message = None
+voice_message_playing = False
+voice_message_paused = False
+
 # Zainicjalizowanie miksera dźwięku
 pygame.mixer.init()
 
@@ -35,8 +41,9 @@ def get_sfx_directory():
 def initialize_sound():
     """Inicjalizuje system dźwiękowy."""
     pygame.mixer.init()
-    global background_channel
+    global background_channel, voice_message_channel
     background_channel = pygame.mixer.Channel(1)
+    voice_message_channel = pygame.mixer.Channel(2)
 
 
 def play_sound(sound_file, pan=None):
@@ -180,6 +187,88 @@ def set_system_volume(volume):
         print(f"Failed to set system volume: {e}")
 
     print(f"System volume set to {system_volume}")
+
+
+def play_voice_message(file_path):
+    """Odtwarza wiadomość głosową."""
+    global voice_message_channel, current_voice_message, voice_message_playing, voice_message_paused
+    
+    if not os.path.exists(file_path):
+        print(f"Voice message file not found: {file_path}")
+        return False
+    
+    try:
+        with lock:
+            # Zatrzymaj poprzednią wiadomość jeśli gra
+            if voice_message_channel and voice_message_channel.get_busy():
+                voice_message_channel.stop()
+            
+            current_voice_message = pygame.mixer.Sound(file_path)
+            current_voice_message.set_volume(sound_theme_volume)
+            voice_message_channel.play(current_voice_message)
+            voice_message_playing = True
+            voice_message_paused = False
+            
+            return True
+    except pygame.error as e:
+        print(f"Failed to play voice message: {file_path}, {e}")
+        return False
+
+
+def pause_voice_message():
+    """Wstrzymuje odtwarzanie wiadomości głosowej."""
+    global voice_message_paused, voice_message_playing
+    
+    if voice_message_channel and voice_message_channel.get_busy() and not voice_message_paused:
+        voice_message_channel.pause()
+        voice_message_paused = True
+        voice_message_playing = False
+        return True
+    return False
+
+
+def resume_voice_message():
+    """Wznawia odtwarzanie wiadomości głosowej."""
+    global voice_message_paused, voice_message_playing
+    
+    if voice_message_channel and voice_message_paused:
+        voice_message_channel.unpause()
+        voice_message_paused = False
+        voice_message_playing = True
+        return True
+    return False
+
+
+def stop_voice_message():
+    """Zatrzymuje odtwarzanie wiadomości głosowej."""
+    global voice_message_playing, voice_message_paused, current_voice_message
+    
+    if voice_message_channel:
+        voice_message_channel.stop()
+        voice_message_playing = False
+        voice_message_paused = False
+        current_voice_message = None
+        return True
+    return False
+
+
+def toggle_voice_message():
+    """Przełącza między odtwarzaniem a pauzą wiadomości głosowej."""
+    if voice_message_playing:
+        return pause_voice_message()
+    elif voice_message_paused:
+        return resume_voice_message()
+    return False
+
+
+def is_voice_message_playing():
+    """Sprawdza czy wiadomość głosowa jest odtwarzana."""
+    return voice_message_playing and voice_message_channel and voice_message_channel.get_busy()
+
+
+def is_voice_message_paused():
+    """Sprawdza czy wiadomość głosowa jest wstrzymana."""
+    return voice_message_paused
 
 
 # Inicjalizacja dźwięku na starcie programu

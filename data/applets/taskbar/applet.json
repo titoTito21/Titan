@@ -1,0 +1,9 @@
+{
+    "name_pl": "Pasek zadań",
+    "name_en": "Taskbar",
+    "description_pl": "Widget paska zadań do przełączania między oknami aplikacji",
+    "description_en": "Taskbar widget for switching between application windows",
+    "version": "1.0.0",
+    "author": "TCE Launcher",
+    "type": "grid"
+}

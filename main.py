@@ -14,11 +14,12 @@ from app_manager import find_application_by_shortname, open_application
 from game_manager import *
 from component_manager import ComponentManager
 from menu import MenuBar
+# from lockscreen_simple import start_lock_monitoring
 
 # Initialize translation system
 _ = set_language(get_setting('language', 'pl'))
 
-VERSION = "0.1.7.5"
+VERSION = "0.1.9.2"
 speaker = accessible_output3.outputs.auto.Auto()
 
 def main():
@@ -102,6 +103,9 @@ if __name__ == "__main__":
     frame.component_manager = component_manager
     menubar = MenuBar(frame)
     frame.SetMenuBar(menubar)
+
+    # Start lockscreen monitoring service
+    # start_lock_monitoring()
 
     
     

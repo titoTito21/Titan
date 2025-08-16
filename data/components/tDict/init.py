@@ -61,8 +61,13 @@ def speak(text):
             system = platform.system()
             if system == 'Windows':
                 import win32com.client
-                speaker = win32com.client.Dispatch("SAPI.SpVoice")
-                speaker.Speak(text)
+                import pythoncom
+                pythoncom.CoInitialize()
+                try:
+                    speaker = win32com.client.Dispatch("SAPI.SpVoice")
+                    speaker.Speak(text)
+                finally:
+                    pythoncom.CoUninitialize()
             elif system == 'Darwin':  # macOS
                 os.system(f"say '{text}'")
             else:  # Assume Linux

@@ -7,6 +7,31 @@ import configparser
 import re
 from translation import _
 
+# Dodaj importy dla obsługi DOCX, DOC, PDF
+try:
+    import docx
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+    print("Biblioteka 'python-docx' nie jest zainstalowana. Otwieranie plików .docx będzie niemożliwe.")
+    print("Aby zainstalować, użyj: pip install python-docx")
+
+try:
+    import pypandoc
+    PYPANDOC_AVAILABLE = True
+except ImportError:
+    PYPANDOC_AVAILABLE = False
+    print("Biblioteka 'pypandoc' nie jest zainstalowana. Otwieranie plików .doc będzie niemożliwe.")
+    print("Aby zainstalować, użyj: pip install pypandoc")
+
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+    print("Biblioteka 'PyPDF2' nie jest zainstalowana. Otwieranie plików .pdf będzie niemożliwe.")
+    print("Aby zainstalować, użyj: pip install PyPDF2")
+
 
 # Dodaj importy dla pobierania
 try:
@@ -742,7 +767,13 @@ class TextEditor(wx.Frame):
             elif res == wx.CANCEL:
                  return
 
-        with wx.FileDialog(self, _("Otwórz plik"), wildcard=_("Pliki tekstowe (*.txt)|*.txt|Wszystkie pliki (*.*)|*.*"),
+        wildcard = (
+            _("Pliki tekstowe (*.txt)|*.txt|") +
+            _("Dokumenty Word (*.docx, *.doc)|*.docx;*.doc|") +
+            _("Pliki PDF (*.pdf)|*.pdf|") +
+            _("Wszystkie pliki (*.*)|*.*")
+        )
+        with wx.FileDialog(self, _("Otwórz plik"), wildcard=wildcard,
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
             if fileDialog.ShowModal() == wx.ID_CANCEL:
                 return
@@ -753,21 +784,34 @@ class TextEditor(wx.Frame):
     def LoadFile(self, path):
         """Wczytuje zawartość pliku do edytora."""
         try:
-            with open(path, 'r', encoding='utf-8', errors='replace') as file:
-                content = file.read()
-                self.text_ctrl.SetValue(content)
+            ext = os.path.splitext(path)[1].lower()
+            content = ""
+            if ext == '.docx' and DOCX_AVAILABLE:
+                doc = docx.Document(path)
+                content = "\n".join([para.text for para in doc.paragraphs])
+            elif ext == '.doc' and PYPANDOC_AVAILABLE:
+                content = pypandoc.convert_file(path, 'plain')
+            elif ext == '.pdf' and PYPDF2_AVAILABLE:
+                with open(path, 'rb') as f:
+                    reader = PyPDF2.PdfReader(f)
+                    for page in reader.pages:
+                        content += page.extract_text()
+            else:
+                with open(path, 'r', encoding='utf-8', errors='replace') as file:
+                    content = file.read()
+
+            self.text_ctrl.SetValue(content)
             self.text_ctrl.SetModified(False)
             self.current_file = path
             self.SetTitle(f"{os.path.basename(path)} - TEdit")
-            self.ClearSpellCheckHighlights() # Wyczyść stare podkreślenia po wczytaniu nowego pliku
+            self.ClearSpellCheckHighlights()
 
-            # Opcjonalnie: Wykonaj automatyczne sprawdzanie pisowni po otwarciu
-            # if self.spell_check_enabled and self.spell_dict:
-            #    self.OnCheckSpelling(None) # Wywołaj sprawdzanie pisowni
+            if ext in ['.docx', '.doc', '.pdf']:
+                wx.MessageBox(_("Plik został zaimportowany jako tekst. Zapisanie go spowoduje utratę oryginalnego formatowania i zapisanie jako plik tekstowy."), _("Ostrzeżenie"), wx.OK | wx.ICON_WARNING)
 
-        except IOError as e:
+        except Exception as e:
             wx.LogError(_("Nie można otworzyć pliku '{path}': {e}").format(path=path, e=e))
-            self.current_file = None # Resetuj current_file w przypadku błędu
+            self.current_file = None
 
 
     def OnSave(self, event):

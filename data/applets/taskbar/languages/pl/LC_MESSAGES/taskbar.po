@@ -1,0 +1,70 @@
+# Polish translation for taskbar widget
+# Copyright (C) 2025 TCE Launcher
+# This file is distributed under the same license as the taskbar package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: taskbar 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 12:00+0000\n"
+"PO-Revision-Date: 2025-01-01 12:00+0000\n"
+"Last-Translator: TCE Launcher\n"
+"Language-Team: Polish\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Activate window"
+msgstr "Aktywuj"
+
+msgid "Close window"
+msgstr "Zamknij"
+
+msgid "Minimize window"
+msgstr "Minimalizuj"
+
+msgid "Back"
+msgstr "Wstecz"
+
+msgid "No window selected"
+msgstr "Nie wybrano okna"
+
+msgid "Context menu for {}"
+msgstr "Menu"
+
+msgid "Window activated: {}"
+msgstr "Okno aktywowane: {}"
+
+msgid "Failed to activate window"
+msgstr "Nie udało się aktywować okna"
+
+msgid "Window closed: {}"
+msgstr "Okno zamknięte: {}"
+
+msgid "Failed to close window"
+msgstr "Nie udało się zamknąć okna"
+
+msgid "Window minimized: {}"
+msgstr "Okno zminimalizowane: {}"
+
+msgid "Failed to minimize window"
+msgstr "Nie udało się zminimalizować okna"
+
+msgid "No windows found"
+msgstr "Nie znaleziono okien"
+
+msgid " (active)"
+msgstr " (aktywne)"
+
+msgid "No window to activate"
+msgstr "Brak okna do aktywacji"
+
+msgid "Activated: {}"
+msgstr "Aktywowano: {}"
+
+msgid "Taskbar"
+msgstr "Pasek zadań"
+
+msgid "Window switching taskbar widget"
+msgstr "Widget paska zadań do przełączania okien"

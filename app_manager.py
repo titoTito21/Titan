@@ -106,7 +106,11 @@ def is_frozen():
 
 def get_python_executable():
     if is_frozen():
-        # If we are running in a PyInstaller bundle, find the embedded python interpreter
+        # Użyj wbudowanego Python z build/python/
+        embedded_python = os.path.join(os.path.dirname(sys.executable), 'python', 'python.exe')
+        if os.path.exists(embedded_python):
+            return embedded_python
+        # Fallback do oryginalnej logiki
         return os.path.join(os.path.dirname(sys.executable), 'python.exe' if sys.platform == 'win32' else 'python3')
     else:
         return sys.executable
