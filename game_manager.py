@@ -53,4 +53,5 @@ def open_game(game_info):
         elif game_file.endswith('.exe'):
             subprocess.run([game_file], cwd=game_info['path'])
     
-    threading.Thread(target=run_game).start()
+    game_thread = threading.Thread(target=run_game, daemon=True)
+    game_thread.start()

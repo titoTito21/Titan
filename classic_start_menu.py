@@ -53,6 +53,10 @@ class ClassicStartMenu(wx.Frame):
         self.menu_items = []
         self.current_submenu = None
         
+        # Cache for applications and games to avoid reloading
+        self._apps_cache = None
+        self._games_cache = None
+        
         # Inicjalizacja dźwięku
         initialize_sound()
         
@@ -76,26 +80,31 @@ class ClassicStartMenu(wx.Frame):
         # Sizer główny
         main_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        # Lewy panel z logo Windows (niebieski gradient)
+        # Lewy panel z autentycznym gradientem Windows 95 (blue to black)
         self.logo_panel = wx.Panel(main_panel)
-        self.logo_panel.SetBackgroundColour(wx.Colour(0, 0, 128))  # Ciemny niebieski
-        self.logo_panel.SetMinSize((32, 300))
+        # Use teal blue color from authentic Windows 95 palette
+        self.logo_panel.SetBackgroundColour(wx.Colour(0, 128, 128))  # Teal blue base
+        self.logo_panel.SetMinSize((24, 300))  # Slightly narrower like authentic Windows 95
         
-        # Logo text (pionowo)
+        # Logo text (rotated 90 degrees like authentic Windows 95)
         logo_sizer = wx.BoxSizer(wx.VERTICAL)
-        logo_text = wx.StaticText(self.logo_panel, label="Windows", style=wx.ALIGN_CENTER)
+        logo_text = wx.StaticText(self.logo_panel, label="Windows 95", style=wx.ALIGN_CENTER)
         logo_text.SetForegroundColour(wx.Colour(255, 255, 255))
-        logo_font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        # Use MS Sans Serif-like font with authentic Windows 95 sizing
+        logo_font = wx.Font(11, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, 
+                           faceName="MS Sans Serif")
         logo_text.SetFont(logo_font)
         
         logo_sizer.AddStretchSpacer(1)
-        logo_sizer.Add(logo_text, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+        logo_sizer.Add(logo_text, 0, wx.ALIGN_CENTER | wx.ALL, 3)
         
+        # Add "Titan" text in smaller, lighter font like original Windows logo
         titan_text = wx.StaticText(self.logo_panel, label="Titan", style=wx.ALIGN_CENTER)
-        titan_text.SetForegroundColour(wx.Colour(192, 192, 255))
-        titan_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        titan_text.SetForegroundColour(wx.Colour(224, 224, 255))  # Lighter blue-white
+        titan_font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL,
+                            faceName="MS Sans Serif")
         titan_text.SetFont(titan_font)
-        logo_sizer.Add(titan_text, 0, wx.ALIGN_CENTER | wx.ALL, 2)
+        logo_sizer.Add(titan_text, 0, wx.ALIGN_CENTER | wx.ALL, 1)
         logo_sizer.AddStretchSpacer(1)
         
         self.logo_panel.SetSizer(logo_sizer)
@@ -105,10 +114,13 @@ class ClassicStartMenu(wx.Frame):
         menu_panel.SetBackgroundColour(wx.Colour(192, 192, 192))
         menu_sizer = wx.BoxSizer(wx.VERTICAL)
         
-        # Drzewo menu w stylu Windows 95
-        self.menu_tree = wx.TreeCtrl(menu_panel, style=wx.TR_DEFAULT_STYLE | wx.TR_HIDE_ROOT | wx.TR_SINGLE)
-        self.menu_tree.SetBackgroundColour(wx.Colour(255, 255, 255))
-        self.menu_tree.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        # Drzewo menu w autentycznym stylu Windows 95
+        self.menu_tree = wx.TreeCtrl(menu_panel, style=wx.TR_DEFAULT_STYLE | wx.TR_HIDE_ROOT | wx.TR_SINGLE | wx.TR_NO_LINES)
+        self.menu_tree.SetBackgroundColour(wx.Colour(255, 255, 255))  # Pure white like authentic Windows 95
+        # Use MS Sans Serif font at 8pt like authentic Windows 95 menus
+        menu_font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL,
+                           faceName="MS Sans Serif")
+        self.menu_tree.SetFont(menu_font)
         
         menu_sizer.Add(self.menu_tree, 1, wx.ALL | wx.EXPAND, 3)
         
@@ -144,20 +156,20 @@ class ClassicStartMenu(wx.Frame):
         self.menu_tree.Bind(wx.EVT_KEY_DOWN, self.on_tree_key)
         self.shutdown_button.Bind(wx.EVT_BUTTON, self.on_shutdown)
         
-        # Rozmiar okna
-        self.SetSize((280, 400))
+        # Rozmiar okna - authentic Windows 95 Start Menu dimensions
+        self.SetSize((240, 350))  # More compact like authentic Windows 95
     
     def build_menu_structure(self):
-        """Budowanie struktury menu w stylu Windows 95"""
+        """Budowanie struktury menu w stylu Windows 95/98 - authentic layout"""
         self.menu_items = [
             ClassicMenuItem(_("Programs"), submenu="programs"),
             ClassicMenuItem(_("Documents"), submenu="documents"),
-            ClassicMenuItem(_("Titan - Applications"), submenu="titan_apps"),
-            ClassicMenuItem(_("Titan - Games"), submenu="titan_games"),
             ClassicMenuItem(_("Settings"), submenu="settings"),
-            ClassicMenuItem(_("Find"), action="find"),
+            ClassicMenuItem(_("Find"), submenu="find"),
             ClassicMenuItem(_("Help"), action="help"),
             ClassicMenuItem(_("Run..."), action="run"),
+            ClassicMenuItem("---"),  # Separator before Shut Down
+            ClassicMenuItem(_("Shut Down..."), action="shutdown"),
         ]
         
         self.update_menu_display()
@@ -170,7 +182,11 @@ class ClassicStartMenu(wx.Frame):
         root = self.menu_tree.AddRoot("Root")
         
         for item in self.menu_items:
-            if not item.is_separator:
+            if item.is_separator:
+                # Add separator as visual divider (disabled item)
+                separator_item = self.menu_tree.AppendItem(root, "─────────────")
+                self.menu_tree.SetItemData(separator_item, item)
+            else:
                 tree_item = self.menu_tree.AppendItem(root, item.name)
                 self.menu_tree.SetItemData(tree_item, item)
                 
@@ -203,14 +219,34 @@ class ClassicStartMenu(wx.Frame):
         
         play_sound('focus_expanded.ogg')
         
-        if item_data and item_data.submenu:
-            # Remove placeholder
-            child, cookie = self.menu_tree.GetFirstChild(item_id)
-            if child.IsOk():
-                self.menu_tree.Delete(child)
+        if item_data and hasattr(item_data, 'submenu') and item_data.submenu:
+            # Check if items are already loaded (more than just placeholder)
+            child_count = self.menu_tree.GetChildrenCount(item_id, recursively=False)
+            print(f"DEBUG: Expanding {item_data.name}, child_count: {child_count}, submenu: {item_data.submenu}")
             
-            # Load submenu items
-            self.load_submenu_items(item_id, item_data.submenu)
+            # If we have exactly 1 child, it might be a placeholder - check if it's the placeholder
+            if child_count == 1:
+                child, cookie = self.menu_tree.GetFirstChild(item_id)
+                if child.IsOk():
+                    child_text = self.menu_tree.GetItemText(child)
+                    child_data = self.menu_tree.GetItemData(child)
+                    print(f"DEBUG: Child text: '{child_text}', child_data: {child_data}")
+                    # Check if it's our placeholder (text="..." and data=None)
+                    if child_text == "..." and child_data is None:
+                        print(f"DEBUG: Removing placeholder and loading submenu: {item_data.submenu}")
+                        # Remove placeholder and load real items
+                        self.menu_tree.Delete(child)
+                        self.load_submenu_items(item_id, item_data.submenu)
+                    else:
+                        print("DEBUG: Child is not placeholder, already loaded")
+            elif child_count == 0:
+                # No children at all, load items
+                print(f"DEBUG: No children, loading submenu: {item_data.submenu}")
+                self.load_submenu_items(item_id, item_data.submenu)
+            else:
+                print(f"DEBUG: Multiple children ({child_count}), already loaded")
+        else:
+            print(f"DEBUG: No submenu data for {item_data}")
     
     def on_tree_collapsing(self, event):
         """Obsługa zwijania węzła"""
@@ -276,23 +312,52 @@ class ClassicStartMenu(wx.Frame):
     
     def load_submenu_items(self, parent_item, submenu_type):
         """Ładowanie elementów submenu do drzewa"""
-        if submenu_type == "programs":
-            self.load_programs_submenu(parent_item)
-        elif submenu_type == "documents":
-            self.load_documents_submenu(parent_item)
-        elif submenu_type == "titan_apps":
-            self.load_titan_apps_submenu(parent_item)
-        elif submenu_type == "titan_games":
-            self.load_titan_games_submenu(parent_item)
-        elif submenu_type == "settings":
-            self.load_settings_submenu(parent_item)
+        print(f"DEBUG: Loading submenu items: {submenu_type}")
+        try:
+            if submenu_type == "programs":
+                self.load_programs_submenu(parent_item)
+            elif submenu_type == "documents":
+                self.load_documents_submenu(parent_item)
+            elif submenu_type == "titan_apps":
+                self.load_titan_apps_submenu(parent_item)
+            elif submenu_type == "titan_games":
+                self.load_titan_games_submenu(parent_item)
+            elif submenu_type == "settings":
+                self.load_settings_submenu(parent_item)
+            elif submenu_type == "find":
+                self.load_find_submenu(parent_item)
+            else:
+                print(f"DEBUG: Unknown submenu type: {submenu_type}")
+        except Exception as e:
+            print(f"DEBUG: Error loading submenu {submenu_type}: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_programs_submenu(self, parent_item):
-        """Ładowanie programów jako drzewo"""
+        """Ładowanie programów jako drzewo - Windows 95 style with all programs including Titan"""
+        print(f"DEBUG: Loading programs submenu, parent_item: {parent_item}")
         try:
+            # Add Titan Applications folder
+            titan_apps_folder = self.menu_tree.AppendItem(parent_item, _("Titan Applications"))
+            self.menu_tree.SetItemData(titan_apps_folder, ClassicMenuItem(_("Titan Applications"), submenu="titan_apps"))
+            # Add placeholder for lazy loading
+            placeholder = self.menu_tree.AppendItem(titan_apps_folder, "...")
+            self.menu_tree.SetItemData(placeholder, None)
+            
+            # Add Titan Games folder
+            titan_games_folder = self.menu_tree.AppendItem(parent_item, _("Titan Games"))
+            self.menu_tree.SetItemData(titan_games_folder, ClassicMenuItem(_("Titan Games"), submenu="titan_games"))
+            # Add placeholder for lazy loading
+            placeholder = self.menu_tree.AppendItem(titan_games_folder, "...")
+            self.menu_tree.SetItemData(placeholder, None)
+            
+            # Add Windows programs if on Windows
             if self.is_windows:
+                print("DEBUG: Loading Windows programs")
                 folder_structure = self.load_windows_programs_with_folders()
+                print(f"DEBUG: Found {len(folder_structure)} program folders")
                 for folder_name, items in folder_structure.items():
+                    print(f"DEBUG: Adding folder '{folder_name}' with {len(items)} items")
                     folder_item = self.menu_tree.AppendItem(parent_item, folder_name)
                     self.menu_tree.SetItemData(folder_item, ClassicMenuItem(folder_name))
                     
@@ -300,59 +365,131 @@ class ClassicStartMenu(wx.Frame):
                         program_item = self.menu_tree.AppendItem(folder_item, program['name'])
                         # Store program data directly in tree item instead of lambda
                         self.menu_tree.SetItemData(program_item, {'type': 'windows_program', 'data': program})
+                print("DEBUG: Successfully loaded Windows programs")
+            else:
+                print("DEBUG: Not Windows, no Windows programs to load")
         except Exception as e:
-            print(f"Error loading programs: {e}")
+            print(f"DEBUG: Error loading programs: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_documents_submenu(self, parent_item):
         """Ładowanie dokumentów jako drzewo"""
-        my_docs = self.menu_tree.AppendItem(parent_item, _('My Documents'))
-        self.menu_tree.SetItemData(my_docs, ClassicMenuItem(_('My Documents'), action='my_documents'))
+        print(f"DEBUG: Loading documents submenu, parent_item: {parent_item}")
+        try:
+            my_docs = self.menu_tree.AppendItem(parent_item, _('My Documents'))
+            self.menu_tree.SetItemData(my_docs, ClassicMenuItem(_('My Documents'), action='my_documents'))
+            print("DEBUG: Successfully added My Documents item")
+        except Exception as e:
+            print(f"DEBUG: Error loading documents: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_titan_apps_submenu(self, parent_item):
         """Ładowanie aplikacji Titan jako drzewo - bez folderów, bezpośrednio"""
+        print(f"DEBUG: Loading Titan apps submenu, parent_item: {parent_item}")
         try:
-            from app_manager import get_applications
-            apps = get_applications()
+            # Use cache if available, otherwise load fresh
+            if self._apps_cache is None:
+                print("DEBUG: Loading apps from app_manager")
+                from app_manager import get_applications
+                self._apps_cache = get_applications()
+                print(f"DEBUG: Loaded {len(self._apps_cache) if self._apps_cache else 0} apps to cache")
+            
+            apps = self._apps_cache
+            if not apps:
+                print("DEBUG: No apps found, adding placeholder")
+                no_apps_item = self.menu_tree.AppendItem(parent_item, _("No applications"))
+                self.menu_tree.SetItemData(no_apps_item, ClassicMenuItem(_("No applications")))
+                return
             
             # Add all applications directly to the tree
-            for app in apps:
+            print(f"DEBUG: Adding {len(apps)} apps to tree")
+            for i, app in enumerate(apps):
+                print(f"DEBUG: Adding app {i+1}/{len(apps)}: {app.get('name', 'Unknown')}")
                 app_item = self.menu_tree.AppendItem(parent_item, app['name'])
                 # Store app data directly in tree item instead of lambda
                 self.menu_tree.SetItemData(app_item, {'type': 'titan_app', 'data': app})
-                    
+            print(f"DEBUG: Successfully added {len(apps)} apps to submenu")    
         except Exception as e:
-            print(f"Error loading Titan applications: {e}")
+            print(f"DEBUG: Error loading Titan applications: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_titan_games_submenu(self, parent_item):
         """Ładowanie gier Titan jako drzewo - bez kategorii, bezpośrednio"""
+        print(f"DEBUG: Loading Titan games submenu, parent_item: {parent_item}")
         try:
-            from game_manager import get_games
-            games = get_games()
+            # Use cache if available, otherwise load fresh
+            if self._games_cache is None:
+                print("DEBUG: Loading games from game_manager")
+                from game_manager import get_games
+                self._games_cache = get_games()
+                print(f"DEBUG: Loaded {len(self._games_cache) if self._games_cache else 0} games to cache")
+            
+            games = self._games_cache
             
             # Add all games directly to the tree
             if games:
-                for game in games:
+                print(f"DEBUG: Adding {len(games)} games to tree")
+                for i, game in enumerate(games):
+                    print(f"DEBUG: Adding game {i+1}/{len(games)}: {game.get('name', 'Unknown')}")
                     game_item = self.menu_tree.AppendItem(parent_item, game['name'])
                     # Store game data directly in tree item instead of lambda
                     self.menu_tree.SetItemData(game_item, {'type': 'titan_game', 'data': game})
+                print(f"DEBUG: Successfully added {len(games)} games to submenu")
             else:
+                print("DEBUG: No games found, adding placeholder")
                 # Add "No games found" item if no games
                 no_games_item = self.menu_tree.AppendItem(parent_item, _("No games found"))
                 self.menu_tree.SetItemData(no_games_item, ClassicMenuItem(_("No games found")))
                     
         except Exception as e:
-            print(f"Error loading Titan games: {e}")
+            print(f"DEBUG: Error loading Titan games: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_settings_submenu(self, parent_item):
         """Ładowanie ustawień jako drzewo"""
-        # Titan Settings - make it work like menu bar
-        titan_settings = self.menu_tree.AppendItem(parent_item, _("Titan Settings"))
-        self.menu_tree.SetItemData(titan_settings, ClassicMenuItem(_("Titan Settings"), action="titan_settings"))
-        
-        # Control Panel
-        if self.is_windows:
-            control_panel = self.menu_tree.AppendItem(parent_item, _("Control Panel"))
-            self.menu_tree.SetItemData(control_panel, ClassicMenuItem(_("Control Panel"), action="control_panel"))
+        print(f"DEBUG: Loading settings submenu, parent_item: {parent_item}")
+        try:
+            # Titan Settings - make it work like menu bar
+            titan_settings = self.menu_tree.AppendItem(parent_item, _("Titan Settings"))
+            self.menu_tree.SetItemData(titan_settings, ClassicMenuItem(_("Titan Settings"), action="titan_settings"))
+            print("DEBUG: Added Titan Settings item")
+            
+            # Control Panel
+            if self.is_windows:
+                control_panel = self.menu_tree.AppendItem(parent_item, _("Control Panel"))
+                self.menu_tree.SetItemData(control_panel, ClassicMenuItem(_("Control Panel"), action="control_panel"))
+                print("DEBUG: Added Control Panel item")
+            
+            print("DEBUG: Successfully loaded settings submenu")
+        except Exception as e:
+            print(f"DEBUG: Error loading settings: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def load_find_submenu(self, parent_item):
+        """Ładowanie opcji wyszukiwania jako drzewo - Windows 95 style"""
+        print(f"DEBUG: Loading find submenu, parent_item: {parent_item}")
+        try:
+            # Files or Folders
+            find_files = self.menu_tree.AppendItem(parent_item, _("Files or Folders..."))
+            self.menu_tree.SetItemData(find_files, ClassicMenuItem(_("Files or Folders..."), action="find_files"))
+            print("DEBUG: Added Find Files or Folders item")
+            
+            # Computer (on network)
+            if self.is_windows:
+                find_computer = self.menu_tree.AppendItem(parent_item, _("Computer..."))
+                self.menu_tree.SetItemData(find_computer, ClassicMenuItem(_("Computer..."), action="find_computer"))
+                print("DEBUG: Added Find Computer item")
+            
+            print("DEBUG: Successfully loaded find submenu")
+        except Exception as e:
+            print(f"DEBUG: Error loading find submenu: {e}")
+            import traceback
+            traceback.print_exc()
     
     def run_titan_app(self, app):
         """Uruchamianie aplikacji Titan"""
@@ -611,6 +748,16 @@ class ClassicStartMenu(wx.Frame):
                     if self.is_windows:
                         documents_path = os.path.expanduser("~/Documents")
                         subprocess.run(['explorer', documents_path], shell=True)
+            elif action == "shutdown":
+                self.show_shutdown_dialog()
+            elif action == "find_files":
+                if self.is_windows:
+                    # Open Windows Search
+                    subprocess.run(['explorer', 'shell:SearchHomeFolder'], shell=True)
+            elif action == "find_computer":
+                if self.is_windows:
+                    # Open Network Places
+                    subprocess.run(['explorer', 'shell:NetworkPlacesFolder'], shell=True)
             
         except Exception as e:
             print(f"Error executing action {action}: {e}")
@@ -876,43 +1023,64 @@ class ClassicStartMenu(wx.Frame):
         except Exception as e:
             print(f"Error opening help: {e}")
     
-    def on_shutdown(self, event):
-        """Obsługa przycisku zamknij system - systemowy dialog Windows jak Alt+F4 na pulpicie"""
+    def show_shutdown_dialog(self):
+        """Dialog zamykania systemu - wspólny dla przycisku i opcji menu"""
         try:
+            # Dźwięk otwierania dialogu zamknięcia
+            play_sound('statusbar.ogg')
+            
             if self.is_windows:
-                # Use Windows shutdown dialog (same as Alt+F4 on desktop)  
+                # Try Windows native shutdown dialog first
                 try:
-                    import ctypes
-                    from ctypes import wintypes
-                    
-                    # Call ExitWindowsEx API to show shutdown dialog
-                    user32 = ctypes.windll.user32
-                    # EWX_LOGOFF | EWX_POWEROFF
-                    user32.ExitWindowsEx(0, 0)
+                    subprocess.run(['rundll32', 'shell32.dll,SHExitWindowsEx', '0'], shell=True)
                     self.Hide()
+                    return
                 except Exception:
-                    # Fallback to shutdown command
-                    subprocess.run(['shutdown', '/s', '/t', '60'], shell=True)  # 60 second delay
-                    self.Hide()
-            else:
-                # Fallback for non-Windows systems
-                dlg = wx.MessageDialog(self, 
-                                      _("Do you want to shut down the system?"),
-                                      _("Shut Down Windows"),
-                                      wx.YES_NO | wx.ICON_QUESTION)
-                
-                if dlg.ShowModal() == wx.ID_YES:
-                    self.parent.Close()
-                
-                dlg.Destroy()
-                self.Hide()
+                    pass  # Fall back to custom dialog
+            
+            # Custom dialog for all systems (Windows fallback + non-Windows)
+            dlg = wx.MessageDialog(self, 
+                                  _("Do you want to shut down the system?"),
+                                  _("Shut Down Windows"),
+                                  wx.YES_NO | wx.ICON_QUESTION)
+            
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            
+            # Dźwięk zamknięcia dialogu
+            play_sound('applist.ogg')
+            
+            if result == wx.ID_YES:
+                if self.is_windows:
+                    try:
+                        # Try different Windows shutdown methods
+                        subprocess.run(['shutdown', '/s', '/t', '0'], shell=True)
+                    except Exception:
+                        try:
+                            import ctypes
+                            user32 = ctypes.windll.user32
+                            user32.ExitWindowsEx(0x00000008, 0)  # EWX_SHUTDOWN
+                        except Exception:
+                            # Final fallback - just close the app
+                            self.parent.Close()
+                else:
+                    # Non-Windows systems
+                    try:
+                        subprocess.run(['sudo', 'shutdown', 'now'], shell=True)
+                    except Exception:
+                        self.parent.Close()
+            
+            self.Hide()
+            
         except Exception as e:
-            print(f"Error opening shutdown dialog: {e}")
-            # Fallback to remote shutdown if SlShutdown not available
-            try:
-                subprocess.run(['shutdown', '/s', '/t', '0'], shell=True)
-            except Exception as e2:
-                print(f"Fallback shutdown failed: {e2}")
+            print(f"Error in shutdown dialog: {e}")
+            # Dźwięk zamknięcia dialogu nawet przy błędzie
+            play_sound('applist.ogg')
+            self.Hide()
+    
+    def on_shutdown(self, event):
+        """Obsługa przycisku zamknij system - używa tej samej wspólnej metody co opcja menu"""
+        self.show_shutdown_dialog()
     
     def on_close(self, event):
         """Zamknięcie menu"""

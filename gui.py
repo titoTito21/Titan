@@ -12,6 +12,8 @@ import time
 import telegram_client
 import telegram_windows
 import messenger_webview
+import whatsapp_webview
+from teamtalk_gui_methods import TeamTalkGUIIntegration
 
 from app_manager import get_applications, open_application
 from game_manager import get_games, open_game
@@ -34,24 +36,61 @@ speaker = accessible_output3.outputs.auto.Auto()
 
 class TaskBarIcon(wx.adv.TaskBarIcon):
     def __init__(self, frame, version, skin_data):
-        super(TaskBarIcon, self).__init__()
-        self.frame = frame
-        
-        icon_path = None
-        if skin_data and 'Icons' in skin_data and 'taskbar_icon' in skin_data['Icons']:
-            icon_path = skin_data['Icons']['taskbar_icon']
+        """Initialize TaskBarIcon with comprehensive error handling."""
+        try:
+            super(TaskBarIcon, self).__init__()
+            self.frame = frame
+            
+            # Safely get icon path
+            icon_path = None
+            try:
+                if skin_data and isinstance(skin_data, dict):
+                    if 'Icons' in skin_data and isinstance(skin_data['Icons'], dict):
+                        if 'taskbar_icon' in skin_data['Icons']:
+                            icon_path = skin_data['Icons']['taskbar_icon']
+            except (TypeError, AttributeError, KeyError):
+                pass
 
-        if icon_path and os.path.exists(icon_path):
-            icon = wx.Icon(icon_path)
-            if not icon.IsOk():
-                print(f"WARNING: Could not load taskbar icon from: {icon_path}")
-                icon = wx.Icon(wx.ArtProvider.GetBitmap(wx.ART_MISSING_IMAGE, wx.ART_OTHER, (16, 16)))
-        else:
-            # Default icon if not defined in skin or file does not exist
-            icon = wx.Icon(wx.ArtProvider.GetBitmap(wx.ART_QUESTION, wx.ART_OTHER, (16, 16)))
+            # Create icon safely
+            icon = None
+            if icon_path and os.path.exists(icon_path):
+                try:
+                    icon = wx.Icon(icon_path)
+                    if not icon.IsOk():
+                        print(f"WARNING: Could not load taskbar icon from: {icon_path}")
+                        icon = None
+                except (wx.PyAssertionError, Exception) as e:
+                    print(f"Error loading taskbar icon: {e}")
+                    icon = None
+            
+            # Fallback to default icon if needed
+            if icon is None:
+                try:
+                    icon = wx.Icon(wx.ArtProvider.GetBitmap(wx.ART_QUESTION, wx.ART_OTHER, (16, 16)))
+                except Exception as e:
+                    print(f"Error creating fallback taskbar icon: {e}")
+                    # Create empty icon as last resort
+                    try:
+                        icon = wx.Icon()
+                    except:
+                        icon = None
 
-        self.SetIcon(icon, _("Titan v{}").format(version))
-        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_left_dclick)
+            # Set icon safely
+            if icon:
+                try:
+                    self.SetIcon(icon, _("Titan v{}").format(version))
+                except Exception as e:
+                    print(f"Error setting taskbar icon: {e}")
+            
+            # Bind events safely
+            try:
+                self.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_left_dclick)
+            except Exception as e:
+                print(f"Error binding taskbar events: {e}")
+                
+        except Exception as e:
+            print(f"Critical error in TaskBarIcon.__init__: {e}")
+            # Don't re-raise here, let the app continue without taskbar icon
 
     def CreatePopupMenu(self):
         menu = wx.Menu()
@@ -66,53 +105,88 @@ class TaskBarIcon(wx.adv.TaskBarIcon):
         self.frame.restore_from_tray()
 
 
-class TitanApp(wx.Frame):
-    def __init__(self, *args, version, settings=None, component_manager=None, **kw):
-        super(TitanApp, self).__init__(*args, **kw)
-        self.version = version
-        self.settings = settings
-        self.component_manager = component_manager
-        self.task_bar_icon = None
-        self.invisible_ui = InvisibleUI(self, component_manager=self.component_manager)
-        # Multi-service session management
-        self.active_services = {}  # Dict to store active service connections
-        self.current_service = None  # Currently selected service for chat
-        
-        # Legacy compatibility - will be removed gradually
-        self.logged_in = False
-        self.telegram_client = None
-        self.online_users = []
-        self.current_chat_user = None
-        self.unread_messages = {}
-        self.call_active = False
-        self.call_window = None
-        
-        # Debouncing for mouse motion sounds
-        self.last_statusbar_sound_time = 0
-        self.statusbar_sound_delay = 0.2  # 200ms delay for statusbar sounds
+class TitanApp(wx.Frame, TeamTalkGUIIntegration):
+    def __init__(self, *args, version, settings=None, component_manager=None, start_minimized=False, **kw):
+        """Initialize TitanApp with comprehensive error handling to prevent segfaults."""
+        try:
+            super(TitanApp, self).__init__(*args, **kw)
+            
+            # Initialize basic attributes first
+            self.version = version
+            self.settings = settings or {}
+            self.component_manager = component_manager
+            self.task_bar_icon = None
+            self.start_minimized = start_minimized
+            self.timer = None  # Initialize timer to None first
+            
+            # Initialize invisible UI safely
+            try:
+                self.invisible_ui = InvisibleUI(self, component_manager=self.component_manager)
+            except Exception as e:
+                print(f"Warning: Failed to initialize InvisibleUI: {e}")
+                self.invisible_ui = None
+            
+            # Multi-service session management
+            self.active_services = {}  # Dict to store active service connections
+            self.current_service = None  # Currently selected service for chat
+            
+            # Legacy compatibility - will be removed gradually
+            self.logged_in = False
+            self.telegram_client = None
+            self.teamtalk_client = None
+            self.teamtalk_window = None
+            self.online_users = []
+            self.current_chat_user = None
+            self.unread_messages = {}
+            self.call_active = False
+            self.call_window = None
+            
+            # Debouncing for mouse motion sounds
+            self.last_statusbar_sound_time = 0
+            self.statusbar_sound_delay = 0.2  # 200ms delay for statusbar sounds
 
-        initialize_sound()
+            # Initialize sound system safely
+            try:
+                initialize_sound()
+            except Exception as e:
+                print(f"Warning: Failed to initialize sound in TitanApp: {e}")
 
-        self.current_list = "apps"
-        
-        # Inicjalizacja Start Menu (tylko dla Windows) - zawsze klasyczne
-        if platform.system() == "Windows":
-            self.start_menu = create_classic_start_menu(self)
-        else:
-            self.start_menu = None
+            self.current_list = "apps"
+            
+            # Inicjalizacja Start Menu (tylko dla Windows) - zawsze klasyczne
+            try:
+                if platform.system() == "Windows":
+                    self.start_menu = create_classic_start_menu(self)
+                else:
+                    self.start_menu = None
+            except Exception as e:
+                print(f"Warning: Failed to create start menu: {e}")
+                self.start_menu = None
 
-        self.InitUI()
+            # Initialize timer safely
+            try:
+                self.timer = wx.Timer(self)
+                self.Bind(wx.EVT_TIMER, self.update_statusbar, self.timer)
+                self.timer.Start(5000)
+            except Exception as e:
+                print(f"Warning: Failed to initialize timer: {e}")
 
-        self.timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.update_statusbar, self.timer)
-        self.timer.Start(5000)
-
-        self.populate_app_list()
-        self.populate_game_list()
-
-        self.apply_selected_skin()
-
-        self.show_app_list()
+            # Only initialize UI if not starting minimized
+            if not self.start_minimized:
+                try:
+                    self.InitUI()
+                    self.populate_app_list()
+                    self.populate_game_list()
+                    self.apply_selected_skin()
+                    self.show_app_list()
+                except Exception as e:
+                    print(f"Error initializing UI: {e}")
+                    # Continue anyway, app might still work in minimal mode
+                    
+        except Exception as e:
+            print(f"Critical error in TitanApp.__init__: {e}")
+            # Re-raise to let main.py handle it
+            raise
     
     def get_skin_start_menu_style(self, skin_name):
         """Pobierz styl Start Menu ze skórki"""
@@ -237,11 +311,11 @@ class TitanApp(wx.Frame):
         last_phone = telegram_client.get_last_phone_number()
         if last_phone:
             self.username_text.SetValue(last_phone)
-        self.password_label = wx.StaticText(self.login_panel, label=_("Hasło 2FA (jeśli włączone):"))
+        self.password_label = wx.StaticText(self.login_panel, label=_("2FA Password (if enabled):"))
         self.password_text = wx.TextCtrl(self.login_panel, style=wx.TE_PASSWORD)
         self.login_button = wx.Button(self.login_panel, label=_("OK"))
         # Remove the second button - communicators will be in list
-        # self.register_button = wx.Button(self.login_panel, label=_("Inne komunikatory wkrótce"))
+        # self.register_button = wx.Button(self.login_panel, label=_("Other communicators coming soon"))
 
         login_sizer.Add(self.username_label, 0, wx.ALL, 5)
         login_sizer.Add(self.username_text, 0, wx.EXPAND|wx.ALL, 5)
@@ -277,7 +351,7 @@ class TitanApp(wx.Frame):
         
         input_sizer = wx.BoxSizer(wx.HORIZONTAL)
         input_sizer.Add(self.message_input, 1, wx.EXPAND | wx.ALL, 5)
-        send_btn = wx.Button(panel, label=_("Wyślij"))
+        send_btn = wx.Button(panel, label=_("Send"))
         send_btn.Hide()  # Hidden since functionality moved to separate windows
         input_sizer.Add(send_btn, 0, wx.ALL, 5)
         chat_sizer.Add(input_sizer, 0, wx.EXPAND)
@@ -508,10 +582,17 @@ class TitanApp(wx.Frame):
         self.statusbar_listbox.Append(get_network_status())
 
     def update_statusbar(self, event):
-        self.statusbar_listbox.SetString(0, _("Clock: {}").format(get_current_time()))
-        self.statusbar_listbox.SetString(1, _("Battery level: {}").format(get_battery_status()))
-        self.statusbar_listbox.SetString(2, _("Volume: {}").format(get_volume_level()))
-        self.statusbar_listbox.SetString(3, get_network_status())
+        # If UI is not initialized (minimized start), update invisible UI status instead
+        if self.start_minimized and not hasattr(self, 'statusbar_listbox'):
+            # Update status data for invisible UI
+            if hasattr(self, 'invisible_ui') and self.invisible_ui:
+                self.invisible_ui.refresh_status_bar()
+        else:
+            # Normal status bar update for GUI mode
+            self.statusbar_listbox.SetString(0, _("Clock: {}").format(get_current_time()))
+            self.statusbar_listbox.SetString(1, _("Battery level: {}").format(get_battery_status()))
+            self.statusbar_listbox.SetString(2, _("Volume: {}").format(get_volume_level()))
+            self.statusbar_listbox.SetString(3, get_network_status())
 
 
     def on_app_selected(self, event):
@@ -681,7 +762,7 @@ class TitanApp(wx.Frame):
             if self.current_list in ["contacts", "group_chats"] and current_focus == self.users_listbox:
                 selection = self.users_listbox.GetSelection()
                 if selection != wx.NOT_FOUND:
-                    # Trigger context menu on Enter
+                    # Trigger context menu on Enter for contact types
                     self.on_users_context_menu(event)
                     return
 
@@ -827,17 +908,27 @@ class TitanApp(wx.Frame):
         if selection != wx.NOT_FOUND:
             play_select_sound()
             status_item = self.statusbar_listbox.GetString(selection)
-            threading.Thread(target=self.handle_status_action, args=(status_item,)).start()
+            status_thread = threading.Thread(target=self.handle_status_action, args=(status_item,), daemon=True)
+            status_thread.start()
 
     def handle_status_action(self, item):
+        # CRITICAL FIX: WiFi operations must run on main GUI thread!
+        # Running GUI operations from background threads can cause hanging
+        print(f"handle_status_action called with item: '{item}'")
+        
+        if _("Network status:") in item or "połączono" in item.lower() or "connected" in item.lower() or "nie połączono" in item.lower() or "disconnected" in item.lower():
+            # WiFi network operations - MUST run on main thread
+            print(f"Network item detected: '{item}' - scheduling WiFi operation on main GUI thread...")
+            wx.CallAfter(self.open_network_settings_safe)
+            return
+        
+        # Other operations can run in background thread
         if _("Clock:") in item:
             self.open_time_settings()
         elif _("Battery level:") in item:
             self.open_power_settings()
         elif _("Volume:") in item:
             self.open_volume_mixer()
-        elif _("Network status:") in item:
-             self.open_network_settings()
         else:
             print(f"WARNING: Unknown statusbar item selected: {item}")
 
@@ -896,6 +987,7 @@ class TitanApp(wx.Frame):
         self.network_listbox.Clear()
         self.network_listbox.Append(_("Telegram"))
         self.network_listbox.Append(_("Facebook Messenger"))
+        self.network_listbox.Append(_("WhatsApp"))
         # Future messaging platforms:
         # self.network_listbox.Append(_("Mastodon"))
         # self.network_listbox.Append(_("Matrix"))
@@ -919,14 +1011,20 @@ class TitanApp(wx.Frame):
                 else:
                     # Not logged in - show login
                     self.show_telegram_login()
+            # elif "TeamTalk" in selected_text:
+            #     if "teamtalk" in self.active_services:
+            #         # Already connected - show TeamTalk options
+            #         self.current_service = "teamtalk"
+            #         self.show_teamtalk_options()
+            #     else:
+            #         # Not connected - show TeamTalk window
+            #         self.show_teamtalk_window()
             elif "Facebook Messenger" in selected_text:
-                if "messenger" in self.active_services:
-                    # Already logged in - show Messenger options
-                    self.current_service = "messenger"  
-                    self.show_messenger_options()
-                else:
-                    # Not logged in - show login
-                    self.show_messenger_login()
+                # Always just show WebView (no integration with main UI)
+                self.show_messenger_login()
+            elif "WhatsApp" in selected_text:
+                # Show WhatsApp WebView (like Messenger)
+                self.show_whatsapp_login()
             elif selected_text == _("Other communicators"):
                 wx.MessageBox(_("Other communicators will be available soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
         
@@ -946,19 +1044,20 @@ class TitanApp(wx.Frame):
             elif selected_text == _("Back to main menu"):
                 self.show_network_list()
         
-        elif self.current_list == "messenger_options":
-            # Handle Messenger options
-            play_select_sound()  # Play select sound for Messenger options
-            if selected_text == _("Contacts"):
-                self.show_messenger_contacts_view()
+        elif self.current_list == "teamtalk_options":
+            # Handle TeamTalk options
+            play_select_sound()
+            if selected_text == _("Channels"):
+                self.show_teamtalk_channels()
+            elif selected_text == _("Users"):
+                self.show_teamtalk_users()
             elif selected_text == _("Settings"):
-                self.show_network_settings()
-            elif selected_text == _("Information"):
-                self.show_network_info()
-            elif selected_text == _("Logout"):
-                self.logout_from_service("messenger")
+                self.show_teamtalk_settings()
+            elif selected_text == _("Disconnect"):
+                self.disconnect_from_teamtalk()
             elif selected_text == _("Back to main menu"):
                 self.show_network_list()
+        
 
     def show_telegram_login(self):
         """Show Telegram login interface"""
@@ -989,31 +1088,85 @@ class TitanApp(wx.Frame):
         except Exception as e:
             print(f"WebView Messenger error: {e}")
             wx.MessageBox(
-                _("Nie można uruchomić Messenger WebView.\n"
-                  "Sprawdź czy WebView2 jest zainstalowany."),
-                _("Błąd Messenger WebView"),
+                _("Cannot launch Messenger WebView.\n"
+                  "Check if WebView2 is installed."),
+                _("Messenger WebView Error"),
                 wx.OK | wx.ICON_ERROR
             )
+    
+    def show_whatsapp_login(self):
+        """Show WhatsApp WebView interface"""
+        try:
+            whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+            if whatsapp_window:
+                # Add WhatsApp to active services when successfully connected
+                # This will be handled by callback from whatsapp_window
+                self.setup_whatsapp_callbacks(whatsapp_window)
+        except Exception as e:
+            print(f"WebView WhatsApp error: {e}")
+            # Only show MessageBox if we have a running wx.App
+            if wx.GetApp():
+                wx.MessageBox(
+                    _("Cannot launch WhatsApp WebView.\n"
+                      "Check if WebView2 is installed."),
+                    _("WhatsApp WebView Error"),
+                    wx.OK | wx.ICON_ERROR
+                )
         
     def setup_messenger_callbacks(self, messenger_window):
         """Setup callbacks for Messenger integration"""
-        # Create a callback to handle successful Messenger connection
-        def on_messenger_connected(user_data):
-            self.active_services["messenger"] = {
-                "client": messenger_window,
-                "type": "messenger", 
-                "name": "Facebook Messenger",
-                "online_users": [],
-                "unread_messages": {},
-                "user_data": user_data
-            }
+        # Create a callback to handle successful Messenger connection (WebView only)
+        def on_messenger_status_change(status, data=None):
+            if status == 'logged_in' or (hasattr(messenger_window, 'messenger_logged_in') and messenger_window.messenger_logged_in):
+                print("✓ Messenger WebView logged in (standalone mode)")
+                # Just keep running as standalone WebView, no UI integration
+            elif status == 'disconnected':
+                print("✓ Messenger WebView disconnected")
+        
+        # Setup the callback
+        messenger_window.add_status_callback(on_messenger_status_change)
+    
+    def setup_whatsapp_callbacks(self, whatsapp_window):
+        """Setup callbacks for WhatsApp integration"""
+        # Create a callback to handle successful WhatsApp connection (WebView only)
+        def on_whatsapp_status_change(status, data=None):
+            if status == 'logged_in' or (hasattr(whatsapp_window, 'whatsapp_logged_in') and whatsapp_window.whatsapp_logged_in):
+                print("✓ WhatsApp WebView logged in (standalone mode)")
+                # Just keep running as standalone WebView, no UI integration
+            elif status == 'disconnected':
+                print("✓ WhatsApp WebView disconnected")
+        
+        # Setup the callback
+        whatsapp_window.add_status_callback(on_whatsapp_status_change)
+    
+    def open_messenger_webview(self):
+        """Open Messenger WebView window"""
+        try:
+            if "messenger" in self.active_services:
+                # If already have a messenger service, try to show existing window
+                messenger_instance = self.active_services["messenger"]["client"]
+                if hasattr(messenger_instance, 'Show'):
+                    messenger_instance.Show()
+                    messenger_instance.Raise()
+                    return
             
-            # Update UI to show messenger as connected
-            wx.CallAfter(self.populate_network_list)
-            wx.CallAfter(self.show_network_list)
-            
-        # TODO: Add actual callback setup when messenger_window supports it
-        # For now, we'll assume connection when window is created
+            # Open new Messenger WebView
+            import messenger_webview
+            messenger_window = messenger_webview.show_messenger_webview(self)
+            if messenger_window:
+                self.setup_messenger_callbacks(messenger_window)
+                wx.MessageBox(
+                    _("Messenger WebView opened.\nPlease log in to see your contacts in Titan IM."),
+                    _("Messenger WebView"),
+                    wx.OK | wx.ICON_INFORMATION
+                )
+        except Exception as e:
+            print(f"Error opening Messenger WebView: {e}")
+            wx.MessageBox(
+                _("Failed to open Messenger WebView.\nCheck if WebView2 is installed."),
+                _("Error"),
+                wx.OK | wx.ICON_ERROR
+            )
         
     def show_telegram_options(self):
         """Show Telegram service options (Contacts, Groups, Settings, Logout)"""
@@ -1041,39 +1194,6 @@ class TitanApp(wx.Frame):
         
         if self.network_listbox.GetCount() > 0:
             self.network_listbox.SetFocus()
-    
-    def show_messenger_options(self):
-        """Show Messenger service options"""
-        self.app_listbox.Hide()
-        self.game_listbox.Hide()
-        self.users_listbox.Hide()
-        self.chat_display.Hide()
-        self.message_input.Hide()
-        self.login_panel.Hide()
-        
-        self.network_listbox.Show()
-        self.network_listbox.Clear()
-        
-        # Show Messenger specific options
-        self.network_listbox.Append(_("Contacts"))
-        self.network_listbox.Append(_("Settings"))
-        self.network_listbox.Append(_("Information"))
-        self.network_listbox.Append(_("Logout"))
-        self.network_listbox.Append(_("Back to main menu"))
-        
-        self.list_label.SetLabel(_("Messenger Options"))
-        self.current_list = "messenger_options"
-        self.Layout()
-        
-        if self.network_listbox.GetCount() > 0:
-            self.network_listbox.SetFocus()
-    
-    def show_messenger_contacts_view(self):
-        """Show Messenger contacts view"""
-        if "messenger" in self.active_services:
-            messenger_service = self.active_services["messenger"]
-            # TODO: Implement messenger contacts view
-            wx.MessageBox(_("Messenger contacts view will be implemented soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
     
     def logout_from_service(self, service_name):
         """Logout from specific service"""
@@ -1263,7 +1383,9 @@ class TitanApp(wx.Frame):
         if not self.active_services:
             # Show communicator options when not logged in to any service
             self.network_listbox.Append(_("Telegram"))
+            # self.network_listbox.Append(_("TeamTalk"))
             self.network_listbox.Append(_("Facebook Messenger"))
+            self.network_listbox.Append(_("WhatsApp"))
             self.network_listbox.Append(_("Other communicators"))
         else:
             # Show logged in services with connection status
@@ -1282,6 +1404,19 @@ class TitanApp(wx.Frame):
             else:
                 self.network_listbox.Append(_("Telegram"))
             
+            # if "teamtalk" in self.active_services:
+            #     # Try to get username from teamtalk service
+            #     username = "user"  # Default
+            #     try:
+            #         teamtalk_service = self.active_services["teamtalk"]
+            #         if "user_data" in teamtalk_service and teamtalk_service["user_data"]:
+            #             username = teamtalk_service["user_data"].get("nickname", "user")
+            #     except:
+            #         pass
+            #     self.network_listbox.Append(_("TeamTalk - connected as {}").format(username))
+            # else:
+            #     self.network_listbox.Append(_("TeamTalk"))
+            
             if "messenger" in self.active_services:
                 # Try to get username from messenger service
                 username = "user"  # Default
@@ -1294,6 +1429,18 @@ class TitanApp(wx.Frame):
                 self.network_listbox.Append(_("Facebook Messenger - connected as {}").format(username))
             else:
                 self.network_listbox.Append(_("Facebook Messenger"))
+            
+            if "whatsapp" in self.active_services:
+                username = "user"  # Default
+                try:
+                    whatsapp_service = self.active_services["whatsapp"]
+                    if "user_data" in whatsapp_service and whatsapp_service["user_data"]:
+                        username = whatsapp_service["user_data"].get("username", "user")
+                except:
+                    pass
+                self.network_listbox.Append(_("WhatsApp - connected as {}").format(username))
+            else:
+                self.network_listbox.Append(_("WhatsApp"))
                 
             self.network_listbox.Append(_("Other communicators"))
 
@@ -1340,6 +1487,37 @@ class TitanApp(wx.Frame):
                 subprocess.run(["timedate.cpl"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+        elif platform.system() == "Linux":
+            try:
+                # Try common Linux time/date settings applications
+                settings_apps = [
+                    ["gnome-control-center", "datetime"],  # GNOME
+                    ["systemsettings5", "kcm_clock"],      # KDE Plasma 5
+                    ["systemsettings", "clock"],           # KDE 4
+                    ["unity-control-center", "datetime"],  # Unity
+                    ["xfce4-settings-manager"],             # XFCE
+                    ["lxqt-config-datetime"],               # LXQt
+                    ["timedatectl", "status"]                # systemd (shows current settings)
+                ]
+                
+                for app_cmd in settings_apps:
+                    try:
+                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:
+                    # If all GUI options fail, show timedatectl info
+                    try:
+                        result = subprocess.run(["timedatectl", "status"], 
+                                               capture_output=True, text=True, check=True)
+                        wx.MessageBox(_("Current time settings:\n\n{}").format(result.stdout), 
+                                     _("Time Settings"), wx.OK | wx.ICON_INFORMATION)
+                    except Exception:
+                        wx.MessageBox(_("Could not open time settings. Please use your system's settings application."), 
+                                     _("Information"), wx.OK | wx.ICON_INFORMATION)
+            except Exception as e:
+                wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
@@ -1354,6 +1532,52 @@ class TitanApp(wx.Frame):
                 subprocess.run(["powercfg.cpl"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+        elif platform.system() == "Linux":
+            try:
+                # Try common Linux power management applications
+                power_apps = [
+                    ["gnome-control-center", "power"],      # GNOME
+                    ["systemsettings5", "kcm_powerdevilprofilesconfig"],  # KDE Plasma 5
+                    ["systemsettings", "powerdevil"],       # KDE 4
+                    ["unity-control-center", "power"],      # Unity
+                    ["xfce4-power-manager-settings"],       # XFCE
+                    ["lxqt-config-powermanagement"],        # LXQt
+                    ["mate-power-preferences"]               # MATE
+                ]
+                
+                for app_cmd in power_apps:
+                    try:
+                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:
+                    # If all GUI options fail, show power info using system commands
+                    try:
+                        # Show battery info if available
+                        import glob
+                        battery_paths = glob.glob("/sys/class/power_supply/BAT*")
+                        if battery_paths:
+                            info_text = "Battery Information:\n\n"
+                            for bat_path in battery_paths:
+                                bat_name = os.path.basename(bat_path)
+                                try:
+                                    with open(os.path.join(bat_path, "capacity"), 'r') as f:
+                                        capacity = f.read().strip()
+                                    with open(os.path.join(bat_path, "status"), 'r') as f:
+                                        status = f.read().strip()
+                                    info_text += f"{bat_name}: {capacity}% ({status})\n"
+                                except Exception:
+                                    info_text += f"{bat_name}: Information unavailable\n"
+                            wx.MessageBox(_(info_text), _("Power Information"), wx.OK | wx.ICON_INFORMATION)
+                        else:
+                            wx.MessageBox(_("No battery detected. Power settings may not be available."), 
+                                         _("Power Information"), wx.OK | wx.ICON_INFORMATION)
+                    except Exception:
+                        wx.MessageBox(_("Could not open power settings. Please use your system's settings application."), 
+                                     _("Information"), wx.OK | wx.ICON_INFORMATION)
+            except Exception as e:
+                wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"], check=True)
@@ -1368,6 +1592,41 @@ class TitanApp(wx.Frame):
                 subprocess.run(["sndvol.exe"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+        elif platform.system() == "Linux":
+            try:
+                # Try common Linux audio control applications
+                audio_apps = [
+                    ["pavucontrol"],                         # PulseAudio Volume Control
+                    ["gnome-control-center", "sound"],      # GNOME
+                    ["systemsettings5", "kcm_pulseaudio"],  # KDE Plasma 5
+                    ["systemsettings", "phonon"],           # KDE 4
+                    ["unity-control-center", "sound"],      # Unity
+                    ["xfce4-mixer"],                         # XFCE
+                    ["lxqt-config-audio"],                  # LXQt
+                    ["mate-volume-control"],                # MATE
+                    ["alsamixergui"],                        # ALSA GUI mixer
+                    ["kmix"]                                 # KDE mixer
+                ]
+                
+                for app_cmd in audio_apps:
+                    try:
+                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:
+                    # If all GUI options fail, try terminal-based mixer
+                    try:
+                        # Check if alsamixer is available
+                        subprocess.run(["which", "alsamixer"], check=True, 
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        wx.MessageBox(_("GUI volume mixer not found.\n\nYou can use 'alsamixer' in terminal for audio control."), 
+                                     _("Volume Control"), wx.OK | wx.ICON_INFORMATION)
+                    except Exception:
+                        wx.MessageBox(_("Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."), 
+                                     _("Information"), wx.OK | wx.ICON_INFORMATION)
+            except Exception as e:
+                wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/Applications/Utilities/Audio MIDI Setup.app"], check=True)
@@ -1378,11 +1637,105 @@ class TitanApp(wx.Frame):
 
 
     def open_network_settings(self):
+        """Open network settings - now guaranteed to run on main GUI thread"""
+        print("open_network_settings called on main GUI thread")
+        
+        # Check if invisible UI is active - if so, use invisible WiFi interface
+        if hasattr(self, 'invisible_ui') and self.invisible_ui.active:
+            try:
+                # Use invisible UI WiFi manager
+                self.invisible_ui.activate_wifi_interface()
+                return
+            except Exception as e:
+                print(f"Could not load invisible WiFi manager: {e}")
+        
+        # Show WiFi GUI - now much simpler since we're on main thread
+        try:
+            print("Opening WiFi GUI on main thread (should not hang)...")
+            import tce_system_net
+            
+            # Direct call should work now that we're on main thread
+            wifi_frame = tce_system_net.show_wifi_gui(self)
+            
+            if wifi_frame:
+                print("WiFi GUI opened successfully on main thread!")
+            else:
+                print("WiFi GUI returned None")
+                wx.MessageBox(
+                    _("WiFi interface could not be initialized.\nThis may be due to missing drivers or system restrictions."),
+                    _("WiFi Warning"),
+                    wx.OK | wx.ICON_WARNING
+                )
+            return
+                    
+        except Exception as e:
+            print(f"Error opening WiFi GUI on main thread: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            try:
+                wx.MessageBox(
+                    _("Error opening WiFi interface: {}\n\nTrying system WiFi settings instead...").format(str(e)),
+                    _("WiFi Error"),
+                    wx.OK | wx.ICON_WARNING
+                )
+            except:
+                pass
+        
+        # Fallback to system network settings
         if platform.system() == "Windows":
             try:
                 subprocess.run(["explorer", "ms-settings:network-status"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+        elif platform.system() == "Linux":
+            try:
+                # Try common Linux network management applications
+                network_apps = [
+                    ["nm-connection-editor"],               # NetworkManager GUI
+                    ["gnome-control-center", "network"],    # GNOME
+                    ["systemsettings5", "kcm_networkmanagement"],  # KDE Plasma 5
+                    ["systemsettings", "network"],          # KDE 4
+                    ["unity-control-center", "network"],    # Unity
+                    ["network-manager-gnome"],              # GNOME NetworkManager
+                    ["wicd-gtk"],                            # Wicd GUI
+                    ["connman-gtk"],                         # ConnMan GUI
+                    ["lxqt-config-network"],                # LXQt
+                    ["mate-network-properties"]             # MATE
+                ]
+                
+                for app_cmd in network_apps:
+                    try:
+                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:
+                    # If all GUI options fail, show network info using nmcli
+                    try:
+                        result = subprocess.run(["nmcli", "device", "status"], 
+                                               capture_output=True, text=True, check=True)
+                        info_text = "Network Devices:\n\n" + result.stdout
+                        
+                        # Also show active connections
+                        result2 = subprocess.run(["nmcli", "connection", "show", "--active"], 
+                                                capture_output=True, text=True, check=True)
+                        if result2.stdout.strip():
+                            info_text += "\n\nActive Connections:\n" + result2.stdout
+                        
+                        wx.MessageBox(_(info_text), _("Network Information"), wx.OK | wx.ICON_INFORMATION)
+                    except Exception:
+                        # Final fallback - show basic IP info
+                        try:
+                            result = subprocess.run(["ip", "addr", "show"], 
+                                                   capture_output=True, text=True, check=True)
+                            wx.MessageBox(_("Network interface information:\n\n{}").format(result.stdout[:1000]), 
+                                         _("Network Information"), wx.OK | wx.ICON_INFORMATION)
+                        except Exception:
+                            wx.MessageBox(_("Could not open network settings. Please use your system's network manager."), 
+                                         _("Information"), wx.OK | wx.ICON_INFORMATION)
+            except Exception as e:
+                wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif platform.system() == "Darwin":
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
@@ -1400,12 +1753,37 @@ class TitanApp(wx.Frame):
         self.invisible_ui.start_listening()
 
     def restore_from_tray(self):
+        # Auto-disable Titan UI when main window is restored
+        if hasattr(self.invisible_ui, 'titan_ui_mode') and self.invisible_ui.titan_ui_mode:
+            self.invisible_ui.temporarily_disable_titan_ui("main_window")
+            # Bind window close event to re-enable if minimized again
+            self.Bind(wx.EVT_ICONIZE, self._on_window_minimize)
+        
+        # Initialize UI if it wasn't initialized (when started minimized)
+        if self.start_minimized and not hasattr(self, 'toolbar'):
+            self.InitUI()
+            self.populate_app_list()
+            self.populate_game_list()
+            self.apply_selected_skin()
+            self.show_app_list()
+            self.start_minimized = False  # Mark as no longer in minimized startup state
+        
         self.Show()
         self.Raise()
         self.task_bar_icon.Destroy()
         self.task_bar_icon = None
         play_sound('normalize.ogg')
         self.invisible_ui.stop_listening()
+    
+    def _on_window_minimize(self, event):
+        """Handle window minimization - re-enable Titan UI if it was disabled"""
+        if event.IsIconized():
+            # Window is being minimized, re-enable Titan UI if it was disabled
+            if (hasattr(self.invisible_ui, 'titan_ui_temporarily_disabled') and 
+                self.invisible_ui.titan_ui_temporarily_disabled and 
+                self.invisible_ui.disabled_by_dialog == "main_window"):
+                self.invisible_ui._on_dialog_close("main_window", None)
+        event.Skip()
 
     def shutdown_app(self):
         """Handles the complete shutdown of the application by terminating the process after a delay."""
@@ -1425,6 +1803,14 @@ class TitanApp(wx.Frame):
                         time.sleep(1)
                     except Exception as e:
                         print(f"Warning: Error disconnecting from Telegram: {e}")
+                
+                # Stop system hooks before shutdown
+                try:
+                    from tce_system import stop_system_hooks
+                    stop_system_hooks()
+                    print("INFO: System hooks stopped")
+                except Exception as e:
+                    print(f"Warning: Error stopping system hooks: {e}")
                 
                 print("INFO: Application terminating now.")
                 os._exit(0)
@@ -1508,8 +1894,8 @@ class TitanApp(wx.Frame):
             user_data = telegram_client.get_user_data()
             online_count = len(telegram_client.get_online_users())
             info_text = f"{_('Zalogowany jako')}: {user_data.get('username', _('Nieznany'))}\n"
-            info_text += f"{_('Użytkowników online')}: {online_count}\n"
-            info_text += f"{_('Status połączenia')}: {_('Połączony')}"
+            info_text += f"{_('Users online')}: {online_count}\n"
+            info_text += f"{_('Connection status')}: {_('Connected')}"
         else:
             info_text = f"{_('Connection status')}: {_('Disconnected')}"
         
@@ -1625,11 +2011,11 @@ class TitanApp(wx.Frame):
         # Add menu items based on current list type
         if self.current_list == "contacts":
             private_msg_item = menu.Append(wx.ID_ANY, _("Private message"), _("Send private message"))
-            voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
+            # voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
             
             # Bind menu events for contacts
             self.Bind(wx.EVT_MENU, lambda evt: self.on_private_message(username), private_msg_item)
-            self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
+            # self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
             
         elif self.current_list == "group_chats":
             group_msg_item = menu.Append(wx.ID_ANY, _("Open group chat"), _("Open group chat window"))
@@ -1640,11 +2026,11 @@ class TitanApp(wx.Frame):
         else:
             # Legacy users list
             private_msg_item = menu.Append(wx.ID_ANY, _("Private message"), _("Send private message"))
-            voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
+            # voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
             
             # Bind menu events
             self.Bind(wx.EVT_MENU, lambda evt: self.on_private_message(username), private_msg_item)
-            self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
+            # self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
         
         # Show menu at cursor position
         self.PopupMenu(menu)
@@ -1686,7 +2072,7 @@ class TitanApp(wx.Frame):
                 self.call_active = True
             else:
                 play_sound('error.ogg')
-                wx.MessageBox(_("Nie udało się rozpocząć rozmowy."), _("Błąd"), wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(_("Failed to start conversation."), _("Error"), wx.OK | wx.ICON_ERROR)
         
         play_sound('dialogclose.ogg')
     
@@ -1724,8 +2110,8 @@ class TitanApp(wx.Frame):
                 self.call_window = None
             self.call_active = False
             play_sound('error.ogg')
-            wx.MessageBox(_("Połączenie nie powiodło się: {}").format(data.get('error', 'Unknown error')), 
-                         _("Błąd połączenia"), wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_("Connection failed: {}").format(data.get('error', 'Unknown error')), 
+                         _("Connection Error"), wx.OK | wx.ICON_ERROR)
     
     # Message sending moved to separate windows
     
@@ -1813,10 +2199,10 @@ class TitanApp(wx.Frame):
             status = data.get('status')
             
             if status == 'online':
-                self.SetStatusText(_("{} dołączył do Telegramem").format(username))
+                self.SetStatusText(_("{} joined Telegram").format(username))
                 play_sound('user_online')
             elif status == 'offline':
-                self.SetStatusText(_("{} opuścił Telegrama").format(username))
+                self.SetStatusText(_("{} left Telegram").format(username))
                 play_sound('user_offline')
             
             # Refresh users list

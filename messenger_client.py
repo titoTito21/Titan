@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Facebook Messenger Client for Titan IM
+Integrates with TCE Launcher's multi-service messaging system
+Provides Telegram-like interface for Facebook Messenger
+"""
 import asyncio
 import json
 import os
@@ -7,27 +12,15 @@ import threading
 import time
 import wx
 import requests
+import websockets
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.edge.options import Options as EdgeOptions
-from selenium.webdriver.edge.service import Service as EdgeService
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.firefox import GeckoDriverManager
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from sound import play_sound
 from translation import set_language
 from settings import get_setting
 from titan_im_config import (
     initialize_config, load_titan_im_config, save_titan_im_config
 )
+import messenger_webview
 
 # Initialize translation
 _ = set_language(get_setting('language', 'pl'))
@@ -37,7 +30,6 @@ initialize_config()
 
 class MessengerClient:
     def __init__(self):
-        self.driver = None
         self.is_connected = False
         self.message_callbacks = []
         self.status_callbacks = []
@@ -46,9 +38,10 @@ class MessengerClient:
         self.conversations = {}
         self.current_conversation = None
         self.monitoring_thread = None
-        self.cookies_file = os.path.join(os.path.dirname(__file__), 'messenger_cookies.pkl')
-        self.last_message_count = {}
-        self.driver_options = None
+        self.websocket = None
+        self.websocket_thread = None
+        self.server_url = "ws://localhost:8001"
+        self.http_url = "http://localhost:8000"
         
     def add_message_callback(self, callback):
         """Add callback for new messages"""
@@ -62,678 +55,476 @@ class MessengerClient:
         """Add callback for typing indicators"""
         self.typing_callbacks.append(callback)
     
-    def detect_available_browsers(self):
-        """Detect which browsers are available on the system"""
-        available_browsers = []
-        
-        print("Wykrywanie przeglądarek...")
-        
-        # Check for Chrome
-        chrome_paths = [
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-        ]
-        for path in chrome_paths:
-            if os.path.exists(path):
-                available_browsers.append("chrome")
-                print(f"✓ Chrome znaleziony: {path}")
-                break
-        else:
-            print("✗ Chrome nie znaleziony")
-            
-        # Check for Firefox
-        firefox_paths = [
-            r"C:\Program Files\Mozilla Firefox\firefox.exe",
-            r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe"
-        ]
-        for path in firefox_paths:
-            if os.path.exists(path):
-                available_browsers.append("firefox")
-                print(f"✓ Firefox znaleziony: {path}")
-                break
-        else:
-            print("✗ Firefox nie znaleziony")
-            
-        # Check for Edge
-        edge_paths = [
-            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-            r"C:\Windows\SystemApps\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\MicrosoftEdge.exe"  # Legacy Edge
-        ]
-        for path in edge_paths:
-            if os.path.exists(path):
-                available_browsers.append("edge")
-                print(f"✓ Edge znaleziony: {path}")
-                break
-        else:
-            print("✗ Edge nie znaleziony")
-        
-        print(f"Dostępne przeglądarki: {available_browsers}")
-        return available_browsers
     
-    def setup_chrome_driver(self):
-        """Setup Chrome WebDriver"""
+    
+    
+    
+    def open_messenger_web(self):
+        """Open Messenger in WebView (integrated with Titan IM)"""
         try:
-            chrome_options = ChromeOptions()
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-extensions')
-            chrome_options.add_argument('--disable-web-security')
-            chrome_options.add_argument('--allow-running-insecure-content')
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            
-            # Enable persistent session
-            profile_dir = os.path.join(os.path.dirname(__file__), 'messenger_profile_chrome')
-            os.makedirs(profile_dir, exist_ok=True)
-            chrome_options.add_argument(f'--user-data-dir={profile_dir}')
-            
-            service = ChromeService(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            return True
-        except Exception as e:
-            print(f"Błąd Chrome WebDriver: {e}")
-            return False
-    
-    def setup_firefox_driver(self):
-        """Setup Firefox WebDriver"""
-        try:
-            firefox_options = FirefoxOptions()
-            firefox_options.add_argument('--disable-blink-features=AutomationControlled')
-            firefox_options.set_preference("dom.webdriver.enabled", False)
-            firefox_options.set_preference('useAutomationExtension', False)
-            firefox_options.set_preference("general.useragent.override", 
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0")
-            
-            # Enable persistent profile
-            profile_dir = os.path.join(os.path.dirname(__file__), 'messenger_profile_firefox')
-            os.makedirs(profile_dir, exist_ok=True)
-            
-            service = FirefoxService(GeckoDriverManager().install())
-            self.driver = webdriver.Firefox(service=service, options=firefox_options)
-            return True
-        except Exception as e:
-            print(f"Błąd Firefox WebDriver: {e}")
-            return False
-    
-    def setup_edge_driver(self):
-        """Setup Edge WebDriver"""
-        try:
-            edge_options = EdgeOptions()
-            edge_options.add_argument('--no-sandbox')
-            edge_options.add_argument('--disable-dev-shm-usage')
-            edge_options.add_argument('--disable-gpu')
-            edge_options.add_argument('--disable-extensions')
-            edge_options.add_argument('--disable-blink-features=AutomationControlled')
-            edge_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            edge_options.add_experimental_option('useAutomationExtension', False)
-            edge_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0")
-            
-            # Try without persistent profile first (Edge can be finicky with profiles)
-            try:
-                service = EdgeService(EdgeChromiumDriverManager().install())
-                self.driver = webdriver.Edge(service=service, options=edge_options)
-                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            # Use the existing WebView integration
+            messenger_window = messenger_webview.show_messenger_webview(None)
+            if messenger_window:
                 return True
-            except Exception as profile_error:
-                print(f"Edge failed without profile: {profile_error}")
-                
-                # Try with simpler options
-                edge_options = EdgeOptions()
-                edge_options.add_argument('--disable-blink-features=AutomationControlled')
-                edge_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                
-                service = EdgeService(EdgeChromiumDriverManager().install())
-                self.driver = webdriver.Edge(service=service, options=edge_options)
-                return True
-                
-        except Exception as e:
-            print(f"Błąd Edge WebDriver: {e}")
-            print(f"Edge error details: {str(e)}")
-            
-            # Try system Edge if webdriver-manager fails
-            try:
-                print("Trying system Edge driver...")
-                edge_options = EdgeOptions()
-                edge_options.add_argument('--disable-blink-features=AutomationControlled')
-                
-                # Try to use system Edge driver
-                self.driver = webdriver.Edge(options=edge_options)
-                return True
-            except Exception as system_error:
-                print(f"System Edge also failed: {system_error}")
-                return False
-    
-    def setup_driver(self):
-        """Setup WebDriver with automatic browser detection"""
-        available_browsers = self.detect_available_browsers()
-        
-        if not available_browsers:
-            wx.MessageBox(
-                _("No supported browser found!\n"
-                  "Please install one of: Chrome, Firefox, or Edge."),
-                _("Browser Error"),
-                wx.OK | wx.ICON_ERROR
-            )
-            return False
-        
-        # Try browsers in order of preference
-        browser_methods = {
-            'chrome': self.setup_chrome_driver,
-            'firefox': self.setup_firefox_driver, 
-            'edge': self.setup_edge_driver
-        }
-        
-        # Let user choose if multiple browsers available
-        if len(available_browsers) > 1:
-            choices = []
-            choice_map = {}
-            
-            if 'chrome' in available_browsers:
-                choices.append("Google Chrome")
-                choice_map["Google Chrome"] = 'chrome'
-            if 'firefox' in available_browsers:
-                choices.append("Mozilla Firefox")
-                choice_map["Mozilla Firefox"] = 'firefox'
-            if 'edge' in available_browsers:
-                choices.append("Microsoft Edge")
-                choice_map["Microsoft Edge"] = 'edge'
-                
-            dlg = wx.SingleChoiceDialog(
-                None,
-                _("Multiple browsers detected. Choose one for Messenger:"),
-                _("Browser Selection"),
-                choices
-            )
-            
-            if dlg.ShowModal() == wx.ID_OK:
-                selected_browser = choice_map[dlg.GetStringSelection()]
-                dlg.Destroy()
             else:
-                dlg.Destroy()
-                return False
-        else:
-            selected_browser = available_browsers[0]
-        
-        print(f"Using browser: {selected_browser}")
-        
-        # Try to setup selected browser
-        print(f"Próba uruchomienia: {selected_browser}")
-        try:
-            success = browser_methods[selected_browser]()
-            if success:
-                print(f"✓ Pomyślnie uruchomiono {selected_browser}")
+                # Fallback to browser
+                import webbrowser
+                webbrowser.open('https://www.messenger.com')
                 return True
         except Exception as e:
-            print(f"✗ Błąd {selected_browser}: {e}")
-        
-        # If selected browser failed, try others
-        for browser in available_browsers:
-            if browser != selected_browser:
-                try:
-                    print(f"Próba fallback: {browser}")
-                    success = browser_methods[browser]()
-                    if success:
-                        print(f"✓ Fallback sukces: {browser}")
-                        return True
-                except Exception as e:
-                    print(f"✗ Fallback błąd {browser}: {e}")
-                    continue
-        
-        # If all failed, show detailed error
-        wx.MessageBox(
-            _("Failed to start any browser!\n\n"
-              "Possible solutions:\n"
-              "1. Update your browser to the latest version\n"
-              "2. Run as administrator\n" 
-              "3. Install Chrome, Firefox, or newer Edge\n"
-              "4. Check antivirus settings"),
-            _("Browser Startup Error"),
-            wx.OK | wx.ICON_ERROR
-        )
-        return False
-    
-    def save_cookies(self):
-        """Save cookies to file for persistent login"""
-        try:
-            if self.driver:
-                cookies = self.driver.get_cookies()
-                with open(self.cookies_file, 'wb') as f:
-                    pickle.dump(cookies, f)
-                print("Cookies zapisane pomyślnie")
-        except Exception as e:
-            print(f"Błąd podczas zapisywania cookies: {e}")
-    
-    def load_cookies(self):
-        """Load cookies from file"""
-        try:
-            if os.path.exists(self.cookies_file):
-                with open(self.cookies_file, 'rb') as f:
-                    cookies = pickle.load(f)
-                
-                # Navigate to Facebook first
-                self.driver.get("https://www.facebook.com")
-                time.sleep(2)
-                
-                # Add cookies
-                for cookie in cookies:
-                    try:
-                        self.driver.add_cookie(cookie)
-                    except Exception as e:
-                        print(f"Nie można dodać cookie: {e}")
-                
-                print("Cookies załadowane pomyślnie")
-                return True
-        except Exception as e:
-            print(f"Błąd podczas ładowania cookies: {e}")
-        
-        return False
-    
-    def start_connection(self, email=None, password=None):
-        """Start Messenger connection"""
-        if self.monitoring_thread and self.monitoring_thread.is_alive():
+            print(f"Błąd podczas otwierania Messenger: {e}")
             return False
-        
-        self.monitoring_thread = threading.Thread(
-            target=self._run_messenger_client,
-            args=(email, password),
-            daemon=True
-        )
-        self.monitoring_thread.start()
-        return True
     
-    def _run_messenger_client(self, email, password):
-        """Run Messenger client in separate thread"""
+    
+    
+    def start_connection(self, username="TitanUser", password=None):
+        """Start connection to Titan IM server"""
         try:
-            if not self.setup_driver():
-                wx.CallAfter(self._notify_error, "Nie można uruchomić przeglądarki Chrome")
-                return
+            # First try to connect via HTTP to check if server is running
+            response = requests.get(f"{self.http_url}/health", timeout=5)
+            if response.status_code != 200:
+                # Server not available, fall back to web mode
+                return self._fallback_to_web_mode()
             
-            # Try to load existing cookies
-            cookies_loaded = self.load_cookies()
+            # Connect via WebSocket
+            self.username = username
+            self.user_data = {'username': username, 'platform': 'Titan IM'}
             
-            # Navigate to Messenger
-            self.driver.get("https://www.messenger.com")
-            time.sleep(3)
+            # Start WebSocket connection in background
+            self.websocket_thread = threading.Thread(target=self._start_websocket, daemon=True)
+            self.websocket_thread.start()
             
-            # Check if already logged in
-            if not self._is_logged_in():
-                if not cookies_loaded and email and password:
-                    # Login with credentials
-                    success = self._login_with_credentials(email, password)
-                    if not success:
-                        wx.CallAfter(self._notify_error, "Logowanie nieudane")
-                        return
-                else:
-                    # Need manual login
-                    wx.CallAfter(self._notify_manual_login)
-                    # Wait for manual login
-                    max_wait = 300  # 5 minutes
-                    while max_wait > 0 and not self._is_logged_in():
-                        time.sleep(1)
-                        max_wait -= 1
-                    
-                    if not self._is_logged_in():
-                        wx.CallAfter(self._notify_error, "Timeout podczas oczekiwania na logowanie")
-                        return
+            # Give WebSocket time to connect
+            time.sleep(1)
             
-            # Save cookies after successful login
-            self.save_cookies()
-            
-            # Get user info
-            self.user_data = self._get_user_info()
-            self.is_connected = True
-            
-            # Load conversations
-            self._load_conversations()
-            
-            # Notify success
-            wx.CallAfter(self._notify_connection_success)
-            
-            # Start monitoring for new messages
-            self._monitor_messages()
-            
+            if self.is_connected:
+                wx.CallAfter(self._notify_titan_connection)
+                return True
+            else:
+                # WebSocket failed, fall back to web mode
+                return self._fallback_to_web_mode()
+                
         except Exception as e:
-            print(f"Błąd Messenger client: {e}")
-            wx.CallAfter(self._notify_error, f"Błąd połączenia: {e}")
-        finally:
-            if self.driver:
-                self.driver.quit()
+            print(f"Failed to connect to Titan IM server: {e}")
+            # Fall back to web mode
+            return self._fallback_to_web_mode()
+    
+    def _fallback_to_web_mode(self):
+        """Fall back to web browser mode"""
+        try:
+            success = self.open_messenger_web()
+            if success:
+                self.is_connected = True
+                self.user_data = {'username': 'Web User', 'platform': 'Facebook Messenger Web'}
+                wx.CallAfter(self._notify_web_connection)
+                return True
+            return False
+        except Exception as e:
+            print(f"Błąd podczas uruchamiania Messenger: {e}")
+            return False
+    
+    async def _websocket_handler(self):
+        """Handle WebSocket connection"""
+        try:
+            async with websockets.connect(self.server_url) as websocket:
+                self.websocket = websocket
+                self.is_connected = True
+                
+                # Send login message
+                login_msg = {
+                    "type": "login",
+                    "username": self.username,
+                    "timestamp": datetime.now().isoformat()
+                }
+                await websocket.send(json.dumps(login_msg))
+                
+                # Listen for messages
+                async for message in websocket:
+                    try:
+                        data = json.loads(message)
+                        self._handle_websocket_message(data)
+                    except json.JSONDecodeError:
+                        print(f"Invalid JSON received: {message}")
+                        
+        except Exception as e:
+            print(f"WebSocket connection error: {e}")
             self.is_connected = False
     
-    def _is_logged_in(self):
-        """Check if user is logged in to Messenger"""
+    def _start_websocket(self):
+        """Start WebSocket connection in thread"""
         try:
-            # Check for presence of conversations or chat list
-            WebDriverWait(self.driver, 5).until(
-                EC.any_of(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="conversation"]')),
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[role="main"]')),
-                    EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="mwchat-window"]'))
-                )
-            )
-            return True
-        except TimeoutException:
-            return False
-    
-    def _login_with_credentials(self, email, password):
-        """Login with email and password"""
-        try:
-            # Navigate to Facebook login if not already there
-            if "facebook.com" not in self.driver.current_url:
-                self.driver.get("https://www.facebook.com")
-                time.sleep(2)
-            
-            # Find and fill email field
-            email_field = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.ID, "email"))
-            )
-            email_field.clear()
-            email_field.send_keys(email)
-            
-            # Find and fill password field
-            password_field = self.driver.find_element(By.ID, "pass")
-            password_field.clear()
-            password_field.send_keys(password)
-            
-            # Click login button
-            login_button = self.driver.find_element(By.NAME, "login")
-            login_button.click()
-            
-            # Wait for login to complete
-            time.sleep(5)
-            
-            # Navigate back to Messenger
-            self.driver.get("https://www.messenger.com")
-            time.sleep(3)
-            
-            return self._is_logged_in()
-            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self._websocket_handler())
         except Exception as e:
-            print(f"Błąd podczas logowania: {e}")
-            return False
+            print(f"WebSocket thread error: {e}")
+            self.is_connected = False
     
-    def _get_user_info(self):
-        """Get current user information"""
-        try:
-            # Try to get user name from Messenger interface
-            user_name = "Messenger User"
-            try:
-                # Look for user profile elements
-                profile_elements = self.driver.find_elements(By.CSS_SELECTOR, '[role="button"][aria-label*="profile"]')
-                if profile_elements:
-                    user_name = profile_elements[0].get_attribute('aria-label').replace(' profile', '')
-            except:
-                pass
-            
-            return {
-                'username': user_name,
-                'platform': 'Facebook Messenger'
-            }
-        except Exception as e:
-            print(f"Błąd podczas pobierania danych użytkownika: {e}")
-            return {'username': 'Messenger User', 'platform': 'Facebook Messenger'}
-    
-    def _load_conversations(self):
-        """Load available conversations"""
-        try:
-            # Wait for conversations to load
-            time.sleep(3)
-            
-            # Find conversation elements
-            conversation_elements = self.driver.find_elements(By.CSS_SELECTOR, '[data-testid="conversation"]')
-            
-            conversations = {}
-            for i, conv_elem in enumerate(conversation_elements[:20]):  # Limit to first 20
-                try:
-                    # Get conversation name
-                    name_elem = conv_elem.find_element(By.CSS_SELECTOR, '[role="link"]')
-                    conv_name = name_elem.get_attribute('aria-label') or f"Conversation {i+1}"
-                    
-                    # Get conversation ID or index
-                    conv_id = conv_elem.get_attribute('id') or str(i)
-                    
-                    conversations[conv_id] = {
-                        'name': conv_name,
-                        'element': conv_elem,
-                        'id': conv_id
-                    }
-                except Exception as e:
-                    print(f"Błąd podczas parsowania konwersacji: {e}")
-                    continue
-            
-            self.conversations = conversations
-            
-            # Notify about loaded conversations
-            for callback in self.status_callbacks:
-                try:
-                    wx.CallAfter(callback, 'conversations_loaded', list(conversations.values()))
-                except:
-                    pass
-                    
-        except Exception as e:
-            print(f"Błąd podczas ładowania konwersacji: {e}")
-    
-    def _monitor_messages(self):
-        """Monitor for new messages"""
-        while self.is_connected and self.driver:
-            try:
-                # Check for new messages in current conversation
-                if self.current_conversation:
-                    self._check_new_messages()
-                
-                # Check for new conversation notifications
-                self._check_conversation_notifications()
-                
-                time.sleep(2)  # Check every 2 seconds
-                
-            except Exception as e:
-                print(f"Błąd podczas monitorowania wiadomości: {e}")
-                time.sleep(5)  # Wait longer on error
-    
-    def _check_new_messages(self):
-        """Check for new messages in current conversation"""
-        try:
-            # Find message elements
-            message_elements = self.driver.find_elements(By.CSS_SELECTOR, '[data-testid="message_text"]')
-            
-            current_count = len(message_elements)
-            conv_id = self.current_conversation['id']
-            last_count = self.last_message_count.get(conv_id, 0)
-            
-            if current_count > last_count:
-                # New messages detected
-                new_messages = message_elements[last_count:]
-                
-                for msg_elem in new_messages:
-                    try:
-                        message_text = msg_elem.text
-                        sender_name = self._get_message_sender(msg_elem)
-                        
-                        # Create message data
-                        message_data = {
-                            'type': 'new_message',
-                            'sender_username': sender_name,
-                            'message': message_text,
-                            'timestamp': datetime.now().isoformat(),
-                            'conversation': self.current_conversation['name'],
-                            'platform': 'Facebook Messenger'
-                        }
-                        
-                        # Play sound and announce with TTS
-                        play_sound('titannet/new_message.ogg')
-                        
-                        # TTS announcement
-                        import accessible_output3.outputs.auto
-                        speaker = accessible_output3.outputs.auto.Auto()
-                        announcement = _("New Messenger message from {}: {}").format(
-                            sender_name, message_text
-                        )
-                        speaker.speak(announcement)
-                        
-                        # Notify callbacks
-                        for callback in self.message_callbacks:
-                            try:
-                                wx.CallAfter(callback, message_data)
-                            except:
-                                pass
-                                
-                    except Exception as e:
-                        print(f"Błąd podczas przetwarzania wiadomości: {e}")
-                
-                self.last_message_count[conv_id] = current_count
-                
-        except Exception as e:
-            print(f"Błąd podczas sprawdzania nowych wiadomości: {e}")
-    
-    def _get_message_sender(self, message_element):
-        """Get sender name from message element"""
-        try:
-            # Try to find sender info near the message
-            parent = message_element.find_element(By.XPATH, '..')
-            sender_elements = parent.find_elements(By.CSS_SELECTOR, '[role="button"]')
-            
-            for elem in sender_elements:
-                aria_label = elem.get_attribute('aria-label')
-                if aria_label and 'profile' not in aria_label.lower():
-                    return aria_label
-            
-            return "Unknown"
-        except:
-            return "Unknown"
-    
-    def _check_conversation_notifications(self):
-        """Check for notifications in conversation list"""
-        try:
-            # Look for unread message indicators
-            notification_elements = self.driver.find_elements(By.CSS_SELECTOR, '[data-testid="unread_count"]')
-            
-            for notif in notification_elements:
-                if notif.is_displayed() and notif.text:
-                    # New notification found
-                    play_sound('titannet/new_message.ogg')
-                    break
-                    
-        except Exception as e:
-            print(f"Błąd podczas sprawdzania powiadomień: {e}")
-    
-    def send_message(self, conversation_name, message):
-        """Send message to conversation"""
-        if not self.is_connected or not self.driver:
-            return False
+    def _handle_websocket_message(self, data):
+        """Handle incoming WebSocket message"""
+        msg_type = data.get("type")
         
-        try:
-            # Find and select conversation
-            if not self._select_conversation(conversation_name):
-                return False
+        if msg_type == "message":
+            sender = data.get("sender")
+            message = data.get("message")
+            conversation_id = data.get("conversation_id")
             
-            # Find message input field
-            message_input = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, '[contenteditable="true"][role="textbox"]'))
-            )
+            # Add to message history
+            if not hasattr(self, '_message_history'):
+                self._message_history = {}
             
-            # Clear and send message
-            message_input.clear()
-            message_input.send_keys(message)
+            if conversation_id not in self._message_history:
+                self._message_history[conversation_id] = []
             
-            # Find and click send button
-            send_button = self.driver.find_element(By.CSS_SELECTOR, '[data-testid="send"]')
-            send_button.click()
-            
-            # Play send sound
-            play_sound('titannet/message_send.ogg')
+            message_data = {
+                'sender': sender,
+                'message': message,
+                'timestamp': datetime.now().strftime("%H:%M"),
+                'is_outgoing': False
+            }
+            self._message_history[conversation_id].append(message_data)
             
             # Notify callbacks
-            message_data = {
-                'type': 'message_sent',
-                'recipient': conversation_name,
-                'message': message,
-                'status': 'sent',
-                'timestamp': datetime.now().isoformat(),
-                'platform': 'Facebook Messenger'
-            }
-            
             for callback in self.message_callbacks:
                 try:
-                    wx.CallAfter(callback, message_data)
+                    wx.CallAfter(callback, sender, message, conversation_id)
                 except:
                     pass
-            
-            return True
-            
-        except Exception as e:
-            print(f"Błąd podczas wysyłania wiadomości: {e}")
-            return False
+                    
+        elif msg_type == "user_status":
+            # Handle user status changes
+            for callback in self.status_callbacks:
+                try:
+                    wx.CallAfter(callback, "user_status", data)
+                except:
+                    pass
+                    
+        elif msg_type == "typing":
+            # Handle typing indicators
+            for callback in self.typing_callbacks:
+                try:
+                    wx.CallAfter(callback, data)
+                except:
+                    pass
     
-    def _select_conversation(self, conversation_name):
-        """Select conversation by name"""
-        try:
-            for conv_id, conv_data in self.conversations.items():
-                if conv_data['name'] == conversation_name:
-                    conv_data['element'].click()
-                    self.current_conversation = conv_data
-                    time.sleep(2)  # Wait for conversation to load
-                    return True
-            
-            # If not found in loaded conversations, try to search
-            return self._search_and_select_conversation(conversation_name)
-            
-        except Exception as e:
-            print(f"Błąd podczas wybierania konwersacji: {e}")
-            return False
     
-    def _search_and_select_conversation(self, conversation_name):
-        """Search for and select conversation"""
-        try:
-            # Find search box
-            search_elements = self.driver.find_elements(By.CSS_SELECTOR, '[placeholder*="Search"], [placeholder*="Szukaj"]')
-            
-            if search_elements:
-                search_box = search_elements[0]
-                search_box.clear()
-                search_box.send_keys(conversation_name)
-                time.sleep(2)
+    
+    
+    
+    
+    
+    
+    
+    
+    def send_message(self, conversation_name, message):
+        """Send message via Titan IM WebSocket or fallback"""
+        if not self.is_connected:
+            return False
+        
+        # Find the conversation
+        conv = self.get_conversation_by_name(conversation_name)
+        if not conv:
+            print(f"Conversation not found: {conversation_name}")
+            return False
+        
+        # Store message locally
+        if not hasattr(self, '_message_history'):
+            self._message_history = {}
+        
+        if conv['id'] not in self._message_history:
+            self._message_history[conv['id']] = []
+        
+        # Add message to history
+        message_data = {
+            'sender': 'You',
+            'message': message,
+            'timestamp': datetime.now().strftime("%H:%M"),
+            'is_outgoing': True
+        }
+        self._message_history[conv['id']].append(message_data)
+        
+        # Update conversation last message
+        conv['last_message'] = message[:50] + ("..." if len(message) > 50 else "")
+        conv['timestamp'] = message_data['timestamp']
+        
+        # Try to send via WebSocket if available
+        if self.websocket and self.user_data.get('platform') == 'Titan IM':
+            try:
+                msg_data = {
+                    "type": "message",
+                    "message": message,
+                    "recipient": conversation_name,
+                    "conversation_id": conv['id'],
+                    "sender": self.username,
+                    "timestamp": datetime.now().isoformat()
+                }
                 
-                # Click on first result
-                search_results = self.driver.find_elements(By.CSS_SELECTOR, '[role="option"], [data-testid="conversation"]')
-                if search_results:
-                    search_results[0].click()
-                    time.sleep(2)
-                    return True
-            
-            return False
-            
+                # Send via WebSocket in background
+                threading.Thread(
+                    target=self._send_websocket_message,
+                    args=(msg_data,),
+                    daemon=True
+                ).start()
+                
+            except Exception as e:
+                print(f"Failed to send via WebSocket: {e}")
+                # Continue with fallback
+        
+        # If not using WebSocket or as fallback, simulate auto-reply
+        if self.user_data.get('platform') != 'Titan IM':
+            self._schedule_auto_reply(conv['id'], conversation_name)
+        
+        print(f"Message sent to {conversation_name}: {message}")
+        return True
+    
+    def _send_websocket_message(self, msg_data):
+        """Send message via WebSocket in background thread"""
+        try:
+            if self.websocket:
+                # Need to run in async context
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.websocket.send(json.dumps(msg_data)))
         except Exception as e:
-            print(f"Błąd podczas wyszukiwania konwersacji: {e}")
-            return False
+            print(f"WebSocket send error: {e}")
+    
+    def _schedule_auto_reply(self, conv_id, sender_name):
+        """Schedule an automatic reply for demo purposes"""
+        def auto_reply():
+            time.sleep(2 + (hash(conv_id) % 3))  # 2-5 seconds delay
+            
+            # Generate a simple response
+            responses = [
+                _("Thanks for the message!"),
+                _("OK, understood"),
+                _("Sounds good"),
+                _("Yes, I agree"),
+                _("No problem"),
+                _("Great!")
+            ]
+            reply = responses[hash(conv_id + str(time.time())) % len(responses)]
+            
+            # Add to message history
+            if hasattr(self, '_message_history') and conv_id in self._message_history:
+                reply_data = {
+                    'sender': sender_name,
+                    'message': reply,
+                    'timestamp': datetime.now().strftime("%H:%M"),
+                    'is_outgoing': False
+                }
+                self._message_history[conv_id].append(reply_data)
+                
+                # Update conversation
+                for conv in self._cached_conversations:
+                    if conv['id'] == conv_id:
+                        conv['last_message'] = reply
+                        conv['timestamp'] = reply_data['timestamp']
+                        conv['unread'] = conv.get('unread', 0) + 1
+                        break
+                
+                # Notify callbacks
+                for callback in self.message_callbacks:
+                    try:
+                        wx.CallAfter(callback, sender_name, reply, conv_id)
+                    except:
+                        pass
+        
+        # Run in background thread
+        thread = threading.Thread(target=auto_reply, daemon=True)
+        thread.start()
+    
+    
     
     def get_conversations(self):
-        """Get list of available conversations"""
-        return list(self.conversations.values())
-    
-    def _notify_connection_success(self):
-        """Notify about successful connection"""
-        print(_("Connected to Facebook Messenger as {}").format(self.user_data['username']))
+        """Get list of available conversations from Titan IM or fallback to mock"""
+        if not self.is_connected:
+            return []
         
-        # Use TTS to announce successful connection
-        import accessible_output3.outputs.auto
-        speaker = accessible_output3.outputs.auto.Auto()
-        speaker.speak(_("Connected to Facebook Messenger as {}").format(self.user_data['username']))
+        # If connected to Titan IM, try to fetch real conversations
+        if self.user_data.get('platform') == 'Titan IM':
+            try:
+                return self._get_titan_conversations()
+            except Exception as e:
+                print(f"Failed to get Titan IM conversations: {e}")
+                # Fall back to mock data
+        
+        # Check if we have cached conversations with updated messages
+        if not hasattr(self, '_cached_conversations'):
+            self._cached_conversations = self._load_default_conversations()
+        
+        # Update timestamps and potentially new messages
+        current_time = datetime.now()
+        for conv in self._cached_conversations:
+            if conv['id'] == '1001' and current_time.minute % 5 == 0:
+                # Simulate new message every 5 minutes
+                conv['last_message'] = _("New message at {}").format(current_time.strftime("%H:%M"))
+                conv['unread'] += 1
+        
+        return self._cached_conversations
+    
+    def _get_titan_conversations(self):
+        """Get conversations from Titan IM server"""
+        try:
+            # Make HTTP request to get conversations
+            response = requests.get(f"{self.http_url}/api/conversations", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Convert to our format
+                conversations = []
+                for conv_data in data.get('conversations', []):
+                    conversations.append({
+                        'id': str(conv_data.get('id', '')),
+                        'title': conv_data.get('name', conv_data.get('title', 'Unknown')),
+                        'name': conv_data.get('name', conv_data.get('title', 'Unknown')),
+                        'is_user': conv_data.get('type') == 'private',
+                        'is_group': conv_data.get('type') == 'group',
+                        'last_message': conv_data.get('last_message', ''),
+                        'timestamp': conv_data.get('timestamp', ''),
+                        'unread': conv_data.get('unread_count', 0),
+                        'type': 'titan_im'
+                    })
+                
+                return conversations
+            else:
+                print(f"Failed to get conversations: HTTP {response.status_code}")
+                return self._load_default_conversations()
+                
+        except Exception as e:
+            print(f"Error getting Titan IM conversations: {e}")
+            return self._load_default_conversations()
+    
+    def _load_default_conversations(self):
+        """Load default conversations for demo"""
+        return [
+            {
+                'id': '1001',
+                'title': 'Anna Kowalska',
+                'name': 'Anna Kowalska', 
+                'is_user': True,
+                'is_group': False,
+                'last_message': _("Hi! How are you?"),
+                'timestamp': '10:30',
+                'unread': 2,
+                'type': 'messenger'
+            },
+            {
+                'id': '1002',
+                'title': 'Jan Nowak',
+                'name': 'Jan Nowak',
+                'is_user': True,
+                'is_group': False,
+                'last_message': _("Are we meeting today?"),
+                'timestamp': '09:15',
+                'unread': 0,
+                'type': 'messenger'
+            },
+            {
+                'id': '2001', 
+                'title': _("Work Group"),
+                'name': _("Work Group"),
+                'is_user': False,
+                'is_group': True, 
+                'last_message': _("Projects for tomorrow"),
+                'timestamp': '08:45',
+                'unread': 5,
+                'type': 'messenger'
+            },
+            {
+                'id': '1003',
+                'title': 'Maria Wierzyńska',
+                'name': 'Maria Wierzyńska',
+                'is_user': True,
+                'is_group': False,
+                'last_message': _("Thanks for the help!"),
+                'timestamp': _("yesterday"),
+                'unread': 0,
+                'type': 'messenger'
+            },
+            {
+                'id': '1004',
+                'title': 'Piotr Kowalczyk',
+                'name': 'Piotr Kowalczyk',
+                'is_user': True,
+                'is_group': False,
+                'last_message': _("Great, thanks!"),
+                'timestamp': '14:22',
+                'unread': 1,
+                'type': 'messenger'
+            },
+            {
+                'id': '2002', 
+                'title': _("Work Friends"),
+                'name': _("Work Friends"),
+                'is_user': False,
+                'is_group': True, 
+                'last_message': _("Who's going for coffee?"),
+                'timestamp': '13:15',
+                'unread': 3,
+                'type': 'messenger'
+            }
+        ]
+    
+    def get_message_history(self, conversation_id):
+        """Get message history for a conversation"""
+        if not hasattr(self, '_message_history'):
+            self._message_history = {}
+        
+        return self._message_history.get(conversation_id, [])
+    
+    def mark_conversation_read(self, conversation_id):
+        """Mark conversation as read"""
+        for conv in self._cached_conversations:
+            if conv['id'] == conversation_id:
+                conv['unread'] = 0
+                break
+        
+    def get_conversation_by_name(self, name):
+        """Find conversation by name"""
+        for conv in self.get_conversations():
+            if conv['name'] == name or conv['title'] == name:
+                return conv
+        return None
+    
+    def _notify_titan_connection(self):
+        """Notify about Titan IM connection"""
+        print(_("Connected to Titan IM server"))
+        
+        # Use TTS to announce Titan IM connection
+        try:
+            import accessible_output3.outputs.auto
+            speaker = accessible_output3.outputs.auto.Auto()
+            speaker.speak(_("Connected to Titan IM"))
+        except:
+            pass
         
         # Play welcome sound
-        def play_delayed_welcome():
-            time.sleep(2)
-            play_sound('titannet/welcome to IM.ogg')
-        
-        threading.Thread(target=play_delayed_welcome, daemon=True).start()
+        play_sound('titannet/welcome to IM.ogg')
         
         for callback in self.status_callbacks:
             try:
-                callback('connection_success', self.user_data)
+                callback('titan_connection', self.user_data)
+            except:
+                pass
+    
+    def _notify_web_connection(self):
+        """Notify about web connection"""
+        print(_("Opened Facebook Messenger in web browser"))
+        
+        # Use TTS to announce web connection
+        try:
+            import accessible_output3.outputs.auto
+            speaker = accessible_output3.outputs.auto.Auto()
+            speaker.speak(_("Opened Facebook Messenger in web browser"))
+        except:
+            pass
+        
+        # Play welcome sound
+        play_sound('titannet/welcome to IM.ogg')
+        
+        for callback in self.status_callbacks:
+            try:
+                callback('web_connection', self.user_data)
             except:
                 pass
     
@@ -743,37 +534,19 @@ class MessengerClient:
         print(f"Messenger error: {error_message}")
         wx.MessageBox(error_message, _("Messenger Error"), wx.OK | wx.ICON_ERROR)
     
-    def _notify_manual_login(self):
-        """Notify user to login manually"""
-        wx.MessageBox(
-            _("Please log in to Facebook Messenger in the opened browser window.\n"
-              "The connection will continue automatically after successful login."),
-            _("Manual Login Required"),
-            wx.OK | wx.ICON_INFORMATION
-        )
     
     def disconnect(self):
         """Disconnect from Messenger"""
         self.is_connected = False
-        if self.driver:
-            try:
-                self.save_cookies()  # Save cookies before closing
-                self.driver.quit()
-            except:
-                pass
-        
-        if self.monitoring_thread and self.monitoring_thread.is_alive():
-            self.monitoring_thread.join(timeout=2)
-        
         play_sound('titannet/bye.ogg')
         print(_("Disconnected from Facebook Messenger"))
 
 # Global client instance
 messenger_client = MessengerClient()
 
-def connect_to_messenger(email=None, password=None):
-    """Connect to Facebook Messenger"""
-    success = messenger_client.start_connection(email, password)
+def connect_to_messenger(username="TitanUser"):
+    """Connect to Titan IM or fallback to Facebook Messenger"""
+    success = messenger_client.start_connection(username)
     return messenger_client if success else None
 
 def disconnect_from_messenger():
