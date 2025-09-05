@@ -1,10 +1,11 @@
 # Filename: componentmanagergui.py
 import wx
 import os
+import configparser
 from accessible_output3.outputs.auto import Auto
 from sound import play_sound, play_focus_sound, play_endoflist_sound
 from translation import set_language
-from settings import get_setting
+from settings import get_setting, load_settings
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -37,6 +38,10 @@ class ComponentManagerDialog(wx.Dialog):
         panel.SetSizer(vbox)
         self.Centre()
         self.populate_component_list()
+        
+        # Apply skin settings
+        self.apply_skin_settings()
+        
         self.component_listbox.SetFocus()
 
     def populate_component_list(self):
@@ -181,6 +186,54 @@ class ComponentManagerDialog(wx.Dialog):
         
         self.component_listbox.SetString(index, f"{display_name} - {status_str}")
         self.tts.output(_("Component {} {}").format(display_name, status_str.lower()))
+
+    def apply_skin_settings(self):
+        """Apply current skin settings to component manager"""
+        try:
+            settings = load_settings()
+            skin_name = settings.get('interface', {}).get('skin', 'default')
+            
+            skin_path = os.path.join(os.getcwd(), "skins", skin_name, "skin.ini")
+            if not os.path.exists(skin_path):
+                print(f"WARNING: Skin file not found: {skin_path}")
+                return
+            
+            config = configparser.ConfigParser()
+            config.read(skin_path, encoding='utf-8')
+            
+            colors = dict(config.items('Colors')) if config.has_section('Colors') else {}
+            fonts = dict(config.items('Fonts')) if config.has_section('Fonts') else {}
+            
+            # Apply colors
+            if colors:
+                # Convert hex colors to wx.Colour
+                def hex_to_wx_colour(hex_color):
+                    hex_color = hex_color.lstrip('#')
+                    return wx.Colour(int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16))
+                
+                # Apply background colors
+                frame_bg = colors.get('frame_background_color', '#C0C0C0')
+                listbox_bg = colors.get('listbox_background_color', '#FFFFFF')
+                
+                self.SetBackgroundColour(hex_to_wx_colour(frame_bg))
+                self.component_listbox.SetBackgroundColour(hex_to_wx_colour(listbox_bg))
+            
+            # Apply fonts
+            if fonts:
+                default_size = int(fonts.get('default_font_size', 9))
+                listbox_face = fonts.get('listbox_font_face', 'MS Sans Serif')
+                
+                listbox_font = wx.Font(default_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, faceName=listbox_face)
+                self.component_listbox.SetFont(listbox_font)
+                
+                # Apply to dialog itself
+                self.SetFont(listbox_font)
+            
+            # Refresh the window
+            self.Refresh()
+            
+        except Exception as e:
+            print(f"Error applying skin to component manager: {e}")
 
 if __name__ == '__main__':
     # Dummy classes for testing

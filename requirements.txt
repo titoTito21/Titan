@@ -10,6 +10,10 @@ pywinusb; platform_system == "Windows"
 pywin32; platform_system == "Windows"
 pywinctl
 
+# Linux audio dependencies
+pycaw; platform_system == "Windows"
+comtypes; platform_system == "Windows"
+
 pyenchant
 pytube
 beautifulsoup4
@@ -21,5 +25,18 @@ aiortc
 telethon
 cryptography
 py-tgcalls
-selenium
-webdriver-manager
+pydub
+
+# Linux system integration (optional)
+pynput  # Cross-platform input handling (already used)
+# Note: For Linux audio control, system packages are preferred:
+# Ubuntu/Debian: pulseaudio-utils, alsa-utils
+# Fedora/RHEL: pulseaudio-utils, alsa-utils
+# Arch: pulseaudio-alsa, alsa-utils
+
+# Titan-net server dependencies
+websockets
+aiohttp
+aiohttp-cors
+bcrypt
+# sqlite3 is built into Python standard library

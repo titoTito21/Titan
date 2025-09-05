@@ -73,6 +73,11 @@ class MessengerWebViewFrame(wx.Frame):
         self.last_message_count = 0
         self.last_activity_check = 0
         
+        # Notification anti-spam mechanism
+        self.last_notification_time = 0
+        self.last_notification_count = 0
+        self.notification_cooldown = 5.0  # 5 seconds cooldown between notifications
+        
         # Voice call state
         self.is_call_active = False
         self.current_call_user = None
@@ -101,7 +106,7 @@ class MessengerWebViewFrame(wx.Frame):
         # Navigation buttons
         self.back_btn = wx.Button(toolbar, label=_("Wstecz"))
         self.forward_btn = wx.Button(toolbar, label=_("Dalej"))
-        self.refresh_btn = wx.Button(toolbar, label=_("Odśwież"))
+        self.refresh_btn = wx.Button(toolbar, label=_("Refresh"))
         self.home_btn = wx.Button(toolbar, label=_("Messenger"))
         
         # Bind toolbar events
@@ -189,7 +194,7 @@ class MessengerWebViewFrame(wx.Frame):
         
         # Status bar
         self.CreateStatusBar()
-        self.SetStatusText(_("Ładowanie Facebook Messenger..."))
+        self.SetStatusText(_("Loading Facebook Messenger..."))
         
         # Bind close event
         self.Bind(wx.EVT_CLOSE, self.on_close)
@@ -204,11 +209,11 @@ class MessengerWebViewFrame(wx.Frame):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         error_text = wx.StaticText(error_panel, label=_(
-            "WebView nie jest dostępny na tym systemie.\n\n"
-            "Możliwe rozwiązania:\n"
+            "WebView is not available on this system.\n\n"
+            "Possible solutions:\n"
             "• Zaktualizuj wxPython: pip install -U wxPython\n"
             "• Zainstaluj Microsoft Edge WebView2 Runtime\n"
-            "• Sprawdź czy system obsługuje WebView2"
+            "• Check if your system supports WebView2"
         ))
         
         close_btn = wx.Button(error_panel, wx.ID_CLOSE, _("Zamknij"))
@@ -220,7 +225,7 @@ class MessengerWebViewFrame(wx.Frame):
         error_panel.SetSizer(sizer)
         
         # Speak error
-        speaker.speak(_("WebView nie jest dostępny"))
+        speaker.speak(_("WebView is not available"))
     
     def create_menu_bar(self):
         """Create menu bar"""
@@ -229,16 +234,16 @@ class MessengerWebViewFrame(wx.Frame):
         # Messenger menu
         messenger_menu = wx.Menu()
         
-        refresh_item = messenger_menu.Append(wx.ID_ANY, _("Odśwież\tF5"), _("Odśwież stronę Messenger"))
+        refresh_item = messenger_menu.Append(wx.ID_ANY, _("Refresh\tF5"), _("Refresh Messenger page"))
         messenger_menu.AppendSeparator()
         
-        zoom_in_item = messenger_menu.Append(wx.ID_ANY, _("Powiększ\tCtrl++"), _("Powiększ stronę"))
-        zoom_out_item = messenger_menu.Append(wx.ID_ANY, _("Pomniejsz\tCtrl+-"), _("Pomniejsz stronę"))
-        zoom_reset_item = messenger_menu.Append(wx.ID_ANY, _("Resetuj zoom\tCtrl+0"), _("Resetuj powiększenie"))
+        zoom_in_item = messenger_menu.Append(wx.ID_ANY, _("Zoom In\tCtrl++"), _("Zoom in page"))
+        zoom_out_item = messenger_menu.Append(wx.ID_ANY, _("Zoom Out\tCtrl+-"), _("Zoom out page"))
+        zoom_reset_item = messenger_menu.Append(wx.ID_ANY, _("Reset Zoom\tCtrl+0"), _("Reset zoom level"))
         
         messenger_menu.AppendSeparator()
         
-        devtools_item = messenger_menu.Append(wx.ID_ANY, _("Narzędzia deweloperskie\tF12"), _("Otwórz narzędzia deweloperskie"))
+        devtools_item = messenger_menu.Append(wx.ID_ANY, _("Developer Tools\tF12"), _("Open developer tools"))
         
         messenger_menu.AppendSeparator()
         
@@ -680,12 +685,28 @@ class MessengerWebViewFrame(wx.Frame):
     def on_title_changed(self, event):
         """Handle title change"""
         title = event.GetString()
-        self.SetTitle(f"{title} - Titan IM")
         
-        # Check for new message notifications in title
-        if "(" in title and ")" in title and self.notifications_item.IsChecked():
-            # Title likely contains unread message count
-            self.on_notification_detected(title)
+        # Check for new message notifications in title and update window title like Telegram
+        if "(" in title and ")" in title:
+            import re
+            match = re.search(r'\((\d+)\)', title)
+            if match:
+                count = int(match.group(1))
+                if count > 0:
+                    # Show unread count in window title like Telegram
+                    self.SetTitle(f"[{count}] Facebook Messenger - Titan IM")
+                    
+                    # Trigger notification if enabled
+                    if self.notifications_item.IsChecked():
+                        self.on_notification_detected(title, count)
+                else:
+                    # No unread messages
+                    self.SetTitle("Facebook Messenger - Titan IM")
+            else:
+                self.SetTitle(f"{title} - Titan IM")
+        else:
+            # No unread count in title
+            self.SetTitle(f"{title} - Titan IM")
     
     def on_webview_error(self, event):
         """Handle WebView errors"""
@@ -891,10 +912,10 @@ class MessengerWebViewFrame(wx.Frame):
                     if result.get('status') == 'logged_in' and not self.messenger_logged_in:
                         self.messenger_logged_in = True
                         
-                        print(f"✓ ZALOGOWANO! Powód: {result.get('reason')}")
+                        print(f"✓ Messenger login successful! Reason: {result.get('reason')}")
                         
                         # Play welcome sound like in Telegram - but only now after login!
-                        print("Odtwarzam dźwięk powitalny...")
+                        print("Playing welcome sound...")
                         play_sound('titannet/welcome to IM.ogg')
                         
                         # TTS announcement
@@ -904,11 +925,18 @@ class MessengerWebViewFrame(wx.Frame):
                         # Update status
                         self.SetStatusText(_("Połączono z Messenger"))
                         
+                        # Notify status callbacks about successful login
+                        for callback in self.status_callbacks:
+                            try:
+                                wx.CallAfter(callback, 'logged_in', {"platform": "Facebook Messenger Web"})
+                            except Exception as e:
+                                print(f"Error calling status callback: {e}")
+                        
                         # Start enhanced monitoring for typing and messages
                         self.start_enhanced_monitoring()
                         
                     elif result.get('status') == 'not_logged_in':
-                        print(f"Nie zalogowano jeszcze. Debug: {result}")
+                        print(f"Not logged in yet. Debug: {result}")
                         # Keep checking periodically
                         wx.CallLater(3000, self.check_login_status)  # Check more frequently
                         
@@ -1170,9 +1198,19 @@ class MessengerWebViewFrame(wx.Frame):
                             # Play message send sound like in Telegram
                             play_sound('titannet/message_send.ogg')
                             
-                            # TTS announcement
+                            # TTS announcement with stereo speech like WhatsApp
                             if self.tts_item.IsChecked():
-                                speaker.speak(_("Wiadomość wysłana"))
+                                try:
+                                    from stereo_speech import get_stereo_speech
+                                    stereo_speech = get_stereo_speech()
+                                    
+                                    if stereo_speech.is_stereo_enabled():
+                                        # Use stereo speech for sent confirmation with lower pitch
+                                        stereo_speech.speak(_("Message sent"), position=0.0, pitch_offset=-2, use_fallback=False)
+                                    else:
+                                        speaker.speak(_("Message sent"))
+                                except ImportError:
+                                    speaker.speak(_("Message sent"))
                                 
                             print("✓ Wiadomość wysłana - odtworzono dźwięk message_send.ogg")
                         else:
@@ -1193,8 +1231,9 @@ class MessengerWebViewFrame(wx.Frame):
                             print("⚠️ Notifications disabled - no sound played")
                 
                 except Exception as e:
-                    print(f"Activity parsing error: {e}")
-                    print(f"Raw result was: {result_str}")
+                    if "Expecting value: line 1 column 1 (char 0)" not in str(e):
+                        print(f"Activity parsing error: {e}")
+                        print(f"Raw result was: {result_str}")
                     
         except Exception as e:
             print(f"Activity check error: {e}")
@@ -1305,14 +1344,25 @@ class MessengerWebViewFrame(wx.Frame):
                         print("✓ Simple detection - played message_send.ogg")
                         
                         if self.tts_item.IsChecked():
-                            speaker.speak(_("Wiadomość wysłana"))
+                            try:
+                                from stereo_speech import get_stereo_speech
+                                stereo_speech = get_stereo_speech()
+                                
+                                if stereo_speech.is_stereo_enabled():
+                                    # Use stereo speech for sent confirmation with lower pitch
+                                    stereo_speech.speak(_("Message sent"), position=0.0, pitch_offset=-2, use_fallback=False)
+                                else:
+                                    speaker.speak(_("Message sent"))
+                            except ImportError:
+                                speaker.speak(_("Message sent"))
                 
                 if not result.get('setup'):
                     # Re-setup if needed
                     wx.CallLater(1000, self.setup_simple_detection)
             
         except Exception as e:
-            print(f"Simple check error: {e}")
+            if "Expecting value: line 1 column 1 (char 0)" not in str(e):
+                print(f"Simple check error: {e}")
     
     def setup_voice_call_monitoring(self):
         """Setup voice call detection and WebRTC integration"""
@@ -1728,7 +1778,8 @@ class MessengerWebViewFrame(wx.Frame):
                     wx.CallLater(3000, self.check_call_ended_by_ui)
                 
         except Exception as e:
-            print(f"Voice call check error: {e}")
+            if "'int' object has no attribute 'get'" not in str(e) and "Expecting value: line 1 column 1 (char 0)" not in str(e):
+                print(f"Voice call check error: {e}")
     
     def check_call_ended_by_ui(self):
         """Check if call really ended when UI disappeared"""
@@ -2230,91 +2281,395 @@ class MessengerWebViewFrame(wx.Frame):
         
         self.notification_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.check_notifications, self.notification_timer)
-        self.notification_timer.Start(2000)  # Check every 2 seconds
+        self.notification_timer.Start(5000)  # Check every 5 seconds (reduced frequency)
     
     def check_notifications(self, event):
-        """Check for new notifications by monitoring page changes"""
-        if not hasattr(self, 'webview') or not self.webview:
+        """Check for new notifications by monitoring page changes (improved with anti-spam)"""
+        if not hasattr(self, 'webview') or not self.webview or not self.messenger_logged_in:
             return
         
         try:
-            # Get current title
+            current_count = 0
+            
+            # Method 1: Check title for unread count
             current_title = self.webview.GetCurrentTitle()
+            if current_title and "(" in current_title and ")" in current_title:
+                import re
+                match = re.search(r'\((\d+)\)', current_title)
+                if match:
+                    current_count = int(match.group(1))
             
-            if current_title and current_title != self.last_title:
-                self.last_title = current_title
-                
-                # Check for unread message count in title
-                if "(" in current_title and ")" in current_title:
-                    import re
-                    match = re.search(r'\((\d+)\)', current_title)
-                    if match:
-                        count = int(match.group(1))
-                        if count > self.last_notification_count:
-                            self.last_notification_count = count
-                            self.on_notification_detected(current_title, count)
-                        elif count == 0:
-                            self.last_notification_count = 0
-                else:
-                    self.last_notification_count = 0
-            
-            # Also check for visual notifications using JavaScript
-            notification_script = """
-            (function() {
-                // Look for notification badges, unread indicators
-                var badges = document.querySelectorAll('[data-testid="unread_count"], .notification, [aria-label*="unread"]');
-                var count = 0;
-                for (var i = 0; i < badges.length; i++) {
-                    if (badges[i].offsetWidth > 0 && badges[i].offsetHeight > 0) {
-                        var text = badges[i].textContent || badges[i].innerText;
-                        if (text && !isNaN(text)) {
-                            count += parseInt(text);
-                        } else if (badges[i].offsetWidth > 0) {
-                            count += 1;
+            # Method 2: Check DOM for notification badges (only if title didn't show count)
+            if current_count == 0:
+                # Check for visual notifications using JavaScript
+                notification_script = """
+                (function() {
+                    try {
+                        // Enhanced notification detection for current Messenger
+                        var badges = document.querySelectorAll(
+                            '[data-testid="unread_count"], ' +
+                            '.notification, ' +
+                            '[aria-label*="unread"], ' +
+                            '[style*="background-color: rgb(0, 132, 255)"], ' +
+                            'span[data-testid*="unread"], ' +
+                            'div[data-testid*="unread"]'
+                        );
+                        
+                        var count = 0;
+                        for (var i = 0; i < badges.length; i++) {
+                            if (badges[i].offsetWidth > 0 && badges[i].offsetHeight > 0) {
+                                var text = badges[i].textContent || badges[i].innerText;
+                                if (text && !isNaN(text)) {
+                                    count += parseInt(text);
+                                } else if (badges[i].offsetWidth > 0) {
+                                    count += 1;
+                                }
+                            }
                         }
+                        return count;
+                    } catch (e) {
+                        return 0;
                     }
-                }
-                return count;
-            })();
-            """
+                })();
+                """
+                
+                try:
+                    result = self.webview.RunScript(notification_script)
+                    if isinstance(result, tuple) and len(result) >= 2:
+                        success, actual_result = result
+                        if success:
+                            result = actual_result
+                        else:
+                            result = None
+                    
+                    if result and isinstance(result, (int, float)):
+                        current_count = int(result)
+                except:
+                    pass  # Ignore JavaScript errors
             
-            try:
-                result = self.webview.RunScript(notification_script)
-                
-                # Handle WebView returning tuple (success, result) instead of just result
-                if isinstance(result, tuple) and len(result) >= 2:
-                    success, actual_result = result
-                    if success:
-                        result = actual_result
-                    else:
-                        result = None
-                
-                if result and isinstance(result, (int, float)) and result > 0:
-                    if result != self.last_notification_count:
-                        self.last_notification_count = result
-                        self.on_notification_detected(current_title, result)
-            except:
-                pass  # Ignore JavaScript errors
+            # Trigger notification if count increased (new messages)
+            if current_count > 0:
+                # Check for detailed message information
+                self.check_detailed_notifications(current_count)
                 
         except Exception as e:
             print(f"Notification check error: {e}")
     
-    def on_notification_detected(self, title, count=None):
-        """Handle detected notification"""
+    def check_detailed_notifications(self, total_count):
+        """Check for detailed message notifications with sender info"""
+        if not hasattr(self, 'webview') or not self.webview or not self.messenger_logged_in:
+            return
+        
+        try:
+            # Enhanced notification detection with message details for Messenger
+            detailed_notification_script = """
+            (function() {
+                try {
+                    console.log('TITAN: Starting Messenger detailed notification check...');
+                    
+                    var result = {
+                        totalCount: 0,
+                        newMessages: []
+                    };
+                    
+                    // Find all chat items with unread messages in Messenger
+                    const chatSelectors = [
+                        'div[aria-label*="Conversations"] div[role="listitem"]',
+                        'div[aria-label*="Chats"] div[role="listitem"]',
+                        'div[aria-label*="Rozmowy"] div[role="listitem"]',
+                        '[data-testid="mwthreadlist"] div[role="listitem"]',
+                        'div[role="navigation"] div[role="listitem"]'
+                    ];
+                    
+                    for (let chatSelector of chatSelectors) {
+                        const chatItems = document.querySelectorAll(chatSelector);
+                        
+                        if (chatItems.length > 0) {
+                            chatItems.forEach((chatItem, index) => {
+                                try {
+                                    // Check if this chat has unread indicator
+                                    const unreadIndicators = [
+                                        'div[class*="unread"]',
+                                        '[aria-label*="unread"]',
+                                        'span[data-testid*="unread"]',
+                                        'div[data-testid*="unread"]',
+                                        // Visual indicators (bold text, badges)
+                                        'strong',
+                                        'span[class*="badge"]',
+                                        'div[class*="notification"]'
+                                    ];
+                                    
+                                    let hasUnread = false;
+                                    for (let selector of unreadIndicators) {
+                                        const indicator = chatItem.querySelector(selector);
+                                        if (indicator && indicator.offsetWidth > 0) {
+                                            hasUnread = true;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (hasUnread) {
+                                        // Get sender name
+                                        let senderName = '';
+                                        const nameSelectors = [
+                                            'span[dir="auto"] strong',
+                                            'div[data-testid*="thread"] span',
+                                            'h3 span',
+                                            'span[role="heading"]',
+                                            'div[role="heading"] span',
+                                            'h3',
+                                            'span[dir="auto"]:first-child',
+                                            'strong'
+                                        ];
+                                        
+                                        for (let nameSelector of nameSelectors) {
+                                            const nameEl = chatItem.querySelector(nameSelector);
+                                            if (nameEl && nameEl.textContent.trim()) {
+                                                senderName = nameEl.textContent.trim();
+                                                break;
+                                            }
+                                        }
+                                        
+                                        // Get last message preview
+                                        let messagePreview = '';
+                                        const msgSelectors = [
+                                            'div[data-testid*="thread"] span:last-child',
+                                            'div:last-child span[dir="auto"]',
+                                            'span[dir="auto"]:not(:first-child)',
+                                            'div:nth-child(2) span[dir="auto"]',
+                                            'span[dir="auto"]:last-child',
+                                            'p:last-child'
+                                        ];
+                                        
+                                        for (let msgSelector of msgSelectors) {
+                                            const msgEl = chatItem.querySelector(msgSelector);
+                                            if (msgEl && msgEl.textContent.trim() && 
+                                                msgEl.textContent.trim() !== senderName &&
+                                                !msgEl.textContent.includes('Active') &&
+                                                !msgEl.textContent.includes('ago')) {
+                                                messagePreview = msgEl.textContent.trim();
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (senderName) {
+                                            result.newMessages.push({
+                                                sender: senderName,
+                                                message: messagePreview || 'New message',
+                                                count: 1
+                                            });
+                                            result.totalCount += 1;
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.log('TITAN: Error processing Messenger chat item:', err);
+                                }
+                            });
+                            
+                            // If we found messages, break from selector loop
+                            if (result.newMessages.length > 0) {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    console.log('TITAN: Messenger notification result:', result);
+                    return JSON.stringify(result);
+                    
+                } catch (e) {
+                    console.error('TITAN: Messenger notification error:', e);
+                    return JSON.stringify({totalCount: 0, newMessages: []});
+                }
+            })();
+            """
+            
+            result_str = self.webview.RunScript(detailed_notification_script)
+            if result_str:
+                import json
+                try:
+                    # Handle WebView returning tuple
+                    if isinstance(result_str, tuple) and len(result_str) >= 2:
+                        success, actual_result = result_str
+                        if success:
+                            result_str = actual_result
+                        else:
+                            result_str = '{"totalCount": 0, "newMessages": []}'
+                    
+                    if isinstance(result_str, str):
+                        notification_data = json.loads(result_str)
+                    else:
+                        notification_data = {"totalCount": 0, "newMessages": []}
+                    
+                    detected_count = notification_data.get('totalCount', 0)
+                    new_messages = notification_data.get('newMessages', [])
+                    
+                    # Use the higher count (either detected or passed total_count)
+                    final_count = max(detected_count, total_count)
+                    
+                    # Trigger detailed notifications if we have messages
+                    if final_count > 0:
+                        if new_messages:
+                            self.on_detailed_messenger_notification(new_messages, final_count)
+                        else:
+                            # Fallback to simple notification
+                            self.on_notification_detected("Messenger", final_count)
+                    
+                except Exception as e:
+                    print(f"Messenger notification parsing error: {e}")
+                    # Fallback to simple notification
+                    self.on_notification_detected("Messenger", total_count)
+            else:
+                # Fallback to simple notification
+                self.on_notification_detected("Messenger", total_count)
+                
+        except Exception as e:
+            print(f"Messenger detailed notification error: {e}")
+            # Fallback to simple notification
+            self.on_notification_detected("Messenger", total_count)
+    
+    def on_detailed_messenger_notification(self, messages, total_count):
+        """Handle detailed Messenger notification with sender and message info"""
         if not self.notifications_item.IsChecked() or not self.messenger_logged_in:
             return
+        
+        import time
+        current_time = time.time()
+        
+        # Anti-spam protection
+        if current_time - self.last_notification_time < self.notification_cooldown:
+            return
+        
+        # Only notify if count actually increased
+        if total_count <= self.last_notification_count:
+            return
+        
+        self.last_notification_time = current_time
+        self.last_notification_count = total_count
+        
+        print(f"✓ Messenger detailed notification: {total_count} messages from {len(messages)} chats")
+        
+        # Play notification sound
+        play_sound('titannet/new_message.ogg')
+        
+        # Enhanced TTS with sender and message details
+        if self.tts_item.IsChecked():
+            try:
+                from stereo_speech import get_stereo_speech
+                stereo_speech = get_stereo_speech()
+                
+                # Create detailed notification text
+                if len(messages) == 1:
+                    msg = messages[0]
+                    notification_text = _("Messenger message from {}: {}").format(msg['sender'], msg['message'][:50])
+                elif len(messages) <= 3:
+                    # Announce first few messages individually
+                    for msg in messages[:3]:
+                        notification_text = _("Messenger message from {}: {}").format(msg['sender'], msg['message'][:30])
+                        
+                        if stereo_speech and stereo_speech.is_stereo_enabled():
+                            stereo_speech.speak(notification_text, position=0.0, pitch_offset=3, use_fallback=False)
+                        else:
+                            import accessible_output3.outputs.auto
+                            speaker = accessible_output3.outputs.auto.Auto()
+                            speaker.speak(notification_text)
+                        
+                        time.sleep(0.5)  # Brief pause between messages
+                    return
+                else:
+                    # Too many messages, give summary
+                    notification_text = _("Messenger: {} new messages from {} contacts").format(total_count, len(messages))
+                
+                if stereo_speech and stereo_speech.is_stereo_enabled():
+                    stereo_speech.speak(notification_text, position=0.0, pitch_offset=3, use_fallback=False)
+                    print(f"✓ Stereo TTS: {notification_text}")
+                else:
+                    import accessible_output3.outputs.auto
+                    speaker = accessible_output3.outputs.auto.Auto()
+                    speaker.speak(notification_text)
+                    print(f"✓ Standard TTS: {notification_text}")
+                    
+            except ImportError:
+                import accessible_output3.outputs.auto
+                speaker = accessible_output3.outputs.auto.Auto()
+                if len(messages) == 1:
+                    msg = messages[0]
+                    notification_text = _("Messenger message from {}: {}").format(msg['sender'], msg['message'][:50])
+                else:
+                    notification_text = _("Messenger: {} new messages").format(total_count)
+                speaker.speak(notification_text)
+                print(f"✓ Fallback TTS: {notification_text}")
+        
+        # Flash taskbar
+        try:
+            if hasattr(self, 'RequestUserAttention'):
+                self.RequestUserAttention()
+        except:
+            pass
+    
+    def on_notification_detected(self, title, count=None):
+        """Handle detected notification with anti-spam protection"""
+        if not self.notifications_item.IsChecked() or not self.messenger_logged_in:
+            return
+        
+        import time
+        current_time = time.time()
+        
+        # Anti-spam protection - only allow notifications every X seconds
+        if current_time - self.last_notification_time < self.notification_cooldown:
+            return
+            
+        # Only notify if count actually increased (new messages)
+        if count is not None and count <= self.last_notification_count:
+            return
+        
+        self.last_notification_time = current_time
+        if count is not None:
+            self.last_notification_count = count
+        
+        print(f"✓ Messenger notification: {count or 'new message'}")
         
         # Play notification sound like in Telegram
         play_sound('titannet/new_message.ogg')
         
-        # TTS announcement
+        # TTS announcement (mowa stereo) - exactly like Telegram
         if self.tts_item.IsChecked():
-            if count and count > 1:
-                message = _("Nowe wiadomości w Messenger: {}").format(count)
-            else:
-                message = _("Nowa wiadomość w Messenger")
-            
-            speaker.speak(message)
+            # Check if stereo speech is enabled (same as Telegram)
+            try:
+                from stereo_speech import get_stereo_speech
+                stereo_speech = get_stereo_speech()
+                
+                if stereo_speech.is_stereo_enabled():
+                    # Use stereo speech with higher tone for notification (same style as Telegram)
+                    if count and count > 1:
+                        notification_text = _("New messages from Messenger: {}").format(count)
+                    else:
+                        notification_text = _("New message from Messenger")
+                    
+                    # Speak with higher pitch (faster/higher tone) - same as Telegram
+                    stereo_speech.speak(notification_text, position=0.0, pitch_offset=3, use_fallback=False)
+                    print(f"✓ Stereo TTS notification: {notification_text}")
+                else:
+                    # Fallback to accessible_output3 if stereo speech is disabled
+                    if count and count > 1:
+                        message = _("Messenger: {} new messages").format(count)
+                    else:
+                        message = _("Messenger: new message")
+                    
+                    import accessible_output3.outputs.auto
+                    speaker = accessible_output3.outputs.auto.Auto()
+                    speaker.speak(message)
+                    print(f"✓ Fallback TTS notification: {message}")
+            except ImportError:
+                # If stereo_speech is not available, use standard TTS
+                if count and count > 1:
+                    message = _("Messenger: {} new messages").format(count)
+                else:
+                    message = _("Messenger: new message")
+                
+                import accessible_output3.outputs.auto
+                speaker = accessible_output3.outputs.auto.Auto()
+                speaker.speak(message)
+                print(f"✓ Standard TTS notification: {message}")
         
         # Flash taskbar (Windows)
         try:
@@ -2330,6 +2685,573 @@ class MessengerWebViewFrame(wx.Frame):
     def add_status_callback(self, callback):
         """Add callback for status events"""
         self.status_callbacks.append(callback)
+    
+    def get_chat_list(self):
+        """Get list of active conversations from Messenger"""
+        if not hasattr(self, 'webview') or not self.webview:
+            return []
+        
+        # Only get chat list if user is logged in
+        if not self.messenger_logged_in:
+            print("get_chat_list: User not logged in yet")
+            return []
+        
+        try:
+            chat_list_script = """
+            (function() {
+                try {
+                    console.log('TITAN: Starting chat list extraction...');
+                    
+                    // Enhanced selectors for current Messenger (2024/2025)
+                    const chatSelectors = [
+                        // Main conversation list containers
+                        'div[aria-label*="Conversations"] div[role="listitem"]',
+                        'div[aria-label*="Chats"] div[role="listitem"]', 
+                        'div[aria-label*="Rozmowy"] div[role="listitem"]',
+                        '[data-testid="mwthreadlist"] div[role="listitem"]',
+                        'div[role="navigation"] div[role="listitem"]',
+                        
+                        // Alternative containers
+                        '[data-testid="conversation"]',
+                        'div[aria-label*="Conversations"] > div > div',
+                        'div[role="main"] div[role="listitem"]',
+                        
+                        // Fallback selectors
+                        'div[aria-label*="Conversations"] li',
+                        'div[role="navigation"] li',
+                        'div[aria-label="Chats"] li'
+                    ];
+                    
+                    let conversations = [];
+                    
+                    for (let selector of chatSelectors) {
+                        const chatElements = document.querySelectorAll(selector);
+                        console.log(`TITAN: Trying selector "${selector}" - found ${chatElements.length} elements`);
+                        
+                        if (chatElements.length > 0) {
+                            chatElements.forEach((element, index) => {
+                                try {
+                                    // Enhanced name extraction for current Messenger
+                                    let name = '';
+                                    const nameSelectors = [
+                                        // Current Messenger name selectors (2024/2025)
+                                        'span[dir="auto"] strong',
+                                        'div[data-testid*="thread"] span',
+                                        'h3 span',
+                                        'span[role="heading"]',
+                                        'div[role="heading"] span',
+                                        
+                                        // Fallback selectors
+                                        'h3', 'span[dir="auto"]', '[data-testid="thread_name"]',
+                                        'div[title]', 'strong', 'span[title]',
+                                        'div:first-child span'
+                                    ];
+                                    
+                                    for (let nameSelector of nameSelectors) {
+                                        const nameEl = element.querySelector(nameSelector);
+                                        if (nameEl && nameEl.textContent.trim()) {
+                                            name = nameEl.textContent.trim();
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // Enhanced last message extraction
+                                    let lastMessage = '';
+                                    const msgSelectors = [
+                                        // Current Messenger message preview selectors
+                                        'div[data-testid*="thread"] span:last-child',
+                                        'div:last-child span[dir="auto"]',
+                                        'span[dir="auto"]:not(:first-child)',
+                                        'div:nth-child(2) span[dir="auto"]',
+                                        
+                                        // Fallback selectors
+                                        'span[dir="auto"]:last-child', 
+                                        'p:last-child', 
+                                        '.text-content', 
+                                        '.message-snippet',
+                                        'div > div:last-child span'
+                                    ];
+                                    
+                                    for (let msgSelector of msgSelectors) {
+                                        const msgEl = element.querySelector(msgSelector);
+                                        if (msgEl && msgEl.textContent.trim() !== name) {
+                                            lastMessage = msgEl.textContent.trim();
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // Enhanced unread indicator detection
+                                    let unread = 0;
+                                    const unreadSelectors = [
+                                        // Current Messenger unread indicators
+                                        'span[data-testid*="unread"]',
+                                        'div[data-testid*="unread"]',
+                                        'span[aria-label*="unread"]',
+                                        'div[aria-label*="unread"]',
+                                        'span[style*="background-color: rgb(0, 132, 255)"]',
+                                        'div[style*="background-color: rgb(0, 132, 255)"]',
+                                        
+                                        // Fallback selectors
+                                        '[data-testid="unread_count"]',
+                                        '.unread-badge', 
+                                        '.notification-badge',
+                                        'span[style*="background"]',
+                                        'div[style*="border-radius"][style*="background"]'
+                                    ];
+                                    
+                                    for (let unreadSelector of unreadSelectors) {
+                                        const unreadEl = element.querySelector(unreadSelector);
+                                        if (unreadEl) {
+                                            const unreadText = unreadEl.textContent.trim();
+                                            unread = parseInt(unreadText) || 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // Get timestamp if available
+                                    let timestamp = '';
+                                    const timeSelectors = [
+                                        'time', '[data-testid="timestamp"]', '.timestamp',
+                                        'span:last-child'
+                                    ];
+                                    
+                                    for (let timeSelector of timeSelectors) {
+                                        const timeEl = element.querySelector(timeSelector);
+                                        if (timeEl && timeEl.textContent.match(/\\d/)) {
+                                            timestamp = timeEl.textContent.trim();
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (name && name.length > 0) {
+                                        const conversation = {
+                                            id: 'conv_' + index,
+                                            name: name,
+                                            lastMessage: lastMessage || '',
+                                            timestamp: timestamp || '',
+                                            unread: unread,
+                                            element_index: index,
+                                            selector_used: selector
+                                        };
+                                        
+                                        conversations.push(conversation);
+                                        console.log(`TITAN: Found conversation: ${name} (last: "${lastMessage}", unread: ${unread})`);
+                                    }
+                                } catch (e) {
+                                    console.log('TITAN: Error parsing conversation element:', e);
+                                }
+                            });
+                            
+                            if (conversations.length > 0) {
+                                console.log(`TITAN: Successfully found ${conversations.length} conversations with selector: ${selector}`);
+                                break; // If we found conversations with this selector, stop
+                            }
+                        }
+                    }
+                    
+                    console.log(`TITAN: Total conversations found: ${conversations.length}`);
+                    
+                    return JSON.stringify({
+                        success: true,
+                        conversations: conversations,
+                        count: conversations.length
+                    });
+                    
+                } catch (error) {
+                    return JSON.stringify({
+                        success: false,
+                        error: error.toString(),
+                        conversations: []
+                    });
+                }
+            })();
+            """
+            
+            result_str = self.webview.RunScript(chat_list_script)
+            if result_str:
+                import json
+                try:
+                    result = json.loads(result_str)
+                    if result.get('success'):
+                        return result.get('conversations', [])
+                    else:
+                        print(f"Chat list extraction failed: {result.get('error')}")
+                        return []
+                except json.JSONDecodeError:
+                    print(f"Failed to parse chat list JSON: {result_str}")
+                    return []
+        
+        except Exception as e:
+            print(f"Error getting chat list: {e}")
+            return []
+        
+        return []
+    
+    def send_message_to_chat(self, chat_name, message):
+        """Send a message to specific chat"""
+        if not hasattr(self, 'webview') or not self.webview:
+            return False
+        
+        try:
+            # Escape quotes and special characters in the message
+            escaped_message = message.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n')
+            escaped_chat_name = chat_name.replace("'", "\\'").replace('"', '\\"')
+            
+            send_message_script = f"""
+            (function() {{
+                try {{
+                    console.log('TITAN: Starting message send to: {escaped_chat_name}');
+                    
+                    // Use same enhanced selectors as chat list extraction
+                    const chatSelectors = [
+                        'div[aria-label*="Conversations"] div[role="listitem"]',
+                        'div[aria-label*="Chats"] div[role="listitem"]', 
+                        'div[aria-label*="Rozmowy"] div[role="listitem"]',
+                        '[data-testid="mwthreadlist"] div[role="listitem"]',
+                        'div[role="navigation"] div[role="listitem"]',
+                        '[data-testid="conversation"]',
+                        'div[aria-label*="Conversations"] > div > div',
+                        'div[role="main"] div[role="listitem"]',
+                        'div[aria-label*="Conversations"] li',
+                        'div[role="navigation"] li',
+                        'div[aria-label="Chats"] li'
+                    ];
+                    
+                    let chatFound = false;
+                    let targetChat = '{escaped_chat_name}';
+                    
+                    for (let selector of chatSelectors) {{
+                        const chatElements = document.querySelectorAll(selector);
+                        console.log(`TITAN: Checking selector "${{selector}}" - found ${{chatElements.length}} elements`);
+                        
+                        for (let element of chatElements) {{
+                            // Use enhanced name selectors matching get_chat_list
+                            const nameSelectors = [
+                                'span[dir="auto"] strong',
+                                'div[data-testid*="thread"] span',
+                                'h3 span',
+                                'span[role="heading"]',
+                                'div[role="heading"] span',
+                                'h3', 'span[dir="auto"]', '[data-testid="thread_name"]',
+                                'div[title]', 'strong', 'span[title]',
+                                'div:first-child span'
+                            ];
+                            
+                            for (let nameSelector of nameSelectors) {{
+                                const nameEl = element.querySelector(nameSelector);
+                                if (nameEl && nameEl.textContent.trim().includes(targetChat)) {{
+                                    console.log(`TITAN: Found matching chat: ${{nameEl.textContent.trim()}}`);
+                                    element.click();
+                                    chatFound = true;
+                                    break;
+                                }}
+                            }}
+                            if (chatFound) break;
+                        }}
+                        if (chatFound) break;
+                    }}
+                    
+                    if (!chatFound) {{
+                        return JSON.stringify({{
+                            success: false,
+                            error: 'Chat not found: ' + targetChat
+                        }});
+                    }}
+                    
+                    // Wait a bit for chat to load, then find message input
+                    setTimeout(() => {{
+                        console.log('TITAN: Looking for message input field...');
+                        
+                        const messageInputSelectors = [
+                            // Current Messenger message input selectors (2024/2025)
+                            'div[aria-label*="Message"][contenteditable="true"]',
+                            'div[aria-label*="Wiadomość"][contenteditable="true"]', 
+                            'div[role="textbox"][contenteditable="true"]',
+                            'div[data-testid*="message"][contenteditable="true"]',
+                            '[data-testid="message-input"]',
+                            
+                            // Fallback selectors
+                            'div[aria-label*="Message"]',
+                            'div[contenteditable="true"]',
+                            'div[role="textbox"]',
+                            'textarea[placeholder*="message" i]',
+                            'div[contenteditable="true"][style*="outline"]'
+                        ];
+                        
+                        let messageInput = null;
+                        for (let selector of messageInputSelectors) {{
+                            messageInput = document.querySelector(selector);
+                            if (messageInput) break;
+                        }}
+                        
+                        if (messageInput) {{
+                            // Focus on the input
+                            messageInput.focus();
+                            
+                            // Set the message text
+                            messageInput.innerHTML = '{escaped_message}';
+                            
+                            // Trigger input events
+                            messageInput.dispatchEvent(new Event('input', {{bubbles: true}}));
+                            messageInput.dispatchEvent(new Event('change', {{bubbles: true}}));
+                            
+                            // Try to find and click send button
+                            setTimeout(() => {{
+                                console.log('TITAN: Looking for send button...');
+                                
+                                const sendButtonSelectors = [
+                                    // Current Messenger send button selectors (2024/2025)
+                                    'div[aria-label*="Send"][role="button"]',
+                                    'div[aria-label*="Wyślij"][role="button"]',
+                                    'button[aria-label*="Send"]',
+                                    'button[aria-label*="Wyślij"]',
+                                    '[data-testid*="send"]',
+                                    'div[role="button"][aria-label*="Send"]',
+                                    
+                                    // Fallback selectors
+                                    'div[aria-label*="Send" i]',
+                                    'button[aria-label*="Send" i]',
+                                    '[data-testid="send-button"]',
+                                    'div[role="button"][aria-label*="Send" i]',
+                                    'svg[aria-label*="Send"]'
+                                ];
+                                
+                                let sendButton = null;
+                                for (let selector of sendButtonSelectors) {{
+                                    sendButton = document.querySelector(selector);
+                                    if (sendButton) {{
+                                        console.log(`TITAN: Found send button with selector: ${{selector}}`);
+                                        break;
+                                    }}
+                                }}
+                                
+                                if (sendButton) {{
+                                    console.log('TITAN: Clicking send button...');
+                                    sendButton.click();
+                                    console.log('TITAN: Message sent successfully!');
+                                }} else {{
+                                    console.log('TITAN: Send button not found, trying Enter key...');
+                                    // Fallback: try Enter key
+                                    messageInput.dispatchEvent(new KeyboardEvent('keydown', {{
+                                        key: 'Enter',
+                                        code: 'Enter',
+                                        keyCode: 13,
+                                        which: 13,
+                                        bubbles: true
+                                    }}));
+                                    console.log('TITAN: Enter key pressed as fallback');
+                                }}
+                            }}, 500);
+                        }}
+                    }}, 1000);
+                    
+                    return JSON.stringify({{
+                        success: true,
+                        message: 'Message sending initiated'
+                    }});
+                    
+                }} catch (error) {{
+                    return JSON.stringify({{
+                        success: false,
+                        error: error.toString()
+                    }});
+                }}
+            }})();
+            """
+            
+            result_str = self.webview.RunScript(send_message_script)
+            if result_str:
+                import json
+                try:
+                    result = json.loads(result_str)
+                    return result.get('success', False)
+                except json.JSONDecodeError:
+                    print(f"Failed to parse send message result: {result_str}")
+                    return False
+        
+        except Exception as e:
+            print(f"Error sending message: {e}")
+            return False
+        
+        return False
+    
+    def start_video_call_with_contact(self, chat_name):
+        """Start video call with specific contact"""
+        if not hasattr(self, 'webview') or not self.webview:
+            return False
+        
+        try:
+            # Escape quotes and special characters in the chat name
+            escaped_chat_name = chat_name.replace("'", "\\'").replace('"', '\\"')
+            
+            start_call_script = f"""
+            (function() {{
+                try {{
+                    console.log('TITAN: Starting video call with: {escaped_chat_name}');
+                    
+                    // Use same enhanced selectors as message sending
+                    const chatSelectors = [
+                        'div[aria-label*="Conversations"] div[role="listitem"]',
+                        'div[aria-label*="Chats"] div[role="listitem"]', 
+                        'div[aria-label*="Rozmowy"] div[role="listitem"]',
+                        '[data-testid="mwthreadlist"] div[role="listitem"]',
+                        'div[role="navigation"] div[role="listitem"]',
+                        '[data-testid="conversation"]',
+                        'div[aria-label*="Conversations"] > div > div',
+                        'div[role="main"] div[role="listitem"]',
+                        'div[aria-label*="Conversations"] li',
+                        'div[role="navigation"] li',
+                        'div[aria-label="Chats"] li'
+                    ];
+                    
+                    let chatFound = false;
+                    let targetChat = '{escaped_chat_name}';
+                    
+                    for (let selector of chatSelectors) {{
+                        const chatElements = document.querySelectorAll(selector);
+                        console.log(`TITAN: Checking selector "${{selector}}" - found ${{chatElements.length}} elements`);
+                        
+                        for (let element of chatElements) {{
+                            // Use enhanced name selectors matching message sending
+                            const nameSelectors = [
+                                'span[dir="auto"] strong',
+                                'div[data-testid*="thread"] span',
+                                'h3 span',
+                                'span[role="heading"]',
+                                'div[role="heading"] span',
+                                'h3', 'span[dir="auto"]', '[data-testid="thread_name"]',
+                                'div[title]', 'strong', 'span[title]',
+                                'div:first-child span'
+                            ];
+                            
+                            for (let nameSelector of nameSelectors) {{
+                                const nameEl = element.querySelector(nameSelector);
+                                if (nameEl && nameEl.textContent.trim().includes(targetChat)) {{
+                                    console.log(`TITAN: Found matching chat for video call: ${{nameEl.textContent.trim()}}`);
+                                    element.click();
+                                    chatFound = true;
+                                    break;
+                                }}
+                            }}
+                            if (chatFound) break;
+                        }}
+                        if (chatFound) break;
+                    }}
+                    
+                    if (!chatFound) {{
+                        console.log('TITAN: Chat not found:', targetChat);
+                        return {{ success: false, error: 'Chat not found' }};
+                    }}
+                    
+                    // Wait a moment for the chat to load
+                    setTimeout(function() {{
+                        try {{
+                            console.log('TITAN: Looking for video call button...');
+                            
+                            // Enhanced video call button selectors (2024/2025)
+                            const callButtonSelectors = [
+                                // Current Messenger video call selectors
+                                'div[aria-label*="Video call"][role="button"]',
+                                'div[aria-label*="Start video call"][role="button"]',
+                                'div[aria-label*="Rozmowa wideo"][role="button"]',
+                                'button[aria-label*="Video call"]',
+                                'button[aria-label*="Start video call"]',
+                                '[data-testid*="video_call"]',
+                                '[data-testid*="videocall"]',
+                                
+                                // Fallback selectors
+                                '[aria-label*="Video call"]',
+                                '[aria-label*="Start video call"]',
+                                '[aria-label*="video"]',
+                                'button[data-testid*="video"]',
+                                'button[data-testid*="call"]',
+                                '[class*="video-call"]',
+                                '[class*="call-button"]',
+                                '.x1i10hfl[aria-label*="call"]',
+                                'svg[aria-label*="Video call"]'
+                            ];
+                            
+                            let callButton = null;
+                            for (let selector of callButtonSelectors) {{
+                                const buttons = document.querySelectorAll(selector);
+                                if (buttons.length > 0) {{
+                                    console.log(`TITAN: Found ${{buttons.length}} potential video call buttons with selector: ${{selector}}`);
+                                }}
+                                
+                                for (let button of buttons) {{
+                                    const label = button.getAttribute('aria-label') || '';
+                                    const text = button.textContent || '';
+                                    if (label.toLowerCase().includes('video') || 
+                                        label.toLowerCase().includes('call') ||
+                                        text.toLowerCase().includes('video')) {{
+                                        console.log(`TITAN: Found video call button: ${{label}} - ${{text}}`);
+                                        callButton = button;
+                                        break;
+                                    }}
+                                }}
+                                if (callButton) break;
+                            }}
+                            
+                            if (callButton) {{
+                                console.log('TITAN: Found video call button, clicking...');
+                                callButton.click();
+                                
+                                // Set call state
+                                if (!window.titanCallState) {{
+                                    window.titanCallState = {{ callType: 'outgoing', callUIVisible: false }};
+                                }}
+                                window.titanCallState.callType = 'outgoing';
+                                window.titanOutgoingCall = true;
+                                window.titanCallButtonClicked = true;
+                                
+                                return {{ success: true }};
+                            }} else {{
+                                console.log('TITAN: Video call button not found');
+                                return {{ success: false, error: 'Video call button not found' }};
+                            }}
+                        }} catch (e) {{
+                            console.log('TITAN: Error clicking video call button:', e);
+                            return {{ success: false, error: e.message }};
+                        }}
+                    }}, 1000);
+                    
+                    // Return pending result
+                    return {{ success: true, pending: true }};
+                    
+                }} catch (e) {{
+                    console.log('TITAN: Error starting video call:', e);
+                    return {{ success: false, error: e.message }};
+                }}
+            }})();
+            """
+            
+            result_str = self.webview.RunScript(start_call_script)
+            print(f"Start video call result: {result_str}")
+            
+            if result_str:
+                try:
+                    result = json.loads(result_str)
+                    success = result.get('success', False)
+                    
+                    if success:
+                        # Set current call user for monitoring
+                        self.current_call_user = chat_name
+                        print(f"✓ Video call initiated with {{chat_name}}")
+                        return True
+                    else:
+                        print(f"Video call failed: {{result.get('error', 'Unknown error')}}")
+                        return False
+                except json.JSONDecodeError:
+                    print(f"Failed to parse video call result: {result_str}")
+                    # If we can't parse JSON, assume success if no obvious error
+                    self.current_call_user = chat_name
+                    return True
+        
+        except Exception as e:
+            print(f"Error starting video call: {e}")
+            return False
+        
+        return False
     
     def on_close(self, event):
         """Handle window close"""
@@ -2371,26 +3293,44 @@ def show_messenger_webview(parent=None):
         return messenger_window
     except Exception as e:
         print(f"Error creating Messenger WebView: {e}")
-        wx.MessageBox(
-            _("Nie można otworzyć Messenger WebView.\n"
-              "Sprawdź czy WebView2 jest zainstalowany."),
-            _("Błąd"),
-            wx.OK | wx.ICON_ERROR
-        )
+        if wx.GetApp():  # Only show MessageBox if wx.App exists
+            wx.MessageBox(
+                _("Nie można otworzyć Messenger WebView.\n"
+                  "Sprawdź czy WebView2 jest zainstalowany."),
+                _("Błąd"),
+                wx.OK | wx.ICON_ERROR
+            )
         return None
 
 def is_webview_available():
     """Check if WebView is available on this system"""
     try:
-        # Try to create a minimal WebView to test availability
-        app = wx.App()
-        frame = wx.Frame(None)
-        webview = wx.html2.WebView.New(frame)
-        available = webview is not None
-        frame.Destroy()
-        app.Destroy()
-        return available
-    except:
+        # Check if we already have a wx.App running
+        current_app = wx.GetApp()
+        if current_app:
+            # Use existing app to test WebView
+            test_frame = wx.Frame(None)
+            try:
+                test_webview = wx.html2.WebView.New(test_frame)
+                test_frame.Destroy()
+                return True
+            except Exception:
+                test_frame.Destroy()
+                return False
+        else:
+            # Create temporary app for testing
+            test_app = wx.App(False)
+            test_frame = wx.Frame(None)
+            try:
+                test_webview = wx.html2.WebView.New(test_frame)
+                test_frame.Destroy()
+                test_app.Destroy()
+                return True
+            except Exception:
+                test_frame.Destroy()
+                test_app.Destroy()
+                return False
+    except Exception:
         return False
 
 # Global messenger instance for voice call integration
@@ -2441,6 +3381,27 @@ def end_messenger_call():
     if instance and instance.is_call_active:
         instance.on_end_call(None)
         return True
+    return False
+
+def get_messenger_chat_list():
+    """Get list of chats from Messenger WebView"""
+    instance = get_messenger_instance()
+    if instance:
+        return instance.get_chat_list()
+    return []
+
+def send_messenger_message(chat_name, message):
+    """Send message to specific chat in Messenger WebView"""
+    instance = get_messenger_instance()
+    if instance:
+        return instance.send_message_to_chat(chat_name, message)
+    return False
+
+def start_messenger_video_call(chat_name):
+    """Start video call with specific contact in Messenger WebView"""
+    instance = get_messenger_instance()
+    if instance:
+        return instance.start_video_call_with_contact(chat_name)
     return False
 
 if __name__ == '__main__':

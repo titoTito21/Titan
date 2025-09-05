@@ -47,3 +47,8 @@ else:
     initial_language = settings.get_setting('language', 'pl')
 
 _ = set_language(initial_language)
+
+def get_translation_function():
+    """Returns the current translation function."""
+    global _
+    return _

@@ -906,3 +906,160 @@ def open_group_chat_window(parent, group_name):
     window = TelegramGroupChatWindow(parent, group_name)
     window.Show()
     return window
+
+
+class IncomingCallDialog(wx.Dialog):
+    """Dialog for incoming voice calls with Accept/Reject buttons"""
+    
+    def __init__(self, parent, caller_name, call_data=None):
+        super().__init__(
+            parent,
+            title=_("Incoming call"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT,
+            size=(400, 200)
+        )
+        
+        self.caller_name = caller_name
+        self.call_data = call_data
+        self.result = None
+        
+        self.setup_ui()
+        self.Center()
+        
+        # Force window to appear on top and request attention
+        self.SetWindowStyle(self.GetWindowStyle() | wx.STAY_ON_TOP)
+        self.Raise()
+        self.RequestUserAttention(wx.USER_ATTENTION_ERROR)  # Strong attention request
+        
+        # On Windows, use Win32 API to force window to foreground
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # Get window handle
+            hwnd = self.GetHandle()
+            if hwnd:
+                # Force window to foreground
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+                ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)  # HWND_TOPMOST
+        except:
+            pass  # Ignore if Win32 API fails
+        
+        # Play incoming call sound repeatedly
+        self.ring_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.play_ring_sound, self.ring_timer)
+        self.ring_timer.Start(3000)  # Ring every 3 seconds
+        
+        # Play initial ring
+        play_sound('titannet/ring_in.ogg')
+        
+        # Handle window close (treat as reject)
+        self.Bind(wx.EVT_CLOSE, self.on_reject)
+    
+    def setup_ui(self):
+        """Setup the dialog UI"""
+        panel = wx.Panel(self)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Call icon/image area
+        icon_panel = wx.Panel(panel)
+        icon_panel.SetBackgroundColour(wx.Colour(45, 140, 240))  # Blue background
+        icon_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Phone icon (using text without emoji)
+        phone_icon = wx.StaticText(icon_panel, label=_("CALL"))
+        phone_icon.SetFont(wx.Font(24, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        phone_icon.SetForegroundColour(wx.Colour(255, 255, 255))
+        icon_sizer.Add(phone_icon, 0, wx.ALL | wx.CENTER, 10)
+        
+        icon_panel.SetSizer(icon_sizer)
+        main_sizer.Add(icon_panel, 1, wx.EXPAND | wx.ALL, 0)
+        
+        # Caller info
+        info_panel = wx.Panel(panel)
+        info_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # "Incoming call from" text
+        incoming_text = wx.StaticText(info_panel, label=_("Incoming call from:"))
+        incoming_text.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        info_sizer.Add(incoming_text, 0, wx.ALL | wx.CENTER, 5)
+        
+        # Caller name
+        caller_label = wx.StaticText(info_panel, label=self.caller_name)
+        caller_label.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        info_sizer.Add(caller_label, 0, wx.ALL | wx.CENTER, 5)
+        
+        info_panel.SetSizer(info_sizer)
+        main_sizer.Add(info_panel, 0, wx.EXPAND | wx.ALL, 10)
+        
+        # Buttons
+        button_panel = wx.Panel(panel)
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Reject button (red)
+        self.reject_button = wx.Button(button_panel, wx.ID_CANCEL, label=_("Reject"))
+        self.reject_button.SetBackgroundColour(wx.Colour(220, 50, 50))
+        self.reject_button.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.reject_button.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.reject_button.Bind(wx.EVT_BUTTON, self.on_reject)
+        button_sizer.Add(self.reject_button, 1, wx.ALL | wx.EXPAND, 10)
+        
+        # Accept button (green)
+        self.accept_button = wx.Button(button_panel, wx.ID_OK, label=_("Accept"))
+        self.accept_button.SetBackgroundColour(wx.Colour(50, 200, 50))
+        self.accept_button.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.accept_button.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.accept_button.Bind(wx.EVT_BUTTON, self.on_accept)
+        button_sizer.Add(self.accept_button, 1, wx.ALL | wx.EXPAND, 10)
+        
+        button_panel.SetSizer(button_sizer)
+        main_sizer.Add(button_panel, 0, wx.EXPAND | wx.ALL, 0)
+        
+        panel.SetSizer(main_sizer)
+        
+        # Set focus to accept button by default
+        self.accept_button.SetDefault()
+        self.accept_button.SetFocus()
+    
+    def play_ring_sound(self, event):
+        """Play ring sound repeatedly"""
+        play_sound('titannet/ring_in.ogg')
+    
+    def on_accept(self, event):
+        """Handle call accept"""
+        self.ring_timer.Stop()
+        self.result = 'accept'
+        
+        # Answer the call
+        telegram_client.answer_voice_call()
+        
+        # Close dialog
+        self.EndModal(wx.ID_OK)
+    
+    def on_reject(self, event):
+        """Handle call reject"""
+        self.ring_timer.Stop()
+        self.result = 'reject'
+        
+        # End the call
+        telegram_client.end_voice_call()
+        
+        # Close dialog
+        self.EndModal(wx.ID_CANCEL)
+    
+    def __del__(self):
+        """Cleanup when dialog is destroyed"""
+        if hasattr(self, 'ring_timer') and self.ring_timer:
+            self.ring_timer.Stop()
+
+
+def show_incoming_call_dialog(parent, caller_name, call_data=None):
+    """Show incoming call dialog and return result"""
+    dialog = IncomingCallDialog(parent, caller_name, call_data)
+    result = dialog.ShowModal()
+    
+    # Get the user's choice
+    user_choice = dialog.result
+    dialog.Destroy()
+    
+    return user_choice

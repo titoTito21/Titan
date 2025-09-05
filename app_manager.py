@@ -8,7 +8,7 @@ import shutil
 import importlib.util
 import settings
 from sound import play_sound, play_error_sound, play_dialog_sound, play_dialogclose_sound, resource_path
-from translation import language_code
+from translation import language_code, _
 
 
 APP_DIR = resource_path(os.path.join('data', 'applications'))
@@ -44,7 +44,7 @@ def read_app_info(app_path, lang='pl'):
             key, value = line.split('=', 1)
             app_info[key.strip()] = value.strip().strip('"')
     
-    # Wybierz tłumaczoną nazwę
+    # Select translated name
     app_info['name'] = app_info.get(f'name_{lang}', app_info.get('name_en', app_info.get('name', '')))
 
     app_info['path'] = app_path
@@ -83,7 +83,7 @@ def copy_missing_modules(py_file):
 
 def show_compile_error_dialog(error_message):
     app = wx.App(False)
-    dialog = wx.Dialog(None, wx.ID_ANY, "Błąd kompilacji aplikacji", size=(400, 300))
+    dialog = wx.Dialog(None, wx.ID_ANY, _("Application compilation error"), size=(400, 300))
 
     vbox = wx.BoxSizer(wx.VERTICAL)
     error_text = wx.TextCtrl(dialog, wx.ID_ANY, error_message, style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -106,7 +106,7 @@ def is_frozen():
 
 def get_python_executable():
     if is_frozen():
-        # Użyj wbudowanego Python z build/python/
+        # Use embedded Python from build/python/
         embedded_python = os.path.join(os.path.dirname(sys.executable), 'python', 'python.exe')
         if os.path.exists(embedded_python):
             return embedded_python
@@ -166,9 +166,10 @@ def open_application(app_info, file_path=None):
 
         except Exception as e:
             play_error_sound()
-            wx.MessageBox(f'Błąd podczas uruchamiania aplikacji: {str(e)}', 'Błąd', wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(_(f'Error running application: {str(e)}'), _("Error"), wx.OK | wx.ICON_ERROR)
 
-    threading.Thread(target=run_app).start()
+    app_thread = threading.Thread(target=run_app, daemon=True)
+    app_thread.start()
 
 def find_application_by_shortname(shortname):
     # Search for applications by shortname including hidden ones
