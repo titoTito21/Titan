@@ -97,13 +97,16 @@ class DesktopWidget(BaseWidget):
                         subprocess.Popen(["open", shortcut["path"]])
                     else: # Dla Windows i innych
                         os.startfile(shortcut["path"])
-                    self.speak(f"Uruchamiam {shortcut['name']}")
+                    
+                    # Użyj pozycjonowania stereo dla widget activation
+                    position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
+                    self.speak_with_position(f"Uruchamiam {shortcut['name']}", position=position)
                 except Exception as e:
-                    self.speak(f"Błąd podczas uruchamiania {shortcut['name']}: {e}")
+                    position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
+                    self.speak_with_position(f"Błąd podczas uruchamiania {shortcut['name']}: {e}", position=position)
             else:
-                self.speak("Ten skrót jest pusty.")
-        else:
-            self.speak("Puste miejsce.")
+                position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
+                self.speak_with_position("Ten skrót jest pusty.", position=position)
 
 def get_widget_instance(speak_func):
     return DesktopWidget(speak_func)

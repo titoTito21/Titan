@@ -11,6 +11,7 @@ from stereo_speech import get_stereo_speech, speak_stereo
 import componentmanagergui
 import settingsgui
 import sys
+from help import show_help
 import wx
 import os
 import importlib.util
@@ -501,6 +502,7 @@ class InvisibleUI:
         main_menu_actions = {
             _("Component Manager"): lambda: safe_call_after(show_component_manager),
             _("Program settings"): lambda: safe_call_after(show_settings),
+            _("Help"): lambda: safe_call_after(show_help),
             _("Back to graphical interface"): lambda: safe_call_after(self.main_frame.restore_from_tray) if self.main_frame else None,
             _("Exit"): lambda: safe_call_after(lambda: self.main_frame.Close()) if self.main_frame else None
         }
@@ -536,7 +538,7 @@ class InvisibleUI:
         # Add Components as a sub-menu if there are any component menu actions
         if component_menu_actions:
             self.categories[-1]["elements"].append(_("Components"))
-            self.categories.append({"name": _("Components"), "sound": "applist.ogg", "elements": list(component_menu_actions.keys()), "action": lambda name: component_menu_actions[name]()})
+            self.categories.append({"name": _("Components"), "sound": "applist.ogg", "elements": list(component_menu_actions.keys()), "action": lambda name: component_menu_actions.get(name, lambda parent_frame: self.speak(_("Component not found")))(self.main_frame)})
 
 
     def load_widgets(self):
@@ -1477,10 +1479,15 @@ class InvisibleUI:
         else:
             return
         
-        # Check if connected
+        # Check if connected with safe error handling
         is_connected = False
-        if self.titan_im_mode == 'telegram' and telegram_client:
-            is_connected = telegram_client.is_connected()
+        try:
+            if self.titan_im_mode == 'telegram' and telegram_client:
+                is_connected = telegram_client.is_connected()
+        except Exception as e:
+            print(f"Error checking Telegram connection: {e}")
+            self.speak(_("Error checking connection to {}").format(platform_name))
+            return
         
         if not is_connected:
             self.speak(_("Not connected to {}").format(platform_name))
@@ -1730,30 +1737,53 @@ class InvisibleUI:
     
     def handle_titan_enter(self):
         """Handle Titan+Enter key combination for voice message playback and widget actions"""
-        # Handle widget mode first
-        if self.in_widget_mode and self.active_widget:
-            # Check if widget has handle_titan_enter method
-            if hasattr(self.active_widget, 'handle_titan_enter'):
-                self.active_widget.handle_titan_enter()
+        try:
+            if self._shutdown_in_progress:
                 return
-        
-        if (self.titan_ui_mode and self.titan_im_mode and 
-            self.titan_im_submenu == 'history'):
-            # Check if current element contains voice message
-            category = self.categories[self.current_category_index]
-            if category['elements']:
-                element_name = category['elements'][self.current_element_index]
-                self.check_for_voice_message(element_name)
-                if self.current_voice_message_path:
-                    self.handle_voice_message_toggle()
+                
+            # Handle widget mode first
+            if self.in_widget_mode and self.active_widget:
+                try:
+                    # Check if widget has handle_titan_enter method
+                    if hasattr(self.active_widget, 'handle_titan_enter'):
+                        self.active_widget.handle_titan_enter()
+                        return
+                except Exception as e:
+                    print(f"Error in widget handle_titan_enter: {e}")
                     return
-        
-        # If not in a voice message context, just speak current element
-        if self.titan_ui_mode:
-            category = self.categories[self.current_category_index]
-            if category['elements']:
-                element_name = category['elements'][self.current_element_index]
-                self.speak(element_name)
+            
+            if (self.titan_ui_mode and self.titan_im_mode and 
+                self.titan_im_submenu == 'history'):
+                try:
+                    # Check if current element contains voice message
+                    if (self.current_category_index < len(self.categories) and
+                        self.categories[self.current_category_index]['elements'] and
+                        self.current_element_index < len(self.categories[self.current_category_index]['elements'])):
+                        
+                        category = self.categories[self.current_category_index]
+                        element_name = category['elements'][self.current_element_index]
+                        self.check_for_voice_message(element_name)
+                        if self.current_voice_message_path:
+                            self.handle_voice_message_toggle()
+                            return
+                except Exception as e:
+                    print(f"Error in voice message handling: {e}")
+            
+            # If not in a voice message context, just speak current element
+            if self.titan_ui_mode:
+                try:
+                    if (self.current_category_index < len(self.categories) and
+                        self.categories[self.current_category_index]['elements'] and
+                        self.current_element_index < len(self.categories[self.current_category_index]['elements'])):
+                        
+                        category = self.categories[self.current_category_index]
+                        element_name = category['elements'][self.current_element_index]
+                        self.speak(element_name)
+                except Exception as e:
+                    print(f"Error speaking current element: {e}")
+                    
+        except Exception as e:
+            print(f"Critical error in handle_titan_enter: {e}")
     
     def show_send_message_dialog(self):
         """Show dialog to send message"""
@@ -2038,9 +2068,10 @@ class InvisibleUI:
             try:
                 # The tilde key is always available to toggle TUI mode if enabled
                 if get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true':
-                    hotkeys['`'] = self.toggle_titan_ui_mode
+                    # Wrap hotkey functions to prevent crashes
+                    hotkeys['`'] = self._safe_toggle_titan_ui
                     # Titan+Enter for voice message playback
-                    hotkeys['`+<enter>'] = self.handle_titan_enter
+                    hotkeys['`+<enter>'] = self._safe_handle_titan_enter
             except Exception as e:
                 print(f"Error setting titan UI hotkeys: {e}")
             
@@ -2180,23 +2211,88 @@ class InvisibleUI:
         
         if event:
             event.Skip()
+    
+    def _safe_on_dialog_close(self, dialog_name, event):
+        """Safe wrapper for dialog close to prevent crashes in compiled version"""
+        try:
+            if self._shutdown_in_progress:
+                return
+                
+            self._on_dialog_close(dialog_name, event)
+        except Exception as e:
+            print(f"Error in _safe_on_dialog_close for {dialog_name}: {e}")
+            # Force cleanup on error
+            try:
+                if self.titan_ui_temporarily_disabled and self.disabled_by_dialog == dialog_name:
+                    self.titan_ui_temporarily_disabled = False
+                    self.disabled_by_dialog = None
+            except:
+                pass
+    
+    def _safe_toggle_titan_ui(self):
+        """Safe wrapper for toggle_titan_ui_mode to prevent hotkey crashes"""
+        try:
+            import threading
+            # Run in separate thread to avoid blocking hotkey system
+            thread = threading.Thread(target=self.toggle_titan_ui_mode, daemon=True)
+            thread.start()
+        except Exception as e:
+            print(f"Error in _safe_toggle_titan_ui: {e}")
+    
+    def _safe_handle_titan_enter(self):
+        """Safe wrapper for handle_titan_enter to prevent hotkey crashes"""
+        try:
+            import threading
+            # Run in separate thread to avoid blocking hotkey system
+            thread = threading.Thread(target=self.handle_titan_enter, daemon=True)
+            thread.start()
+        except Exception as e:
+            print(f"Error in _safe_handle_titan_enter: {e}")
 
     def toggle_titan_ui_mode(self):
-        self.titan_ui_mode = not self.titan_ui_mode
-        if self.titan_ui_mode:
-            play_sound('TUI_open.ogg')
-            self.speak(_("Titan UI on"))
-        else:
-            play_sound('TUI_close.ogg')
-            self.speak(_("Titan UI off"))
-            # Reset temporary disable state when turning off
-            self.titan_ui_temporarily_disabled = False
-            self.disabled_by_dialog = None
-        self._update_hotkeys()
+        """Toggle Titan UI mode with crash protection"""
+        try:
+            if self._shutdown_in_progress:
+                return
+                
+            self.titan_ui_mode = not self.titan_ui_mode
+            
+            try:
+                if self.titan_ui_mode:
+                    play_sound('TUI_open.ogg')
+                    self.speak(_("Titan UI on"))
+                else:
+                    play_sound('TUI_close.ogg')
+                    self.speak(_("Titan UI off"))
+                    # Reset temporary disable state when turning off
+                    self.titan_ui_temporarily_disabled = False
+                    self.disabled_by_dialog = None
+            except Exception as e:
+                print(f"Error in titan UI toggle sound/speech: {e}")
+                
+            try:
+                self._update_hotkeys()
+            except Exception as e:
+                print(f"Error updating hotkeys after Titan UI toggle: {e}")
+                
+        except Exception as e:
+            print(f"Critical error in toggle_titan_ui_mode: {e}")
+            # Ensure we don't get stuck in a bad state
+            try:
+                self.titan_ui_mode = False
+                self.titan_ui_temporarily_disabled = False
+                self.disabled_by_dialog = None
+            except:
+                pass
     
     def open_messenger_webview(self):
         """Open Messenger WebView like in gui.py"""
         try:
+            # Check if we have a valid main frame
+            if not self.main_frame or self._shutdown_in_progress:
+                self.speak(_("Cannot open Messenger - application not ready"))
+                return
+                
             import messenger_webview
             
             # Auto-disable Titan UI when webview opens
@@ -2207,20 +2303,60 @@ class InvisibleUI:
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             
             def launch_messenger():
-                messenger_window = messenger_webview.show_messenger_webview(self.main_frame)
-                if messenger_window:
-                    # Bind close event to re-enable Titan UI when webview closes
-                    messenger_window.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("messenger_webview", evt))
-                    if announce_widget_type:
-                        self.speak(_("Messenger, web application"))
+                try:
+                    # Additional safety check in wx.CallAfter
+                    if self._shutdown_in_progress or not self.main_frame:
+                        return
+                        
+                    messenger_window = messenger_webview.show_messenger_webview(self.main_frame)
+                    if messenger_window and not messenger_window.IsBeingDeleted():
+                        # Safely bind close event to re-enable Titan UI when webview closes
+                        try:
+                            messenger_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("messenger_webview", evt))
+                        except Exception as bind_error:
+                            print(f"Warning: Could not bind close event: {bind_error}")
+                            
+                        # Speak announcement safely
+                        try:
+                            if announce_widget_type:
+                                self.speak(_("Messenger, web application"))
+                            else:
+                                self.speak(_("Messenger"))
+                        except Exception as speak_error:
+                            print(f"Warning: Could not speak messenger announcement: {speak_error}")
                     else:
-                        self.speak(_("Messenger"))
+                        # Re-enable Titan UI if window creation failed
+                        self._safe_on_dialog_close("messenger_webview", None)
+                        
+                except Exception as launch_error:
+                    print(f"Error in launch_messenger: {launch_error}")
+                    # Re-enable Titan UI on error
+                    self._safe_on_dialog_close("messenger_webview", None)
+                    try:
+                        self.speak(_("Error opening Messenger WebView"))
+                    except:
+                        pass
             
-            wx.CallAfter(launch_messenger)
+            # Use safer wx.CallAfter with error handling
+            try:
+                wx.CallAfter(launch_messenger)
+            except Exception as callafter_error:
+                print(f"Error with wx.CallAfter: {callafter_error}")
+                # Re-enable Titan UI if CallAfter fails
+                self._safe_on_dialog_close("messenger_webview", None)
+                self.speak(_("Error opening Messenger WebView"))
             
+        except ImportError:
+            print("Messenger WebView module not available")
+            self.speak(_("Messenger WebView not available"))
         except Exception as e:
             print(f"Error opening Messenger WebView from invisible UI: {e}")
-            self.speak(_("Error opening Messenger WebView"))
+            # Re-enable Titan UI on any error
+            self._safe_on_dialog_close("messenger_webview", None)
+            try:
+                self.speak(_("Error opening Messenger WebView"))
+            except:
+                pass
     
     def activate_wifi_interface(self):
         """Activate WiFi interface for invisible UI as a panel"""
@@ -2263,6 +2399,11 @@ class InvisibleUI:
     def open_whatsapp_webview(self):
         """Open WhatsApp WebView like in gui.py"""
         try:
+            # Check if we have a valid main frame
+            if not self.main_frame or self._shutdown_in_progress:
+                self.speak(_("Cannot open WhatsApp - application not ready"))
+                return
+                
             import whatsapp_webview
             
             # Auto-disable Titan UI when webview opens
@@ -2273,20 +2414,60 @@ class InvisibleUI:
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             
             def launch_whatsapp():
-                whatsapp_window = whatsapp_webview.show_whatsapp_webview(self.main_frame)
-                if whatsapp_window:
-                    # Bind close event to re-enable Titan UI when webview closes
-                    whatsapp_window.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("whatsapp_webview", evt))
-                    if announce_widget_type:
-                        self.speak(_("WhatsApp, web application"))
+                try:
+                    # Additional safety check in wx.CallAfter
+                    if self._shutdown_in_progress or not self.main_frame:
+                        return
+                        
+                    whatsapp_window = whatsapp_webview.show_whatsapp_webview(self.main_frame)
+                    if whatsapp_window and not whatsapp_window.IsBeingDeleted():
+                        # Safely bind close event to re-enable Titan UI when webview closes
+                        try:
+                            whatsapp_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("whatsapp_webview", evt))
+                        except Exception as bind_error:
+                            print(f"Warning: Could not bind close event: {bind_error}")
+                            
+                        # Speak announcement safely
+                        try:
+                            if announce_widget_type:
+                                self.speak(_("WhatsApp, web application"))
+                            else:
+                                self.speak(_("WhatsApp"))
+                        except Exception as speak_error:
+                            print(f"Warning: Could not speak WhatsApp announcement: {speak_error}")
                     else:
-                        self.speak(_("WhatsApp"))
+                        # Re-enable Titan UI if window creation failed
+                        self._safe_on_dialog_close("whatsapp_webview", None)
+                        
+                except Exception as launch_error:
+                    print(f"Error in launch_whatsapp: {launch_error}")
+                    # Re-enable Titan UI on error
+                    self._safe_on_dialog_close("whatsapp_webview", None)
+                    try:
+                        self.speak(_("Error opening WhatsApp WebView"))
+                    except:
+                        pass
             
-            wx.CallAfter(launch_whatsapp)
+            # Use safer wx.CallAfter with error handling
+            try:
+                wx.CallAfter(launch_whatsapp)
+            except Exception as callafter_error:
+                print(f"Error with wx.CallAfter: {callafter_error}")
+                # Re-enable Titan UI if CallAfter fails
+                self._safe_on_dialog_close("whatsapp_webview", None)
+                self.speak(_("Error opening WhatsApp WebView"))
             
+        except ImportError:
+            print("WhatsApp WebView module not available")
+            self.speak(_("WhatsApp WebView not available"))
         except Exception as e:
             print(f"Error opening WhatsApp WebView from invisible UI: {e}")
-            self.speak(_("Error opening WhatsApp WebView"))
+            # Re-enable Titan UI on any error
+            self._safe_on_dialog_close("whatsapp_webview", None)
+            try:
+                self.speak(_("Error opening WhatsApp WebView"))
+            except:
+                pass
 
     def show_start_menu(self):
         """Pokaż klasyczne Menu Start gdy aplikacja jest zminimalizowana"""
@@ -2300,5 +2481,5 @@ class InvisibleUI:
                     self.speak(_("Menu Start"))
         except Exception as e:
             print(f"Error showing start menu from invisible UI: {e}")
-
+    
 # F6 program switching method removed

@@ -3255,34 +3255,68 @@ class MessengerWebViewFrame(wx.Frame):
     
     def on_close(self, event):
         """Handle window close"""
-        # End any active call first
-        if self.is_call_active:
-            print("Ending active call before closing...")
-            self.on_call_ended()
-        
-        # Stop all timers
-        if self.notification_timer:
-            self.notification_timer.Stop()
-        if hasattr(self, 'enhanced_timer'):
-            self.enhanced_timer.Stop()
-        if hasattr(self, 'simple_timer'):
-            self.simple_timer.Stop()
-        if hasattr(self, 'voice_timer'):
-            self.voice_timer.Stop()
-        
-        # Play goodbye sound like in Telegram - only if was logged in
-        if self.messenger_logged_in and not self.is_call_active:  # Don't play if call just ended
-            play_sound('titannet/bye.ogg')
-            print("✓ Zamykanie - odtworzono dźwięk bye.ogg")
-        
-        # TTS goodbye
-        if hasattr(self, 'tts_item') and self.tts_item.IsChecked():
-            if self.messenger_logged_in:
-                speaker.speak(_("Rozłączono z Messenger"))
+        try:
+            # End any active call first
+            if self.is_call_active:
+                print("Ending active call before closing...")
+                self.on_call_ended()
+            
+            # Stop all timers
+            if self.notification_timer:
+                self.notification_timer.Stop()
+                self.notification_timer = None
+            if hasattr(self, 'enhanced_timer'):
+                self.enhanced_timer.Stop()
+                self.enhanced_timer = None
+            if hasattr(self, 'simple_timer'):
+                self.simple_timer.Stop()
+                self.simple_timer = None
+            if hasattr(self, 'voice_timer'):
+                self.voice_timer.Stop()
+                self.voice_timer = None
+            
+            # Clean up WebView resources
+            if hasattr(self, 'webview') and self.webview:
+                try:
+                    # Unbind WebView events to prevent callbacks during cleanup
+                    self.webview.Unbind(wx.html2.EVT_WEBVIEW_NAVIGATING)
+                    self.webview.Unbind(wx.html2.EVT_WEBVIEW_LOADED)
+                    self.webview.Unbind(wx.html2.EVT_WEBVIEW_TITLE_CHANGED)
+                    self.webview.Unbind(wx.html2.EVT_WEBVIEW_ERROR)
+                    self.webview.Unbind(wx.EVT_CHAR_HOOK)
+                    
+                    # Navigate to about:blank to stop any ongoing operations
+                    self.webview.LoadURL("about:blank")
+                    
+                    # Destroy the WebView
+                    self.webview.Destroy()
+                    self.webview = None
+                except Exception as e:
+                    print(f"Error cleaning up WebView: {e}")
+            
+            # Play goodbye sound like in Telegram - only if was logged in
+            if self.messenger_logged_in and not self.is_call_active:  # Don't play if call just ended
+                play_sound('titannet/bye.ogg')
+                print("✓ Zamykanie - odtworzono dźwięk bye.ogg")
+            
+            # TTS goodbye
+            if hasattr(self, 'tts_item') and self.tts_item.IsChecked():
+                if self.messenger_logged_in:
+                    speaker.speak(_("Rozłączono z Messenger"))
+                else:
+                    speaker.speak(_("Zamykanie Messenger"))
+            
+            # Allow the event to be processed properly
+            if event.CanVeto():
+                event.Skip()
             else:
-                speaker.speak(_("Zamykanie Messenger"))
-        
-        self.Destroy()
+                # Use CallAfter to ensure proper cleanup order
+                wx.CallAfter(self.Destroy)
+                
+        except Exception as e:
+            print(f"Error during close: {e}")
+            # Force close if something goes wrong
+            wx.CallAfter(self.Destroy)
 
 def show_messenger_webview(parent=None):
     """Show Messenger WebView window"""

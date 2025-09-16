@@ -4,10 +4,8 @@ import sys
 import threading
 import platform
 import subprocess
-import accessible_output3.outputs.auto
 from sound import play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound
-
-speaker = accessible_output3.outputs.auto.Auto()
+from bg5reader import bg5reader as speak
 
 class TitanMenu(wx.Frame):
     def __init__(self, *args, **kw):

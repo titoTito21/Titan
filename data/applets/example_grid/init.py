@@ -1,8 +1,9 @@
 # data/applets/example_grid/init.py
+from invisibleui import BaseWidget
 
-class WidgetGrid:
+class WidgetGrid(BaseWidget):
     def __init__(self, speak_func, view=None):
-        self.speak = speak_func
+        super().__init__(speak_func)
         self.view = view
         # Przykładowa siatka 2x2
         self.grid = [
@@ -24,35 +25,44 @@ class WidgetGrid:
         """Nawigacja po siatce (up, down, left, right)."""
         rows = len(self.grid)
         cols = len(self.grid[0])
+        old_pos = self.current_pos[:]
         
         if direction == 'up':
             if self.current_pos[0] > 0:
                 self.current_pos[0] -= 1
             else:
-                return False  # Krawędź
+                return False, self.current_pos[1], cols  # Krawędź
         elif direction == 'down':
             if self.current_pos[0] < rows - 1:
                 self.current_pos[0] += 1
             else:
-                return False
+                return False, self.current_pos[1], cols
         elif direction == 'left':
             if self.current_pos[1] > 0:
                 self.current_pos[1] -= 1
             else:
-                return False
+                return False, self.current_pos[1], cols
         elif direction == 'right':
             if self.current_pos[1] < cols - 1:
                 self.current_pos[1] += 1
             else:
-                return False
+                return False, self.current_pos[1], cols
         
-        self.speak(self.get_current_element())
-        return True
+        # NIE mów tutaj - navigate_widget() w invisibleui.py będzie mówić z pozycjonowaniem
+        # return True z informacją o pozycji dla stereo pozycjonowania
+        return True, self.current_pos[1], cols
 
     def activate_current_element(self):
         """Aktywuje bieżący element siatki."""
         element = self.get_current_element()
-        self.speak(f"Activated: {element}")
+        
+        # Użyj pozycjonowania stereo dla aktywacji
+        cols = len(self.grid[0]) if self.grid else 1
+        position = (self.current_pos[1] / (cols - 1) * 2.0) - 1.0 if cols > 1 else 0.0
+        
+        # Teraz dziedziczymy z BaseWidget więc mamy speak_with_position
+        self.speak_with_position(f"Activated: {element}", position=position)
+        
         print(f"Grid widget element activated: {element}")
 
     def get_current_element(self):

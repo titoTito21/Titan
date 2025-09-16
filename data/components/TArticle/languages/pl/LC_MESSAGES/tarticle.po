@@ -1,0 +1,52 @@
+# TArticle Component Polish Translation
+# Copyright (C) 2024
+# This file is distributed under the same license as the TArticle package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TArticle 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 12:00+0000\n"
+"PO-Revision-Date: 2024-01-01 12:00+0000\n"
+"Last-Translator: TArticle <noreply@example.com>\n"
+"Language-Team: Polish\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Article Viewer - TArticle"
+msgstr "Przeglądarka artykułów - TArticle"
+
+msgid "Loading article..."
+msgstr "Ładowanie artykułu..."
+
+msgid "Could not extract article content from this URL"
+msgstr "Nie można wyodrębnić treści artykułu z tego adresu URL"
+
+msgid "Error loading article: "
+msgstr "Błąd ładowania artykułu: "
+
+msgid "Unexpected error: "
+msgstr "Nieoczekiwany błąd: "
+
+msgid "Error"
+msgstr "Błąd"
+
+msgid "Error - TArticle"
+msgstr "Błąd - TArticle"
+
+msgid "Please paste a link to the article, e.g., to Wikipedia page"
+msgstr "Proszę wkleić link do artykułu, np. na stronie Wikipedii"
+
+msgid "Article URL"
+msgstr "Adres URL artykułu"
+
+msgid "Please enter a valid URL"
+msgstr "Proszę podać poprawny adres URL"
+
+msgid "Article Viewer"
+msgstr "Przeglądarka artykułów"
+
+msgid "Article"
+msgstr "Artykuł"

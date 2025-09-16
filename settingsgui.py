@@ -229,7 +229,7 @@ class SettingsFrame(wx.Frame):
 
         self.startup_mode_choice = wx.Choice(self.general_panel)
         self.startup_mode_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        startup_modes = [_("Normal (Graphical interface)"), _("Minimized (Invisible interface)")]
+        startup_modes = [_("Normal (Graphical interface)"), _("Minimized (Invisible interface)"), _("Classic Mode")]
         self.startup_mode_choice.AppendItems(startup_modes)
         vbox.Add(self.startup_mode_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
@@ -329,6 +329,11 @@ class SettingsFrame(wx.Frame):
         self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.windows_e_hook_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        self.enable_tce_sounds_cb = wx.CheckBox(self.environment_panel, label=_("Enable TCE sounds outside environment"))
+        self.enable_tce_sounds_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.enable_tce_sounds_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.enable_tce_sounds_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         self.environment_panel.SetSizer(vbox)
 
     def InitSystemMonitorPanel(self):
@@ -367,15 +372,15 @@ class SettingsFrame(wx.Frame):
         panel = self.windows_panel
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        sapi_settings_button = wx.Button(panel, label=_("Change SAPI settings"))
-        sapi_settings_button.Bind(wx.EVT_BUTTON, self.OnSapiSettings)
-        sapi_settings_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(sapi_settings_button, flag=wx.ALL | wx.EXPAND, border=10)
+        # sapi_settings_button = wx.Button(panel, label=_("Change SAPI settings"))
+        # sapi_settings_button.Bind(wx.EVT_BUTTON, self.OnSapiSettings)
+        # sapi_settings_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        # vbox.Add(sapi_settings_button, flag=wx.ALL | wx.EXPAND, border=10)
 
-        ease_of_access_button = wx.Button(panel, label=_("Ease of Access"))
-        ease_of_access_button.Bind(wx.EVT_BUTTON, self.OnEaseOfAccess)
-        ease_of_access_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(ease_of_access_button, flag=wx.ALL | wx.EXPAND, border=10)
+        # ease_of_access_button = wx.Button(panel, label=_("Ease of Access"))
+        # ease_of_access_button.Bind(wx.EVT_BUTTON, self.OnEaseOfAccess)
+        # ease_of_access_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        # vbox.Add(ease_of_access_button, flag=wx.ALL | wx.EXPAND, border=10)
 
         volume_label_text = _("System volume:")
         volume_label = wx.StaticText(panel, label=volume_label_text)
@@ -490,6 +495,8 @@ class SettingsFrame(wx.Frame):
         startup_mode_value = general_settings.get('startup_mode', 'normal')
         if startup_mode_value == 'minimized':
             self.startup_mode_choice.SetSelection(1)
+        elif startup_mode_value == 'klango':
+            self.startup_mode_choice.SetSelection(2)
         else:
             self.startup_mode_choice.SetSelection(0)
 
@@ -514,6 +521,7 @@ class SettingsFrame(wx.Frame):
         environment_settings = self.settings.get('environment', {})
         self.announce_screen_lock_cb.SetValue(str(environment_settings.get('announce_screen_lock', 'True')).lower() in ['true', '1'])
         self.windows_e_hook_cb.SetValue(str(environment_settings.get('windows_e_hook', 'False')).lower() in ['true', '1'])
+        self.enable_tce_sounds_cb.SetValue(str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1'])
 
         # Load system monitor settings
         system_monitor_settings = self.settings.get('system_monitor', {})
@@ -546,16 +554,27 @@ class SettingsFrame(wx.Frame):
 
     def OnSapiSettings(self, event):
         try:
-            cpl_file = "sapi.cpl"
-            print(f"INFO: Attempting to open CPL file using os.startfile: {cpl_file}")
-            os.startfile(cpl_file)
-            print(f"INFO: os.startfile('{cpl_file}') executed successfully in OnSapiSettings.")
+            # Use subprocess to run control panel command for SAPI settings
+            command = ["control.exe", "sapi.cpl"]
+            print(f"INFO: Attempting to run command: {' '.join(command)}")
+            result = subprocess.run(command, check=False, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                error_message = _("Command '{}' finished with error code {}.\n").format(' '.join(command), result.returncode)
+                if result.stdout:
+                    error_message += f"Stdout:\n{result.stdout}\n"
+                if result.stderr:
+                    error_message += f"Stderr:\n{result.stderr}"
+                print(f"ERROR: Subprocess error in OnSapiSettings:\n{error_message}")
+                wx.MessageBox(_("Cannot open SAPI settings:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
+            else:
+                print("INFO: SAPI settings command executed successfully.")
 
         except FileNotFoundError:
-             print(f"ERROR: File {cpl_file} not found. (Very unlikely for sapi.cpl)")
-             wx.MessageBox(_("Error: File {} not found. Make sure Windows is working correctly.").format(cpl_file), _("Error"), wx.OK | wx.ICON_ERROR)
+            print("ERROR: Executable control.exe not found.")
+            wx.MessageBox(_("Error: Executable control.exe not found. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
-            print(f"ERROR: Unexpected error while opening CPL file in OnSapiSettings: {e}")
+            print(f"ERROR: Unexpected error while opening SAPI settings: {e}")
             wx.MessageBox(_("Unexpected error while opening SAPI settings:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
@@ -563,26 +582,36 @@ class SettingsFrame(wx.Frame):
 
     def OnEaseOfAccess(self, event):
         try:
-            command = ["control.exe", "access.cpl"]
+            # Try modern Settings app first (Windows 10/11)
+            command = ["ms-settings:easeofaccess"]
             print(f"INFO: Attempting to run command: {' '.join(command)}")
-            result = subprocess.run(command, check=False, capture_output=True, text=True)
-
+            result = subprocess.run(command, check=False, capture_output=True, text=True, shell=True)
+            
             if result.returncode != 0:
-                error_message = _("Command '{}' finished with error code {}.\n").format(' '.join(command), result.returncode)
-                if result.stdout:
-                    error_message += f"Stdout:\n{result.stdout}\n"
-                if result.stderr:
-                    error_message += f"Stderr:\n{result.stderr}"
-                print(f"ERROR: Subprocess error in OnEaseOfAccess:\n{error_message}")
-                wx.MessageBox(_("Cannot open Ease of Access:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
+                print("INFO: Modern Settings app failed, trying legacy Control Panel...")
+                # Fallback to legacy control panel
+                command = ["control.exe", "access.cpl"]
+                print(f"INFO: Attempting to run legacy command: {' '.join(command)}")
+                result = subprocess.run(command, check=False, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    error_message = _("Command '{}' finished with error code {}.\n").format(' '.join(command), result.returncode)
+                    if result.stdout:
+                        error_message += f"Stdout:\n{result.stdout}\n"
+                    if result.stderr:
+                        error_message += f"Stderr:\n{result.stderr}"
+                    print(f"ERROR: Subprocess error in OnEaseOfAccess:\n{error_message}")
+                    wx.MessageBox(_("Cannot open Ease of Access:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
+                else:
+                    print("INFO: Legacy Ease of Access command executed successfully.")
             else:
-                print("INFO: Command executed successfully in OnEaseOfAccess.")
+                print("INFO: Modern Ease of Access settings opened successfully.")
 
         except FileNotFoundError:
-             print("ERROR: Executable control.exe not found.")
-             wx.MessageBox(_("Error: Executable control.exe not found. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
+            print("ERROR: Executable not found.")
+            wx.MessageBox(_("Error: Cannot find accessibility settings. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
-            print(f"ERROR: Unexpected error while running subprocess in OnEaseOfAccess: {e}")
+            print(f"ERROR: Unexpected error while opening Ease of Access: {e}")
             wx.MessageBox(_("Unexpected error while opening Ease of Access:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
@@ -650,7 +679,13 @@ class SettingsFrame(wx.Frame):
             'stereo_sound': str(self.stereo_sound_cb.GetValue()),
             'theme_volume': str(self.theme_volume_slider.GetValue())
         }
-        startup_mode = 'minimized' if self.startup_mode_choice.GetSelection() == 1 else 'normal'
+        startup_mode_selection = self.startup_mode_choice.GetSelection()
+        if startup_mode_selection == 1:
+            startup_mode = 'minimized'
+        elif startup_mode_selection == 2:
+            startup_mode = 'klango'
+        else:
+            startup_mode = 'normal'
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
             'confirm_exit': str(self.confirm_exit_cb.GetValue()),
@@ -673,7 +708,8 @@ class SettingsFrame(wx.Frame):
 
         self.settings['environment'] = {
             'announce_screen_lock': str(self.announce_screen_lock_cb.GetValue()),
-            'windows_e_hook': str(self.windows_e_hook_cb.GetValue())
+            'windows_e_hook': str(self.windows_e_hook_cb.GetValue()),
+            'enable_tce_sounds': str(self.enable_tce_sounds_cb.GetValue())
         }
 
         # Save system monitor settings

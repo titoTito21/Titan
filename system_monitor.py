@@ -42,8 +42,7 @@ except ImportError:
     PYCAW_AVAILABLE = False
     print("pycaw not found, Windows volume monitoring will be disabled.")
 
-# Initialize sound system
-initialize_sound()
+# Sound system will be initialized by main.py
 pygame = None
 
 # Initialize pygame mixer for interruptible sound on Windows
