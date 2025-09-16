@@ -40,6 +40,43 @@ def get_sfx_directory():
     return sfx_dir
 
 
+def get_available_audio_systems():
+    """Zwraca listę dostępnych systemów audio dla danej platformy."""
+    systems = []
+    
+    if platform.system() == "Windows":
+        systems.append("Windows Audio (winmm)")
+        try:
+            import comtypes
+            from pycaw.pycaw import AudioUtilities
+            systems.append("Windows Audio (WASAPI)")
+        except ImportError:
+            pass
+    elif platform.system() == "Linux":
+        # Check for PulseAudio
+        try:
+            subprocess.run(["pactl", "info"], check=True, 
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            systems.append("PulseAudio")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        
+        # Check for ALSA
+        try:
+            subprocess.run(["amixer", "info"], check=True, 
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            systems.append("ALSA")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    elif platform.system() == "Darwin":
+        systems.append("macOS Core Audio")
+    
+    if not systems:
+        systems.append("No audio system detected")
+    
+    return systems
+
+
 def initialize_sound():
     """Inicjalizuje system dźwiękowy z bezpiecznym podwójnym sprawdzeniem."""
     global _mixer_initialized, background_channel, voice_message_channel
@@ -387,39 +424,3 @@ def is_voice_message_paused():
 
 # Inicjalizacja dźwięku na starcie programu
 initialize_sound()
-
-def get_available_audio_systems():
-    """Zwraca listę dostępnych systemów audio dla danej platformy."""
-    systems = []
-    
-    if platform.system() == "Windows":
-        systems.append("Windows Audio (winmm)")
-        try:
-            import comtypes
-            from pycaw.pycaw import AudioUtilities
-            systems.append("Windows Audio (WASAPI)")
-        except ImportError:
-            pass
-    elif platform.system() == "Linux":
-        # Check for PulseAudio
-        try:
-            subprocess.run(["pactl", "info"], check=True, 
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            systems.append("PulseAudio")
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-        
-        # Check for ALSA
-        try:
-            subprocess.run(["amixer", "info"], check=True, 
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            systems.append("ALSA")
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-    elif platform.system() == "Darwin":
-        systems.append("macOS Core Audio")
-    
-    if not systems:
-        systems.append("No audio system detected")
-    
-    return systems

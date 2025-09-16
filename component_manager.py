@@ -157,6 +157,18 @@ class ComponentManager:
 
     def get_component_menu_functions(self):
         return self.component_menu_functions
+    
+    def get_components(self):
+        """Get list of all components with their metadata."""
+        components_list = []
+        for folder_name, friendly_name in self.component_friendly_names.items():
+            component_data = {
+                'name': friendly_name,
+                'folder': folder_name,
+                'enabled': self.component_states.get(folder_name, 1) == 0
+            }
+            components_list.append(component_data)
+        return components_list
 
     def register_menu_function(self, name, func):
         """Registers a menu function from a component."""

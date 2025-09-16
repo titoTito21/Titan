@@ -1,0 +1,52 @@
+# TArticle Component Translation Template
+# Copyright (C) 2024
+# This file is distributed under the same license as the TArticle package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TArticle 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Article Viewer - TArticle"
+msgstr ""
+
+msgid "Loading article..."
+msgstr ""
+
+msgid "Could not extract article content from this URL"
+msgstr ""
+
+msgid "Error loading article: "
+msgstr ""
+
+msgid "Unexpected error: "
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "Error - TArticle"
+msgstr ""
+
+msgid "Please paste a link to the article, e.g., to Wikipedia page"
+msgstr ""
+
+msgid "Article URL"
+msgstr ""
+
+msgid "Please enter a valid URL"
+msgstr ""
+
+msgid "Article Viewer"
+msgstr ""
+
+msgid "Article"
+msgstr ""

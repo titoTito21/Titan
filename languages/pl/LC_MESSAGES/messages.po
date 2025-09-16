@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-09-05 13:22+0200\n"
+"POT-Creation-Date: 2025-09-16 15:28+0200\n"
 "PO-Revision-Date: 2025-08-29 13:12+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -24,14 +24,14 @@ msgid "Application compilation error"
 msgstr "Błąd kompilacji aplikacji"
 
 #: app_manager.py:169 componentmanagergui.py:167 componentmanagergui.py:178
-#: gui.py:603 gui.py:619 gui.py:627 gui.py:660 gui.py:664 gui.py:1105
-#: gui.py:1198 gui.py:1248 gui.py:1427 gui.py:1458 gui.py:1463 gui.py:1472
-#: gui.py:1518 gui.py:1523 gui.py:1532 gui.py:1567 gui.py:1572 gui.py:1628
-#: gui.py:1676 gui.py:1681 gui.py:1997 gui.py:2013 menu.py:77 menu.py:79
-#: menu.py:130 menu.py:146 settingsgui.py:556 settingsgui.py:559
-#: settingsgui.py:577 settingsgui.py:583 settingsgui.py:586
+#: gui.py:666 gui.py:682 gui.py:690 gui.py:723 gui.py:727 gui.py:1173
+#: gui.py:1266 gui.py:1316 gui.py:1495 gui.py:1526 gui.py:1531 gui.py:1540
+#: gui.py:1586 gui.py:1591 gui.py:1600 gui.py:1635 gui.py:1640 gui.py:1696
+#: gui.py:1744 gui.py:1749 gui.py:2068 gui.py:2084 menu.py:82 menu.py:84
+#: menu.py:135 menu.py:151 settingsgui.py:569 settingsgui.py:575
+#: settingsgui.py:578 settingsgui.py:604 settingsgui.py:612 settingsgui.py:615
 #: tce_system_net.py:327 tce_system_net.py:567 tce_system_net.py:657
-#: tce_system_net.py:665 tce_system_net.py:1366 tce_system_net.py:1425
+#: tce_system_net.py:665 tce_system_net.py:1367 tce_system_net.py:1426
 #: teamtalk_gui_methods.py:45 teamtalk_gui_methods.py:246
 #: teamtalk_gui_methods.py:281 telegram_gui.py:208 telegram_gui.py:315
 #: telegram_windows.py:793
@@ -51,8 +51,9 @@ msgid "Documents"
 msgstr "Dokumenty"
 
 #: classic_start_menu.py:167 classic_start_menu.py:720
-#: componentmanagergui.py:147 gui.py:976 gui.py:992 gui.py:1124
-#: invisibleui.py:368 main.py:161 menu.py:157 settingsgui.py:163
+#: componentmanagergui.py:147 gui.py:1044 gui.py:1060 gui.py:1192
+#: invisibleui.py:486 klangomode.py:149 klangomode.py:836 klangomode.py:995
+#: klangomode.py:1522 main.py:224 main.py:362 menu.py:162 settingsgui.py:163
 #: teamtalk_gui_methods.py:64
 msgid "Settings"
 msgstr "Ustawienia"
@@ -61,7 +62,8 @@ msgstr "Ustawienia"
 msgid "Find"
 msgstr "Znajdź"
 
-#: classic_start_menu.py:169 classic_start_menu.py:1022
+#: classic_start_menu.py:169 classic_start_menu.py:1022 invisibleui.py:505
+#: klangomode.py:151 klangomode.py:997 menu.py:40
 msgid "Help"
 msgstr "Pomoc"
 
@@ -86,8 +88,8 @@ msgstr "Gry Titan"
 msgid "My Documents"
 msgstr "Moje dokumenty"
 
-#: classic_start_menu.py:402 classic_start_menu.py:403 invisibleui.py:411
-#: invisibleui.py:769
+#: classic_start_menu.py:402 classic_start_menu.py:403 invisibleui.py:530
+#: invisibleui.py:981
 msgid "No applications"
 msgstr "Brak aplikacji"
 
@@ -193,9 +195,9 @@ msgstr "Wyłączone"
 msgid "Component '{}' is not loaded."
 msgstr "Komponent '{}' nie jest załadowany."
 
-#: componentmanagergui.py:128 componentmanagergui.py:136 gui.py:967 gui.py:978
-#: gui.py:1125 gui.py:1456 gui.py:1465 gui.py:1516 gui.py:1525 gui.py:1565
-#: gui.py:1574 gui.py:1674 gui.py:1683 teamtalk.py:981
+#: componentmanagergui.py:128 componentmanagergui.py:136 gui.py:1035
+#: gui.py:1046 gui.py:1193 gui.py:1524 gui.py:1533 gui.py:1584 gui.py:1593
+#: gui.py:1633 gui.py:1642 gui.py:1742 gui.py:1751 teamtalk.py:981
 msgid "Information"
 msgstr "Informacja"
 
@@ -245,139 +247,143 @@ msgstr ""
 msgid "Component {} {}"
 msgstr "Komponent {} {}"
 
-#: gui.py:34 settingsgui.py:268 settingsgui.py:270 settingsgui.py:501
-#: settingsgui.py:502
+#: gui.py:35 settingsgui.py:268 settingsgui.py:270 settingsgui.py:508
+#: settingsgui.py:509
 msgid "Default"
 msgstr "Domyślny"
 
-#: gui.py:55
+#: gui.py:82
 #, python-brace-format
 msgid "Titan v{}"
 msgstr "Titan v{}"
 
-#: gui.py:60
+#: gui.py:98
 msgid "Back to Titan"
 msgstr "Powrót do Titan"
 
-#: gui.py:60
+#: gui.py:98
 msgid "Restores the application window"
 msgstr "Przywraca okno aplikacji"
 
-#: gui.py:216
+#: gui.py:279
 msgid "Application List"
 msgstr "Lista aplikacji"
 
-#: gui.py:216
+#: gui.py:279
 msgid "Show application list"
 msgstr "Pokaż listę aplikacji"
 
-#: gui.py:217
+#: gui.py:280
 msgid "Game List"
 msgstr "Lista gier"
 
-#: gui.py:217
+#: gui.py:280
 msgid "Show game list"
 msgstr "Pokaż listę gier"
 
-#: gui.py:218 invisibleui.py:414 invisibleui.py:709
+#: gui.py:281 invisibleui.py:533 invisibleui.py:912 klangomode.py:138
+#: klangomode.py:984
 msgid "Titan IM"
 msgstr "Titan IM"
 
-#: gui.py:218
+#: gui.py:281
 msgid "Show Titan IM"
 msgstr "Pokaż Titan IM"
 
-#: gui.py:227 gui.py:882
+#: gui.py:290 gui.py:950
 msgid "Application List:"
 msgstr "Lista aplikacji:"
 
-#: gui.py:245
+#: gui.py:308
 msgid "Numer telefonu (z kodem kraju):"
 msgstr "Numer telefonu (z kodem kraju):"
 
-#: gui.py:252
+#: gui.py:315
 msgid "2FA Password (if enabled):"
 msgstr "Hasło 2FA (jeśli włączone):"
 
-#: gui.py:254 shutdown_question.py:26
+#: gui.py:317 shutdown_question.py:26
 msgid "OK"
 msgstr "OK"
 
-#: gui.py:272 gui.py:980 gui.py:1126 gui.py:1177
+#: gui.py:335 gui.py:1048 gui.py:1194 gui.py:1245
 msgid "Logout"
 msgstr "Wyloguj"
 
-#: gui.py:285
+#: gui.py:348
 msgid "Chat:"
 msgstr "Czat:"
 
-#: gui.py:292 messenger_gui.py:188 telegram_gui.py:134 telegram_windows.py:628
+#: gui.py:355 messenger_gui.py:188 telegram_gui.py:134 telegram_windows.py:628
 msgid "Send"
 msgstr "Wyślij"
 
-#: gui.py:304
+#: gui.py:367
 msgid "Status Bar:"
 msgstr "Pasek stanu:"
 
-#: gui.py:329 main.py:170
+#: gui.py:392 klangomode.py:1747 main.py:378
 msgid "Titan App Suite"
 msgstr "Pakiet aplikacji Titan"
 
-#: gui.py:505
+#: gui.py:568
 msgid "Unknown App"
 msgstr "Nieznana aplikacja"
 
-#: gui.py:512
+#: gui.py:575 klangomode.py:1048
 msgid "Unknown Game"
 msgstr "Nieznana gra"
 
-#: gui.py:517 gui.py:530 invisibleui.py:491
+#: gui.py:580 gui.py:593 invisibleui.py:610 klangomode.py:221
+#: klangomode.py:1079
 #, python-brace-format
 msgid "Clock: {}"
 msgstr "Zegar: {}"
 
-#: gui.py:518 gui.py:531 invisibleui.py:492
+#: gui.py:581 gui.py:594 invisibleui.py:611 klangomode.py:222
+#: klangomode.py:1080
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr "Poziom baterii: {}"
 
-#: gui.py:519 gui.py:532 invisibleui.py:493
+#: gui.py:582 gui.py:595 invisibleui.py:612 klangomode.py:223
+#: klangomode.py:1081
 #, python-brace-format
 msgid "Volume: {}"
 msgstr "Głośność: {}"
 
-#: gui.py:583
+#: gui.py:646
 #, python-brace-format
 msgid "Run {}..."
 msgstr "Uruchom {}..."
 
-#: gui.py:583 gui.py:587
+#: gui.py:646 gui.py:650
 msgid "item"
 msgstr "element"
 
-#: gui.py:587
+#: gui.py:650
 #, python-brace-format
 msgid "Uninstall {}"
 msgstr "Odinstaluj {}"
 
-#: gui.py:603
+#: gui.py:666
 msgid "An error occurred: No data to run."
 msgstr "Wystąpił błąd: Brak danych do uruchomienia."
 
-#: gui.py:619
+#: gui.py:682
 msgid "An error occurred: No data to uninstall."
 msgstr "Wystąpił błąd: Brak danych do odinstalowania."
 
-#: gui.py:622
+#: gui.py:685
 msgid "unknown item"
 msgstr "nieznany element"
 
-#: gui.py:627
+#: gui.py:690
 #, python-brace-format
 msgid "Error: Cannot find the directory '{}' to uninstall."
 msgstr "Błąd: Nie można znaleźć katalogu '{}' do odinstalowania."
 
-#: gui.py:632
+#: gui.py:695
 #, python-brace-format
 msgid ""
 "Are you sure you want to uninstall '{}' from Titan?\n"
@@ -388,20 +394,20 @@ msgstr ""
 "\n"
 "To usunie cały katalog: {}"
 
-#: gui.py:633
+#: gui.py:696
 msgid "Confirm Uninstall"
 msgstr "Potwierdź odinstalowanie"
 
-#: gui.py:654
+#: gui.py:717
 #, python-brace-format
 msgid "'{}' has been successfully uninstalled."
 msgstr "'{}' zostało pomyślnie odinstalowane."
 
-#: gui.py:654 menu.py:153 tce_system_net.py:653 tce_system_net.py:662
+#: gui.py:717 menu.py:158 tce_system_net.py:653 tce_system_net.py:662
 msgid "Success"
 msgstr "Sukces"
 
-#: gui.py:660
+#: gui.py:723
 #, python-brace-format
 msgid ""
 "Error uninstalling '{}':\n"
@@ -414,7 +420,7 @@ msgstr ""
 "\n"
 "Upewnij się, że katalog nie jest używany."
 
-#: gui.py:664
+#: gui.py:727
 #, python-brace-format
 msgid ""
 "An unexpected error occurred while uninstalling '{}':\n"
@@ -423,97 +429,98 @@ msgstr ""
 "Wystąpił nieoczekiwany błąd podczas odinstalowywania '{}':\n"
 "{}"
 
-#: gui.py:857
+#: gui.py:925
 msgid "Network status:"
 msgstr "Status sieci:"
 
-#: gui.py:864 invisibleui.py:974
+#: gui.py:932 invisibleui.py:1392
 msgid "Clock:"
 msgstr "Zegar:"
 
-#: gui.py:866 invisibleui.py:975
+#: gui.py:934 invisibleui.py:1393
 msgid "Battery level:"
 msgstr "Poziom baterii:"
 
-#: gui.py:868 invisibleui.py:976 invisibleui.py:980
+#: gui.py:936 invisibleui.py:1394 invisibleui.py:1398
 msgid "Volume:"
 msgstr "Głośność:"
 
-#: gui.py:884
+#: gui.py:952
 msgid "Application list, 1 of 3"
 msgstr "Lista aplikacji, 1 z 3"
 
-#: gui.py:898
+#: gui.py:966
 msgid "Game List:"
 msgstr "Lista gier:"
 
-#: gui.py:900
+#: gui.py:968
 msgid "Game list, 2 of 3"
 msgstr "Lista gier, 2 z 3"
 
-#: gui.py:913
+#: gui.py:981
 msgid "Titan IM:"
 msgstr "Titan IM:"
 
-#: gui.py:915
+#: gui.py:983
 msgid "Titan IM, 3 of 3"
 msgstr "Titan IM, 3 z 3"
 
-#: gui.py:926 gui.py:1323 gui.py:1343 invisibleui.py:401 invisibleui.py:1059
-#: invisibleui.py:1135 invisibleui.py:1170 invisibleui.py:1239
-#: invisibleui.py:1390
+#: gui.py:994 gui.py:1391 gui.py:1411 invisibleui.py:520 invisibleui.py:1477
+#: invisibleui.py:1558 invisibleui.py:1593 invisibleui.py:1662
+#: invisibleui.py:1836 klangomode.py:139 klangomode.py:985
 msgid "Telegram"
 msgstr "Telegram"
 
-#: gui.py:927 gui.py:1325 gui.py:1369 invisibleui.py:404 invisibleui.py:710
-#: invisibleui.py:1053
+#: gui.py:995 gui.py:1393 gui.py:1437 invisibleui.py:523 invisibleui.py:913
+#: invisibleui.py:1471
 msgid "Facebook Messenger"
 msgstr "Facebook Messenger"
 
-#: gui.py:928 gui.py:1326 gui.py:1381 invisibleui.py:405 invisibleui.py:710
-#: invisibleui.py:1055 invisibleui.py:1822 whatsapp_webview.py:191
+#: gui.py:996 gui.py:1394 gui.py:1449 invisibleui.py:524 invisibleui.py:913
+#: invisibleui.py:1473 invisibleui.py:2435 klangomode.py:141 klangomode.py:987
+#: whatsapp_webview.py:191
 msgid "WhatsApp"
 msgstr "WhatsApp"
 
-#: gui.py:966 gui.py:1327 gui.py:1383
+#: gui.py:1034 gui.py:1395 gui.py:1451
 msgid "Other communicators"
 msgstr "Inne komunikatory"
 
-#: gui.py:967
+#: gui.py:1035
 msgid "Other communicators will be available soon."
 msgstr "Inne komunikatory będą dostępne wkrótce."
 
-#: gui.py:972 gui.py:1122 gui.py:1791 invisibleui.py:1074 invisibleui.py:1111
-#: invisibleui.py:1391
+#: gui.py:1040 gui.py:1190 gui.py:1862 invisibleui.py:1497 invisibleui.py:1534
+#: invisibleui.py:1837 klangomode.py:710 klangomode.py:1397
 msgid "Contacts"
 msgstr "Kontakty"
 
-#: gui.py:974 gui.py:1123 gui.py:1813
+#: gui.py:1042 gui.py:1191 gui.py:1884
 msgid "Group Chats"
 msgstr "Czaty grupowe"
 
-#: gui.py:982 gui.py:996 gui.py:1127 teamtalk_gui_methods.py:66
+#: gui.py:1050 gui.py:1064 gui.py:1195 teamtalk_gui_methods.py:66
 msgid "Back to main menu"
 msgstr "Powrót do menu głównego"
 
-#: gui.py:988 teamtalk.py:649 teamtalk_gui_methods.py:62
+#: gui.py:1056 teamtalk.py:649 teamtalk_gui_methods.py:62
 msgid "Channels"
 msgstr "Kanały"
 
-#: gui.py:990 teamtalk.py:654 teamtalk.py:660 teamtalk_gui_methods.py:63
+#: gui.py:1058 teamtalk.py:654 teamtalk.py:660 teamtalk_gui_methods.py:63
 msgid "Users"
 msgstr "Użytkownicy"
 
-#: gui.py:994 tce_system_net.py:387 teamtalk.py:634 teamtalk_gui_methods.py:65
+#: gui.py:1062 tce_system_net.py:387 teamtalk.py:634 teamtalk_gui_methods.py:65
 #: telegram_gui.py:150
 msgid "Disconnect"
 msgstr "Rozłącz"
 
-#: gui.py:1010
+#: gui.py:1078
 msgid "Telegram Login"
 msgstr "Logowanie do Telegram"
 
-#: gui.py:1029
+#: gui.py:1097
 msgid ""
 "Cannot launch Messenger WebView.\n"
 "Check if WebView2 is installed."
@@ -521,11 +528,11 @@ msgstr ""
 "Nie można uruchomić Messenger WebView.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
-#: gui.py:1031
+#: gui.py:1099
 msgid "Messenger WebView Error"
 msgstr "Błąd Messenger WebView"
 
-#: gui.py:1048
+#: gui.py:1116
 msgid ""
 "Cannot launch WhatsApp WebView.\n"
 "Check if WebView2 is installed."
@@ -533,11 +540,11 @@ msgstr ""
 "Nie można uruchomić WhatsApp WebView.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
-#: gui.py:1050
+#: gui.py:1118
 msgid "WhatsApp WebView Error"
 msgstr "Błąd WhatsApp WebView"
 
-#: gui.py:1097
+#: gui.py:1165
 msgid ""
 "Messenger WebView opened.\n"
 "Please log in to see your contacts in Titan IM."
@@ -545,11 +552,11 @@ msgstr ""
 "Messenger WebView otwarty.\n"
 "Zaloguj się, aby zobaczyć swoje kontakty w Titan IM."
 
-#: gui.py:1098
+#: gui.py:1166
 msgid "Messenger WebView"
 msgstr "Messenger WebView"
 
-#: gui.py:1104
+#: gui.py:1172
 msgid ""
 "Failed to open Messenger WebView.\n"
 "Check if WebView2 is installed."
@@ -557,64 +564,64 @@ msgstr ""
 "Nie udało się otworzyć Messenger WebView.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
-#: gui.py:1129
+#: gui.py:1197
 msgid "Telegram Options"
 msgstr "Opcje Telegram"
 
-#: gui.py:1176
+#: gui.py:1244
 #, python-brace-format
 msgid "Successfully logged out from {}."
 msgstr "Pomyślnie wylogowano z {}."
 
-#: gui.py:1184
+#: gui.py:1252
 #, python-brace-format
 msgid "Error logging out from {}: {}"
 msgstr "Błąd wylogowania z {}: {}"
 
-#: gui.py:1185
+#: gui.py:1253
 msgid "Logout Error"
 msgstr "Błąd wylogowania"
 
-#: gui.py:1198
+#: gui.py:1266
 msgid "Enter phone number with country code (e.g. +48123456789)."
 msgstr "Wprowadź numer telefonu z kodem kraju (np. +48123456789)."
 
-#: gui.py:1211
+#: gui.py:1279
 msgid "Connecting to Telegram..."
 msgstr "Łączenie z Telegram..."
 
-#: gui.py:1214
+#: gui.py:1282
 msgid "TCE User"
 msgstr "Użytkownik TCE"
 
-#: gui.py:1236
+#: gui.py:1304
 msgid "Failed to connect to Telegram server."
 msgstr "Nie udało się połączyć z serwerem Telegram."
 
-#: gui.py:1236 gui.py:2052 messenger_gui.py:497
+#: gui.py:1304 gui.py:2123 messenger_gui.py:497
 msgid "Connection Error"
 msgstr "Błąd połączenia"
 
-#: gui.py:1260
+#: gui.py:1328
 msgid "Disconnecting..."
 msgstr "Rozłączanie..."
 
-#: gui.py:1341
+#: gui.py:1409
 #, python-brace-format
 msgid "Telegram - connected as {}"
 msgstr "Telegram - połączony jako {}"
 
-#: gui.py:1367
+#: gui.py:1435
 #, python-brace-format
 msgid "Facebook Messenger - connected as {}"
 msgstr "Facebook Messenger - połączony jako {}"
 
-#: gui.py:1379
+#: gui.py:1447
 #, python-brace-format
 msgid "WhatsApp - connected as {}"
 msgstr "WhatsApp - połączony jako {}"
 
-#: gui.py:1427 gui.py:1458 gui.py:1463
+#: gui.py:1495 gui.py:1526 gui.py:1531
 #, python-brace-format
 msgid ""
 "Could not open date/time settings:\n"
@@ -623,7 +630,7 @@ msgstr ""
 "Nie można otworzyć ustawień daty/godziny:\n"
 "{}"
 
-#: gui.py:1452
+#: gui.py:1520
 #, fuzzy, python-brace-format
 msgid ""
 "Current time settings:\n"
@@ -633,22 +640,22 @@ msgstr ""
 "Nie można otworzyć ustawień daty/godziny:\n"
 "{}"
 
-#: gui.py:1453
+#: gui.py:1521
 #, fuzzy
 msgid "Time Settings"
 msgstr "Ustawienia Titan"
 
-#: gui.py:1455
+#: gui.py:1523
 msgid ""
 "Could not open time settings. Please use your system's settings "
 "application."
 msgstr ""
 
-#: gui.py:1465 gui.py:1525 gui.py:1574 gui.py:1683
+#: gui.py:1533 gui.py:1593 gui.py:1642 gui.py:1751
 msgid "This feature is not supported on this platform."
 msgstr "Ta funkcja nie jest obsługiwana na tej platformie."
 
-#: gui.py:1472 gui.py:1518 gui.py:1523
+#: gui.py:1540 gui.py:1586 gui.py:1591
 #, python-brace-format
 msgid ""
 "Could not open power settings:\n"
@@ -657,22 +664,22 @@ msgstr ""
 "Nie można otworzyć ustawień zasilania:\n"
 "{}"
 
-#: gui.py:1510 gui.py:1513
+#: gui.py:1578 gui.py:1581
 #, fuzzy
 msgid "Power Information"
 msgstr "Informacja"
 
-#: gui.py:1512
+#: gui.py:1580
 msgid "No battery detected. Power settings may not be available."
 msgstr ""
 
-#: gui.py:1515
+#: gui.py:1583
 msgid ""
 "Could not open power settings. Please use your system's settings "
 "application."
 msgstr ""
 
-#: gui.py:1532 gui.py:1567
+#: gui.py:1600 gui.py:1635
 #, python-brace-format
 msgid ""
 "Could not open volume mixer:\n"
@@ -681,22 +688,22 @@ msgstr ""
 "Nie można otworzyć miksera głośności:\n"
 "{}"
 
-#: gui.py:1561
+#: gui.py:1629
 msgid ""
 "GUI volume mixer not found.\n"
 "\n"
 "You can use 'alsamixer' in terminal for audio control."
 msgstr ""
 
-#: gui.py:1562
+#: gui.py:1630
 msgid "Volume Control"
 msgstr ""
 
-#: gui.py:1564
+#: gui.py:1632
 msgid "Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."
 msgstr ""
 
-#: gui.py:1572
+#: gui.py:1640
 #, python-brace-format
 msgid ""
 "Could not open audio settings:\n"
@@ -705,18 +712,18 @@ msgstr ""
 "Nie można otworzyć ustawień dźwięku:\n"
 "{}"
 
-#: gui.py:1603
+#: gui.py:1671
 msgid ""
 "WiFi interface could not be initialized.\n"
 "This may be due to missing drivers or system restrictions."
 msgstr ""
 
-#: gui.py:1604
+#: gui.py:1672
 #, fuzzy
 msgid "WiFi Warning"
 msgstr "Menedżer WiFi"
 
-#: gui.py:1616
+#: gui.py:1684
 #, python-brace-format
 msgid ""
 "Error opening WiFi interface: {}\n"
@@ -724,12 +731,12 @@ msgid ""
 "Trying system WiFi settings instead..."
 msgstr ""
 
-#: gui.py:1617 tce_system_net.py:1402 wifi_safe_wrapper.py:172
+#: gui.py:1685 tce_system_net.py:1403 wifi_safe_wrapper.py:172
 #, fuzzy
 msgid "WiFi Error"
 msgstr "Błąd logowania"
 
-#: gui.py:1628 gui.py:1676 gui.py:1681
+#: gui.py:1696 gui.py:1744 gui.py:1749
 #, python-brace-format
 msgid ""
 "Could not open network settings:\n"
@@ -738,12 +745,12 @@ msgstr ""
 "Nie można otworzyć ustawień sieci:\n"
 "{}"
 
-#: gui.py:1664 gui.py:1671
+#: gui.py:1732 gui.py:1739
 #, fuzzy
 msgid "Network Information"
 msgstr "Informacja"
 
-#: gui.py:1670
+#: gui.py:1738
 #, python-brace-format
 msgid ""
 "Network interface information:\n"
@@ -751,100 +758,100 @@ msgid ""
 "{}"
 msgstr ""
 
-#: gui.py:1673
+#: gui.py:1741
 msgid "Could not open network settings. Please use your system's network manager."
 msgstr ""
 
-#: gui.py:1827
+#: gui.py:1898
 msgid "Ustawienia sieciowe - w przygotowaniu"
 msgstr "Ustawienia sieciowe - w przygotowaniu"
 
-#: gui.py:1827 messenger_webview.py:819 messenger_webview.py:1961
+#: gui.py:1898 messenger_webview.py:819 messenger_webview.py:1961
 msgid "Informacja"
 msgstr "Informacja"
 
-#: gui.py:1834
+#: gui.py:1905
 msgid "Zalogowany jako"
 msgstr "Zalogowany jako"
 
-#: gui.py:1834 messenger_webview.py:2015 messenger_webview.py:2030
+#: gui.py:1905 messenger_webview.py:2015 messenger_webview.py:2030
 msgid "Nieznany"
 msgstr "Nieznany"
 
-#: gui.py:1835
+#: gui.py:1906
 msgid "Users online"
 msgstr "Użytkownicy online"
 
-#: gui.py:1836 gui.py:1838
+#: gui.py:1907 gui.py:1909
 msgid "Connection status"
 msgstr "Status połączenia"
 
-#: gui.py:1836 messenger_gui.py:495 tce_system_net.py:533 tce_system_net.py:778
-#: tce_system_net.py:1237 tce_system_net.py:1340
+#: gui.py:1907 messenger_gui.py:495 tce_system_net.py:533 tce_system_net.py:779
+#: tce_system_net.py:1238 tce_system_net.py:1341
 msgid "Connected"
 msgstr "Połączony"
 
-#: gui.py:1838 messenger_gui.py:508
+#: gui.py:1909 messenger_gui.py:508
 msgid "Disconnected"
 msgstr "Rozłączony"
 
-#: gui.py:1840
+#: gui.py:1911
 msgid "Telegram Information"
 msgstr "Informacje o Telegram"
 
-#: gui.py:1865
+#: gui.py:1936
 msgid "Refreshing contacts list, found"
 msgstr "Odświeżanie listy kontaktów, znaleziono"
 
-#: gui.py:1865 invisibleui.py:1150
+#: gui.py:1936 invisibleui.py:1573
 msgid "contacts"
 msgstr "kontaktów"
 
-#: gui.py:1871 gui.py:1905
+#: gui.py:1942 gui.py:1976
 msgid "unread"
 msgstr "nieprzeczytane"
 
-#: gui.py:1873
+#: gui.py:1944
 msgid "Added contact"
 msgstr "Dodano kontakt"
 
-#: gui.py:1876
+#: gui.py:1947
 msgid "No connection or client to refresh contacts"
 msgstr "Brak połączenia lub klienta do odświeżenia kontaktów"
 
-#: gui.py:1899
+#: gui.py:1970
 msgid "Refreshing group chats, found"
 msgstr "Odświeżanie czatów grupowych, znaleziono"
 
-#: gui.py:1899 invisibleui.py:1185
+#: gui.py:1970 invisibleui.py:1608
 msgid "groups"
 msgstr "grup"
 
-#: gui.py:1907
+#: gui.py:1978
 msgid "Added group"
 msgstr "Dodano grupę"
 
-#: gui.py:1910
+#: gui.py:1981
 msgid "No connection or client to refresh groups"
 msgstr "Brak połączenia lub klienta do odświeżenia grup"
 
-#: gui.py:1951 gui.py:1966
+#: gui.py:2022 gui.py:2037
 msgid "Private message"
 msgstr "Wiadomość prywatna"
 
-#: gui.py:1951 gui.py:1966
+#: gui.py:2022 gui.py:2037
 msgid "Send private message"
 msgstr "Wyślij wiadomość prywatą"
 
-#: gui.py:1959
+#: gui.py:2030
 msgid "Open group chat"
 msgstr "Otwórz czat grupowy"
 
-#: gui.py:1959
+#: gui.py:2030
 msgid "Open group chat window"
 msgstr "Otwórz okno czatu grupowego"
 
-#: gui.py:1996
+#: gui.py:2067
 msgid ""
 "Voice calls are not available.\n"
 "Check if py-tgcalls is installed."
@@ -852,389 +859,461 @@ msgstr ""
 "Połączenia głosowe nie są dostępne.\n"
 "Sprawdź, czy py-tgcalls jest zainstalowany."
 
-#: gui.py:2001
+#: gui.py:2072
 #, python-brace-format
 msgid "Do you want to start a voice call with {}?"
 msgstr "Czy chcesz rozpocząć połączenie głosowe z {}?"
 
-#: gui.py:2002
+#: gui.py:2073
 msgid "Voice call"
 msgstr "Połączenie głosowe"
 
-#: gui.py:2013
+#: gui.py:2084
 msgid "Failed to start conversation."
 msgstr "Nie udało się rozpocząć rozmowy."
 
-#: gui.py:2051
+#: gui.py:2122
 #, python-brace-format
 msgid "Connection failed: {}"
 msgstr "Połączenie nie powiodło się: {}"
 
-#: gui.py:2127
+#: gui.py:2198
 msgid "Otrzymano zmianę statusu"
 msgstr "Otrzymano zmianę statusu"
 
-#: gui.py:2127
+#: gui.py:2198
 msgid "dane"
 msgstr "dane"
 
-#: gui.py:2131
+#: gui.py:2202
 msgid "Zaktualizowano listę użytkowników online"
 msgstr "Zaktualizowano listę użytkowników online"
 
-#: gui.py:2131
+#: gui.py:2202
 msgid "użytkowników"
 msgstr "użytkowników"
 
-#: gui.py:2140
+#: gui.py:2211
 #, python-brace-format
 msgid "{} joined Telegram"
 msgstr "{} dołączył do Telegram"
 
-#: gui.py:2143
+#: gui.py:2214
 #, python-brace-format
 msgid "{} left Telegram"
 msgstr "{} opuścił Telegram"
 
-#: gui.py:2157
+#: gui.py:2228
 #, python-brace-format
 msgid "{} pisze..."
 msgstr "{} pisze..."
 
-#: gui.py:2160
+#: gui.py:2231
 #, python-brace-format
 msgid "Rozmowa z {}"
 msgstr "Rozmowa z {}"
 
-#: invisibleui.py:72 invisibleui.py:254
+#: help.py:13
+#, fuzzy
+msgid "Titan Help"
+msgstr "Klawisz Titan:"
+
+#: help.py:59
+msgid "Help file not found."
+msgstr ""
+
+#: help.py:76
+#, fuzzy, python-brace-format
+msgid "Error reading help file: {}"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: help.py:79
+#, fuzzy, python-brace-format
+msgid "Unexpected error: {}"
+msgstr "Błąd połączenia: {}"
+
+#: help.py:90
+msgid "No help content found."
+msgstr ""
+
+#: help.py:92
+#, fuzzy, python-brace-format
+msgid "Error parsing help data: {}"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: help.py:120
+msgid "No content available for this section."
+msgstr ""
+
+#: invisibleui.py:143 invisibleui.py:352
 msgid "slider"
 msgstr "suwak"
 
-#: invisibleui.py:73 invisibleui.py:260 invisibleui.py:265 invisibleui.py:703
+#: invisibleui.py:144 invisibleui.py:358 invisibleui.py:363 invisibleui.py:906
 msgid "button"
 msgstr "przycisk"
 
-#: invisibleui.py:74 tce_system_net.py:678 tce_system_net.py:772
-#: tce_system_net.py:865 tce_system_net.py:1335
+#: invisibleui.py:145 tce_system_net.py:678 tce_system_net.py:773
+#: tce_system_net.py:866 tce_system_net.py:1336
 msgid "checkbox"
 msgstr "pole wyboru"
 
-#: invisibleui.py:75 tce_system_net.py:679 tce_system_net.py:781
-#: tce_system_net.py:1242 tce_system_net.py:1343
+#: invisibleui.py:146 tce_system_net.py:679 tce_system_net.py:782
+#: tce_system_net.py:1243 tce_system_net.py:1344
 msgid "list item"
 msgstr "element listy"
 
-#: invisibleui.py:254
+#: invisibleui.py:352
 #, python-brace-format
 msgid "Volume {}%, {}"
 msgstr "Głośność {}%, {}"
 
-#: invisibleui.py:256 system_monitor.py:221
+#: invisibleui.py:354 system_monitor.py:242
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr "Głośność: {}%"
 
-#: invisibleui.py:260
+#: invisibleui.py:358
 #, fuzzy, python-brace-format
 msgid "Unmute, {}"
 msgstr "Wyłącz wyciszenie"
 
-#: invisibleui.py:262
+#: invisibleui.py:360
 msgid "Unmute"
 msgstr "Wyłącz wyciszenie"
 
-#: invisibleui.py:265
+#: invisibleui.py:363
 #, fuzzy, python-brace-format
 msgid "Mute, {}"
 msgstr "Wycisz"
 
-#: invisibleui.py:267
+#: invisibleui.py:365
 msgid "Mute"
 msgstr "Wycisz"
 
-#: invisibleui.py:298
+#: invisibleui.py:400
 msgid "Muted"
 msgstr "Wyciszono"
 
-#: invisibleui.py:301
+#: invisibleui.py:403
 msgid "Unmuted"
 msgstr "Wyłączono wyciszenie"
 
-#: invisibleui.py:335 invisibleui.py:415 invisibleui.py:597 invisibleui.py:606
+#: invisibleui.py:453 invisibleui.py:534 invisibleui.py:763 invisibleui.py:772
+#: klangomode.py:143 klangomode.py:989
 msgid "Status Bar"
 msgstr "Pasek stanu"
 
-#: invisibleui.py:354 invisibleui.py:385 menu.py:73
+#: invisibleui.py:472 invisibleui.py:503 klangomode.py:150 klangomode.py:850
+#: klangomode.py:996 klangomode.py:1535 menu.py:78
 msgid "Component Manager"
 msgstr "Menedżer komponentów"
 
-#: invisibleui.py:362
+#: invisibleui.py:480
 msgid "Component manager is not available"
 msgstr "Menedżer komponentów jest niedostępny"
 
-#: invisibleui.py:386 menu.py:37
+#: invisibleui.py:504 menu.py:38
 msgid "Program settings"
 msgstr "Ustawienia programu"
 
-#: invisibleui.py:387 invisibleui.py:796
+#: invisibleui.py:506 invisibleui.py:1014
 msgid "Back to graphical interface"
 msgstr "Powrót do interfejsu graficznego"
 
-#: invisibleui.py:388 invisibleui.py:796 menu.py:39
+#: invisibleui.py:507 invisibleui.py:1014 klangomode.py:152 klangomode.py:998
+#: menu.py:43
 msgid "Exit"
 msgstr "Wyjście"
 
-#: invisibleui.py:408 invisibleui.py:1048 invisibleui.py:1049
+#: invisibleui.py:527 invisibleui.py:1466 invisibleui.py:1467
 msgid "No IM clients available"
 msgstr "Brak dostępnych klientów komunikacji"
 
-#: invisibleui.py:411
+#: invisibleui.py:530 klangomode.py:136 klangomode.py:982
 msgid "Applications"
 msgstr "Aplikacje"
 
-#: invisibleui.py:412
+#: invisibleui.py:531 klangomode.py:137 klangomode.py:983
 msgid "Games"
 msgstr "Gry"
 
-#: invisibleui.py:412 invisibleui.py:769
+#: invisibleui.py:531 invisibleui.py:981
 msgid "No games"
 msgstr "Brak gier"
 
-#: invisibleui.py:413 invisibleui.py:699 invisibleui.py:805
+#: invisibleui.py:532 invisibleui.py:902 invisibleui.py:1023
 msgid "Widgets"
 msgstr "Widżety"
 
-#: invisibleui.py:413 invisibleui.py:769
+#: invisibleui.py:532 invisibleui.py:981
 msgid "No widgets found"
 msgstr "Nie znaleziono widżetów"
 
-#: invisibleui.py:416
+#: invisibleui.py:535 klangomode.py:449 klangomode.py:1145
 msgid "Menu"
 msgstr "Menu"
 
-#: invisibleui.py:421 invisibleui.py:422 menu.py:58
+#: invisibleui.py:540 invisibleui.py:541 klangomode.py:154 klangomode.py:1000
+#: menu.py:63
 msgid "Components"
 msgstr "Komponenty"
 
-#: invisibleui.py:453 invisibleui.py:477
+#: invisibleui.py:541
+#, fuzzy
+msgid "Component not found"
+msgstr "Komponent '{}' nie jest załadowany."
+
+#: invisibleui.py:572 invisibleui.py:596
 #, python-brace-format
 msgid "Error loading widget: {}"
 msgstr "Błąd ładowania widżetu: {}"
 
-#: invisibleui.py:498
+#: invisibleui.py:617
 msgid "No status bar data"
 msgstr "Brak danych paska stanu"
 
-#: invisibleui.py:696
+#: invisibleui.py:899
 #, python-brace-format
 msgid "{} of {}"
 msgstr "{} z {}"
 
-#: invisibleui.py:703
+#: invisibleui.py:906
 msgid "widget"
 msgstr "widżet"
 
-#: invisibleui.py:711
+#: invisibleui.py:914
 msgid "web application"
 msgstr "aplikacja internetowa"
 
-#: invisibleui.py:752
+#: invisibleui.py:955
 msgid "Widget activation error"
 msgstr ""
 
-#: invisibleui.py:816
-#, fuzzy, python-brace-format
+#: invisibleui.py:981 invisibleui.py:982 invisibleui.py:1659
+#: invisibleui.py:1690
+msgid "Loading messages..."
+msgstr "Ładowanie wiadomości..."
+
+#: invisibleui.py:983 invisibleui.py:1691
+msgid "Messages are loading, please wait"
+msgstr "Wiadomości się ładują, proszę czekać"
+
+#: invisibleui.py:1034
+#, fuzzy
 msgid "Error during activation"
 msgstr "Błąd podczas aktywacji: {}"
 
-#: invisibleui.py:823
+#: invisibleui.py:1041
 #, fuzzy
 msgid "Activation error"
 msgstr "Błąd połączenia"
 
-#: invisibleui.py:840
+#: invisibleui.py:1058
 #, python-brace-format
 msgid "Invalid widget type: {}"
 msgstr "Nieprawidłowy typ widżetu: {}"
 
-#: invisibleui.py:848
+#: invisibleui.py:1105
+#, fuzzy
+msgid "Unknown element"
+msgstr "nieznany element"
+
+#: invisibleui.py:1111 invisibleui.py:1119
 msgid "In widget"
 msgstr "W widżecie"
 
-#: invisibleui.py:879
+#: invisibleui.py:1119
+msgid "Error getting element"
+msgstr ""
+
+#: invisibleui.py:1200
+#, fuzzy
+msgid "Error entering widget mode"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: invisibleui.py:1242
 msgid "Out of widget"
 msgstr "Poza widżetem"
 
-#: invisibleui.py:965
+#: invisibleui.py:1383
 #, python-brace-format
 msgid "Application not found: {}"
 msgstr "Nie znaleziono aplikacji: {}"
 
-#: invisibleui.py:970
+#: invisibleui.py:1388
 #, python-brace-format
 msgid "Game not found: {}"
 msgstr "Nie znaleziono gry: {}"
 
-#: invisibleui.py:991
+#: invisibleui.py:1409
 msgid "No action for this item"
 msgstr "Brak akcji dla tego elementu"
 
-#: invisibleui.py:996
+#: invisibleui.py:1414
 msgid "Volume Panel"
 msgstr "Panel głośności"
 
-#: invisibleui.py:1025
+#: invisibleui.py:1443
 msgid "Exiting volume panel"
 msgstr "Wychodzę z panelu głośności"
 
-#: invisibleui.py:1040
+#: invisibleui.py:1458
 msgid "Exiting WiFi manager, returning to Titan UI"
 msgstr ""
 
-#: invisibleui.py:1042
+#: invisibleui.py:1460
 #, fuzzy
 msgid "Exiting WiFi manager"
 msgstr "Menedżer WiFi"
 
-#: invisibleui.py:1070
+#: invisibleui.py:1489
+#, fuzzy, python-brace-format
+msgid "Error checking connection to {}"
+msgstr "Błąd wykonywania funkcji komponentu"
+
+#: invisibleui.py:1493 klangomode.py:716 klangomode.py:1403
 #, python-brace-format
 msgid "Not connected to {}"
 msgstr "Nie połączono z {}"
 
-#: invisibleui.py:1074 invisibleui.py:1113 invisibleui.py:1391
+#: invisibleui.py:1497 invisibleui.py:1536 invisibleui.py:1837
+#: klangomode.py:711 klangomode.py:1398
 msgid "Groups"
 msgstr "Grupy"
 
-#: invisibleui.py:1074 invisibleui.py:1099 invisibleui.py:1139
-#: invisibleui.py:1174 invisibleui.py:1189 invisibleui.py:1198
-#: invisibleui.py:1236 invisibleui.py:1261 invisibleui.py:1391
-#: invisibleui.py:1455
+#: invisibleui.py:1497 invisibleui.py:1522 invisibleui.py:1562
+#: invisibleui.py:1597 invisibleui.py:1612 invisibleui.py:1621
+#: invisibleui.py:1659 invisibleui.py:1684 invisibleui.py:1837
+#: invisibleui.py:1901 klangomode.py:712 klangomode.py:1399
 msgid "Back"
 msgstr "Wstecz"
 
-#: invisibleui.py:1078 invisibleui.py:1394
+#: invisibleui.py:1501 invisibleui.py:1840
 #, python-brace-format
 msgid "{} Menu"
 msgstr "Menu {}"
 
-#: invisibleui.py:1128 invisibleui.py:1189
+#: invisibleui.py:1551 invisibleui.py:1612
 msgid "No contacts"
 msgstr "Brak kontaktów"
 
-#: invisibleui.py:1135 invisibleui.py:1170 invisibleui.py:1239
-#: invisibleui.py:1390 invisibleui.py:1756 messenger_webview.py:110
-#: messenger_webview.py:271
+#: invisibleui.py:1558 invisibleui.py:1593 invisibleui.py:1662
+#: invisibleui.py:1836 invisibleui.py:2324 klangomode.py:140 klangomode.py:986
+#: messenger_webview.py:110 messenger_webview.py:271
 msgid "Messenger"
 msgstr "Messenger"
 
-#: invisibleui.py:1137
+#: invisibleui.py:1560
 #, python-brace-format
 msgid "{} Contacts"
 msgstr "Kontakty {}"
 
-#: invisibleui.py:1163 invisibleui.py:1198
+#: invisibleui.py:1586 invisibleui.py:1621
 msgid "No groups"
 msgstr "Brak grup"
 
-#: invisibleui.py:1172
+#: invisibleui.py:1595
 #, python-brace-format
 msgid "{} Groups"
 msgstr "Grupy {}"
 
-#: invisibleui.py:1236 invisibleui.py:1267
-msgid "Loading messages..."
-msgstr "Ładowanie wiadomości..."
-
-#: invisibleui.py:1236 invisibleui.py:1264 invisibleui.py:1455
+#: invisibleui.py:1659 invisibleui.py:1687 invisibleui.py:1901
 msgid "Send message"
 msgstr "Wyślij wiadomość"
 
-#: invisibleui.py:1238
+#: invisibleui.py:1661
 msgid "Group"
 msgstr "Grupa"
 
-#: invisibleui.py:1238
+#: invisibleui.py:1661
 msgid "Contact"
 msgstr "Kontakt"
 
-#: invisibleui.py:1242
+#: invisibleui.py:1665
 #, python-brace-format
 msgid "{} {} - {}"
 msgstr "{} {} - {}"
 
-#: invisibleui.py:1268
-msgid "Messages are loading, please wait"
-msgstr "Wiadomości się ładują, proszę czekać"
-
-#: invisibleui.py:1300 invisibleui.py:1308
+#: invisibleui.py:1723 invisibleui.py:1731
 msgid "Playing voice message"
 msgstr "Odtwarzanie wiadomości głosowej"
 
-#: invisibleui.py:1303
+#: invisibleui.py:1726
 msgid "Voice message paused"
 msgstr "Wiadomość głosowa wstrzymana"
 
-#: invisibleui.py:1311
+#: invisibleui.py:1734
 msgid "Error playing voice message"
 msgstr "Błąd odtwarzania wiadomości głosowej"
 
-#: invisibleui.py:1313
+#: invisibleui.py:1736
 msgid "No voice message selected"
 msgstr "Nie wybrano wiadomości głosowej"
 
-#: invisibleui.py:1354
+#: invisibleui.py:1800
 #, python-brace-format
 msgid "Enter message to send to {}:"
 msgstr "Wprowadź wiadomość do wysłania do {}:"
 
-#: invisibleui.py:1355
+#: invisibleui.py:1801
 msgid "Send Message"
 msgstr "Wyślij wiadomość"
 
-#: invisibleui.py:1384
+#: invisibleui.py:1830
 #, python-brace-format
 msgid "Message sent to {}"
 msgstr "Wiadomość wysłana do {}"
 
-#: invisibleui.py:1386 messenger_gui.py:449 telegram_gui.py:208
+#: invisibleui.py:1832 messenger_gui.py:449 telegram_gui.py:208
 #: telegram_windows.py:793
 msgid "Failed to send message"
 msgstr "Nie udało się wysłać wiadomości"
 
-#: invisibleui.py:1440 telegram_windows.py:291 telegram_windows.py:813
+#: invisibleui.py:1886 telegram_windows.py:291 telegram_windows.py:813
 msgid "Voice message"
 msgstr "Wiadomość głosowa"
 
-#: invisibleui.py:1460
+#: invisibleui.py:1906
 #, python-brace-format
 msgid "Chat history loaded, {} messages"
 msgstr "Historia czatu załadowana, {} wiadomości"
 
-#: invisibleui.py:1462
+#: invisibleui.py:1908
 msgid "No messages in chat history"
 msgstr "Brak wiadomości w historii czatu"
 
-#: invisibleui.py:1471
+#: invisibleui.py:1925
 msgid "Invisible interface active"
 msgstr "Niewidzialny interfejs aktywny"
 
-#: invisibleui.py:1725
+#: invisibleui.py:2263
 msgid "Titan UI on"
 msgstr "Titan UI włączony"
 
-#: invisibleui.py:1728
+#: invisibleui.py:2266
 msgid "Titan UI off"
 msgstr "Titan UI wyłączony"
 
-#: invisibleui.py:1754
+#: invisibleui.py:2293
+#, fuzzy
+msgid "Cannot open Messenger - application not ready"
+msgstr "Messenger, aplikacja internetowa"
+
+#: invisibleui.py:2322
 msgid "Messenger, web application"
 msgstr "Messenger, aplikacja internetowa"
 
-#: invisibleui.py:1762
+#: invisibleui.py:2336 invisibleui.py:2347 invisibleui.py:2357
 msgid "Error opening Messenger WebView"
 msgstr "Błąd otwierania Messenger WebView"
 
-#: invisibleui.py:1777
+#: invisibleui.py:2351
+#, fuzzy
+msgid "Messenger WebView not available"
+msgstr "WebView niedostępny"
+
+#: invisibleui.py:2374
 #, fuzzy
 msgid ""
 "WiFi functionality requires pywifi library. Install with: pip install "
@@ -1243,26 +1322,272 @@ msgstr ""
 "Funkcjonalność WiFi wymaga biblioteki pywifi.\n"
 "Zainstaluj poleceniem: pip install pywifi"
 
-#: invisibleui.py:1782 invisibleui.py:1797 tce_system_net.py:787
-#: tce_system_net.py:973 tce_system_net.py:1371 tce_system_net.py:1408
+#: invisibleui.py:2379 invisibleui.py:2394 tce_system_net.py:788
+#: tce_system_net.py:974 tce_system_net.py:1372 tce_system_net.py:1409
 msgid "WiFi Manager"
 msgstr "Menedżer WiFi"
 
-#: invisibleui.py:1787
+#: invisibleui.py:2384
 msgid "Error opening WiFi interface"
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: invisibleui.py:1820
+#: invisibleui.py:2404
+#, fuzzy
+msgid "Cannot open WhatsApp - application not ready"
+msgstr "WhatsApp, aplikacja internetowa"
+
+#: invisibleui.py:2433
 msgid "WhatsApp, web application"
 msgstr "WhatsApp, aplikacja internetowa"
 
-#: invisibleui.py:1828
+#: invisibleui.py:2447 invisibleui.py:2458 invisibleui.py:2468
 msgid "Error opening WhatsApp WebView"
 msgstr "Błąd otwierania WhatsApp WebView"
 
-#: invisibleui.py:1839
+#: invisibleui.py:2462
+#, fuzzy
+msgid "WhatsApp WebView not available"
+msgstr "WebView niedostępny"
+
+#: invisibleui.py:2481
 msgid "Menu Start"
 msgstr "Menu Start"
+
+#: klangomode.py:144 klangomode.py:233 klangomode.py:990 klangomode.py:1090
+#, fuzzy
+msgid "Current Time"
+msgstr "Bieżąca wersja:"
+
+#: klangomode.py:145 klangomode.py:234 klangomode.py:991 klangomode.py:1091
+#, fuzzy
+msgid "Battery Status"
+msgstr "Status sieci:"
+
+#: klangomode.py:146 klangomode.py:235 klangomode.py:992 klangomode.py:1092
+#, fuzzy
+msgid "Volume Level"
+msgstr "Panel głośności"
+
+#: klangomode.py:148 klangomode.py:994 menu.py:52
+msgid "Program"
+msgstr "Program"
+
+#: klangomode.py:245
+#, fuzzy
+msgid "Network"
+msgstr "Sieć: {}"
+
+#: klangomode.py:248
+#, fuzzy
+msgid "Error getting network status"
+msgstr "Status sieci:"
+
+#: klangomode.py:411 klangomode.py:427 klangomode.py:1116
+msgid "To open a menu, press alt"
+msgstr "Aby otworzyć menu w trybie klasycznym, wciśnij alt"
+
+#: klangomode.py:562 klangomode.py:1249
+#, fuzzy
+msgid "Error executing action"
+msgstr "Błąd podczas aktywacji: {}"
+
+#: klangomode.py:567 klangomode.py:1254
+msgid "Empty menu"
+msgstr "puste menu"
+
+#: klangomode.py:687 klangomode.py:1374
+#, fuzzy
+msgid "Error launching application"
+msgstr "Błąd podczas aktywacji: {}"
+
+#: klangomode.py:697 klangomode.py:1384
+#, fuzzy
+msgid "Error launching game"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: klangomode.py:714 klangomode.py:1401
+msgid "Telegram Menu"
+msgstr "Menu Telegram"
+
+#: klangomode.py:719 klangomode.py:1406
+#, fuzzy
+msgid "Telegram client not available"
+msgstr "Brak dostępnych klientów komunikacji"
+
+#: klangomode.py:723 klangomode.py:1410
+#, fuzzy
+msgid "Error opening Telegram"
+msgstr "Błąd podczas otwierania interfejsu WiFi"
+
+#: klangomode.py:736 klangomode.py:1423
+#, fuzzy
+msgid "Messenger not available"
+msgstr "Menedżer komponentów niedostępny."
+
+#: klangomode.py:739 klangomode.py:1426
+#, fuzzy
+msgid "Error opening Messenger"
+msgstr "Błąd otwierania Messenger WebView"
+
+#: klangomode.py:752 klangomode.py:1439
+#, fuzzy
+msgid "WhatsApp not available"
+msgstr "WebView niedostępny"
+
+#: klangomode.py:755 klangomode.py:1442
+#, fuzzy
+msgid "Error opening WhatsApp"
+msgstr "Błąd otwierania WhatsApp WebView"
+
+#: klangomode.py:782 klangomode.py:1469
+#, fuzzy
+msgid "Loading contacts"
+msgstr "Brak kontaktów"
+
+#: klangomode.py:787 klangomode.py:1474
+#, fuzzy
+msgid "Error loading contacts"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: klangomode.py:792 klangomode.py:1479
+#, fuzzy
+msgid "Loading groups"
+msgstr "Brak grup"
+
+#: klangomode.py:797 klangomode.py:1484
+#, fuzzy
+msgid "Error loading groups"
+msgstr "Błąd ładowania widżetu: {}"
+
+#: klangomode.py:807 klangomode.py:1494
+#, fuzzy
+msgid "Current time"
+msgstr "Bieżąca wersja:"
+
+#: klangomode.py:810 klangomode.py:1497
+msgid "Error getting time"
+msgstr ""
+
+#: klangomode.py:816 klangomode.py:1503
+#, fuzzy
+msgid "Battery"
+msgstr "Poziom baterii:"
+
+#: klangomode.py:819 klangomode.py:1506
+msgid "Error getting battery status"
+msgstr ""
+
+#: klangomode.py:825 klangomode.py:1512
+#, fuzzy
+msgid "Volume"
+msgstr "Głośność:"
+
+#: klangomode.py:828 klangomode.py:1515
+#, fuzzy
+msgid "Error getting volume level"
+msgstr "Wychodzę z panelu głośności"
+
+#: klangomode.py:841 klangomode.py:1527
+#, fuzzy
+msgid "Error opening settings"
+msgstr ""
+"Błąd otwierania ustawień dla '{}':\n"
+"{}"
+
+#: klangomode.py:854 klangomode.py:1539 menu.py:82
+msgid "Cannot load Component Manager (componentmanagergui.py not found)"
+msgstr ""
+"Nie można załadować Menedżera komponentów (nie znaleziono "
+"componentmanagergui.py)"
+
+#: klangomode.py:856 klangomode.py:1541 menu.py:84
+msgid "Component Manager has not been initialized."
+msgstr "Menedżer komponentów nie został zainicjalizowany."
+
+#: klangomode.py:860 klangomode.py:1545
+#, fuzzy
+msgid "Error opening component manager"
+msgstr "Menedżer komponentów"
+
+#: klangomode.py:870 klangomode.py:1555
+msgid "Error showing help"
+msgstr ""
+
+#: klangomode.py:884 klangomode.py:1679
+#, fuzzy
+msgid "Exit cancelled"
+msgstr "Łączenie anulowane"
+
+#: klangomode.py:925 klangomode.py:1561
+#, fuzzy
+msgid "Activating component"
+msgstr "Uruchamianie komponentu {}"
+
+#: klangomode.py:939 klangomode.py:1575
+#, fuzzy
+msgid "Error activating component"
+msgstr "Błąd wykonywania funkcji komponentu"
+
+#: klangomode.py:950 klangomode.py:1586
+#, fuzzy
+msgid "Invalid component function"
+msgstr "Błąd wykonywania funkcji komponentu"
+
+#: klangomode.py:953 klangomode.py:1589
+msgid "Error executing component function"
+msgstr "Błąd wykonywania funkcji komponentu"
+
+#: klangomode.py:1560
+#, fuzzy
+msgid "Unknown Component"
+msgstr "Uruchamianie komponentu {}"
+
+#: klangomode.py:1598
+#, fuzzy
+msgid "Time settings opened"
+msgstr "Ustawienia Titan"
+
+#: klangomode.py:1602
+#, fuzzy
+msgid "Could not open time settings"
+msgstr ""
+"Nie można otworzyć ustawień daty/godziny:\n"
+"{}"
+
+#: klangomode.py:1611
+msgid "Power settings opened"
+msgstr ""
+
+#: klangomode.py:1615
+#, fuzzy
+msgid "Could not open power settings"
+msgstr ""
+"Nie można otworzyć ustawień zasilania:\n"
+"{}"
+
+#: klangomode.py:1624
+#, fuzzy
+msgid "Volume mixer opened"
+msgstr "Panel głośności"
+
+#: klangomode.py:1628
+#, fuzzy
+msgid "Could not open volume mixer"
+msgstr ""
+"Nie można otworzyć miksera głośności:\n"
+"{}"
+
+#: klangomode.py:1637
+#, fuzzy
+msgid "Network settings opened"
+msgstr "status sieci:"
+
+#: klangomode.py:1641
+#, fuzzy
+msgid "Could not open network settings"
+msgstr ""
+"Nie można otworzyć ustawień sieci:\n"
+"{}"
 
 #: lockscreen_monitor_improved.py:170
 msgid "Screen locked"
@@ -1272,72 +1597,44 @@ msgstr "Ekran zablokowany"
 msgid "Screen unlocked"
 msgstr "Ekran odblokowany"
 
-#: main.py:112
+#: main.py:177
 #, python-brace-format
 msgid "Welcome to Titan: Version {}"
 msgstr "Witaj w Titan: Wersja {}"
 
-#: main.py:154
-msgid ""
-"Currently, translation system and international support is limited. To "
-"fully enjoy Titan, please use translation addon for your screen reader, "
-"or switch to Polish Language"
-msgstr ""
-"Aktualnie system tłumaczeń i wsparcie międzynarodowe jest ograniczone. "
-"Aby w pełni korzystać z Titan, użyj dodatku tłumaczącego dla swojego "
-"czytnika ekranu lub przełącz na język polski"
-
-#: main.py:155
-msgid "Titan"
-msgstr "Titan"
-
-#: menu.py:33
+#: menu.py:34
 msgid "Install data package..."
 msgstr "Zainstaluj pakiet danych..."
 
-#: menu.py:34
+#: menu.py:35
 msgid "Component Manager..."
 msgstr "Menedżer komponentów..."
 
-#: menu.py:38
+#: menu.py:42
 msgid "Minimize"
 msgstr "Minimalizuj"
 
-#: menu.py:47
-msgid "Program"
-msgstr "Program"
-
-#: menu.py:62
+#: menu.py:67
 msgid "Select data package"
 msgstr "Wybierz pakiet danych"
 
-#: menu.py:62
+#: menu.py:67
 msgid "Data packages (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
 msgstr "Pakiety danych (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
 
-#: menu.py:67
+#: menu.py:72
 msgid "Package installation"
 msgstr "Instalacja pakietu"
 
-#: menu.py:67
+#: menu.py:72
 msgid "Preparing for installation..."
 msgstr "Przygotowywanie do instalacji..."
 
-#: menu.py:77
-msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr ""
-"Nie można załadować Menedżera komponentów (nie znaleziono "
-"componentmanagergui.py)"
-
-#: menu.py:79
-msgid "Component Manager has not been initialized."
-msgstr "Menedżer komponentów nie został zainicjalizowany."
-
-#: menu.py:104
+#: menu.py:109
 msgid "Unpacking ZIP package..."
 msgstr "Rozpakowywanie pakietu ZIP..."
 
-#: menu.py:115
+#: menu.py:120
 msgid ""
 "Error: 7z executable not found. Make sure it is in the 'data/bin/' "
 "directory."
@@ -1345,19 +1642,19 @@ msgstr ""
 "Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się"
 " w katalogu 'data/bin/'."
 
-#: menu.py:115
+#: menu.py:120
 msgid "Executable file error"
 msgstr "Błąd pliku wykonywalnego"
 
-#: menu.py:122
+#: menu.py:127
 msgid "Unpacking 7z package..."
 msgstr "Rozpakowywanie pakietu 7z..."
 
-#: menu.py:124
+#: menu.py:129
 msgid "Starting 7z process..."
 msgstr "Uruchamianie procesu 7z..."
 
-#: menu.py:130
+#: menu.py:135
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
@@ -1366,23 +1663,23 @@ msgstr ""
 "Błąd podczas instalacji pakietu:\n"
 "{}"
 
-#: menu.py:133
+#: menu.py:138
 msgid "Finished unpacking 7z."
 msgstr "Zakończono rozpakowywanie 7z."
 
-#: menu.py:137
+#: menu.py:142
 msgid "Unpacking .tcepackage package..."
 msgstr "Rozpakowywanie pakietu .tcepackage..."
 
-#: menu.py:139
+#: menu.py:144
 msgid "Unpacking archive..."
 msgstr "Rozpakowywanie archiwum..."
 
-#: menu.py:141
+#: menu.py:146
 msgid "Finished unpacking .tcepackage."
 msgstr "Zakończono rozpakowywanie .tcepackage."
 
-#: menu.py:146
+#: menu.py:151
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
@@ -1395,7 +1692,7 @@ msgstr ""
 "Szczegóły:\n"
 "{}"
 
-#: menu.py:153
+#: menu.py:158
 msgid "Data package has been installed!"
 msgstr "Pakiet danych został zainstalowany!"
 
@@ -1511,7 +1808,7 @@ msgstr "Połącz"
 
 #: messenger_gui.py:50 settingsgui.py:149 shutdown_question.py:30
 #: tce_system_net.py:305 teamtalk_gui_methods.py:206 telegram_gui.py:55
-#: updater.py:70 updater.py:135
+#: updater.py:70 updater.py:144
 msgid "Cancel"
 msgstr "Anuluj"
 
@@ -1627,8 +1924,8 @@ msgstr "Już połączony z Messengerem"
 msgid "Connection Status"
 msgstr "Status połączenia"
 
-#: messenger_gui.py:495 tce_system_net.py:653 tce_system_net.py:901
-#: tce_system_net.py:1282
+#: messenger_gui.py:495 tce_system_net.py:653 tce_system_net.py:902
+#: tce_system_net.py:1283
 #, python-brace-format
 msgid "Connected to {}"
 msgstr "Połączono z {}"
@@ -2021,7 +2318,7 @@ msgstr ""
 
 #: messenger_webview.py:2175 messenger_webview.py:2205
 #: messenger_webview.py:2235 messenger_webview.py:2243
-#: messenger_webview.py:3300 telegram_windows.py:271 whatsapp_webview.py:1962
+#: messenger_webview.py:3334 telegram_windows.py:271 whatsapp_webview.py:1962
 msgid "Błąd"
 msgstr ""
 
@@ -2100,27 +2397,27 @@ msgstr ""
 msgid "Messenger: new message"
 msgstr ""
 
-#: messenger_webview.py:3281
+#: messenger_webview.py:3305
 msgid "Rozłączono z Messenger"
 msgstr ""
 
-#: messenger_webview.py:3283
+#: messenger_webview.py:3307
 msgid "Zamykanie Messenger"
 msgstr ""
 
-#: messenger_webview.py:3298
+#: messenger_webview.py:3332
 msgid ""
 "Nie można otworzyć Messenger WebView.\n"
 "Sprawdź czy WebView2 jest zainstalowany."
 msgstr ""
 
-#: messenger_webview.py:3413 whatsapp_webview.py:2106
+#: messenger_webview.py:3447 whatsapp_webview.py:2106
 msgid ""
 "WebView nie jest dostępny na tym systemie.\n"
 "Zainstaluj Microsoft Edge WebView2 Runtime."
 msgstr ""
 
-#: messenger_webview.py:3415 whatsapp_webview.py:2108
+#: messenger_webview.py:3449 whatsapp_webview.py:2108
 msgid "Błąd WebView"
 msgstr ""
 
@@ -2160,7 +2457,7 @@ msgstr "Zapisz"
 msgid "Select sound theme:"
 msgstr "Wybierz motyw dźwiękowy:"
 
-#: settingsgui.py:184 settingsgui.py:625
+#: settingsgui.py:184 settingsgui.py:654
 msgid "No themes"
 msgstr "Brak motywów"
 
@@ -2187,6 +2484,10 @@ msgstr "Normalny (Interfejs graficzny)"
 #: settingsgui.py:232
 msgid "Minimized (Invisible interface)"
 msgstr "Zminimalizowany (Niewidzialny interfejs)"
+
+#: settingsgui.py:232
+msgid "Classic Mode"
+msgstr "tryb klasyczny"
 
 #: settingsgui.py:239
 msgid "Quick start"
@@ -2232,96 +2533,107 @@ msgstr "Ogłaszaj stan blokowania ekranu"
 msgid "Modify system interface"
 msgstr "Modyfikuj interfejs systemu"
 
-#: settingsgui.py:339
+#: settingsgui.py:332
+msgid "Enable TCE sounds outside environment"
+msgstr "Włącz dźwięki TCE poza środowiskiem"
+
+#: settingsgui.py:344
 msgid "Volume Monitor:"
 msgstr "Monitor głośności:"
 
-#: settingsgui.py:343
+#: settingsgui.py:348
 msgid "None"
 msgstr "Brak"
 
-#: settingsgui.py:343
+#: settingsgui.py:348
 msgid "Sound only"
 msgstr "Dźwięk"
 
-#: settingsgui.py:343
+#: settingsgui.py:348
 msgid "Speech only"
 msgstr "Mowa"
 
-#: settingsgui.py:343
+#: settingsgui.py:348
 msgid "Sound and speech"
 msgstr "Mowa i dźwięk"
 
-#: settingsgui.py:349
+#: settingsgui.py:354
 msgid "Announce battery level every:"
 msgstr "Ogłaszaj poziom baterii co:"
 
-#: settingsgui.py:353
+#: settingsgui.py:358
 msgid "1%"
 msgstr "1%"
 
-#: settingsgui.py:353
+#: settingsgui.py:358
 msgid "10%"
 msgstr "10%"
 
-#: settingsgui.py:353
+#: settingsgui.py:358
 msgid "15%"
 msgstr "15%"
 
-#: settingsgui.py:353
+#: settingsgui.py:358
 msgid "25%"
 msgstr "25%"
 
-#: settingsgui.py:353
+#: settingsgui.py:358
 msgid "Never"
 msgstr "Nigdy"
 
-#: settingsgui.py:359
+#: settingsgui.py:364
 msgid "Monitor charger connection and disconnection"
 msgstr "Monitoruj podłączenie i odłączenie od zasilacza"
 
-#: settingsgui.py:370
-msgid "Change SAPI settings"
-msgstr "Zmień ustawienia SAPI"
-
-#: settingsgui.py:375
-msgid "Ease of Access"
-msgstr "Ułatwienia dostępu"
-
-#: settingsgui.py:380
+#: settingsgui.py:385
 msgid "System volume:"
 msgstr "Głośność systemu:"
 
-#: settingsgui.py:409
+#: settingsgui.py:414
 msgid "Disable sound card mute when Titan is running"
 msgstr "Wyłącz wyciszenie karty dźwiękowej gdy Titan jest uruchomiony"
 
-#: settingsgui.py:424
+#: settingsgui.py:429
 msgid "Voice:"
 msgstr "Głos:"
 
-#: settingsgui.py:433
+#: settingsgui.py:438
 msgid "Speech rate:"
 msgstr "Szybkość mowy:"
 
-#: settingsgui.py:438
+#: settingsgui.py:443
 msgid "Speech rate"
 msgstr "Szybkość mowy"
 
-#: settingsgui.py:444
+#: settingsgui.py:449
 msgid "Speech volume:"
 msgstr ""
 
-#: settingsgui.py:449
+#: settingsgui.py:454
 msgid "Speech volume"
 msgstr ""
 
-#: settingsgui.py:556
+#: settingsgui.py:563 settingsgui.py:598
 #, python-brace-format
-msgid "Error: File {} not found. Make sure Windows is working correctly."
+msgid "Command '{}' finished with error code {}.\n"
 msgstr ""
 
-#: settingsgui.py:559
+#: settingsgui.py:569
+#, python-brace-format
+msgid ""
+"Cannot open SAPI settings:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:575
+msgid ""
+"Error: Executable control.exe not found. Make sure Windows is working "
+"correctly."
+msgstr ""
+
+#: settingsgui.py:578
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
@@ -2330,12 +2642,7 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: settingsgui.py:571
-#, python-brace-format
-msgid "Command '{}' finished with error code {}.\n"
-msgstr ""
-
-#: settingsgui.py:577
+#: settingsgui.py:604
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
@@ -2344,13 +2651,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: settingsgui.py:583
+#: settingsgui.py:612
 msgid ""
-"Error: Executable control.exe not found. Make sure Windows is working "
+"Error: Cannot find accessibility settings. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: settingsgui.py:586
+#: settingsgui.py:615
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
@@ -2359,17 +2666,17 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: settingsgui.py:712
+#: settingsgui.py:748
 msgid ""
 "Settings have been saved. Please restart the application for the language"
 " change to take full effect."
 msgstr ""
 
-#: settingsgui.py:813
+#: settingsgui.py:849
 msgid "Stereo Speech Settings"
 msgstr "Ustawienia mowy stereo"
 
-#: settingsgui.py:873 settingsgui.py:876
+#: settingsgui.py:909 settingsgui.py:912
 msgid "Default voice"
 msgstr ""
 
@@ -2381,22 +2688,22 @@ msgstr "Potwierdź wyjście"
 msgid "Are you sure you want to exit Titan?"
 msgstr "Czy na pewno chcesz wyjść z Titan?"
 
-#: system_monitor.py:154
+#: system_monitor.py:167
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr "Podłączono do zasilacza, poziom baterii wynosi {}%"
 
-#: system_monitor.py:159
+#: system_monitor.py:174
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr "Odłączono zasilacz, poziom baterii wynosi {}%"
 
-#: system_monitor.py:162
+#: system_monitor.py:179
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr "Ładowanie baterii, poziom baterii {}%"
 
-#: system_monitor.py:165
+#: system_monitor.py:184
 msgid "Battery is fully charged"
 msgstr "Bateria jest naładowana"
 
@@ -2440,9 +2747,9 @@ msgstr "Odświeżanie sieci WiFi..."
 msgid "Please wait"
 msgstr ""
 
-#: tce_system_net.py:368 tce_system_net.py:772 tce_system_net.py:774
-#: tce_system_net.py:865 tce_system_net.py:867 tce_system_net.py:1335
-#: tce_system_net.py:1337
+#: tce_system_net.py:368 tce_system_net.py:773 tce_system_net.py:775
+#: tce_system_net.py:866 tce_system_net.py:868 tce_system_net.py:1336
+#: tce_system_net.py:1338
 msgid "WiFi"
 msgstr "WiFi"
 
@@ -2467,7 +2774,7 @@ msgstr "Status"
 msgid "WiFi Scanner"
 msgstr "Menedżer WiFi"
 
-#: tce_system_net.py:438 tce_system_net.py:870
+#: tce_system_net.py:438 tce_system_net.py:871
 #, fuzzy
 msgid "Scanning for networks..."
 msgstr "Łączenie z siecią..."
@@ -2502,13 +2809,13 @@ msgstr "Połączenie nie powiodło się: {}"
 msgid "Scan Error"
 msgstr "Błąd wysyłania"
 
-#: tce_system_net.py:532 tce_system_net.py:779 tce_system_net.py:1238
-#: tce_system_net.py:1341
+#: tce_system_net.py:532 tce_system_net.py:780 tce_system_net.py:1239
+#: tce_system_net.py:1342
 msgid "Secured"
 msgstr "Zabezpieczona"
 
-#: tce_system_net.py:532 tce_system_net.py:779 tce_system_net.py:1238
-#: tce_system_net.py:1341
+#: tce_system_net.py:532 tce_system_net.py:780 tce_system_net.py:1239
+#: tce_system_net.py:1342
 msgid "Open"
 msgstr "Otwarta"
 
@@ -2531,7 +2838,7 @@ msgstr "Proszę wybrać sieć"
 msgid "WiFi Connection"
 msgstr "Połączenie"
 
-#: tce_system_net.py:587 tce_system_net.py:894 tce_system_net.py:1278
+#: tce_system_net.py:587 tce_system_net.py:895 tce_system_net.py:1279
 #, python-brace-format
 msgid "Connecting to {}..."
 msgstr "Łączenie z {}..."
@@ -2565,7 +2872,7 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr "Limit czasu połączenia"
 
-#: tce_system_net.py:657 tce_system_net.py:905 tce_system_net.py:1287
+#: tce_system_net.py:657 tce_system_net.py:906 tce_system_net.py:1288
 #, python-brace-format
 msgid "Failed to connect to {}"
 msgstr "Nie udało się połączyć z {}"
@@ -2578,86 +2885,86 @@ msgstr "Rozłączono z siecią"
 msgid "Failed to disconnect"
 msgstr "Nie udało się rozłączyć"
 
-#: tce_system_net.py:735
+#: tce_system_net.py:736
 #, fuzzy
 msgid "Networks updated"
 msgstr "Nazwa sieci"
 
-#: tce_system_net.py:746
+#: tce_system_net.py:747
 msgid "Scanning networks in background..."
 msgstr ""
 
-#: tce_system_net.py:770 tce_system_net.py:863 tce_system_net.py:1333
+#: tce_system_net.py:771 tce_system_net.py:864 tce_system_net.py:1334
 msgid "Checked"
 msgstr "Zaznaczone"
 
-#: tce_system_net.py:770 tce_system_net.py:863 tce_system_net.py:1333
+#: tce_system_net.py:771 tce_system_net.py:864 tce_system_net.py:1334
 msgid "Unchecked"
 msgstr "Niezaznaczone"
 
-#: tce_system_net.py:785 tce_system_net.py:1347
+#: tce_system_net.py:786 tce_system_net.py:1348
 msgid "No WiFi networks available"
 msgstr "Brak dostępnych sieci WiFi"
 
-#: tce_system_net.py:886 tce_system_net.py:1260
+#: tce_system_net.py:887 tce_system_net.py:1261
 #, python-brace-format
 msgid "Already connected to {}"
 msgstr "Już połączono z {}"
 
-#: tce_system_net.py:890
+#: tce_system_net.py:891
 #, python-brace-format
 msgid "Network {} requires password. Use GUI interface for password entry."
 msgstr ""
 
-#: tce_system_net.py:909 telegram_client.py:98 telegram_gui.py:313
+#: tce_system_net.py:910 telegram_client.py:98 telegram_gui.py:313
 msgid "Connection error"
 msgstr "Błąd połączenia"
 
-#: tce_system_net.py:919
+#: tce_system_net.py:920
 msgid "Scan already in progress"
 msgstr ""
 
-#: tce_system_net.py:971
+#: tce_system_net.py:972
 msgid "WiFi Manager: Widget"
 msgstr "Menedżer WiFi: Widget"
 
-#: tce_system_net.py:1265
+#: tce_system_net.py:1266
 #, python-brace-format
 msgid "Enter WiFi network password for {}:"
 msgstr "Wpisz hasło do sieci WiFi {}:"
 
-#: tce_system_net.py:1267
+#: tce_system_net.py:1268
 msgid "Password: "
 msgstr "Hasło: "
 
-#: tce_system_net.py:1269
+#: tce_system_net.py:1270
 msgid "Connecting to network..."
 msgstr "Łączenie z siecią..."
 
-#: tce_system_net.py:1272
+#: tce_system_net.py:1273
 msgid "Password required"
 msgstr "Wymagane hasło"
 
-#: tce_system_net.py:1275
+#: tce_system_net.py:1276
 #, fuzzy
 msgid ""
 "\n"
 "Connection cancelled"
 msgstr "Łączenie anulowane"
 
-#: tce_system_net.py:1306
+#: tce_system_net.py:1307
 msgid "WiFi manager closed"
 msgstr "Menedżer WiFi zamknięty"
 
-#: tce_system_net.py:1352
+#: tce_system_net.py:1353
 msgid "Refreshing WiFi networks..."
 msgstr "Odświeżanie sieci WiFi..."
 
-#: tce_system_net.py:1355
+#: tce_system_net.py:1356
 msgid "Networks refreshed"
 msgstr "Sieci odświeżone"
 
-#: tce_system_net.py:1365
+#: tce_system_net.py:1366
 msgid ""
 "WiFi functionality requires pywifi library.\n"
 "Install with: pip install pywifi"
@@ -2665,45 +2972,45 @@ msgstr ""
 "Funkcjonalność WiFi wymaga biblioteki pywifi.\n"
 "Zainstaluj poleceniem: pip install pywifi"
 
-#: tce_system_net.py:1372
+#: tce_system_net.py:1373
 #, fuzzy
 msgid "Initializing WiFi interface..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: tce_system_net.py:1379
+#: tce_system_net.py:1380
 #, fuzzy
 msgid "Creating network manager..."
 msgstr "Łączenie z siecią..."
 
-#: tce_system_net.py:1393
+#: tce_system_net.py:1394
 msgid "WiFi initialization timed out. Please try again."
 msgstr ""
 
-#: tce_system_net.py:1394
+#: tce_system_net.py:1395
 #, fuzzy
 msgid "Timeout Error"
 msgstr "Błąd wylogowania"
 
-#: tce_system_net.py:1397
+#: tce_system_net.py:1398
 #, fuzzy
 msgid "Checking WiFi interfaces..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: tce_system_net.py:1401
+#: tce_system_net.py:1402
 msgid "No WiFi interfaces available or WiFi initialization failed."
 msgstr ""
 
-#: tce_system_net.py:1405
+#: tce_system_net.py:1406
 #, fuzzy
 msgid "Creating GUI interface..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: tce_system_net.py:1411 wifi_safe_wrapper.py:145
+#: tce_system_net.py:1412 wifi_safe_wrapper.py:145
 #, fuzzy
 msgid "Ready!"
 msgstr "Nieprzeczytane"
 
-#: tce_system_net.py:1424
+#: tce_system_net.py:1425
 #, fuzzy, python-brace-format
 msgid ""
 "Error creating WiFi interface:\n"
@@ -3279,43 +3586,43 @@ msgstr "Nowości:"
 msgid "Update"
 msgstr "Zaktualizuj"
 
-#: updater.py:113
+#: updater.py:122
 msgid "Downloading Update"
 msgstr "Pobieranie aktualizacji"
 
-#: updater.py:126
+#: updater.py:135
 msgid "Downloading update..."
 msgstr "Pobieranie aktualizacji..."
 
-#: updater.py:200
+#: updater.py:210
 msgid "Unable to retrieve changelog."
 msgstr "Nie można pobrać listy zmian."
 
-#: updater.py:233
+#: updater.py:243
 msgid "Download failed"
 msgstr "Pobieranie nieudane"
 
-#: updater.py:239 updater.py:253
+#: updater.py:249 updater.py:263
 msgid "Extracting update..."
 msgstr "Rozpakowywanie aktualizacji..."
 
-#: updater.py:259
+#: updater.py:269
 msgid "Update extracted successfully"
 msgstr "Aktualizacja rozpakowana pomyślnie"
 
-#: updater.py:314
+#: updater.py:324
 msgid "Update completed successfully! Please restart the application."
 msgstr "Aktualizacja zakończona pomyślnie! Proszę uruchomić ponownie aplikację."
 
-#: updater.py:315
+#: updater.py:325
 msgid "Update Complete"
 msgstr "Aktualizacja zakończona"
 
-#: updater.py:324
+#: updater.py:334
 msgid "Update failed. Please try again later."
 msgstr "Aktualizacja nieudana. Spróbuj ponownie później."
 
-#: updater.py:325
+#: updater.py:335
 msgid "Update Error"
 msgstr "Błąd aktualizacji"
 
@@ -3610,4 +3917,41 @@ msgstr "Błąd podczas otwierania interfejsu WiFi"
 
 #~ msgid "List item"
 #~ msgstr "Element listy"
+
+#~ msgid "Left channel test"
+#~ msgstr "Test lewego kanału"
+
+#~ msgid "Right channel test"
+#~ msgstr "Test prawego kanału"
+
+#~ msgid "Center channel test"
+#~ msgstr "Test kanału środkowego"
+
+#~ msgid ""
+#~ "Currently, translation system and "
+#~ "international support is limited. To "
+#~ "fully enjoy Titan, please use "
+#~ "translation addon for your screen "
+#~ "reader, or switch to Polish Language"
+#~ msgstr ""
+#~ "Aktualnie system tłumaczeń i wsparcie "
+#~ "międzynarodowe jest ograniczone. Aby w "
+#~ "pełni korzystać z Titan, użyj dodatku"
+#~ " tłumaczącego dla swojego czytnika ekranu"
+#~ " lub przełącz na język polski"
+
+#~ msgid "Titan"
+#~ msgstr "Titan"
+
+#~ msgid "Klango Mode"
+#~ msgstr ""
+
+#~ msgid "Change SAPI settings"
+#~ msgstr "Zmień ustawienia SAPI"
+
+#~ msgid "Ease of Access"
+#~ msgstr "Ułatwienia dostępu"
+
+#~ msgid "Error: File {} not found. Make sure Windows is working correctly."
+#~ msgstr ""
 

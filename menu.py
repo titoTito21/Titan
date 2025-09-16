@@ -10,6 +10,7 @@ from settingsgui import SettingsFrame
 import traceback
 from translation import set_language
 from settings import get_setting
+from help import show_help
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -35,12 +36,16 @@ class MenuBar(wx.MenuBar):
         
         
         settings_item = program_menu.Append(wx.ID_ANY, _("Program settings"))
+        program_menu.AppendSeparator()
+        help_item = program_menu.Append(wx.ID_ANY, _("Help") + "\tF1")
+        program_menu.AppendSeparator()
         minimize_item = program_menu.Append(wx.ID_ANY, _("Minimize"))
         exit_item = program_menu.Append(wx.ID_EXIT, _("Exit"))
 
         self.Bind(wx.EVT_MENU, self.on_install_data_package, install_data_item)
         self.Bind(wx.EVT_MENU, self.on_open_component_manager, component_manager_item)
         self.Bind(wx.EVT_MENU, self.on_open_settings, settings_item)
+        self.Bind(wx.EVT_MENU, self.on_show_help, help_item)
         self.Bind(wx.EVT_MENU, self.on_minimize, minimize_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
 
@@ -156,6 +161,9 @@ class MenuBar(wx.MenuBar):
     def on_open_settings(self, event):
         settings_frame = SettingsFrame(None, title=_("Settings"))
         settings_frame.Show()
+
+    def on_show_help(self, event):
+        show_help()
 
     def on_minimize(self, event):
         self.parent.minimize_to_tray()

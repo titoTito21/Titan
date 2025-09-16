@@ -1,0 +1,42 @@
+&Titan Help
+#What is Titan?
+Titan Computer Environment (TCE) is a comprehensive desktop environment designed specifically for blind and visually impaired users. The system features high accessibility, an intuitive interface, and full customization capabilities tailored to individual user needs.
+
+#System Requirements
+Operating System: Windows 10 or newer
+Memory: 512 MB RAM
+Storage: 700 MB (with Python interpreter for TCE applications) or 60 MB (without interpreter and TCE application support)
+
+#Graphical Interface Keyboard Shortcuts
+Ctrl+Tab - switch between application list and games list. Visually impaired users can also use the toolbar for mouse navigation
+Tab - switch between application/games list and status bar
+Shift+F10 - activate context menu for selected item (TCE application or game)
+Alt - activate main program menu
+
+#Application System
+Titan applications are independent programs written in Python or compiled to executable files (.exe). The only element connecting TCE with an application is the appropriate configuration entry. All default TCE applications are developed according to TCE standards, characterized by simplicity, intuitiveness, and configurability.
+
+#Games System
+Titan offers full support for TCE games and external entertainment applications. The system does not include built-in games by default.
+
+Information for developers: Documentation for creating applications and games is available in the titan/data/docu/programming guide directory
+
+#Titan IM
+The Titan IM module provides integration with popular messengers: Telegram, Messenger, and WhatsApp. Due to technical limitations, WhatsApp and Messenger operate as web applications integrated with TCE through dedicated scripts.
+
+#Status Bar
+The status bar displays key system information such as: current time, battery level, system volume, and network connection status.
+
+#Invisible Interface
+After minimizing the main window, Titan automatically switches to invisible interface mode. This mode enables full program control from any system application without the need to switch windows.
+
+#Invisible Interface Keyboard Shortcuts
+The Ctrl+Shift combination serves as the primary modifier in the invisible interface. In documentation, shortcuts are presented as "Titan+key" for simplified notation.
+
+Titan+arrows - navigation in four directions (up, down, left, right). In default mode (outside widgets), up/down arrows switch between categories, and left/right switch between elements in a given category. In widgets, arrows provide standard directional navigation
+Titan+Enter - activate selected element
+Titan+Backspace or Titan+Esc - exit current widget
+Tilde key (~) - toggle Titan UI mode (if option is active)
+
+#Titan UI Mode
+Titan UI mode enables interface navigation using only arrow keys, without the need to hold additional modifiers. This provides even greater user comfort for those preferring simplified navigation.

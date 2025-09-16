@@ -26,6 +26,7 @@ from translation import set_language
 from settings import get_setting
 from shutdown_question import show_shutdown_dialog
 from classic_start_menu import create_classic_start_menu
+from help import show_help
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -735,6 +736,11 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
         
+        # Handle F1 (Help)
+        if keycode == wx.WXK_F1 and modifiers == wx.MOD_NONE:
+            show_help()
+            return
+            
         # Handle Alt+F1 (Start Menu) - Linux style only
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_ALT:
             if self.start_menu and platform.system() == "Windows":
@@ -1776,13 +1782,16 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.invisible_ui.stop_listening()
     
     def _on_window_minimize(self, event):
-        """Handle window minimization - re-enable Titan UI if it was disabled"""
+        """Handle window minimization - re-enable Titan UI if it was disabled and minimize to tray"""
         if event.IsIconized():
             # Window is being minimized, re-enable Titan UI if it was disabled
             if (hasattr(self.invisible_ui, 'titan_ui_temporarily_disabled') and 
                 self.invisible_ui.titan_ui_temporarily_disabled and 
                 self.invisible_ui.disabled_by_dialog == "main_window"):
                 self.invisible_ui._on_dialog_close("main_window", None)
+            
+            # Minimize to tray and start invisible UI
+            self.minimize_to_tray()
         event.Skip()
 
     def shutdown_app(self):

@@ -37,6 +37,53 @@ except Exception as e:
 
 import accessible_output3.outputs.auto
 
+# Import libraries used by components for compilation compatibility
+try:
+    import platform
+    import subprocess
+    import configparser
+    import json
+    import keyboard
+    import speech_recognition as sr
+    import pygame
+    import random
+    import psutil
+    if platform.system() == 'Windows':
+        import win32com.client
+        import win32gui
+        import win32process
+        import win32api
+        import win32con
+        import comtypes
+        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from ctypes import POINTER, cast
+    elif platform.system() == 'Linux':
+        import alsaaudio
+    # Other potential libraries used by components
+    import time
+    import random
+    import threading
+    import os
+    import sys
+    from bg5reader import bg5reader
+    
+    # Import libraries used by widgets (applets) for compilation compatibility
+    import gettext
+    import glob
+    if platform.system() == "Windows":
+        # Additional Windows-specific imports for taskbar widget
+        import win32con
+    try:
+        import pywinctl as pwc
+    except ImportError:
+        pass  # pywinctl is optional
+    # Other widget dependencies
+    import typing
+    from typing import List, Dict, Optional
+    
+except ImportError as e:
+    print(f"Warning: Could not import component/widget library: {e}")
+
 # Fix COM errors early
 try:
     from com_fix import suppress_com_errors, init_com_safe
@@ -64,7 +111,7 @@ from updater import check_for_updates_on_startup
 # Initialize translation system
 _ = set_language(get_setting('language', 'pl'))
 
-VERSION = "0.2"
+VERSION = "0.2.1"
 speaker = accessible_output3.outputs.auto.Auto()
 
 # Global flag for graceful shutdown
@@ -86,7 +133,7 @@ def signal_handler(signum, frame):
     except:
         pass
 
-def main():
+def main(command_line_args=None):
     """Main initialization function with comprehensive error handling."""
     try:
         settings = load_settings()
@@ -142,16 +189,109 @@ def main():
 
         # Sprawdzenie argumentów wiersza poleceń
         try:
-            if len(sys.argv) > 1:
-                shortname = sys.argv[1]
+            if command_line_args and command_line_args.application:
+                shortname = command_line_args.application
                 app_info = find_application_by_shortname(shortname)
                 if app_info:
-                    file_path = sys.argv[2] if len(sys.argv) > 2 else None
+                    file_path = command_line_args.file_path
                     open_application(app_info, file_path)
                     return True # Zwróć informację, że aplikacja została uruchomiona w trybie specjalnym
         except Exception as e:
             print(f"Error processing command line arguments: {e}")
+        
+        # Check startup mode setting safely - allow command line override
+        try:
+            if command_line_args and command_line_args.startup_mode:
+                startup_mode = command_line_args.startup_mode
+                print(f"Command line startup mode: {startup_mode}")
+            else:
+                startup_mode = settings.get('general', {}).get('startup_mode', 'normal')
+                print(f"Settings startup mode: {startup_mode}")
+            print(f"Final startup mode: {startup_mode}")
+        except Exception:
+            startup_mode = 'normal'
+    
+        # Handle different startup modes
+        if startup_mode == 'klango':
+            try:
+                print("Starting Klango mode with full TCE initialization...")
+                # Create wx.App for Klango mode
+                klango_app = wx.App(False)
                 
+                # Initialize all TCE systems like in GUI mode
+                try:
+                    from settingsgui import SettingsFrame
+                    settings_frame = SettingsFrame(None, title=_("Settings"))
+                    print("Settings frame initialized for Klango mode")
+                except Exception as e:
+                    print(f"Warning: Failed to create settings frame for Klango: {e}")
+                    settings_frame = None
+                
+                # Initialize component manager with settings frame
+                try:
+                    component_manager = ComponentManager(settings_frame)
+                    component_manager.initialize_components(klango_app)
+                    print("Component manager fully initialized for Klango mode")
+                except Exception as e:
+                    print(f"Warning: Failed to initialize component manager for Klango: {e}")
+                    component_manager = None
+                
+                # Start all system services like in GUI mode
+                try:
+                    start_lock_monitoring()
+                    print("Lock screen monitoring started for Klango mode")
+                except Exception as e:
+                    print(f"Warning: Failed to start lock monitoring for Klango: {e}")
+                
+                try:
+                    start_system_hooks()
+                    print("System hooks started for Klango mode")
+                except Exception as e:
+                    print(f"Warning: Failed to start system hooks for Klango: {e}")
+                
+                # Initialize system monitor in background thread like GUI
+                def init_system_services_delayed():
+                    import time
+                    time.sleep(2)  # Wait 2 seconds for full app initialization
+                    try:
+                        initialize_system_monitor()
+                        print("System monitor initialized for Klango mode")
+                    except Exception as e:
+                        print(f"Warning: System monitor initialization failed for Klango: {e}")
+
+                    # Initialize TCE sounds if enabled in environment settings
+                    try:
+                        environment_settings = settings.get('environment', {})
+                        enable_tce_sounds = str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1']
+
+                        if enable_tce_sounds:
+                            import tsounds
+                            tce_sound_feedback = tsounds.initialize()
+                            print("TCE sounds initialized successfully for Klango mode")
+                    except Exception as e:
+                        print(f"Warning: TCE sounds initialization failed for Klango: {e}")
+
+                services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
+                services_thread.start()
+                
+                # Start Klango frame with full initialization
+                from klangomode import start_klango_wx_mode
+                klango_frame = start_klango_wx_mode(settings_frame, VERSION, settings, component_manager)
+                klango_app.MainLoop()
+                return True
+            except Exception as e:
+                print(f"Failed to start Klango mode: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to normal mode
+                startup_mode = 'normal'
+        
+        elif startup_mode == 'minimized':
+            # Start GUI in minimized mode (will minimize to tray automatically)
+            print("Starting in minimized mode...")
+            startup_mode = 'normal'  # Continue with normal GUI startup but will be minimized
+                
+        # If we get here, we're in normal GUI mode
         return False
         
     except Exception as e:
@@ -159,6 +299,17 @@ def main():
         return False
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    import argparse
+    parser = argparse.ArgumentParser(description='Titan App Suite')
+    parser.add_argument('application', nargs='?', default=None, 
+                       help='Application shortname to launch directly')
+    parser.add_argument('file_path', nargs='?', default=None,
+                       help='File path to open with the application')
+    parser.add_argument('--startup-mode', choices=['normal', 'minimized', 'klango'], 
+                       default=None, help='Override startup mode setting')
+    args = parser.parse_args()
+    
     # Install signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -172,7 +323,7 @@ if __name__ == "__main__":
         create_notifications_file()
     
     # Uruchom logikę przed-GUI. Jeśli zwróci True, zakończ program.
-    if main():
+    if main(args):
         sys.exit()
 
     # Check for updates before starting the main application
@@ -220,15 +371,11 @@ if __name__ == "__main__":
         print(f"Failed to initialize component manager: {e}")
         # Continue without components rather than crash
 
-    # Check startup mode setting safely
-    try:
-        startup_mode = settings.get('general', {}).get('startup_mode', 'normal')
-        start_minimized = startup_mode == 'minimized'
-    except Exception:
-        start_minimized = False
     
     try:
-        frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings, component_manager=component_manager, start_minimized=start_minimized)
+        # Check if we should start minimized
+        should_start_minimized = settings.get('general', {}).get('startup_mode', 'normal') == 'minimized'
+        frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings, component_manager=component_manager, start_minimized=should_start_minimized)
     except Exception as e:
         print(f"Failed to create main application frame: {e}")
         sys.exit(1)
@@ -249,8 +396,8 @@ if __name__ == "__main__":
     # Start system hooks
     start_system_hooks()
     
-    # Initialize system monitor in a separate thread after all other components are loaded
-    def init_system_monitor_delayed():
+    # Initialize system services in a separate thread after all other components are loaded
+    def init_system_services_delayed():
         import time
         time.sleep(2)  # Wait 2 seconds for full app initialization
         try:
@@ -258,15 +405,30 @@ if __name__ == "__main__":
             print("System monitor initialized successfully")
         except Exception as e:
             print(f"Warning: System monitor initialization failed: {e}")
+
+        # Initialize TCE sounds if enabled in environment settings
+        try:
+            environment_settings = settings.get('environment', {})
+            enable_tce_sounds = str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1']
+
+            if enable_tce_sounds:
+                import tsounds
+                tce_sound_feedback = tsounds.initialize()
+                print("TCE sounds initialized successfully")
+                # Store reference to prevent garbage collection
+                if hasattr(frame, 'tce_sound_feedback'):
+                    frame.tce_sound_feedback = tce_sound_feedback
+        except Exception as e:
+            print(f"Warning: TCE sounds initialization failed: {e}")
+
+    services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
+    services_thread.start()
     
-    monitor_thread = threading.Thread(target=init_system_monitor_delayed, daemon=True)
-    monitor_thread.start()
-    
-    if start_minimized:
-        # Start in minimized/invisible interface mode without showing GUI
-        frame.minimize_to_tray()
+    # Show the GUI normally (unless we should start minimized)
+    if should_start_minimized:
+        # Start minimized to tray with invisible UI active
+        wx.CallAfter(frame.minimize_to_tray)
     else:
-        # Show normally
         frame.Show()
     
     try:
