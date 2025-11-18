@@ -360,7 +360,7 @@ class TeamTalkClient:
             if result:
                 self.voice_transmission = True
                 self.trigger_callback('voice_status', 'transmission_started', self.current_channel)
-                play_sound("ring_out")  # Indicate voice transmission started
+                play_sound("titannet/ring_out.ogg")  # Indicate voice transmission started
                 return True
             return False
             
@@ -408,7 +408,7 @@ class TeamTalkClient:
                 if result:
                     self.push_to_talk_active = True
                     self.voice_transmission = True
-                    play_sound("ring_out")
+                    play_sound("titannet/ring_out.ogg")
                     self.trigger_callback('voice_status', 'push_to_talk_start', self.current_channel)
                     return True
             elif not active and self.push_to_talk_active:
@@ -739,7 +739,7 @@ class TeamTalkWindow(wx.Frame):
                 self.update_channels()
                 # Initialize audio devices after connection
                 self.client.initialize_audio_devices()
-                play_sound("titannet_success")
+                play_sound("titannet/titannet_success.ogg")
                 speaker.output(_("Connected to TeamTalk server"))
     
     def on_disconnect(self, event):
@@ -750,7 +750,7 @@ class TeamTalkWindow(wx.Frame):
         self.ptt_btn.Enable(False)
         self.voice_toggle_btn.Enable(False)
         self.clear_lists()
-        play_sound("bye")
+        play_sound("titannet/bye.ogg")
         speaker.output(_("Disconnected from TeamTalk server"))
     
     def on_channel_activate(self, event):
@@ -813,7 +813,7 @@ class TeamTalkWindow(wx.Frame):
         if message:
             success = self.client.send_message(message)
             if success:
-                play_sound("message_send")
+                play_sound("titannet/message_send.ogg")
                 self.message_input.SetValue("")
                 # Add to message log
                 nickname = self.client.config.get('user', {}).get('nickname', 'Me')
@@ -825,7 +825,7 @@ class TeamTalkWindow(wx.Frame):
         
         # Play appropriate sound for success/failure
         if not success and ("error" in message.lower() or "failed" in message.lower() or "timeout" in message.lower()):
-            play_sound("file_error")
+            play_sound("titannet/file_error.ogg")
         
         if success and self.client.logged_in:
             wx.CallAfter(self.update_channels)
@@ -841,13 +841,13 @@ class TeamTalkWindow(wx.Frame):
             if msg_type == TextMsgType.MSGTYPE_CHANNEL:
                 # Channel message
                 self.add_message_to_log(f"[{_('Channel')}] {from_nickname}: {content}")
-                play_sound("new_message")  # Use titannet sound theme
+                play_sound("titannet/new_message.ogg")  # Use titannet sound theme
                 if self.client.config.get('ui', {}).get('show_channel_messages', True):
                     speaker.output(f"{from_nickname}: {content}")
             elif msg_type == TextMsgType.MSGTYPE_USER:
                 # Private message
                 self.add_message_to_log(f"[{_('Private')}] {from_nickname}: {content}")
-                play_sound("chat_message")  # Use titannet sound theme
+                play_sound("titannet/chat_message.ogg")  # Use titannet sound theme
                 if self.client.config.get('ui', {}).get('show_user_messages', True):
                     speaker.output(f"{_('Private message from')} {from_nickname}: {content}")
         
@@ -862,16 +862,16 @@ class TeamTalkWindow(wx.Frame):
             nickname = user['nickname']
             
             if status == 'login':
-                play_sound("new_status")
+                play_sound("titannet/new_status.ogg")
                 wx.CallAfter(self.add_message_to_log, f"[{_('System')}] {nickname} {_('joined the server')}")
             elif status == 'logout':
-                play_sound("bye")
+                play_sound("titannet/bye.ogg")
                 wx.CallAfter(self.add_message_to_log, f"[{_('System')}] {nickname} {_('left the server')}")
             elif status == 'joined_channel':
-                play_sound("new_chat")
+                play_sound("titannet/new_chat.ogg")
                 wx.CallAfter(self.add_message_to_log, f"[{_('System')}] {nickname} {_('joined the channel')}")
             elif status == 'left_channel':
-                play_sound("bye")
+                play_sound("titannet/bye.ogg")
                 wx.CallAfter(self.add_message_to_log, f"[{_('System')}] {nickname} {_('left the channel')}")
     
     def on_channel_status_event(self, channel_id, status):
@@ -884,7 +884,7 @@ class TeamTalkWindow(wx.Frame):
         if success:
             channel_name = self.client.channels.get(channel_id, {}).get('name', str(channel_id))
             self.add_message_to_log(f"[{_('System')}] {_('Joined channel')}: {channel_name}")
-            play_sound("callsuccess")
+            play_sound("titannet/callsuccess.ogg")
             speaker.output(f"{_('Joined channel')} {channel_name}")
             self.update_users()
     
@@ -895,7 +895,7 @@ class TeamTalkWindow(wx.Frame):
             success = self.client.leave_channel()
             if success:
                 self.add_message_to_log(f"[{_('System')}] {_('Left channel')}: {channel_name}")
-                play_sound("bye")
+                play_sound("titannet/bye.ogg")
                 speaker.output(f"{_('Left channel')} {channel_name}")
                 self.update_users()
     
@@ -1020,12 +1020,12 @@ class TeamTalkWindow(wx.Frame):
                 self.add_message_to_log(f"[{_('System')}] Audio devices initialized")
             elif status_type == 'transmission_started':
                 self.add_message_to_log(f"[{_('System')}] Voice transmission started in channel")
-                play_sound("ring_out")  # Sound from titannet directory
+                play_sound("titannet/ring_out.ogg")  # Sound from titannet directory
             elif status_type == 'transmission_stopped':
                 self.add_message_to_log(f"[{_('System')}] Voice transmission stopped")
             elif status_type == 'push_to_talk_start':
                 self.add_message_to_log(f"[{_('System')}] Push-to-talk activated")
-                play_sound("ring_out")  # Sound from titannet directory
+                play_sound("titannet/ring_out.ogg")  # Sound from titannet directory
             elif status_type == 'push_to_talk_stop':
                 self.add_message_to_log(f"[{_('System')}] Push-to-talk deactivated")
         

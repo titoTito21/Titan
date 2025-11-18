@@ -27,32 +27,48 @@ class ComponentManager:
 
     def load_components(self):
         """Loads all components from the data/components directory."""
-        components_dir = os.path.join(os.path.dirname(__file__), 'data', 'components')
-        if not os.path.exists(components_dir):
-            print(f"Components directory does not exist: {components_dir}")
-            return
+        try:
+            components_dir = os.path.join(os.path.dirname(__file__), 'data', 'components')
+            if not os.path.exists(components_dir):
+                print(f"Components directory does not exist: {components_dir}")
+                return
 
-        sys.path.insert(0, components_dir)
+            sys.path.insert(0, components_dir)
 
-        for component_folder in os.listdir(components_dir):
-            component_path = os.path.join(components_dir, component_folder)
-            if os.path.isdir(component_path) and component_folder != '.DS_Store':
-                self.ensure_component_config(component_path, component_folder)
-                status = self.get_component_status(component_path)
-                self.component_states[component_folder] = status
-                
-                friendly_name = self.get_component_display_name(component_path, component_folder)
-                self.component_friendly_names[component_folder] = friendly_name
+            for component_folder in os.listdir(components_dir):
+                try:
+                    component_path = os.path.join(components_dir, component_folder)
+                    if os.path.isdir(component_path) and component_folder != '.DS_Store':
+                        try:
+                            self.ensure_component_config(component_path, component_folder)
+                            status = self.get_component_status(component_path)
+                            self.component_states[component_folder] = status
 
-                if status == 0:  # Load only enabled components
-                    print(f"Loading component from folder: {component_folder}")
-                    init_path = self.find_init_file(component_path)
-                    if init_path:
-                        self.load_component(init_path, component_folder)
-                    else:
-                        print(f"No init file found in component: {component_folder}")
-                else:
-                    print(f"Component {component_folder} is disabled.")
+                            friendly_name = self.get_component_display_name(component_path, component_folder)
+                            self.component_friendly_names[component_folder] = friendly_name
+
+                            if status == 0:  # Load only enabled components
+                                print(f"Loading component from folder: {component_folder}")
+                                init_path = self.find_init_file(component_path)
+                                if init_path:
+                                    self.load_component(init_path, component_folder)
+                                else:
+                                    print(f"No init file found in component: {component_folder}")
+                            else:
+                                print(f"Component {component_folder} is disabled.")
+                        except Exception as e:
+                            print(f"Error processing component {component_folder}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Continue with next component
+                            continue
+                except Exception as e:
+                    print(f"Error accessing component folder: {e}")
+                    continue
+        except Exception as e:
+            print(f"Critical error in load_components: {e}")
+            import traceback
+            traceback.print_exc()
 
     def ensure_component_config(self, component_path, component_folder):
         config_path = os.path.join(component_path, '__component__.TCE')
@@ -120,19 +136,24 @@ class ComponentManager:
         try:
             if init_path.endswith('.py'):
                 # Compile .py to .pyc if it's newer or .pyc doesn't exist
-                pyc_path = init_path + 'c'
-                if not os.path.exists(pyc_path) or os.path.getmtime(init_path) > os.path.getmtime(pyc_path):
-                    pyc_path = self.compile_to_pyc(init_path)
-                    if not pyc_path:
-                        print(f"Failed to compile file: {init_path}")
-                        return
-                init_path = pyc_path
+                try:
+                    pyc_path = init_path + 'c'
+                    if not os.path.exists(pyc_path) or os.path.getmtime(init_path) > os.path.getmtime(pyc_path):
+                        pyc_path = self.compile_to_pyc(init_path)
+                        if not pyc_path:
+                            print(f"Failed to compile file: {init_path}")
+                            return
+                    init_path = pyc_path
+                except Exception as e:
+                    print(f"Error compiling component {component_name}: {e}")
+                    # Try to load .py file directly
+                    pass
 
             spec = importlib.util.spec_from_file_location(component_name, init_path)
             if spec is None:
                 print(f"Could not create spec for component: {component_name}")
                 return
-            
+
             module = importlib.util.module_from_spec(spec)
             sys.modules[component_name] = module
             spec.loader.exec_module(module)
@@ -140,20 +161,28 @@ class ComponentManager:
 
             print(f"Successfully loaded component: {component_name}")
 
-            if hasattr(module, 'add_menu'):
-                print(f"Adding menu for component: {component_name}")
-                module.add_menu(self)
-            else:
-                print(f"No menu to add for component: {component_name}")
+            try:
+                if hasattr(module, 'add_menu'):
+                    print(f"Adding menu for component: {component_name}")
+                    module.add_menu(self)
+                else:
+                    print(f"No menu to add for component: {component_name}")
+            except Exception as e:
+                print(f"Error adding menu for component {component_name}: {e}")
 
-            if hasattr(module, 'add_settings'):
-                print(f"Adding settings for component: {component_name}")
-                module.add_settings(self.settings_frame)
-            else:
-                print(f"No settings to add for component: {component_name}")
+            try:
+                if hasattr(module, 'add_settings'):
+                    print(f"Adding settings for component: {component_name}")
+                    module.add_settings(self.settings_frame)
+                else:
+                    print(f"No settings to add for component: {component_name}")
+            except Exception as e:
+                print(f"Error adding settings for component {component_name}: {e}")
 
         except Exception as e:
             print(f"Failed to load component {component_name}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_component_menu_functions(self):
         return self.component_menu_functions
@@ -190,14 +219,24 @@ class ComponentManager:
     def initialize_components(self, app):
         """Initializes all loaded components."""
         for component in self.components:
-            if hasattr(component, 'initialize'):
-                try:
-                    component.initialize(app)
-                    print(f"Initialized component: {component.__name__}")
-                except Exception as e:
-                    print(f"Failed to initialize component {component.__name__}: {e}")
-            else:
-                print(f"No initialize function in component: {component.__name__}")
+            try:
+                if hasattr(component, 'initialize'):
+                    try:
+                        component.initialize(app)
+                        print(f"Initialized component: {component.__name__}")
+                    except Exception as e:
+                        print(f"Failed to initialize component {component.__name__}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Continue with next component
+                else:
+                    print(f"No initialize function in component: {component.__name__}")
+            except Exception as e:
+                print(f"Critical error in initialize_components for component: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue with next component
+                continue
 
     def shutdown_components(self):
         """Shuts down all loaded components."""

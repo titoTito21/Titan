@@ -23,6 +23,8 @@ except ImportError:
     ComponentManagerDialog = None
     print("ERROR: Failed to import componentmanagergui.py. Make sure the file exists and is in the correct path.")
 
+# AI system now runs via voice commands only - no menu needed
+
 
 class MenuBar(wx.MenuBar):
     def __init__(self, parent):
@@ -51,6 +53,18 @@ class MenuBar(wx.MenuBar):
 
         self.Append(program_menu, _("Program"))
 
+        # Add switch menu
+        switch_menu = wx.Menu()
+        switch_apps_item = switch_menu.Append(wx.ID_ANY, _("Applications"))
+        switch_games_item = switch_menu.Append(wx.ID_ANY, _("Games"))
+        switch_titanim_item = switch_menu.Append(wx.ID_ANY, _("Titan IM"))
+
+        self.Bind(wx.EVT_MENU, self.on_switch_to_apps, switch_apps_item)
+        self.Bind(wx.EVT_MENU, self.on_switch_to_games, switch_games_item)
+        self.Bind(wx.EVT_MENU, self.on_switch_to_titanim, switch_titanim_item)
+
+        self.Append(switch_menu, _("Switch to"))
+
         # Add components menu
         if self.component_manager:
             component_menu = wx.Menu()
@@ -58,7 +72,7 @@ class MenuBar(wx.MenuBar):
             for name, func in menu_functions.items():
                 menu_item = component_menu.Append(wx.ID_ANY, name)
                 self.Bind(wx.EVT_MENU, func, menu_item)
-            
+
             if component_menu.GetMenuItemCount() > 0:
                 self.Append(component_menu, _("Components"))
 
@@ -75,6 +89,10 @@ class MenuBar(wx.MenuBar):
 
     def on_open_component_manager(self, event):
         if ComponentManagerDialog and self.component_manager:
+            # Restore window from tray if it's hidden
+            if not self.parent.IsShown():
+                self.parent.restore_from_tray()
+
             manager_dialog = ComponentManagerDialog(self.parent, title=_("Component Manager"), component_manager=self.component_manager)
             manager_dialog.ShowModal()
             manager_dialog.Destroy()
@@ -170,3 +188,18 @@ class MenuBar(wx.MenuBar):
 
     def on_exit(self, event):
         self.parent.Close()
+
+    def on_switch_to_apps(self, event):
+        """Switch to Applications list"""
+        if hasattr(self.parent, 'show_app_list'):
+            self.parent.show_app_list()
+
+    def on_switch_to_games(self, event):
+        """Switch to Games list"""
+        if hasattr(self.parent, 'show_game_list'):
+            self.parent.show_game_list()
+
+    def on_switch_to_titanim(self, event):
+        """Switch to Titan IM"""
+        if hasattr(self.parent, 'show_network_list'):
+            self.parent.show_network_list()

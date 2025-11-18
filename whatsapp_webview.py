@@ -218,8 +218,8 @@ class WhatsAppWebViewFrame(wx.Frame):
         
         try:
             # Play connecting sound like in Telegram/Messenger
-            play_sound('connecting.ogg')
-            print("🔗 Connecting to WhatsApp Web...")
+            play_sound('system/connecting.ogg')
+            print("Connecting to WhatsApp Web...")
             
             # TTS announcement if available
             try:
@@ -1913,10 +1913,10 @@ class WhatsAppWebViewFrame(wx.Frame):
         
         print(f"WhatsApp WebView error loading {url}: {error}")
         self.SetStatusText(_("Błąd ładowania strony"))
-        
+
         # Play error sound
-        play_sound('error.ogg')
-        
+        play_sound('core/error.ogg')
+
         # TTS error announcement
         if self.tts_item.IsChecked():
             speaker.speak(_("Błąd ładowania strony"))

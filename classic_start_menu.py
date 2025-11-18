@@ -12,6 +12,10 @@ except ImportError:
     TTS_AVAILABLE = False
     print("Warning: accessible_output3 not available")
 from sound import play_sound, initialize_sound
+from controller_vibrations import (
+    vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
+    vibrate_focus_change, vibrate_error, vibrate_notification
+)
 from settings import get_setting, load_settings
 from translation import set_language
 import winreg
@@ -206,7 +210,8 @@ class ClassicStartMenu(wx.Frame):
         if item_id.IsOk():
             item_data = self.menu_tree.GetItemData(item_id)
             if item_data:
-                play_sound('focus.ogg')
+                play_sound('core/FOCUS.ogg')
+                vibrate_cursor_move()  # Add vibration for focus movement
     
     def on_tree_activate(self, event):
         """Obsługa aktywacji elementu w drzewie (double-click)"""
@@ -217,7 +222,8 @@ class ClassicStartMenu(wx.Frame):
         item_id = event.GetItem()
         item_data = self.menu_tree.GetItemData(item_id)
         
-        play_sound('focus_expanded.ogg')
+        play_sound('ui/focus_expanded.ogg')
+        vibrate_menu_open()  # Add vibration for expanding menu
         
         if item_data and hasattr(item_data, 'submenu') and item_data.submenu:
             # Check if items are already loaded (more than just placeholder)
@@ -250,7 +256,8 @@ class ClassicStartMenu(wx.Frame):
     
     def on_tree_collapsing(self, event):
         """Obsługa zwijania węzła"""
-        play_sound('focus_collabsed.ogg')
+        play_sound('ui/focus_collabsed.ogg')
+        vibrate_menu_close()  # Add vibration for collapsing menu
     
     def on_tree_key(self, event):
         """Obsługa klawiszy w drzewie"""
@@ -276,7 +283,8 @@ class ClassicStartMenu(wx.Frame):
             return
         
         print(f"DEBUG: Executing tree item: {type(item)} - {item}")
-        play_sound('select.ogg')
+        play_sound('core/SELECT.ogg')
+        vibrate_selection()  # Add vibration for selection
         
         # Handle new data structure for apps and games
         if isinstance(item, dict):
@@ -671,12 +679,14 @@ class ClassicStartMenu(wx.Frame):
                 
                 if program_data:
                     # Uruchom program
-                    play_sound('select.ogg')
+                    play_sound('core/SELECT.ogg')
+                    vibrate_selection()  # Add vibration for selection
                     self.run_program(program_data)
                     self.Hide()
                 elif action_data:
                     # Wykonaj akcję systemową
-                    play_sound('select.ogg')
+                    play_sound('core/SELECT.ogg')
+                    vibrate_selection()  # Add vibration for selection
                     self.execute_action(action_data)
                     self.Hide()
             
@@ -1027,7 +1037,7 @@ class ClassicStartMenu(wx.Frame):
         """Dialog zamykania systemu - wspólny dla przycisku i opcji menu"""
         try:
             # Dźwięk otwierania dialogu zamknięcia
-            play_sound('statusbar.ogg')
+            play_sound('ui/statusbar.ogg')
             
             if self.is_windows:
                 # Try Windows native shutdown dialog first
@@ -1048,7 +1058,7 @@ class ClassicStartMenu(wx.Frame):
             dlg.Destroy()
             
             # Dźwięk zamknięcia dialogu
-            play_sound('applist.ogg')
+            play_sound('ui/applist.ogg')
             
             if result == wx.ID_YES:
                 if self.is_windows:
@@ -1075,7 +1085,7 @@ class ClassicStartMenu(wx.Frame):
         except Exception as e:
             print(f"Error in shutdown dialog: {e}")
             # Dźwięk zamknięcia dialogu nawet przy błędzie
-            play_sound('applist.ogg')
+            play_sound('ui/applist.ogg')
             self.Hide()
     
     def on_shutdown(self, event):

@@ -115,7 +115,7 @@ class ComponentManagerDialog(wx.Dialog):
         self.show_context_menu(component_folder)
 
     def on_menu_close(self, event):
-        play_sound('contextmenuclose.ogg')
+        play_sound('ui/contextmenuclose.ogg')
         self.actions_button.SetFocus()
         if event:
             event.Skip()
@@ -136,7 +136,7 @@ class ComponentManagerDialog(wx.Dialog):
             wx.MessageBox(_("No available actions for component '{}'.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
             return
 
-        play_sound('contextmenu.ogg')
+        play_sound('ui/contextmenu.ogg')
         self.tts.output(_("Context menu"))
 
         if has_open_action:

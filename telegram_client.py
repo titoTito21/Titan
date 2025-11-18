@@ -706,7 +706,7 @@ class TelegramClient:
     
     def _notify_error(self, error_message):
         """Notify about errors"""
-        play_sound('error')
+        play_sound('core/error.ogg')
         print(f"Telegram error: {error_message}")
         wx.MessageBox(error_message, _("Telegram Error"), wx.OK | wx.ICON_ERROR)
     

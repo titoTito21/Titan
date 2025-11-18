@@ -42,9 +42,9 @@ class ShutdownDialog(wx.Dialog):
         self.EndModal(wx.ID_CANCEL)
 
 def show_shutdown_dialog():
-    play_sound('statusbar.ogg')
+    play_sound('ui/statusbar.ogg')
     dialog = ShutdownDialog(None)
     result = dialog.ShowModal()
     dialog.Destroy()
-    play_sound('applist.ogg')
+    play_sound('ui/applist.ogg')
     return result

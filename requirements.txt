@@ -27,6 +27,10 @@ cryptography
 py-tgcalls
 pydub
 
+# AI System dependencies
+google-generativeai>=0.8.0
+gtts  # Text-to-speech fallback
+
 # Linux system integration (optional)
 pynput  # Cross-platform input handling (already used)
 # Note: For Linux audio control, system packages are preferred:

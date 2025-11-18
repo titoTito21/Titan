@@ -111,9 +111,9 @@ class SystemAudioFeedback(threading.Thread):
         info = self.process_info.pop(pid, None)
         if info and info["had_window"]:
             if info["is_system"]:
-                play_sound("sysprocess_close.ogg")
+                play_sound("system/sysprocess_close.ogg")
             else:
-                play_sound("uiclose.ogg")
+                play_sound("ui/uiclose.ogg")
 
     # --------------------------------------------------------------------------
     #                      MONITOROWANIE OKIEN PROCESÓW
@@ -134,9 +134,9 @@ class SystemAudioFeedback(threading.Thread):
                     # Pierwsze okno = odtwarzamy dźwięk otwarcia
                     info["had_window"] = True
                     if info["is_system"]:
-                        play_sound("sysprocess_open.ogg")
+                        play_sound("system/sysprocess_open.ogg")
                     else:
-                        play_sound("uiopen.ogg")
+                        play_sound("ui/uiopen.ogg")
 
             return True
 
@@ -152,16 +152,16 @@ class SystemAudioFeedback(threading.Thread):
             if self.prev_window:
                 old_title = win32gui.GetWindowText(self.prev_window)
                 if self._is_dialog_or_menu(old_title):
-                    play_sound("applist.ogg")
+                    play_sound("ui/applist.ogg")
 
             # Otwarcie nowego okna
             self.prev_window = current_window
             new_title = win32gui.GetWindowText(current_window)
             if self._is_dialog_or_menu(new_title):
-                play_sound("statusbar.ogg")
+                play_sound("ui/statusbar.ogg")
             else:
                 # Zwykła zmiana fokusa / skok kursora
-                play_sound("focus.ogg")
+                play_sound("core/FOCUS.ogg")
 
     def _is_dialog_or_menu(self, title: str) -> bool:
         t = title.lower()

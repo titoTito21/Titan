@@ -136,10 +136,10 @@ class ThreadSafeEventMonitor:
             return
         
         try:
-            play_sound('lock_screen.ogg')
+            play_sound('system/lock_screen.ogg')
         except:
             try:
-                play_sound('onlock_screen.ogg') 
+                play_sound('system/onlock_screen.ogg')
             except:
                 pass
     
@@ -151,10 +151,10 @@ class ThreadSafeEventMonitor:
             return
         
         try:
-            play_sound('unlock_screen.ogg')
+            play_sound('system/unlock_screen.ogg')
         except:
             try:
-                play_sound('onlock_screen.ogg')
+                play_sound('system/onlock_screen.ogg')
             except:
                 pass
     

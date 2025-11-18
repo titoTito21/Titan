@@ -275,9 +275,9 @@ class WiFiPasswordDialog(wx.Dialog):
         super().__init__(parent, title=_("Connect to WiFi Network"))
         self.network_name = network_name
         self.password = ""
-        
-        play_sound('statusbar.ogg')
-        
+
+        play_sound('ui/statusbar.ogg')
+
         self.setup_ui()
     
     def setup_ui(self):
@@ -534,7 +534,7 @@ class WiFiGUIPanel(wx.Panel):
                 
                 # Play sound for connected network
                 if network.get('connected'):
-                    play_sound('x.ogg')
+                    play_sound('ui/X.ogg')
                     
             # Update status text and show results
             if networks:
@@ -553,13 +553,13 @@ class WiFiGUIPanel(wx.Panel):
             print(f"Error updating network list: {e}")
     
     def on_network_selected(self, event):
-        play_sound('focus.ogg')
+        play_sound('core/FOCUS.ogg')
         # Play x.ogg if selected network is connected
         selection = event.GetIndex()
         if 0 <= selection < len(self.network_manager.current_networks):
             network = self.network_manager.current_networks[selection]
             if network.get('connected'):
-                play_sound('x.ogg')
+                play_sound('ui/X.ogg')
     
     def on_connect(self, event):
         selection = self.network_list.GetFirstSelected()
@@ -651,7 +651,7 @@ class WiFiGUIPanel(wx.Panel):
     def on_connect_result(self, success, ssid):
         if success:
             wx.MessageBox(_("Connected to {}").format(ssid), _("Success"), wx.OK | wx.ICON_INFORMATION)
-            play_sound('x.ogg')  # Connected sound
+            play_sound('ui/X.ogg')  # Connected sound
             self.refresh_networks(force_scan=False)  # Quick refresh
         else:
             wx.MessageBox(_("Failed to connect to {}").format(ssid), _("Error"), wx.OK | wx.ICON_ERROR)
@@ -798,7 +798,7 @@ class WiFiPanel:
                     # Play x.ogg if current network is connected
                     network = self.networks[self.current_network_index]
                     if network.get('connected'):
-                        play_sound('x.ogg')
+                        play_sound('ui/X.ogg')
                     return (True, 1, 2)  # networks = position 1 of 2 controls
                 else:
                     # At top of list or no networks
@@ -816,7 +816,7 @@ class WiFiPanel:
                     # Play x.ogg if current network is connected
                     network = self.networks[self.current_network_index]
                     if network.get('connected'):
-                        play_sound('x.ogg')
+                        play_sound('ui/X.ogg')
                     return (True, 1, 2)  # networks = position 1 of 2 controls
                 else:
                     # At bottom of list or no networks
@@ -844,7 +844,7 @@ class WiFiPanel:
                     # Play x.ogg if first network is connected
                     network = self.networks[self.current_network_index]
                     if network.get('connected'):
-                        play_sound('x.ogg')
+                        play_sound('ui/X.ogg')
                 return (True, 1, 2)  # networks = position 1 of 2 controls
             else:
                 # Already on networks list
@@ -858,7 +858,7 @@ class WiFiPanel:
             # Toggle WiFi
             self.wifi_enabled = not self.wifi_enabled
             self.network_manager.toggle_wifi(self.wifi_enabled)
-            play_sound('select.ogg')
+            play_sound('core/SELECT.ogg')
             from settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = _("Checked") if self.wifi_enabled else _("Unchecked")
@@ -889,7 +889,7 @@ class WiFiPanel:
         
         if network['encrypted']:
             self.speak(_("Network {} requires password. Use GUI interface for password entry.").format(ssid))
-            play_sound('statusbar.ogg')
+            play_sound('ui/statusbar.ogg')
             return
         else:
             self.speak(_("Connecting to {}...").format(ssid))
@@ -900,15 +900,15 @@ class WiFiPanel:
                     success = self.network_manager.connect_to_network(ssid)
                     if success:
                         self.speak(_("Connected to {}").format(ssid))
-                        play_sound('x.ogg')
+                        play_sound('ui/X.ogg')
                         self.refresh_networks(force_scan=True, threaded=True)
                     else:
                         self.speak(_("Failed to connect to {}").format(ssid))
-                        play_sound('error.ogg')
+                        play_sound('core/error.ogg')
                 except Exception as e:
                     print(f"Error connecting to network in background: {e}")
                     self.speak(_("Connection error"))
-                    play_sound('error.ogg')
+                    play_sound('core/error.ogg')
             
             import threading
             connect_thread = threading.Thread(target=background_connect, daemon=True)
@@ -920,7 +920,7 @@ class WiFiPanel:
             self.speak(_("Scan already in progress"))
         else:
             self.refresh_networks(force_scan=True, threaded=True)
-            play_sound('select.ogg')
+            play_sound('core/SELECT.ogg')
 
 class WiFiInvisibleUI:
     def __init__(self, network_manager, announce_widget_type=False, titan_ui_mode=False):
@@ -1122,7 +1122,7 @@ class WiFiInvisibleUI:
                 print(f"{prefix}{network['ssid']} - Signal: {network['signal']} dBm - {security} {status}")
                 
                 if network.get('connected'):
-                    play_sound('x.ogg')
+                    play_sound('ui/X.ogg')
             
             print(f"\nCurrent selection: {self.networks[self.current_index]['ssid']}")
             self.announce_current_network()
@@ -1212,7 +1212,7 @@ class WiFiInvisibleUI:
             # Toggle WiFi
             self.wifi_enabled = not self.wifi_enabled
             self.network_manager.toggle_wifi(self.wifi_enabled)
-            play_sound('select.ogg')
+            play_sound('core/SELECT.ogg')
             from settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = "Checked" if self.wifi_enabled else "Unchecked"

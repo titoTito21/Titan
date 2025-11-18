@@ -8,10 +8,15 @@ from app_manager import get_applications, open_application
 from game_manager import get_games, open_game
 from notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 from sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_sound
+from controller_vibrations import (
+    vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
+    vibrate_focus_change, vibrate_error, vibrate_notification
+)
 from translation import set_language
 from settings import get_setting, set_setting
 from component_manager import ComponentManager
 from help import show_help
+from controller_modes import initialize_controller_modes
 
 # Import stereo speech functionality
 try:
@@ -102,7 +107,7 @@ class KlangoMode:
         self.current_menu = None
         self.current_item = 0
         self.menu_stack = []
-        
+
         # Initialize pygame without display (only audio and events)
         try:
             # Set SDL to not require display
@@ -119,18 +124,25 @@ class KlangoMode:
                 print("Pygame initialized with fallback method")
             except Exception as fallback_error:
                 print(f"Pygame fallback initialization failed: {fallback_error}")
-        
+
         # Initialize sound system
         initialize_sound()
-        
+
+        # Initialize controller modes system
+        try:
+            initialize_controller_modes()
+            print("Controller modes initialized in Klango Mode")
+        except Exception as e:
+            print(f"Failed to initialize controller modes: {e}")
+
         # Load settings for stereo support
         self._stereo_sound_enabled = None
         self._stereo_speech_enabled = None
         self._load_stereo_settings()
-        
+
         # Initialize component manager
         self.component_manager = ComponentManager()
-        
+
         # Define main menu structure
         self.main_menu = [
             {"name": _("Applications"), "type": "submenu", "items": [], "expanded": False},
@@ -159,9 +171,6 @@ class KlangoMode:
         self.load_games()
         self.load_components()
         self.load_status_bar_items()
-        
-        # Disable Windows+M minimize
-        self.disable_win_minimize()
     
     def load_applications(self):
         """Load applications into the menu."""
@@ -246,70 +255,7 @@ class KlangoMode:
         except Exception as e:
             print(f"Error getting network status: {e}")
             speak_klango(_("Error getting network status"))
-    
-    def disable_win_minimize(self):
-        """Disable Windows+M minimize functionality."""
-        try:
-            import ctypes
-            from ctypes import wintypes
-            import ctypes.wintypes
-            
-            # Constants for Windows API
-            WH_KEYBOARD_LL = 13
-            WM_KEYDOWN = 0x0100
-            WM_SYSKEYDOWN = 0x0104
-            VK_LWIN = 0x5B
-            VK_RWIN = 0x5C
-            VK_M = 0x4D
-            
-            # Hook procedure to intercept Win+M
-            def low_level_keyboard_proc(nCode, wParam, lParam):
-                if nCode >= 0:
-                    if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                        # Get key info
-                        kbd_struct = ctypes.cast(lParam, ctypes.POINTER(ctypes.wintypes.POINT)).contents
-                        vk_code = kbd_struct.x  # Virtual key code is in x field for KBDLLHOOKSTRUCT
-                        
-                        # Check for Win+M combination
-                        win_key_pressed = (ctypes.windll.user32.GetAsyncKeyState(VK_LWIN) & 0x8000) or \
-                                        (ctypes.windll.user32.GetAsyncKeyState(VK_RWIN) & 0x8000)
-                        
-                        if win_key_pressed and vk_code == VK_M:
-                            # Block the key combination
-                            return 1
-                
-                # Call next hook
-                return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
-            
-            # Set up the hook
-            kernel32 = ctypes.windll.kernel32
-            user32 = ctypes.windll.user32
-            
-            # Define hook procedure type
-            HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
-            
-            # Install the hook
-            hook_proc = HOOKPROC(low_level_keyboard_proc)
-            self.keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, hook_proc, 
-                                                        kernel32.GetModuleHandleW(None), 0)
-            
-            if self.keyboard_hook:
-                print("Win+M minimize disabled successfully")
-            else:
-                print("Failed to disable Win+M minimize")
-                
-        except Exception as e:
-            print(f"Could not disable Win+M: {e}")
-    
-    def cleanup_hooks(self):
-        """Cleanup keyboard hooks on exit."""
-        try:
-            if hasattr(self, 'keyboard_hook') and self.keyboard_hook:
-                ctypes.windll.user32.UnhookWindowsHookEx(self.keyboard_hook)
-                print("Keyboard hook cleaned up")
-        except Exception as e:
-            print(f"Error cleaning up hooks: {e}")
-    
+
     def run(self):
         """Main event loop for Klango Mode."""
         self.running = True
@@ -361,9 +307,8 @@ class KlangoMode:
                                 self.open_main_menu()
                     except (EOFError, KeyboardInterrupt):
                         self.running = False
-        
+
         # Cleanup before exit
-        self.cleanup_hooks()
         try:
             pygame.quit()
         except:
@@ -445,7 +390,8 @@ class KlangoMode:
         self.menu_stack = []
         
         # Play context menu opening sound and announce menu
-        play_sound("contextmenu.ogg")
+        play_sound("ui/contextmenu.ogg")
+        vibrate_menu_open()  # Add vibration for context menu opening
         speak_klango(_("Menu"), position=0.0, pitch_offset=0, interrupt=True)
         
         # Announce current item
@@ -464,6 +410,7 @@ class KlangoMode:
             if self.current_item > 0:
                 self.current_item -= 1
                 self.play_focus_sound_stereo()
+                vibrate_cursor_move()  # Add vibration for focus movement
                 
                 # Use stereo speech if enabled
                 item_name = self.current_menu[self.current_item]["name"]
@@ -482,7 +429,8 @@ class KlangoMode:
                     speak_klango(item_name, position=0.0, pitch_offset=0, interrupt=True)
             else:
                 # At beginning - play boundary sound
-                play_sound("endoflist.ogg")
+                play_sound("ui/endoflist.ogg")
+                vibrate_cursor_move()  # Add vibration for boundary/end of list
     
     def navigate_right(self):
         """Navigate right (next item) in the menu."""
@@ -491,6 +439,7 @@ class KlangoMode:
             if self.current_item < len(self.current_menu) - 1:
                 self.current_item += 1
                 self.play_focus_sound_stereo()
+                vibrate_cursor_move()  # Add vibration for focus movement
                 
                 # Use stereo speech if enabled
                 item_name = self.current_menu[self.current_item]["name"]
@@ -509,7 +458,8 @@ class KlangoMode:
                     speak_klango(item_name, position=0.0, pitch_offset=0, interrupt=True)
             else:
                 # At end - play boundary sound
-                play_sound("endoflist.ogg")
+                play_sound("ui/endoflist.ogg")
+                vibrate_cursor_move()  # Add vibration for boundary/end of list
     
     def expand_item(self):
         """Expand current submenu item (Down key/S) and enter it directly."""
@@ -554,6 +504,7 @@ class KlangoMode:
         elif item["type"] == "action":
             # Execute action
             play_select_sound()
+            vibrate_selection()  # Add vibration for selection
             if "action" in item and callable(item["action"]):
                 try:
                     item["action"]()
@@ -595,7 +546,8 @@ class KlangoMode:
         """Close current menu or submenu."""
         if self.menu_stack:
             # Return to parent menu - play collapse sound
-            play_sound("focus_collabsed.ogg")
+            play_sound("ui/focus_collabsed.ogg")
+            vibrate_menu_close()  # Add vibration for collapsing/closing
             parent = self.menu_stack.pop()
             self.current_menu = parent["menu"]
             self.current_item = parent["item"]
@@ -612,7 +564,8 @@ class KlangoMode:
             self.menu_open = False
             self.current_menu = None
             self.current_item = 0
-            play_sound("contextmenuclose.ogg")
+            play_sound("ui/contextmenuclose.ogg")
+            vibrate_menu_close()  # Add vibration for context menu closing
             # Remove menu closed message
     
     def play_focus_sound_stereo(self):
@@ -635,9 +588,9 @@ class KlangoMode:
         """Play focus_extended.ogg sound."""
         try:
             if self.is_stereo_sound_enabled():
-                play_sound("focus_expanded.ogg")
+                play_sound("ui/focus_expanded.ogg")
             else:
-                play_sound("focus_expanded.ogg")
+                play_sound("ui/focus_expanded.ogg")
         except Exception as e:
             print(f"Could not play focus_expanded sound: {e}")
     
@@ -645,9 +598,10 @@ class KlangoMode:
         """Play focus_collapsed.ogg sound."""
         try:
             if self.is_stereo_sound_enabled():
-                play_sound("focus_collabsed.ogg")
+                play_sound("ui/focus_collabsed.ogg")
             else:
-                play_sound("focus_collabsed.ogg")
+                play_sound("ui/focus_collabsed.ogg")
+            vibrate_menu_close()  # Add vibration for collapsing/closing
         except Exception as e:
             print(f"Could not play focus_collabsed sound: {e}")
     
@@ -968,10 +922,17 @@ class KlangoFrame(wx.Frame):
         
         # Hide the frame completely
         self.SetPosition((-10000, -10000))  # Move off-screen
-        
+
         # Initialize sound system
         initialize_sound()
-        
+
+        # Initialize controller modes system
+        try:
+            initialize_controller_modes()
+            print("Controller modes initialized in KlangoFrame (wx mode)")
+        except Exception as e:
+            print(f"Failed to initialize controller modes in KlangoFrame: {e}")
+
         # Load settings for stereo support
         self._stereo_sound_enabled = None
         self._stereo_speech_enabled = None
@@ -1141,7 +1102,8 @@ class KlangoFrame(wx.Frame):
         self.menu_stack = []
         
         # Play context menu opening sound and announce menu
-        play_sound("contextmenu.ogg")
+        play_sound("ui/contextmenu.ogg")
+        vibrate_menu_open()  # Add vibration for context menu opening
         speak_klango(_("Menu"), position=0.0, pitch_offset=0, interrupt=True)
         
         # Announce current item
@@ -1160,6 +1122,7 @@ class KlangoFrame(wx.Frame):
             if self.current_item > 0:
                 self.current_item -= 1
                 self.play_focus_sound_stereo()
+                vibrate_cursor_move()  # Add vibration for focus movement
                 
                 # Use stereo speech if enabled
                 item_name = self.current_menu[self.current_item]["name"]
@@ -1178,7 +1141,8 @@ class KlangoFrame(wx.Frame):
                     speak_klango(item_name, position=0.0, pitch_offset=0, interrupt=True)
             else:
                 # At beginning - play boundary sound
-                play_sound("endoflist.ogg")
+                play_sound("ui/endoflist.ogg")
+                vibrate_cursor_move()  # Add vibration for boundary/end of list
     
     def navigate_right(self):
         """Navigate right (next item) in the menu."""
@@ -1187,6 +1151,7 @@ class KlangoFrame(wx.Frame):
             if self.current_item < len(self.current_menu) - 1:
                 self.current_item += 1
                 self.play_focus_sound_stereo()
+                vibrate_cursor_move()  # Add vibration for focus movement
                 
                 # Use stereo speech if enabled
                 item_name = self.current_menu[self.current_item]["name"]
@@ -1205,7 +1170,8 @@ class KlangoFrame(wx.Frame):
                     speak_klango(item_name, position=0.0, pitch_offset=0, interrupt=True)
             else:
                 # At end - play boundary sound
-                play_sound("endoflist.ogg")
+                play_sound("ui/endoflist.ogg")
+                vibrate_cursor_move()  # Add vibration for boundary/end of list
     
     def expand_item(self):
         """Enter current submenu item (Down arrow) directly."""
@@ -1241,6 +1207,7 @@ class KlangoFrame(wx.Frame):
         elif item["type"] == "action":
             # Execute action
             play_select_sound()
+            vibrate_selection()  # Add vibration for selection
             if "action" in item and callable(item["action"]):
                 try:
                     item["action"]()
@@ -1282,7 +1249,8 @@ class KlangoFrame(wx.Frame):
         """Close current menu or submenu."""
         if self.menu_stack:
             # Return to parent menu - play collapse sound
-            play_sound("focus_collabsed.ogg")
+            play_sound("ui/focus_collabsed.ogg")
+            vibrate_menu_close()  # Add vibration for collapsing/closing
             parent = self.menu_stack.pop()
             self.current_menu = parent["menu"]
             self.current_item = parent["item"]
@@ -1299,7 +1267,8 @@ class KlangoFrame(wx.Frame):
             self.menu_open = False
             self.current_menu = None
             self.current_item = 0
-            play_sound("contextmenuclose.ogg")
+            play_sound("ui/contextmenuclose.ogg")
+            vibrate_menu_close()  # Add vibration for context menu closing
             # Remove menu closed message
     
     def play_focus_sound_stereo(self):
@@ -1322,9 +1291,9 @@ class KlangoFrame(wx.Frame):
         """Play focus_extended.ogg sound."""
         try:
             if self.is_stereo_sound_enabled():
-                play_sound("focus_expanded.ogg")
+                play_sound("ui/focus_expanded.ogg")
             else:
-                play_sound("focus_expanded.ogg")
+                play_sound("ui/focus_expanded.ogg")
         except Exception as e:
             print(f"Could not play focus_expanded sound: {e}")
     
@@ -1332,9 +1301,10 @@ class KlangoFrame(wx.Frame):
         """Play focus_collapsed.ogg sound."""
         try:
             if self.is_stereo_sound_enabled():
-                play_sound("focus_collabsed.ogg")
+                play_sound("ui/focus_collabsed.ogg")
             else:
-                play_sound("focus_collabsed.ogg")
+                play_sound("ui/focus_collabsed.ogg")
+            vibrate_menu_close()  # Add vibration for collapsing/closing
         except Exception as e:
             print(f"Could not play focus_collabsed sound: {e}")
     

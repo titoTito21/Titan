@@ -126,7 +126,7 @@ class TitanHelp(wx.Frame):
             selected_header = self.header_list.GetStringSelection()
             if selected_header:
                 self.display_content(selected_header)
-                play_sound("focus.ogg")
+                play_sound("core/FOCUS.ogg")
         except Exception as e:
             print(f"Error in header selection: {e}")
 
@@ -141,7 +141,7 @@ class TitanHelp(wx.Frame):
                 selected_header = self.header_list.GetStringSelection()
                 if selected_header:
                     self.display_content(selected_header)
-                    play_sound("focus.ogg")
+                    play_sound("core/FOCUS.ogg")
             else:
                 event.Skip()
         except Exception as e:
@@ -152,7 +152,7 @@ class TitanHelp(wx.Frame):
         """Pokaż okno pomocy."""
         try:
             self.Show()
-            play_sound("uiopen.ogg")
+            play_sound("ui/uiopen.ogg")
             # Ensure focus is set properly with a small delay
             wx.CallAfter(self.header_list.SetFocus)
         except Exception as e:
@@ -162,7 +162,7 @@ class TitanHelp(wx.Frame):
         """Ukryj okno pomocy."""
         try:
             self.Hide()
-            play_sound("uiclose.ogg")
+            play_sound("ui/uiclose.ogg")
         except Exception as e:
             print(f"Error hiding help window: {e}")
 

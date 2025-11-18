@@ -56,35 +56,58 @@ if platform.system() == 'Windows':
 
 class SystemMonitor:
     """Main system monitor class that manages all monitoring threads"""
-    
+
     def __init__(self):
-        self.monitors = []
-        self.running = False
-    
+        try:
+            self.monitors = []
+            self.running = False
+        except Exception as e:
+            print(f"Error in SystemMonitor.__init__: {e}")
+            import traceback
+            traceback.print_exc()
+            self.monitors = []
+            self.running = False
+
     def start(self):
         """Start all enabled monitors"""
-        if self.running:
-            return
-            
-        self.running = True
-        
-        # Start ChargerMonitor if enabled and available
-        if (get_setting('monitor_charger', True, section='system_monitor') and 
-            psutil and hasattr(psutil, 'sensors_battery') and 
-            psutil.sensors_battery() is not None):
-            charger_monitor = ChargerMonitor()
-            charger_monitor.start()
-            self.monitors.append(charger_monitor)
-        
-        # Start AudioMonitor based on volume monitor setting (only if pycaw available on Windows)
-        volume_monitor_mode = get_setting('volume_monitor', 'sound', section='system_monitor')
-        if volume_monitor_mode != 'none':
-            if platform.system() != 'Windows' or PYCAW_AVAILABLE:
-                audio_monitor = AudioMonitor(volume_monitor_mode)
-                audio_monitor.start()
-                self.monitors.append(audio_monitor)
-            else:
-                print("Volume monitoring disabled on Windows - pycaw not available")
+        try:
+            if self.running:
+                return
+
+            self.running = True
+
+            # Start ChargerMonitor if enabled and available
+            try:
+                if (get_setting('monitor_charger', True, section='system_monitor') and
+                    psutil and hasattr(psutil, 'sensors_battery') and
+                    psutil.sensors_battery() is not None):
+                    charger_monitor = ChargerMonitor()
+                    charger_monitor.start()
+                    self.monitors.append(charger_monitor)
+            except Exception as e:
+                print(f"Error starting ChargerMonitor: {e}")
+                import traceback
+                traceback.print_exc()
+
+            # Start AudioMonitor based on volume monitor setting (only if pycaw available on Windows)
+            try:
+                volume_monitor_mode = get_setting('volume_monitor', 'sound', section='system_monitor')
+                if volume_monitor_mode != 'none':
+                    if platform.system() != 'Windows' or PYCAW_AVAILABLE:
+                        audio_monitor = AudioMonitor(volume_monitor_mode)
+                        audio_monitor.start()
+                        self.monitors.append(audio_monitor)
+                    else:
+                        print("Volume monitoring disabled on Windows - pycaw not available")
+            except Exception as e:
+                print(f"Error starting AudioMonitor: {e}")
+                import traceback
+                traceback.print_exc()
+        except Exception as e:
+            print(f"Critical error in SystemMonitor.start: {e}")
+            import traceback
+            traceback.print_exc()
+            self.running = False
     
     def stop(self):
         """Stop all running monitors"""
@@ -95,17 +118,27 @@ class SystemMonitor:
 
 class ChargerMonitor(threading.Thread):
     """Monitor battery charging status and announce changes"""
-    
+
     def __init__(self):
-        super().__init__()
-        self.daemon = True
-        self.running = True
-        self.charged_notification_sent = False
-        battery = psutil.sensors_battery()
-        if battery:
-            self.previous_status = battery.power_plugged
-            self.previous_percentage = battery.percent
-        else:
+        try:
+            super().__init__()
+            self.daemon = True
+            self.running = True
+            self.charged_notification_sent = False
+            battery = psutil.sensors_battery()
+            if battery:
+                self.previous_status = battery.power_plugged
+                self.previous_percentage = battery.percent
+            else:
+                self.previous_status = None
+                self.previous_percentage = None
+        except Exception as e:
+            print(f"Error in ChargerMonitor.__init__: {e}")
+            import traceback
+            traceback.print_exc()
+            self.daemon = True
+            self.running = False  # Don't run if initialization failed
+            self.charged_notification_sent = False
             self.previous_status = None
             self.previous_percentage = None
 
@@ -161,14 +194,14 @@ class ChargerMonitor(threading.Thread):
             time.sleep(1)
 
     def on_charger_connect(self, percentage):
-        play_sound('charger_connect.ogg')
+        play_sound('system/charger_connect.ogg')
         safe_speaker = get_safe_system_speaker()
         if safe_speaker:
             safe_speaker.speak(_("Connected to power adapter, battery level is {}%").format(percentage))
 
     def on_charger_disconnect(self, percentage):
         self.charged_notification_sent = False
-        play_sound('charger_disconnect.ogg')
+        play_sound('system/charger_disconnect.ogg')
         safe_speaker = get_safe_system_speaker()
         if safe_speaker:
             safe_speaker.speak(_("Power adapter disconnected, battery level is {}%").format(percentage))
@@ -188,16 +221,28 @@ class ChargerMonitor(threading.Thread):
 
 class AudioMonitor(threading.Thread):
     """Monitor system volume changes and announce them"""
-    
+
     def __init__(self, announce_mode='sound'):
-        super().__init__()
-        self.daemon = True
-        self.running = True
-        self.announce_mode = announce_mode  # 'none', 'sound', 'speech', 'both'
-        self.com_initialized = False
-        self.consecutive_errors = 0
-        self.max_consecutive_errors = 10  # Stop after 10 consecutive errors
-        self.previous_volume = self.get_volume_percentage_safe()
+        try:
+            super().__init__()
+            self.daemon = True
+            self.running = True
+            self.announce_mode = announce_mode  # 'none', 'sound', 'speech', 'both'
+            self.com_initialized = False
+            self.consecutive_errors = 0
+            self.max_consecutive_errors = 10  # Stop after 10 consecutive errors
+            self.previous_volume = self.get_volume_percentage_safe()
+        except Exception as e:
+            print(f"Error in AudioMonitor.__init__: {e}")
+            import traceback
+            traceback.print_exc()
+            self.daemon = True
+            self.running = False  # Don't run if initialization failed
+            self.announce_mode = announce_mode
+            self.com_initialized = False
+            self.consecutive_errors = 0
+            self.max_consecutive_errors = 10
+            self.previous_volume = -1
 
     def run(self):
         if platform.system() == 'Windows':
@@ -234,7 +279,7 @@ class AudioMonitor(threading.Thread):
     def announce_volume_change(self, volume):
         """Announce volume change based on current settings"""
         if self.announce_mode in ['sound', 'both']:
-            play_sound('volume.ogg')
+            play_sound('system/volume.ogg')
         
         if self.announce_mode in ['speech', 'both']:
             safe_speaker = get_safe_system_speaker()
@@ -346,9 +391,15 @@ _system_monitor = None
 def initialize_system_monitor():
     """Initialize and start the system monitor"""
     global _system_monitor
-    if _system_monitor is None:
-        _system_monitor = SystemMonitor()
-        _system_monitor.start()
+    try:
+        if _system_monitor is None:
+            _system_monitor = SystemMonitor()
+            _system_monitor.start()
+    except Exception as e:
+        print(f"Error initializing system monitor: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't crash the program, just log the error
 
 def stop_system_monitor():
     """Stop the system monitor"""

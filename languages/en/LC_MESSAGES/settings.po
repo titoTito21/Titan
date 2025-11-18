@@ -1,0 +1,296 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"PO-Revision-Date: 2025-11-05 10:38+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: settingsgui.py:121
+msgid "Sound"
+msgstr ""
+
+#: settingsgui.py:122
+msgid "General"
+msgstr ""
+
+#: settingsgui.py:123
+msgid "Interface"
+msgstr ""
+
+#: settingsgui.py:125
+msgid "Invisible Interface"
+msgstr ""
+
+#: settingsgui.py:127
+msgid "Environment"
+msgstr ""
+
+#: settingsgui.py:131
+msgid "System Monitor"
+msgstr "System Monitor"
+
+#: settingsgui.py:146
+msgid "Windows"
+msgstr ""
+
+#: settingsgui.py:151
+msgid "Save"
+msgstr ""
+
+#: settingsgui.py:155
+msgid "Cancel"
+msgstr ""
+
+#: settingsgui.py:169
+msgid "Settings"
+msgstr ""
+
+#: settingsgui.py:176
+msgid "Select sound theme:"
+msgstr ""
+
+#: settingsgui.py:190 settingsgui.py:660
+msgid "No themes"
+msgstr ""
+
+#: settingsgui.py:196
+msgid "Stereo sounds"
+msgstr ""
+
+#: settingsgui.py:201
+msgid "Sound theme volume:"
+msgstr ""
+
+#: settingsgui.py:219
+msgid "Language:"
+msgstr ""
+
+#: settingsgui.py:233
+msgid "Startup mode:"
+msgstr ""
+
+#: settingsgui.py:238
+msgid "Normal (Graphical interface)"
+msgstr ""
+
+#: settingsgui.py:238
+msgid "Minimized (Invisible interface)"
+msgstr ""
+
+#: settingsgui.py:238
+msgid "Classic Mode"
+msgstr ""
+
+#: settingsgui.py:245
+msgid "Quick start"
+msgstr ""
+
+#: settingsgui.py:250
+msgid "Confirm exit from Titan"
+msgstr ""
+
+#: settingsgui.py:260
+msgid "Select interface skin:"
+msgstr ""
+
+#: settingsgui.py:274 settingsgui.py:276 settingsgui.py:514 settingsgui.py:515
+msgid "Default"
+msgstr ""
+
+#: settingsgui.py:291
+msgid "Announce item index"
+msgstr ""
+
+#: settingsgui.py:296
+msgid "Announce widget type"
+msgstr ""
+
+#: settingsgui.py:301
+msgid "Enable TitanUI support"
+msgstr ""
+
+#: settingsgui.py:306
+msgid "Announce first item in category"
+msgstr ""
+
+#: settingsgui.py:311
+msgid "Stereo speech (Using SAPI)"
+msgstr ""
+
+#: settingsgui.py:316
+msgid "Titan key:"
+msgstr ""
+
+#: settingsgui.py:328
+msgid "Announce screen locking state"
+msgstr ""
+
+#: settingsgui.py:333
+msgid "Modify system interface"
+msgstr ""
+
+#: settingsgui.py:338
+msgid "Enable TCE sounds outside environment"
+msgstr ""
+
+#: settingsgui.py:350
+msgid "Volume Monitor:"
+msgstr "Volume Monitor:"
+
+#: settingsgui.py:354
+msgid "None"
+msgstr "None"
+
+#: settingsgui.py:354
+msgid "Sound only"
+msgstr "Sound only"
+
+#: settingsgui.py:354
+msgid "Speech only"
+msgstr "Speech only"
+
+#: settingsgui.py:354
+msgid "Sound and speech"
+msgstr "Sound and speech"
+
+#: settingsgui.py:360
+msgid "Announce battery level every:"
+msgstr "Announce battery level every:"
+
+#: settingsgui.py:364
+msgid "1%"
+msgstr "1%"
+
+#: settingsgui.py:364
+msgid "10%"
+msgstr "10%"
+
+#: settingsgui.py:364
+msgid "15%"
+msgstr "15%"
+
+#: settingsgui.py:364
+msgid "25%"
+msgstr "25%"
+
+#: settingsgui.py:364
+msgid "Never"
+msgstr "Never"
+
+#: settingsgui.py:370
+msgid "Monitor charger connection and disconnection"
+msgstr "Monitor charger connection and disconnection"
+
+#: settingsgui.py:391
+msgid "System volume:"
+msgstr ""
+
+#: settingsgui.py:420
+msgid "Disable sound card mute when Titan is running"
+msgstr ""
+
+#: settingsgui.py:435
+msgid "Voice:"
+msgstr ""
+
+#: settingsgui.py:444
+msgid "Speech rate:"
+msgstr ""
+
+#: settingsgui.py:449
+msgid "Speech rate"
+msgstr ""
+
+#: settingsgui.py:455
+msgid "Speech volume:"
+msgstr ""
+
+#: settingsgui.py:460
+msgid "Speech volume"
+msgstr ""
+
+#: settingsgui.py:569 settingsgui.py:604
+#, python-brace-format
+msgid "Command '{}' finished with error code {}.\n"
+msgstr ""
+
+#: settingsgui.py:575
+#, python-brace-format
+msgid ""
+"Cannot open SAPI settings:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:575 settingsgui.py:581 settingsgui.py:584 settingsgui.py:610
+#: settingsgui.py:618 settingsgui.py:621
+msgid "Error"
+msgstr ""
+
+#: settingsgui.py:581
+msgid ""
+"Error: Executable control.exe not found. Make sure Windows is working "
+"correctly."
+msgstr ""
+
+#: settingsgui.py:584
+#, python-brace-format
+msgid ""
+"Unexpected error while opening SAPI settings:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:610
+#, python-brace-format
+msgid ""
+"Cannot open Ease of Access:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:618
+msgid ""
+"Error: Cannot find accessibility settings. Make sure Windows is working "
+"correctly."
+msgstr ""
+
+#: settingsgui.py:621
+#, python-brace-format
+msgid ""
+"Unexpected error while opening Ease of Access:\n"
+"{}\n"
+"\n"
+"Technical details in the console."
+msgstr ""
+
+#: settingsgui.py:754
+msgid ""
+"Settings have been saved. Please restart the application for the language"
+" change to take full effect."
+msgstr ""
+
+#: settingsgui.py:861
+msgid "Stereo Speech Settings"
+msgstr ""
+
+#: settingsgui.py:921 settingsgui.py:924
+msgid "Default voice"
+msgstr ""
+

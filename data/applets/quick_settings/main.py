@@ -250,8 +250,8 @@ class QuickSettingsWidget(BaseWidget):
                     cache_key = f"{item['section']}.{item['key']}"
                     if cache_key in self._settings_cache:
                         del self._settings_cache[cache_key]
-                    
-                    play_sound('select.ogg')
+
+                    play_sound('core/SELECT.ogg')
                     value_text = _('On') if new_value == 'true' else _('Off')
                     self.speak(f"{item['name']}: {value_text}")
                 except Exception as e:
@@ -285,8 +285,8 @@ class QuickSettingsWidget(BaseWidget):
                             set_theme(new_value)
                         except Exception as e:
                             print(f"Error setting theme: {e}")
-                    
-                    play_sound('select.ogg')
+
+                    play_sound('core/SELECT.ogg')
                     self.speak(f"{item['name']}: {new_value}")
                     
                 except Exception as e:

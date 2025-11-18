@@ -36,7 +36,7 @@ def add_notification(date, time, appname, content):
 
 def show_notification(title, message):
     """Odtwarza dźwięk powiadomienia i odczytuje jego treść."""
-    play_sound('notify.ogg')
+    play_sound('ui/notify.ogg')
     speaker.speak(f"{title}, {message}")
 
 def _monitor_network_events():

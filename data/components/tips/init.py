@@ -94,7 +94,7 @@ class TipManager(threading.Thread):
             time.sleep(self.interval)
             if not self.running:
                 break
-            play_sound('tip.ogg')
+            play_sound('ui/tip.ogg')
             time.sleep(2)
             tip = random.choice(self.tips)
             speak(f"Porada: {tip}")

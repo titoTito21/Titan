@@ -7,6 +7,7 @@ import win32gui
 import win32con
 import win32api
 import keyboard
+import wx
 from settings import get_setting
 from app_manager import find_application_by_shortname, open_application
 from translation import _
@@ -46,19 +47,28 @@ class SystemHooksManager:
             self.stop_system_interface_hooks()
     
     def start_system_interface_hooks(self):
-        """Start system interface hooks - Windows key and Windows+E"""
+        """Start system interface hooks - Windows key, Escape key, Windows+E, and Windows+B"""
         if self.windows_e_hook_active:
             return
-            
+
         try:
+            # Hook Windows key (left) to open Classic Start Menu
+            keyboard.add_hotkey('left windows', self.on_windows_key_pressed, suppress=True)
+
+            # Hook Windows key (right) to open Classic Start Menu
+            keyboard.add_hotkey('right windows', self.on_windows_key_pressed, suppress=True)
+
             # Hook Windows+E combination
             keyboard.add_hotkey('win+e', self.on_windows_e_pressed, suppress=True)
-            
-            # Hook Windows key (left and right)
-            keyboard.add_hotkey('win', self.on_windows_key_pressed, suppress=True)
-            
+
+            # Hook Windows+B combination (System Tray)
+            keyboard.add_hotkey('win+b', self.on_windows_b_pressed, suppress=True)
+
+            # Hook Escape key to open Start Menu
+            keyboard.add_hotkey('escape', self.on_escape_key_pressed, suppress=True)
+
             self.windows_e_hook_active = True
-            print("INFO: System interface hooks activated - Windows key -> Classic Start Menu, Windows+E -> TFM")
+            print("INFO: System interface hooks activated - Windows key -> Classic Start Menu, Escape key -> Classic Start Menu, Windows+E -> TFM, Windows+B -> System Tray")
         except Exception as e:
             print(f"ERROR: Failed to start system interface hooks: {e}")
     
@@ -66,15 +76,18 @@ class SystemHooksManager:
         """Stop system interface hooks"""
         if not self.windows_e_hook_active:
             return
-            
+
         try:
+            keyboard.remove_hotkey('left windows')
+            keyboard.remove_hotkey('right windows')
             keyboard.remove_hotkey('win+e')
-            keyboard.remove_hotkey('win')
+            keyboard.remove_hotkey('win+b')
+            keyboard.remove_hotkey('escape')
             self.windows_e_hook_active = False
             print("INFO: System interface hooks deactivated")
         except Exception as e:
             print(f"ERROR: Failed to stop system interface hooks: {e}")
-    
+
     def on_windows_key_pressed(self):
         """Handler for Windows key press - opens Classic Start Menu"""
         try:
@@ -85,13 +98,42 @@ class SystemHooksManager:
             ).start()
         except Exception as e:
             print(f"ERROR: Failed to handle Windows key: {e}")
+
+    def on_escape_key_pressed(self):
+        """Handler for Escape key press - opens Classic Start Menu"""
+        try:
+            print("INFO: Escape key pressed - opening Classic Start Menu")
+            threading.Thread(
+                target=self._open_classic_start_menu,
+                daemon=True
+            ).start()
+        except Exception as e:
+            print(f"ERROR: Failed to handle Escape key: {e}")
     
+    def _get_main_frame(self):
+        """Get the main TitanApp frame"""
+        try:
+            # Find the main frame from wx app
+            app = wx.GetApp()
+            if app:
+                for window in wx.GetTopLevelWindows():
+                    if hasattr(window, 'start_menu'):  # TitanApp has start_menu attribute
+                        return window
+            return None
+        except Exception as e:
+            print(f"ERROR: Failed to get main frame: {e}")
+            return None
+
     def _open_classic_start_menu(self):
         """Open Classic Start Menu"""
         try:
-            from classic_start_menu import create_classic_start_menu
-            create_classic_start_menu()
-            print("INFO: Classic Start Menu opened")
+            main_frame = self._get_main_frame()
+            if main_frame and hasattr(main_frame, 'start_menu') and main_frame.start_menu:
+                # Use existing start menu from main frame
+                wx.CallAfter(main_frame.start_menu.toggle_menu)
+                print("INFO: Classic Start Menu toggled")
+            else:
+                print("WARNING: Main frame or start menu not found")
         except Exception as e:
             print(f"ERROR: Failed to open Classic Start Menu: {e}")
     
@@ -124,11 +166,35 @@ class SystemHooksManager:
             from app_manager import open_application
             open_application(tfm_app)
             print("INFO: TFM application launched")
-            
+
         except Exception as e:
             print(f"ERROR: Failed to open TFM: {e}")
             # Don't fallback to explorer - just log the error
             print("TFM failed to open, no fallback to Windows Explorer")
+
+    def on_windows_b_pressed(self):
+        """Handler for Windows+B keypress - opens System Tray list"""
+        try:
+            print("INFO: Windows+B pressed - opening System Tray list")
+            threading.Thread(
+                target=self._open_system_tray_list,
+                daemon=True
+            ).start()
+        except Exception as e:
+            print(f"ERROR: Failed to handle Windows+B: {e}")
+
+    def _open_system_tray_list(self):
+        """Open System Tray icon list"""
+        try:
+            main_frame = self._get_main_frame()
+            if main_frame:
+                from system_tray_list import show_system_tray_list
+                wx.CallAfter(show_system_tray_list, main_frame)
+                print("INFO: System Tray list opened")
+            else:
+                print("WARNING: Main frame not found for System Tray list")
+        except Exception as e:
+            print(f"ERROR: Failed to open System Tray list: {e}")
     
 
 # Global system hooks manager
