@@ -60,7 +60,7 @@ def add_menu(component_manager):
     component_manager.register_menu_function(menu_label, on_tterm_menu_action)
 
 def on_open_terminal(event):
-    play_sound('terminal.ogg')
+    play_sound('ui/terminal.ogg')
     wx.CallAfter(show_terminal)
 
 def show_terminal():

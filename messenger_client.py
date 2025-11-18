@@ -530,7 +530,7 @@ class MessengerClient:
     
     def _notify_error(self, error_message):
         """Notify about errors"""
-        play_sound('error')
+        play_sound('core/error.ogg')
         print(f"Messenger error: {error_message}")
         wx.MessageBox(error_message, _("Messenger Error"), wx.OK | wx.ICON_ERROR)
     

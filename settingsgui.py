@@ -66,12 +66,17 @@ else:
 try:
     from com_fix import suppress_com_errors
     suppress_com_errors()
-except ImportError:
+except (ImportError, Exception):
     pass
 
 import accessible_output3.outputs.auto
 from settings import load_settings, save_settings, get_setting, set_setting
 from sound import set_theme, initialize_sound, play_sound, resource_path, set_sound_theme_volume
+from controller_vibrations import (
+    vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
+    vibrate_focus_change, vibrate_error, vibrate_notification, test_vibration,
+    set_vibration_enabled, set_vibration_strength, get_controller_info
+)
 from translation import get_available_languages, set_language
 from stereo_speech import get_stereo_speech
 from system_monitor import restart_system_monitor
@@ -96,7 +101,8 @@ class SettingsFrame(wx.Frame):
         self.theme_volume_timer = None
 
         self.InitUI()
-        play_sound('sectionchange.ogg')
+        play_sound('ui/sectionchange.ogg')
+        vibrate_menu_open()  # Add vibration for opening settings
 
         self.load_settings_to_ui()
         
@@ -663,8 +669,8 @@ class SettingsFrame(wx.Frame):
         # Debounce the sound to prevent audio spam during rapid navigation
         if self.theme_volume_timer:
             self.theme_volume_timer.cancel()
-        
-        self.theme_volume_timer = threading.Timer(0.1, lambda: play_sound('volume.ogg'))
+
+        self.theme_volume_timer = threading.Timer(0.1, lambda: play_sound('system/volume.ogg'))
         self.theme_volume_timer.start()
         
         event.Skip()
@@ -808,26 +814,32 @@ class SettingsFrame(wx.Frame):
             print(f"Error applying skin to settings window: {e}")
 
     def OnFocus(self, event):
-        play_sound('focus.ogg')
+        play_sound('core/FOCUS.ogg')
+        vibrate_focus_change()  # Add vibration for focus changes
         event.Skip()
 
     def OnSelect(self, event):
-        play_sound('select.ogg')
+        play_sound('core/SELECT.ogg')
+        vibrate_selection()  # Add vibration for selections
         event.Skip()
 
     def OnCheckBox(self, event):
         if event.IsChecked():
-            play_sound('x.ogg')
+            play_sound('ui/X.ogg')
+            vibrate_selection()  # Add vibration for checkbox checked
         else:
-            play_sound('focus.ogg')
+            play_sound('core/FOCUS.ogg')
+            vibrate_focus_change()  # Add vibration for checkbox unchecked
         event.Skip()
 
     def OnStereoSpeechChanged(self, event):
         """Handle stereo speech checkbox change"""
         if event.IsChecked():
-            play_sound('x.ogg')
+            play_sound('ui/X.ogg')
+            vibrate_selection()  # Add vibration for stereo speech enabled
         else:
-            play_sound('focus.ogg')
+            play_sound('core/FOCUS.ogg')
+            vibrate_focus_change()  # Add vibration for stereo speech disabled
         
         # Update panel visibility
         self.update_stereo_speech_panel_visibility()
@@ -913,8 +925,8 @@ class SettingsFrame(wx.Frame):
 
     def OnVoiceChanged(self, event):
         """Handle voice selection change"""
-        play_sound('focus.ogg')
-        
+        play_sound('core/FOCUS.ogg')
+
         try:
             voice_index = self.voice_choice.GetSelection()
             if voice_index >= 0:
@@ -922,7 +934,7 @@ class SettingsFrame(wx.Frame):
                 stereo_speech.set_voice(voice_index)
         except Exception as e:
             print(f"Error setting voice: {e}")
-        
+
         event.Skip()
 
     def OnRateChanged(self, event):
@@ -937,7 +949,7 @@ class SettingsFrame(wx.Frame):
             try:
                 stereo_speech = get_stereo_speech()
                 stereo_speech.set_rate(rate)
-                play_sound('focus.ogg')
+                play_sound('core/FOCUS.ogg')
             except Exception as e:
                 print(f"Error setting rate: {e}")
         
@@ -958,7 +970,7 @@ class SettingsFrame(wx.Frame):
             try:
                 stereo_speech = get_stereo_speech()
                 stereo_speech.set_volume(volume)
-                play_sound('focus.ogg')
+                play_sound('core/FOCUS.ogg')
             except Exception as e:
                 print(f"Error setting volume: {e}")
         

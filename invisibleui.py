@@ -1,4 +1,4 @@
-from pynput import keyboard
+import keyboard  # Use keyboard library for proper event suppression
 import threading
 import time
 import accessible_output3.outputs.auto
@@ -58,27 +58,38 @@ def cleanup_speaker():
             speaker = None
 
 class GlobalHotKeys(threading.Thread):
-    """Enhanced GlobalHotKeys with better error handling and cleanup"""
-    
+    """Enhanced GlobalHotKeys with event suppression using keyboard library"""
+
     def __init__(self, hotkeys):
         super().__init__()
         self.hotkeys = hotkeys
-        self.listener = None
+        self.registered_hotkeys = []
         self.daemon = True
         self._stop_event = threading.Event()
 
     def run(self):
-        """Run the hotkey listener with error handling"""
+        """Run the hotkey listener with error handling and suppression"""
         try:
             if not self.hotkeys:
                 return
-                
-            self.listener = keyboard.GlobalHotKeys(self.hotkeys)
-            self.listener.start()
-            
+
+            # Register all hotkeys with suppression
+            for hotkey_str, callback in self.hotkeys.items():
+                # Convert pynput format to keyboard library format
+                # '<ctrl>+<shift>+<up>' -> 'ctrl+shift+up'
+                kb_hotkey = hotkey_str.replace('<', '').replace('>', '')
+
+                try:
+                    # Register with suppress=True to prevent system from receiving the keys
+                    # Store the return value which is needed for removal
+                    hotkey_handle = keyboard.add_hotkey(kb_hotkey, callback, suppress=True)
+                    self.registered_hotkeys.append((kb_hotkey, hotkey_handle))
+                except Exception as e:
+                    print(f"Error registering hotkey {kb_hotkey}: {e}")
+
             # Wait for stop event
             self._stop_event.wait()
-            
+
         except Exception as e:
             print(f"Error in GlobalHotKeys thread: {e}")
         finally:
@@ -88,50 +99,24 @@ class GlobalHotKeys(threading.Thread):
         """Stop the hotkey listener safely"""
         try:
             self._stop_event.set()
-            
-            if self.listener:
-                try:
-                    # Check if we're trying to join the current thread
-                    import threading
-                    current_thread = threading.current_thread()
-                    
-                    # Stop the listener first
-                    try:
-                        if hasattr(self.listener, 'stop'):
-                            self.listener.stop()
-                    except (AttributeError, RuntimeError) as e:
-                        print(f"Error stopping listener: {e}")
-                    
-                    # Only call join if we're not in the same thread and this is a Thread object
-                    if (current_thread != self and 
-                        hasattr(self.listener, 'join') and 
-                        hasattr(self.listener, 'is_alive') and
-                        self.listener is not None):
-                        try:
-                            # Only join if it's actually a thread and alive
-                            if self.listener.is_alive():
-                                self.listener.join(timeout=1.0)
-                        except (RuntimeError, AttributeError) as e:
-                            if "cannot join current thread" not in str(e) and "NoneType" not in str(e):
-                                print(f"Error joining hotkey listener: {e}")
-                        except Exception as e:
-                            print(f"Unexpected error joining hotkey listener: {e}")
-                        
-                except Exception as e:
-                    print(f"Error in hotkey listener stop process: {e}")
-                    
         except Exception as e:
             print(f"Error in GlobalHotKeys.stop(): {e}")
         finally:
             self._cleanup()
-    
+
     def _cleanup(self):
-        """Clean up resources"""
+        """Clean up resources and unhook all hotkeys"""
         try:
-            if self.listener:
-                self.listener = None
-        except Exception:
-            pass
+            # Unregister all hotkeys using the stored handles
+            for kb_hotkey, hotkey_handle in self.registered_hotkeys:
+                try:
+                    keyboard.remove_hotkey(hotkey_handle)
+                except Exception as e:
+                    print(f"Error removing hotkey {kb_hotkey}: {e}")
+
+            self.registered_hotkeys.clear()
+        except Exception as e:
+            print(f"Error in cleanup: {e}")
 
 class BaseWidget:
     def __init__(self, speak_func):
@@ -396,10 +381,10 @@ class VolumePanel(BaseWidget):
             if self.toggle_mute():
                 self.is_muted = self.get_mute_status()
                 if self.is_muted:
-                    play_sound('mute.ogg' if os.path.exists(resource_path(os.path.join(get_sfx_directory(), 'mute.ogg'))) else 'select.ogg')
+                    play_sound('core/mute.ogg' if os.path.exists(resource_path(os.path.join(get_sfx_directory(), 'core/mute.ogg'))) else 'core/SELECT.ogg')
                     self.speak(_("Muted"))
                 else:
-                    play_sound('unmute.ogg' if os.path.exists(resource_path(os.path.join(get_sfx_directory(), 'unmute.ogg'))) else 'select.ogg')
+                    play_sound('core/unmute.ogg' if os.path.exists(resource_path(os.path.join(get_sfx_directory(), 'core/unmute.ogg'))) else 'core/SELECT.ogg')
                     self.speak(_("Unmuted"))
 
 class InvisibleUI:
@@ -512,7 +497,18 @@ class InvisibleUI:
         if self.component_manager:
             component_menu_functions = self.component_manager.get_component_menu_functions()
             for name, func in component_menu_functions.items():
-                component_menu_actions[name] = func
+                # Wrap component function to ensure main window is shown
+                def make_component_wrapper(component_func):
+                    def wrapper(parent):
+                        # Restore window from tray if hidden
+                        if self.main_frame and not self.main_frame.IsShown():
+                            self.main_frame.restore_from_tray()
+                            # Call component after a short delay to allow window to fully restore
+                            wx.CallLater(200, component_func, parent)
+                        else:
+                            wx.CallAfter(component_func, parent)
+                    return wrapper
+                component_menu_actions[name] = make_component_wrapper(func)
 
         # Build Titan IM menu
         titan_im_elements = []
@@ -527,12 +523,12 @@ class InvisibleUI:
             titan_im_elements = [_("No IM clients available")]
 
         self.categories = [
-            {"name": _("Applications"), "sound": "focus.ogg", "elements": apps if apps else [_("No applications")], "action": self.launch_app_by_name},
-            {"name": _("Games"), "sound": "focus.ogg", "elements": games if games else [_("No games")], "action": self.launch_game_by_name},
-            {"name": _("Widgets"), "sound": "focus.ogg", "elements": [w['name'] for w in widgets] if widgets else [_("No widgets found")], "action": self.activate_widget, "widget_data": widgets},
+            {"name": _("Applications"), "sound": "core/focus.ogg", "elements": apps if apps else [_("No applications")], "action": self.launch_app_by_name},
+            {"name": _("Games"), "sound": "core/focus.ogg", "elements": games if games else [_("No games")], "action": self.launch_game_by_name},
+            {"name": _("Widgets"), "sound": "core/focus.ogg", "elements": [w['name'] for w in widgets] if widgets else [_("No widgets found")], "action": self.activate_widget, "widget_data": widgets},
             {"name": _("Titan IM"), "sound": "titannet/iui.ogg", "elements": titan_im_elements, "action": self.activate_titan_im},
             {"name": _("Status Bar"), "sound": "statusbar.ogg", "elements": self.get_statusbar_items(), "action": self.activate_statusbar_item},
-            {"name": _("Menu"), "sound": "applist.ogg", "elements": list(main_menu_actions.keys()), "action": lambda name: main_menu_actions[name]()}
+            {"name": _("Menu"), "sound": "ui/applist.ogg", "elements": list(main_menu_actions.keys()), "action": lambda name: main_menu_actions[name]()}
         ]
 
         # Add Components as a sub-menu if there are any component menu actions
@@ -543,57 +539,72 @@ class InvisibleUI:
 
     def load_widgets(self):
         widgets = []
-        applets_dir = 'data/applets'
-        if not os.path.exists(applets_dir):
-            return widgets
+        try:
+            applets_dir = 'data/applets'
+            if not os.path.exists(applets_dir):
+                return widgets
 
-        for applet_name in os.listdir(applets_dir):
-            applet_dir = os.path.join(applets_dir, applet_name)
-            if not os.path.isdir(applet_dir):
-                continue
-
-            # Sprawdź plik init.py dla wstecznej zgodności
-            init_file = os.path.join(applet_dir, 'init.py')
-            if os.path.exists(init_file):
+            for applet_name in os.listdir(applets_dir):
                 try:
-                    spec = importlib.util.spec_from_file_location(applet_name, init_file)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    
-                    info = module.get_widget_info()
-                    widgets.append({
-                        "name": info["name"],
-                        "type": info["type"],
-                        "module": module
-                    })
-                    continue # Przejdź do następnego apletu
-                except Exception as e:
-                    print(f"Error loading widget from init.py '{applet_name}': {e}")
-                    self.speak(_("Error loading widget: {}").format(applet_name))
+                    applet_dir = os.path.join(applets_dir, applet_name)
+                    if not os.path.isdir(applet_dir):
+                        continue
 
-            # Nowy system oparty na applet.json i main.py
-            json_path = os.path.join(applet_dir, 'applet.json')
-            main_py_path = os.path.join(applet_dir, 'main.py')
+                    # Sprawdź plik init.py dla wstecznej zgodności
+                    init_file = os.path.join(applet_dir, 'init.py')
+                    if os.path.exists(init_file):
+                        try:
+                            spec = importlib.util.spec_from_file_location(applet_name, init_file)
+                            module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(module)
 
-            if os.path.exists(json_path) and os.path.exists(main_py_path):
-                try:
-                    spec = importlib.util.spec_from_file_location(f"applets.{applet_name}.main", main_py_path)
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules[spec.name] = module
-                    spec.loader.exec_module(module)
-                    
-                    # Po załadowaniu modułu, gettext wewnątrz niego jest już aktywny
-                    info = module.get_widget_info()
-                    
-                    widgets.append({
-                        "name": info.get("name", applet_name),
-                        "type": info.get("type", "grid"),
-                        "module": module
-                    })
+                            info = module.get_widget_info()
+                            widgets.append({
+                                "name": info["name"],
+                                "type": info["type"],
+                                "module": module
+                            })
+                            continue # Przejdź do następnego apletu
+                        except Exception as e:
+                            print(f"Error loading widget from init.py '{applet_name}': {e}")
+                            try:
+                                self.speak(_("Error loading widget: {}").format(applet_name))
+                            except:
+                                pass  # Don't crash if speak fails
+
+                    # Nowy system oparty na applet.json i main.py
+                    json_path = os.path.join(applet_dir, 'applet.json')
+                    main_py_path = os.path.join(applet_dir, 'main.py')
+
+                    if os.path.exists(json_path) and os.path.exists(main_py_path):
+                        try:
+                            spec = importlib.util.spec_from_file_location(f"applets.{applet_name}.main", main_py_path)
+                            module = importlib.util.module_from_spec(spec)
+                            sys.modules[spec.name] = module
+                            spec.loader.exec_module(module)
+
+                            # Po załadowaniu modułu, gettext wewnątrz niego jest już aktywny
+                            info = module.get_widget_info()
+
+                            widgets.append({
+                                "name": info.get("name", applet_name),
+                                "type": info.get("type", "grid"),
+                                "module": module
+                            })
+                        except Exception as e:
+                            print(f"Error loading applet '{applet_name}': {e}")
+                            traceback.print_exc() # Print full traceback for debugging
+                            try:
+                                self.speak(_("Error loading widget: {}").format(applet_name))
+                            except:
+                                pass  # Don't crash if speak fails
                 except Exception as e:
-                    print(f"Error loading applet '{applet_name}': {e}")
-                    traceback.print_exc() # Print full traceback for debugging
-                    self.speak(_("Error loading widget: {}").format(applet_name))
+                    print(f"Error processing applet folder '{applet_name}': {e}")
+                    continue  # Continue with next applet
+        except Exception as e:
+            print(f"Critical error in load_widgets: {e}")
+            import traceback
+            traceback.print_exc()
         return widgets
 
     def get_statusbar_items(self):
@@ -775,7 +786,7 @@ class InvisibleUI:
                             pan = 0.5
                             if num_categories > 1:
                                 pan = new_index / (num_categories - 1)
-                            play_sound(new_category.get('sound', 'focus.ogg'), pan=pan)
+                            play_sound(new_category.get('sound', 'core/focus.ogg'), pan=pan)
                 except Exception as e:
                     play_focus_sound()  # Fallback sound
                     print(f"Error playing category sound: {e}")
@@ -1006,7 +1017,7 @@ class InvisibleUI:
                     print(f"Error handling voice message: {e}")
                 
                 try:
-                    play_sound('select.ogg')
+                    play_sound('core/SELECT.ogg')
                 except Exception as e:
                     print(f"Error playing selection sound: {e}")
                 
@@ -1043,19 +1054,43 @@ class InvisibleUI:
                 pass
 
     def activate_widget(self, widget_data):
-        widget_type = widget_data['type']
-        module = widget_data['module']
+        try:
+            widget_type = widget_data['type']
+            module = widget_data['module']
 
-        if widget_type == "button":
-            self.active_widget = module.get_widget_instance(self.speak)
-            self.active_widget.activate_current_element()
-        elif widget_type == "grid":
-            self.last_widget_element = None  # Reset przy wejściu do nowego widgetu
-            self.active_widget = module.get_widget_instance(self.speak)
-            self.active_widget_name = widget_data['name']
-            self.enter_widget_mode()
-        else:
-            self.speak(_("Invalid widget type: {}").format(widget_type))
+            if widget_type == "button":
+                try:
+                    self.active_widget = module.get_widget_instance(self.speak)
+                    self.active_widget.activate_current_element()
+                except Exception as e:
+                    print(f"Error activating button widget: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.speak(_("Error activating widget"))
+            elif widget_type == "grid":
+                try:
+                    self.last_widget_element = None  # Reset przy wejściu do nowego widgetu
+                    self.active_widget = module.get_widget_instance(self.speak)
+                    self.active_widget_name = widget_data['name']
+                    self.enter_widget_mode()
+                except Exception as e:
+                    print(f"Error activating grid widget: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.speak(_("Error activating widget"))
+                    # Reset state on error
+                    self.active_widget = None
+                    self.active_widget_name = None
+            else:
+                self.speak(_("Invalid widget type: {}").format(widget_type))
+        except Exception as e:
+            print(f"Critical error in activate_widget: {e}")
+            import traceback
+            traceback.print_exc()
+            self.speak(_("Error activating widget"))
+            # Reset state on error
+            self.active_widget = None
+            self.active_widget_name = None
 
     def enter_widget_mode(self):
         """Enter widget mode with enhanced error handling and debugging."""
@@ -1089,7 +1124,7 @@ class InvisibleUI:
             # Play sound safely
             print("DEBUG: Playing widget sound...")
             try:
-                play_sound("widget.ogg")
+                play_sound("ui/widget.ogg")
                 print("DEBUG: Widget sound played successfully")
             except Exception as e:
                 print(f"WARNING: Failed to play widget sound: {e}")
@@ -1205,13 +1240,13 @@ class InvisibleUI:
         """Exit widget mode with comprehensive cleanup"""
         if not self.in_widget_mode or self._shutdown_in_progress:
             return
-        
+
         try:
             # Special handling for volume panel
             if isinstance(self.active_widget, VolumePanel):
                 self.exit_volume_panel_mode()
                 return
-            
+
             # Special handling for WiFi panel
             try:
                 import tce_system_net
@@ -1220,34 +1255,40 @@ class InvisibleUI:
                     return
             except (ImportError, AttributeError):
                 pass
-            
+
             # Cleanup any widget resources
             if self.active_widget and hasattr(self.active_widget, 'cleanup'):
                 try:
                     self.active_widget.cleanup()
                 except Exception as e:
                     print(f"Error cleaning up widget: {e}")
-                
+
             self.in_widget_mode = False
             self.active_widget = None
             self.active_widget_name = None
             self.last_widget_element = None
-            
+
             try:
-                play_sound("widgetclose.ogg")
+                play_sound("ui/widgetclose.ogg")
             except Exception as e:
                 print(f"Error playing widget close sound: {e}")
-                
-            try:
-                self.speak(_("Out of widget"))
-            except Exception as e:
-                print(f"Error speaking widget exit message: {e}")
-                
+
+            # Speak in background thread to prevent freezing
+            def speak_exit():
+                try:
+                    self.speak(_("Out of widget"))
+                except Exception as e:
+                    print(f"Error speaking widget exit message: {e}")
+
+            speak_thread = threading.Thread(target=speak_exit, daemon=True)
+            speak_thread.start()
+
+            # Update hotkeys directly - _update_hotkeys already handles threading
             try:
                 self._update_hotkeys()
             except Exception as e:
                 print(f"Error updating hotkeys after widget exit: {e}")
-                
+
         except Exception as e:
             print(f"Critical error in exit_widget_mode: {e}")
             # Force cleanup even on error
@@ -1417,31 +1458,44 @@ class InvisibleUI:
     def enter_volume_panel_mode(self):
         """Enter volume panel widget mode"""
         self.in_widget_mode = True
-        play_sound("focus_expanded.ogg")
+        play_sound("ui/focus_expanded.ogg")
         # Update volume levels when entering
         self.active_widget.volume_level = self.active_widget.get_current_volume()
         self.active_widget.is_muted = self.active_widget.get_mute_status()
-        
+
         widget_info = self.active_widget.get_current_element()
         self.last_widget_element = self.active_widget.get_current_element()
         self.speak(widget_info)
-        self._update_hotkeys()
+
+        # Update hotkeys in background to prevent blocking
+        def background_hotkey_update():
+            try:
+                self._update_hotkeys()
+            except Exception as e:
+                print(f"Error updating hotkeys after volume panel entry: {e}")
+
+        threading.Thread(target=background_hotkey_update, daemon=True).start()
     
     def exit_volume_panel_mode(self):
         """Exit volume panel mode with special sound"""
         if not self.in_widget_mode: return
-        
+
         # Cleanup volume panel resources
         if hasattr(self.active_widget, 'cleanup'):
             self.active_widget.cleanup()
-        
+
         self.in_widget_mode = False
         self.active_widget = None
         self.active_widget_name = None
         self.last_widget_element = None
-        play_sound("focus_collabsed.ogg")
+        play_sound("ui/focus_collapsed.ogg")
         self.speak(_("Exiting volume panel"))
-        self._update_hotkeys()
+
+        # Update hotkeys directly - _update_hotkeys already handles threading
+        try:
+            self._update_hotkeys()
+        except Exception as e:
+            print(f"Error updating hotkeys after volume panel exit: {e}")
     
     def exit_wifi_panel_mode(self):
         """Exit WiFi panel mode with special sound"""
@@ -1450,16 +1504,20 @@ class InvisibleUI:
         self.active_widget = None
         self.active_widget_name = None
         self.last_widget_element = None
-        play_sound("focus_collapsed.ogg")
-        
+        play_sound("ui/focus_collapsed.ogg")
+
         # Check if returning to Titan UI mode
         titan_ui_enabled = get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true'
         if self.titan_ui_mode or titan_ui_enabled:
             self.speak(_("Exiting WiFi manager, returning to Titan UI"))
         else:
             self.speak(_("Exiting WiFi manager"))
-        
-        self._update_hotkeys()
+
+        # Update hotkeys directly - _update_hotkeys already handles threading
+        try:
+            self._update_hotkeys()
+        except Exception as e:
+            print(f"Error updating hotkeys after WiFi panel exit: {e}")
     
     def activate_titan_im(self, platform_name):
         """Activate Titan IM platform (Telegram/Messenger/WhatsApp)"""
@@ -1514,7 +1572,7 @@ class InvisibleUI:
         self.current_element_index = 0
         
         category = self.categories[self.current_category_index]
-        play_sound(category.get('sound', 'focus.ogg'))
+        play_sound(category.get('sound', 'core/focus.ogg'))
         self.speak(f"{category['name']}, {category['elements'][0]}")
     
     def activate_titan_im_submenu(self, submenu_name):
@@ -1527,7 +1585,7 @@ class InvisibleUI:
             self.titan_im_submenu = None
             
             category = self.categories[self.current_category_index]
-            play_sound(category.get('sound', 'focus.ogg'))
+            play_sound(category.get('sound', 'core/focus.ogg'))
             self.speak(f"{category['name']}, {category['elements'][self.current_element_index]}")
             return
         
@@ -1569,7 +1627,7 @@ class InvisibleUI:
         self.current_element_index = 0
         
         category = self.categories[self.current_category_index]
-        play_sound(category.get('sound', 'focus.ogg'))
+        play_sound(category.get('sound', 'core/focus.ogg'))
         self.speak(f"{category['name']}, {len(contacts)} {_('contacts')}, {category['elements'][0]}")
     
     def load_titan_im_groups(self):
@@ -1604,7 +1662,7 @@ class InvisibleUI:
         self.current_element_index = 0
         
         category = self.categories[self.current_category_index]
-        play_sound(category.get('sound', 'focus.ogg'))
+        play_sound(category.get('sound', 'core/focus.ogg'))
         self.speak(f"{category['name']}, {len(groups)} {_('groups')}, {category['elements'][0]}")
     
     def activate_titan_im_contact(self, contact_name):
@@ -1676,7 +1734,7 @@ class InvisibleUI:
         self.current_element_index = 0
         
         category = self.categories[self.current_category_index]
-        play_sound(category.get('sound', 'focus.ogg'))
+        play_sound(category.get('sound', 'core/focus.ogg'))
         self.speak(f"{category['name']}, {category['elements'][0]}")
     
     def activate_chat_history_item(self, item_name):
@@ -1730,7 +1788,7 @@ class InvisibleUI:
                     play_sound('titannet/voice_play.ogg')
                     self.speak(_("Playing voice message"))
                 else:
-                    play_sound('error.ogg')
+                    play_sound('core/error.ogg')
                     self.speak(_("Error playing voice message"))
         else:
             self.speak(_("No voice message selected"))
@@ -1848,7 +1906,7 @@ class InvisibleUI:
         self.current_element_index = 0
         
         category = self.categories[self.current_category_index]
-        play_sound(category.get('sound', 'focus.ogg'))
+        play_sound(category.get('sound', 'core/focus.ogg'))
         self.speak(f"{category['name']}, {category['elements'][0]}")
     
     def update_chat_history(self, history_data):
@@ -2048,149 +2106,143 @@ class InvisibleUI:
 
     def _update_hotkeys(self):
         """Update hotkeys with simplified system - no key blocking"""
-        try:
-            if self._shutdown_in_progress:
-                return
-                
-            # Stop existing hotkey thread safely
-            if self.hotkey_thread:
+        # Run the entire hotkey update in a background thread to prevent freezing
+        def _update_hotkeys_async():
+            try:
+                if self._shutdown_in_progress:
+                    return
+
+                # Stop existing hotkey thread safely
+                if self.hotkey_thread:
+                    try:
+                        self.hotkey_thread.stop()
+                        # Give time for cleanup (runs in background, won't block)
+                        time.sleep(0.1)
+                    except Exception as e:
+                        print(f"Error stopping hotkey thread: {e}")
+                    finally:
+                        self.hotkey_thread = None
+
+                hotkeys = {}
+
                 try:
-                    self.hotkey_thread.stop()
-                    # Give time for cleanup
-                    time.sleep(0.1)
+                    # The tilde key is always available to toggle TUI mode if enabled
+                    if get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true':
+                        # Wrap hotkey functions to prevent crashes
+                        hotkeys['`'] = self._safe_toggle_titan_ui
+                        # Titan+Enter for voice message playback
+                        hotkeys['`+<enter>'] = self._safe_handle_titan_enter
                 except Exception as e:
-                    print(f"Error stopping hotkey thread: {e}")
-                finally:
-                    self.hotkey_thread = None
+                    print(f"Error setting titan UI hotkeys: {e}")
 
-            hotkeys = {}
-            
-            try:
-                # The tilde key is always available to toggle TUI mode if enabled
-                if get_setting('enable_titan_ui', 'False', section='invisible_interface').lower() == 'true':
-                    # Wrap hotkey functions to prevent crashes
-                    hotkeys['`'] = self._safe_toggle_titan_ui
-                    # Titan+Enter for voice message playback
-                    hotkeys['`+<enter>'] = self._safe_handle_titan_enter
-            except Exception as e:
-                print(f"Error setting titan UI hotkeys: {e}")
-            
-            try:
-                # Alt+F1 for Start Menu (when minimized to tray)
-                import platform
-                if platform.system() == "Windows":
-                    hotkeys['<alt>+<f1>'] = self.show_start_menu
-            except Exception as e:
-                print(f"Error setting start menu hotkey: {e}")
-
-            # Navigation hotkeys - always use ctrl+shift, plus simple arrows when Titan UI is active
-            if self.in_widget_mode:
-                # Basic navigation always available
-                hotkeys.update({
-                    '<ctrl>+<shift>+<up>': lambda: self.navigate_widget('up'),
-                    '<ctrl>+<shift>+<down>': lambda: self.navigate_widget('down'),
-                    '<ctrl>+<shift>+<left>': lambda: self.navigate_widget('left'),
-                    '<ctrl>+<shift>+<right>': lambda: self.navigate_widget('right'),
-                    '<ctrl>+<shift>+<enter>': self.activate_element,
-                    '<ctrl>+<shift>+<space>': self.activate_element,
-                    '<ctrl>+<shift>+<backspace>': self.exit_widget_mode,
-                    '<ctrl>+<shift>+<esc>': self.exit_widget_mode,
-                })
-                
-                # Simple arrows when Titan UI mode is enabled
-                if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
-                    hotkeys.update({
-                        '<up>': lambda: self.navigate_widget('up'),
-                        '<down>': lambda: self.navigate_widget('down'),
-                        '<left>': lambda: self.navigate_widget('left'),
-                        '<right>': lambda: self.navigate_widget('right'),
-                        '<enter>': self.activate_element,
-                        '<space>': self.activate_element,
-                        '<backspace>': self.exit_widget_mode,
-                        '<esc>': self.exit_widget_mode,
-                    })
-                
-                # Special shortcuts for volume and wifi panels
                 try:
-                    if isinstance(self.active_widget, VolumePanel):
-                        hotkeys.update({
-                            '<ctrl>+<alt>+<up>': lambda: self.navigate_widget('up'),
-                            '<ctrl>+<alt>+<down>': lambda: self.navigate_widget('down'),
-                        })
-                    
-                    # WiFi panel shortcuts
-                    import tce_system_net
-                    if isinstance(self.active_widget, tce_system_net.WiFiPanel):
-                        hotkeys.update({
-                            '<ctrl>+<alt>+<up>': lambda: self.navigate_widget('up'),
-                            '<ctrl>+<alt>+<down>': lambda: self.navigate_widget('down'),
-                            '<ctrl>+<alt>+<left>': lambda: self.navigate_widget('left'),
-                            '<ctrl>+<alt>+<right>': lambda: self.navigate_widget('right'),
-                        })
-                except (ImportError, AttributeError):
-                    pass  # WiFi panel not available
-                    
-            else:
-                # Main view navigation - basic navigation always available
-                hotkeys.update({
-                    '<ctrl>+<shift>+<up>': lambda: self.navigate_category(-1),
-                    '<ctrl>+<shift>+<down>': lambda: self.navigate_category(1),
-                    '<ctrl>+<shift>+<left>': lambda: self.navigate_element(-1),
-                    '<ctrl>+<shift>+<right>': lambda: self.navigate_element(1),
-                    '<ctrl>+<shift>+<enter>': self.activate_element,
-                    '<ctrl>+<shift>+<space>': self.activate_element,
-                })
-                
-                # Simple arrows when Titan UI mode is enabled
-                if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
+                    # Alt+F1 for Start Menu (when minimized to tray)
+                    import platform
+                    if platform.system() == "Windows":
+                        hotkeys['<alt>+<f1>'] = self.show_start_menu
+                except Exception as e:
+                    print(f"Error setting start menu hotkey: {e}")
+
+                # Navigation hotkeys - always use ctrl+shift, plus simple arrows when Titan UI is active
+                if self.in_widget_mode:
+                    # Basic navigation always available
                     hotkeys.update({
-                        '<up>': lambda: self.navigate_category(-1),
-                        '<down>': lambda: self.navigate_category(1),
-                        '<left>': lambda: self.navigate_element(-1),
-                        '<right>': lambda: self.navigate_element(1),
-                        '<enter>': self.activate_element,
-                        '<space>': self.activate_element,
+                        '<ctrl>+<shift>+<up>': lambda: self.navigate_widget('up'),
+                        '<ctrl>+<shift>+<down>': lambda: self.navigate_widget('down'),
+                        '<ctrl>+<shift>+<left>': lambda: self.navigate_widget('left'),
+                        '<ctrl>+<shift>+<right>': lambda: self.navigate_widget('right'),
+                        '<ctrl>+<shift>+<enter>': self.activate_element,
+                        '<ctrl>+<shift>+<space>': self.activate_element,
+                        '<ctrl>+<shift>+<backspace>': self.exit_widget_mode,
+                        '<ctrl>+<shift>+<esc>': self.exit_widget_mode,
                     })
+
+                    # Simple arrows when Titan UI mode is enabled
+                    if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
+                        hotkeys.update({
+                            '<up>': lambda: self.navigate_widget('up'),
+                            '<down>': lambda: self.navigate_widget('down'),
+                            '<left>': lambda: self.navigate_widget('left'),
+                            '<right>': lambda: self.navigate_widget('right'),
+                            '<enter>': self.activate_element,
+                            '<space>': self.activate_element,
+                            '<backspace>': self.exit_widget_mode,
+                            '<esc>': self.exit_widget_mode,
+                        })
+
+                    # Special shortcuts for volume and wifi panels
+                    try:
+                        if isinstance(self.active_widget, VolumePanel):
+                            hotkeys.update({
+                                '<ctrl>+<alt>+<up>': lambda: self.navigate_widget('up'),
+                                '<ctrl>+<alt>+<down>': lambda: self.navigate_widget('down'),
+                            })
+
+                        # WiFi panel shortcuts
+                        import tce_system_net
+                        if isinstance(self.active_widget, tce_system_net.WiFiPanel):
+                            hotkeys.update({
+                                '<ctrl>+<alt>+<up>': lambda: self.navigate_widget('up'),
+                                '<ctrl>+<alt>+<down>': lambda: self.navigate_widget('down'),
+                                '<ctrl>+<alt>+<left>': lambda: self.navigate_widget('left'),
+                                '<ctrl>+<alt>+<right>': lambda: self.navigate_widget('right'),
+                            })
+                    except (ImportError, AttributeError):
+                        pass  # WiFi panel not available
+
+                else:
+                    # Main view navigation - basic navigation always available
+                    hotkeys.update({
+                        '<ctrl>+<shift>+<up>': lambda: self.navigate_category(-1),
+                        '<ctrl>+<shift>+<down>': lambda: self.navigate_category(1),
+                        '<ctrl>+<shift>+<left>': lambda: self.navigate_element(-1),
+                        '<ctrl>+<shift>+<right>': lambda: self.navigate_element(1),
+                        '<ctrl>+<shift>+<enter>': self.activate_element,
+                        '<ctrl>+<shift>+<space>': self.activate_element,
+                    })
+
+                    # Simple arrows when Titan UI mode is enabled
+                    if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
+                        hotkeys.update({
+                            '<up>': lambda: self.navigate_category(-1),
+                            '<down>': lambda: self.navigate_category(1),
+                            '<left>': lambda: self.navigate_element(-1),
+                            '<right>': lambda: self.navigate_element(1),
+                            '<enter>': self.activate_element,
+                            '<space>': self.activate_element,
+                        })
 
 # F6 program switching removed
 
-            # Only create new hotkey thread if we have hotkeys and not shutting down
-            if hotkeys and not self._shutdown_in_progress:
-                try:
-                    # Add timeout protection for hotkey thread creation
-                    import signal
-                    
-                    def create_hotkeys_with_timeout():
-                        try:
-                            start_time = time.time()
-                            new_hotkey_thread = GlobalHotKeys(hotkeys)
-                            new_hotkey_thread.start()
-                            
-                            # Only assign if successful
-                            self.hotkey_thread = new_hotkey_thread
-                            
-                            elapsed = time.time() - start_time
-                            if elapsed > 1.0:
-                                print(f"Warning: Hotkey thread creation took {elapsed:.2f} seconds")
-                                
-                        except Exception as e:
-                            print(f"Error creating/starting hotkey thread: {e}")
-                            self.hotkey_thread = None
-                    
-                    # Create hotkeys in a separate thread with timeout
-                    creation_thread = threading.Thread(target=create_hotkeys_with_timeout, daemon=True)
-                    creation_thread.start()
-                    
-                    # Don't wait for the thread - let it complete in background
-                    
-                except Exception as e:
-                    print(f"Error setting up hotkey creation thread: {e}")
-                    self.hotkey_thread = None
-                    
+                # Only create new hotkey thread if we have hotkeys and not shutting down
+                if hotkeys and not self._shutdown_in_progress:
+                    try:
+                        start_time = time.time()
+                        new_hotkey_thread = GlobalHotKeys(hotkeys)
+                        new_hotkey_thread.start()
+
+                        # Only assign if successful
+                        self.hotkey_thread = new_hotkey_thread
+
+                        elapsed = time.time() - start_time
+                        if elapsed > 1.0:
+                            print(f"Warning: Hotkey thread creation took {elapsed:.2f} seconds")
+
+                    except Exception as e:
+                        print(f"Error creating/starting hotkey thread: {e}")
+                        self.hotkey_thread = None
+
+            except Exception as e:
+                print(f"Critical error in _update_hotkeys_async: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Start the async update in a background thread to prevent freezing
+        try:
+            update_thread = threading.Thread(target=_update_hotkeys_async, daemon=True)
+            update_thread.start()
         except Exception as e:
-            print(f"Critical error in _update_hotkeys: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error starting hotkey update thread: {e}")
 
     def temporarily_disable_titan_ui(self, dialog_name):
         """Temporarily disable Titan UI when a dialog opens"""
@@ -2259,10 +2311,10 @@ class InvisibleUI:
             
             try:
                 if self.titan_ui_mode:
-                    play_sound('TUI_open.ogg')
+                    play_sound('ui/tui_open.ogg')
                     self.speak(_("Titan UI on"))
                 else:
-                    play_sound('TUI_close.ogg')
+                    play_sound('ui/tui_close.ogg')
                     self.speak(_("Titan UI off"))
                     # Reset temporary disable state when turning off
                     self.titan_ui_temporarily_disabled = False
@@ -2386,7 +2438,7 @@ class InvisibleUI:
     def enter_wifi_panel_mode(self):
         """Enter WiFi panel mode"""
         self.in_widget_mode = True
-        play_sound("focus_expanded.ogg")
+        play_sound("ui/focus_expanded.ogg")
         
         # Initial announcement
         widget_info = self.active_widget.get_current_element()

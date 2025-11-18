@@ -1,0 +1,1554 @@
+# Translations template for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: messenger_client.py:298 whatsapp_client.py:283
+msgid "Thanks for the message!"
+msgstr ""
+
+#: messenger_client.py:299 whatsapp_client.py:284
+msgid "OK, understood"
+msgstr ""
+
+#: messenger_client.py:300 whatsapp_client.py:285
+msgid "Sounds good"
+msgstr ""
+
+#: messenger_client.py:301 whatsapp_client.py:286
+msgid "Yes, I agree"
+msgstr ""
+
+#: messenger_client.py:302 whatsapp_client.py:287
+msgid "No problem"
+msgstr ""
+
+#: messenger_client.py:303 whatsapp_client.py:288
+msgid "Great!"
+msgstr ""
+
+#: messenger_client.py:360 whatsapp_client.py:343
+#, python-brace-format
+msgid "New message at {}"
+msgstr ""
+
+#: messenger_client.py:406 whatsapp_client.py:389
+msgid "Hi! How are you?"
+msgstr ""
+
+#: messenger_client.py:417 whatsapp_client.py:400
+msgid "Are we meeting today?"
+msgstr ""
+
+#: messenger_client.py:424 messenger_client.py:425 whatsapp_client.py:407
+#: whatsapp_client.py:408
+msgid "Work Group"
+msgstr ""
+
+#: messenger_client.py:428 whatsapp_client.py:411
+msgid "Projects for tomorrow"
+msgstr ""
+
+#: messenger_client.py:439 whatsapp_client.py:422
+msgid "Thanks for the help!"
+msgstr ""
+
+#: messenger_client.py:440 whatsapp_client.py:423
+msgid "yesterday"
+msgstr ""
+
+#: messenger_client.py:450 whatsapp_client.py:433
+msgid "Great, thanks!"
+msgstr ""
+
+#: messenger_client.py:457 messenger_client.py:458 whatsapp_client.py:440
+#: whatsapp_client.py:441
+msgid "Work Friends"
+msgstr ""
+
+#: messenger_client.py:461 whatsapp_client.py:444
+msgid "Who's going for coffee?"
+msgstr ""
+
+#: messenger_client.py:491 whatsapp_client.py:474
+msgid "Connected to Titan IM server"
+msgstr ""
+
+#: messenger_client.py:497 whatsapp_client.py:480
+msgid "Connected to Titan IM"
+msgstr ""
+
+#: messenger_client.py:512 messenger_client.py:518
+msgid "Opened Facebook Messenger in web browser"
+msgstr ""
+
+#: messenger_client.py:535
+msgid "Messenger Error"
+msgstr ""
+
+#: messenger_client.py:542
+msgid "Disconnected from Facebook Messenger"
+msgstr ""
+
+#: messenger_gui.py:18
+msgid "Connect to Titan IM"
+msgstr ""
+
+#: messenger_gui.py:25
+msgid ""
+"Connect to Titan IM server for real-time messaging.\n"
+"If server is unavailable, will fallback to web mode."
+msgstr ""
+
+#: messenger_gui.py:31
+msgid "Your username:"
+msgstr ""
+
+#: messenger_gui.py:39
+msgid "Server: localhost:8001 (WebSocket), localhost:8000 (HTTP)"
+msgstr ""
+
+#: messenger_gui.py:46 teamtalk.py:633 telegram_gui.py:52
+msgid "Connect"
+msgstr ""
+
+#: messenger_gui.py:50 teamtalk_gui_methods.py:206 telegram_gui.py:55
+msgid "Cancel"
+msgstr ""
+
+#: messenger_gui.py:138
+msgid "Search conversations:"
+msgstr ""
+
+#: messenger_gui.py:146
+msgid "Conversations:"
+msgstr ""
+
+#: messenger_gui.py:150
+msgid "Name"
+msgstr ""
+
+#: messenger_gui.py:151
+msgid "Last Message"
+msgstr ""
+
+#: messenger_gui.py:152
+msgid "Time"
+msgstr ""
+
+#: messenger_gui.py:153
+msgid "Unread"
+msgstr ""
+
+#: messenger_gui.py:161 messenger_gui.py:317 messenger_gui.py:474
+msgid "Status: Disconnected"
+msgstr ""
+
+#: messenger_gui.py:172
+msgid "Select a conversation to start chatting"
+msgstr ""
+
+#: messenger_gui.py:188 telegram_gui.py:134 telegram_windows.py:628
+msgid "Send"
+msgstr ""
+
+#: messenger_gui.py:208
+msgid "Connect to Messenger\tCtrl+N"
+msgstr ""
+
+#: messenger_gui.py:209
+msgid "Disconnect\tCtrl+D"
+msgstr ""
+
+#: messenger_gui.py:211
+msgid "Refresh Conversations\tF5"
+msgstr ""
+
+#: messenger_gui.py:213
+msgid "Close\tCtrl+Q"
+msgstr ""
+
+#: messenger_gui.py:220
+msgid "File"
+msgstr ""
+
+#: messenger_gui.py:224
+msgid "Open Messenger Web\tCtrl+W"
+msgstr ""
+
+#: messenger_gui.py:227
+msgid "View"
+msgstr ""
+
+#: messenger_gui.py:322 messenger_gui.py:471
+msgid "Status: Connected (Web Mode)"
+msgstr ""
+
+#: messenger_gui.py:364
+msgid "Click to open chat"
+msgstr ""
+
+#: messenger_gui.py:380
+msgid "Chat with"
+msgstr ""
+
+#: messenger_gui.py:412
+#, python-brace-format
+msgid ""
+"Chat opened with {}\n"
+"No previous messages.\n"
+"\n"
+msgstr ""
+
+#: messenger_gui.py:414
+#, python-brace-format
+msgid "Chat with {}\n"
+msgstr ""
+
+#: messenger_gui.py:429
+msgid "Please select a conversation first"
+msgstr ""
+
+#: messenger_gui.py:429
+msgid "No Chat Selected"
+msgstr ""
+
+#: messenger_gui.py:449 telegram_gui.py:208 telegram_windows.py:793
+msgid "Failed to send message"
+msgstr ""
+
+#: messenger_gui.py:449
+msgid "Send Error"
+msgstr ""
+
+#: messenger_gui.py:468
+msgid "Status: Connected (Titan IM)"
+msgstr ""
+
+#: messenger_gui.py:483
+msgid "Already connected to Messenger"
+msgstr ""
+
+#: messenger_gui.py:483 messenger_gui.py:504
+msgid "Connection Status"
+msgstr ""
+
+#: messenger_gui.py:495
+#, python-brace-format
+msgid "Connected to {}"
+msgstr ""
+
+#: messenger_gui.py:495
+msgid "Connected"
+msgstr ""
+
+#: messenger_gui.py:497
+msgid "Failed to connect"
+msgstr ""
+
+#: messenger_gui.py:497
+msgid "Connection Error"
+msgstr ""
+
+#: messenger_gui.py:504
+msgid "Not connected to Messenger"
+msgstr ""
+
+#: messenger_gui.py:508
+msgid "Disconnected from Messenger"
+msgstr ""
+
+#: messenger_gui.py:508
+msgid "Disconnected"
+msgstr ""
+
+#: messenger_webview.py:64
+msgid "Facebook Messenger - Titan IM"
+msgstr ""
+
+#: messenger_webview.py:107
+msgid "Wstecz"
+msgstr ""
+
+#: messenger_webview.py:108
+msgid "Dalej"
+msgstr ""
+
+#: messenger_webview.py:109
+msgid "Refresh"
+msgstr ""
+
+#: messenger_webview.py:110 messenger_webview.py:271
+msgid "Messenger"
+msgstr ""
+
+#: messenger_webview.py:197
+msgid "Loading Facebook Messenger..."
+msgstr ""
+
+#: messenger_webview.py:212
+msgid ""
+"WebView is not available on this system.\n"
+"\n"
+"Possible solutions:\n"
+"• Zaktualizuj wxPython: pip install -U wxPython\n"
+"• Zainstaluj Microsoft Edge WebView2 Runtime\n"
+"• Check if your system supports WebView2"
+msgstr ""
+
+#: messenger_webview.py:219
+msgid "Zamknij"
+msgstr ""
+
+#: messenger_webview.py:228
+msgid "WebView is not available"
+msgstr ""
+
+#: messenger_webview.py:237
+msgid "Refresh\tF5"
+msgstr ""
+
+#: messenger_webview.py:237
+msgid "Refresh Messenger page"
+msgstr ""
+
+#: messenger_webview.py:240
+msgid "Zoom In\tCtrl++"
+msgstr ""
+
+#: messenger_webview.py:240
+msgid "Zoom in page"
+msgstr ""
+
+#: messenger_webview.py:241
+msgid "Zoom Out\tCtrl+-"
+msgstr ""
+
+#: messenger_webview.py:241
+msgid "Zoom out page"
+msgstr ""
+
+#: messenger_webview.py:242
+msgid "Reset Zoom\tCtrl+0"
+msgstr ""
+
+#: messenger_webview.py:242
+msgid "Reset zoom level"
+msgstr ""
+
+#: messenger_webview.py:246
+msgid "Developer Tools\tF12"
+msgstr ""
+
+#: messenger_webview.py:246
+msgid "Open developer tools"
+msgstr ""
+
+#: messenger_webview.py:252
+msgid "Pokaż folder cookies"
+msgstr ""
+
+#: messenger_webview.py:252
+msgid "Otwórz folder z danymi użytkownika"
+msgstr ""
+
+#: messenger_webview.py:253
+msgid "Wyczyść cookies"
+msgstr ""
+
+#: messenger_webview.py:253
+msgid "Usuń wszystkie zapisane dane logowania"
+msgstr ""
+
+#: messenger_webview.py:255
+msgid "Zarządzanie cookies"
+msgstr ""
+
+#: messenger_webview.py:259 whatsapp_webview.py:188
+msgid "Zamknij\tAlt+F4"
+msgstr ""
+
+#: messenger_webview.py:259
+msgid "Zamknij Messenger"
+msgstr ""
+
+#: messenger_webview.py:276
+msgid "Powiadomienia dźwiękowe"
+msgstr ""
+
+#: messenger_webview.py:276
+msgid "Włącz powiadomienia dźwiękowe"
+msgstr ""
+
+#: messenger_webview.py:279
+msgid "Odczytywanie TTS"
+msgstr ""
+
+#: messenger_webview.py:279
+msgid "Włącz odczytywanie przez TTS"
+msgstr ""
+
+#: messenger_webview.py:284
+msgid "Fokus na czat\tCtrl+M"
+msgstr ""
+
+#: messenger_webview.py:284
+msgid "Ustaw fokus na obszar czatu"
+msgstr ""
+
+#: messenger_webview.py:288
+msgid "Widok"
+msgstr ""
+
+#: messenger_webview.py:293
+msgid "Włącz połączenia głosowe"
+msgstr ""
+
+#: messenger_webview.py:293
+msgid "Włącz obsługę połączeń głosowych"
+msgstr ""
+
+#: messenger_webview.py:298 messenger_webview.py:2011 messenger_webview.py:2035
+msgid "Status połączenia"
+msgstr ""
+
+#: messenger_webview.py:298
+msgid "Pokaż status aktualnego połączenia"
+msgstr ""
+
+#: messenger_webview.py:301
+msgid "Zakończ połączenie\tCtrl+E"
+msgstr ""
+
+#: messenger_webview.py:301
+msgid "Zakończ aktywne połączenie głosowe"
+msgstr ""
+
+#: messenger_webview.py:312
+msgid "Połączenia"
+msgstr ""
+
+#: messenger_webview.py:322
+msgid "Test dźwięku przychodzącego"
+msgstr ""
+
+#: messenger_webview.py:322
+msgid "Przetestuj dźwięk przychodzącego połączenia"
+msgstr ""
+
+#: messenger_webview.py:323
+msgid "Test dźwięku wychodzącego"
+msgstr ""
+
+#: messenger_webview.py:323
+msgid "Przetestuj dźwięk wychodzącego połączenia"
+msgstr ""
+
+#: messenger_webview.py:324
+msgid "Test dźwięku nawiązania"
+msgstr ""
+
+#: messenger_webview.py:324
+msgid "Przetestuj dźwięk nawiązanego połączenia"
+msgstr ""
+
+#: messenger_webview.py:325
+msgid "Test dźwięku zakończenia"
+msgstr ""
+
+#: messenger_webview.py:325
+msgid "Przetestuj dźwięk zakończenia połączenia"
+msgstr ""
+
+#: messenger_webview.py:327 messenger_webview.py:2131
+msgid "Debug połączeń głosowych"
+msgstr ""
+
+#: messenger_webview.py:327
+msgid "Pokaż informacje debug o połączeniach"
+msgstr ""
+
+#: messenger_webview.py:635 messenger_webview.py:638
+msgid "Łączenie z Messenger"
+msgstr ""
+
+#: messenger_webview.py:646
+msgid "Ładowanie..."
+msgstr ""
+
+#: messenger_webview.py:651
+msgid "Ładowanie strony"
+msgstr ""
+
+#: messenger_webview.py:655
+msgid "Strona załadowana"
+msgstr ""
+
+#: messenger_webview.py:668
+#, python-brace-format
+msgid "Załadowano {}"
+msgstr ""
+
+#: messenger_webview.py:717 messenger_webview.py:724 whatsapp_webview.py:1915
+#: whatsapp_webview.py:1922
+msgid "Błąd ładowania strony"
+msgstr ""
+
+#: messenger_webview.py:766
+msgid "Odświeżanie"
+msgstr ""
+
+#: messenger_webview.py:776
+msgid "Powrót do strony głównej"
+msgstr ""
+
+#: messenger_webview.py:818
+msgid "Narzędzia deweloperskie mogą nie być dostępne w tej wersji WebView."
+msgstr ""
+
+#: messenger_webview.py:819 messenger_webview.py:1961
+msgid "Informacja"
+msgstr ""
+
+#: messenger_webview.py:923
+msgid "Połączono z Facebook Messenger"
+msgstr ""
+
+#: messenger_webview.py:926
+msgid "Połączono z Messenger"
+msgstr ""
+
+#: messenger_webview.py:1186
+#, python-brace-format
+msgid "{} pisze"
+msgstr ""
+
+#: messenger_webview.py:1188
+msgid "Ktoś pisze"
+msgstr ""
+
+#: messenger_webview.py:1209 messenger_webview.py:1211
+#: messenger_webview.py:1213 messenger_webview.py:1353
+#: messenger_webview.py:1355 messenger_webview.py:1357 whatsapp_webview.py:1115
+#: whatsapp_webview.py:1119 whatsapp_webview.py:1123
+msgid "Message sent"
+msgstr ""
+
+#: messenger_webview.py:1227
+msgid "Nowa wiadomość"
+msgstr ""
+
+#: messenger_webview.py:1843 telegram_windows.py:436
+msgid "Łączenie..."
+msgstr ""
+
+#: messenger_webview.py:1856
+msgid "Przychodzące połączenie"
+msgstr ""
+
+#: messenger_webview.py:1875
+msgid "Dzwonię..."
+msgstr ""
+
+#: messenger_webview.py:1897
+msgid "Połączenie nawiązane"
+msgstr ""
+
+#: messenger_webview.py:1904
+msgid "Aktywne połączenie głosowe"
+msgstr ""
+
+#: messenger_webview.py:1934
+#, python-brace-format
+msgid "Połączenie zakończone. Czas trwania: {}"
+msgstr ""
+
+#: messenger_webview.py:1936 messenger_webview.py:1950
+msgid "Połączenie zakończone"
+msgstr ""
+
+#: messenger_webview.py:1961 messenger_webview.py:2011
+msgid "Brak aktywnego połączenia"
+msgstr ""
+
+#: messenger_webview.py:2015 messenger_webview.py:2030
+msgid "Nieznany"
+msgstr ""
+
+#: messenger_webview.py:2024
+#, python-brace-format
+msgid ""
+"Status połączenia głosowego:\n"
+"\n"
+"Kontakt: {}\n"
+"Typ: {}\n"
+"Czas trwania: {}\n"
+"Status: Aktywne"
+msgstr ""
+
+#: messenger_webview.py:2031
+msgid "Przychodzące"
+msgstr ""
+
+#: messenger_webview.py:2031
+msgid "Wychodzące"
+msgstr ""
+
+#: messenger_webview.py:2041
+msgid "Test dźwięku przychodzącego połączenia"
+msgstr ""
+
+#: messenger_webview.py:2047
+msgid "Test dźwięku wychodzącego połączenia"
+msgstr ""
+
+#: messenger_webview.py:2053
+msgid "Test dźwięku nawiązania połączenia"
+msgstr ""
+
+#: messenger_webview.py:2059
+msgid "Test dźwięku zakończenia połączenia"
+msgstr ""
+
+#: messenger_webview.py:2095
+msgid "Błąd pobierania informacji debug"
+msgstr ""
+
+#: messenger_webview.py:2095 messenger_webview.py:2140
+msgid "Debug"
+msgstr ""
+
+#: messenger_webview.py:2100
+msgid ""
+"Informacje debug połączeń głosowych:\n"
+"\n"
+msgstr ""
+
+#: messenger_webview.py:2139
+#, python-brace-format
+msgid ""
+"Błąd pobierania informacji debug:\n"
+"{}"
+msgstr ""
+
+#: messenger_webview.py:2169
+msgid "Otwarto folder cookies"
+msgstr ""
+
+#: messenger_webview.py:2174
+#, python-brace-format
+msgid ""
+"Nie można otworzyć folderu cookies:\n"
+"{}"
+msgstr ""
+
+#: messenger_webview.py:2175 messenger_webview.py:2205
+#: messenger_webview.py:2235 messenger_webview.py:2243
+#: messenger_webview.py:3334 telegram_windows.py:271 whatsapp_webview.py:1962
+msgid "Błąd"
+msgstr ""
+
+#: messenger_webview.py:2184
+msgid ""
+"Czy na pewno chcesz usunąć wszystkie cookies i dane logowania?\n"
+"\n"
+"To spowoduje wylogowanie z Messenger i konieczność ponownego logowania."
+msgstr ""
+
+#: messenger_webview.py:2186
+msgid "Potwierdź usunięcie cookies"
+msgstr ""
+
+#: messenger_webview.py:2204
+#, python-brace-format
+msgid ""
+"Błąd podczas czyszczenia cookies:\n"
+"{}"
+msgstr ""
+
+#: messenger_webview.py:2218
+msgid ""
+"Cookies zostały usunięte pomyślnie.\n"
+"Przeładuj stronę aby zastosować zmiany."
+msgstr ""
+
+#: messenger_webview.py:2220 messenger_webview.py:2229
+msgid "Cookies usunięte"
+msgstr ""
+
+#: messenger_webview.py:2233
+msgid ""
+"Nie można usunąć cookies.\n"
+"Może być potrzebne zamknięcie wszystkich okien Messenger."
+msgstr ""
+
+#: messenger_webview.py:2242
+#, python-brace-format
+msgid ""
+"Błąd podczas usuwania cookies:\n"
+"{}"
+msgstr ""
+
+#: messenger_webview.py:2268
+msgid "Fokus na obszar czatu"
+msgstr ""
+
+#: messenger_webview.py:2563 messenger_webview.py:2567
+#: messenger_webview.py:2596
+#, python-brace-format
+msgid "Messenger message from {}: {}"
+msgstr ""
+
+#: messenger_webview.py:2580
+#, python-brace-format
+msgid "Messenger: {} new messages from {} contacts"
+msgstr ""
+
+#: messenger_webview.py:2598 messenger_webview.py:2654
+#: messenger_webview.py:2665
+#, python-brace-format
+msgid "Messenger: {} new messages"
+msgstr ""
+
+#: messenger_webview.py:2644
+#, python-brace-format
+msgid "New messages from Messenger: {}"
+msgstr ""
+
+#: messenger_webview.py:2646
+msgid "New message from Messenger"
+msgstr ""
+
+#: messenger_webview.py:2656 messenger_webview.py:2667
+msgid "Messenger: new message"
+msgstr ""
+
+#: messenger_webview.py:3305
+msgid "Rozłączono z Messenger"
+msgstr ""
+
+#: messenger_webview.py:3307
+msgid "Zamykanie Messenger"
+msgstr ""
+
+#: messenger_webview.py:3332
+msgid ""
+"Nie można otworzyć Messenger WebView.\n"
+"Sprawdź czy WebView2 jest zainstalowany."
+msgstr ""
+
+#: messenger_webview.py:3447 whatsapp_webview.py:2106
+msgid ""
+"WebView nie jest dostępny na tym systemie.\n"
+"Zainstaluj Microsoft Edge WebView2 Runtime."
+msgstr ""
+
+#: messenger_webview.py:3449 whatsapp_webview.py:2108
+msgid "Błąd WebView"
+msgstr ""
+
+#: telegram_client.py:98 telegram_gui.py:313
+msgid "Connection error"
+msgstr ""
+
+#: telegram_client.py:166
+msgid "Invalid phone number"
+msgstr ""
+
+#: telegram_client.py:168
+msgid "Invalid verification code"
+msgstr ""
+
+#: telegram_client.py:170
+msgid "Login error"
+msgstr ""
+
+#: telegram_client.py:179
+msgid "Enter the verification code received by SMS or Telegram:"
+msgstr ""
+
+#: telegram_client.py:180
+msgid "Verification code"
+msgstr ""
+
+#: telegram_client.py:200
+msgid "Enter two-factor authentication password:"
+msgstr ""
+
+#: telegram_client.py:201
+msgid "2FA Password"
+msgstr ""
+
+#: telegram_client.py:257 telegram_client.py:864 telegram_windows.py:340
+#: telegram_windows.py:863
+msgid "Unknown"
+msgstr ""
+
+#: telegram_client.py:290
+#, python-brace-format
+msgid "New group message from {}, {}"
+msgstr ""
+
+#: telegram_client.py:298
+#, python-brace-format
+msgid "New message from {}"
+msgstr ""
+
+#: telegram_client.py:321
+#, python-brace-format
+msgid "New group message from {}, {}, {}"
+msgstr ""
+
+#: telegram_client.py:328
+#, python-brace-format
+msgid "Message from: {}, {}"
+msgstr ""
+
+#: telegram_client.py:687 telegram_client.py:692
+#, python-brace-format
+msgid "Connected to Telegram as {}"
+msgstr ""
+
+#: telegram_client.py:711
+msgid "Telegram Error"
+msgstr ""
+
+#: telegram_client.py:1034
+msgid "Disconnecting from Telegram..."
+msgstr ""
+
+#: telegram_client.py:1061
+msgid "Event loop stopped, forcing client cleanup"
+msgstr ""
+
+#: telegram_client.py:1077
+msgid "Waiting for connection thread to finish..."
+msgstr ""
+
+#: telegram_client.py:1081
+msgid "Warning: Connection thread did not stop cleanly"
+msgstr ""
+
+#: telegram_client.py:1083
+msgid "Connection thread stopped"
+msgstr ""
+
+#: telegram_client.py:1093
+msgid "Successfully disconnected from Telegram"
+msgstr ""
+
+#: telegram_client.py:1099
+msgid "Disconnected from Telegram (with errors)"
+msgstr ""
+
+#: telegram_client.py:1106
+msgid "Telegram client disconnected"
+msgstr ""
+
+#: telegram_client.py:1115
+msgid "Start login by providing phone number"
+msgstr ""
+
+#: telegram_client.py:1120
+msgid "Phone number is required"
+msgstr ""
+
+#: telegram_client.py:1121
+msgid "Preparing connection to Telegram..."
+msgstr ""
+
+#: telegram_gui.py:15
+msgid "Connect to Telegram"
+msgstr ""
+
+#: telegram_gui.py:22
+msgid ""
+"To connect to Telegram, you need a bot token.\n"
+"Create a bot with @BotFather in Telegram and copy the token."
+msgstr ""
+
+#: telegram_gui.py:28
+msgid "Bot token:"
+msgstr ""
+
+#: telegram_gui.py:35
+msgid "Group chat ID (optional):"
+msgstr ""
+
+#: telegram_gui.py:39
+msgid "Leave empty for private messages"
+msgstr ""
+
+#: telegram_gui.py:43
+msgid "Your username in TCE:"
+msgstr ""
+
+#: telegram_gui.py:104
+msgid "Users in chat:"
+msgstr ""
+
+#: telegram_gui.py:124
+msgid "Connected to Telegram - select a user or chat generally"
+msgstr ""
+
+#: teamtalk.py:634 teamtalk_gui_methods.py:65 telegram_gui.py:150
+msgid "Disconnect"
+msgstr ""
+
+#: telegram_gui.py:150
+msgid "Disconnect from Telegram"
+msgstr ""
+
+#: telegram_gui.py:158 telegram_gui.py:250
+msgid "Connected to Telegram"
+msgstr ""
+
+#: telegram_gui.py:183
+#, python-brace-format
+msgid "Private conversation with {}"
+msgstr ""
+
+#: telegram_gui.py:188
+msgid "General chat"
+msgstr ""
+
+#: teamtalk_gui_methods.py:45 teamtalk_gui_methods.py:246
+#: teamtalk_gui_methods.py:281 telegram_gui.py:208 telegram_gui.py:315
+#: telegram_windows.py:793
+msgid "Error"
+msgstr ""
+
+#: telegram_gui.py:313
+msgid "Failed to connect to Telegram"
+msgstr ""
+
+#: telegram_gui.py:315
+msgid "Invalid bot token"
+msgstr ""
+
+#: telegram_windows.py:24 telegram_windows.py:321
+msgid "Wiadomości prywatne z"
+msgstr ""
+
+#: teamtalk.py:955 telegram_windows.py:68
+msgid "Online"
+msgstr ""
+
+#: telegram_windows.py:101
+msgid "Wyślij"
+msgstr ""
+
+#: telegram_windows.py:271
+msgid "Nie udało się wysłać wiadomości"
+msgstr ""
+
+#: telegram_windows.py:291 telegram_windows.py:813
+msgid "Voice message"
+msgstr ""
+
+#: telegram_windows.py:337
+msgid "Historia rozmowy z"
+msgstr ""
+
+#: telegram_windows.py:374
+msgid "Połączenie wychodzące"
+msgstr ""
+
+#: telegram_windows.py:374
+msgid "Połączenie przychodzące"
+msgstr ""
+
+#: telegram_windows.py:375
+msgid "Rozmowa z"
+msgstr ""
+
+#: telegram_windows.py:424
+msgid "Dzwonisz do"
+msgstr ""
+
+#: telegram_windows.py:424
+msgid "Połączenie przychodzące od"
+msgstr ""
+
+#: telegram_windows.py:449 telegram_windows.py:519 telegram_windows.py:524
+msgid "Wycisz"
+msgstr ""
+
+#: telegram_windows.py:453
+msgid "Zakończ"
+msgstr ""
+
+#: telegram_windows.py:464
+msgid "Skróty: Spacja=Wycisz/Włącz • Escape=Zakończ"
+msgstr ""
+
+#: telegram_windows.py:490 telegram_windows.py:525
+msgid "Połączono - rozmowa aktywna"
+msgstr ""
+
+#: telegram_windows.py:514
+msgid "Łączenie"
+msgstr ""
+
+#: telegram_windows.py:520
+msgid "Włącz"
+msgstr ""
+
+#: telegram_windows.py:521
+msgid "Mikrofon wyciszony"
+msgstr ""
+
+#: telegram_windows.py:551 telegram_windows.py:844
+msgid "Group chat"
+msgstr ""
+
+#: telegram_windows.py:595
+msgid "Active"
+msgstr ""
+
+#: telegram_windows.py:788
+msgid "Me"
+msgstr ""
+
+#: telegram_windows.py:860
+msgid "Group chat history"
+msgstr ""
+
+#: telegram_windows.py:917
+msgid "Incoming call"
+msgstr ""
+
+#: telegram_windows.py:970
+msgid "CALL"
+msgstr ""
+
+#: telegram_windows.py:983
+msgid "Incoming call from:"
+msgstr ""
+
+#: telegram_windows.py:1000
+msgid "Reject"
+msgstr ""
+
+#: telegram_windows.py:1008
+msgid "Accept"
+msgstr ""
+
+#: teamtalk.py:148
+msgid "TeamTalk SDK not available"
+msgstr ""
+
+#: teamtalk.py:174 teamtalk.py:743 teamtalk_gui_methods.py:313
+msgid "Connected to TeamTalk server"
+msgstr ""
+
+#: teamtalk.py:177
+msgid "Connection timeout"
+msgstr ""
+
+#: teamtalk.py:180
+msgid "Failed to connect to server"
+msgstr ""
+
+#: teamtalk.py:184
+#, python-brace-format
+msgid "Connection error: {}"
+msgstr ""
+
+#: teamtalk.py:207
+#, python-brace-format
+msgid "Logged in as {}"
+msgstr ""
+
+#: teamtalk.py:210
+msgid "Login timeout"
+msgstr ""
+
+#: teamtalk.py:213
+msgid "Login failed"
+msgstr ""
+
+#: teamtalk.py:217
+#, python-brace-format
+msgid "Login error: {}"
+msgstr ""
+
+#: teamtalk.py:231
+msgid "Disconnected from server"
+msgstr ""
+
+#: teamtalk.py:607
+msgid "TeamTalk"
+msgstr ""
+
+#: teamtalk.py:630
+msgid "Connection"
+msgstr ""
+
+#: teamtalk.py:638 teamtalk.py:1012
+msgid "Push to Talk (Hold Space)"
+msgstr ""
+
+#: teamtalk.py:640 teamtalk.py:978
+msgid "Voice Transmission"
+msgstr ""
+
+#: teamtalk.py:649 teamtalk_gui_methods.py:62
+msgid "Channels"
+msgstr ""
+
+#: teamtalk.py:653 teamtalk.py:843
+msgid "Channel"
+msgstr ""
+
+#: teamtalk.py:654 teamtalk.py:660 teamtalk_gui_methods.py:63
+msgid "Users"
+msgstr ""
+
+#: teamtalk.py:655
+msgid "Topic"
+msgstr ""
+
+#: teamtalk.py:664
+msgid "Nickname"
+msgstr ""
+
+#: teamtalk.py:665
+msgid "Status"
+msgstr ""
+
+#: teamtalk.py:670
+msgid "Messages"
+msgstr ""
+
+#: teamtalk.py:754 teamtalk_gui_methods.py:259
+msgid "Disconnected from TeamTalk server"
+msgstr ""
+
+#: teamtalk.py:824 teamtalk.py:866 teamtalk.py:869 teamtalk.py:872
+#: teamtalk.py:875 teamtalk.py:886 teamtalk.py:897 teamtalk.py:1020
+#: teamtalk.py:1022 teamtalk.py:1025 teamtalk.py:1027 teamtalk.py:1030
+msgid "System"
+msgstr ""
+
+#: teamtalk.py:849 teamtalk.py:920
+msgid "Private"
+msgstr ""
+
+#: teamtalk.py:852
+msgid "Private message from"
+msgstr ""
+
+#: teamtalk.py:866
+msgid "joined the server"
+msgstr ""
+
+#: teamtalk.py:869
+msgid "left the server"
+msgstr ""
+
+#: teamtalk.py:872
+msgid "joined the channel"
+msgstr ""
+
+#: teamtalk.py:875
+msgid "left the channel"
+msgstr ""
+
+#: teamtalk.py:886 teamtalk.py:888
+msgid "Joined channel"
+msgstr ""
+
+#: teamtalk.py:897 teamtalk.py:899
+msgid "Left channel"
+msgstr ""
+
+#: teamtalk.py:912
+msgid "Send private message to"
+msgstr ""
+
+#: teamtalk.py:913
+msgid "Private Message"
+msgstr ""
+
+#: teamtalk.py:975
+msgid "Stop Voice"
+msgstr ""
+
+#: teamtalk.py:976
+msgid "Voice transmission started"
+msgstr ""
+
+#: teamtalk.py:979
+msgid "Voice transmission stopped"
+msgstr ""
+
+#: teamtalk.py:981
+msgid "Please join a channel first"
+msgstr ""
+
+#: teamtalk.py:981
+msgid "Information"
+msgstr ""
+
+#: teamtalk.py:1000
+msgid "Talking... (Release Space)"
+msgstr ""
+
+#: teamtalk.py:1049
+msgid ""
+"TeamTalk5 SDK is not installed. Please install TeamTalk5 SDK to use this "
+"feature."
+msgstr ""
+
+#: teamtalk.py:1050
+msgid "TeamTalk Unavailable"
+msgstr ""
+
+#: teamtalk_gui_methods.py:26
+msgid "TeamTalk window opened"
+msgstr ""
+
+#: teamtalk_gui_methods.py:30
+msgid ""
+"Could not open TeamTalk window. Please check if TeamTalk5 SDK is "
+"installed."
+msgstr ""
+
+#: teamtalk_gui_methods.py:31
+msgid "TeamTalk Error"
+msgstr ""
+
+#: teamtalk_gui_methods.py:38
+msgid "TeamTalk window activated"
+msgstr ""
+
+#: teamtalk_gui_methods.py:44
+#, python-brace-format
+msgid "Error opening TeamTalk: {}"
+msgstr ""
+
+#: teamtalk_gui_methods.py:64
+msgid "Settings"
+msgstr ""
+
+#: teamtalk_gui_methods.py:66
+msgid "Back to main menu"
+msgstr ""
+
+#: teamtalk_gui_methods.py:68
+msgid "TeamTalk Options"
+msgstr ""
+
+#: teamtalk_gui_methods.py:93
+msgid "users"
+msgstr ""
+
+#: teamtalk_gui_methods.py:95
+msgid "current"
+msgstr ""
+
+#: teamtalk_gui_methods.py:98
+msgid "TeamTalk Channels"
+msgstr ""
+
+#: teamtalk_gui_methods.py:106
+msgid "No channels available"
+msgstr ""
+
+#: teamtalk_gui_methods.py:125
+msgid "Users in Channel"
+msgstr ""
+
+#: teamtalk_gui_methods.py:129
+msgid "All TeamTalk Users"
+msgstr ""
+
+#: teamtalk_gui_methods.py:134
+msgid "you"
+msgstr ""
+
+#: teamtalk_gui_methods.py:144
+msgid "No users available"
+msgstr ""
+
+#: teamtalk_gui_methods.py:151
+msgid "TeamTalk Settings"
+msgstr ""
+
+#: teamtalk_gui_methods.py:161
+msgid "Server Settings"
+msgstr ""
+
+#: teamtalk_gui_methods.py:165
+msgid "Server Host:"
+msgstr ""
+
+#: teamtalk_gui_methods.py:171
+msgid "TCP Port:"
+msgstr ""
+
+#: teamtalk_gui_methods.py:177
+msgid "UDP Port:"
+msgstr ""
+
+#: teamtalk_gui_methods.py:183
+msgid "Use encrypted connection"
+msgstr ""
+
+#: teamtalk_gui_methods.py:188
+msgid "User Settings"
+msgstr ""
+
+#: teamtalk_gui_methods.py:192
+msgid "Nickname:"
+msgstr ""
+
+#: teamtalk_gui_methods.py:198
+msgid "Password (optional):"
+msgstr ""
+
+#: teamtalk_gui_methods.py:205
+msgid "Save"
+msgstr ""
+
+#: teamtalk_gui_methods.py:236
+msgid "TeamTalk settings saved successfully."
+msgstr ""
+
+#: teamtalk_gui_methods.py:237
+msgid "Settings Saved"
+msgstr ""
+
+#: teamtalk_gui_methods.py:241
+msgid "TeamTalk settings saved"
+msgstr ""
+
+#: teamtalk_gui_methods.py:245
+#, python-brace-format
+msgid "Error saving TeamTalk settings: {}"
+msgstr ""
+
+#: teamtalk_gui_methods.py:280
+#, python-brace-format
+msgid "Error disconnecting from TeamTalk: {}"
+msgstr ""
+
+#: teamtalk_gui_methods.py:285
+msgid "Not connected to TeamTalk"
+msgstr ""
+
+#: whatsapp_client.py:495 whatsapp_client.py:501
+msgid "Opened WhatsApp Web in web browser"
+msgstr ""
+
+#: whatsapp_client.py:518
+msgid "WhatsApp Error"
+msgstr ""
+
+#: whatsapp_client.py:524 whatsapp_webview.py:2051
+msgid "Disconnected from WhatsApp Web"
+msgstr ""
+
+#: whatsapp_webview.py:99
+msgid "WhatsApp Web - Titan IM"
+msgstr ""
+
+#: whatsapp_webview.py:142 whatsapp_webview.py:234 whatsapp_webview.py:333
+msgid "Ładowanie WhatsApp Web..."
+msgstr ""
+
+#: whatsapp_webview.py:178
+msgid "Odśwież\tF5"
+msgstr ""
+
+#: whatsapp_webview.py:178
+msgid "Odśwież stronę"
+msgstr ""
+
+#: whatsapp_webview.py:183 whatsapp_webview.py:1951
+msgid "Wyczyść dane sesji"
+msgstr ""
+
+#: whatsapp_webview.py:183
+msgid "Wyczyść cookies i dane"
+msgstr ""
+
+#: whatsapp_webview.py:188
+msgid "Zamknij okno"
+msgstr ""
+
+#: whatsapp_webview.py:191
+msgid "WhatsApp"
+msgstr ""
+
+#: whatsapp_webview.py:196
+msgid "Powiadomienia"
+msgstr ""
+
+#: whatsapp_webview.py:196
+msgid "Włącz powiadomienia o nowych wiadomościach"
+msgstr ""
+
+#: whatsapp_webview.py:199
+msgid "Mowa (TTS)"
+msgstr ""
+
+#: whatsapp_webview.py:199
+msgid "Włącz powiadomienia głosowe"
+msgstr ""
+
+#: whatsapp_webview.py:202
+msgid "Ustawienia"
+msgstr ""
+
+#: whatsapp_webview.py:207
+msgid "O programie"
+msgstr ""
+
+#: whatsapp_webview.py:207
+msgid "Informacje o WhatsApp Web dla Titan IM"
+msgstr ""
+
+#: whatsapp_webview.py:210
+msgid "Pomoc"
+msgstr ""
+
+#: whatsapp_webview.py:228
+msgid "Connecting to WhatsApp Web"
+msgstr ""
+
+#: whatsapp_webview.py:238
+msgid "Błąd ładowania WhatsApp Web"
+msgstr ""
+
+#: whatsapp_webview.py:247
+msgid "WhatsApp Web załadowany"
+msgstr ""
+
+#: whatsapp_webview.py:329
+msgid "Zeskanuj kod QR, aby zalogować się do WhatsApp"
+msgstr ""
+
+#: whatsapp_webview.py:353
+msgid "Połączono z WhatsApp"
+msgstr ""
+
+#: whatsapp_webview.py:546 whatsapp_webview.py:556 whatsapp_webview.py:563
+#, python-brace-format
+msgid "{} is typing"
+msgstr ""
+
+#: whatsapp_webview.py:548 whatsapp_webview.py:558 whatsapp_webview.py:565
+msgid "Someone is typing"
+msgstr ""
+
+#: whatsapp_webview.py:639 whatsapp_webview.py:649 whatsapp_webview.py:656
+msgid "New WhatsApp chat"
+msgstr ""
+
+#: whatsapp_webview.py:641 whatsapp_webview.py:651 whatsapp_webview.py:658
+#, python-brace-format
+msgid "New WhatsApp chats: {}"
+msgstr ""
+
+#: whatsapp_webview.py:847 whatsapp_webview.py:851 whatsapp_webview.py:880
+#, python-brace-format
+msgid "WhatsApp message from {}: {}"
+msgstr ""
+
+#: whatsapp_webview.py:864
+#, python-brace-format
+msgid "WhatsApp: {} new messages from {} contacts"
+msgstr ""
+
+#: whatsapp_webview.py:882 whatsapp_webview.py:941 whatsapp_webview.py:952
+#, python-brace-format
+msgid "WhatsApp: {} new messages"
+msgstr ""
+
+#: whatsapp_webview.py:931
+#, python-brace-format
+msgid "New messages from WhatsApp: {}"
+msgstr ""
+
+#: whatsapp_webview.py:933
+msgid "New message from WhatsApp"
+msgstr ""
+
+#: whatsapp_webview.py:943 whatsapp_webview.py:954
+msgid "WhatsApp: new message"
+msgstr ""
+
+#: whatsapp_webview.py:1739
+msgid "Incoming WhatsApp call"
+msgstr ""
+
+#: whatsapp_webview.py:1756
+msgid "WhatsApp call connecting"
+msgstr ""
+
+#: whatsapp_webview.py:1773
+msgid "WhatsApp call connected"
+msgstr ""
+
+#: whatsapp_webview.py:1790
+msgid "WhatsApp call ended"
+msgstr ""
+
+#: whatsapp_webview.py:1942
+msgid "Odświeżanie WhatsApp Web..."
+msgstr ""
+
+#: whatsapp_webview.py:1950
+msgid ""
+"Czy na pewno chcesz wyczyścić wszystkie dane sesji WhatsApp?\n"
+"Będziesz musiał zalogować się ponownie."
+msgstr ""
+
+#: whatsapp_webview.py:1957
+msgid ""
+"Dane sesji zostały wyczyszczone.\n"
+"Odśwież stronę, aby zalogować się ponownie."
+msgstr ""
+
+#: whatsapp_webview.py:1958
+msgid "Sukces"
+msgstr ""
+
+#: whatsapp_webview.py:1961
+msgid "Nie udało się wyczyścić danych sesji."
+msgstr ""
+
+#: whatsapp_webview.py:1971
+msgid ""
+"Integracja WhatsApp Web z systemem Titan IM.\n"
+"Umożliwia korzystanie z WhatsApp w ramach TCE Launcher."
+msgstr ""
+
+#: whatsapp_webview.py:2092
+#, python-brace-format
+msgid ""
+"Nie można uruchomić WhatsApp WebView.\n"
+"Sprawdź czy WebView2 jest zainstalowany.\n"
+"Błąd: {}"
+msgstr ""
+
+#: whatsapp_webview.py:2095
+msgid "Błąd WhatsApp WebView"
+msgstr ""
+

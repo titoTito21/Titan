@@ -119,10 +119,10 @@ def dictate():
                         break
                     except sr.UnknownValueError:
                         if attempt == int(settings['tDictate']['recognition_attempts']) - 1:
-                            play_sound('srerror.ogg')
+                            play_sound('ui/srerror.ogg')
                             speak("Błąd dyktowania, nie rozpoznano mowy.")
                     except sr.RequestError:
-                        play_sound('srerror.ogg')
+                        play_sound('ui/srerror.ogg')
                         speak("Błąd dyktowania, błąd połączenia z internetem.")
                         break
 
@@ -139,12 +139,12 @@ def dictate():
                             for char in text:
                                 keyboard.write(char)
                     else:
-                        play_sound('srerror.ogg')
+                        play_sound('ui/srerror.ogg')
                         speak("Błąd dyktowania, nie jesteś w polu tekstowym.")
             except sr.WaitTimeoutError:
                 pass  # Timeout, continue listening
             except Exception as e:
-                play_sound('srerror.ogg')
+                play_sound('ui/srerror.ogg')
                 speak(f"Błąd dyktowania: {str(e)}")
         time.sleep(1)
 
@@ -153,10 +153,10 @@ def toggle_dictation():
     with dictating_lock:
         if is_dictating:
             is_dictating = False
-            play_sound('srend.ogg')
+            play_sound('ui/srend.ogg')
         else:
             is_dictating = True
-            play_sound('srbegin.ogg')
+            play_sound('ui/srbegin.ogg')
             threading.Thread(target=dictate).start()
 
 def show_settings_dialog():

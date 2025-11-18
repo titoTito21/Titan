@@ -1,0 +1,48 @@
+będą 3 tryby
+system - domyślny tryb klawiszy, nic nie zmienia w padzie
+kontroler - controller mode - dla windows/systemu, zmiana klawiszy
+lewa gałka:
+dół, strzałka w dół
+w lewo, strzałka w lewo
+w prawo, strzałka w prawo
+w górę, strzałka w górę
+prawa gałka:
+w górę, shift+tab
+w dół, tab
+w lewo, control shift tab
+w prawo, control+tab
+inne przyciski
+przekonwertuj też na inne pady, dam xboxowe
+dolny przycisk akcji, enter
+prawy przycisk akcji, escape
+górny przycisk akcji, backspace
+lewy przycisk akcji: alt+f4
+przycisk menu, przycisk windows
+przycisk start, alt
+przycisk środkowy, alt+tab
+screenreader mode "tryb czytnika ekranu
+przycisk menu, nvda+n lub jaws+j 
+lewa gałka lub strzałki: num 2, num 8, num 4 i num 6
+dolny przycisk, sprawdzanie godziny, ins+f12
+prawy przycisk, sprawdzanie baterii ins+shift+b
+górny przycisk, zakończenie czytnika ekranu
+lewy przycisk, ins+ctrl+s
+
+tryb domyślny, czyli po prostu tryb domyślnie działającego joysticka
+tryb klawiatury ekranowej, screen keyboard mode
+to będzie swego rodzaju niewidzialny interface
+dolny przycisk, lub przycisk odpowiadający za potwierdzenie, wpisz znak
+prawy przycisk, lub odpowiednik przycisku wróć w padach, backspace
+prawa gałka, strzałki w górę, w dół, w prawo i w lewo
+lewa gałka+strzałki, przemieszczają nas po klawiaturze ekranowej, 
+w pierwszej kolumnie jest od ` do =
+w drugiej od q do \
+w trzeciej od capslock, będzie można go włączyć lub wyłączyć od capslock do ;
+w czwartej, od shift do /
+w piątej, spacja, enter
+żeby się przełączyć między trybami, przytrzymamy przycisk trigger przez 2 sekundy, lewy lub prawy, żeby przełączyć nas między trybami
+dźwięki
+change_mode.ogg, zmiana trybu
+ui1.ogg, przemieszczanie nas po klawiaturze ekranowej
+ui2.ogg, wpisanie znaku, enter lub/i backspace
+w każdym z trybów naciśnięcie powoduje też wibrację odpowiednią do sytuacji

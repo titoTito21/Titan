@@ -14,40 +14,33 @@ _ = set_language(get_setting('language', 'pl'))
 
 try:
     from pytgcalls import PyTgCalls
-    
-    # Import correct components for py-tgcalls 2.2.6
+    from pytgcalls import MediaDevices
+
+    # Import correct components for py-tgcalls 2.2.8
     try:
-        from pytgcalls.types.stream import MediaStream, Device, AudioQuality, VideoQuality
-        from pytgcalls.types.stream.external_media import ExternalMedia
-        print("py-tgcalls 2.2.6 imports successful")
+        from pytgcalls.types import MediaStream
+        print("py-tgcalls 2.2.8 imports successful")
         COMPONENTS_AVAILABLE = True
     except ImportError as import_error:
         print(f"py-tgcalls stream imports failed: {import_error}")
         MediaStream = None
-        Device = None
-        AudioQuality = None
-        VideoQuality = None
-        ExternalMedia = None
         COMPONENTS_AVAILABLE = False
-    
+
     VOICE_CALLS_AVAILABLE = True
     print("py-tgcalls loaded successfully!")
     print(f"Stream components available: {COMPONENTS_AVAILABLE}")
-    
-    # Set legacy variables to None since they're not used in 2.2.6
+
+    # Set legacy variables to None since they're not used in 2.2.8
     AudioPiped = None
-    VideoPiped = None 
+    VideoPiped = None
     HighQualityAudio = None
     
 except ImportError as e:
     VOICE_CALLS_AVAILABLE = False
     print(f"py-tgcalls not available: {e}. Using native Telegram calls only.")
     PyTgCalls = None
+    MediaDevices = None
     MediaStream = None
-    Device = None
-    AudioQuality = None
-    VideoQuality = None
-    ExternalMedia = None
     AudioPiped = None
     VideoPiped = None
     HighQualityAudio = None
@@ -429,14 +422,25 @@ class TelegramVoiceClient:
                 'type': 'incoming',
                 'start_time': self.call_start_time.isoformat()
             })
-            
+
             self.is_call_active = True
-            
-            # Don't automatically start audio stream as it might cause issues
-            # Let the user manually join voice chat if needed
-            print("Call answered successfully - audio will work through Telegram's WebRTC")
-            print("No additional setup needed for native voice calls")
-            
+
+            # IMPORTANT: Start audio stream using group voice chat for working audio
+            # Native WebRTC through Telethon doesn't support audio in Python
+            print("Call answered - setting up audio using group voice chat method")
+            print("Note: Using PyTgCalls for audio support instead of native WebRTC")
+
+            try:
+                # Start audio stream using group voice workaround
+                audio_success = await self._start_audio_stream()
+                if audio_success:
+                    print("Audio stream established successfully")
+                else:
+                    print("Warning: Audio stream setup failed - voice may not work")
+            except Exception as audio_error:
+                print(f"Warning: Could not start audio stream: {audio_error}")
+                print("Call is active but audio may not work")
+
             return True
             
         except Exception as e:
@@ -627,22 +631,27 @@ class TelegramVoiceClient:
                 try:
                     # Get user entity
                     import telegram_client
+                    from telethon import utils
                     user_entity = None
-                    
+
                     if hasattr(telegram_client.telegram_client, 'chat_users') and recipient_id in telegram_client.telegram_client.chat_users:
                         user_entity = telegram_client.telegram_client.chat_users[recipient_id]['entity']
                     else:
                         user_entity = await self.telethon_client.get_entity(recipient_id)
-                    
+
                     if user_entity:
+                        # Convert to InputUser to avoid type casting errors
+                        # Use get_input_entity to ensure we have the correct InputPeer type
+                        input_user = await self.telethon_client.get_input_entity(user_entity)
+
                         # Invite user to the temporary group
                         await self.telethon_client(InviteToChannelRequest(
                             channel=group,
-                            users=[user_entity]
+                            users=[input_user]
                         ))
                         print(f"Invited {recipient_id} to audio group")
                         print(f"Other user should join voice chat in: {group_title}")
-                        
+
                         # Now we can start a group voice call
                         return group.id
                         
@@ -675,78 +684,116 @@ class TelegramVoiceClient:
             if not VOICE_CALLS_AVAILABLE or not self.voice_client:
                 print("PyTgCalls not available for group call")
                 return False
-                
+
             print(f"Starting voice chat in audio group {group_id}")
-            
-            # Method 1: Try with MediaStream and microphone device
-            if COMPONENTS_AVAILABLE and MediaStream and Device:
+
+            # Get the channel entity for the group
+            try:
+                channel_entity = await self.telethon_client.get_entity(group_id)
+                print(f"Got channel entity: {type(channel_entity)}")
+            except Exception as entity_error:
+                print(f"Failed to get channel entity: {entity_error}")
+                return False
+
+            # Method 1: Try using MediaDevices with microphone (py-tgcalls 2.2.8 API)
+            if COMPONENTS_AVAILABLE and MediaStream and MediaDevices:
                 try:
-                    print("Trying MediaStream with microphone device...")
-                    
-                    # Create media stream with microphone
-                    stream = MediaStream(Device.MICROPHONE)
-                    
-                    await self.voice_client.play(group_id, stream)
-                    print("MediaStream with microphone successful")
-                    print("Voice chat active - microphone connected")
-                    print("Other user should join voice chat to hear audio")
-                    
-                    self.using_group_workaround = True
-                    return True
-                    
+                    print("Trying MediaDevices with microphone input (py-tgcalls 2.2.8)...")
+
+                    # Get available microphone devices
+                    mic_devices = MediaDevices.microphone_devices()
+
+                    if mic_devices and len(mic_devices) > 0:
+                        print(f"Found {len(mic_devices)} microphone device(s)")
+                        print(f"Using microphone: {mic_devices[0]}")
+
+                        # Create MediaStream with microphone audio
+                        stream = MediaStream(
+                            audio_path=mic_devices[0]
+                        )
+
+                        # Use play() method instead of join_group_call()
+                        await self.voice_client.play(
+                            chat_id=group_id,
+                            media_stream=stream
+                        )
+
+                        print("Successfully joined group voice call with microphone")
+                        print("Microphone is active and streaming")
+                        print("Other user should join voice chat to hear audio")
+
+                        self.using_group_workaround = True
+                        return True
+                    else:
+                        print("No microphone devices found")
+
                 except Exception as media_error:
-                    print(f"MediaStream with microphone failed: {media_error}")
-            
-            # Method 2: Try with default MediaStream
-            if COMPONENTS_AVAILABLE and MediaStream:
-                try:
-                    print("Trying default MediaStream...")
-                    
-                    # Create basic media stream
-                    stream = MediaStream.default()
-                    
-                    await self.voice_client.play(group_id, stream)
-                    print("Default MediaStream successful")
-                    print("Voice chat active - default audio")
-                    
+                    print(f"MediaDevices method failed: {media_error}")
+
+            # Method 2: Try with silent audio file (fallback)
+            try:
+                print("Trying silent audio file fallback...")
+
+                import tempfile
+                import wave
+                import os
+
+                # Create 5 seconds of silence as a WAV file
+                temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                temp_audio_path = temp_audio.name
+                temp_audio.close()
+
+                with wave.open(temp_audio_path, 'wb') as wav:
+                    wav.setnchannels(2)  # stereo
+                    wav.setsampwidth(2)  # 16-bit
+                    wav.setframerate(48000)  # 48kHz
+                    # 5 seconds of silence
+                    wav.writeframes(b'\x00' * (48000 * 2 * 2 * 5))
+
+                # Create MediaStream with the silent audio file
+                if COMPONENTS_AVAILABLE and MediaStream:
+                    stream = MediaStream(media_path=temp_audio_path)
+
+                    await self.voice_client.play(
+                        chat_id=group_id,
+                        media_stream=stream
+                    )
+
+                    print("Successfully joined with silent audio file")
+                    print("Note: Using silent audio - microphone needs manual activation")
+
+                    # Clean up temp file after a delay
+                    try:
+                        os.unlink(temp_audio_path)
+                    except:
+                        pass
+
                     self.using_group_workaround = True
                     return True
-                    
-                except Exception as default_error:
-                    print(f"Default MediaStream failed: {default_error}")
-            
-            # Method 3: Try basic join with empty stream
-            try:
-                print("Trying basic group call join...")
-                # Use play method with empty stream to join call
-                await self.voice_client.play(group_id, MediaStream.default())
-                print("Joined group voice call - basic mode")
-                print("User can manually enable microphone in Telegram")
-                self.using_group_workaround = True
-                return True
-            except Exception as join_error:
-                print(f"Basic join failed: {join_error}")
-            
-            # Method 4: Try play with string path
-            try:
-                print("Trying play with microphone path...")
-                await self.voice_client.play(group_id, "default")
-                print("Play with path successful")
-                self.using_group_workaround = True
-                return True
-            except Exception as path_error:
-                print(f"Play with path failed: {path_error}")
-            
-            # If all methods fail, still return true so user can join manually
+
+            except Exception as silent_error:
+                print(f"Silent audio fallback failed: {silent_error}")
+
+            # If all methods fail, provide helpful guidance
+            print("=" * 50)
             print("All automatic audio methods failed")
             print("Group created successfully - user can join voice chat manually")
-            print("In Telegram app: go to the group and click 'Join Voice Chat'")
-            
+            print("=" * 50)
+            print("Instructions:")
+            print("1. Open Telegram app")
+            print("2. Go to the created group")
+            print("3. Click 'Join Voice Chat' button")
+            print("4. Your microphone will work through the Telegram app")
+            print("=" * 50)
+
+            # Still return True since group was created successfully
             self.using_group_workaround = True
             return True
-                
+
         except Exception as e:
             print(f"Failed to start group voice call: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return False
     
     async def _cleanup_temp_group(self):
@@ -1002,33 +1049,32 @@ def start_voice_call(recipient):
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
             
-            # Try private call first, then group fallback
-            print(f"[STEP 1] Attempting private WebRTC call to {recipient}")
+            # IMPORTANT: Use group voice chat method for reliable audio
+            # Native Telegram WebRTC calls through Telethon don't support audio streaming in Python
+            # Group voice chat with PyTgCalls is the only method that provides working audio
+            print(f"[INFO] Using group voice chat method for reliable audio")
+            print(f"[INFO] Note: Native WebRTC calls don't work in Python - using PyTgCalls instead")
+
+            # Skip private call attempt and go directly to group method for audio support
+            # private_call_success = False
+            # try:
+            #     if loop.is_running():
+            #         future = asyncio.run_coroutine_threadsafe(
+            #             telegram_voice_client.start_private_call(recipient),
+            #             loop
+            #         )
+            #         private_call_success = future.result(timeout=300)
+            #     else:
+            #         private_call_success = loop.run_until_complete(telegram_voice_client.start_private_call(recipient))
+            #
+            #     if private_call_success:
+            #         print(f"[SUCCESS] Private call established with {recipient} via WebRTC")
+            #         return True
+            # except Exception as private_error:
+            #     print(f"[INFO] Private call failed with error: {private_error}")
             
-            # Schedule the call on the existing loop
-            private_call_success = False
-            try:
-                if loop.is_running():
-                    future = asyncio.run_coroutine_threadsafe(
-                        telegram_voice_client.start_private_call(recipient), 
-                        loop
-                    )
-                    private_call_success = future.result(timeout=300)  # 5 minute timeout - let user have time to answer
-                else:
-                    # If loop is not running, run the coroutine directly
-                    private_call_success = loop.run_until_complete(telegram_voice_client.start_private_call(recipient))
-                
-                if private_call_success:
-                    print(f"[SUCCESS] Private call established with {recipient} via WebRTC")
-                    return True
-                else:
-                    print(f"[INFO] Private call failed - trying group workaround method")
-            except Exception as private_error:
-                print(f"[INFO] Private call failed with error: {private_error}")
-                print(f"[STEP 2] Falling back to group voice chat method")
-            
-            # Fallback to group method if private call failed
-            print(f"[STEP 2] Attempting group voice chat with {recipient}")
+            # Use group voice chat method with working audio
+            print(f"[STEP 1] Creating group voice chat with {recipient} for audio support")
             try:
                 if loop.is_running():
                     future = asyncio.run_coroutine_threadsafe(

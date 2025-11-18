@@ -19,6 +19,9 @@ current_voice_message = None
 voice_message_playing = False
 voice_message_paused = False
 
+# AI TTS channel
+ai_tts_channel = None
+
 # Global flag to track pygame mixer initialization
 _mixer_initialized = False
 
@@ -79,12 +82,12 @@ def get_available_audio_systems():
 
 def initialize_sound():
     """Inicjalizuje system dźwiękowy z bezpiecznym podwójnym sprawdzeniem."""
-    global _mixer_initialized, background_channel, voice_message_channel
-    
+    global _mixer_initialized, background_channel, voice_message_channel, ai_tts_channel
+
     if _mixer_initialized:
         print("Audio system already initialized")
         return True
-    
+
     try:
         # Safe pygame mixer initialization
         if pygame.mixer.get_init() is None:
@@ -94,20 +97,23 @@ def initialize_sound():
             except pygame.error as e:
                 print(f"Failed to initialize pygame mixer: {e}")
                 return False
-        
+
         # Safely get channels
         try:
             background_channel = pygame.mixer.Channel(1)
             voice_message_channel = pygame.mixer.Channel(2)
+            ai_tts_channel = pygame.mixer.Channel(3)
         except (pygame.error, IndexError) as e:
             print(f"Failed to get audio channels: {e}")
             # Try to get any available channels
             try:
                 background_channel = pygame.mixer.find_channel()
                 voice_message_channel = pygame.mixer.find_channel()
+                ai_tts_channel = pygame.mixer.find_channel()
             except Exception:
                 background_channel = None
                 voice_message_channel = None
+                ai_tts_channel = None
         
         _mixer_initialized = True
         print(f"Audio system initialized on {platform.system()}")
@@ -222,42 +228,42 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
 
 # Funkcje odtwarzania dźwięków
 def play_startup_sound():
-    play_sound('startup.ogg')
+    play_sound('core/startup.ogg')
 
 def play_connecting_sound():
-    play_sound('connecting.ogg')
+    play_sound('system/connecting.ogg')
 
 
 def play_focus_sound(pan=None):
-    play_sound('focus.ogg', pan=pan)
+    play_sound('core/FOCUS.ogg', pan=pan)
 
 
 def play_select_sound():
-    play_sound('select.ogg')
+    play_sound('core/SELECT.ogg')
 
 
 def play_statusbar_sound():
-    play_sound('statusbar.ogg')
+    play_sound('ui/statusbar.ogg')
 
 
 def play_applist_sound():
-    play_sound('applist.ogg')
+    play_sound('ui/applist.ogg')
 
 
 def play_endoflist_sound():
-    play_sound('endoflist.ogg')
+    play_sound('ui/endoflist.ogg')
 
 
 def play_error_sound():
-    play_sound('error.ogg')
+    play_sound('core/error.ogg')
 
 
 def play_dialog_sound():
-    play_sound('dialog.ogg')
+    play_sound('ui/dialog.ogg')
 
 
 def play_dialogclose_sound():
-    play_sound('dialogclose.ogg')
+    play_sound('ui/dialogclose.ogg')
 
 
 def play_loop_sound():
@@ -420,6 +426,66 @@ def is_voice_message_playing():
 def is_voice_message_paused():
     """Sprawdza czy wiadomość głosowa jest wstrzymana."""
     return voice_message_paused
+
+
+def play_ai_tts(audio_file_path, wait=False):
+    """Odtwarza AI TTS audio na dedykowanym kanale."""
+    global ai_tts_channel
+
+    try:
+        if not _mixer_initialized or pygame.mixer.get_init() is None:
+            if not initialize_sound():
+                print("[AI TTS] Cannot initialize sound system")
+                return False
+
+        if not ai_tts_channel:
+            print("[AI TTS] AI TTS channel not available")
+            return False
+
+        # Stop current AI TTS if playing
+        if ai_tts_channel.get_busy():
+            ai_tts_channel.stop()
+
+        # Load and play audio
+        try:
+            audio = pygame.mixer.Sound(audio_file_path)
+            ai_tts_channel.set_volume(1.0)
+            ai_tts_channel.play(audio)
+
+            # Wait for playback to finish if requested
+            if wait:
+                while ai_tts_channel.get_busy():
+                    pygame.time.wait(100)
+
+            return True
+        except pygame.error as e:
+            print(f"[AI TTS] Error playing audio: {e}")
+            return False
+
+    except Exception as e:
+        print(f"[AI TTS] Error in play_ai_tts: {e}")
+        return False
+
+
+def stop_ai_tts():
+    """Zatrzymuje odtwarzanie AI TTS."""
+    global ai_tts_channel
+
+    try:
+        if ai_tts_channel and ai_tts_channel.get_busy():
+            ai_tts_channel.stop()
+    except Exception as e:
+        print(f"[AI TTS] Error stopping TTS: {e}")
+
+
+def is_ai_tts_playing():
+    """Sprawdza czy AI TTS jest odtwarzany."""
+    global ai_tts_channel
+
+    try:
+        return ai_tts_channel and ai_tts_channel.get_busy()
+    except Exception:
+        return False
 
 
 # Inicjalizacja dźwięku na starcie programu

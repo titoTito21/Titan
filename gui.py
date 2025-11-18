@@ -27,6 +27,11 @@ from settings import get_setting
 from shutdown_question import show_shutdown_dialog
 from classic_start_menu import create_classic_start_menu
 from help import show_help
+from controller_vibrations import (
+    vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
+    vibrate_focus_change, vibrate_error, vibrate_notification
+)
+from controller_ui import initialize_controller_system, shutdown_controller_system
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -126,6 +131,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             except Exception as e:
                 print(f"Warning: Failed to initialize InvisibleUI: {e}")
                 self.invisible_ui = None
+
             
             # Multi-service session management
             self.active_services = {}  # Dict to store active service connections
@@ -146,11 +152,29 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             self.last_statusbar_sound_time = 0
             self.statusbar_sound_delay = 0.2  # 200ms delay for statusbar sounds
 
+            # Status cache to prevent GUI blocking
+            self.status_cache = {
+                'time': get_current_time(),
+                'battery': 'Loading...',
+                'volume': 'Loading...',
+                'network': 'Loading...'
+            }
+            self.status_cache_lock = threading.Lock()
+            self.status_update_thread = None
+            self.status_thread_running = True
+
             # Initialize sound system safely
             try:
                 initialize_sound()
             except Exception as e:
                 print(f"Warning: Failed to initialize sound in TitanApp: {e}")
+
+            # Initialize controller system with this window
+            try:
+                initialize_controller_system(parent_window=self)
+                print("[GUI] Controller system initialized with TitanApp window")
+            except Exception as e:
+                print(f"Warning: Failed to initialize controller in TitanApp: {e}")
 
             self.current_list = "apps"
             
@@ -163,6 +187,14 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             except Exception as e:
                 print(f"Warning: Failed to create start menu: {e}")
                 self.start_menu = None
+
+            # Start background status update thread
+            try:
+                self.status_update_thread = threading.Thread(target=self._update_status_cache_loop, daemon=True)
+                self.status_update_thread.start()
+                print("[GUI] Background status update thread started")
+            except Exception as e:
+                print(f"Warning: Failed to start status update thread: {e}")
 
             # Initialize timer safely
             try:
@@ -561,6 +593,38 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.apply_skin(skin_data)
 
 
+    def _update_status_cache_loop(self):
+        """Background thread to update status information without blocking GUI."""
+        print("[GUI] Status cache update loop started")
+        while self.status_thread_running:
+            try:
+                # Update time (fast operation)
+                time_str = get_current_time()
+
+                # Update battery (potentially slow)
+                battery_str = get_battery_status()
+
+                # Update volume (potentially very slow due to COM initialization)
+                volume_str = get_volume_level()
+
+                # Update network (potentially very slow due to subprocess)
+                network_str = get_network_status()
+
+                # Update cache atomically
+                with self.status_cache_lock:
+                    self.status_cache['time'] = time_str
+                    self.status_cache['battery'] = battery_str
+                    self.status_cache['volume'] = volume_str
+                    self.status_cache['network'] = network_str
+
+            except Exception as e:
+                print(f"Warning: Error updating status cache: {e}")
+
+            # Sleep for 5 seconds before next update
+            time.sleep(5)
+
+        print("[GUI] Status cache update loop stopped")
+
     def populate_app_list(self):
         applications = get_applications()
         self.app_listbox.Clear()
@@ -576,24 +640,28 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
 
     def populate_statusbar(self):
+        """Populate statusbar with cached data to avoid blocking GUI."""
         self.statusbar_listbox.Clear()
-        self.statusbar_listbox.Append(_("Clock: {}").format(get_current_time()))
-        self.statusbar_listbox.Append(_("Battery level: {}").format(get_battery_status()))
-        self.statusbar_listbox.Append(_("Volume: {}").format(get_volume_level()))
-        self.statusbar_listbox.Append(get_network_status())
+        with self.status_cache_lock:
+            self.statusbar_listbox.Append(_("Clock: {}").format(self.status_cache['time']))
+            self.statusbar_listbox.Append(_("Battery level: {}").format(self.status_cache['battery']))
+            self.statusbar_listbox.Append(_("Volume: {}").format(self.status_cache['volume']))
+            self.statusbar_listbox.Append(self.status_cache['network'])
 
     def update_statusbar(self, event):
+        """Update statusbar with cached data to avoid blocking GUI."""
         # If UI is not initialized (minimized start), update invisible UI status instead
         if self.start_minimized and not hasattr(self, 'statusbar_listbox'):
             # Update status data for invisible UI
             if hasattr(self, 'invisible_ui') and self.invisible_ui:
                 self.invisible_ui.refresh_status_bar()
         else:
-            # Normal status bar update for GUI mode
-            self.statusbar_listbox.SetString(0, _("Clock: {}").format(get_current_time()))
-            self.statusbar_listbox.SetString(1, _("Battery level: {}").format(get_battery_status()))
-            self.statusbar_listbox.SetString(2, _("Volume: {}").format(get_volume_level()))
-            self.statusbar_listbox.SetString(3, get_network_status())
+            # Normal status bar update for GUI mode - read from cache
+            with self.status_cache_lock:
+                self.statusbar_listbox.SetString(0, _("Clock: {}").format(self.status_cache['time']))
+                self.statusbar_listbox.SetString(1, _("Battery level: {}").format(self.status_cache['battery']))
+                self.statusbar_listbox.SetString(2, _("Volume: {}").format(self.status_cache['volume']))
+                self.statusbar_listbox.SetString(3, self.status_cache['network'])
 
 
     def on_app_selected(self, event):
@@ -602,6 +670,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             app_info = self.app_listbox.GetClientData(selection)
             if app_info:
                  play_select_sound()
+                 vibrate_selection()  # Add vibration for app selection
                  open_application(app_info)
             else:
                  print("WARNING: No ClientData for selected application.")
@@ -613,6 +682,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             game_info = self.game_listbox.GetClientData(selection)
             if game_info:
                  play_select_sound()
+                 vibrate_selection()  # Add vibration for game selection
                  open_game(game_info)
             else:
                  print("WARNING: No ClientData for selected game.")
@@ -639,7 +709,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
                  event.Skip()
                  return
 
-            play_sound('contextmenu.ogg')
+            play_sound('ui/contextmenu.ogg')
+            vibrate_menu_open()  # Add vibration for menu opening
 
             menu = wx.Menu()
 
@@ -653,7 +724,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
             listbox.PopupMenu(menu, event.GetPosition())
 
-            play_sound('contextmenuclose.ogg')
+            play_sound('ui/contextmenuclose.ogg')
+            vibrate_menu_close()  # Add vibration for menu closing
 
             menu.Destroy()
 
@@ -668,9 +740,11 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
         if item_type == "app":
             play_select_sound()
+            vibrate_selection()  # Add vibration for selection/activation
             open_application(item_data)
         elif item_type == "game":
             play_select_sound()
+            vibrate_selection()  # Add vibration for selection/activation
             open_game(item_data)
         else:
             print(f"ERROR: Unknown item type ({item_type}) to run from context menu.")
@@ -702,50 +776,63 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
         if result == wx.ID_YES:
             print(f"INFO: User confirmed uninstall of '{item_name}'. Deleting directory: {item_path}")
-            try:
-                shutil.rmtree(item_path)
-                print(f"INFO: Directory '{item_path}' deleted successfully.")
 
-                if item_type == "app":
-                    self.populate_app_list()
-                    print(f"INFO: Application list refreshed.")
-                elif item_type == "game":
-                    self.populate_game_list()
-                    print(f"INFO: Game list refreshed.")
+            # Run uninstall in background thread to avoid GUI blocking
+            def uninstall_thread():
+                try:
+                    shutil.rmtree(item_path)
+                    print(f"INFO: Directory '{item_path}' deleted successfully.")
 
-                play_select_sound()
-                wx.MessageBox(_("'{}' has been successfully uninstalled.").format(item_name), _("Success"), wx.OK | wx.ICON_INFORMATION)
+                    # Refresh list on main thread
+                    def refresh_ui():
+                        if item_type == "app":
+                            self.populate_app_list()
+                            print(f"INFO: Application list refreshed.")
+                        elif item_type == "game":
+                            self.populate_game_list()
+                            print(f"INFO: Game list refreshed.")
 
+                        play_select_sound()
+                        vibrate_selection()  # Add vibration for successful uninstall
+                        wx.MessageBox(_("'{}' has been successfully uninstalled.").format(item_name), _("Success"), wx.OK | wx.ICON_INFORMATION)
 
-            except OSError as e:
-                print(f"ERROR: Error deleting directory '{item_path}': {e}")
-                play_endoflist_sound()
-                wx.MessageBox(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
-            except Exception as e:
-                 print(f"ERROR: Unexpected error during uninstall of '{item_name}': {e}")
-                 play_endoflist_sound()
-                 wx.MessageBox(_("An unexpected error occurred while uninstalling '{}':\n{}").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+                    wx.CallAfter(refresh_ui)
+
+                except OSError as e:
+                    print(f"ERROR: Error deleting directory '{item_path}': {e}")
+
+                    def show_error():
+                        play_endoflist_sound()
+                        vibrate_error()  # Add vibration for uninstall error
+                        wx.MessageBox(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+
+                    wx.CallAfter(show_error)
+
+            threading.Thread(target=uninstall_thread, daemon=True).start()
 
         else:
             print(f"INFO: Uninstall of '{item_name}' canceled by user.")
             play_focus_sound()
+            vibrate_focus_change()  # Add vibration for cancel action
 
 
     def on_key_down(self, event):
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
-        
+
         # Handle F1 (Help)
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_NONE:
             show_help()
             return
-            
+
         # Handle Alt+F1 (Start Menu) - Linux style only
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_ALT:
             if self.start_menu and platform.system() == "Windows":
                 self.start_menu.toggle_menu()
                 return
+
+        # Note: Ctrl+Shift+A (AI Voice Recognition) is now a global hotkey registered in __init__
 
         if keycode == wx.WXK_TAB and modifiers == wx.MOD_CONTROL:
             self.on_toggle_list()
@@ -754,7 +841,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         # Handle ESC key - return from users/contacts/group_chats list to network list
         if keycode == wx.WXK_ESCAPE:
             if self.current_list in ["users", "contacts", "group_chats"]:
-                play_sound('popupclose.ogg')
+                play_sound('ui/popupclose.ogg')
+                vibrate_menu_close()  # Add vibration for menu/view closing
                 self.show_network_list()
                 if self.network_listbox.GetCount() > 0:
                     self.network_listbox.SetFocus()
@@ -794,34 +882,44 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
                   if current_focus == self.app_listbox and self.app_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
+                      vibrate_focus_change()  # Add vibration for focus change to statusbar
                   elif current_focus == self.game_listbox and self.game_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
+                      vibrate_focus_change()  # Add vibration for focus change to statusbar
                   elif current_focus == self.network_listbox and self.network_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
+                      vibrate_focus_change()  # Add vibration for focus change to statusbar
                   elif current_focus == self.users_listbox and self.users_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
+                      vibrate_focus_change()  # Add vibration for focus change to statusbar
                   elif current_focus == self.message_input and self.message_input.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
+                      vibrate_focus_change()  # Add vibration for focus change to statusbar
                   elif current_focus == self.statusbar_listbox:
                       if self.current_list == "apps":
                            self.app_listbox.SetFocus()
                            play_applist_sound()
+                           vibrate_focus_change()  # Add vibration for focus change to app list
                       elif self.current_list == "games":
                            self.game_listbox.SetFocus()
                            play_applist_sound()
+                           vibrate_focus_change()  # Add vibration for focus change to game list
                       elif self.current_list == "network":
                            self.network_listbox.SetFocus()
                            play_applist_sound()
+                           vibrate_focus_change()  # Add vibration for focus change to network list
                       elif self.current_list == "users":
                            self.users_listbox.SetFocus()
                            play_applist_sound()
+                           vibrate_focus_change()  # Add vibration for focus change to users list
                       elif self.current_list == "messages":
                            self.message_input.SetFocus()
                            play_applist_sound()
+                           vibrate_focus_change()  # Add vibration for focus change to message input
                   else:
                       event.Skip()
                   return
@@ -891,6 +989,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
             if new_selection >= 0 and new_selection < item_count:
                 target_listbox.SetSelection(new_selection)
+                vibrate_cursor_move()  # Add vibration for cursor movement
                 pan = 0
                 if item_count > 1:
                     pan = new_selection / (item_count - 1)
@@ -950,6 +1049,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.list_label.SetLabel(_("Application List:"))
         self.current_list = "apps"
         speaker.speak(_("Application list, 1 of 3"))
+        vibrate_menu_open()  # Add vibration for switching to application list
         self.Layout()
         if self.app_listbox.GetCount() > 0:
              self.app_listbox.SetFocus()
@@ -966,6 +1066,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.list_label.SetLabel(_("Game List:"))
         self.current_list = "games"
         speaker.speak(_("Game list, 2 of 3"))
+        vibrate_menu_open()  # Add vibration for switching to game list
         self.Layout()
         if self.game_listbox.GetCount() > 0:
              self.game_listbox.SetFocus()
@@ -981,10 +1082,11 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.list_label.SetLabel(_("Titan IM:"))
         self.current_list = "network"
         speaker.speak(_("Titan IM, 3 of 3"))
-        
+        vibrate_menu_open()  # Add vibration for switching to network list
+
         # Always populate the network list based on login status
         self.populate_network_list()
-        
+
         self.Layout()
         if self.network_listbox.GetCount() > 0:
             self.network_listbox.SetFocus()
@@ -1009,6 +1111,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         if self.current_list == "network":
             # Main network menu
             play_select_sound()  # Play select sound for network options
+            vibrate_selection()  # Add vibration for network option selection
             if "Telegram" in selected_text:
                 if "telegram" in self.active_services:
                     # Already logged in - show Telegram options
@@ -1037,6 +1140,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         elif self.current_list == "telegram_options":
             # Handle Telegram options
             play_select_sound()  # Play select sound for Telegram options
+            vibrate_selection()  # Add vibration for Telegram option selection
             if selected_text == _("Contacts"):
                 self.show_contacts_view()
             elif selected_text == _("Group Chats"):
@@ -1266,7 +1370,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             wx.MessageBox(_("Enter phone number with country code (e.g. +48123456789)."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
-        play_sound('connecting.ogg')
+        play_sound('system/connecting.ogg')
         # For Telegram, use phone number and optional 2FA password
         phone_number = username  # Phone number with country code
         twofa_password = password if password else None  # Optional 2FA password
@@ -1451,7 +1555,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             self.network_listbox.Append(_("Other communicators"))
 
     def on_toggle_list(self):
-        play_sound('sectionchange.ogg')
+        play_sound('ui/switch_list.ogg')
+        vibrate_menu_open()  # Add vibration for section/list switching
 
         # Ctrl+Tab przełącza tylko między 3 głównymi widokami
         if self.current_list == "apps":
@@ -1466,7 +1571,6 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         else:
             # Domyślnie wróć do aplikacji
             self.show_app_list()
-
 
     def on_show_apps(self, event):
         if self.current_list != "apps":
@@ -1755,7 +1859,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         skin_name = self.settings.get('interface', {}).get('skin', DEFAULT_SKIN_NAME)
         skin_data = self.load_skin_data(skin_name)
         self.task_bar_icon = TaskBarIcon(self, self.version, skin_data)
-        play_sound('minimalize.ogg')
+        play_sound('ui/minimalize.ogg')
+        vibrate_menu_close()  # Add vibration for minimizing to tray
         self.invisible_ui.start_listening()
 
     def restore_from_tray(self):
@@ -1778,7 +1883,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.Raise()
         self.task_bar_icon.Destroy()
         self.task_bar_icon = None
-        play_sound('normalize.ogg')
+        play_sound('ui/normalize.ogg')
+        vibrate_menu_open()  # Add vibration for normalizing from tray
         self.invisible_ui.stop_listening()
     
     def _on_window_minimize(self, event):
@@ -1796,14 +1902,33 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
 
     def shutdown_app(self):
         """Handles the complete shutdown of the application by terminating the process after a delay."""
+        print("=" * 80)
+        print("!!! SHUTDOWN_APP CALLED !!!")
+        print("=" * 80)
+
+        # Print stack trace to see who called shutdown
+        import traceback
+        print("SHUTDOWN CALLED FROM:")
+        for line in traceback.format_stack()[:-1]:
+            print(line.strip())
+        print("=" * 80)
+
         print("INFO: Shutting down application...")
-        
+
         # Hide window immediately for user feedback
         self.Hide()
-        
+
         # Safely disconnect from Telegram if connected
         def safe_shutdown():
             try:
+                # Stop status update thread
+                print("INFO: Stopping status update thread...")
+                self.status_thread_running = False
+                if self.status_update_thread and self.status_update_thread.is_alive():
+                    # Wait max 2 seconds for thread to finish
+                    self.status_update_thread.join(timeout=2)
+                    print("INFO: Status update thread stopped")
+
                 if self.logged_in and self.telegram_client:
                     print("INFO: Disconnecting from Telegram before shutdown...")
                     try:
@@ -1812,7 +1937,7 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
                         time.sleep(1)
                     except Exception as e:
                         print(f"Warning: Error disconnecting from Telegram: {e}")
-                
+
                 # Stop system hooks before shutdown
                 try:
                     from tce_system import stop_system_hooks
@@ -1820,16 +1945,22 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
                     print("INFO: System hooks stopped")
                 except Exception as e:
                     print(f"Warning: Error stopping system hooks: {e}")
-                
+
+                # Final wait for daemon threads to wrap up
+                print("INFO: Waiting for background threads to complete...")
+                time.sleep(1)
+
                 print("INFO: Application terminating now.")
                 os._exit(0)
-                
+
             except Exception as e:
                 print(f"Error during shutdown: {e}")
+                import traceback
+                traceback.print_exc()
                 # Force exit even if there were errors
                 os._exit(1)
-        
-        # Run shutdown process in background thread with slightly longer delay
+
+        # Run shutdown process in background thread
         shutdown_thread = threading.Thread(target=safe_shutdown, daemon=True)
         shutdown_thread.start()
 
@@ -1861,10 +1992,10 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.users_listbox.Show()
         self.list_label.SetLabel(_("Contacts"))
         self.current_list = "contacts"
-        
+
         # Play popup sound when opening contacts view
-        play_sound('popup.ogg')
-        
+        play_sound('ui/popup.ogg')
+
         self.refresh_contacts()
         self.Layout()
         
@@ -1883,10 +2014,10 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         self.users_listbox.Show()
         self.list_label.SetLabel(_("Group Chats"))
         self.current_list = "group_chats"
-        
+
         # Play popup sound when opening group chats view
-        play_sound('popup.ogg')
-        
+        play_sound('ui/popup.ogg')
+
         self.refresh_group_chats()
         self.Layout()
         
@@ -1996,9 +2127,9 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             # Clear unread messages for this user
             if username in self.unread_messages:
                 self.unread_messages[username] = 0
-                
+
             # User selection now just sets current user - use context menu for actions
-            play_sound('select.ogg')
+            play_sound('core/SELECT.ogg')
     
     # Chat history loading moved to separate windows
     
@@ -2010,21 +2141,21 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         
         user_text = self.users_listbox.GetString(selection)
         username = user_text.split(' (')[0]  # Remove unread count if present
-        
+
         # Play context menu sound
-        play_sound('contextmenu.ogg')
-        
+        play_sound('ui/contextmenu.ogg')
+
         # Create context menu
         menu = wx.Menu()
         
         # Add menu items based on current list type
         if self.current_list == "contacts":
             private_msg_item = menu.Append(wx.ID_ANY, _("Private message"), _("Send private message"))
-            # voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
-            
+            voice_call_item = menu.Append(wx.ID_ANY, _("Voice call"), _("Start voice call"))
+
             # Bind menu events for contacts
             self.Bind(wx.EVT_MENU, lambda evt: self.on_private_message(username), private_msg_item)
-            # self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
+            self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
             
         elif self.current_list == "group_chats":
             group_msg_item = menu.Append(wx.ID_ANY, _("Open group chat"), _("Open group chat window"))
@@ -2035,18 +2166,18 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         else:
             # Legacy users list
             private_msg_item = menu.Append(wx.ID_ANY, _("Private message"), _("Send private message"))
-            # voice_call_item = menu.Append(wx.ID_ANY, _("Call"), _("Start voice call"))
-            
+            voice_call_item = menu.Append(wx.ID_ANY, _("Voice call"), _("Start voice call"))
+
             # Bind menu events
             self.Bind(wx.EVT_MENU, lambda evt: self.on_private_message(username), private_msg_item)
-            # self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
+            self.Bind(wx.EVT_MENU, lambda evt: self.on_voice_call(username), voice_call_item)
         
         # Show menu at cursor position
         self.PopupMenu(menu)
-        
+
         # Play context menu close sound
-        play_sound('contextmenuclose.ogg')
-        
+        play_sound('ui/contextmenuclose.ogg')
+
         menu.Destroy()
     
     def on_private_message(self, username):
@@ -2057,18 +2188,18 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         
         # Open separate private message window
         telegram_windows.open_private_message_window(self, username)
-        
-        play_sound('select.ogg')
+
+        play_sound('core/SELECT.ogg')
     
     def on_voice_call(self, username):
         """Start voice call with user"""
         if not telegram_client.is_voice_calls_available():
-            play_sound('error.ogg')
-            wx.MessageBox(_("Voice calls are not available.\nCheck if py-tgcalls is installed."), 
+            play_sound('core/error.ogg')
+            wx.MessageBox(_("Voice calls are not available.\nCheck if py-tgcalls is installed."),
                          _("Error"), wx.OK | wx.ICON_ERROR)
             return
-        
-        play_sound('dialog.ogg')
+
+        play_sound('ui/dialog.ogg')
         message = _("Do you want to start a voice call with {}?").format(username)
         result = wx.MessageBox(message, _("Voice call"), wx.YES_NO | wx.ICON_QUESTION)
         
@@ -2076,25 +2207,25 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
             # Start voice call
             success = telegram_client.start_voice_call(username)
             if success:
-                # Open separate voice call window
-                telegram_windows.open_voice_call_window(self, username, 'outgoing')
+                # Open separate voice call window and store reference
+                self.call_window = telegram_windows.open_voice_call_window(self, username, 'outgoing')
                 self.call_active = True
             else:
-                play_sound('error.ogg')
+                play_sound('core/error.ogg')
                 wx.MessageBox(_("Failed to start conversation."), _("Error"), wx.OK | wx.ICON_ERROR)
-        
-        play_sound('dialogclose.ogg')
+
+        play_sound('ui/dialogclose.ogg')
     
     def on_group_chat(self, group_name):
         """Open group chat window"""
         # Clear unread messages for this group
         if group_name in self.unread_messages:
             self.unread_messages[group_name] = 0
-        
-        # Open separate group chat window 
+
+        # Open separate group chat window
         telegram_windows.open_group_chat_window(self, group_name)
-        
-        play_sound('select.ogg')
+
+        play_sound('core/SELECT.ogg')
     
     # Call window functions removed - using telegram_windows.py
     
@@ -2118,8 +2249,8 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
                 self.call_window.Close()
                 self.call_window = None
             self.call_active = False
-            play_sound('error.ogg')
-            wx.MessageBox(_("Connection failed: {}").format(data.get('error', 'Unknown error')), 
+            play_sound('core/error.ogg')
+            wx.MessageBox(_("Connection failed: {}").format(data.get('error', 'Unknown error')),
                          _("Connection Error"), wx.OK | wx.ICON_ERROR)
     
     # Message sending moved to separate windows
@@ -2206,13 +2337,13 @@ class TitanApp(wx.Frame, TeamTalkGUIIntegration):
         elif status_type == 'status_change':
             username = data.get('username')
             status = data.get('status')
-            
+
             if status == 'online':
                 self.SetStatusText(_("{} joined Telegram").format(username))
-                play_sound('user_online')
+                play_sound('system/user_online.ogg')
             elif status == 'offline':
                 self.SetStatusText(_("{} left Telegram").format(username))
-                play_sound('user_offline')
+                play_sound('system/user_offline.ogg')
             
             # Refresh users list
             if self.current_list == "users":

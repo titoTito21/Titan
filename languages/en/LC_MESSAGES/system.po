@@ -1,0 +1,469 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"PO-Revision-Date: 2025-11-05 10:38+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: tce_system_net.py:275
+msgid "Connect to WiFi Network"
+msgstr "Connect to WiFi Network"
+
+#: tce_system_net.py:287
+#, python-brace-format
+msgid "Network: {}"
+msgstr "Network: {}"
+
+#: tce_system_net.py:291
+msgid "Enter WiFi network password:"
+msgstr "Enter WiFi network password:"
+
+#: tce_system_net.py:298
+msgid "Connect automatically"
+msgstr "Connect automatically"
+
+#: tce_system_net.py:304 tce_system_net.py:386
+msgid "Connect"
+msgstr ""
+
+#: shutdown_question.py:30 tce_system_net.py:305 updater.py:70 updater.py:144
+msgid "Cancel"
+msgstr ""
+
+#: tce_system_net.py:327
+msgid "Please enter a password"
+msgstr "Please enter a password"
+
+#: tce_system_net.py:327 tce_system_net.py:567 tce_system_net.py:657
+#: tce_system_net.py:665 tce_system_net.py:1367 tce_system_net.py:1426
+msgid "Error"
+msgstr ""
+
+#: tce_system_net.py:342
+msgid "Click 'Refresh' to scan for WiFi networks"
+msgstr "Refreshing WiFi networks..."
+
+#: tce_system_net.py:344
+msgid "Ready"
+msgstr ""
+
+#: tce_system_net.py:352
+msgid "Scanning WiFi networks..."
+msgstr "Refreshing WiFi networks..."
+
+#: tce_system_net.py:354
+msgid "Please wait"
+msgstr ""
+
+#: tce_system_net.py:368 tce_system_net.py:773 tce_system_net.py:775
+#: tce_system_net.py:866 tce_system_net.py:868 tce_system_net.py:1336
+#: tce_system_net.py:1338
+msgid "WiFi"
+msgstr "WiFi"
+
+#: tce_system_net.py:375
+msgid "Network Name"
+msgstr "Network Name"
+
+#: tce_system_net.py:376
+msgid "Signal"
+msgstr "Signal"
+
+#: tce_system_net.py:377
+msgid "Security"
+msgstr "Security"
+
+#: tce_system_net.py:378
+msgid "Status"
+msgstr ""
+
+#: tce_system_net.py:385
+msgid "Refresh"
+msgstr ""
+
+#: tce_system_net.py:387
+msgid "Disconnect"
+msgstr ""
+
+#: tce_system_net.py:437
+msgid "WiFi Scanner"
+msgstr "WiFi Manager"
+
+#: tce_system_net.py:438 tce_system_net.py:871
+msgid "Scanning for networks..."
+msgstr "Connecting to network..."
+
+#: tce_system_net.py:454
+msgid "Processing results..."
+msgstr ""
+
+#: tce_system_net.py:464
+msgid "Complete!"
+msgstr "Computer..."
+
+#: tce_system_net.py:512
+msgid ""
+"WiFi scan timed out. This may happen if your WiFi adapter is busy or "
+"there are many networks nearby. Please try again."
+msgstr ""
+
+#: tce_system_net.py:513
+msgid "Scan Timeout"
+msgstr ""
+
+#: tce_system_net.py:520
+#, python-brace-format
+msgid "WiFi scan failed: {}"
+msgstr ""
+
+#: tce_system_net.py:521
+msgid "Scan Error"
+msgstr ""
+
+#: tce_system_net.py:532 tce_system_net.py:780 tce_system_net.py:1239
+#: tce_system_net.py:1342
+msgid "Secured"
+msgstr "Secured"
+
+#: tce_system_net.py:532 tce_system_net.py:780 tce_system_net.py:1239
+#: tce_system_net.py:1342
+msgid "Open"
+msgstr "Open"
+
+#: tce_system_net.py:533 tce_system_net.py:779 tce_system_net.py:1238
+#: tce_system_net.py:1341
+msgid "Connected"
+msgstr ""
+
+#: tce_system_net.py:547
+msgid "No WiFi networks found"
+msgstr "No WiFi networks available"
+
+#: tce_system_net.py:549
+msgid "Try refreshing"
+msgstr "Networks refreshed"
+
+#: tce_system_net.py:567
+msgid "Please select a network"
+msgstr "Please select a network"
+
+#: tce_system_net.py:586
+msgid "WiFi Connection"
+msgstr ""
+
+#: tce_system_net.py:587 tce_system_net.py:895 tce_system_net.py:1279
+#, python-brace-format
+msgid "Connecting to {}..."
+msgstr "Connecting to {}..."
+
+#: tce_system_net.py:597
+msgid "Authenticating..."
+msgstr ""
+
+#: tce_system_net.py:604
+msgid "Establishing connection..."
+msgstr ""
+
+#: tce_system_net.py:613
+msgid "Connected!"
+msgstr "Connection cancelled"
+
+#: tce_system_net.py:613
+msgid "Failed!"
+msgstr ""
+
+#: tce_system_net.py:646
+#, python-brace-format
+msgid "Connection to {} timed out. Please check your password and try again."
+msgstr ""
+
+#: tce_system_net.py:647
+msgid "Connection Timeout"
+msgstr "Connecting to {}..."
+
+#: tce_system_net.py:653 tce_system_net.py:902 tce_system_net.py:1283
+#, python-brace-format
+msgid "Connected to {}"
+msgstr ""
+
+#: tce_system_net.py:653 tce_system_net.py:662
+msgid "Success"
+msgstr ""
+
+#: tce_system_net.py:657 tce_system_net.py:906 tce_system_net.py:1288
+#, python-brace-format
+msgid "Failed to connect to {}"
+msgstr "Failed to connect to {}"
+
+#: tce_system_net.py:662
+msgid "Disconnected from network"
+msgstr "Disconnected from network"
+
+#: tce_system_net.py:665
+msgid "Failed to disconnect"
+msgstr "Failed to disconnect"
+
+#: tce_system_net.py:678 tce_system_net.py:773 tce_system_net.py:866
+#: tce_system_net.py:1336
+msgid "checkbox"
+msgstr "checkbox"
+
+#: tce_system_net.py:679 tce_system_net.py:782 tce_system_net.py:1243
+#: tce_system_net.py:1344
+msgid "list item"
+msgstr "list item"
+
+#: tce_system_net.py:736
+msgid "Networks updated"
+msgstr "Network Name"
+
+#: tce_system_net.py:747
+msgid "Scanning networks in background..."
+msgstr ""
+
+#: tce_system_net.py:771 tce_system_net.py:864 tce_system_net.py:1334
+msgid "Checked"
+msgstr "Checked"
+
+#: tce_system_net.py:771 tce_system_net.py:864 tce_system_net.py:1334
+msgid "Unchecked"
+msgstr "Unchecked"
+
+#: tce_system_net.py:786 tce_system_net.py:1348
+msgid "No WiFi networks available"
+msgstr "No WiFi networks available"
+
+#: tce_system_net.py:788 tce_system_net.py:974 tce_system_net.py:1372
+#: tce_system_net.py:1409
+msgid "WiFi Manager"
+msgstr "WiFi Manager"
+
+#: tce_system_net.py:887 tce_system_net.py:1261
+#, python-brace-format
+msgid "Already connected to {}"
+msgstr "Already connected to {}"
+
+#: tce_system_net.py:891
+#, python-brace-format
+msgid "Network {} requires password. Use GUI interface for password entry."
+msgstr ""
+
+#: tce_system_net.py:910
+msgid "Connection error"
+msgstr ""
+
+#: tce_system_net.py:920
+msgid "Scan already in progress"
+msgstr ""
+
+#: tce_system_net.py:972
+msgid "WiFi Manager: Widget"
+msgstr "WiFi Manager: Widget"
+
+#: tce_system_net.py:1266
+#, python-brace-format
+msgid "Enter WiFi network password for {}:"
+msgstr "Enter WiFi network password for {}:"
+
+#: tce_system_net.py:1268
+msgid "Password: "
+msgstr "Password: "
+
+#: tce_system_net.py:1270
+msgid "Connecting to network..."
+msgstr "Connecting to network..."
+
+#: tce_system_net.py:1273
+msgid "Password required"
+msgstr "Password required"
+
+#: tce_system_net.py:1276
+msgid ""
+"\n"
+"Connection cancelled"
+msgstr "Connection cancelled"
+
+#: tce_system_net.py:1307
+msgid "WiFi manager closed"
+msgstr "WiFi manager closed"
+
+#: tce_system_net.py:1353
+msgid "Refreshing WiFi networks..."
+msgstr "Refreshing WiFi networks..."
+
+#: tce_system_net.py:1356
+msgid "Networks refreshed"
+msgstr "Networks refreshed"
+
+#: tce_system_net.py:1366
+msgid ""
+"WiFi functionality requires pywifi library.\n"
+"Install with: pip install pywifi"
+msgstr ""
+"WiFi functionality requires pywifi library.\n"
+"Install with: pip install pywifi"
+
+#: tce_system_net.py:1373
+msgid "Initializing WiFi interface..."
+msgstr "Error opening WiFi interface"
+
+#: tce_system_net.py:1380
+msgid "Creating network manager..."
+msgstr "Connecting to network..."
+
+#: tce_system_net.py:1394
+msgid "WiFi initialization timed out. Please try again."
+msgstr ""
+
+#: tce_system_net.py:1395
+msgid "Timeout Error"
+msgstr ""
+
+#: tce_system_net.py:1398
+msgid "Checking WiFi interfaces..."
+msgstr "Error opening WiFi interface"
+
+#: tce_system_net.py:1402
+msgid "No WiFi interfaces available or WiFi initialization failed."
+msgstr ""
+
+#: tce_system_net.py:1403
+msgid "WiFi Error"
+msgstr "WiFi Manager"
+
+#: tce_system_net.py:1406
+msgid "Creating GUI interface..."
+msgstr "Error opening WiFi interface"
+
+#: tce_system_net.py:1412
+msgid "Ready!"
+msgstr ""
+
+#: tce_system_net.py:1425
+#, python-brace-format
+msgid ""
+"Error creating WiFi interface:\n"
+"{}"
+msgstr "Error opening WiFi interface"
+
+#: system_monitor.py:200
+#, python-brace-format
+msgid "Connected to power adapter, battery level is {}%"
+msgstr "Connected to power adapter, battery level is {}%"
+
+#: system_monitor.py:207
+#, python-brace-format
+msgid "Power adapter disconnected, battery level is {}%"
+msgstr "Power adapter disconnected, battery level is {}%"
+
+#: system_monitor.py:212
+#, python-brace-format
+msgid "Charging battery, battery level {}%"
+msgstr "Charging battery, battery level {}%"
+
+#: system_monitor.py:217
+msgid "Battery is fully charged"
+msgstr "Battery is fully charged"
+
+#: system_monitor.py:287
+#, python-brace-format
+msgid "Volume: {}%"
+msgstr "Volume: {}%"
+
+#: updater.py:13
+msgid "Program Update Available"
+msgstr ""
+
+#: updater.py:31
+msgid "Program update is available"
+msgstr ""
+
+#: updater.py:42
+msgid "Current version:"
+msgstr ""
+
+#: updater.py:49
+msgid "Update to version:"
+msgstr ""
+
+#: updater.py:58
+msgid "What's new:"
+msgstr ""
+
+#: updater.py:69
+msgid "Update"
+msgstr "Mute"
+
+#: updater.py:122
+msgid "Downloading Update"
+msgstr ""
+
+#: updater.py:135
+msgid "Downloading update..."
+msgstr ""
+
+#: updater.py:210
+msgid "Unable to retrieve changelog."
+msgstr ""
+
+#: updater.py:243
+msgid "Download failed"
+msgstr ""
+
+#: updater.py:249 updater.py:263
+msgid "Extracting update..."
+msgstr ""
+
+#: updater.py:269
+msgid "Update extracted successfully"
+msgstr ""
+
+#: updater.py:324
+msgid "Update completed successfully! Please restart the application."
+msgstr ""
+
+#: updater.py:325
+msgid "Update Complete"
+msgstr ""
+
+#: updater.py:334
+msgid "Update failed. Please try again later."
+msgstr ""
+
+#: updater.py:335
+msgid "Update Error"
+msgstr ""
+
+#: lockscreen_monitor_improved.py:170
+msgid "Screen locked"
+msgstr ""
+
+#: lockscreen_monitor_improved.py:176
+msgid "Screen unlocked"
+msgstr ""
+
+#: shutdown_question.py:15
+msgid "Confirm Exit"
+msgstr ""
+
+#: shutdown_question.py:22
+msgid "Are you sure you want to exit Titan?"
+msgstr ""
+
+#: shutdown_question.py:26
+msgid "OK"
+msgstr ""
+

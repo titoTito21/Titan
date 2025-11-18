@@ -37,10 +37,10 @@ class TelegramPrivateMessageWindow(wx.Frame):
         
         # Load chat history
         telegram_client.get_chat_history(username)
-        
+
         # Play popup sound when opening
-        play_sound('popup.ogg')
-        
+        play_sound('ui/popup.ogg')
+
         # Play new chat sound
         play_sound('titannet/new_chat.ogg')
         
@@ -198,7 +198,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
                 if play_voice_message(self.current_voice_message_path):
                     play_sound('titannet/voice_play.ogg')
                 else:
-                    play_sound('error.ogg')
+                    play_sound('core/error.ogg')
     
     def handle_voice_message_at_cursor(self):
         """Handle voice message at current cursor position"""
@@ -361,7 +361,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
         self.stop_typing_indicator()
         
         # Play close sound
-        play_sound('popupclose.ogg')
+        play_sound('ui/popupclose.ogg')
         
         self.Destroy()
 
@@ -385,7 +385,7 @@ class TelegramVoiceCallWindow(wx.Frame):
         self.Center()
         
         # Play popup sound when opening voice call window
-        play_sound('popup.ogg')
+        play_sound('ui/popup.ogg')
         
         # Update call status every second
         self.Bind(wx.EVT_TIMER, self.update_call_timer, self.call_timer)
@@ -519,11 +519,11 @@ class TelegramVoiceCallWindow(wx.Frame):
         if _("Wycisz") in current_label:  # Currently shows mute button
             self.mute_button.SetLabel(_("Włącz"))
             self.status_label.SetLabel("[" + _("Mikrofon wyciszony") + "]")
-            play_sound('focus.ogg')
+            play_sound('core/FOCUS.ogg')
         else:  # Currently shows unmute button
             self.mute_button.SetLabel(_("Wycisz"))
             self.status_label.SetLabel("[" + _("Połączono - rozmowa aktywna") + "]")
-            play_sound('select.ogg')
+            play_sound('core/SELECT.ogg')
     
     def on_end_call(self, event):
         """End the call"""
@@ -539,7 +539,7 @@ class TelegramVoiceCallWindow(wx.Frame):
             telegram_client.end_voice_call()
         
         # Play close sound
-        play_sound('popupclose.ogg')
+        play_sound('ui/popupclose.ogg')
         
         self.Destroy()
 
@@ -566,7 +566,7 @@ class TelegramGroupChatWindow(wx.Frame):
         telegram_client.get_group_chat_history(group_name)
         
         # Play popup sound when opening
-        play_sound('popup.ogg')
+        play_sound('ui/popup.ogg')
         
         # Play new chat sound
         play_sound('titannet/new_chat.ogg')
@@ -725,7 +725,7 @@ class TelegramGroupChatWindow(wx.Frame):
                 if play_voice_message(self.current_voice_message_path):
                     play_sound('titannet/voice_play.ogg')
                 else:
-                    play_sound('error.ogg')
+                    play_sound('core/error.ogg')
     
     def handle_voice_message_at_cursor(self):
         """Handle voice message at current cursor position"""
@@ -884,7 +884,7 @@ class TelegramGroupChatWindow(wx.Frame):
         self.stop_typing_indicator()
         
         # Play close sound
-        play_sound('popupclose.ogg')
+        play_sound('ui/popupclose.ogg')
         
         self.Destroy()
 
@@ -1029,10 +1029,22 @@ class IncomingCallDialog(wx.Dialog):
         """Handle call accept"""
         self.ring_timer.Stop()
         self.result = 'accept'
-        
+
         # Answer the call
         telegram_client.answer_voice_call()
-        
+
+        # Open voice call window for incoming call
+        import wx
+        app = wx.GetApp()
+        if app:
+            main_window = app.GetTopWindow()
+            if main_window:
+                # Open voice call window
+                call_window = open_voice_call_window(main_window, self.caller_name, 'incoming')
+                # Store reference in main window if it has the attribute
+                if hasattr(main_window, 'call_window'):
+                    main_window.call_window = call_window
+
         # Close dialog
         self.EndModal(wx.ID_OK)
     

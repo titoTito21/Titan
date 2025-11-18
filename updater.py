@@ -102,8 +102,8 @@ class UpdateDialog(wx.Dialog):
     def delayed_show(self):
         """Show dialog after playing newupdate sound."""
         # Play newupdate sound
-        play_sound('newupdate.ogg')
-        
+        play_sound('system/newupdate.ogg')
+
         # Wait 3 seconds then show dialog with safety check
         wx.CallLater(3000, self.safe_show)
     
@@ -123,10 +123,10 @@ class ProgressDialog(wx.Dialog):
                         style=wx.DEFAULT_DIALOG_STYLE)
         
         self.init_ui()
-        
+
         # Start playing installation sound in background
-        play_sound('installingapps.ogg')
-    
+        play_sound('system/installingapps.ogg')
+
     def init_ui(self):
         """Initialize progress dialog UI."""
         main_sizer = wx.BoxSizer(wx.VERTICAL)

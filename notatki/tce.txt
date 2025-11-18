@@ -1,3 +1,0 @@
-ctrl+l - address bar
-fix - tdictate
-fix - tMedia

@@ -172,7 +172,7 @@ class TaskbarWidget:
         # Play context menu open sound
         try:
             from sound import play_sound
-            play_sound('contextmenu.ogg')
+            play_sound('ui/contextmenu.ogg')
         except ImportError:
             pass
         
@@ -225,7 +225,7 @@ class TaskbarWidget:
             # Play context menu close sound
             try:
                 from sound import play_sound
-                play_sound('contextmenuclose.ogg')
+                play_sound('ui/contextmenuclose.ogg')
             except ImportError:
                 pass
             

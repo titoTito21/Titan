@@ -1,0 +1,146 @@
+# Translations template for Titan Screen Reader.
+# Copyright (C) 2025 Titosoft
+# This file is distributed under the same license as the TCE Launcher project.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Titan Screen Reader 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 12:00+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+msgid "Screen reader cannot be enabled. Required libraries missing."
+msgstr ""
+
+msgid "Titan Screen Reader enabled"
+msgstr ""
+
+msgid "Titan Screen Reader disabled"
+msgstr ""
+
+msgid "space"
+msgstr ""
+
+msgid "enter"
+msgstr ""
+
+msgid "backspace"
+msgstr ""
+
+msgid "button"
+msgstr ""
+
+msgid "edit"
+msgstr ""
+
+msgid "text"
+msgstr ""
+
+msgid "combo box"
+msgstr ""
+
+msgid "list box"
+msgstr ""
+
+msgid "scroll bar"
+msgstr ""
+
+msgid "checkbox"
+msgstr ""
+
+msgid "radio button"
+msgstr ""
+
+msgid "tree view"
+msgstr ""
+
+msgid "list view"
+msgstr ""
+
+msgid "tab control"
+msgstr ""
+
+msgid "toolbar"
+msgstr ""
+
+msgid "status bar"
+msgstr ""
+
+msgid "menu bar"
+msgstr ""
+
+msgid "dialog"
+msgstr ""
+
+msgid "window"
+msgstr ""
+
+msgid "Titan Screen Reader Settings"
+msgstr ""
+
+msgid "Enable Screen Reader"
+msgstr ""
+
+msgid "Voice:"
+msgstr ""
+
+msgid "No voices available"
+msgstr ""
+
+msgid "Rate:"
+msgstr ""
+
+msgid "Pitch:"
+msgstr ""
+
+msgid "Volume:"
+msgstr ""
+
+msgid "Echo (speak typed characters)"
+msgstr ""
+
+msgid "Speak control type"
+msgstr ""
+
+msgid "Stereo positioning"
+msgstr ""
+
+msgid "Status: "
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Test Voice"
+msgstr ""
+
+msgid "Left channel test"
+msgstr ""
+
+msgid "Center test"
+msgstr ""
+
+msgid "Right channel test"
+msgstr ""
+
+msgid "This is a voice test"
+msgstr ""
+
+msgid "Titan Screen Reader..."
+msgstr ""

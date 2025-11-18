@@ -15,20 +15,46 @@ try:
     class COMErrorSuppressor:
         def __init__(self):
             self.original_stderr = sys.stderr
-            
+            self.buffer = ""
+            self.suppress_until_newline = 0
+
         def write(self, text):
-            if any(pattern in text.lower() for pattern in [
-                "failed to load any com objects",
-                "freedomsci.jawsapi",
-                "jfwapi",
-                "gwspeak.speak",
-                "com objects. tried",
-                "exception ignored in"
-            ]):
+            # Suppress single colons/punctuation (COM error fragments)
+            if text.strip() in [':', '', ' ']:
                 return
-            self.original_stderr.write(text)
-            
+
+            # Simple aggressive suppression: if buffer + text contains error keywords, suppress everything
+            self.buffer += text
+
+            # Check for error patterns in buffer
+            buffer_lower = self.buffer.lower()
+
+            # Suppress if we see these keywords
+            if any(keyword in buffer_lower for keyword in [
+                "systemerror", "valueerror", "comtypes", "com method",
+                "__del__", "unknwn", "iunknown", "traceback", "gwspeak", "jfwapi",
+                "win32 exception", "releasing iunknown", "exception occurred"
+            ]):
+                self.suppress_until_newline = 100  # Suppress next 100 writes (increased)
+                self.buffer = ""
+                return
+
+            # If suppressing, count down
+            if self.suppress_until_newline > 0:
+                self.suppress_until_newline -= 1
+                self.buffer = ""
+                return
+
+            # If buffer gets too large without errors, flush it
+            if len(self.buffer) > 200 or '\n' in self.buffer:
+                self.original_stderr.write(self.buffer)
+                self.buffer = ""
+
         def flush(self):
+            # Only flush non-error content
+            if self.suppress_until_newline == 0 and self.buffer:
+                self.original_stderr.write(self.buffer)
+                self.buffer = ""
             self.original_stderr.flush()
     
     sys.stderr = COMErrorSuppressor()
@@ -97,6 +123,9 @@ from gui import TitanApp
 from sound import play_startup_sound, initialize_sound, set_theme, play_sound
 from settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
 from translation import set_language
+from controller_vibrations import initialize_vibration, vibrate_startup
+from controller_ui import initialize_controller_system, shutdown_controller_system
+from controller_modes import initialize_controller_modes
 from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
 from shutdown_question import show_shutdown_dialog
 from app_manager import find_application_by_shortname, open_application
@@ -107,11 +136,12 @@ from lockscreen_monitor_improved import start_lock_monitoring
 from tce_system import start_system_hooks
 from system_monitor import initialize_system_monitor
 from updater import check_for_updates_on_startup
+from loading_window import LoadingWindow
 
 # Initialize translation system
 _ = set_language(get_setting('language', 'pl'))
 
-VERSION = "0.2.1"
+VERSION = "0.3"
 speaker = accessible_output3.outputs.auto.Auto()
 
 # Global flag for graceful shutdown
@@ -167,17 +197,34 @@ def main(command_line_args=None):
         
         if not quick_start:
             try:
+                # Initialize controller vibration system
+                initialize_vibration()
+
+                # Controller modes system will be initialized when GUI starts
+                try:
+                    initialize_controller_modes()
+                    print("Controller modes system initialized")
+                except Exception as e:
+                    print(f"Warning: Controller modes system failed to initialize: {e}")
+
                 # Odtwarzanie dźwięku w osobnym wątku
                 sound_thread = threading.Thread(target=play_startup_sound, daemon=True)
                 sound_thread.start()
-                time.sleep(1)  # Poczekaj 1 sekundę
-                
-                # Mówienie tekstu w osobnym wątku
-                speech_thread = threading.Thread(
-                    target=lambda: speaker.speak(_("Welcome to Titan: Version {}").format(VERSION)), 
-                    daemon=True
-                )
+
+                # Strong vibration for startup sound (3 seconds)
+                vibration_thread = threading.Thread(target=vibrate_startup, daemon=True)
+                vibration_thread.start()
+
+                # Mówienie tekstu w osobnym wątku po odczekaniu 1 sekundy (nie blokuje głównego wątku)
+                def delayed_speech():
+                    time.sleep(1)  # Odczekaj w tle
+                    speaker.speak(_("Welcome to Titan: Version {}").format(VERSION))
+
+                speech_thread = threading.Thread(target=delayed_speech, daemon=True)
                 speech_thread.start()
+
+                # Wait 2 seconds before loading the program (allows sounds/speech to play in background)
+                time.sleep(2)
             except Exception as e:
                 print(f"Error playing startup sounds/speech: {e}")
         
@@ -273,7 +320,7 @@ def main(command_line_args=None):
 
                 services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
                 services_thread.start()
-                
+
                 # Start Klango frame with full initialization
                 from klangomode import start_klango_wx_mode
                 klango_frame = start_klango_wx_mode(settings_frame, VERSION, settings, component_manager)
@@ -354,7 +401,19 @@ if __name__ == "__main__":
         print(f"Failed to create main wx.App: {e}")
         sys.exit(1)
     settings = load_settings()
-    
+
+    # Check if we should start minimized (don't show loading window in minimized mode)
+    should_start_minimized = settings.get('general', {}).get('startup_mode', 'normal') == 'minimized'
+
+    # Show loading window during startup (except in minimized mode)
+    loading_window = None
+    if not should_start_minimized:
+        try:
+            loading_window = LoadingWindow()
+            print("Loading window displayed")
+        except Exception as e:
+            print(f"Failed to create loading window: {e}")
+
     # Language warning dialog removed per user request
 
     try:
@@ -371,10 +430,9 @@ if __name__ == "__main__":
         print(f"Failed to initialize component manager: {e}")
         # Continue without components rather than crash
 
-    
+
     try:
-        # Check if we should start minimized
-        should_start_minimized = settings.get('general', {}).get('startup_mode', 'normal') == 'minimized'
+        # Use should_start_minimized variable defined earlier
         frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings, component_manager=component_manager, start_minimized=should_start_minimized)
     except Exception as e:
         print(f"Failed to create main application frame: {e}")
@@ -423,14 +481,25 @@ if __name__ == "__main__":
 
     services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
     services_thread.start()
-    
+
+    # AI is now managed by the AI component (data/components/AI)
+    # Enable it through component settings if needed
+
+    # Close loading window before showing main GUI
+    if loading_window:
+        try:
+            loading_window.close()
+            print("Loading window closed")
+        except Exception as e:
+            print(f"Error closing loading window: {e}")
+
     # Show the GUI normally (unless we should start minimized)
     if should_start_minimized:
         # Start minimized to tray with invisible UI active
         wx.CallAfter(frame.minimize_to_tray)
     else:
         frame.Show()
-    
+
     try:
         app.MainLoop()
     except KeyboardInterrupt:
@@ -444,7 +513,15 @@ if __name__ == "__main__":
     finally:
         # Ensure proper cleanup
         print("Performing final cleanup...")
-        
+
+        # Unregister AI hotkey
+        try:
+            import keyboard
+            keyboard.remove_hotkey('ctrl+shift+a')
+            print("AI hotkey unregistered")
+        except Exception as e:
+            print(f"Warning: Error unregistering AI hotkey: {e}")
+
         # Cleanup frame
         if 'frame' in locals():
             try:
@@ -454,7 +531,7 @@ if __name__ == "__main__":
                 frame.Destroy()
             except Exception as e:
                 print(f"Error destroying frame: {e}")
-        
+
         # Cleanup app
         try:
             if app:
@@ -466,11 +543,21 @@ if __name__ == "__main__":
         import gc
         gc.collect()
         
+        # Cleanup controller system
+        try:
+            shutdown_controller_system()
+            print("Controller system shutdown completed")
+        except:
+            pass
+
+        # AI is now managed by the AI component
+        # Shutdown happens automatically through component manager
+
         # Additional cleanup for COM objects
         try:
             from com_fix import cleanup_com_on_exit
             cleanup_com_on_exit()
         except:
             pass
-        
+
         print("Cleanup completed")

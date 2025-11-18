@@ -627,8 +627,8 @@ class MessengerWebViewFrame(wx.Frame):
         """Load Facebook Messenger"""
         if hasattr(self, 'webview') and self.webview:
             # Play connecting sound like in Telegram
-            play_sound('connecting.ogg')
-            print("🔗 Connecting to Messenger...")
+            play_sound('system/connecting.ogg')
+            print("Connecting to Messenger...")
             
             # TTS announcement if available
             if hasattr(self, 'tts_item') and self.tts_item and self.tts_item.IsChecked():
@@ -715,10 +715,10 @@ class MessengerWebViewFrame(wx.Frame):
         
         print(f"WebView error loading {url}: {error}")
         self.SetStatusText(_("Błąd ładowania strony"))
-        
+
         # Play error sound
-        play_sound('error.ogg')
-        
+        play_sound('core/error.ogg')
+
         # TTS error announcement
         if self.tts_item.IsChecked():
             speaker.speak(_("Błąd ładowania strony"))
