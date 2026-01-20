@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"POT-Creation-Date: 2025-12-17 12:29+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,132 +18,132 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: menu.py:36
+#: src/ui/menu.py:40
 msgid "Install data package..."
 msgstr ""
 
-#: menu.py:37
+#: src/ui/menu.py:47
 msgid "Component Manager..."
 msgstr ""
 
-#: menu.py:40
+#: src/ui/menu.py:61
 msgid "Program settings"
 msgstr ""
 
-#: menu.py:42
+#: src/ui/menu.py:70
 msgid "Help"
 msgstr ""
 
-#: menu.py:44
+#: src/ui/menu.py:79
 msgid "Minimize"
 msgstr ""
 
-#: menu.py:45
+#: src/ui/menu.py:86
 msgid "Exit"
 msgstr ""
 
-#: menu.py:54
+#: src/ui/menu.py:100
 msgid "Program"
 msgstr ""
 
-#: menu.py:58
+#: src/ui/menu.py:106
 msgid "Applications"
 msgstr ""
 
-#: menu.py:59
+#: src/ui/menu.py:113
 msgid "Games"
 msgstr ""
 
-#: menu.py:60
+#: src/ui/menu.py:120
 msgid "Titan IM"
 msgstr ""
 
-#: menu.py:66
+#: src/ui/menu.py:130
 msgid "Switch to"
 msgstr ""
 
-#: menu.py:77
+#: src/ui/menu.py:144
 msgid "Components"
 msgstr ""
 
-#: menu.py:81
+#: src/ui/menu.py:148
 msgid "Select data package"
 msgstr ""
 
-#: menu.py:81
+#: src/ui/menu.py:148
 msgid "Data packages (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
 msgstr ""
 
-#: menu.py:86
+#: src/ui/menu.py:153
 msgid "Package installation"
 msgstr ""
 
-#: menu.py:86
+#: src/ui/menu.py:153
 msgid "Preparing for installation..."
 msgstr ""
 
-#: menu.py:96
+#: src/ui/menu.py:163
 msgid "Component Manager"
 msgstr ""
 
-#: menu.py:100
+#: src/ui/menu.py:167
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
 msgstr ""
 
-#: menu.py:100 menu.py:102 menu.py:153 menu.py:169
+#: src/ui/menu.py:167 src/ui/menu.py:169 src/ui/menu.py:265 src/ui/menu.py:281
 msgid "Error"
 msgstr ""
 
-#: menu.py:102
+#: src/ui/menu.py:169
 msgid "Component Manager has not been initialized."
 msgstr ""
 
-#: menu.py:127
+#: src/ui/menu.py:239
 msgid "Unpacking ZIP package..."
 msgstr ""
 
-#: menu.py:138
+#: src/ui/menu.py:250
 msgid ""
 "Error: 7z executable not found. Make sure it is in the 'data/bin/' "
 "directory."
 msgstr ""
 
-#: menu.py:138
+#: src/ui/menu.py:250
 msgid "Executable file error"
 msgstr ""
 
-#: menu.py:145
+#: src/ui/menu.py:257
 msgid "Unpacking 7z package..."
 msgstr ""
 
-#: menu.py:147
+#: src/ui/menu.py:259
 msgid "Starting 7z process..."
 msgstr ""
 
-#: menu.py:153
+#: src/ui/menu.py:265
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
 "{}"
 msgstr ""
 
-#: menu.py:156
+#: src/ui/menu.py:268
 msgid "Finished unpacking 7z."
 msgstr ""
 
-#: menu.py:160
+#: src/ui/menu.py:272
 msgid "Unpacking .tcepackage package..."
 msgstr ""
 
-#: menu.py:162
+#: src/ui/menu.py:274
 msgid "Unpacking archive..."
 msgstr ""
 
-#: menu.py:164
+#: src/ui/menu.py:276
 msgid "Finished unpacking .tcepackage."
 msgstr ""
 
-#: menu.py:169
+#: src/ui/menu.py:281
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
@@ -152,15 +152,27 @@ msgid ""
 "{}"
 msgstr ""
 
-#: menu.py:176
+#: src/ui/menu.py:288
 msgid "Data package has been installed!"
 msgstr ""
 
-#: menu.py:176
+#: src/ui/menu.py:288
 msgid "Success"
 msgstr ""
 
-#: menu.py:180
+#: src/ui/menu.py:296
 msgid "Settings"
 msgstr ""
+
+#~ msgid "Log in to Titan-Network..."
+#~ msgstr ""
+
+#~ msgid "Titan-Net client not initialized"
+#~ msgstr ""
+
+#~ msgid "You are already logged in to Titan-Network"
+#~ msgstr ""
+
+#~ msgid "Information"
+#~ msgstr ""
 

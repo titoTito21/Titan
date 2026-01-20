@@ -7,7 +7,7 @@ import random
 import configparser
 import wx
 import platform
-from sound import play_sound, resource_path
+from src.titan_core.sound import play_sound, resource_path
 
 # Ścieżki
 def get_config_path():
@@ -78,7 +78,7 @@ def speak(text):
             os.system(f"say '{text}'")
         else:  # Zakładamy Linux
             os.system(f"spd-say '{text}'")
-    threading.Thread(target=speak_thread).start()
+    threading.Thread(target=speak_thread, daemon=True).start()
 
 # Klasa TipManager
 class TipManager(threading.Thread):
@@ -150,11 +150,60 @@ def show_settings_dialog(parent):
     app.MainLoop()
 
 # Funkcja dodająca menu
-def on_tips_settings_action(parent_frame):
+def on_tips_settings_action(event):
+    """Menu action handler"""
     show_settings_dialog()
 
 def add_menu(component_manager):
     component_manager.register_menu_function("Ustawienia porad", on_tips_settings_action)
+
+# New: Add settings category
+def add_settings_category(component_manager):
+    """Register Tips settings category in the main settings window"""
+    print("[TIPS] add_settings_category called!")
+    print(f"[TIPS] component_manager: {component_manager}")
+    print(f"[TIPS] settings_frame: {component_manager.settings_frame if component_manager else 'None'}")
+
+    def create_tips_settings_panel(parent):
+        print(f"[TIPS] create_tips_settings_panel called with parent: {parent}")
+        """Create tips settings panel"""
+        panel = wx.Panel(parent)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        interval_label = wx.StaticText(panel, label="Mów porady:")
+        interval_choices = list(INTERVAL_OPTIONS.keys())
+        interval_choice = wx.Choice(panel, choices=interval_choices)
+
+        # Store reference for loading/saving later
+        panel.interval_choice = interval_choice
+
+        vbox.Add(interval_label, flag=wx.ALL, border=10)
+        vbox.Add(interval_choice, flag=wx.ALL | wx.EXPAND, border=10)
+
+        panel.SetSizer(vbox)
+        return panel
+
+    def load_tips_settings(panel):
+        """Load tips settings into panel"""
+        current_interval = config['Tips'].get('interval', 'co 15 minut')
+        panel.interval_choice.SetStringSelection(current_interval)
+
+    def save_tips_settings(panel):
+        """Save tips settings from panel"""
+        selected_interval = panel.interval_choice.GetStringSelection()
+        config['Tips']['interval'] = selected_interval
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as configfile:
+            config.write(configfile)
+        if tip_manager:
+            tip_manager.update_settings()
+
+    # Register the category
+    component_manager.register_settings_category("Porady", create_tips_settings_panel, save_tips_settings, load_tips_settings)
+
+# Legacy add_settings hook (deprecated but kept for compatibility)
+def add_settings(settings_frame):
+    """Legacy hook - not used with new category system"""
+    pass
 
 # Inicjalizacja komponentu
 def initialize(app=None):

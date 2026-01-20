@@ -3,7 +3,7 @@ import os
 import subprocess
 import platform
 import threading
-from sound import play_sound
+from src.titan_core.sound import play_sound
 
 class TerminalFrame(wx.Frame):
     def __init__(self, *args, **kwargs):
@@ -32,7 +32,7 @@ class TerminalFrame(wx.Frame):
         command = self.command_input.GetValue()
         self.command_input.SetValue("")
 
-        threading.Thread(target=self.run_command, args=(command,)).start()
+        threading.Thread(target=self.run_command, args=(command,), daemon=True).start()
 
     def run_command(self, command):
         if platform.system() == "Windows":

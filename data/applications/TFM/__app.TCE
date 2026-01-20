@@ -1,5 +1,5 @@
 name_pl="Menedżer Plików"
 name_en="File Manager"
-description=""
+description="TFM file manager"
 openfile="tfm.py"
 shortname="tfm"

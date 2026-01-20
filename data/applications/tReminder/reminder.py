@@ -117,8 +117,7 @@ class TitanOrganizer(wx.Frame):
         self.play_sound('reminderstarted.ogg')
 
         # Uruchomienie wątku sprawdzającego przypomnienia
-        self.check_reminders_thread = threading.Thread(target=self.check_reminders)
-        self.check_reminders_thread.daemon = True
+        self.check_reminders_thread = threading.Thread(target=self.check_reminders, daemon=True)
         self.check_reminders_thread.start()
 
     def init_ui(self):

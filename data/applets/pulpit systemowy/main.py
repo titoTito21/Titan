@@ -1,17 +1,24 @@
 import os
 import subprocess
-from invisibleui import BaseWidget
 import gettext
 import sys
 import glob
+
+# Add TCE root to path
+APPLET_DIR = os.path.dirname(__file__)
+TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+from src.ui.invisibleui import BaseWidget
 
 # Inicjalizacja gettext dla tego apletu
 try:
     applet_name = "pulpit_systemowy"
     localedir = os.path.join(os.path.dirname(__file__), 'languages')
-    
+
     # Poprawne wczytanie globalnego ustawienia języka
-    from settings import get_setting
+    from src.settings.settings import get_setting
     language_code = get_setting('language', 'pl')
     print(f"[Pulpit systemowy] Trying to load language: '{language_code}' from '{localedir}'")
     

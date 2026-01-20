@@ -1,0 +1,17 @@
+# Titan-Net Server Requirements
+
+# WebSocket server
+websockets>=12.0
+
+# HTTP server
+aiohttp>=3.9.0
+aiohttp-cors>=0.7.0
+
+# Database
+# SQLite3 is included in Python standard library
+
+# WebRTC for voice chat (optional)
+aiortc>=1.6.0
+
+# Utilities
+python-dotenv>=1.0.0

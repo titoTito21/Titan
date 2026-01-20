@@ -229,7 +229,7 @@ class TitanDownloadManager(wx.Frame):
             finally:
                 wx.CallAfter(self.destroy_progress_dialog)
 
-        threading.Thread(target=download_wget).start()
+        threading.Thread(target=download_wget, daemon=True).start()
 
     def notify_completion(self, file_name):
         message = _('Pobieranie {} zakończone').format(file_name)

@@ -1,0 +1,440 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"PO-Revision-Date: 2025-11-22 19:24+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: src/network/titan_net.py:210 src/network/titan_net.py:276
+msgid "Cannot connect to Titan-Net server"
+msgstr ""
+
+#: src/network/titan_net.py:229 src/network/titan_net.py:292
+#: src/network/titan_net.py:474 src/network/titan_net.py:526
+#: src/network/titan_net.py:613 src/network/titan_net.py:693
+#: src/network/titan_net.py:734 src/network/titan_net.py:783
+#: src/network/titan_net.py:832
+msgid "No response from server"
+msgstr ""
+
+#: src/network/titan_net.py:241
+msgid "Account created successfully"
+msgstr ""
+
+#: src/network/titan_net.py:248 src/network/titan_net_gui.py:315
+msgid "Registration failed"
+msgstr ""
+
+#: src/network/titan_net.py:256
+#, python-brace-format
+msgid "Registration error: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:312 src/network/titan_net_gui.py:165
+msgid "Login successful"
+msgstr ""
+
+#: src/network/titan_net.py:321 src/network/titan_net_gui.py:176
+msgid "Login failed"
+msgstr ""
+
+#: src/network/titan_net.py:329
+#, python-brace-format
+msgid "Login error: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:342 src/network/titan_net.py:402
+#: src/network/titan_net.py:444 src/network/titan_net.py:499
+#: src/network/titan_net.py:550 src/network/titan_net.py:588
+#: src/network/titan_net.py:638 src/network/titan_net.py:674
+#: src/network/titan_net.py:715 src/network/titan_net.py:760
+#: src/network/titan_net.py:809
+msgid "Not logged in"
+msgstr ""
+
+#: src/network/titan_net.py:372
+msgid "Logout successful"
+msgstr ""
+
+#: src/network/titan_net.py:385
+#, python-brace-format
+msgid "Logout error: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:417 src/network/titan_net.py:653
+msgid "Message sent"
+msgstr ""
+
+#: src/network/titan_net.py:425 src/network/titan_net.py:661
+#, python-brace-format
+msgid "Error sending message: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:465
+msgid "Room created successfully"
+msgstr ""
+
+#: src/network/titan_net.py:470 src/network/titan_net_gui.py:624
+msgid "Failed to create room"
+msgstr ""
+
+#: src/network/titan_net.py:482
+#, python-brace-format
+msgid "Error creating room: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:517
+msgid "Joined room successfully"
+msgstr ""
+
+#: src/network/titan_net.py:522 src/network/titan_net_gui.py:666
+msgid "Failed to join room"
+msgstr ""
+
+#: src/network/titan_net.py:534
+#, python-brace-format
+msgid "Error joining room: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:564 src/network/titan_net_gui.py:701
+msgid "Left room"
+msgstr ""
+
+#: src/network/titan_net.py:572
+#, python-brace-format
+msgid "Error leaving room: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:604
+msgid "Room deleted"
+msgstr ""
+
+#: src/network/titan_net.py:609
+msgid "Failed to delete room"
+msgstr ""
+
+#: src/network/titan_net.py:621
+#, python-brace-format
+msgid "Error deleting room: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:688
+msgid "Rooms retrieved"
+msgstr ""
+
+#: src/network/titan_net.py:702
+#, python-brace-format
+msgid "Error getting rooms: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:729
+msgid "Users retrieved"
+msgstr ""
+
+#: src/network/titan_net.py:743
+#, python-brace-format
+msgid "Error getting users: {error}"
+msgstr ""
+
+#: src/network/titan_net.py:778 src/network/titan_net.py:827
+msgid "Messages retrieved"
+msgstr ""
+
+#: src/network/titan_net.py:792 src/network/titan_net.py:841
+#, python-brace-format
+msgid "Error getting messages: {error}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:25
+msgid "Titan-Net Login"
+msgstr ""
+
+#: src/network/titan_net_gui.py:41 src/network/titan_net_gui.py:209
+msgid "Username:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:49 src/network/titan_net_gui.py:217
+msgid "Password:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:57
+msgid "I don't use Titan-Net"
+msgstr ""
+
+#: src/network/titan_net_gui.py:65 src/network/titan_net_gui.py:243
+msgid "Create Account"
+msgstr ""
+
+#: src/network/titan_net_gui.py:70
+msgid "Login"
+msgstr ""
+
+#: src/network/titan_net_gui.py:75
+msgid "Continue in Offline Mode"
+msgstr ""
+
+#: src/network/titan_net_gui.py:124
+msgid "Account created. You can now login."
+msgstr ""
+
+#: src/network/titan_net_gui.py:136
+msgid "Please enter username and password"
+msgstr ""
+
+#: src/network/titan_net_gui.py:143
+msgid "Connecting to Titan-Net..."
+msgstr ""
+
+#: src/network/titan_net_gui.py:170
+#, python-brace-format
+msgid "Logged in as: {username}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:183
+msgid "Continuing in offline mode"
+msgstr ""
+
+#: src/network/titan_net_gui.py:193
+msgid "Create Titan-Net Account"
+msgstr ""
+
+#: src/network/titan_net_gui.py:225
+msgid "First Name:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:225 src/network/titan_net_gui.py:233
+msgid "optional"
+msgstr ""
+
+#: src/network/titan_net_gui.py:233
+msgid "Last Name:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:248
+msgid "Cancel"
+msgstr ""
+
+#: src/network/titan_net_gui.py:272
+msgid "Username and password are required"
+msgstr ""
+
+#: src/network/titan_net_gui.py:280
+msgid "Creating account..."
+msgstr ""
+
+#: src/network/titan_net_gui.py:303
+#, python-brace-format
+msgid "Account created successfully. Your Titan number is {titan_number}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:329
+msgid "Titan-Net"
+msgstr ""
+
+#: src/network/titan_net_gui.py:352
+#, python-brace-format
+msgid "Logged in as: {username} (#{titan_number})"
+msgstr ""
+
+#: src/network/titan_net_gui.py:364
+msgid "Chat Rooms"
+msgstr ""
+
+#: src/network/titan_net_gui.py:368
+msgid "Private Messages"
+msgstr ""
+
+#: src/network/titan_net_gui.py:372
+msgid "Online Users"
+msgstr ""
+
+#: src/network/titan_net_gui.py:377
+msgid "Disconnect"
+msgstr ""
+
+#: src/network/titan_net_gui.py:389
+msgid "Available Rooms:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:393
+msgid "Name"
+msgstr ""
+
+#: src/network/titan_net_gui.py:394
+msgid "Type"
+msgstr ""
+
+#: src/network/titan_net_gui.py:395
+msgid "Members"
+msgstr ""
+
+#: src/network/titan_net_gui.py:402 src/network/titan_net_gui.py:604
+msgid "Create Room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:406
+msgid "Join Room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:410 src/network/titan_net_gui.py:514
+msgid "Refresh"
+msgstr ""
+
+#: src/network/titan_net_gui.py:419
+msgid "Room Chat:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:431 src/network/titan_net_gui.py:483
+msgid "Send"
+msgstr ""
+
+#: src/network/titan_net_gui.py:437
+msgid "Leave Room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:455
+msgid "Send message to:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:463
+msgid "Select"
+msgstr ""
+
+#: src/network/titan_net_gui.py:470
+msgid "Private Messages:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:497
+msgid "Online Users:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:501
+msgid "Username"
+msgstr ""
+
+#: src/network/titan_net_gui.py:502
+msgid "Titan Number"
+msgstr ""
+
+#: src/network/titan_net_gui.py:503
+msgid "Full Name"
+msgstr ""
+
+#: src/network/titan_net_gui.py:510
+msgid "Send Message"
+msgstr ""
+
+#: src/network/titan_net_gui.py:604
+msgid "Enter room name:"
+msgstr ""
+
+#: src/network/titan_net_gui.py:620
+msgid "Room created"
+msgstr ""
+
+#: src/network/titan_net_gui.py:633
+msgid "Please select a room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:651
+#, python-brace-format
+msgid "Joined room: {name}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:738
+msgid "Please select a user"
+msgstr ""
+
+#: src/network/titan_net_gui.py:745
+msgid "Loading messages..."
+msgstr ""
+
+#: src/network/titan_net_gui.py:766
+msgid "Messages loaded"
+msgstr ""
+
+#: src/network/titan_net_gui.py:771
+msgid "Please select a user first"
+msgstr ""
+
+#: src/network/titan_net_gui.py:859
+#, python-brace-format
+msgid "New message from {user}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:884
+msgid "joined the room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:890
+msgid "left the room"
+msgstr ""
+
+#: src/network/titan_net_gui.py:896
+#, python-brace-format
+msgid "Welcome user {username}, Titan ID: {titan_number}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:916
+msgid "Checking Titan-Net connection..."
+msgstr ""
+
+#: src/network/titan_net_gui.py:921
+msgid ""
+"Titan-Net server is not available. Would you like to continue in offline "
+"mode?"
+msgstr ""
+
+#: src/network/titan_net_gui.py:926
+msgid ""
+"Titan-Net server is not available.\n"
+"You can continue in offline mode without messaging features."
+msgstr ""
+
+#: src/network/titan_net_gui.py:927
+msgid "Server Not Available"
+msgstr ""
+
+#: src/network/titan_net_gui.py:939
+msgid "Server connected"
+msgstr ""
+
+#: src/network/titan_net_gui.py:967
+msgid "Not connected to Titan-Net"
+msgstr ""
+
+#: src/network/titan_net_gui.py:967
+msgid "Error"
+msgstr ""
+
+#~ msgid "Welcome user {username}, Titan ID: {titan_number}"
+#~ msgstr ""
+
+#~ msgid "Text field"
+#~ msgstr ""
+
+#~ msgid "checked"
+#~ msgstr ""
+
+#~ msgid "unchecked"
+#~ msgstr ""
+
+#~ msgid "User {username}, {titan_number} has joined the community"
+#~ msgstr ""
+
+#~ msgid "Connection to Titan-Net lost"
+#~ msgstr ""
+

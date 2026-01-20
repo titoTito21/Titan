@@ -1,5 +1,5 @@
 wxPython
-pygame
+pygame-ce
 accessible-output3
 polib
 Nuitka
@@ -32,7 +32,6 @@ google-generativeai>=0.8.0
 gtts  # Text-to-speech fallback
 
 # Linux system integration (optional)
-pynput  # Cross-platform input handling (already used)
 # Note: For Linux audio control, system packages are preferred:
 # Ubuntu/Debian: pulseaudio-utils, alsa-utils
 # Fedora/RHEL: pulseaudio-utils, alsa-utils
@@ -44,3 +43,8 @@ aiohttp
 aiohttp-cors
 bcrypt
 # sqlite3 is built into Python standard library
+
+# Optional: Cython for performance optimization
+# Install to compile Python modules to C extensions
+# Usage: python setup_cython.py build_ext --inplace
+Cython>=0.29.0  # Optional - for building optimized extensions
