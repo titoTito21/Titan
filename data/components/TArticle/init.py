@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import threading
 import os
 import gettext
-from sound import play_sound
+from src.titan_core.sound import play_sound
 
 # Set up local translations for TArticle component
 def setup_translations():
@@ -15,7 +15,7 @@ def setup_translations():
     
     # Try to get language from main app, default to 'pl'
     try:
-        from translation import language_code
+        from src.titan_core.translation import language_code
         lang = language_code
     except ImportError:
         lang = 'pl'
@@ -618,7 +618,7 @@ def show_url_dialog():
     
     dialog.Destroy()
 
-def on_tarticle_menu_action(parent_frame):
+def on_tarticle_menu_action(event):
     """Menu action handler"""
     show_url_dialog()
 

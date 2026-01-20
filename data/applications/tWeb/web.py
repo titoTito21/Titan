@@ -278,26 +278,26 @@ class BrowserFrame(wx.Frame):
         url = event.GetURL()
         self.address.SetValue(url)
         self.statusbar.SetStatusText(_("Ładowanie strony..."))
-        threading.Thread(target=play_sound, args=('select.ogg',)).start()
+        threading.Thread(target=play_sound, args=('select.ogg',), daemon=True).start()
         self.progress.SetValue(0)
         self.loading = True
         self.timer.Start(100)
 
         if self.settings.getboolean('announcements', 'loading_messages'):
-            threading.Thread(target=speak, args=(_("Ładowanie strony..."),)).start()
+            threading.Thread(target=speak, args=(_("Ładowanie strony..."),), daemon=True).start()
 
     def OnPageLoaded(self, event):
         """Po załadowaniu strony w WebView."""
         self.statusbar.SetStatusText(_("Strona załadowana."))
         self.progress.SetValue(100)
-        threading.Thread(target=play_sound, args=('ding.ogg',)).start()
+        threading.Thread(target=play_sound, args=('ding.ogg',), daemon=True).start()
         self.loading = False
         self.timer.Stop()
 
         # Jeśli włączone komunikaty
         if self.settings.getboolean('announcements', 'loading_messages'):
             title = self.browser.GetCurrentTitle()
-            threading.Thread(target=speak, args=(_("Załadowano stronę {}").format(title),)).start()
+            threading.Thread(target=speak, args=(_("Załadowano stronę {}").format(title),), daemon=True).start()
 
         # Ustawiamy tytuł okna
         title = self.browser.GetCurrentTitle()
@@ -456,7 +456,7 @@ class BrowserFrame(wx.Frame):
                 if len(data) == 4:
                     forms, links, buttons, rows = data
                     message = _("Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy.").format(forms, links, buttons, rows)
-                    threading.Thread(target=speak, args=(message,)).start()
+                    threading.Thread(target=speak, args=(message,), daemon=True).start()
         else:
             if hasattr(self, 'current_soup'):
                 forms = len(self.current_soup.find_all('form'))
@@ -464,7 +464,7 @@ class BrowserFrame(wx.Frame):
                 buttons = len(self.current_soup.find_all('button'))
                 rows = len(self.current_soup.find_all('tr'))
                 message = _("Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy.").format(forms, links, buttons, rows)
-                threading.Thread(target=speak, args=(message,)).start()
+                threading.Thread(target=speak, args=(message,), daemon=True).start()
 
     def get_label_for_input(self, input_element):
         # 1. Check for a <label> with a 'for' attribute matching the input's id
@@ -600,7 +600,7 @@ class BrowserFrame(wx.Frame):
     def LoadVirtualBuffer(self, url):
         """Ładowanie strony w trybie wirtualnego bufora."""
         self.statusbar.SetStatusText(_("Ładowanie strony..."))
-        threading.Thread(target=play_sound, args=('select.ogg',)).start()
+        threading.Thread(target=play_sound, args=('select.ogg',), daemon=True).start()
         self.progress.SetValue(0)
         self.loading = True
         self.timer.Start(100)
@@ -627,10 +627,10 @@ class BrowserFrame(wx.Frame):
                 wx.CallAfter(self.timer.Stop)
                 wx.CallAfter(self.progress.SetValue, 100)
                 wx.CallAfter(self.statusbar.SetStatusText, _("Strona załadowana."))
-                threading.Thread(target=play_sound, args=('ding.ogg',)).start()
+                threading.Thread(target=play_sound, args=('ding.ogg',), daemon=True).start()
 
                 if self.settings.getboolean('announcements', 'loading_messages'):
-                    threading.Thread(target=speak, args=(_("Załadowano stronę"),)).start()
+                    threading.Thread(target=speak, args=(_("Załadowano stronę"),), daemon=True).start()
 
                 title_tag = soup.find('title')
                 if title_tag:
@@ -648,7 +648,7 @@ class BrowserFrame(wx.Frame):
                 self.loading = False
                 wx.CallAfter(self.timer.Stop)
 
-        threading.Thread(target=load_content).start()
+        threading.Thread(target=load_content, daemon=True).start()
 
     def render_content(self, soup):
         self.browser.Freeze()

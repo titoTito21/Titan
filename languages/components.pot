@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"POT-Creation-Date: 2025-12-17 12:30+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,81 +17,81 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: componentmanagergui.py:23
+#: src/ui/componentmanagergui.py:23
 msgid "Installed components:"
 msgstr ""
 
-#: componentmanagergui.py:29
+#: src/ui/componentmanagergui.py:29
 msgid "&Actions"
 msgstr ""
 
-#: componentmanagergui.py:50
+#: src/ui/componentmanagergui.py:50
 msgid "Component manager not available."
 msgstr ""
 
-#: componentmanagergui.py:59 componentmanagergui.py:185
+#: src/ui/componentmanagergui.py:61 src/ui/componentmanagergui.py:189
 msgid "Enabled"
 msgstr ""
 
-#: componentmanagergui.py:59 componentmanagergui.py:185
+#: src/ui/componentmanagergui.py:61 src/ui/componentmanagergui.py:189
 msgid "Disabled"
 msgstr ""
 
-#: componentmanagergui.py:128
+#: src/ui/componentmanagergui.py:130
 #, python-brace-format
 msgid "Component '{}' is not loaded."
 msgstr ""
 
-#: componentmanagergui.py:128 componentmanagergui.py:136
+#: src/ui/componentmanagergui.py:130 src/ui/componentmanagergui.py:138
 msgid "Information"
 msgstr ""
 
-#: componentmanagergui.py:136
+#: src/ui/componentmanagergui.py:138
 #, python-brace-format
 msgid "No available actions for component '{}'."
 msgstr ""
 
-#: componentmanagergui.py:140
+#: src/ui/componentmanagergui.py:142
 msgid "Context menu"
 msgstr ""
 
-#: componentmanagergui.py:143
+#: src/ui/componentmanagergui.py:145
 msgid "Run"
 msgstr ""
 
-#: componentmanagergui.py:147
+#: src/ui/componentmanagergui.py:149
 msgid "Settings"
 msgstr ""
 
-#: componentmanagergui.py:155
+#: src/ui/componentmanagergui.py:157
 #, python-brace-format
 msgid "Running component {}"
 msgstr ""
 
-#: componentmanagergui.py:167
+#: src/ui/componentmanagergui.py:169
 #, python-brace-format
 msgid ""
 "Error running component '{}':\n"
 "{}"
 msgstr ""
 
-#: componentmanagergui.py:167 componentmanagergui.py:178
+#: src/ui/componentmanagergui.py:169 src/ui/componentmanagergui.py:180
 msgid "Error"
 msgstr ""
 
-#: componentmanagergui.py:171
+#: src/ui/componentmanagergui.py:173
 #, python-brace-format
 msgid "Opening settings for component {}"
 msgstr ""
 
-#: componentmanagergui.py:178
+#: src/ui/componentmanagergui.py:180
 #, python-brace-format
 msgid ""
 "Error opening settings for '{}':\n"
 "{}"
 msgstr ""
 
-#: componentmanagergui.py:188
+#: src/ui/componentmanagergui.py:192
 #, python-brace-format
 msgid "Component {} {}"
 msgstr ""

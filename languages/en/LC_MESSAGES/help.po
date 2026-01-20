@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-11-18 09:25+0100\n"
+"POT-Creation-Date: 2025-12-17 12:30+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,34 +18,34 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: help.py:13
+#: src/ui/help.py:13
 msgid "Titan Help"
 msgstr "Titan Games"
 
-#: help.py:59
+#: src/ui/help.py:59
 msgid "Help file not found."
 msgstr ""
 
-#: help.py:76
+#: src/ui/help.py:76
 #, python-brace-format
 msgid "Error reading help file: {}"
 msgstr "Error opening WiFi interface"
 
-#: help.py:79
+#: src/ui/help.py:79
 #, python-brace-format
 msgid "Unexpected error: {}"
 msgstr ""
 
-#: help.py:90
+#: src/ui/help.py:90
 msgid "No help content found."
 msgstr ""
 
-#: help.py:92
+#: src/ui/help.py:92
 #, python-brace-format
 msgid "Error parsing help data: {}"
 msgstr ""
 
-#: help.py:120
+#: src/ui/help.py:120
 msgid "No content available for this section."
 msgstr ""
 

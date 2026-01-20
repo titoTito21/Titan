@@ -1,3 +1,11 @@
+# Python 3.14+ fix: Create asyncio event loop before any imports that use it
+import asyncio
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import wx
 import threading
 import time
@@ -76,13 +84,14 @@ try:
     import psutil
     if platform.system() == 'Windows':
         import win32com.client
+        import pythoncom  # For TitanScreenReader component
         import win32gui
         import win32process
         import win32api
         import win32con
         import comtypes
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-        from ctypes import POINTER, cast
+        from pycaw.pycaw import AudioUtilities
+        from ctypes import wintypes  # For TitanScreenReader component
     elif platform.system() == 'Linux':
         import alsaaudio
     # Other potential libraries used by components
@@ -112,31 +121,30 @@ except ImportError as e:
 
 # Fix COM errors early
 try:
-    from com_fix import suppress_com_errors, init_com_safe
+    from src.system.com_fix import suppress_com_errors, init_com_safe
     suppress_com_errors()
     init_com_safe()
 except ImportError:
     pass
 except Exception as e:
     pass
-from gui import TitanApp
-from sound import play_startup_sound, initialize_sound, set_theme, play_sound
-from settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
-from translation import set_language
-from controller_vibrations import initialize_vibration, vibrate_startup
-from controller_ui import initialize_controller_system, shutdown_controller_system
-from controller_modes import initialize_controller_modes
-from notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
-from shutdown_question import show_shutdown_dialog
-from app_manager import find_application_by_shortname, open_application
-from game_manager import *
-from component_manager import ComponentManager
-from menu import MenuBar
-from lockscreen_monitor_improved import start_lock_monitoring
-from tce_system import start_system_hooks
-from system_monitor import initialize_system_monitor
-from updater import check_for_updates_on_startup
-from loading_window import LoadingWindow
+from src.ui.gui import TitanApp
+from src.titan_core.sound import play_startup_sound, initialize_sound, set_theme, play_sound
+from src.settings.settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
+from src.titan_core.translation import set_language
+from src.controller.controller_vibrations import initialize_vibration, vibrate_startup
+from src.controller.controller_ui import initialize_controller_system, shutdown_controller_system
+from src.controller.controller_modes import initialize_controller_modes
+from src.ui.notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
+from src.ui.shutdown_question import show_shutdown_dialog
+from src.titan_core.app_manager import find_application_by_shortname, open_application
+from src.titan_core.game_manager import *
+from src.titan_core.component_manager import ComponentManager
+from src.ui.menu import MenuBar
+from src.system.lockscreen_monitor_improved import start_lock_monitoring
+from src.titan_core.tce_system import start_system_hooks
+from src.system.system_monitor import initialize_system_monitor
+from src.system.updater import check_for_updates_on_startup
 
 # Initialize translation system
 _ = set_language(get_setting('language', 'pl'))
@@ -262,40 +270,89 @@ def main(command_line_args=None):
         if startup_mode == 'klango':
             try:
                 print("Starting Klango mode with full TCE initialization...")
-                # Create wx.App for Klango mode
-                klango_app = wx.App(False)
-                
+                # Check if wx.App already exists (it shouldn't in Klango mode called from main())
+                existing_app = wx.GetApp()
+                if existing_app:
+                    print("Warning: wx.App already exists, using existing instance for Klango")
+                    klango_app = existing_app
+                else:
+                    # Create wx.App for Klango mode
+                    klango_app = wx.App(False)
+
+                # Create component manager first (without settings_frame initially)
+                try:
+                    component_manager = ComponentManager(settings_frame=None, gui_app=None)
+                    print("Component manager created for Klango mode")
+                except Exception as e:
+                    print(f"Warning: Failed to create component manager for Klango: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    component_manager = None
+
                 # Initialize all TCE systems like in GUI mode
                 try:
-                    from settingsgui import SettingsFrame
-                    settings_frame = SettingsFrame(None, title=_("Settings"))
+                    from src.ui.settingsgui import SettingsFrame
+                    settings_frame = SettingsFrame(None, title=_("Settings"), component_manager=component_manager)
                     print("Settings frame initialized for Klango mode")
                 except Exception as e:
                     print(f"Warning: Failed to create settings frame for Klango: {e}")
+                    import traceback
+                    traceback.print_exc()
                     settings_frame = None
-                
-                # Initialize component manager with settings frame
-                try:
-                    component_manager = ComponentManager(settings_frame)
-                    component_manager.initialize_components(klango_app)
-                    print("Component manager fully initialized for Klango mode")
-                except Exception as e:
-                    print(f"Warning: Failed to initialize component manager for Klango: {e}")
-                    component_manager = None
-                
+
+                # Set settings_frame reference in component manager and register component settings
+                if component_manager:
+                    component_manager.settings_frame = settings_frame
+                    component_manager.register_component_settings()
+                    settings_frame.rebuild_category_list()
+                    settings_frame.load_component_settings()  # Load component settings after registration
+                    print("Component settings categories registered for Klango mode")
+
                 # Start all system services like in GUI mode
                 try:
                     start_lock_monitoring()
                     print("Lock screen monitoring started for Klango mode")
                 except Exception as e:
                     print(f"Warning: Failed to start lock monitoring for Klango: {e}")
-                
+                    import traceback
+                    traceback.print_exc()
+
                 try:
                     start_system_hooks()
                     print("System hooks started for Klango mode")
                 except Exception as e:
                     print(f"Warning: Failed to start system hooks for Klango: {e}")
-                
+                    import traceback
+                    traceback.print_exc()
+
+                # Start Klango frame FIRST, then initialize components
+                try:
+                    from src.system.klangomode import start_klango_wx_mode
+                    klango_frame = start_klango_wx_mode(settings_frame, VERSION, settings, component_manager)
+                    print("Klango frame created successfully")
+                except Exception as e:
+                    print(f"Failed to create Klango frame: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return False
+
+                # Set gui_app reference for Klango mode
+                if component_manager:
+                    component_manager.gui_app = klango_frame
+
+                # NOW initialize components after Klango frame is created
+                if component_manager:
+                    try:
+                        component_manager.initialize_components(klango_app)
+                        print("Components initialized successfully for Klango mode")
+                        # Apply Klango hooks from components
+                        component_manager.apply_klango_hooks(klango_frame)
+                        print("Klango hooks applied successfully")
+                    except Exception as e:
+                        print(f"Warning: Failed to initialize components for Klango: {e}")
+                        import traceback
+                        traceback.print_exc()
+
                 # Initialize system monitor in background thread like GUI
                 def init_system_services_delayed():
                     import time
@@ -305,6 +362,8 @@ def main(command_line_args=None):
                         print("System monitor initialized for Klango mode")
                     except Exception as e:
                         print(f"Warning: System monitor initialization failed for Klango: {e}")
+                        import traceback
+                        traceback.print_exc()
 
                     # Initialize TCE sounds if enabled in environment settings
                     try:
@@ -312,18 +371,18 @@ def main(command_line_args=None):
                         enable_tce_sounds = str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1']
 
                         if enable_tce_sounds:
-                            import tsounds
+                            from src.titan_core import tsounds
                             tce_sound_feedback = tsounds.initialize()
                             print("TCE sounds initialized successfully for Klango mode")
                     except Exception as e:
                         print(f"Warning: TCE sounds initialization failed for Klango: {e}")
+                        import traceback
+                        traceback.print_exc()
 
                 services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
                 services_thread.start()
 
-                # Start Klango frame with full initialization
-                from klangomode import start_klango_wx_mode
-                klango_frame = start_klango_wx_mode(settings_frame, VERSION, settings, component_manager)
+                # Start main loop
                 klango_app.MainLoop()
                 return True
             except Exception as e:
@@ -373,87 +432,248 @@ if __name__ == "__main__":
     if main(args):
         sys.exit()
 
-    # Check for updates before starting the main application
-    # Create minimal wx.App for update dialog only
-    update_app = wx.App(False)
-    
+    # Inicjalizacja aplikacji wxPython w głównym zakresie (TYLKO JEDNA instancja wx.App)
+    try:
+        # Check if wx.App already exists (shouldn't happen, but be safe)
+        existing_app = wx.GetApp()
+        if existing_app:
+            print("Warning: wx.App already exists, using existing instance")
+            app = existing_app
+        else:
+            app = wx.App(False)
+            print("wx.App created successfully")
+    except Exception as e:
+        print(f"Failed to create main wx.App: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+    # Reload settings to ensure we have latest configuration
+    try:
+        settings = load_settings()
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+        settings = {}
+
+    # Check for updates using the main app instance
     try:
         # Check for updates - this will show dialog if update available
         update_result = check_for_updates_on_startup()
-        
+
         # If update was applied, the application will exit automatically
         # If no update or user cancelled, continue normally
-        
+
     except Exception as e:
         print(f"Error checking for updates: {e}")
-    finally:
-            # Clean up the temporary app safely
-        try:
-            update_app.Destroy()
-            del update_app
-        except Exception as e:
-            print(f"Error destroying update app: {e}")
+        import traceback
+        traceback.print_exc()
 
-    # Inicjalizacja aplikacji wxPython w głównym zakresie
-    try:
-        app = wx.App(False)
-    except Exception as e:
-        print(f"Failed to create main wx.App: {e}")
-        sys.exit(1)
-    settings = load_settings()
-
-    # Check if we should start minimized (don't show loading window in minimized mode)
+    # Check if we should start minimized
     should_start_minimized = settings.get('general', {}).get('startup_mode', 'normal') == 'minimized'
-
-    # Show loading window during startup (except in minimized mode)
-    loading_window = None
-    if not should_start_minimized:
-        try:
-            loading_window = LoadingWindow()
-            print("Loading window displayed")
-        except Exception as e:
-            print(f"Failed to create loading window: {e}")
 
     # Language warning dialog removed per user request
 
+    # Create component manager first (without settings_frame initially)
     try:
-        from settingsgui import SettingsFrame
-        settings_frame = SettingsFrame(None, title=_("Settings"))
+        component_manager = ComponentManager(settings_frame=None, gui_app=None)
+        print("Component manager created (not yet initialized)")
+    except Exception as e:
+        print(f"Failed to create component manager: {e}")
+        component_manager = None
+        # Continue without components rather than crash
+
+    # Now create settings frame with component_manager reference
+    try:
+        from src.ui.settingsgui import SettingsFrame
+        settings_frame = SettingsFrame(None, title=_("Settings"), component_manager=component_manager)
     except Exception as e:
         print(f"Failed to create settings frame: {e}")
         sys.exit(1)
 
-    try:
-        component_manager = ComponentManager(settings_frame)
-        component_manager.initialize_components(app)
-    except Exception as e:
-        print(f"Failed to initialize component manager: {e}")
-        # Continue without components rather than crash
+    # Set settings_frame reference in component manager and register component settings
+    if component_manager:
+        component_manager.settings_frame = settings_frame
+        print("[MAIN] Registering component settings...")
+        component_manager.register_component_settings()
+        print("[MAIN] Calling rebuild_category_list...")
+        settings_frame.rebuild_category_list()
+        print("[MAIN] Loading component settings...")
+        settings_frame.load_component_settings()  # Load component settings after registration
+        print("[MAIN] Component settings categories registered")
 
 
     try:
         # Use should_start_minimized variable defined earlier
         frame = TitanApp(None, title=_("Titan App Suite"), version=VERSION, settings=settings, component_manager=component_manager, start_minimized=should_start_minimized)
+        print("TitanApp frame created successfully")
     except Exception as e:
         print(f"Failed to create main application frame: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
-    
-    # Bind the close event to the appropriate handler
-    if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
-        frame.Bind(wx.EVT_CLOSE, frame.on_close)
-    else:
-        frame.Bind(wx.EVT_CLOSE, frame.on_close_unconfirmed)
-    
-    frame.component_manager = component_manager
-    menubar = MenuBar(frame)
-    frame.SetMenuBar(menubar)
 
-    # Start lockscreen monitoring service
-    start_lock_monitoring()
-    
-    # Start system hooks
-    start_system_hooks()
-    
+    # Set gui_app reference in component manager
+    if component_manager:
+        component_manager.gui_app = frame
+
+    # NOW initialize components after TitanApp is fully created
+    if component_manager:
+        try:
+            component_manager.initialize_components(app)
+            print("Components initialized successfully")
+            # Apply GUI hooks from components
+            component_manager.apply_gui_hooks(frame)
+            print("GUI hooks applied successfully")
+        except Exception as e:
+            print(f"Warning: Failed to initialize components: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continue without components rather than crash
+
+    # Ensure frame has component_manager and settings_frame references before binding events
+    frame.component_manager = component_manager
+    frame.settings_frame = settings_frame
+
+    # Bind the close event to the appropriate handler
+    try:
+        if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
+            frame.Bind(wx.EVT_CLOSE, frame.on_close)
+        else:
+            frame.Bind(wx.EVT_CLOSE, frame.on_close_unconfirmed)
+    except Exception as e:
+        print(f"Warning: Failed to bind close event: {e}")
+
+    # Create and set menu bar
+    try:
+        menubar = MenuBar(frame)
+        frame.SetMenuBar(menubar)
+        print("Menu bar created successfully")
+    except Exception as e:
+        print(f"Warning: Failed to create menu bar: {e}")
+
+    # Initialize Titan-Net client with auto-connect - DISABLED
+    # try:
+    #     from src.network.titan_net import TitanNetClient
+    #     from src.network.titan_net_gui import show_login_dialog
+
+    #     # Get Titan-Net server configuration from settings
+    #     titan_net_settings = settings.get('titan_net', {})
+    #     server_host = titan_net_settings.get('server_host', 'localhost')
+    #     server_port = int(titan_net_settings.get('server_port', 8001))
+
+    #     print(f"Titan-Net configuration: host={server_host}, port={server_port}")
+
+    #     # Create Titan-Net client
+    #     titan_client = TitanNetClient(server_host=server_host, server_port=server_port)
+
+    #     # Store client reference in frame
+    #     frame.titan_client = titan_client
+
+    #     print(f"Titan-Net client initialized with URL: ws://{server_host}:{server_port}")
+
+    #     # Auto-connect: Check if server is available and show login dialog
+    #     # IMPORTANT: Add delay to ensure frame is fully initialized first
+    #     def auto_connect_titannet():
+    #         try:
+    #             # Wait for frame to be fully initialized
+    #             import time
+    #             time.sleep(1)
+
+    #             # Verify frame still exists and is ready
+    #             if not frame or not hasattr(frame, 'active_services'):
+    #                 print("Frame not ready for Titan-Net auto-connect, skipping")
+    #                 return
+
+    #             # Check if auto-connect is enabled in settings
+    #             auto_connect = titan_net_settings.get('auto_connect', True)
+
+    #             if auto_connect:
+    #                 print("Checking Titan-Net server availability...")
+
+    #                 # Check server availability
+    #                 if titan_client.check_server():
+    #                     print("Titan-Net server available, showing login dialog...")
+
+    #                     # Show login dialog on main thread with safety check
+    #                     wx.CallAfter(lambda: _show_titannet_login_safe(frame, titan_client))
+    #                 else:
+    #                     print("Titan-Net server not available, skipping auto-connect")
+    #             else:
+    #                 print("Titan-Net auto-connect disabled in settings")
+
+    #         except Exception as e:
+    #             print(f"Error during Titan-Net auto-connect: {e}")
+    #             import traceback
+    #             traceback.print_exc()
+
+    #     def _show_titannet_login_safe(frame, titan_client):
+    #         """Show Titan-Net login dialog and handle result with safety checks"""
+    #         try:
+    #             # Safety check: ensure frame is still valid
+    #             if not frame or not hasattr(frame, 'active_services'):
+    #                 print("Frame not ready for Titan-Net login, skipping")
+    #                 return
+
+    #             logged_in, offline_mode = show_login_dialog(frame, titan_client)
+
+    #             if logged_in:
+    #                 print(f"Titan-Net login successful: {titan_client.username}")
+
+    #                 # Store in active services with safety check
+    #                 if hasattr(frame, 'active_services'):
+    #                     frame.active_services["titannet"] = {
+    #                         "client": titan_client,
+    #                         "type": "titannet",
+    #                         "name": "Titan-Net",
+    #                         "online_users": [],
+    #                         "unread_messages": {},
+    #                         "user_data": {
+    #                             "username": titan_client.username,
+    #                             "titan_number": titan_client.titan_number
+    #                         }
+    #                     }
+
+    #                     # Setup callbacks for real-time updates
+    #                     titan_client.on_message_received = lambda msg: frame._on_titannet_message(msg)
+    #                     titan_client.on_user_online = lambda username: frame._on_titannet_user_online(username)
+    #                     titan_client.on_user_offline = lambda username: frame._on_titannet_user_offline(username)
+
+    #                     print("Titan-Net callbacks registered")
+    #             elif offline_mode:
+    #                 print("User chose Titan-Net offline mode")
+    #             else:
+    #                 print("Titan-Net login cancelled")
+
+    #         except Exception as e:
+    #             print(f"Error showing Titan-Net login dialog: {e}")
+    #             import traceback
+    #             traceback.print_exc()
+
+    #     # Start auto-connect in background thread
+    #     connect_thread = threading.Thread(target=auto_connect_titannet, daemon=True)
+    #     connect_thread.start()
+
+    # except Exception as e:
+    #     print(f"Warning: Failed to initialize Titan-Net client (optional): {e}")
+    #     frame.titan_client = None
+
+    # Set titan_client to None since Titan-Net is disabled
+    frame.titan_client = None
+
+    # Start lockscreen monitoring service with error handling
+    try:
+        start_lock_monitoring()
+        print("Lock screen monitoring started")
+    except Exception as e:
+        print(f"Warning: Failed to start lock monitoring: {e}")
+
+    # Start system hooks with error handling
+    try:
+        start_system_hooks()
+        print("System hooks started")
+    except Exception as e:
+        print(f"Warning: Failed to start system hooks: {e}")
+
     # Initialize system services in a separate thread after all other components are loaded
     def init_system_services_delayed():
         import time
@@ -463,6 +683,8 @@ if __name__ == "__main__":
             print("System monitor initialized successfully")
         except Exception as e:
             print(f"Warning: System monitor initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Initialize TCE sounds if enabled in environment settings
         try:
@@ -470,7 +692,7 @@ if __name__ == "__main__":
             enable_tce_sounds = str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1']
 
             if enable_tce_sounds:
-                import tsounds
+                from src.titan_core import tsounds
                 tce_sound_feedback = tsounds.initialize()
                 print("TCE sounds initialized successfully")
                 # Store reference to prevent garbage collection
@@ -478,6 +700,8 @@ if __name__ == "__main__":
                     frame.tce_sound_feedback = tce_sound_feedback
         except Exception as e:
             print(f"Warning: TCE sounds initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     services_thread = threading.Thread(target=init_system_services_delayed, daemon=True)
     services_thread.start()
@@ -485,34 +709,49 @@ if __name__ == "__main__":
     # AI is now managed by the AI component (data/components/AI)
     # Enable it through component settings if needed
 
-    # Close loading window before showing main GUI
-    if loading_window:
-        try:
-            loading_window.close()
-            print("Loading window closed")
-        except Exception as e:
-            print(f"Error closing loading window: {e}")
-
     # Show the GUI normally (unless we should start minimized)
-    if should_start_minimized:
-        # Start minimized to tray with invisible UI active
-        wx.CallAfter(frame.minimize_to_tray)
-    else:
-        frame.Show()
+    try:
+        if should_start_minimized:
+            # Start minimized to tray with invisible UI active
+            wx.CallAfter(frame.minimize_to_tray)
+            print("Starting minimized to tray")
+        else:
+            frame.Show()
+            print("Main frame shown")
+    except Exception as e:
+        print(f"Error showing frame: {e}")
+        import traceback
+        traceback.print_exc()
 
+    # Start main event loop with comprehensive error handling
+    print("Starting main event loop...")
     try:
         app.MainLoop()
     except KeyboardInterrupt:
-        print("Application interrupted by user")
+        print("Application interrupted by user (Ctrl+C)")
     except SystemExit:
         print("Application exiting normally")
     except Exception as e:
         print(f"Fatal error in main loop: {e}")
         import traceback
         traceback.print_exc()
+
+        # Try to show error dialog to user before crashing
+        try:
+            wx.MessageBox(
+                f"Critical error occurred:\n\n{str(e)}\n\nPlease check console for details.",
+                "Titan Error",
+                wx.OK | wx.ICON_ERROR
+            )
+        except:
+            pass  # If even the error dialog fails, just continue to cleanup
     finally:
         # Ensure proper cleanup
         print("Performing final cleanup...")
+
+        # Stop all daemon threads gracefully by signaling them
+        # All daemon threads should check their stop events and exit
+        print("Signaling all daemon threads to stop...")
 
         # Unregister AI hotkey
         try:
@@ -522,12 +761,30 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Warning: Error unregistering AI hotkey: {e}")
 
-        # Cleanup frame
+        # Cleanup frame and stop its threads
         if 'frame' in locals():
             try:
+                # Stop frame's status update thread if it exists
+                if hasattr(frame, 'status_thread_running'):
+                    frame.status_thread_running = False
+                if hasattr(frame, 'status_thread_stop_event'):
+                    frame.status_thread_stop_event.set()
+
+                # Stop invisible UI threads if they exist
+                if hasattr(frame, 'invisible_ui') and frame.invisible_ui:
+                    try:
+                        # Signal invisible UI to cleanup its threads
+                        if hasattr(frame.invisible_ui, 'cleanup'):
+                            frame.invisible_ui.cleanup()
+                    except Exception as e:
+                        print(f"Error cleaning up invisible UI: {e}")
+
+                # Remove taskbar icon
                 if hasattr(frame, 'task_bar_icon') and frame.task_bar_icon:
                     frame.task_bar_icon.RemoveIcon()
                     frame.task_bar_icon.Destroy()
+
+                # Destroy frame
                 frame.Destroy()
             except Exception as e:
                 print(f"Error destroying frame: {e}")
@@ -555,7 +812,7 @@ if __name__ == "__main__":
 
         # Additional cleanup for COM objects
         try:
-            from com_fix import cleanup_com_on_exit
+            from src.system.com_fix import cleanup_com_on_exit
             cleanup_com_on_exit()
         except:
             pass

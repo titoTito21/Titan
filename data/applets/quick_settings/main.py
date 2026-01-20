@@ -1,16 +1,24 @@
 import os
+import sys
 import gettext
-from settings import get_setting, set_setting, load_settings
-from sound import set_theme
+
+# Add TCE root to path
+APPLET_DIR = os.path.dirname(__file__)
+TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+from src.settings.settings import get_setting, set_setting, load_settings
+from src.titan_core.sound import set_theme
 
 # BaseWidget definition to avoid circular import
 class BaseWidget:
     def __init__(self, speak_func):
         self.speak = speak_func
         self.view = None
-        # Control type strings for translation  
+        # Control type strings for translation
         try:
-            from translation import set_language
+            from src.titan_core.translation import set_language
             _ = set_language(get_setting('language', 'pl'))
             self._control_types = {
                 'slider': _("slider"),
@@ -46,9 +54,9 @@ class BaseWidget:
 try:
     applet_name = "quick_settings"
     localedir = os.path.join(os.path.dirname(__file__), 'languages')
-    
+
     # Poprawne wczytanie globalnego ustawienia języka
-    from settings import get_setting
+    # get_setting already imported at the top
     language_code = get_setting('language', 'pl')
     print(f"[Quick Settings] Trying to load language: '{language_code}' from '{localedir}'")
     
@@ -234,9 +242,9 @@ class QuickSettingsWidget(BaseWidget):
                 return
 
             item = self.settings_items[index]
-            
+
             try:
-                from sound import play_sound
+                from src.titan_core.sound import play_sound
             except ImportError:
                 play_sound = lambda x: None  # Fallback
             

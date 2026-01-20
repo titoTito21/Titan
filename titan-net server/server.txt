@@ -1,0 +1,14 @@
+to będzie serwer titan-net, robiony w pythonie, ze wsparciem socketa
+funkcje serwera: 
+wsparcie logowania/zakładania konta, Nazwa użytkownika/nick, hasło, Imie i nazwisko (opcjonalnie), po zakładaniu konta będzie generowany losowy numer, nie per sesja, per konto, 5 cyfrowy np.: 69522, każde konto ma 1 numer, nie mogą się numery powtarzać
+wsparcie wiadomości prywatnych
+wsparcie pokojów chatu, tekstowych lub/i głosowych, przez aio rtc, lub inne, żeby można było poprawnie rozmawiać w pokojach, mogą być też wsparcie tych z hasłem
+repozytorium aplikacji, ze wsparciem wysłania pliku do poczekalni, administrator w poczekalni może zatwierdzić, wtedy będzie to w głównym repozytorium: Kategorie: 
+aplikacja
+komponent
+motyw dźwiękowy
+gra
+pakiet TCE
+pakiet językowy
+wsparcie powiązania bloga z kontem TCE, może być też zewnętrzny, z wordPressa
+prywatne wiadomości mają być zachowane, interfejs konwersacji będzie od strony klienta

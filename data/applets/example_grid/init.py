@@ -1,5 +1,14 @@
 # data/applets/example_grid/init.py
-from invisibleui import BaseWidget
+import sys
+import os
+
+# Add TCE root to path
+APPLET_DIR = os.path.dirname(__file__)
+TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+from src.ui.invisibleui import BaseWidget
 
 class WidgetGrid(BaseWidget):
     def __init__(self, speak_func, view=None):
