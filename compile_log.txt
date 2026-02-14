@@ -1,0 +1,61 @@
+pygame-ce 2.5.6 (SDL 2.32.10, Python 3.14.0)
+======================================================================
+TCE Launcher - PyInstaller Compilation with Dependency Detection
+======================================================================
+
+Step 1: Scanning for dependencies...
+----------------------------------------------------------------------
+Scanning applications for dependencies...
+  Found 53 imports in applications
+Scanning games for dependencies...
+  Found 0 imports in games
+Scanning components for dependencies...
+  Found 15 imports in components
+
+Found 35 external dependencies:
+  - MediaCatalog
+  - PyPDF2
+  - Settings
+  - YoutubeSearch
+  - accessible_output3
+  - bs4
+  - clonegen
+  - copy_move
+  - database
+  - docx
+  - elevenlabs
+  - enchant
+  - feedparser
+  - generator
+  - gui
+  - key_dialog
+  - menu
+  - menu_bar
+  - player
+  - pygame
+  - pypandoc
+  - pyttsx3
+  - requests
+  - settings
+  - sound
+  - src
+  - support_dialog
+  - tfm_settings
+  - tplayer
+  - translation
+  - vlc
+  - webbrowser
+  - win32com
+  - wx
+  - yt_dlp
+
+Step 2: Building PyInstaller command...
+----------------------------------------------------------------------
+Total hidden imports: 139
+
+Step 3: Running PyInstaller...
+----------------------------------------------------------------------
+
+==================================================
+COMPILATION FAILED!
+==================================================

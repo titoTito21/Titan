@@ -143,6 +143,84 @@ def clear_telegram_config():
         del config['telegram']
     save_titan_im_config(config)
 
+# EltenLink configuration functions
+def get_eltenlink_config() -> dict:
+    """Get EltenLink-specific configuration"""
+    config = load_titan_im_config()
+    return config.get('eltenlink', {})
+
+def save_eltenlink_config(eltenlink_config: dict):
+    """Save EltenLink-specific configuration"""
+    config = load_titan_im_config()
+    config['eltenlink'] = eltenlink_config
+    save_titan_im_config(config)
+
+def set_eltenlink_username(username: str):
+    """Save EltenLink last username"""
+    eltenlink_config = get_eltenlink_config()
+    eltenlink_config.update({
+        'username': username,
+        'last_username': username
+    })
+    save_eltenlink_config(eltenlink_config)
+
+def get_eltenlink_username() -> str:
+    """Get saved EltenLink username"""
+    eltenlink_config = get_eltenlink_config()
+    return eltenlink_config.get('last_username', '')
+
+def set_eltenlink_credentials(username: str, token: str, password: str = None):
+    """
+    Save EltenLink credentials for auto-login.
+
+    Args:
+        username: EltenLink username
+        token: Session token
+        password: Optional password for automatic token refresh (encrypted)
+    """
+    eltenlink_config = get_eltenlink_config()
+    eltenlink_config.update({
+        'username': username,
+        'last_username': username,
+        'token': token,
+        'auto_connect': True
+    })
+
+    # Save password if provided (for automatic token refresh)
+    if password:
+        eltenlink_config['password'] = password
+
+    save_eltenlink_config(eltenlink_config)
+
+def get_eltenlink_credentials() -> tuple:
+    """
+    Get saved EltenLink credentials (username, token, password).
+
+    Returns:
+        tuple: (username, token, password) - password may be None if not saved
+    """
+    eltenlink_config = get_eltenlink_config()
+    return (
+        eltenlink_config.get('username', ''),
+        eltenlink_config.get('token', ''),
+        eltenlink_config.get('password', None)  # Password for auto-refresh
+    )
+
+def clear_eltenlink_credentials():
+    """Clear EltenLink saved credentials"""
+    eltenlink_config = get_eltenlink_config()
+    if 'token' in eltenlink_config:
+        del eltenlink_config['token']
+    eltenlink_config['auto_connect'] = False
+    save_eltenlink_config(eltenlink_config)
+
+def clear_eltenlink_config():
+    """Clear EltenLink configuration"""
+    config = load_titan_im_config()
+    if 'eltenlink' in config:
+        del config['eltenlink']
+    save_titan_im_config(config)
+
 # Default configuration structure
 DEFAULT_CONFIG = {
     "telegram": {
@@ -158,6 +236,36 @@ DEFAULT_CONFIG = {
         "ui": {
             "separate_chat_window": False,
             "minimize_to_tray": True
+        }
+    },
+    "eltenlink": {
+        "username": None,
+        "last_username": None,
+        "auto_connect": False,
+        "remember_password": False,  # NOT recommended (security)
+        "notifications": {
+            "sound_enabled": True,
+            "tts_enabled": True,
+            "show_preview": True
+        },
+        "ui": {
+            "auto_refresh_interval": 15,
+            "show_online_status": True,
+            "skin": "default"
+        },
+        "voice": {
+            "vad_enabled": True,
+            "vad_aggressiveness": 0,
+            "self_monitor": False,
+            "volume": 100
+        },
+        "blog": {
+            "show_preview": True,
+            "auto_load_comments": True
+        },
+        "forum": {
+            "mark_read_on_open": True,
+            "show_pinned_first": True
         }
     },
     "general": {

@@ -1284,9 +1284,16 @@ class StereoSpeech:
         Args:
             engine (str): Engine type ('sapi5' or 'espeak')
         """
-        if engine == 'espeak' and ESPEAK_AVAILABLE:
-            self.engine = 'espeak'
-            print("[StereoSpeech] Switched to eSpeak engine")
+        if engine == 'espeak':
+            # Prefer DLL for fastest performance, fallback to executable
+            if ESPEAK_DLL_AVAILABLE:
+                self.engine = 'espeak_dll'
+                print("[StereoSpeech] Switched to eSpeak DLL engine (fast mode)")
+            elif ESPEAK_AVAILABLE:
+                self.engine = 'espeak'
+                print("[StereoSpeech] Switched to eSpeak subprocess engine")
+            else:
+                print(f"[StereoSpeech] eSpeak not available")
         elif engine == 'sapi5' and self.sapi:
             self.engine = 'sapi5'
             print("[StereoSpeech] Switched to SAPI5 engine")
@@ -1312,7 +1319,8 @@ class StereoSpeech:
         engines = []
         if self.sapi:
             engines.append('sapi5')
-        if ESPEAK_AVAILABLE:
+        # Check both DLL and executable versions of eSpeak
+        if ESPEAK_AVAILABLE or ESPEAK_DLL_AVAILABLE:
             engines.append('espeak')
         return engines
 
@@ -1371,6 +1379,12 @@ class StereoSpeech:
             list: List of voice dicts with 'id' and 'display_name'
         """
         try:
+            # Check if any version of eSpeak is available
+            if not ESPEAK_AVAILABLE and not ESPEAK_DLL_AVAILABLE:
+                return []
+
+            # If DLL is available but executable is not, try to use espeak-ng executable anyway
+            # (the DLL doesn't have a method to list voices, so we need the executable)
             if not ESPEAK_AVAILABLE:
                 return []
 
@@ -1473,7 +1487,8 @@ class StereoSpeech:
                     voices.append(voice.GetDescription())
 
                 return voices
-            elif self.engine == 'espeak':
+            elif self.engine in ['espeak', 'espeak_dll']:
+                # Both DLL and subprocess versions use the same voice list
                 return self.get_espeak_voices()
             else:
                 return []

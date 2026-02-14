@@ -131,7 +131,7 @@ except Exception as e:
 from src.ui.gui import TitanApp
 from src.titan_core.sound import play_startup_sound, initialize_sound, set_theme, play_sound
 from src.settings.settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
-from src.titan_core.translation import set_language
+from src.titan_core.translation import set_language, get_system_language
 from src.controller.controller_vibrations import initialize_vibration, vibrate_startup
 from src.controller.controller_ui import initialize_controller_system, shutdown_controller_system
 from src.controller.controller_modes import initialize_controller_modes
@@ -147,9 +147,10 @@ from src.system.system_monitor import initialize_system_monitor
 from src.system.updater import check_for_updates_on_startup
 
 # Initialize translation system
-_ = set_language(get_setting('language', 'pl'))
+# Note: translation.py will auto-detect system language if no preference is saved
+_ = set_language(get_setting('language', get_system_language()))
 
-VERSION = "0.3"
+VERSION = "0.5"
 speaker = accessible_output3.outputs.auto.Auto()
 
 # Global flag for graceful shutdown
@@ -178,16 +179,17 @@ def main(command_line_args=None):
         
         # Set the LANG environment variable for the entire application and subprocesses
         try:
-            lang = get_setting('language', 'pl')
+            # Get language preference - defaults to system language if not set
+            lang = get_setting('language', get_system_language())
             os.environ['LANG'] = lang
             os.environ['LANGUAGE'] = lang
-            
+
             # Initialize translation system with the correct language
             global _
             _ = set_language(lang)
         except Exception as e:
             print(f"Error setting up language: {e}")
-            lang = 'pl'  # Fallback
+            lang = get_system_language()  # Fallback to system language
 
         # Initialize sound system with error handling
         try:
@@ -289,6 +291,13 @@ def main(command_line_args=None):
                     traceback.print_exc()
                     component_manager = None
 
+                # Load Titan IM external modules
+                try:
+                    from src.network.im_module_manager import im_module_manager
+                    im_module_manager.load_modules()
+                except Exception as e:
+                    print(f"Warning: Failed to load IM modules: {e}")
+
                 # Initialize all TCE systems like in GUI mode
                 try:
                     from src.ui.settingsgui import SettingsFrame
@@ -340,18 +349,57 @@ def main(command_line_args=None):
                 if component_manager:
                     component_manager.gui_app = klango_frame
 
-                # NOW initialize components after Klango frame is created
+                # Initialize Titan-Net client for Klango mode
+                try:
+                    from src.network.titan_net import TitanNetClient
+
+                    # Get Titan-Net server configuration from settings
+                    titan_net_settings = settings.get('titan_net', {})
+                    server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+                    server_port = int(titan_net_settings.get('server_port', 8001))
+                    http_port = int(titan_net_settings.get('http_port', 8000))
+
+                    print(f"[KLANGO] Titan-Net configuration: host={server_host}, ws_port={server_port}, http_port={http_port}")
+
+                    # Create Titan-Net client for Klango mode
+                    titan_client = TitanNetClient(server_host=server_host, server_port=server_port, http_port=http_port)
+
+                    # Link client to Klango frame
+                    klango_frame.titan_client = titan_client
+
+                    print(f"[KLANGO] Titan-Net client initialized and linked to Klango frame")
+
+                except Exception as e:
+                    print(f"[KLANGO] Warning: Failed to initialize Titan-Net client: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    klango_frame.titan_client = None
+
+                # Apply Klango hooks from components (before initialization)
                 if component_manager:
                     try:
-                        component_manager.initialize_components(klango_app)
-                        print("Components initialized successfully for Klango mode")
-                        # Apply Klango hooks from components
                         component_manager.apply_klango_hooks(klango_frame)
                         print("Klango hooks applied successfully")
                     except Exception as e:
-                        print(f"Warning: Failed to initialize components for Klango: {e}")
+                        print(f"Warning: Failed to apply Klango hooks: {e}")
                         import traceback
                         traceback.print_exc()
+
+                # Initialize components AFTER Klango frame is ready
+                def init_klango_components_delayed():
+                    """Initialize components after Klango frame is fully ready"""
+                    if component_manager:
+                        try:
+                            print("[KLANGO] Initializing components after frame is ready...")
+                            component_manager.initialize_components(klango_app)
+                            print("[KLANGO] Components initialized successfully")
+                        except Exception as e:
+                            print(f"[KLANGO] Warning: Failed to initialize components: {e}")
+                            import traceback
+                            traceback.print_exc()
+
+                # Use CallAfter to initialize components after event loop starts
+                wx.CallAfter(init_klango_components_delayed)
 
                 # Initialize system monitor in background thread like GUI
                 def init_system_services_delayed():
@@ -392,6 +440,249 @@ def main(command_line_args=None):
                 # Fallback to normal mode
                 startup_mode = 'normal'
         
+        elif startup_mode == 'launcher':
+            try:
+                # Determine which launcher to use
+                launcher_name = settings.get('general', {}).get('launcher', '')
+                if command_line_args and hasattr(command_line_args, 'launcher') and command_line_args.launcher:
+                    launcher_name = command_line_args.launcher
+
+                if not launcher_name:
+                    print("Launcher mode selected but no launcher specified, falling back to normal mode")
+                    startup_mode = 'normal'
+                else:
+                    print(f"Starting launcher mode with launcher: {launcher_name}")
+
+                    from src.titan_core.launcher_manager import LauncherManager
+
+                    # Create wx.App (needed for settings frame, component dialogs, system hooks)
+                    existing_app = wx.GetApp()
+                    if existing_app:
+                        launcher_wx_app = existing_app
+                    else:
+                        launcher_wx_app = wx.App(False)
+
+                    # Create component manager
+                    try:
+                        component_manager = ComponentManager(settings_frame=None, gui_app=None)
+                        print("Component manager created for launcher mode")
+                    except Exception as e:
+                        print(f"Warning: Failed to create component manager for launcher: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        component_manager = None
+
+                    # Load Titan IM external modules
+                    try:
+                        from src.network.im_module_manager import im_module_manager
+                        im_module_manager.load_modules()
+                    except Exception as e:
+                        print(f"Warning: Failed to load IM modules: {e}")
+
+                    # Create settings frame
+                    try:
+                        from src.ui.settingsgui import SettingsFrame
+                        settings_frame = SettingsFrame(None, title=_("Settings"), component_manager=component_manager)
+                        print("Settings frame initialized for launcher mode")
+                    except Exception as e:
+                        print(f"Warning: Failed to create settings frame for launcher: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        settings_frame = None
+
+                    # Register component settings
+                    if component_manager and settings_frame:
+                        component_manager.settings_frame = settings_frame
+                        component_manager.register_component_settings()
+                        settings_frame.rebuild_category_list()
+                        settings_frame.load_component_settings()
+                        print("Component settings categories registered for launcher mode")
+
+                    # Start system services
+                    try:
+                        start_lock_monitoring()
+                        print("Lock screen monitoring started for launcher mode")
+                    except Exception as e:
+                        print(f"Warning: Failed to start lock monitoring for launcher: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                    try:
+                        start_system_hooks()
+                        print("System hooks started for launcher mode")
+                    except Exception as e:
+                        print(f"Warning: Failed to start system hooks for launcher: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                    # Create Titan-Net client
+                    titan_client = None
+                    try:
+                        from src.network.titan_net import TitanNetClient
+                        titan_net_settings = settings.get('titan_net', {})
+                        server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+                        server_port = int(titan_net_settings.get('server_port', 8001))
+                        http_port = int(titan_net_settings.get('http_port', 8000))
+                        titan_client = TitanNetClient(server_host=server_host, server_port=server_port, http_port=http_port)
+                        print(f"[LAUNCHER] Titan-Net client initialized: ws://{server_host}:{server_port}")
+                    except Exception as e:
+                        print(f"[LAUNCHER] Warning: Failed to initialize Titan-Net client: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                    # Build services dict for LauncherAPI
+                    from src.titan_core import app_manager as app_mgr
+                    from src.titan_core import game_manager as game_mgr
+                    from src.titan_core import sound as sound_mod
+                    from src.titan_core import translation as translation_mod
+                    from src.settings import settings as settings_mod
+
+                    services = {
+                        'app_manager': app_mgr,
+                        'game_manager': game_mgr,
+                        'sound': sound_mod,
+                        'settings': settings_mod,
+                        'translation': translation_mod,
+                        'translation_func': _,
+                        'titan_net_client': titan_client,
+                        'component_manager': component_manager,
+                        'settings_frame': settings_frame,
+                        'version': VERSION,
+                        'speaker': speaker,
+                        'wx_app': launcher_wx_app,
+                    }
+
+                    # Create statusbar applet manager for launcher
+                    statusbar_applet_manager = None
+                    try:
+                        from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
+                        statusbar_applet_manager = StatusbarAppletManager()
+                        statusbar_applet_manager.start_auto_update()
+                        services['statusbar_applet_manager'] = statusbar_applet_manager
+                        print("[LAUNCHER] Statusbar applet manager initialized")
+                    except Exception as e:
+                        print(f"[LAUNCHER] Warning: Failed to init statusbar applet manager: {e}")
+                        services['statusbar_applet_manager'] = None
+
+                    # Add IM module manager (already loaded earlier)
+                    try:
+                        services['im_module_manager'] = im_module_manager
+                    except Exception:
+                        services['im_module_manager'] = None
+
+                    # Try to add optional services
+                    try:
+                        from src.system import notifications as notifications_mod
+                        services['notifications'] = notifications_mod
+                    except Exception:
+                        services['notifications'] = None
+
+                    try:
+                        from src.ui.help import show_help as help_show
+                        services['help_func'] = help_show
+                    except Exception:
+                        services['help_func'] = None
+
+                    # Create launcher manager and find the launcher
+                    launcher_manager = LauncherManager()
+                    launcher_config = launcher_manager.get_launcher_by_name(launcher_name)
+
+                    # Create Invisible UI if launcher requests it
+                    if launcher_config and launcher_config.enabled and launcher_config.features.get('invisible_ui', False):
+                        try:
+                            from src.ui.invisibleui import InvisibleUI
+                            # Create a minimal hidden frame as parent for InvisibleUI
+                            launcher_iui_frame = wx.Frame(None, title="Launcher IUI Host", size=(1, 1))
+                            launcher_iui_frame.Move(-10000, -10000)
+                            launcher_iui = InvisibleUI(launcher_iui_frame, component_manager)
+                            services['invisible_ui'] = launcher_iui
+                            print("[LAUNCHER] Invisible UI created for launcher")
+                        except Exception as e:
+                            print(f"[LAUNCHER] Warning: Failed to create Invisible UI: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            services['invisible_ui'] = None
+                    else:
+                        services['invisible_ui'] = None
+
+                    if launcher_config is None or not launcher_config.enabled:
+                        print(f"Launcher '{launcher_name}' not found or disabled, falling back to normal mode")
+                        startup_mode = 'normal'
+                    else:
+                        # Apply launcher hooks from components
+                        if component_manager:
+                            try:
+                                component_manager.apply_launcher_hooks(launcher_manager, launcher_name)
+                                print("Launcher hooks applied successfully")
+                            except Exception as e:
+                                print(f"Warning: Failed to apply launcher hooks: {e}")
+                                import traceback
+                                traceback.print_exc()
+
+                        # Initialize components after event loop starts
+                        def init_launcher_components_delayed():
+                            if component_manager:
+                                try:
+                                    print("[LAUNCHER] Initializing components...")
+                                    component_manager.initialize_components(launcher_wx_app)
+                                    print("[LAUNCHER] Components initialized successfully")
+                                except Exception as e:
+                                    print(f"[LAUNCHER] Warning: Failed to initialize components: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+
+                        wx.CallAfter(init_launcher_components_delayed)
+
+                        # Start system monitor in background
+                        def init_launcher_system_services():
+                            import time
+                            time.sleep(2)
+                            try:
+                                initialize_system_monitor()
+                                print("System monitor initialized for launcher mode")
+                            except Exception as e:
+                                print(f"Warning: System monitor init failed for launcher: {e}")
+                                import traceback
+                                traceback.print_exc()
+
+                            # Initialize TCE sounds if enabled
+                            try:
+                                environment_settings = settings.get('environment', {})
+                                enable_tce_sounds = str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1']
+                                if enable_tce_sounds:
+                                    from src.titan_core import tsounds
+                                    tsounds.initialize()
+                                    print("TCE sounds initialized for launcher mode")
+                            except Exception as e:
+                                print(f"Warning: TCE sounds init failed for launcher: {e}")
+
+                        services_thread = threading.Thread(target=init_launcher_system_services, daemon=True)
+                        services_thread.start()
+
+                        # Start the launcher
+                        success = launcher_manager.start_launcher(launcher_name, services)
+
+                        if success:
+                            # Run wx main loop (needed for settings, dialogs, system hooks)
+                            launcher_wx_app.MainLoop()
+
+                            # Cleanup
+                            launcher_manager.stop_launcher()
+                            if statusbar_applet_manager:
+                                statusbar_applet_manager.stop_auto_update()
+                            if component_manager:
+                                component_manager.shutdown_components()
+                            return True
+                        else:
+                            print(f"Failed to start launcher '{launcher_name}', falling back to normal mode")
+                            startup_mode = 'normal'
+
+            except Exception as e:
+                print(f"Failed to start launcher mode: {e}")
+                import traceback
+                traceback.print_exc()
+                startup_mode = 'normal'
+
         elif startup_mode == 'minimized':
             # Start GUI in minimized mode (will minimize to tray automatically)
             print("Starting in minimized mode...")
@@ -412,8 +703,10 @@ if __name__ == "__main__":
                        help='Application shortname to launch directly')
     parser.add_argument('file_path', nargs='?', default=None,
                        help='File path to open with the application')
-    parser.add_argument('--startup-mode', choices=['normal', 'minimized', 'klango'], 
+    parser.add_argument('--startup-mode', choices=['normal', 'minimized', 'klango', 'launcher'],
                        default=None, help='Override startup mode setting')
+    parser.add_argument('--launcher', default=None,
+                       help='Launcher folder name to use (requires --startup-mode launcher)')
     args = parser.parse_args()
     
     # Install signal handlers for graceful shutdown
@@ -422,7 +715,9 @@ if __name__ == "__main__":
     
     # Set default settings if the file doesn't exist
     if not os.path.exists(SETTINGS_FILE_PATH):
-        set_setting('language', 'pl')
+        # Detect system language and set as default
+        detected_language = get_system_language()
+        set_setting('language', detected_language)
         set_setting('theme', 'default', section='sound')
 
     if not os.path.exists(NOTIFICATIONS_FILE_PATH):
@@ -482,6 +777,13 @@ if __name__ == "__main__":
         component_manager = None
         # Continue without components rather than crash
 
+    # Load Titan IM external modules
+    try:
+        from src.network.im_module_manager import im_module_manager
+        im_module_manager.load_modules()
+    except Exception as e:
+        print(f"Warning: Failed to load IM modules: {e}")
+
     # Now create settings frame with component_manager reference
     try:
         from src.ui.settingsgui import SettingsFrame
@@ -516,23 +818,19 @@ if __name__ == "__main__":
     if component_manager:
         component_manager.gui_app = frame
 
-    # NOW initialize components after TitanApp is fully created
-    if component_manager:
-        try:
-            component_manager.initialize_components(app)
-            print("Components initialized successfully")
-            # Apply GUI hooks from components
-            component_manager.apply_gui_hooks(frame)
-            print("GUI hooks applied successfully")
-        except Exception as e:
-            print(f"Warning: Failed to initialize components: {e}")
-            import traceback
-            traceback.print_exc()
-            # Continue without components rather than crash
-
     # Ensure frame has component_manager and settings_frame references before binding events
     frame.component_manager = component_manager
     frame.settings_frame = settings_frame
+
+    # Apply GUI hooks from components (before initialization)
+    if component_manager:
+        try:
+            component_manager.apply_gui_hooks(frame)
+            print("GUI hooks applied successfully")
+        except Exception as e:
+            print(f"Warning: Failed to apply GUI hooks: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Bind the close event to the appropriate handler
     try:
@@ -551,114 +849,114 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Warning: Failed to create menu bar: {e}")
 
-    # Initialize Titan-Net client with auto-connect - DISABLED
-    # try:
-    #     from src.network.titan_net import TitanNetClient
-    #     from src.network.titan_net_gui import show_login_dialog
+    # Initialize Titan-Net client with auto-connect
+    try:
+        from src.network.titan_net import TitanNetClient
+        from src.network.titan_net_gui import show_login_dialog
 
-    #     # Get Titan-Net server configuration from settings
-    #     titan_net_settings = settings.get('titan_net', {})
-    #     server_host = titan_net_settings.get('server_host', 'localhost')
-    #     server_port = int(titan_net_settings.get('server_port', 8001))
+        # Get Titan-Net server configuration from settings
+        titan_net_settings = settings.get('titan_net', {})
+        server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+        server_port = int(titan_net_settings.get('server_port', 8001))
+        http_port = int(titan_net_settings.get('http_port', 8000))
 
-    #     print(f"Titan-Net configuration: host={server_host}, port={server_port}")
+        print(f"Titan-Net configuration: host={server_host}, ws_port={server_port}, http_port={http_port}")
 
-    #     # Create Titan-Net client
-    #     titan_client = TitanNetClient(server_host=server_host, server_port=server_port)
+        # Create Titan-Net client
+        titan_client = TitanNetClient(server_host=server_host, server_port=server_port, http_port=http_port)
 
-    #     # Store client reference in frame
-    #     frame.titan_client = titan_client
+        # Store client reference in frame
+        frame.titan_client = titan_client
 
-    #     print(f"Titan-Net client initialized with URL: ws://{server_host}:{server_port}")
+        print(f"Titan-Net client initialized: ws://{server_host}:{server_port}, http://{server_host}:{http_port}")
 
-    #     # Auto-connect: Check if server is available and show login dialog
-    #     # IMPORTANT: Add delay to ensure frame is fully initialized first
-    #     def auto_connect_titannet():
-    #         try:
-    #             # Wait for frame to be fully initialized
-    #             import time
-    #             time.sleep(1)
+        # Auto-connect: Check if server is available and show login dialog
+        # IMPORTANT: Add delay to ensure frame is fully initialized first
+        def auto_connect_titannet():
+            try:
+                # Wait for frame to be fully initialized
+                import time
+                time.sleep(1)
 
-    #             # Verify frame still exists and is ready
-    #             if not frame or not hasattr(frame, 'active_services'):
-    #                 print("Frame not ready for Titan-Net auto-connect, skipping")
-    #                 return
+                # Verify frame still exists and is ready
+                if not frame or not hasattr(frame, 'active_services'):
+                    print("Frame not ready for Titan-Net auto-connect, skipping")
+                    return
 
-    #             # Check if auto-connect is enabled in settings
-    #             auto_connect = titan_net_settings.get('auto_connect', True)
+                # Check if auto-connect is enabled in settings
+                auto_connect = titan_net_settings.get('auto_connect', False)
 
-    #             if auto_connect:
-    #                 print("Checking Titan-Net server availability...")
+                if auto_connect:
+                    print("Checking Titan-Net server availability...")
 
-    #                 # Check server availability
-    #                 if titan_client.check_server():
-    #                     print("Titan-Net server available, showing login dialog...")
+                    # Check server availability
+                    if titan_client.check_server():
+                        print("Titan-Net server available, showing login dialog...")
 
-    #                     # Show login dialog on main thread with safety check
-    #                     wx.CallAfter(lambda: _show_titannet_login_safe(frame, titan_client))
-    #                 else:
-    #                     print("Titan-Net server not available, skipping auto-connect")
-    #             else:
-    #                 print("Titan-Net auto-connect disabled in settings")
+                        # Show login dialog on main thread with safety check
+                        wx.CallAfter(lambda: _show_titannet_login_safe(frame, titan_client))
+                    else:
+                        print("Titan-Net server not available, skipping auto-connect")
+                else:
+                    print("Titan-Net auto-connect disabled in settings (enable with auto_connect: true)")
 
-    #         except Exception as e:
-    #             print(f"Error during Titan-Net auto-connect: {e}")
-    #             import traceback
-    #             traceback.print_exc()
+            except Exception as e:
+                print(f"Error during Titan-Net auto-connect: {e}")
+                import traceback
+                traceback.print_exc()
 
-    #     def _show_titannet_login_safe(frame, titan_client):
-    #         """Show Titan-Net login dialog and handle result with safety checks"""
-    #         try:
-    #             # Safety check: ensure frame is still valid
-    #             if not frame or not hasattr(frame, 'active_services'):
-    #                 print("Frame not ready for Titan-Net login, skipping")
-    #                 return
+        def _show_titannet_login_safe(frame, titan_client):
+            """Show Titan-Net login dialog and handle result with safety checks"""
+            try:
+                # Safety check: ensure frame is still valid
+                if not frame or not hasattr(frame, 'active_services'):
+                    print("Frame not ready for Titan-Net login, skipping")
+                    return
 
-    #             logged_in, offline_mode = show_login_dialog(frame, titan_client)
+                logged_in, offline_mode = show_login_dialog(frame, titan_client)
 
-    #             if logged_in:
-    #                 print(f"Titan-Net login successful: {titan_client.username}")
+                if logged_in:
+                    print(f"Titan-Net login successful: {titan_client.username}")
 
-    #                 # Store in active services with safety check
-    #                 if hasattr(frame, 'active_services'):
-    #                     frame.active_services["titannet"] = {
-    #                         "client": titan_client,
-    #                         "type": "titannet",
-    #                         "name": "Titan-Net",
-    #                         "online_users": [],
-    #                         "unread_messages": {},
-    #                         "user_data": {
-    #                             "username": titan_client.username,
-    #                             "titan_number": titan_client.titan_number
-    #                         }
-    #                     }
+                    # Store in active services with safety check
+                    if hasattr(frame, 'active_services'):
+                        frame.active_services["titannet"] = {
+                            "client": titan_client,
+                            "type": "titannet",
+                            "name": "Titan-Net (Beta)",
+                            "online_users": [],
+                            "unread_messages": {},
+                            "user_data": {
+                                "username": titan_client.username,
+                                "titan_number": titan_client.titan_number
+                            }
+                        }
 
-    #                     # Setup callbacks for real-time updates
-    #                     titan_client.on_message_received = lambda msg: frame._on_titannet_message(msg)
-    #                     titan_client.on_user_online = lambda username: frame._on_titannet_user_online(username)
-    #                     titan_client.on_user_offline = lambda username: frame._on_titannet_user_offline(username)
+                        # Setup callbacks for real-time updates
+                        titan_client.on_message_received = lambda msg: frame._on_titannet_message(msg)
+                        titan_client.on_user_online = lambda username: frame._on_titannet_user_online(username)
+                        titan_client.on_user_offline = lambda username: frame._on_titannet_user_offline(username)
 
-    #                     print("Titan-Net callbacks registered")
-    #             elif offline_mode:
-    #                 print("User chose Titan-Net offline mode")
-    #             else:
-    #                 print("Titan-Net login cancelled")
+                        print("Titan-Net callbacks registered")
+                elif offline_mode:
+                    print("User chose Titan-Net offline mode")
+                else:
+                    print("Titan-Net login cancelled")
 
-    #         except Exception as e:
-    #             print(f"Error showing Titan-Net login dialog: {e}")
-    #             import traceback
-    #             traceback.print_exc()
+            except Exception as e:
+                print(f"Error showing Titan-Net login dialog: {e}")
+                import traceback
+                traceback.print_exc()
 
-    #     # Start auto-connect in background thread
-    #     connect_thread = threading.Thread(target=auto_connect_titannet, daemon=True)
-    #     connect_thread.start()
+        # Start auto-connect in background thread
+        connect_thread = threading.Thread(target=auto_connect_titannet, daemon=True)
+        connect_thread.start()
 
-    # except Exception as e:
-    #     print(f"Warning: Failed to initialize Titan-Net client (optional): {e}")
-    #     frame.titan_client = None
-
-    # Set titan_client to None since Titan-Net is disabled
-    frame.titan_client = None
+    except Exception as e:
+        print(f"Warning: Failed to initialize Titan-Net client: {e}")
+        import traceback
+        traceback.print_exc()
+        frame.titan_client = None
 
     # Start lockscreen monitoring service with error handling
     try:
@@ -722,6 +1020,22 @@ if __name__ == "__main__":
         print(f"Error showing frame: {e}")
         import traceback
         traceback.print_exc()
+
+    # Initialize components AFTER frame is shown and event loop is running
+    def init_components_delayed():
+        """Initialize components after frame is fully ready"""
+        if component_manager:
+            try:
+                print("[MAIN] Initializing components after frame is shown...")
+                component_manager.initialize_components(app)
+                print("[MAIN] Components initialized successfully")
+            except Exception as e:
+                print(f"[MAIN] Warning: Failed to initialize components: {e}")
+                import traceback
+                traceback.print_exc()
+
+    # Use CallAfter to initialize components after event loop starts
+    wx.CallAfter(init_components_delayed)
 
     # Start main event loop with comprehensive error handling
     print("Starting main event loop...")

@@ -4,19 +4,19 @@ from translation import _
 
 class SupportDialog(wx.Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title=_("Dziękuję za używanie klienta elevenLabs"), size=(400, 200))
-        
+        super().__init__(parent, title=_("Thank you for using the ElevenLabs Client"), size=(400, 200))
+
         vbox = wx.BoxSizer(wx.VERTICAL)
-        
-        message = _("Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie "
-                     "kawą, piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy danych.")
+
+        message = _("If you find this program useful, please consider supporting me "
+                     "with a coffee, beer, or cigarette pack to help maintain the voice database server costs.")
         msg_text = wx.StaticText(self, label=message)
         vbox.Add(msg_text, 1, flag=wx.ALL | wx.EXPAND, border=10)
-        
-        donate_button = wx.Button(self, label=_("Dotacja"))
+
+        donate_button = wx.Button(self, label=_("Donate"))
         donate_button.Bind(wx.EVT_BUTTON, self.on_donate)
         vbox.Add(donate_button, 0, flag=wx.ALL, border=10)
-        
+
         ok_button = wx.Button(self, label=_("OK"))
         ok_button.Bind(wx.EVT_BUTTON, self.on_ok)
         vbox.Add(ok_button, 0, flag=wx.ALL, border=10)

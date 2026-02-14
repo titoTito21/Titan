@@ -5,25 +5,25 @@ from translation import _
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title=_("Ustawienia klienta"), size=(400, 300))
+        super().__init__(parent, title=_("Client Settings"), size=(400, 300))
 
         self.panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        api_key_label = wx.StaticText(self.panel, label=_("Klucz API:"))
+        api_key_label = wx.StaticText(self.panel, label=_("API Key:"))
         vbox.Add(api_key_label, 0, wx.ALL, 5)
         self.api_key_text = wx.TextCtrl(self.panel)
         vbox.Add(self.api_key_text, 0, wx.EXPAND | wx.ALL, 5)
 
-        playback_mode_label = wx.StaticText(self.panel, label=_("Tryb odtwarzania:"))
+        playback_mode_label = wx.StaticText(self.panel, label=_("Playback Mode:"))
         vbox.Add(playback_mode_label, 0, wx.ALL, 5)
 
-        self.playback_mode_choice = wx.Choice(self.panel, choices=[_("mpv (domyślny)"), _("t player (nowy, lecz mniej stabilny)")])
+        self.playback_mode_choice = wx.Choice(self.panel, choices=[_("mpv (default)"), _("t player (new, less stable)")])
         vbox.Add(self.playback_mode_choice, 0, wx.EXPAND | wx.ALL, 5)
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
         ok_button = wx.Button(self.panel, label=_("OK"))
-        close_button = wx.Button(self.panel, label=_("Anuluj"))
+        close_button = wx.Button(self.panel, label=_("Cancel"))
         hbox.Add(ok_button, 1, wx.EXPAND | wx.ALL, 5)
         hbox.Add(close_button, 1, wx.EXPAND | wx.ALL, 5)
 

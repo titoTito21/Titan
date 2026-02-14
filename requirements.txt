@@ -27,6 +27,11 @@ cryptography
 py-tgcalls
 pydub
 
+# Voice chat dependencies
+sounddevice>=0.4.6
+webrtcvad>=2.0.10
+numpy>=1.24.0
+
 # AI System dependencies
 google-generativeai>=0.8.0
 gtts  # Text-to-speech fallback

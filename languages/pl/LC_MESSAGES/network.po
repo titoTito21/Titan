@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: src/network/messenger_client.py:298 src/network/whatsapp_client.py:283
 msgid "Thanks for the message!"
@@ -165,8 +165,7 @@ msgstr "Status: Rozłączony"
 msgid "Select a conversation to start chatting"
 msgstr "Wybierz rozmowę, aby rozpocząć czat"
 
-#: src/network/messenger_gui.py:188 src/network/telegram_gui.py:134
-#: src/network/telegram_windows.py:628
+#: src/network/messenger_gui.py:188 src/network/telegram_windows.py:628
 msgid "Send"
 msgstr "Wyślij"
 
@@ -234,8 +233,7 @@ msgstr "Proszę wybrać rozmowę najpierw"
 msgid "No Chat Selected"
 msgstr "Nie wybrano czatu"
 
-#: src/network/messenger_gui.py:449 src/network/telegram_gui.py:208
-#: src/network/telegram_windows.py:793
+#: src/network/messenger_gui.py:449 src/network/telegram_windows.py:793
 msgid "Failed to send message"
 msgstr "Nie udało się wysłać wiadomości"
 
@@ -778,7 +776,7 @@ msgstr ""
 msgid "Błąd WebView"
 msgstr ""
 
-#: src/network/telegram_client.py:98 src/network/telegram_gui.py:313
+#: src/network/telegram_client.py:98 src/network/telegram_gui.py:456
 msgid "Connection error"
 msgstr "Błąd połączenia"
 
@@ -894,66 +892,79 @@ msgstr "Połącz z Telegram"
 
 #: src/network/telegram_gui.py:22
 msgid ""
-"To connect to Telegram, you need a bot token.\n"
-"Create a bot with @BotFather in Telegram and copy the token."
+"To connect to Telegram, enter your phone number.\n"
+"You will receive a verification code by SMS."
 msgstr ""
 
 #: src/network/telegram_gui.py:28
-msgid "Bot token:"
-msgstr "Token bota:"
-
-#: src/network/telegram_gui.py:35
-msgid "Group chat ID (optional):"
-msgstr "ID czatu grupowego (opcjonalne):"
-
-#: src/network/telegram_gui.py:39
-msgid "Leave empty for private messages"
-msgstr "Zostaw puste dla prywatnych wiadomości"
+msgid "Phone number (with country code, e.g. +48123456789):"
+msgstr ""
 
 #: src/network/telegram_gui.py:43
-msgid "Your username in TCE:"
-msgstr "Twoja nazwa użytkownika w TCE:"
+msgid "2FA Password (optional, leave empty if not set):"
+msgstr ""
 
-#: src/network/telegram_gui.py:104
-msgid "Users in chat:"
-msgstr "Użytkownicy w czacie:"
-
-#: src/network/telegram_gui.py:124
-msgid "Connected to Telegram - select a user or chat generally"
-msgstr "Połączono z Telegram - wybierz użytkownika lub czat ogólnie"
-
-#: src/network/telegram_gui.py:150
+#: src/network/telegram_gui.py:122 src/network/telegram_gui.py:149
+#: src/network/telegram_gui.py:298
 msgid "Disconnect"
 msgstr "Rozłącz"
 
-#: src/network/telegram_gui.py:150
+#: src/network/telegram_gui.py:122
 msgid "Disconnect from Telegram"
 msgstr "Rozłącz z Telegram"
 
-#: src/network/telegram_gui.py:158 src/network/telegram_gui.py:250
+#: src/network/telegram_gui.py:130 src/network/telegram_gui.py:363
 msgid "Connected to Telegram"
 msgstr ""
 
-#: src/network/telegram_gui.py:183
+#: src/network/telegram_gui.py:146 src/network/telegram_gui.py:164
+#: src/network/telegram_gui.py:292
+#, fuzzy
+msgid "Contacts"
+msgstr "Połącz"
+
+#: src/network/telegram_gui.py:147 src/network/telegram_gui.py:187
+#: src/network/telegram_gui.py:294
+#, fuzzy
+msgid "Groups"
+msgstr "Grupa robocza"
+
+#: src/network/telegram_gui.py:148 src/network/telegram_gui.py:296
+msgid "Settings"
+msgstr ""
+
+#: src/network/telegram_gui.py:176 src/network/telegram_gui.py:198
+#: src/network/telegram_gui.py:303 src/network/telegram_gui.py:311
+msgid "Back"
+msgstr ""
+
+#: src/network/telegram_gui.py:297
+msgid "Settings - coming soon"
+msgstr ""
+
+#: src/network/telegram_gui.py:297
+#, fuzzy
+msgid "Information"
+msgstr "Informacja"
+
+#: src/network/telegram_gui.py:326 src/network/telegram_gui.py:340
 #, python-brace-format
-msgid "Private conversation with {}"
+msgid ""
+"Cannot open chat window.\n"
+"Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:188
-msgid "General chat"
-msgstr ""
-
-#: src/network/telegram_gui.py:208 src/network/telegram_gui.py:315
-#: src/network/telegram_windows.py:793
+#: src/network/telegram_gui.py:327 src/network/telegram_gui.py:341
+#: src/network/telegram_gui.py:458 src/network/telegram_windows.py:793
 msgid "Error"
 msgstr "Błąd"
 
-#: src/network/telegram_gui.py:313
-msgid "Failed to connect to Telegram"
+#: src/network/telegram_gui.py:456
+msgid "Failed to connect to Telegram. Check your phone number and try again."
 msgstr ""
 
-#: src/network/telegram_gui.py:315
-msgid "Invalid bot token"
+#: src/network/telegram_gui.py:458
+msgid "Failed to start connection. Please try again."
 msgstr ""
 
 #: src/network/telegram_windows.py:24 src/network/telegram_windows.py:321
@@ -1573,4 +1584,39 @@ msgstr ""
 
 #~ msgid "Not connected to TeamTalk"
 #~ msgstr "Nie połączono z TeamTalk"
+
+#~ msgid ""
+#~ "To connect to Telegram, you need a bot token.\n"
+#~ "Create a bot with @BotFather in Telegram and copy the token."
+#~ msgstr ""
+
+#~ msgid "Bot token:"
+#~ msgstr "Token bota:"
+
+#~ msgid "Group chat ID (optional):"
+#~ msgstr "ID czatu grupowego (opcjonalne):"
+
+#~ msgid "Leave empty for private messages"
+#~ msgstr "Zostaw puste dla prywatnych wiadomości"
+
+#~ msgid "Your username in TCE:"
+#~ msgstr "Twoja nazwa użytkownika w TCE:"
+
+#~ msgid "Users in chat:"
+#~ msgstr "Użytkownicy w czacie:"
+
+#~ msgid "Connected to Telegram - select a user or chat generally"
+#~ msgstr "Połączono z Telegram - wybierz użytkownika lub czat ogólnie"
+
+#~ msgid "Private conversation with {}"
+#~ msgstr ""
+
+#~ msgid "General chat"
+#~ msgstr ""
+
+#~ msgid "Failed to connect to Telegram"
+#~ msgstr ""
+
+#~ msgid "Invalid bot token"
+#~ msgstr ""
 

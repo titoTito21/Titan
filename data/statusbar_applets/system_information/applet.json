@@ -1,0 +1,11 @@
+{
+    "name": "System Information",
+    "name_pl": "Informacje o systemie",
+    "name_en": "System Information",
+    "description": "Displays system CPU, RAM, and disk usage",
+    "description_pl": "Wyświetla użycie CPU, RAM i dysku",
+    "description_en": "Displays system CPU, RAM, and disk usage",
+    "version": "1.0.0",
+    "author": "TCE Launcher",
+    "update_interval": 5
+}

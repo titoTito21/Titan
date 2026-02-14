@@ -1,0 +1,17 @@
+[launcher]
+name = Example Launcher
+description = A minimal example launcher using PyQt5 demonstrating the Launcher API with statusbar applets
+author = TCE Team
+version = 1.0
+status = 0
+
+[features]
+applications = true
+games = true
+titan_im = true
+help = true
+components = true
+system_hooks = true
+notifications = true
+sound = true
+invisible_ui = true

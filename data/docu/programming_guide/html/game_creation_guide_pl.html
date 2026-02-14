@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia gier Titan - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html" class="active">Tworzenie gier</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia gier Titan</h1>
+            </div>
+            <h1 id="przewodnik-tworzenia-gier-titan">Przewodnik tworzenia gier Titan</h1>
+
+<h2 id="wprowadzenie">Wprowadzenie</h2>
+
+<p>Gry Titan to specjalna kategoria aplikacji przeznaczona dla rozrywki. System gier jest podobny do systemu aplikacji, ale gry są wyświetlane w osobnej kategorii "Gry" w niewidzialnym interfejsie. Mogą to być gry w Pythonie, skompilowane pliki wykonywalne lub inne typy programów.</p>
+
+<h2 id="architektura-systemu-gier">Architektura systemu gier</h2>
+
+<h3 id="lokalizacja-gier">Lokalizacja gier</h3>
+
+<p>Wszystkie gry znajdują się w katalogu <code>data/games/</code>. Każda gra to osobny katalog zawierający:
+- <code>__game.tce</code> - plik konfiguracyjny gry (wymagany)
+- <code>main.py</code> - główny plik gry (lub inny plik określony w openfile)
+- dodatkowe pliki gry, zasoby, grafiki, dźwięki itp.</p>
+
+<h3 id="proces-uruchamiania-gier">Proces uruchamiania gier</h3>
+
+<ol>
+<li><strong>Kompilacja</strong> - pliki .py są automatycznie kompilowane do .pyc</li>
+<li><strong>Uruchomienie</strong> - gra uruchamiana w osobnym procesie</li>
+<li><strong>Katalog roboczy</strong> - gra działa w swoim katalogu (dostęp do zasobów)</li>
+<li><strong>Izolacja</strong> - każda gra działa niezależnie</li>
+</ol>
+
+<h2 id="struktura-pliku-konfiguracyjnego">Struktura pliku konfiguracyjnego</h2>
+
+<h3 id="__gametce">__game.tce</h3>
+
+<p>Plik w formacie klucz=wartość:</p>
+
+<pre><code>name_pl=Nazwa gry po polsku
+name_en=Game name in English
+openfile=main.py
+author=Autor gry
+version=1.0
+genre=Arcade
+description_pl=Opis gry po polsku
+description_en=Game description in English
+</code></pre>
+
+<p><strong>Wymagane parametry:</strong>
+- <code>openfile</code> - nazwa pliku do uruchomienia</p>
+
+<p><strong>Opcjonalne parametry:</strong>
+- <code>name_pl</code> - nazwa po polsku
+- <code>name_en</code> - nazwa po angielsku<br />
+- <code>name</code> - nazwa domyślna (jeśli brak tłumaczeń)
+- <code>author</code> - autor gry
+- <code>version</code> - wersja gry
+- <code>genre</code> - gatunek gry (Arcade, RPG, Strategy, etc.)
+- <code>description_pl</code> - opis po polsku
+- <code>description_en</code> - opis po angielsku</p>
+
+<h2 id="implementacja-gier-python">Implementacja gier Python</h2>
+
+<h3 id="podstawowa-struktura-mainpy-dla-gry">Podstawowa struktura main.py dla gry</h3>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import pygame
+import sys
+import os
+import random
+
+# Inicjalizacja pygame
+pygame.init()
+
+class SimpleGame:
+    def __init__(self):
+        self.width = 800
+        self.height = 600
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        pygame.display.set_caption("Moja gra")
+
+        # Kolory
+        self.BLACK = (0, 0, 0)
+        self.WHITE = (255, 255, 255)
+        self.RED = (255, 0, 0)
+        self.GREEN = (0, 255, 0)
+        self.BLUE = (0, 0, 255)
+
+        # Zegar gry
+        self.clock = pygame.time.Clock()
+        self.running = True
+
+        # Stan gry
+        self.player_x = self.width // 2
+        self.player_y = self.height // 2
+        self.player_speed = 5
+
+    def handle_events(self):
+        """Obsługa zdarzeń"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+
+    def update(self):
+        """Aktualizacja logiki gry"""
+        keys = pygame.key.get_pressed()
+
+        # Sterowanie graczem
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.player_x -= self.player_speed
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.player_x += self.player_speed
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            self.player_y -= self.player_speed
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            self.player_y += self.player_speed
+
+        # Utrzymuj gracza w granicach ekranu
+        self.player_x = max(25, min(self.width - 25, self.player_x))
+        self.player_y = max(25, min(self.height - 25, self.player_y))
+
+    def draw(self):
+        """Rysowanie gry"""
+        self.screen.fill(self.BLACK)
+
+        # Narysuj gracza
+        pygame.draw.circle(self.screen, self.BLUE, (self.player_x, self.player_y), 25)
+
+        # Instrukcje
+        font = pygame.font.Font(None, 36)
+        text = font.render("Użyj strzałek lub WASD do poruszania", True, self.WHITE)
+        self.screen.blit(text, (10, 10))
+
+        text2 = font.render("ESC - wyjście", True, self.WHITE)
+        self.screen.blit(text2, (10, 50))
+
+        pygame.display.flip()
+
+    def run(self):
+        """Główna pętla gry"""
+        while self.running:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(60)  # 60 FPS
+
+        pygame.quit()
+
+if __name__ == '__main__':
+    game = SimpleGame()
+    game.run()
+</code></pre>
+
+<h3 id="gra-z-dzwiekami-i-grafikami">Gra z dźwiękami i grafikami</h3>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import pygame
+import os
+import random
+
+pygame.init()
+pygame.mixer.init()
+
+class SpaceShooter:
+    def __init__(self):
+        self.width = 800
+        self.height = 600
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        pygame.display.set_caption("Space Shooter")
+
+        # Kolory
+        self.BLACK = (0, 0, 0)
+        self.WHITE = (255, 255, 255)
+        self.RED = (255, 0, 0)
+        self.YELLOW = (255, 255, 0)
+
+        self.clock = pygame.time.Clock()
+        self.running = True
+
+        # Ładowanie zasobów
+        self.load_resources()
+
+        # Inicjalizacja obiektów gry
+        self.player = {
+            'x': self.width // 2,
+            'y': self.height - 50,
+            'speed': 7
+        }
+
+        self.bullets = []
+        self.enemies = []
+        self.enemy_spawn_timer = 0
+
+        self.score = 0
+        self.font = pygame.font.Font(None, 36)
+
+    def load_resources(self):
+        """Ładowanie grafik i dźwięków"""
+        try:
+            # Sprawdź czy istnieją pliki zasobów
+            self.player_image = None
+            self.enemy_image = None
+            self.bullet_sound = None
+            self.explosion_sound = None
+
+            # Możesz dodać ładowanie rzeczywistych plików:
+            # self.player_image = pygame.image.load("resources/player.png")
+            # self.bullet_sound = pygame.mixer.Sound("resources/shot.wav")
+
+        except Exception as e:
+            print(f"Błąd ładowania zasobów: {e}")
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+                elif event.key == pygame.K_SPACE:
+                    self.shoot()
+
+    def shoot(self):
+        """Strzał gracza"""
+        bullet = {
+            'x': self.player['x'],
+            'y': self.player['y'] - 10,
+            'speed': 10
+        }
+        self.bullets.append(bullet)
+
+        # Odtwórz dźwięk strzału (jeśli załadowany)
+        if self.bullet_sound:
+            self.bullet_sound.play()
+
+    def spawn_enemy(self):
+        """Stwórz przeciwnika"""
+        enemy = {
+            'x': random.randint(20, self.width - 20),
+            'y': -20,
+            'speed': random.randint(2, 5)
+        }
+        self.enemies.append(enemy)
+
+    def update(self):
+        keys = pygame.key.get_pressed()
+
+        # Sterowanie graczem
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.player['x'] -= self.player['speed']
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.player['x'] += self.player['speed']
+
+        # Utrzymaj gracza w granicach
+        self.player['x'] = max(20, min(self.width - 20, self.player['x']))
+
+        # Aktualizuj pociski
+        for bullet in self.bullets[:]:
+            bullet['y'] -= bullet['speed']
+            if bullet['y'] &lt; 0:
+                self.bullets.remove(bullet)
+
+        # Aktualizuj przeciwników
+        for enemy in self.enemies[:]:
+            enemy['y'] += enemy['speed']
+            if enemy['y'] &gt; self.height:
+                self.enemies.remove(enemy)
+
+        # Sprawdź kolizje pocisk-przeciwnik
+        for bullet in self.bullets[:]:
+            for enemy in self.enemies[:]:
+                if (abs(bullet['x'] - enemy['x']) &lt; 20 and 
+                    abs(bullet['y'] - enemy['y']) &lt; 20):
+                    self.bullets.remove(bullet)
+                    self.enemies.remove(enemy)
+                    self.score += 10
+                    break
+
+        # Sprawdź kolizje gracz-przeciwnik
+        for enemy in self.enemies:
+            if (abs(self.player['x'] - enemy['x']) &lt; 30 and 
+                abs(self.player['y'] - enemy['y']) &lt; 30):
+                self.game_over()
+
+        # Spawn przeciwników
+        self.enemy_spawn_timer += 1
+        if self.enemy_spawn_timer &gt; 60:  # Co sekundę
+            self.spawn_enemy()
+            self.enemy_spawn_timer = 0
+
+    def draw(self):
+        self.screen.fill(self.BLACK)
+
+        # Narysuj gracza
+        pygame.draw.rect(self.screen, self.WHITE, 
+                        (self.player['x'] - 15, self.player['y'] - 10, 30, 20))
+
+        # Narysuj pociski
+        for bullet in self.bullets:
+            pygame.draw.circle(self.screen, self.YELLOW, 
+                             (bullet['x'], bullet['y']), 3)
+
+        # Narysuj przeciwników
+        for enemy in self.enemies:
+            pygame.draw.rect(self.screen, self.RED, 
+                           (enemy['x'] - 10, enemy['y'] - 10, 20, 20))
+
+        # Wyświetl wynik
+        score_text = self.font.render(f"Wynik: {self.score}", True, self.WHITE)
+        self.screen.blit(score_text, (10, 10))
+
+        # Instrukcje
+        instructions = [
+            "Strzałki/WASD - ruch",
+            "SPACJA - strzał",
+            "ESC - wyjście"
+        ]
+
+        font_small = pygame.font.Font(None, 24)
+        for i, instruction in enumerate(instructions):
+            text = font_small.render(instruction, True, self.WHITE)
+            self.screen.blit(text, (10, self.height - 80 + i * 25))
+
+        pygame.display.flip()
+
+    def game_over(self):
+        """Koniec gry"""
+        self.screen.fill(self.BLACK)
+
+        game_over_text = pygame.font.Font(None, 72).render("GAME OVER", True, self.RED)
+        score_text = self.font.render(f"Końcowy wynik: {self.score}", True, self.WHITE)
+        restart_text = pygame.font.Font(None, 24).render("Naciśnij ESC aby wyjść", True, self.WHITE)
+
+        # Wyśrodkuj teksty
+        game_over_rect = game_over_text.get_rect(center=(self.width//2, self.height//2 - 50))
+        score_rect = score_text.get_rect(center=(self.width//2, self.height//2))
+        restart_rect = restart_text.get_rect(center=(self.width//2, self.height//2 + 50))
+
+        self.screen.blit(game_over_text, game_over_rect)
+        self.screen.blit(score_text, score_rect)
+        self.screen.blit(restart_text, restart_rect)
+
+        pygame.display.flip()
+
+        # Czekaj na ESC
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    waiting = False
+                    self.running = False
+
+    def run(self):
+        while self.running:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(60)
+
+        pygame.quit()
+
+if __name__ == '__main__':
+    game = SpaceShooter()
+    game.run()
+</code></pre>
+
+<h2 id="gry-tekstowe">Gry tekstowe</h2>
+
+<p>Możesz też tworzyć gry tekstowe/konsolowe:</p>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import random
+import os
+
+class GuessTheNumber:
+    def __init__(self):
+        self.number = random.randint(1, 100)
+        self.attempts = 0
+        self.max_attempts = 10
+
+    def clear_screen(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def play(self):
+        self.clear_screen()
+        print("=== ZGADNIJ LICZBĘ ===")
+        print(f"Pomyślałem liczbę od 1 do 100.")
+        print(f"Masz {self.max_attempts} prób na odgadnięcie!")
+        print()
+
+        while self.attempts &lt; self.max_attempts:
+            try:
+                guess = int(input(f"Próba {self.attempts + 1}: Twoja liczba: "))
+                self.attempts += 1
+
+                if guess == self.number:
+                    print(f"🎉 Brawo! Odgadłeś w {self.attempts} próbach!")
+                    break
+                elif guess &lt; self.number:
+                    print("Za mało!")
+                else:
+                    print("Za dużo!")
+
+                remaining = self.max_attempts - self.attempts
+                if remaining &gt; 0:
+                    print(f"Pozostało prób: {remaining}")
+                print()
+
+            except ValueError:
+                print("Proszę wpisać liczbę całkowitą!")
+                continue
+
+        if self.attempts &gt;= self.max_attempts and guess != self.number:
+            print(f"💀 Przegrałeś! Liczba to: {self.number}")
+
+        print("\nNaciśnij Enter aby zakończyć...")
+        input()
+
+class TicTacToe:
+    def __init__(self):
+        self.board = [' '] * 9
+        self.current_player = 'X'
+
+    def clear_screen(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def draw_board(self):
+        print("\n=== KÓŁKO I KRZYŻYK ===")
+        print()
+        print(" 1 | 2 | 3     {} | {} | {} ".format(self.board[0], self.board[1], self.board[2]))
+        print("-----------   -----------")
+        print(" 4 | 5 | 6     {} | {} | {} ".format(self.board[3], self.board[4], self.board[5]))
+        print("-----------   -----------")
+        print(" 7 | 8 | 9     {} | {} | {} ".format(self.board[6], self.board[7], self.board[8]))
+        print()
+
+    def make_move(self, position):
+        if self.board[position - 1] == ' ':
+            self.board[position - 1] = self.current_player
+            return True
+        return False
+
+    def check_winner(self):
+        # Sprawdź wiersze, kolumny i przekątne
+        winning_combinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  # wiersze
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  # kolumny
+            [0, 4, 8], [2, 4, 6]              # przekątne
+        ]
+
+        for combo in winning_combinations:
+            if (self.board[combo[0]] == self.board[combo[1]] == self.board[combo[2]] != ' '):
+                return self.board[combo[0]]
+        return None
+
+    def is_board_full(self):
+        return ' ' not in self.board
+
+    def switch_player(self):
+        self.current_player = 'O' if self.current_player == 'X' else 'X'
+
+    def play(self):
+        while True:
+            self.clear_screen()
+            self.draw_board()
+
+            winner = self.check_winner()
+            if winner:
+                print(f"🎉 Gracz {winner} wygrał!")
+                break
+
+            if self.is_board_full():
+                print("🤝 Remis!")
+                break
+
+            try:
+                position = int(input(f"Gracz {self.current_player}, wybierz pozycję (1-9): "))
+                if 1 &lt;= position &lt;= 9:
+                    if self.make_move(position):
+                        self.switch_player()
+                    else:
+                        print("Ta pozycja jest już zajęta!")
+                        input("Naciśnij Enter aby kontynuować...")
+                else:
+                    print("Wybierz pozycję od 1 do 9!")
+                    input("Naciśnij Enter aby kontynuować...")
+            except ValueError:
+                print("Proszę wpisać liczbę!")
+                input("Naciśnij Enter aby kontynuować...")
+
+        print("\nNaciśnij Enter aby zakończyć...")
+        input()
+
+def main():
+    print("Wybierz grę:")
+    print("1. Zgadnij liczbę")
+    print("2. Kółko i krzyżyk")
+    print("0. Wyjście")
+
+    choice = input("Twój wybór: ")
+
+    if choice == '1':
+        game = GuessTheNumber()
+        game.play()
+    elif choice == '2':
+        game = TicTacToe()
+        game.play()
+    elif choice == '0':
+        print("Do widzenia!")
+    else:
+        print("Nieprawidłowy wybór!")
+
+if __name__ == '__main__':
+    main()
+</code></pre>
+
+<h2 id="zasoby-gier">Zasoby gier</h2>
+
+<h3 id="struktura-katalogow-dla-gier-z-zasobami">Struktura katalogów dla gier z zasobami</h3>
+
+<pre><code>data/games/moja_gra/
+├── __game.tce          # Konfiguracja gry (wymagane)
+├── main.py             # Główny plik gry
+├── resources/          # Zasoby gry
+│   ├── images/         # Grafiki
+│   │   ├── player.png
+│   │   ├── enemy.png
+│   │   └── background.jpg
+│   ├── sounds/         # Dźwięki
+│   │   ├── shoot.wav
+│   │   ├── explosion.wav
+│   │   └── music.ogg
+│   ├── fonts/          # Czcionki
+│   │   └── game_font.ttf
+│   └── data/           # Dane gry
+│       ├── levels.json
+│       └── highscores.txt
+├── modules/            # Dodatkowe moduły
+│   ├── player.py
+│   ├── enemy.py
+│   └── game_state.py
+└── config/             # Konfiguracja
+    └── settings.ini
+</code></pre>
+
+<h3 id="ładowanie-zasobow-z-katalogu-gry">Ładowanie zasobów z katalogu gry</h3>
+
+<pre><code>import os
+import pygame
+
+def load_game_resources():
+    """Funkcja do ładowania zasobów z katalogu gry"""
+    game_dir = os.path.dirname(__file__)
+    resources_dir = os.path.join(game_dir, 'resources')
+
+    resources = {}
+
+    # Ładowanie obrazków
+    images_dir = os.path.join(resources_dir, 'images')
+    if os.path.exists(images_dir):
+        for file in os.listdir(images_dir):
+            if file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                name = os.path.splitext(file)[0]
+                resources[f'image_{name}'] = pygame.image.load(
+                    os.path.join(images_dir, file)
+                )
+
+    # Ładowanie dźwięków
+    sounds_dir = os.path.join(resources_dir, 'sounds')
+    if os.path.exists(sounds_dir):
+        for file in os.listdir(sounds_dir):
+            if file.endswith(('.wav', '.ogg', '.mp3')):
+                name = os.path.splitext(file)[0]
+                resources[f'sound_{name}'] = pygame.mixer.Sound(
+                    os.path.join(sounds_dir, file)
+                )
+
+    return resources
+
+# Użycie w grze
+resources = load_game_resources()
+player_image = resources.get('image_player')
+shoot_sound = resources.get('sound_shoot')
+</code></pre>
+
+<h2 id="zapisywanie-stanu-gry">Zapisywanie stanu gry</h2>
+
+<pre><code>import json
+import os
+
+class GameSave:
+    def __init__(self, game_name):
+        self.game_dir = os.path.dirname(__file__)
+        self.save_file = os.path.join(self.game_dir, f"{game_name}_save.json")
+
+    def save_game(self, game_data):
+        """Zapisz stan gry"""
+        try:
+            with open(self.save_file, 'w', encoding='utf-8') as f:
+                json.dump(game_data, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Błąd zapisywania: {e}")
+            return False
+
+    def load_game(self):
+        """Wczytaj stan gry"""
+        try:
+            if os.path.exists(self.save_file):
+                with open(self.save_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Błąd wczytywania: {e}")
+        return None
+
+    def save_exists(self):
+        """Sprawdź czy istnieje zapis"""
+        return os.path.exists(self.save_file)
+
+# Użycie w grze
+class RPGGame:
+    def __init__(self):
+        self.save_manager = GameSave("my_rpg")
+        self.player_data = {
+            'name': 'Gracz',
+            'level': 1,
+            'hp': 100,
+            'exp': 0,
+            'inventory': [],
+            'position': {'x': 0, 'y': 0}
+        }
+
+    def save_game(self):
+        game_state = {
+            'player': self.player_data,
+            'timestamp': time.time()
+        }
+        return self.save_manager.save_game(game_state)
+
+    def load_game(self):
+        data = self.save_manager.load_game()
+        if data:
+            self.player_data = data.get('player', self.player_data)
+            return True
+        return False
+</code></pre>
+
+<h2 id="testowanie-gier">Testowanie gier</h2>
+
+<ol>
+<li>Utwórz katalog w <code>data/games/nazwa_gry/</code></li>
+<li>Dodaj <code>__game.tce</code> i główny plik gry</li>
+<li>Uruchom Titan</li>
+<li>Sprawdź czy gra pojawia się w kategorii "Gry"</li>
+<li>Przetestuj uruchamianie i gameplay</li>
+</ol>
+
+<h2 id="najwazniejsze-wskazowki-dla-gier">Najważniejsze wskazówki dla gier</h2>
+
+<ol>
+<li><strong>Zawsze dodaj plik __game.tce</strong> - bez niego gra nie będzie widoczna</li>
+<li><strong>Optymalizuj wydajność</strong> - gry powinny działać płynnie (60 FPS)</li>
+<li><strong>Dodaj instrukcje</strong> - wyjaśnij sterowanie i zasady</li>
+<li><strong>Obsługuj ESC</strong> - zawsze pozwól graczowi wyjść z gry</li>
+<li><strong>Zarządzaj zasobami</strong> - ładuj obrazki i dźwięki przy starcie</li>
+<li><strong>Zapisuj stan</strong> - pozwól graczom zapisywać postępy</li>
+<li><strong>Testuj na różnych komputerach</strong> - sprawdź wydajność</li>
+<li><strong>Dodaj menu</strong> - ekran startowy, opcje, high scores</li>
+<li><strong>Obsługuj błędy</strong> - gra nie powinna crashować</li>
+<li><strong>Dokumentuj</strong> - opisz grę w pliku konfiguracyjnym</li>
+</ol>
+
+<h2 id="popularne-biblioteki-dla-gier-python">Popularne biblioteki dla gier Python</h2>
+
+<ul>
+<li><strong>pygame</strong> - 2D gry, sprite'y, dźwięk</li>
+<li><strong>pyglet</strong> - OpenGL, 3D grafika</li>
+<li><strong>arcade</strong> - nowoczesne 2D gry</li>
+<li><strong>kivy</strong> - gry mobilne, touch interface</li>
+<li><strong>panda3d</strong> - gry 3D</li>
+<li><strong>tkinter</strong> - proste gry tekstowe/puzzle</li>
+</ul>
+
+<h2 id="struktura-katalogow">Struktura katalogów</h2>
+
+<pre><code>data/games/my_game/
+├── __game.tce          # Konfiguracja gry (wymagane)
+├── main.py             # Główny plik gry
+├── resources/          # Zasoby gry (opcjonalnie)
+├── modules/            # Moduły gry (opcjonalnie)
+├── saves/              # Zapisy gry (opcjonalnie)
+├── config/             # Ustawienia (opcjonalnie)
+└── docs/               # Dokumentacja (opcjonalnie)
+</code></pre>
+
+<p>Gry Titan oferują platformę do tworzenia różnorodnych gier - od prostych gier tekstowych po zaawansowane gry 2D/3D z grafiką i dźwiękiem. System automatycznie zarządza uruchamianiem i izolacją gier.</p>
+
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

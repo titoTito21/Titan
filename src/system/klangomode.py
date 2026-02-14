@@ -15,8 +15,18 @@ from src.controller.controller_vibrations import (
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, set_setting
 from src.titan_core.component_manager import ComponentManager
+from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.ui.help import show_help
 from src.controller.controller_modes import initialize_controller_modes
+from src.network.titan_net import TitanNetClient
+
+# Import Titan-Net GUI functions
+try:
+    from src.network.titan_net_gui import show_login_dialog, show_titan_net_window
+    TITAN_NET_GUI_AVAILABLE = True
+except ImportError:
+    TITAN_NET_GUI_AVAILABLE = False
+    print("Warning: titan_net_gui module not available")
 
 # Import stereo speech functionality
 try:
@@ -143,6 +153,25 @@ class KlangoMode:
         # Initialize component manager
         self.component_manager = ComponentManager()
 
+        # Initialize statusbar applet manager
+        try:
+            self.statusbar_applet_manager = StatusbarAppletManager()
+        except Exception as e:
+            print(f"Warning: Failed to initialize statusbar applet manager: {e}")
+            self.statusbar_applet_manager = None
+
+        # Titan-Net client reference (SHARED with GUI/IUI)
+        # Client is created in main.py and passed via reference
+        self.titan_client = None  # Will be set from frame.titan_client
+        self.titan_logged_in = False
+        self.titan_username = None
+        self.titan_active_user = None  # Current PM conversation user_id
+        self.titan_active_room = None  # Current room ID
+        self.titan_room_name = None  # Current room name
+        self.titan_online_users = []  # Cache (synced with GUI)
+        self.titan_rooms = []  # Cache (synced with GUI)
+        self.titan_unread_pms = {}  # {user_id: count} (synced with GUI)
+
         # Define main menu structure
         self.main_menu = [
             {"name": _("Applications"), "type": "submenu", "items": [], "expanded": False},
@@ -150,8 +179,10 @@ class KlangoMode:
             {"name": _("Titan IM"), "type": "submenu", "items": [
                 {"name": _("Telegram"), "type": "action", "action": self.open_telegram},
                 {"name": _("Messenger"), "type": "action", "action": self.open_messenger},
-                {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp}
-            ], "expanded": False},
+                {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp},
+                {"name": _("Titan-Net (Beta)"), "type": "action", "action": self.open_titannet},
+                {"name": _("EltenLink (Beta)"), "type": "action", "action": self.open_eltenlink}
+            ] + self._get_external_im_items(), "expanded": False},
             {"name": _("Status Bar"), "type": "submenu", "items": [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
@@ -257,6 +288,22 @@ class KlangoMode:
                 {"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.announce_volume},
                 {"name": get_network_status(), "type": "action", "action": self.announce_network}
             ]
+
+            # Add statusbar applets
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    try:
+                        # Use applet name instead of dynamic text (which becomes stale)
+                        applet_info = self.statusbar_applet_manager.applets[applet_name]['info']
+                        display_name = applet_info['name']
+                        status_items.append({
+                            "name": display_name,
+                            "type": "action",
+                            "action": lambda n=applet_name: self.activate_statusbar_applet(n)
+                        })
+                    except Exception as e:
+                        print(f"Error loading statusbar applet '{applet_name}': {e}")
+
             print(f"DEBUG: Status bar items loaded successfully: {[item['name'] for item in status_items]}")
             # Update Status Bar submenu (index 3 in main menu)
             self.main_menu[3]["items"] = status_items
@@ -280,6 +327,23 @@ class KlangoMode:
         except Exception as e:
             print(f"Error getting network status: {e}")
             speak_klango(_("Error getting network status"))
+
+    def activate_statusbar_applet(self, applet_name):
+        """Activate statusbar applet action."""
+        try:
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                # First update the cache to get fresh data
+                self.statusbar_applet_manager.update_applet_cache(applet_name)
+                # Announce current values
+                current_text = self.statusbar_applet_manager.get_applet_text(applet_name)
+                speak_klango(current_text)
+                # Then activate the applet (console mode - no GUI)
+                self.statusbar_applet_manager.activate_applet(applet_name, parent_frame=None)
+            else:
+                speak_klango(_("Statusbar applet manager not available"))
+        except Exception as e:
+            print(f"Error activating statusbar applet '{applet_name}': {e}")
+            speak_klango(_("Error activating statusbar item"))
 
     def run(self):
         """Main event loop for Klango Mode."""
@@ -654,6 +718,20 @@ class KlangoMode:
             self._load_stereo_settings()
         return self._stereo_speech_enabled
     
+    def _get_external_im_items(self):
+        """Return list of menu items for external IM modules."""
+        try:
+            from src.network.im_module_manager import im_module_manager
+            items = []
+            for info in im_module_manager.modules:
+                def _make_action(_id):
+                    return lambda: im_module_manager.open_module(_id, getattr(self, 'gui_frame', None))
+                items.append({"name": info['name'], "type": "action", "action": _make_action(info['id'])})
+            return items
+        except Exception as e:
+            print(f"[Klango] IM modules: {e}")
+            return []
+
     # Action methods
     def launch_application(self, app):
         """Launch an application."""
@@ -732,7 +810,133 @@ class KlangoMode:
         except Exception as e:
             print(f"Error opening WhatsApp: {e}")
             speak_klango(_("Error opening WhatsApp"), position=0.0, pitch_offset=0, interrupt=True)
-    
+
+    # ====================
+    # TITAN-NET METHODS
+    # ====================
+
+    def get_text_input(self, prompt, mask=False):
+        """Get text input using wx dialog."""
+        speak_klango(prompt, position=0.0, pitch_offset=0, interrupt=True)
+        play_sound("ui/contextmenu.ogg")
+
+        try:
+            import wx
+
+            # Create text entry dialog
+            style = wx.OK | wx.CANCEL | wx.CENTRE
+            if mask:
+                style |= wx.TE_PASSWORD
+
+            dlg = wx.TextEntryDialog(
+                None,
+                prompt,
+                _("Text Input"),
+                "",
+                style=style
+            )
+
+            # Show dialog and get result
+            result = dlg.ShowModal()
+
+            if result == wx.ID_OK:
+                text = dlg.GetValue()
+                dlg.Destroy()
+                play_sound("core/SELECT.ogg")
+                return (True, text)
+            else:
+                dlg.Destroy()
+                play_sound("core/error.ogg")
+                speak_klango(_("Cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                return (False, "")
+
+        except Exception as e:
+            print(f"Error in text input: {e}")
+            speak_klango(_("Error getting input"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+            return (False, "")
+
+    def open_titannet(self):
+        """Main Titan-Net entry point - launches GUI window."""
+        try:
+            # Check if GUI is available
+            if not WX_AVAILABLE or not TITAN_NET_GUI_AVAILABLE:
+                speak_klango(_("Titan-Net GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            # Check if client is available
+            if not self.titan_client:
+                speak_klango(_("Titan-Net client not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening Titan-Net..."), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/SELECT.ogg")
+
+            # Check if actually connected (not just flag)
+            is_connected = self.titan_client.is_connected if hasattr(self.titan_client, 'is_connected') else False
+
+            # If not logged in or disconnected, show login dialog
+            if not self.titan_logged_in or not is_connected:
+                # Reset flag if disconnected
+                if not is_connected:
+                    self.titan_logged_in = False
+
+                success, offline_mode = show_login_dialog(None, self.titan_client)
+
+                if success:
+                    self.titan_logged_in = True
+                    speak_klango(_("Login successful"), position=0.0, pitch_offset=0, interrupt=True)
+                    play_sound("titannet/welcome to IM.ogg")
+                elif offline_mode:
+                    speak_klango(_("Continuing in offline mode"), position=0.0, pitch_offset=0, interrupt=True)
+                    return
+                else:
+                    speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                    return
+
+            # Show Titan-Net main window
+            if self.titan_logged_in and is_connected:
+                show_titan_net_window(None, self.titan_client)
+                speak_klango(_("Titan-Net window opened"), position=0.0, pitch_offset=0, interrupt=True)
+            else:
+                speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+
+        except Exception as e:
+            print(f"Error opening Titan-Net: {e}")
+            speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+
+    def open_eltenlink(self):
+        """Open EltenLink GUI window."""
+        try:
+            # Import EltenLink GUI functions
+            from src.eltenlink_client.elten_gui import show_elten_login
+
+            if not show_elten_login:
+                speak_klango(_("EltenLink GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening EltenLink..."), position=0.0, pitch_offset=0, interrupt=True)
+
+            # Show EltenLink login dialog
+            eltenlink_window = show_elten_login(self)
+
+            if eltenlink_window:
+                play_sound("titannet/welcome to IM.ogg")
+                speak_klango(_("EltenLink window opened"), position=0.0, pitch_offset=0, interrupt=True)
+            else:
+                speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+
+        except Exception as e:
+            print(f"Error opening EltenLink: {e}")
+            speak_klango(_("Error opening EltenLink"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+
     def open_custom_submenu(self, title, items):
         """Open a custom submenu."""
         # Save current menu state
@@ -855,7 +1059,7 @@ class KlangoMode:
     def exit_program(self):
         """Exit the program using exactly same method as GUI."""
         try:
-            from shutdown_question import show_shutdown_dialog
+            from src.ui.shutdown_question import show_shutdown_dialog
             confirm_exit = self.settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']
             
             if confirm_exit:
@@ -966,7 +1170,26 @@ class KlangoFrame(wx.Frame):
         self._stereo_sound_enabled = None
         self._stereo_speech_enabled = None
         self._load_stereo_settings()
-        
+
+        # Initialize statusbar applet manager
+        try:
+            self.statusbar_applet_manager = StatusbarAppletManager()
+        except Exception as e:
+            print(f"Warning: Failed to initialize statusbar applet manager in KlangoFrame: {e}")
+            self.statusbar_applet_manager = None
+
+        # Titan-Net client reference (SHARED with GUI/IUI)
+        # Client is created in main.py and passed via reference
+        self.titan_client = None  # Will be set from frame.titan_client
+        self.titan_logged_in = False
+        self.titan_username = None
+        self.titan_active_user = None  # Current PM conversation user_id
+        self.titan_active_room = None  # Current room ID
+        self.titan_room_name = None  # Current room name
+        self.titan_online_users = []  # Cache (synced with GUI)
+        self.titan_rooms = []  # Cache (synced with GUI)
+        self.titan_unread_pms = {}  # {user_id: count} (synced with GUI)
+
         # Define main menu structure
         self.main_menu = [
             {"name": _("Applications"), "type": "submenu", "items": [], "expanded": False},
@@ -974,8 +1197,10 @@ class KlangoFrame(wx.Frame):
             {"name": _("Titan IM"), "type": "submenu", "items": [
                 {"name": _("Telegram"), "type": "action", "action": self.open_telegram},
                 {"name": _("Messenger"), "type": "action", "action": self.open_messenger},
-                {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp}
-            ], "expanded": False},
+                {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp},
+                {"name": _("Titan-Net (Beta)"), "type": "action", "action": self.open_titannet},
+                {"name": _("EltenLink (Beta)"), "type": "action", "action": self.open_eltenlink}
+            ] + self._get_external_im_items(), "expanded": False},
             {"name": _("Status Bar"), "type": "submenu", "items": [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
@@ -1097,6 +1322,22 @@ class KlangoFrame(wx.Frame):
                 {"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.gui_open_volume_mixer},
                 {"name": get_network_status(), "type": "action", "action": self.gui_open_network_settings}
             ]
+
+            # Add statusbar applets
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    try:
+                        # Use applet name instead of dynamic text (which becomes stale)
+                        applet_info = self.statusbar_applet_manager.applets[applet_name]['info']
+                        display_name = applet_info['name']
+                        status_items.append({
+                            "name": display_name,
+                            "type": "action",
+                            "action": lambda n=applet_name: self.activate_statusbar_applet(n)
+                        })
+                    except Exception as e:
+                        print(f"Error loading statusbar applet '{applet_name}': {e}")
+
             # Update Status Bar submenu (index 3 in main menu)
             self.main_menu[3]["items"] = status_items
         except Exception as e:
@@ -1387,6 +1628,20 @@ class KlangoFrame(wx.Frame):
             self._load_stereo_settings()
         return self._stereo_speech_enabled
     
+    def _get_external_im_items(self):
+        """Return list of menu items for external IM modules."""
+        try:
+            from src.network.im_module_manager import im_module_manager
+            items = []
+            for info in im_module_manager.modules:
+                def _make_action(_id):
+                    return lambda: im_module_manager.open_module(_id, getattr(self, 'gui_frame', None))
+                items.append({"name": info['name'], "type": "action", "action": _make_action(info['id'])})
+            return items
+        except Exception as e:
+            print(f"[Klango] IM modules: {e}")
+            return []
+
     # Action methods
     def launch_application(self, app):
         """Launch an application."""
@@ -1465,7 +1720,133 @@ class KlangoFrame(wx.Frame):
         except Exception as e:
             print(f"Error opening WhatsApp: {e}")
             speak_klango(_("Error opening WhatsApp"), position=0.0, pitch_offset=0, interrupt=True)
-    
+
+    # ====================
+    # TITAN-NET METHODS
+    # ====================
+
+    def get_text_input(self, prompt, mask=False):
+        """Get text input using wx dialog."""
+        speak_klango(prompt, position=0.0, pitch_offset=0, interrupt=True)
+        play_sound("ui/contextmenu.ogg")
+
+        try:
+            import wx
+
+            # Create text entry dialog
+            style = wx.OK | wx.CANCEL | wx.CENTRE
+            if mask:
+                style |= wx.TE_PASSWORD
+
+            dlg = wx.TextEntryDialog(
+                None,
+                prompt,
+                _("Text Input"),
+                "",
+                style=style
+            )
+
+            # Show dialog and get result
+            result = dlg.ShowModal()
+
+            if result == wx.ID_OK:
+                text = dlg.GetValue()
+                dlg.Destroy()
+                play_sound("core/SELECT.ogg")
+                return (True, text)
+            else:
+                dlg.Destroy()
+                play_sound("core/error.ogg")
+                speak_klango(_("Cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                return (False, "")
+
+        except Exception as e:
+            print(f"Error in text input: {e}")
+            speak_klango(_("Error getting input"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+            return (False, "")
+
+    def open_titannet(self):
+        """Main Titan-Net entry point - launches GUI window."""
+        try:
+            # Check if GUI is available
+            if not WX_AVAILABLE or not TITAN_NET_GUI_AVAILABLE:
+                speak_klango(_("Titan-Net GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            # Check if client is available
+            if not self.titan_client:
+                speak_klango(_("Titan-Net client not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening Titan-Net..."), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/SELECT.ogg")
+
+            # Check if actually connected (not just flag)
+            is_connected = self.titan_client.is_connected if hasattr(self.titan_client, 'is_connected') else False
+
+            # If not logged in or disconnected, show login dialog
+            if not self.titan_logged_in or not is_connected:
+                # Reset flag if disconnected
+                if not is_connected:
+                    self.titan_logged_in = False
+
+                success, offline_mode = show_login_dialog(None, self.titan_client)
+
+                if success:
+                    self.titan_logged_in = True
+                    speak_klango(_("Login successful"), position=0.0, pitch_offset=0, interrupt=True)
+                    play_sound("titannet/welcome to IM.ogg")
+                elif offline_mode:
+                    speak_klango(_("Continuing in offline mode"), position=0.0, pitch_offset=0, interrupt=True)
+                    return
+                else:
+                    speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                    return
+
+            # Show Titan-Net main window
+            if self.titan_logged_in and is_connected:
+                show_titan_net_window(None, self.titan_client)
+                speak_klango(_("Titan-Net window opened"), position=0.0, pitch_offset=0, interrupt=True)
+            else:
+                speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+
+        except Exception as e:
+            print(f"Error opening Titan-Net: {e}")
+            speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+
+    def open_eltenlink(self):
+        """Open EltenLink GUI window."""
+        try:
+            # Import EltenLink GUI functions
+            from src.eltenlink_client.elten_gui import show_elten_login
+
+            if not show_elten_login:
+                speak_klango(_("EltenLink GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening EltenLink..."), position=0.0, pitch_offset=0, interrupt=True)
+
+            # Show EltenLink login dialog
+            eltenlink_window = show_elten_login(self)
+
+            if eltenlink_window:
+                play_sound("titannet/welcome to IM.ogg")
+                speak_klango(_("EltenLink window opened"), position=0.0, pitch_offset=0, interrupt=True)
+            else:
+                speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+
+        except Exception as e:
+            print(f"Error opening EltenLink: {e}")
+            speak_klango(_("Error opening EltenLink"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
+
     def open_custom_submenu(self, title, items):
         """Open a custom submenu."""
         # Save current menu state
@@ -1538,7 +1919,24 @@ class KlangoFrame(wx.Frame):
         except Exception as e:
             print(f"Error getting volume level: {e}")
             speak_klango(_("Error getting volume level"))
-    
+
+    def activate_statusbar_applet(self, applet_name):
+        """Activate statusbar applet action."""
+        try:
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                # First update the cache to get fresh data
+                self.statusbar_applet_manager.update_applet_cache(applet_name)
+                # Announce current values
+                current_text = self.statusbar_applet_manager.get_applet_text(applet_name)
+                speak_klango(current_text)
+                # Then activate the applet (wx mode - can show GUI dialogs)
+                self.statusbar_applet_manager.activate_applet(applet_name, parent_frame=self)
+            else:
+                speak_klango(_("Statusbar applet manager not available"))
+        except Exception as e:
+            print(f"Error activating statusbar applet '{applet_name}': {e}")
+            speak_klango(_("Error activating statusbar item"))
+
     def open_settings(self):
         """Open settings."""
         try:
@@ -1697,7 +2095,7 @@ class KlangoFrame(wx.Frame):
     def exit_program(self):
         """Exit the program using exactly same method as GUI."""
         try:
-            from shutdown_question import show_shutdown_dialog
+            from src.ui.shutdown_question import show_shutdown_dialog
             confirm_exit = self.settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']
             
             if confirm_exit:
@@ -1746,7 +2144,7 @@ class KlangoFrame(wx.Frame):
     def on_close(self, event):
         """Handle close event using same method as GUI."""
         try:
-            from shutdown_question import show_shutdown_dialog
+            from src.ui.shutdown_question import show_shutdown_dialog
             confirm_exit = self.settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']
             
             if confirm_exit:

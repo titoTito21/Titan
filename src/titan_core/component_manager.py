@@ -44,6 +44,9 @@ class ComponentManager:
         self.component_friendly_names = {}
         self.component_gui_hooks = {}  # Hooks for GUI modifications
         self.component_klango_hooks = {}  # Hooks for Klango mode modifications
+        self.component_iui_hooks = {}  # Hooks for Invisible UI modifications
+        self.component_launcher_hooks = {}  # Hooks for custom launcher modifications
+        self.components_loaded = False  # Track if components have been loaded
         self.load_components()
 
     def get_component_display_name(self, component_path, folder_name):
@@ -370,6 +373,30 @@ class ComponentManager:
             except Exception as e:
                 print(f"Error getting Klango hooks for component {component_name}: {e}")
 
+            # New hook: get_iui_hooks for Invisible UI modifications
+            try:
+                if hasattr(module, 'get_iui_hooks'):
+                    print(f"Getting IUI hooks for component: {component_name}")
+                    hooks = module.get_iui_hooks()
+                    if hooks:
+                        self.component_iui_hooks[component_name] = hooks
+                else:
+                    print(f"No IUI hooks for component: {component_name}")
+            except Exception as e:
+                print(f"Error getting IUI hooks for component {component_name}: {e}")
+
+            # New hook: get_launcher_hooks for custom launcher modifications
+            try:
+                if hasattr(module, 'get_launcher_hooks'):
+                    print(f"Getting launcher hooks for component: {component_name}")
+                    hooks = module.get_launcher_hooks()
+                    if hooks:
+                        self.component_launcher_hooks[component_name] = hooks
+                else:
+                    print(f"No launcher hooks for component: {component_name}")
+            except Exception as e:
+                print(f"Error getting launcher hooks for component {component_name}: {e}")
+
         except Exception as e:
             print(f"Failed to load component {component_name}: {e}")
             import traceback
@@ -448,6 +475,22 @@ class ComponentManager:
                 import traceback
                 traceback.print_exc()
 
+    def register_view(self, view_id, label, control, on_show=None, on_activate=None, position='after_network'):
+        """Register a view in the main GUI's left panel for Ctrl+Tab cycling.
+
+        Args:
+            view_id: Unique string identifier (e.g., 'my_component')
+            label: Display label for the view header (e.g., 'My List:')
+            control: wx control (ListBox, TreeCtrl, etc.) parented to gui_app.main_panel
+            on_show: Optional callback called when view is shown
+            on_activate: Optional callback for Enter key activation
+            position: Where to insert - 'after_apps', 'after_games', 'after_network' (default), or int index
+        """
+        if self.gui_app and hasattr(self.gui_app, 'register_view'):
+            self.gui_app.register_view(view_id, label, control, on_show, on_activate, position)
+        else:
+            print(f"[ComponentManager] Cannot register view '{view_id}': GUI app not available")
+
     def get_gui_hooks(self):
         """Get all GUI hooks from components."""
         return self.component_gui_hooks
@@ -455,6 +498,10 @@ class ComponentManager:
     def get_klango_hooks(self):
         """Get all Klango mode hooks from components."""
         return self.component_klango_hooks
+
+    def get_iui_hooks(self):
+        """Get all Invisible UI hooks from components."""
+        return self.component_iui_hooks
 
     def apply_gui_hooks(self, gui_app):
         """Apply GUI hooks from all components to the GUI application."""
@@ -480,6 +527,34 @@ class ComponentManager:
                 import traceback
                 traceback.print_exc()
 
+    def apply_iui_hooks(self, iui):
+        """Apply Invisible UI hooks from all components."""
+        for component_name, hooks in self.component_iui_hooks.items():
+            try:
+                if 'on_iui_init' in hooks and callable(hooks['on_iui_init']):
+                    hooks['on_iui_init'](iui)
+                    print(f"Applied IUI init hook from component: {component_name}")
+            except Exception as e:
+                print(f"Error applying IUI hooks from component {component_name}: {e}")
+                import traceback
+                traceback.print_exc()
+
+    def get_launcher_hooks(self):
+        """Get all launcher hooks from components."""
+        return self.component_launcher_hooks
+
+    def apply_launcher_hooks(self, launcher_manager, launcher_name):
+        """Apply launcher hooks from all components."""
+        for component_name, hooks in self.component_launcher_hooks.items():
+            try:
+                if 'on_launcher_init' in hooks and callable(hooks['on_launcher_init']):
+                    hooks['on_launcher_init'](launcher_manager, launcher_name)
+                    print(f"Applied launcher init hook from component: {component_name}")
+            except Exception as e:
+                print(f"Error applying launcher hooks from component {component_name}: {e}")
+                import traceback
+                traceback.print_exc()
+
     def compile_to_pyc(self, py_path):
         """Compiles a Python file to .pyc and returns its path."""
         try:
@@ -495,25 +570,30 @@ class ComponentManager:
 
     def initialize_components(self, app):
         """Initializes all loaded components."""
+        print(f"[ComponentManager] initialize_components called with {len(self.components)} components")
         for component in self.components:
             try:
+                component_name = getattr(component, '__name__', 'Unknown')
+                print(f"[ComponentManager] Checking component: {component_name}")
                 if hasattr(component, 'initialize'):
                     try:
+                        print(f"[ComponentManager] Calling initialize() for {component_name}")
                         component.initialize(app)
-                        print(f"Initialized component: {component.__name__}")
+                        print(f"[ComponentManager] Successfully initialized component: {component_name}")
                     except Exception as e:
-                        print(f"Failed to initialize component {component.__name__}: {e}")
+                        print(f"[ComponentManager] Failed to initialize component {component_name}: {e}")
                         import traceback
                         traceback.print_exc()
                         # Continue with next component
                 else:
-                    print(f"No initialize function in component: {component.__name__}")
+                    print(f"[ComponentManager] No initialize function in component: {component_name}")
             except Exception as e:
-                print(f"Critical error in initialize_components for component: {e}")
+                print(f"[ComponentManager] Critical error in initialize_components for component: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continue with next component
                 continue
+        print(f"[ComponentManager] Finished initializing components")
 
     def shutdown_components(self):
         """Shuts down all loaded components."""

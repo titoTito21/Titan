@@ -7,6 +7,7 @@ Dedicated windows for Telegram functionality:
 """
 import wx
 import time
+import threading
 from datetime import datetime
 from src.network import telegram_client
 from src.titan_core.sound import play_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused
@@ -14,8 +15,51 @@ from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 import re
 
+try:
+    import accessible_output3.outputs.auto
+    _tg_speaker = accessible_output3.outputs.auto.Auto()
+except Exception:
+    _tg_speaker = None
+
+try:
+    from src.titan_core.stereo_speech import speak_stereo, get_stereo_speech
+    _TG_STEREO_AVAILABLE = True
+except ImportError:
+    _TG_STEREO_AVAILABLE = False
+
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
+
+
+def _speak_tg(text, position=0.0, pitch_offset=0, interrupt=False):
+    """Speak text via stereo speech / ao3 for Telegram chat notifications."""
+    if not text or not _tg_speaker:
+        return
+    try:
+        stereo_enabled = get_setting('stereo_speech', 'False', section='invisible_interface').lower() == 'true'
+        if stereo_enabled and _TG_STEREO_AVAILABLE:
+            def do_speak():
+                try:
+                    if interrupt:
+                        try:
+                            ss = get_stereo_speech()
+                            if ss:
+                                ss.stop()
+                        except Exception:
+                            pass
+                    speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True)
+                except Exception:
+                    _tg_speaker.output(text)
+            threading.Thread(target=do_speak, daemon=True).start()
+        else:
+            def do_speak():
+                try:
+                    _tg_speaker.output(text)
+                except Exception:
+                    pass
+            threading.Thread(target=do_speak, daemon=True).start()
+    except Exception:
+        pass
 
 class TelegramPrivateMessageWindow(wx.Frame):
     """Private message window for specific user"""
@@ -68,7 +112,12 @@ class TelegramPrivateMessageWindow(wx.Frame):
         self.status_label = wx.StaticText(header_panel, label="[" + _("Online") + "]")
         self.status_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
         header_sizer.Add(self.status_label, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-        
+
+        # Voice call button
+        self.call_button = wx.Button(header_panel, label=_("Voice Call"), size=(100, 30))
+        self.call_button.Bind(wx.EVT_BUTTON, self.on_voice_call)
+        header_sizer.Add(self.call_button, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+
         header_panel.SetSizer(header_sizer)
         sizer.Add(header_panel, 0, wx.EXPAND | wx.ALL, 5)
         
@@ -316,14 +365,21 @@ class TelegramPrivateMessageWindow(wx.Frame):
             if sender_username == self.username and is_private:
                 timestamp = time.strftime('%H:%M')
                 self.append_message(sender_username, message, timestamp, is_own=False)
-                
+
+                # Titan-net sound + TTS notification
+                play_sound('titannet/new_message.ogg')
+                tts_text = f"{sender_username}: {message}"
+                if len(tts_text) > 100:
+                    tts_text = tts_text[:100] + "..."
+                _speak_tg(tts_text, position=-0.3, pitch_offset=-2)
+
                 # Update window title to show new message
                 original_title = f"{_('Wiadomości prywatne z')} {self.username}"
                 self.SetTitle(f"[NOWA] {self.username}")
-                
+
                 # Reset title after 3 seconds
                 wx.CallLater(3000, lambda: self.SetTitle(original_title))
-                
+
                 # Bring window to front if not focused
                 if not self.IsActive():
                     self.RequestUserAttention()
@@ -352,195 +408,224 @@ class TelegramPrivateMessageWindow(wx.Frame):
                     is_own = sender == telegram_client.get_user_data().get('username', '')
                     self.append_message(sender, content, time_str, is_own, voice_file)
     
+    def on_voice_call(self, event):
+        """Start voice call with this user"""
+        if telegram_client.is_call_active():
+            _speak_tg(_("Call already in progress"), position=0.7, pitch_offset=5)
+            return
+
+        if not telegram_client.is_voice_calls_available():
+            _speak_tg(_("Voice calls not available"), position=0.7, pitch_offset=5)
+            return
+
+        # Start the call
+        telegram_client.start_voice_call(self.username)
+
+        # Open voice call window
+        call_window = TelegramVoiceCallWindow(self, self.username, 'outgoing')
+        call_window.Show()
+
     def on_close(self, event):
         """Handle window close"""
         if self.typing_timer:
             self.typing_timer.Stop()
-        
+
         # Stop typing indicator
         self.stop_typing_indicator()
-        
+
         # Play close sound
         play_sound('ui/popupclose.ogg')
-        
+
         self.Destroy()
 
 
 class TelegramVoiceCallWindow(wx.Frame):
-    """Enhanced voice call window with better integration"""
-    
-    def __init__(self, parent, username, call_type):
-        # Improved title formatting
-        call_type_text = _("Połączenie wychodzące") if call_type == 'outgoing' else _("Połączenie przychodzące") 
-        super().__init__(parent, title=f"{_('Rozmowa z')} {username}", size=(450, 320))
-        
+    """Voice call window with state tracking and real mute control."""
+
+    def __init__(self, parent, username, call_type, call_data=None):
+        super().__init__(parent, title=f"{_('Voice call')}: {username}", size=(450, 350))
+
         self.parent_frame = parent
         self.username = username
-        self.call_type = call_type
+        self.call_type = call_type  # 'outgoing', 'incoming', 'tce_incoming'
+        self.call_data = call_data or {}
         self.call_connected = False
+        self.is_muted = False
         self.call_timer = wx.Timer(self)
         self.call_start_time = None
-        
+
         self.init_ui()
         self.Center()
-        
-        # Play popup sound when opening voice call window
+
         play_sound('ui/popup.ogg')
-        
-        # Update call status every second
+
+        # Register callback for call state changes
+        telegram_client.add_call_callback(self.on_call_event)
+
+        # Start status polling
         self.Bind(wx.EVT_TIMER, self.update_call_timer, self.call_timer)
         self.call_timer.Start(1000)
-        
-        # Handle window close
+
+        # Check if call is already connected (outgoing TCE calls connect immediately)
+        if telegram_client.is_call_active():
+            status = telegram_client.get_call_status()
+            if status.get('state') == 'connected':
+                wx.CallLater(500, self.set_call_connected)
+
         self.Bind(wx.EVT_CLOSE, self.on_close)
-        
-        # Auto-connect simulation for outgoing calls - REMOVED
-        # Connection will be set when call is actually accepted via telegram_client events
-        if call_type == 'outgoing':
-            pass  # Wait for actual call acceptance from Telegram API
-    
+
     def init_ui(self):
-        """Initialize the UI"""
+        """Initialize the UI."""
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # User info with avatar placeholder
-        avatar_panel = wx.Panel(panel)
-        avatar_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Large avatar placeholder
-        avatar_label = wx.StaticText(avatar_panel, label="User")
-        avatar_label.SetFont(wx.Font(48, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        avatar_sizer.Add(avatar_label, 0, wx.ALL | wx.CENTER, 10)
-        
+
         # User info
-        info_panel = wx.Panel(avatar_panel)
-        info_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        user_label = wx.StaticText(info_panel, label=self.username)
+        user_label = wx.StaticText(panel, label=self.username)
         user_label.SetFont(wx.Font(18, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        info_sizer.Add(user_label, 0, wx.ALL, 5)
-        
-        call_type_text = _("Dzwonisz do") if self.call_type == 'outgoing' else _("Połączenie przychodzące od")
-        call_info = wx.StaticText(info_panel, label=call_type_text)
+        sizer.Add(user_label, 0, wx.ALL | wx.CENTER, 10)
+
+        # Call direction
+        if self.call_type == 'outgoing':
+            dir_text = _("Outgoing call")
+        elif self.call_type == 'tce_incoming':
+            dir_text = _("Incoming call")
+        else:
+            dir_text = _("Incoming call (native)")
+
+        call_info = wx.StaticText(panel, label=dir_text)
         call_info.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
-        info_sizer.Add(call_info, 0, wx.ALL, 2)
-        
-        info_panel.SetSizer(info_sizer)
-        avatar_sizer.Add(info_panel, 1, wx.ALL | wx.CENTER, 10)
-        
-        avatar_panel.SetSizer(avatar_sizer)
-        sizer.Add(avatar_panel, 0, wx.EXPAND | wx.ALL, 10)
-        
+        sizer.Add(call_info, 0, wx.ALL | wx.CENTER, 5)
+
         # Call status
-        self.status_label = wx.StaticText(panel, label="[" + _("Łączenie...") + "]")
+        self.status_label = wx.StaticText(panel, label="[" + _("Connecting...") + "]")
         self.status_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         sizer.Add(self.status_label, 0, wx.ALL | wx.CENTER, 10)
-        
-        # Call duration
+
+        # Duration
         self.duration_label = wx.StaticText(panel, label="00:00")
         self.duration_label.SetFont(wx.Font(24, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         sizer.Add(self.duration_label, 0, wx.ALL | wx.CENTER, 10)
-        
-        # Control buttons
+
+        # Audio info
+        has_audio = telegram_client.is_voice_calls_available()
+        if has_audio:
+            audio_text = _("Audio: group voice chat")
+        else:
+            audio_text = _("Audio: limited (py-tgcalls not installed)")
+
+        audio_label = wx.StaticText(panel, label=audio_text)
+        audio_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        audio_label.SetForegroundColour(wx.Colour(100, 100, 100))
+        sizer.Add(audio_label, 0, wx.ALL | wx.CENTER, 3)
+
+        # Buttons
         button_panel = wx.Panel(panel)
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        self.mute_button = wx.Button(button_panel, label=_("Wycisz"), size=(100, 40))
+
+        self.mute_button = wx.Button(button_panel, label=_("Mute"), size=(120, 40))
         self.mute_button.Bind(wx.EVT_BUTTON, self.on_mute)
         button_sizer.Add(self.mute_button, 0, wx.ALL, 5)
-        
-        self.end_button = wx.Button(button_panel, label=_("Zakończ"), size=(120, 40))
+
+        self.end_button = wx.Button(button_panel, label=_("End call"), size=(120, 40))
         self.end_button.Bind(wx.EVT_BUTTON, self.on_end_call)
         self.end_button.SetBackgroundColour(wx.Colour(200, 50, 50))
         self.end_button.SetForegroundColour(wx.Colour(255, 255, 255))
         button_sizer.Add(self.end_button, 0, wx.ALL, 5)
-        
+
         button_panel.SetSizer(button_sizer)
         sizer.Add(button_panel, 0, wx.CENTER | wx.ALL, 10)
-        
-        # Keyboard shortcuts info
-        shortcuts_text = wx.StaticText(panel, 
-                                     label=_("Skróty: Spacja=Wycisz/Włącz • Escape=Zakończ"))
-        shortcuts_text.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
-        shortcuts_text.SetForegroundColour(wx.Colour(128, 128, 128))
-        sizer.Add(shortcuts_text, 0, wx.ALL | wx.CENTER, 10)
-        
+
+        # Shortcuts
+        shortcuts = wx.StaticText(panel,
+                                  label=_("Shortcuts: Space=Mute/Unmute, Escape=End call"))
+        shortcuts.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        shortcuts.SetForegroundColour(wx.Colour(128, 128, 128))
+        sizer.Add(shortcuts, 0, wx.ALL | wx.CENTER, 5)
+
         panel.SetSizer(sizer)
-        
-        # Keyboard shortcuts
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
-    
+
     def on_key_press(self, event):
-        """Handle keyboard shortcuts"""
+        """Handle keyboard shortcuts."""
         keycode = event.GetKeyCode()
-        
         if keycode == wx.WXK_SPACE:
             self.on_mute(None)
         elif keycode == wx.WXK_ESCAPE:
             self.on_end_call(None)
         else:
             event.Skip()
-    
+
     def set_call_connected(self):
-        """Set call as connected"""
+        """Mark call as connected."""
         if not self.call_connected:
             self.call_connected = True
             self.call_start_time = wx.DateTime.Now()
-            self.status_label.SetLabel("[" + _("Połączono - rozmowa aktywna") + "]")
-            
-            # Play call success sound - indicates voice connection is established
-            play_sound('titannet/callsuccess.ogg')
-            
-            # Focus the window
+            self.status_label.SetLabel("[" + _("Connected - call active") + "]")
+            _speak_tg(_("Call connected"), position=0.0, pitch_offset=0)
             self.Raise()
             self.SetFocus()
-    
+
+    def on_call_event(self, event_type, data):
+        """Handle call state changes from voice client."""
+        if event_type == 'state_changed':
+            new_state = data.get('new_state', '')
+            if new_state == 'connected':
+                self.set_call_connected()
+            elif new_state == 'idle':
+                # Call ended remotely
+                if self:
+                    self.Close()
+        elif event_type == 'call_ended':
+            if self:
+                self.Close()
+        elif event_type == 'call_failed':
+            error = data.get('error', _('Unknown error'))
+            self.status_label.SetLabel(f"[{_('Error')}: {error}]")
+            _speak_tg(f"{_('Call failed')}: {error}", position=0.7, pitch_offset=5)
+        elif event_type == 'mute_changed':
+            muted = data.get('muted', False)
+            self.is_muted = muted
+            if muted:
+                self.mute_button.SetLabel(_("Unmute"))
+                self.status_label.SetLabel("[" + _("Microphone muted") + "]")
+            else:
+                self.mute_button.SetLabel(_("Mute"))
+                self.status_label.SetLabel("[" + _("Connected - call active") + "]")
+
     def update_call_timer(self, event):
-        """Update call duration display"""
+        """Update call duration display."""
         if self.call_connected and self.call_start_time:
-            current_time = wx.DateTime.Now()
-            duration = current_time - self.call_start_time
-            
+            duration = wx.DateTime.Now() - self.call_start_time
             total_seconds = duration.GetSeconds()
             minutes = total_seconds // 60
             seconds = total_seconds % 60
-            
             self.duration_label.SetLabel(f"{minutes:02d}:{seconds:02d}")
         elif not self.call_connected:
-            # Show connecting status with animation
-            import time
             dots = "." * ((int(time.time()) % 4) + 1)
-            self.status_label.SetLabel("[" + _("Łączenie") + dots + "]")
-    
+            self.status_label.SetLabel("[" + _("Connecting") + dots + "]")
+
+        # Check if call ended externally
+        if not telegram_client.is_call_active() and self.call_connected:
+            self.Close()
+
     def on_mute(self, event):
-        """Toggle microphone mute"""
-        current_label = self.mute_button.GetLabel()
-        if _("Wycisz") in current_label:  # Currently shows mute button
-            self.mute_button.SetLabel(_("Włącz"))
-            self.status_label.SetLabel("[" + _("Mikrofon wyciszony") + "]")
-            play_sound('core/FOCUS.ogg')
-        else:  # Currently shows unmute button
-            self.mute_button.SetLabel(_("Wycisz"))
-            self.status_label.SetLabel("[" + _("Połączono - rozmowa aktywna") + "]")
-            play_sound('core/SELECT.ogg')
-    
+        """Toggle microphone mute via voice client."""
+        telegram_client.toggle_mute()
+        # UI update happens in on_call_event callback
+
     def on_end_call(self, event):
-        """End the call"""
+        """End the call."""
         telegram_client.end_voice_call()
         self.Close()
-    
+
     def on_close(self, event):
-        """Handle window close"""
+        """Handle window close."""
         self.call_timer.Stop()
-        
-        # End call if still active
+
         if telegram_client.is_call_active():
             telegram_client.end_voice_call()
-        
-        # Play close sound
+
         play_sound('ui/popupclose.ogg')
-        
         self.Destroy()
 
 
@@ -839,14 +924,21 @@ class TelegramGroupChatWindow(wx.Frame):
             if is_group and group_name == self.group_name:
                 timestamp = time.strftime('%H:%M')
                 self.append_message(sender_username, message, timestamp, is_own=False)
-                
+
+                # Titan-net sound + TTS notification
+                play_sound('titannet/chat_message.ogg')
+                tts_text = f"{sender_username}: {message}"
+                if len(tts_text) > 100:
+                    tts_text = tts_text[:100] + "..."
+                _speak_tg(tts_text, position=-0.3, pitch_offset=-2)
+
                 # Update window title to show new message
                 original_title = f"{_('Group chat')}: {self.group_name}"
                 self.SetTitle(f"[NEW] {self.group_name}")
-                
+
                 # Reset title after 3 seconds
                 wx.CallLater(3000, lambda: self.SetTitle(original_title))
-                
+
                 # Bring window to front if not focused
                 if not self.IsActive():
                     self.RequestUserAttention()
@@ -895,9 +987,9 @@ def open_private_message_window(parent, username):
     window.Show()
     return window
 
-def open_voice_call_window(parent, username, call_type='outgoing'):
+def open_voice_call_window(parent, username, call_type='outgoing', call_data=None):
     """Open voice call window for user"""
-    window = TelegramVoiceCallWindow(parent, username, call_type)
+    window = TelegramVoiceCallWindow(parent, username, call_type, call_data)
     window.Show()
     return window
 
@@ -909,169 +1001,200 @@ def open_group_chat_window(parent, group_name):
 
 
 class IncomingCallDialog(wx.Dialog):
-    """Dialog for incoming voice calls with Accept/Reject buttons"""
-    
+    """Dialog for incoming voice calls (both TCE group calls and native Telegram calls)."""
+
     def __init__(self, parent, caller_name, call_data=None):
         super().__init__(
             parent,
             title=_("Incoming call"),
             style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP | wx.FRAME_FLOAT_ON_PARENT,
-            size=(400, 200)
+            size=(400, 220)
         )
-        
+
         self.caller_name = caller_name
-        self.call_data = call_data
+        self.call_data = call_data or {}
         self.result = None
-        
+
+        # Determine call type
+        self.is_tce_call = self.call_data.get('type') == 'tce_call'
+        self.is_native_call = self.call_data.get('type') == 'native_call'
+
         self.setup_ui()
         self.Center()
-        
-        # Force window to appear on top and request attention
+
+        # Force to top
         self.SetWindowStyle(self.GetWindowStyle() | wx.STAY_ON_TOP)
         self.Raise()
-        self.RequestUserAttention(wx.USER_ATTENTION_ERROR)  # Strong attention request
-        
-        # On Windows, use Win32 API to force window to foreground
+        self.RequestUserAttention(wx.USER_ATTENTION_ERROR)
+
         try:
             import ctypes
-            from ctypes import wintypes
-            
-            # Get window handle
             hwnd = self.GetHandle()
             if hwnd:
-                # Force window to foreground
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
-                ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)  # HWND_TOPMOST
-        except:
-            pass  # Ignore if Win32 API fails
-        
-        # Play incoming call sound repeatedly
+                ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+        except Exception:
+            pass
+
+        # Ring timer
         self.ring_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.play_ring_sound, self.ring_timer)
-        self.ring_timer.Start(3000)  # Ring every 3 seconds
-        
-        # Play initial ring
+        self.ring_timer.Start(3000)
+
         play_sound('titannet/ring_in.ogg')
-        
-        # Handle window close (treat as reject)
+        _speak_tg(f"{_('Incoming call from')} {caller_name}", position=0.0, pitch_offset=3, interrupt=True)
+
         self.Bind(wx.EVT_CLOSE, self.on_reject)
-    
+
     def setup_ui(self):
-        """Setup the dialog UI"""
+        """Setup the dialog UI."""
         panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Call icon/image area
+
+        # Header
         icon_panel = wx.Panel(panel)
-        icon_panel.SetBackgroundColour(wx.Colour(45, 140, 240))  # Blue background
+        icon_panel.SetBackgroundColour(wx.Colour(45, 140, 240))
         icon_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Phone icon (using text without emoji)
+
         phone_icon = wx.StaticText(icon_panel, label=_("CALL"))
         phone_icon.SetFont(wx.Font(24, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         phone_icon.SetForegroundColour(wx.Colour(255, 255, 255))
         icon_sizer.Add(phone_icon, 0, wx.ALL | wx.CENTER, 10)
-        
+
         icon_panel.SetSizer(icon_sizer)
-        main_sizer.Add(icon_panel, 1, wx.EXPAND | wx.ALL, 0)
-        
+        main_sizer.Add(icon_panel, 0, wx.EXPAND)
+
         # Caller info
         info_panel = wx.Panel(panel)
         info_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # "Incoming call from" text
+
         incoming_text = wx.StaticText(info_panel, label=_("Incoming call from:"))
         incoming_text.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         info_sizer.Add(incoming_text, 0, wx.ALL | wx.CENTER, 5)
-        
-        # Caller name
+
         caller_label = wx.StaticText(info_panel, label=self.caller_name)
         caller_label.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         info_sizer.Add(caller_label, 0, wx.ALL | wx.CENTER, 5)
-        
+
+        # Show call type info
+        if self.is_tce_call:
+            type_text = _("Voice chat call (full audio)")
+        elif self.is_native_call:
+            type_text = _("Telegram call (signaling only)")
+        else:
+            type_text = _("Voice call")
+
+        type_label = wx.StaticText(info_panel, label=type_text)
+        type_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        type_label.SetForegroundColour(wx.Colour(100, 100, 100))
+        info_sizer.Add(type_label, 0, wx.ALL | wx.CENTER, 2)
+
         info_panel.SetSizer(info_sizer)
-        main_sizer.Add(info_panel, 0, wx.EXPAND | wx.ALL, 10)
-        
+        main_sizer.Add(info_panel, 1, wx.EXPAND | wx.ALL, 5)
+
         # Buttons
         button_panel = wx.Panel(panel)
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Reject button (red)
+
         self.reject_button = wx.Button(button_panel, wx.ID_CANCEL, label=_("Reject"))
         self.reject_button.SetBackgroundColour(wx.Colour(220, 50, 50))
         self.reject_button.SetForegroundColour(wx.Colour(255, 255, 255))
         self.reject_button.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         self.reject_button.Bind(wx.EVT_BUTTON, self.on_reject)
         button_sizer.Add(self.reject_button, 1, wx.ALL | wx.EXPAND, 10)
-        
-        # Accept button (green)
+
         self.accept_button = wx.Button(button_panel, wx.ID_OK, label=_("Accept"))
         self.accept_button.SetBackgroundColour(wx.Colour(50, 200, 50))
         self.accept_button.SetForegroundColour(wx.Colour(255, 255, 255))
         self.accept_button.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         self.accept_button.Bind(wx.EVT_BUTTON, self.on_accept)
         button_sizer.Add(self.accept_button, 1, wx.ALL | wx.EXPAND, 10)
-        
+
         button_panel.SetSizer(button_sizer)
-        main_sizer.Add(button_panel, 0, wx.EXPAND | wx.ALL, 0)
-        
+        main_sizer.Add(button_panel, 0, wx.EXPAND)
+
         panel.SetSizer(main_sizer)
-        
-        # Set focus to accept button by default
+
         self.accept_button.SetDefault()
         self.accept_button.SetFocus()
-    
+
+        # Keyboard: Enter=Accept, Escape=Reject
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
+
+    def on_key_press(self, event):
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE:
+            self.on_reject(None)
+        elif keycode == wx.WXK_RETURN:
+            self.on_accept(None)
+        else:
+            event.Skip()
+
     def play_ring_sound(self, event):
-        """Play ring sound repeatedly"""
         play_sound('titannet/ring_in.ogg')
-    
+
     def on_accept(self, event):
-        """Handle call accept"""
+        """Handle call accept."""
         self.ring_timer.Stop()
         self.result = 'accept'
 
-        # Answer the call
-        telegram_client.answer_voice_call()
-
-        # Open voice call window for incoming call
-        import wx
         app = wx.GetApp()
-        if app:
-            main_window = app.GetTopWindow()
-            if main_window:
-                # Open voice call window
-                call_window = open_voice_call_window(main_window, self.caller_name, 'incoming')
-                # Store reference in main window if it has the attribute
-                if hasattr(main_window, 'call_window'):
-                    main_window.call_window = call_window
+        main_window = app.GetTopWindow() if app else None
 
-        # Close dialog
+        if self.is_tce_call:
+            # TCE call: join the group voice chat
+            group_id = self.call_data.get('group_id')
+            if group_id:
+                telegram_client.join_voice_call(group_id)
+
+            # Open voice call window
+            if main_window:
+                call_window = TelegramVoiceCallWindow(
+                    main_window, self.caller_name, 'tce_incoming', self.call_data
+                )
+                call_window.Show()
+
+        elif self.is_native_call:
+            # Native Telegram call: accept signaling
+            telegram_client.answer_voice_call()
+
+            # Open voice call window
+            if main_window:
+                call_window = TelegramVoiceCallWindow(
+                    main_window, self.caller_name, 'incoming', self.call_data
+                )
+                call_window.Show()
+
+        else:
+            # Unknown type - try answering
+            telegram_client.answer_voice_call()
+            if main_window:
+                call_window = TelegramVoiceCallWindow(
+                    main_window, self.caller_name, 'incoming', self.call_data
+                )
+                call_window.Show()
+
         self.EndModal(wx.ID_OK)
-    
+
     def on_reject(self, event):
-        """Handle call reject"""
+        """Handle call reject."""
         self.ring_timer.Stop()
         self.result = 'reject'
-        
-        # End the call
-        telegram_client.end_voice_call()
-        
-        # Close dialog
+
+        if self.is_native_call:
+            telegram_client.end_voice_call()
+
         self.EndModal(wx.ID_CANCEL)
-    
+
     def __del__(self):
-        """Cleanup when dialog is destroyed"""
         if hasattr(self, 'ring_timer') and self.ring_timer:
             self.ring_timer.Stop()
 
 
 def show_incoming_call_dialog(parent, caller_name, call_data=None):
-    """Show incoming call dialog and return result"""
+    """Show incoming call dialog and return result."""
     dialog = IncomingCallDialog(parent, caller_name, call_data)
     result = dialog.ShowModal()
-    
-    # Get the user's choice
     user_choice = dialog.result
     dialog.Destroy()
-    
     return user_choice

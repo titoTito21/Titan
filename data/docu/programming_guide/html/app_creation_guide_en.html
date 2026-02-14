@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titan Application Creation Guide - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html" class="active">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Titan Application Creation Guide</h1>
+            </div>
+            <h1 id="titan-application-creation-guide">Titan Application Creation Guide</h1>
+
+<h2 id="introduction">Introduction</h2>
+
+<p>Titan applications are standalone programs launched from the launcher. They can be Python applications, compiled executables (.exe), or other types of executable files. Applications are displayed in the "Applications" category in the invisible interface.</p>
+
+<h2 id="application-system-architecture">Application System Architecture</h2>
+
+<h3 id="application-location">Application Location</h3>
+
+<p>All applications are located in the <code>data/applications/</code> directory. Each application is a separate directory containing:
+- <code>__app.tce</code> - application configuration file (required)
+- <code>main.py</code> - main application file (or other file specified in openfile)
+- additional application files and resources</p>
+
+<h3 id="application-launch-process">Application Launch Process</h3>
+
+<ol>
+<li><strong>Compilation</strong> - .py files are automatically compiled to .pyc</li>
+<li><strong>Environment</strong> - PYTHONPATH and environment variables are set</li>
+<li><strong>Launch</strong> - application runs in separate process</li>
+<li><strong>Isolation</strong> - each application runs in its working directory</li>
+</ol>
+
+<h2 id="configuration-file-structure">Configuration File Structure</h2>
+
+<h3 id="__apptce">__app.tce</h3>
+
+<p>File in key=value format:</p>
+
+<pre><code>name_pl=Nazwa aplikacji po polsku
+name_en=Application name in English
+openfile=main.py
+shortname=myapp
+hidden=false
+</code></pre>
+
+<p><strong>Required parameters:</strong>
+- <code>openfile</code> - name of file to execute</p>
+
+<p><strong>Optional parameters:</strong>
+- <code>name_pl</code> - name in Polish
+- <code>name_en</code> - name in English<br />
+- <code>name</code> - default name (if no translations)
+- <code>shortname</code> - short name for programmatic calls
+- <code>hidden</code> - whether to hide application in list (true/false)</p>
+
+<h2 id="python-application-implementation">Python Application Implementation</h2>
+
+<h3 id="basic-mainpy-structure">Basic main.py structure</h3>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import wx
+import sys
+import os
+
+class MyAppFrame(wx.Frame):
+    def __init__(self):
+        super().__init__(None, title="My Application")
+        self.InitUI()
+        self.Center()
+
+    def InitUI(self):
+        """Initialize user interface"""
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Add controls
+        self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
+        vbox.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+
+        # Button
+        btn = wx.Button(panel, label="Click me")
+        btn.Bind(wx.EVT_BUTTON, self.OnButtonClick)
+        vbox.Add(btn, 0, wx.ALL | wx.CENTER, 5)
+
+        panel.SetSizer(vbox)
+
+    def OnButtonClick(self, event):
+        """Handle button click"""
+        self.text_ctrl.AppendText("Button was clicked!\n")
+
+class MyApp(wx.App):
+    def OnInit(self):
+        frame = MyAppFrame()
+        frame.Show()
+        return True
+
+if __name__ == '__main__':
+    app = MyApp()
+    app.MainLoop()
+</code></pre>
+
+<h3 id="access-to-titan-modules">Access to Titan Modules</h3>
+
+<p>Applications have automatic access to Titan modules:</p>
+
+<pre><code># Import Titan modules
+from sound import play_sound, play_error_sound
+from settings import get_setting, set_setting
+from translation import get_available_languages
+
+# Use in application
+def on_action(self):
+    play_sound("focus.ogg")
+
+    # Save application setting
+    set_setting('my_app_setting', 'value', section='my_app')
+
+    # Read setting
+    value = get_setting('my_app_setting', 'default', section='my_app')
+</code></pre>
+
+<h2 id="command-line-arguments-handling">Command Line Arguments Handling</h2>
+
+<p>Applications can receive arguments during launch:</p>
+
+<pre><code>import sys
+
+def main():
+    if len(sys.argv) &gt; 1:
+        file_path = sys.argv[1]
+        print(f"Received file path: {file_path}")
+        # Open file in application
+        open_file(file_path)
+    else:
+        # Run normally without arguments
+        start_normal_mode()
+
+if __name__ == '__main__':
+    main()
+</code></pre>
+
+<h2 id="application-internationalization">Application Internationalization</h2>
+
+<h3 id="babelcfg-configuration">babel.cfg Configuration</h3>
+
+<pre><code>[python: **.py]
+</code></pre>
+
+<h3 id="translation-structure">Translation Structure</h3>
+
+<pre><code>data/applications/my_application/
+├── main.py
+├── __app.tce
+├── babel.cfg
+├── languages/
+│   ├── messages.pot
+│   ├── pl/
+│   │   └── LC_MESSAGES/
+│   │       ├── messages.po
+│   │       └── messages.mo
+│   └── en/
+│       └── LC_MESSAGES/
+│           ├── messages.po
+│           └── messages.mo
+└── translation.py
+</code></pre>
+
+<h3 id="translationpy-file">translation.py File</h3>
+
+<pre><code>import gettext
+import os
+
+def setup_translation():
+    """Configure translations for the application"""
+    # Get language from environment variable set by Titan
+    lang = os.environ.get('LANG', 'en')
+
+    domain = 'messages'
+    localedir = os.path.join(os.path.dirname(__file__), 'languages')
+
+    try:
+        translation = gettext.translation(domain, localedir, languages=[lang], fallback=True)
+        translation.install()
+        return translation.gettext
+    except Exception as e:
+        print(f"Translation configuration error: {e}")
+        return lambda x: x
+
+# Use in application
+_ = setup_translation()
+
+# In application code
+title = _("My Application")
+message = _("Hello, world!")
+</code></pre>
+
+<h3 id="babel-commands">Babel Commands</h3>
+
+<pre><code># Extract texts for translation
+pybabel extract -o languages/messages.pot --input-dirs=.
+
+# Create translation files
+pybabel init -l pl -d languages -i languages/messages.pot
+pybabel init -l en -d languages -i languages/messages.pot
+
+# Update existing translations
+pybabel update -l pl -d languages -i languages/messages.pot
+pybabel update -l en -d languages -i languages/messages.pot
+
+# Compile translations
+pybabel compile -d languages
+</code></pre>
+
+<h2 id="application-examples">Application Examples</h2>
+
+<h3 id="example-1-simple-text-editor">Example 1: Simple Text Editor</h3>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import wx
+import os
+
+class TextEditorFrame(wx.Frame):
+    def __init__(self):
+        super().__init__(None, title="Text Editor", size=(600, 400))
+        self.current_file = None
+        self.InitUI()
+        self.Center()
+
+    def InitUI(self):
+        # Menu
+        menubar = wx.MenuBar()
+
+        file_menu = wx.Menu()
+        file_menu.Append(wx.ID_NEW, "&amp;New\tCtrl+N")
+        file_menu.Append(wx.ID_OPEN, "&amp;Open\tCtrl+O")
+        file_menu.Append(wx.ID_SAVE, "&amp;Save\tCtrl+S")
+        file_menu.AppendSeparator()
+        file_menu.Append(wx.ID_EXIT, "E&amp;xit\tCtrl+Q")
+
+        menubar.Append(file_menu, "&amp;File")
+        self.SetMenuBar(menubar)
+
+        # Text area
+        self.text_ctrl = wx.TextCtrl(self, style=wx.TE_MULTILINE)
+
+        # Status bar
+        self.statusbar = self.CreateStatusBar()
+        self.statusbar.SetStatusText("Ready")
+
+        # Events
+        self.Bind(wx.EVT_MENU, self.OnNew, id=wx.ID_NEW)
+        self.Bind(wx.EVT_MENU, self.OnOpen, id=wx.ID_OPEN)
+        self.Bind(wx.EVT_MENU, self.OnSave, id=wx.ID_SAVE)
+        self.Bind(wx.EVT_MENU, self.OnExit, id=wx.ID_EXIT)
+
+    def OnNew(self, event):
+        self.text_ctrl.Clear()
+        self.current_file = None
+        self.SetTitle("Text Editor - New Document")
+
+    def OnOpen(self, event):
+        dlg = wx.FileDialog(self, "Open file", wildcard="Text files (*.txt)|*.txt")
+        if dlg.ShowModal() == wx.ID_OK:
+            self.current_file = dlg.GetPath()
+            with open(self.current_file, 'r', encoding='utf-8') as f:
+                self.text_ctrl.SetValue(f.read())
+            self.SetTitle(f"Text Editor - {os.path.basename(self.current_file)}")
+        dlg.Destroy()
+
+    def OnSave(self, event):
+        if self.current_file:
+            with open(self.current_file, 'w', encoding='utf-8') as f:
+                f.write(self.text_ctrl.GetValue())
+            self.statusbar.SetStatusText("File saved")
+        else:
+            self.OnSaveAs(event)
+
+    def OnSaveAs(self, event):
+        dlg = wx.FileDialog(self, "Save file", wildcard="Text files (*.txt)|*.txt", 
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.current_file = dlg.GetPath()
+            self.OnSave(event)
+        dlg.Destroy()
+
+    def OnExit(self, event):
+        self.Close()
+
+class TextEditorApp(wx.App):
+    def OnInit(self):
+        frame = TextEditorFrame()
+        frame.Show()
+
+        # Check if file was passed to open
+        if len(sys.argv) &gt; 1:
+            file_path = sys.argv[1]
+            if os.path.exists(file_path):
+                frame.current_file = file_path
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    frame.text_ctrl.SetValue(f.read())
+                frame.SetTitle(f"Text Editor - {os.path.basename(file_path)}")
+
+        return True
+
+if __name__ == '__main__':
+    app = TextEditorApp()
+    app.MainLoop()
+</code></pre>
+
+<h3 id="example-2-calculator">Example 2: Calculator</h3>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import wx
+import math
+
+class CalculatorFrame(wx.Frame):
+    def __init__(self):
+        super().__init__(None, title="Calculator", style=wx.DEFAULT_FRAME_STYLE &amp; ~wx.RESIZE_BORDER)
+        self.InitUI()
+        self.Center()
+        self.current_value = "0"
+        self.previous_value = None
+        self.operation = None
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Display
+        self.display = wx.TextCtrl(panel, value="0", style=wx.TE_RIGHT | wx.TE_READONLY)
+        self.display.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        vbox.Add(self.display, 0, wx.EXPAND | wx.ALL, 5)
+
+        # Buttons
+        button_data = [
+            ['C', 'CE', '←', '/'],
+            ['7', '8', '9', '*'],
+            ['4', '5', '6', '-'],
+            ['1', '2', '3', '+'],
+            ['±', '0', '.', '=']
+        ]
+
+        for row in button_data:
+            hbox = wx.BoxSizer(wx.HORIZONTAL)
+            for label in row:
+                btn = wx.Button(panel, label=label, size=(50, 40))
+                btn.Bind(wx.EVT_BUTTON, self.OnButtonClick)
+                hbox.Add(btn, 0, wx.ALL, 2)
+            vbox.Add(hbox, 0, wx.CENTER)
+
+        panel.SetSizer(vbox)
+        self.Fit()
+
+    def OnButtonClick(self, event):
+        label = event.GetEventObject().GetLabel()
+
+        if label.isdigit():
+            self.OnNumber(label)
+        elif label == '.':
+            self.OnDecimal()
+        elif label in ['+', '-', '*', '/']:
+            self.OnOperation(label)
+        elif label == '=':
+            self.OnEquals()
+        elif label == 'C':
+            self.OnClear()
+        elif label == 'CE':
+            self.OnClearEntry()
+        elif label == '←':
+            self.OnBackspace()
+        elif label == '±':
+            self.OnPlusMinus()
+
+    def OnNumber(self, digit):
+        if self.current_value == "0":
+            self.current_value = digit
+        else:
+            self.current_value += digit
+        self.UpdateDisplay()
+
+    def OnDecimal(self):
+        if '.' not in self.current_value:
+            self.current_value += '.'
+        self.UpdateDisplay()
+
+    def OnOperation(self, op):
+        if self.operation and self.previous_value:
+            self.OnEquals()
+        self.previous_value = float(self.current_value)
+        self.operation = op
+        self.current_value = "0"
+
+    def OnEquals(self):
+        if self.operation and self.previous_value is not None:
+            current = float(self.current_value)
+            try:
+                if self.operation == '+':
+                    result = self.previous_value + current
+                elif self.operation == '-':
+                    result = self.previous_value - current
+                elif self.operation == '*':
+                    result = self.previous_value * current
+                elif self.operation == '/':
+                    if current != 0:
+                        result = self.previous_value / current
+                    else:
+                        wx.MessageBox("Cannot divide by zero!", "Error", wx.OK | wx.ICON_ERROR)
+                        return
+
+                self.current_value = str(result)
+                self.UpdateDisplay()
+                self.operation = None
+                self.previous_value = None
+            except Exception as e:
+                wx.MessageBox(f"Calculation error: {e}", "Error", wx.OK | wx.ICON_ERROR)
+
+    def OnClear(self):
+        self.current_value = "0"
+        self.previous_value = None
+        self.operation = None
+        self.UpdateDisplay()
+
+    def OnClearEntry(self):
+        self.current_value = "0"
+        self.UpdateDisplay()
+
+    def OnBackspace(self):
+        if len(self.current_value) &gt; 1:
+            self.current_value = self.current_value[:-1]
+        else:
+            self.current_value = "0"
+        self.UpdateDisplay()
+
+    def OnPlusMinus(self):
+        if self.current_value != "0":
+            if self.current_value.startswith("-"):
+                self.current_value = self.current_value[1:]
+            else:
+                self.current_value = "-" + self.current_value
+        self.UpdateDisplay()
+
+    def UpdateDisplay(self):
+        # Format number display
+        try:
+            val = float(self.current_value)
+            if val.is_integer():
+                display_text = str(int(val))
+            else:
+                display_text = self.current_value
+        except:
+            display_text = self.current_value
+
+        self.display.SetValue(display_text)
+
+class CalculatorApp(wx.App):
+    def OnInit(self):
+        frame = CalculatorFrame()
+        frame.Show()
+        return True
+
+if __name__ == '__main__':
+    app = CalculatorApp()
+    app.MainLoop()
+</code></pre>
+
+<h2 id="console-applications">Console Applications</h2>
+
+<p>You can also create console applications:</p>
+
+<pre><code>#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+
+def main():
+    print("=== My Console Application ===")
+
+    if len(sys.argv) &gt; 1:
+        print(f"Received arguments: {sys.argv[1:]}")
+
+    while True:
+        command = input("Enter command (help/exit): ").strip().lower()
+
+        if command == "exit":
+            break
+        elif command == "help":
+            print("Available commands:")
+            print("- help: shows this help")
+            print("- exit: ends program")
+        else:
+            print(f"Unknown command: {command}")
+
+    print("Program ended")
+
+if __name__ == '__main__':
+    main()
+</code></pre>
+
+<h2 id="executable-applications-exe">Executable Applications (.exe)</h2>
+
+<p>You can also use compiled applications:</p>
+
+<p><strong>__app.tce:</strong></p>
+
+<pre><code>name_pl=Moja aplikacja
+name_en=My Application
+openfile=myapp.exe
+</code></pre>
+
+<h2 id="testing-applications">Testing Applications</h2>
+
+<ol>
+<li>Create directory in <code>data/applications/application_name/</code></li>
+<li>Add <code>__app.tce</code> and main application file</li>
+<li>Start Titan</li>
+<li>Check if application appears in "Applications" category</li>
+<li>Test launch and functionality</li>
+</ol>
+
+<h2 id="important-guidelines">Important Guidelines</h2>
+
+<ol>
+<li><strong>Always add __app.tce file</strong> - without it application won't be visible</li>
+<li><strong>Test with arguments</strong> - applications can receive files to open</li>
+<li><strong>Use translations</strong> - add multilingual support for better accessibility</li>
+<li><strong>Handle errors</strong> - add try/catch for stability</li>
+<li><strong>Optimize size</strong> - remove unnecessary files from application directory</li>
+<li><strong>Document settings</strong> - if using settings, describe options</li>
+<li><strong>Test compilation</strong> - .py files are automatically compiled to .pyc</li>
+</ol>
+
+<h2 id="directory-structure">Directory Structure</h2>
+
+<pre><code>data/applications/my_application/
+├── __app.tce           # Application configuration (required)
+├── main.py             # Main application file
+├── babel.cfg           # Translation configuration (optional)
+├── languages/          # Translations (optional)
+│   ├── messages.pot
+│   ├── pl/
+│   └── en/
+├── resources/          # Resources (optional)
+│   ├── images/
+│   ├── sounds/
+│   └── data/
+├── modules/            # Additional modules (optional)
+│   └── helpers.py
+└── translation.py      # Translation handling (optional)
+</code></pre>
+
+<p>Titan applications provide a simple platform for creating independent programs with access to launcher functionality and full internationalization support.</p>
+
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

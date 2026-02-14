@@ -248,24 +248,76 @@ class TelegramClient:
         try:
             message = event.message
             sender = await message.get_sender()
-            
+            msg_text = message.text or ''
+
+            # Check for TCE voice call markers BEFORE normal message processing
+            if msg_text and isinstance(message.peer_id, PeerUser):
+                call_info = telegram_voice.parse_call_message(msg_text)
+                if call_info:
+                    sender_name = getattr(sender, 'first_name', None) or getattr(sender, 'username', None) or _('Unknown')
+                    sender_id = sender.id if sender else None
+
+                    if call_info['type'] == 'call_request':
+                        # Incoming TCE voice call
+                        group_id = call_info['group_id']
+                        caller_name = call_info.get('caller_name', sender_name)
+                        print(f"Incoming TCE voice call from {caller_name} (group: {group_id})")
+
+                        # Show incoming call dialog on main thread
+                        def show_tce_call_dialog():
+                            try:
+                                from src.network import telegram_windows
+                                app = wx.GetApp()
+                                if app:
+                                    parent = app.GetTopWindow()
+                                    if parent:
+                                        if hasattr(parent, 'IsIconized') and parent.IsIconized():
+                                            parent.Iconize(False)
+                                        parent.Raise()
+                                        parent.RequestUserAttention()
+
+                                    call_data = {
+                                        'caller_name': caller_name,
+                                        'caller_id': sender_id,
+                                        'group_id': group_id,
+                                        'type': 'tce_call'
+                                    }
+                                    telegram_windows.show_incoming_call_dialog(
+                                        parent, caller_name, call_data
+                                    )
+                            except Exception as dialog_err:
+                                print(f"Error showing TCE call dialog: {dialog_err}")
+                                import traceback
+                                traceback.print_exc()
+
+                        wx.CallAfter(show_tce_call_dialog)
+
+                    elif call_info['type'] == 'call_end':
+                        # Other side ended the call
+                        print(f"TCE call ended by remote side (group: {call_info['group_id']})")
+                        if telegram_voice.is_call_active():
+                            telegram_voice.end_voice_call()
+
+                    # Don't process call markers as regular messages
+                    return
+
             # Create message data
             message_data = {
                 'type': 'new_message',
                 'id': message.id,
                 'sender_id': sender.id if sender else None,
                 'sender_username': getattr(sender, 'username', None) or getattr(sender, 'first_name', _('Unknown')),
-                'message': message.text or '',
+                'message': msg_text,
                 'timestamp': message.date.isoformat(),
                 'chat_id': message.peer_id,
                 'is_private': isinstance(message.peer_id, PeerUser),
                 'is_group': isinstance(message.peer_id, PeerChat),
                 'is_channel': isinstance(message.peer_id, PeerChannel)
             }
-            
+
             # Play sound and announce message with TTS
             play_sound('titannet/new_message.ogg')
-            
+
             # Get group/chat information for group messages
             chat_name = None
             if message_data['is_group'] or message_data['is_channel']:
@@ -277,71 +329,65 @@ class TelegramClient:
                         break
                 if not chat_name:
                     chat_name = "Unknown Group"
-            
+
             # Announce message with TTS (translatable)
             # Check if stereo speech is enabled
-            from stereo_speech import get_stereo_speech
-            stereo_speech = get_stereo_speech()
-            
-            if stereo_speech.is_stereo_enabled():
+            try:
+                from src.titan_core.stereo_speech import get_stereo_speech
+                stereo_speech = get_stereo_speech()
+            except ImportError:
+                stereo_speech = None
+
+            if stereo_speech and stereo_speech.is_stereo_enabled():
                 # Use stereo speech with higher tone for notification and slower for message content
                 if message_data['is_group'] or message_data['is_channel']:
-                    # Group message: "New group message from groupname, nick" with higher pitch
                     notification_text = _("New group message from {}, {}").format(
                         chat_name,
                         message_data['sender_username']
                     )
-                    # Then message content with normal/slower voice
                     message_content = message_data['message']
                 else:
-                    # Private message: "New message from nick" with higher pitch  
                     notification_text = _("New message from {}").format(
                         message_data['sender_username']
                     )
-                    # Then message content with normal/slower voice
                     message_content = message_data['message']
-                
-                # Speak notification part with higher pitch (faster/higher tone)
+
                 stereo_speech.speak(notification_text, position=0.0, pitch_offset=3, use_fallback=False)
-                
-                # Brief pause
+
                 import time
                 time.sleep(0.3)
-                
-                # Speak message content with lower pitch (slower voice)
+
                 if message_content:
                     stereo_speech.speak(message_content, position=0.0, pitch_offset=-2, use_fallback=False)
             else:
-                # Fallback to accessible_output3 if stereo speech is disabled
+                # Fallback to accessible_output3
                 import accessible_output3.outputs.auto
                 speaker = accessible_output3.outputs.auto.Auto()
-                
+
                 if message_data['is_group'] or message_data['is_channel']:
-                    # Group message format: "New group message from groupname, nick, message"
                     announcement = _("New group message from {}, {}, {}").format(
                         chat_name,
-                        message_data['sender_username'], 
+                        message_data['sender_username'],
                         message_data['message']
                     )
                 else:
-                    # Private message format: "Message from: nick, message"
                     announcement = _("Message from: {}, {}").format(
-                        message_data['sender_username'], 
+                        message_data['sender_username'],
                         message_data['message']
                     )
-                
+
                 speaker.speak(announcement)
-            
+
             # Add group name to message data for GUI display
             if message_data['is_group'] or message_data['is_channel']:
                 message_data['group_name'] = chat_name
-            
+
             for callback in self.message_callbacks:
                 try:
                     wx.CallAfter(callback, message_data)
                 except:
                     pass
-                    
+
         except Exception as e:
             print(f"Error handling message: {e}")
     
@@ -358,329 +404,169 @@ class TelegramClient:
             print(f"Error handling user update: {e}")
     
     async def _handle_call_update(self, event):
-        """Handle call-related updates"""
+        """Handle native Telegram call updates (signaling only)."""
         try:
             from telethon.tl.types import UpdatePhoneCall
-            
-            if isinstance(event, UpdatePhoneCall):
-                phone_call = event.phone_call
-                
-                # Handle different call states
-                if hasattr(phone_call, '_'):
-                    call_type = phone_call._
-                    
-                    if call_type == 'phoneCallRequested':
-                        # Incoming call
-                        caller_id = phone_call.admin_id
-                        print(f"Incoming call from user ID: {caller_id}")
-                        print(f"Call object type: {type(phone_call)}")
-                        
-                        # Store incoming call data for proper answering
-                        self.current_incoming_call = {
+
+            if not isinstance(event, UpdatePhoneCall):
+                return
+
+            phone_call = event.phone_call
+            call_type = getattr(phone_call, '_', None)
+            if not call_type:
+                return
+
+            if call_type == 'phoneCallRequested':
+                # Incoming native Telegram call
+                caller_id = phone_call.admin_id
+                print(f"Incoming native call from user ID: {caller_id}")
+
+                self.current_incoming_call = {
+                    'caller_id': caller_id,
+                    'call_object': phone_call,
+                    'call_id': phone_call.id,
+                    'type': 'native_call'
+                }
+
+                # Find caller name
+                caller_name = f"User {caller_id}"
+                try:
+                    for dialog in self.dialogs:
+                        if hasattr(dialog['entity'], 'id') and dialog['entity'].id == caller_id:
+                            caller_name = dialog['name'] or dialog['title']
+                            break
+                except Exception:
+                    pass
+
+                # Show incoming call dialog
+                def show_native_call_dialog():
+                    try:
+                        from src.network import telegram_windows
+                        app = wx.GetApp()
+                        parent = app.GetTopWindow() if app else None
+                        if parent:
+                            if hasattr(parent, 'IsIconized') and parent.IsIconized():
+                                parent.Iconize(False)
+                            parent.Raise()
+                            parent.RequestUserAttention()
+                        telegram_windows.show_incoming_call_dialog(
+                            parent, caller_name, self.current_incoming_call
+                        )
+                    except Exception as e:
+                        print(f"Error showing native call dialog: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                wx.CallAfter(show_native_call_dialog)
+                play_sound('titannet/ring_in.ogg')
+
+                for callback in self.call_callbacks:
+                    try:
+                        wx.CallAfter(callback, 'incoming_call', {
                             'caller_id': caller_id,
-                            'call_object': phone_call,
-                            'call_id': phone_call.id
-                        }
-                        
-                        # Find caller name from user data
-                        caller_name = f"User {caller_id}"  # Default name
-                        
-                        # Try to find caller name in dialogs
-                        try:
-                            for dialog in self.dialogs:
-                                if hasattr(dialog['entity'], 'id') and dialog['entity'].id == caller_id:
-                                    caller_name = dialog['name'] or dialog['title']
-                                    break
-                        except:
-                            pass
-                        
-                        # Show incoming call dialog
-                        def show_call_dialog():
-                            try:
-                                # Import here to avoid circular imports
-                                import telegram_windows
-                                import wx
-                                
-                                # Get main application window - force it to show even if minimized
-                                app = wx.GetApp()
-                                if app:
-                                    main_window = None
-                                    
-                                    # Try to get the main window directly
-                                    main_window = app.GetTopWindow()
-                                    
-                                    # If no main window found, try to find TitanApp window
-                                    if not main_window:
-                                        for window in wx.GetTopLevelWindows():
-                                            if hasattr(window, '__class__') and 'TitanApp' in str(window.__class__):
-                                                main_window = window
-                                                break
-                                    
-                                    # If still no window, create a temporary parent
-                                    if not main_window:
-                                        main_window = wx.Frame(None)
-                                        main_window.Hide()  # Keep it hidden
-                                    
-                                    # Restore main window if minimized and bring to front
-                                    if main_window and hasattr(main_window, 'IsIconized'):
-                                        if main_window.IsIconized():
-                                            main_window.Iconize(False)  # Restore if minimized
-                                        main_window.Raise()  # Bring to front
-                                        main_window.RequestUserAttention()  # Flash in taskbar
-                                    
-                                    # Show the incoming call dialog
-                                    choice = telegram_windows.show_incoming_call_dialog(
-                                        main_window, 
-                                        caller_name, 
-                                        self.current_incoming_call
-                                    )
-                                    print(f"User choice for incoming call: {choice}")
-                                    
-                            except Exception as dialog_error:
-                                print(f"Error showing incoming call dialog: {dialog_error}")
-                                import traceback
-                                print(traceback.format_exc())
-                                
-                                # Fallback: auto-reject if dialog fails
+                            'caller_name': caller_name,
+                            'call_id': phone_call.id,
+                            'call_object': phone_call
+                        })
+                    except Exception:
+                        pass
+
+            elif call_type == 'phoneCallAccepted':
+                # Our outgoing native call was accepted - complete DH exchange
+                print("Native call accepted - completing DH exchange")
+                if telegram_voice.telegram_voice_client and telegram_voice.telegram_voice_client.dh_params:
+                    try:
+                        from telethon.tl.functions.phone import ConfirmCallRequest
+                        from telethon.tl.types import InputPhoneCall
+                        import hashlib
+
+                        dh = telegram_voice.telegram_voice_client.dh_params
+                        if 'g_a' in dh:
+                            g_a_bytes = dh['g_a'].to_bytes(256, byteorder='big')
+                            p = dh['p']
+                            a = dh['a']
+                            g_b_int = int.from_bytes(phone_call.g_b, byteorder='little')
+                            shared_key = pow(g_b_int, a, p)
+                            shared_bytes = shared_key.to_bytes((shared_key.bit_length() + 7) // 8, byteorder='big')
+                            fingerprint = int.from_bytes(
+                                hashlib.sha1(shared_bytes).digest()[-8:],
+                                byteorder='little', signed=True
+                            )
+
+                            input_call = InputPhoneCall(id=phone_call.id, access_hash=phone_call.access_hash)
+
+                            def do_confirm():
                                 try:
-                                    import telegram_client
-                                    telegram_client.end_voice_call()
-                                except:
-                                    pass
-                        
-                        # Show dialog in main thread
-                        wx.CallAfter(show_call_dialog)
-                        
-                        # Notify about incoming call
-                        for callback in self.call_callbacks:
-                            try:
-                                wx.CallAfter(callback, 'incoming_call', {
-                                    'caller_id': caller_id,
-                                    'caller_name': caller_name,
-                                    'call_id': phone_call.id,
-                                    'call_object': phone_call
-                                })
-                            except:
-                                pass
-                        
-                        # Play incoming call sound
-                        play_sound('titannet/ring_in.ogg')
-                        
-                    elif call_type == 'phoneCallAccepted':
-                        # Call was accepted - this means we need to complete DH key exchange
-                        print("=== CALL ACCEPTED - COMPLETING DH KEY EXCHANGE ===")
-                        print("Call was accepted - must send ConfirmCallRequest to complete DH")
-                        print(f"Call object: {phone_call}")
-                        print(f"Call ID: {phone_call.id if hasattr(phone_call, 'id') else 'No ID'}")
-                        print(f"g_b received: {hasattr(phone_call, 'g_b')}")
-                        
-                        # Complete DH key exchange by sending ConfirmCallRequest
-                        if telegram_voice.telegram_voice_client and telegram_voice.telegram_voice_client.dh_params:
-                            try:
-                                # Import necessary functions
-                                from telethon.tl.functions.phone import ConfirmCallRequest
-                                from telethon.tl.types import InputPhoneCall
-                                import asyncio
-                                
-                                # Get stored DH parameters from when we initiated the call
-                                dh_params = telegram_voice.telegram_voice_client.dh_params
-                                g_a = dh_params['g_a']  # Our public key that we need to send
-                                g_b = phone_call.g_b  # Remote's public key from phoneCallAccepted
-                                
-                                # Convert g_a to bytes (256 bytes)
-                                g_a_bytes = g_a.to_bytes(256, byteorder='big')
-                                
-                                # Calculate shared key: k = (g_b)^a mod p
-                                p = dh_params['p']
-                                a = dh_params['a']
-                                
-                                # Convert g_b from bytes to int (little endian like in Telethon-calls)
-                                g_b_int = int.from_bytes(g_b, byteorder='little')
-                                
-                                # Calculate shared key
-                                shared_key_int = pow(g_b_int, a, p)
-                                
-                                # Convert shared key to bytes for fingerprint calculation
-                                def integer_to_bytes(value):
-                                    """Convert integer to bytes like in Telethon-calls"""
-                                    return value.to_bytes((value.bit_length() + 7) // 8, byteorder='big')
-                                
-                                shared_key_bytes = integer_to_bytes(shared_key_int)
-                                
-                                # Calculate key fingerprint like in Telethon-calls
-                                import hashlib
-                                def calc_fingerprint(key_bytes):
-                                    return int.from_bytes(hashlib.sha1(key_bytes).digest()[-8:], byteorder='little', signed=True)
-                                
-                                key_fingerprint = calc_fingerprint(shared_key_bytes)
-                                
-                                print(f"[DH] Sending ConfirmCallRequest with g_a")
-                                print(f"[DH] g_a size: {len(g_a_bytes)} bytes")
-                                print(f"[DH] g_b size: {len(g_b)} bytes")
-                                print(f"[DH] Shared key calculated, fingerprint: {key_fingerprint}")
-                                
-                                # Create InputPhoneCall from the accepted call
-                                input_call = InputPhoneCall(
-                                    id=phone_call.id,
-                                    access_hash=phone_call.access_hash
-                                )
-                                
-                                # Send confirm call request
-                                def confirm_call_async():
-                                    try:
-                                        import telegram_client
-                                        if hasattr(telegram_client.telegram_client, 'event_loop') and telegram_client.telegram_client.event_loop:
-                                            loop = telegram_client.telegram_client.event_loop
-                                            
-                                            # Schedule the confirm call request
-                                            future = asyncio.run_coroutine_threadsafe(
-                                                self.client(ConfirmCallRequest(
-                                                    peer=input_call,
-                                                    g_a=g_a_bytes,  # Send our public key
-                                                    key_fingerprint=key_fingerprint,  # Calculated fingerprint
-                                                    protocol=dh_params['protocol']
-                                                )), 
-                                                loop
-                                            )
-                                            result = future.result(timeout=10)
-                                            print(f"[DH] ConfirmCallRequest sent successfully: {result}")
-                                            print(f"[DH] Result type: {type(result)}")
-                                            
-                                            if hasattr(result, 'phone_call'):
-                                                call_result = result.phone_call
-                                                print(f"[DH] Call confirmed, result: {call_result}")
-                                                print(f"[DH] Call type after confirm: {getattr(call_result, '_', 'No type')}")
-                                                
-                                                # Update our stored call object
-                                                if telegram_voice.telegram_voice_client:
-                                                    telegram_voice.telegram_voice_client.current_call_object = call_result
-                                                    print(f"[DH] Updated stored call object")
-                                            
-                                    except Exception as confirm_error:
-                                        print(f"[ERROR] Failed to send ConfirmCallRequest: {confirm_error}")
-                                        print(f"[ERROR] This could cause the call to disconnect!")
-                                        import traceback
-                                        print(traceback.format_exc())
-                                
-                                # Run confirmation in thread
-                                import threading
-                                threading.Thread(target=confirm_call_async, daemon=True).start()
-                                
-                            except Exception as dh_error:
-                                print(f"[ERROR] DH key exchange completion failed: {dh_error}")
-                                import traceback
-                                print(traceback.format_exc())
-                        
-                        play_sound('titannet/callsuccess.ogg')
-                        
-                        # Initialize voice client audio stream if available
-                        if telegram_voice.telegram_voice_client:
-                            try:
-                                # Mark audio as active since Telegram's WebRTC is now handling it
-                                telegram_voice.telegram_voice_client.audio_stream_active = True
-                                telegram_voice.telegram_voice_client.is_call_active = True  # Ensure call remains active
-                                print("Audio stream marked as active for accepted call")
-                                print("Call state: ACTIVE - DH exchange completed")
-                            except Exception as audio_error:
-                                print(f"Warning: Could not initialize audio stream: {audio_error}")
-                        
-                        # Notify about call connection
-                        for callback in self.call_callbacks:
-                            try:
-                                wx.CallAfter(callback, 'call_connected', {
-                                    'call_id': phone_call.id,
-                                    'audio_active': True
-                                })
-                            except:
-                                pass
-                        
-                    elif call_type == 'phoneCallWaiting':
-                        # Call is waiting - this means it's ringing
-                        print("=== CALL WAITING/RINGING ===")
-                        print("Call is waiting/ringing - user should have time to answer")
-                        print(f"Call object: {phone_call}")
-                        print("=== CALL SHOULD KEEP RINGING ===")
-                        
-                        # Make sure we don't accidentally end the call
-                        # Keep the call active and let it ring
-                        if telegram_voice.telegram_voice_client:
-                            telegram_voice.telegram_voice_client.is_call_active = True
-                            print("Confirmed call is still active - continuing to ring")
-                        
-                        # Continue playing ring sound
-                        play_sound('titannet/ring_out.ogg')
-                        
-                    elif call_type == 'phoneCall':
-                        # Active call established - audio should work now
-                        print("=== CALL FULLY ACTIVE ===")
-                        print("Call is now active - WebRTC connection established")
-                        print(f"Call ID: {getattr(phone_call, 'id', 'No ID')}")
-                        print(f"Call duration: {getattr(phone_call, 'duration', 'No duration')}")
-                        print("=== DH KEY EXCHANGE COMPLETED SUCCESSFULLY ===")
-                        
-                        # Mark voice client audio as fully active
-                        if telegram_voice.telegram_voice_client:
-                            telegram_voice.telegram_voice_client.audio_stream_active = True
-                            telegram_voice.telegram_voice_client.is_call_active = True
-                            print("Voice call connection is now fully active")
-                            print("=== CALL SHOULD REMAIN STABLE NOW ===")
-                            
-                        # Play connection success sound
-                        play_sound('titannet/callsuccess.ogg')
-                            
-                        for callback in self.call_callbacks:
-                            try:
-                                wx.CallAfter(callback, 'call_active', {
-                                    'call_id': phone_call.id,
-                                    'webrtc_active': True,
-                                    'status': 'fully_connected'
-                                })
-                            except:
-                                pass
-                                
-                    elif call_type == 'phoneCallDiscarded':
-                        # Call ended
-                        print("=== CALL DISCARDED DEBUG ===")
-                        print("Call ended - investigating why...")
-                        print(f"Call object: {phone_call}")
-                        print(f"Discard reason: {getattr(phone_call, 'reason', 'Unknown')}")
-                        print(f"Call duration: {getattr(phone_call, 'duration', 'Unknown')}")
-                        
-                        # Check if this is an immediate disconnection (duration < 10 seconds)
-                        duration = getattr(phone_call, 'duration', 0)
-                        if duration < 10:
-                            print("*** WARNING: IMMEDIATE DISCONNECTION DETECTED ***")
-                            print("*** Call ended too quickly - this might be the bug ***")
-                            print(f"*** Duration: {duration} seconds ***")
-                        
-                        play_sound('titannet/bye.ogg')
-                        
-                        # Reset voice client state
-                        if telegram_voice.telegram_voice_client:
-                            telegram_voice.telegram_voice_client.audio_stream_active = False
-                            telegram_voice.telegram_voice_client.is_call_active = False
-                        
-                        # Clear stored incoming call data
-                        self.current_incoming_call = None
-                        
-                        # Notify about call end
-                        for callback in self.call_callbacks:
-                            try:
-                                wx.CallAfter(callback, 'call_ended', {})
-                            except:
-                                pass
-                    
-                    else:
-                        # Unknown call type - log it for debugging
-                        print(f"=== UNKNOWN CALL TYPE: {call_type} ===")
-                        print(f"Call object: {phone_call}")
-                        print(f"Call attributes: {dir(phone_call)}")
-                        print("=== This might be causing disconnections ===")
-        
+                                    if self.event_loop and self.event_loop.is_running():
+                                        future = asyncio.run_coroutine_threadsafe(
+                                            self.client(ConfirmCallRequest(
+                                                peer=input_call,
+                                                g_a=g_a_bytes,
+                                                key_fingerprint=fingerprint,
+                                                protocol=dh['protocol']
+                                            )),
+                                            self.event_loop
+                                        )
+                                        result = future.result(timeout=10)
+                                        if hasattr(result, 'phone_call') and telegram_voice.telegram_voice_client:
+                                            telegram_voice.telegram_voice_client.current_call_object = result.phone_call
+                                except Exception as e:
+                                    print(f"DH confirm failed: {e}")
+
+                            import threading
+                            threading.Thread(target=do_confirm, daemon=True).start()
+
+                    except Exception as e:
+                        print(f"DH exchange failed: {e}")
+
+                play_sound('titannet/callsuccess.ogg')
+
+                for callback in self.call_callbacks:
+                    try:
+                        wx.CallAfter(callback, 'call_connected', {'call_id': phone_call.id})
+                    except Exception:
+                        pass
+
+            elif call_type == 'phoneCallWaiting':
+                # Outgoing call is ringing
+                play_sound('titannet/ring_out.ogg')
+
+            elif call_type == 'phoneCall':
+                # Call fully established
+                play_sound('titannet/callsuccess.ogg')
+                if telegram_voice.telegram_voice_client:
+                    telegram_voice.telegram_voice_client.current_call_object = phone_call
+
+                for callback in self.call_callbacks:
+                    try:
+                        wx.CallAfter(callback, 'call_active', {'call_id': phone_call.id})
+                    except Exception:
+                        pass
+
+            elif call_type == 'phoneCallDiscarded':
+                # Call ended
+                reason = getattr(phone_call, 'reason', None)
+                print(f"Native call discarded (reason: {reason})")
+                play_sound('titannet/bye.ogg')
+
+                if telegram_voice.telegram_voice_client:
+                    # Only end if the voice client still thinks it's a native call
+                    vc = telegram_voice.telegram_voice_client
+                    if vc.current_call_object and not vc.current_group_id:
+                        telegram_voice.end_voice_call()
+
+                self.current_incoming_call = None
+
+                for callback in self.call_callbacks:
+                    try:
+                        wx.CallAfter(callback, 'call_ended', {})
+                    except Exception:
+                        pass
+
         except Exception as e:
             print(f"Error handling call update: {e}")
             import traceback
-            print(traceback.format_exc())
+            traceback.print_exc()
     
     def _notify_connection_success(self):
         """Notify about successful connection"""
@@ -691,13 +577,13 @@ class TelegramClient:
         speaker = accessible_output3.outputs.auto.Auto()
         speaker.speak(_("Connected to Telegram as {}").format(self.user_data['username']))
         
-        # Play welcome sound after 2 seconds to ensure connection is stable
-        def play_delayed_welcome():
-            time.sleep(2)
-            play_sound('titannet/welcome to IM.ogg')
-        
-        threading.Thread(target=play_delayed_welcome, daemon=True).start()
-        
+        # Welcome sound is played by GUI, not here
+        # def play_delayed_welcome():
+        #     time.sleep(2)
+        #     play_sound('titannet/welcome to IM.ogg')
+        #
+        # threading.Thread(target=play_delayed_welcome, daemon=True).start()
+
         for callback in self.status_callbacks:
             try:
                 callback('connection_success', self.user_data)
@@ -1200,6 +1086,14 @@ def answer_voice_call():
 def end_voice_call():
     """End current voice call"""
     return telegram_voice.end_voice_call()
+
+def join_voice_call(group_id):
+    """Join an existing voice call group (for receiving TCE calls)"""
+    return telegram_voice.join_voice_call(group_id)
+
+def toggle_mute():
+    """Toggle microphone mute during voice call"""
+    return telegram_voice.toggle_mute()
 
 def is_call_active():
     """Check if voice call is active"""

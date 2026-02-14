@@ -17,6 +17,7 @@ from src.network import whatsapp_webview
 from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
 from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
+from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound, play_endoflist_sound, play_sound
 import accessible_output3.outputs.auto
 from src.ui.menu import MenuBar
@@ -160,6 +161,16 @@ class TitanApp(wx.Frame):
             self.unread_messages = {}
             self.call_active = False
             self.call_window = None
+
+            # Titan-Net Client - hardcoded to titosofttitan.com
+            from src.network.titan_net import TitanNetClient
+            self.titan_client = TitanNetClient(
+                server_host='titosofttitan.com',
+                server_port=8001,
+                http_port=8000
+            )
+            self.titan_logged_in = False
+            self.titan_username = None
             
             # Debouncing for mouse motion sounds
             self.last_statusbar_sound_time = 0
@@ -179,6 +190,16 @@ class TitanApp(wx.Frame):
             self.status_update_thread = None
             self.status_thread_running = True
             self.status_thread_stop_event = threading.Event()  # Event for immediate thread shutdown
+
+            # Initialize statusbar applet manager
+            try:
+                self.statusbar_applet_manager = StatusbarAppletManager()
+                # Add applet cache entries
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    self.status_cache[f'applet_{applet_name}'] = 'Loading...'
+            except Exception as e:
+                print(f"Warning: Failed to initialize statusbar applet manager: {e}")
+                self.statusbar_applet_manager = None
 
             # Initialize sound system safely
             try:
@@ -334,7 +355,8 @@ class TitanApp(wx.Frame):
 
 
     def InitUI(self):
-        panel = wx.Panel(self)
+        self.main_panel = wx.Panel(self)
+        panel = self.main_panel  # Local alias for backward compatibility
         main_vbox = wx.BoxSizer(wx.VERTICAL)
 
         self.toolbar = self.CreateToolBar()
@@ -401,7 +423,8 @@ class TitanApp(wx.Frame):
         self.logout_button.Hide()
 
 
-        list_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.list_sizer = wx.BoxSizer(wx.VERTICAL)
+        list_sizer = self.list_sizer  # Local alias
         list_sizer.Add(self.app_listbox, proportion=1, flag=wx.EXPAND|wx.ALL, border=0)
         list_sizer.Add(self.game_tree, proportion=1, flag=wx.EXPAND|wx.ALL, border=0)
         list_sizer.Add(self.network_listbox, proportion=1, flag=wx.EXPAND|wx.ALL, border=0)
@@ -428,12 +451,22 @@ class TitanApp(wx.Frame):
 
         main_vbox.Add(list_sizer, proportion=1, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
 
+        # View registry for Ctrl+Tab cycling (built-in views + component views)
+        self.registered_views = [
+            {'id': 'apps', 'label': _("Application List:"), 'control': self.app_listbox, 'show_method': self.show_app_list},
+            {'id': 'games', 'label': _("Game List:"), 'control': self.game_tree, 'show_method': self.show_game_list},
+            {'id': 'network', 'label': _("Titan IM:"), 'control': self.network_listbox, 'show_method': self.show_network_list},
+        ]
+
         main_vbox.Add(wx.StaticText(panel, label=_("Status Bar:")), flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
         self.statusbar_listbox = wx.ListBox(panel)
         self.populate_statusbar()
 
         main_vbox.Add(self.statusbar_listbox, proportion=1, flag=wx.EXPAND|wx.ALL, border=10)
+
+        # Bind statusbar double-click for applet activation
+        self.statusbar_listbox.Bind(wx.EVT_LISTBOX_DCLICK, self.on_statusbar_click)
 
         self.app_listbox.Bind(wx.EVT_LISTBOX_DCLICK, self.on_app_selected)
         self.game_tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_game_tree_activated)
@@ -671,12 +704,29 @@ class TitanApp(wx.Frame):
                 # Update network (potentially very slow due to subprocess)
                 network_str = get_network_status()
 
+                # Update statusbar applets
+                if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                    for applet_name in self.statusbar_applet_manager.get_applet_names():
+                        try:
+                            self.statusbar_applet_manager.update_applet_cache(applet_name)
+                        except Exception as applet_error:
+                            print(f"Error updating statusbar applet '{applet_name}': {applet_error}")
+
                 # Update cache atomically
                 with self.status_cache_lock:
                     self.status_cache['time'] = time_str
                     self.status_cache['battery'] = battery_str
                     self.status_cache['volume'] = volume_str
                     self.status_cache['network'] = network_str
+
+                    # Update applet cache entries
+                    if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                        for applet_name in self.statusbar_applet_manager.get_applet_names():
+                            try:
+                                text = self.statusbar_applet_manager.get_applet_text(applet_name)
+                                self.status_cache[f'applet_{applet_name}'] = text
+                            except Exception as e:
+                                print(f"Error getting applet text for '{applet_name}': {e}")
 
             except Exception as e:
                 print(f"Warning: Error updating status cache: {e}")
@@ -735,16 +785,23 @@ class TitanApp(wx.Frame):
 
 
     def populate_statusbar(self):
-        """Populate statusbar with cached data to avoid blocking GUI."""
+        """Populate statusbar with cached data including applets to avoid blocking GUI."""
         self.statusbar_listbox.Clear()
         with self.status_cache_lock:
+            # Standard status items
             self.statusbar_listbox.Append(_("Clock: {}").format(self.status_cache['time']))
             self.statusbar_listbox.Append(_("Battery level: {}").format(self.status_cache['battery']))
             self.statusbar_listbox.Append(_("Volume: {}").format(self.status_cache['volume']))
             self.statusbar_listbox.Append(self.status_cache['network'])
 
+            # Statusbar applets
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    applet_text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
+                    self.statusbar_listbox.Append(applet_text)
+
     def update_statusbar(self, event):
-        """Update statusbar with cached data to avoid blocking GUI."""
+        """Update statusbar with cached data including applets to avoid blocking GUI."""
         # If UI is not initialized (minimized start), update invisible UI status instead
         if self.start_minimized and not hasattr(self, 'statusbar_listbox'):
             # Update status data for invisible UI
@@ -753,11 +810,45 @@ class TitanApp(wx.Frame):
         else:
             # Normal status bar update for GUI mode - read from cache
             with self.status_cache_lock:
+                # Update standard items
                 self.statusbar_listbox.SetString(0, _("Clock: {}").format(self.status_cache['time']))
                 self.statusbar_listbox.SetString(1, _("Battery level: {}").format(self.status_cache['battery']))
                 self.statusbar_listbox.SetString(2, _("Volume: {}").format(self.status_cache['volume']))
                 self.statusbar_listbox.SetString(3, self.status_cache['network'])
 
+                # Update applet items
+                if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                    applet_names = self.statusbar_applet_manager.get_applet_names()
+                    for i, applet_name in enumerate(applet_names):
+                        index = 4 + i  # Applets start after 4 standard items
+                        applet_text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
+                        # Check if index exists (in case applets were added after initial populate)
+                        if index < self.statusbar_listbox.GetCount():
+                            self.statusbar_listbox.SetString(index, applet_text)
+                        else:
+                            self.statusbar_listbox.Append(applet_text)
+
+    def on_statusbar_click(self, event):
+        """Handle statusbar item double-click to activate applet actions."""
+        selection = self.statusbar_listbox.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+
+        # Indices of applets start after standard items (4: Clock, Battery, Volume, Network)
+        standard_items_count = 4
+        if selection >= standard_items_count:
+            # This is an applet item
+            applet_index = selection - standard_items_count
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                applet_names = self.statusbar_applet_manager.get_applet_names()
+                if applet_index < len(applet_names):
+                    applet_name = applet_names[applet_index]
+                    try:
+                        self.statusbar_applet_manager.activate_applet(applet_name, parent_frame=self)
+                    except Exception as e:
+                        print(f"Error activating statusbar applet '{applet_name}': {e}")
+                        import traceback
+                        traceback.print_exc()
 
     def on_app_selected(self, event):
         selection = self.app_listbox.GetSelection()
@@ -1136,7 +1227,18 @@ class TitanApp(wx.Frame):
             elif current_focus == self.statusbar_listbox:
                 self.on_status_selected(event)
             else:
-                event.Skip()
+                # Check registered component views for on_activate
+                handled = False
+                for view in self.registered_views:
+                    if view.get('on_activate') and current_focus == view['control'] and view['control'].IsShown():
+                        try:
+                            view['on_activate'](event)
+                        except Exception as e:
+                            print(f"[GUI] Error in on_activate for view '{view['id']}': {e}")
+                        handled = True
+                        break
+                if not handled:
+                    event.Skip()
             return
 
         if keycode == wx.WXK_TAB:
@@ -1144,64 +1246,42 @@ class TitanApp(wx.Frame):
                   if current_focus == self.app_listbox and self.app_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
-                      vibrate_focus_change()  # Add vibration for focus change to statusbar
+                      vibrate_focus_change()
                   elif current_focus == self.game_tree and self.game_tree.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
-                      vibrate_focus_change()  # Add vibration for focus change to statusbar
+                      vibrate_focus_change()
                   elif current_focus == self.network_listbox and self.network_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
-                      vibrate_focus_change()  # Add vibration for focus change to statusbar
+                      vibrate_focus_change()
                   elif current_focus == self.users_listbox and self.users_listbox.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
-                      vibrate_focus_change()  # Add vibration for focus change to statusbar
+                      vibrate_focus_change()
                   elif current_focus == self.message_input and self.message_input.IsShown():
                       self.statusbar_listbox.SetFocus()
                       play_statusbar_sound()
-                      vibrate_focus_change()  # Add vibration for focus change to statusbar
+                      vibrate_focus_change()
                   elif current_focus == self.statusbar_listbox:
-                      if self.current_list == "apps":
-                           self.app_listbox.SetFocus()
-                           play_applist_sound()
-                           vibrate_focus_change()  # Add vibration for focus change to app list
-                      elif self.current_list == "games":
-                           self.game_tree.SetFocus()
-                           play_applist_sound()
-                           vibrate_focus_change()  # Add vibration for focus change to game list
-                      elif self.current_list == "network":
-                           self.network_listbox.SetFocus()
-                           play_applist_sound()
-                           vibrate_focus_change()  # Add vibration for focus change to network list
-                      elif self.current_list == "users":
-                           self.users_listbox.SetFocus()
-                           play_applist_sound()
-                           vibrate_focus_change()  # Add vibration for focus change to users list
-                      elif self.current_list == "messages":
-                           self.message_input.SetFocus()
-                           play_applist_sound()
-                           vibrate_focus_change()  # Add vibration for focus change to message input
+                      # Focus back on current view's control
+                      self._focus_current_view_control()
                   else:
-                      event.Skip()
+                      # Check registered component view controls
+                      tab_handled = False
+                      for view in self.registered_views:
+                          if current_focus == view['control'] and view['control'].IsShown():
+                              self.statusbar_listbox.SetFocus()
+                              play_statusbar_sound()
+                              vibrate_focus_change()
+                              tab_handled = True
+                              break
+                      if not tab_handled:
+                          event.Skip()
                   return
              elif modifiers == wx.MOD_SHIFT:
                   if current_focus == self.statusbar_listbox:
-                      if self.current_list == "apps":
-                           self.app_listbox.SetFocus()
-                           play_applist_sound()
-                      elif self.current_list == "games":
-                           self.game_tree.SetFocus()
-                           play_applist_sound()
-                      elif self.current_list == "network":
-                           self.network_listbox.SetFocus()
-                           play_applist_sound()
-                      elif self.current_list == "users":
-                           self.users_listbox.SetFocus()
-                           play_applist_sound()
-                      elif self.current_list == "messages":
-                           self.message_input.SetFocus()
-                           play_applist_sound()
+                      self._focus_current_view_control()
                   event.Skip()
                   return
 
@@ -1303,38 +1383,61 @@ class TitanApp(wx.Frame):
         elif _("Volume:") in item:
             self.open_volume_mixer()
         else:
-            print(f"WARNING: Unknown statusbar item selected: {item}")
+            # Check if this is a statusbar applet
+            # Strategy: Check if item matches applet pattern (not exact text, since values change)
+            applet_handled = False
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    try:
+                        # Get a fresh applet text to check the pattern
+                        self.statusbar_applet_manager.update_applet_cache(applet_name)
+                        applet_text = self.statusbar_applet_manager.get_applet_text(applet_name)
+
+                        # Extract pattern keywords from applet text (words before colons)
+                        # e.g., "CPU: 8%, RAM: 41%" -> ["CPU", "RAM"]
+                        import re
+                        applet_keywords = re.findall(r'(\w+):', applet_text)
+                        item_keywords = re.findall(r'(\w+):', item)
+
+                        # Check if item has same keyword pattern as applet
+                        if applet_keywords and item_keywords and set(applet_keywords) == set(item_keywords):
+                            print(f"Statusbar applet detected: '{applet_name}' (pattern match: {applet_keywords}) - activating...")
+                            # Call activation on main thread (for GUI dialogs)
+                            wx.CallAfter(self.statusbar_applet_manager.activate_applet, applet_name, self)
+                            applet_handled = True
+                            break
+                    except Exception as e:
+                        print(f"Error checking statusbar applet '{applet_name}': {e}")
+                        import traceback
+                        traceback.print_exc()
+
+            if not applet_handled:
+                print(f"WARNING: Unknown statusbar item selected: {item}")
 
 
     def show_app_list(self):
+        self._hide_all_views()
         self.app_listbox.Show()
-        self.game_tree.Hide()
-        self.network_listbox.Hide()
-        self.users_listbox.Hide()
-        self.chat_display.Hide()
-        self.message_input.Hide()
-        self.login_panel.Hide()
         self.list_label.SetLabel(_("Application List:"))
         self.current_list = "apps"
-        speaker.speak(_("Application list, 1 of 3"))
-        vibrate_menu_open()  # Add vibration for switching to application list
+        idx = self._get_view_index('apps')
+        total = len(self.registered_views)
+        speaker.speak(_("Application list, {} of {}").format(idx + 1, total))
+        vibrate_menu_open()
         self.Layout()
         if self.app_listbox.GetCount() > 0:
              self.app_listbox.SetFocus()
 
 
     def show_game_list(self):
-        self.app_listbox.Hide()
+        self._hide_all_views()
         self.game_tree.Show()
-        self.network_listbox.Hide()
-        self.users_listbox.Hide()
-        self.chat_display.Hide()
-        self.message_input.Hide()
-        self.login_panel.Hide()
         self.list_label.SetLabel(_("Game List:"))
         self.current_list = "games"
-        speaker.speak(_("Game list, 2 of 3"))
-        vibrate_menu_open()  # Add vibration for switching to game list
+        idx = self._get_view_index('games')
+        total = len(self.registered_views)
+        speaker.speak(_("Game list, {} of {}").format(idx + 1, total))
+        vibrate_menu_open()
         self.Layout()
 
         # Focus on first element
@@ -1346,17 +1449,14 @@ class TitanApp(wx.Frame):
                 self.game_tree.SetFocus()
 
     def show_network_list(self):
-        self.app_listbox.Hide()
-        self.game_tree.Hide()
+        self._hide_all_views()
         self.network_listbox.Show()
-        self.users_listbox.Hide()
-        self.chat_display.Hide()
-        self.message_input.Hide()
-        self.login_panel.Hide()
         self.list_label.SetLabel(_("Titan IM:"))
         self.current_list = "network"
-        speaker.speak(_("Titan IM, 3 of 3"))
-        vibrate_menu_open()  # Add vibration for switching to network list
+        idx = self._get_view_index('network')
+        total = len(self.registered_views)
+        speaker.speak(_("Titan IM, {} of {}").format(idx + 1, total))
+        vibrate_menu_open()
 
         # Always populate the network list based on login status
         self.populate_network_list()
@@ -1365,11 +1465,129 @@ class TitanApp(wx.Frame):
         if self.network_listbox.GetCount() > 0:
             self.network_listbox.SetFocus()
 
+    def _hide_all_views(self):
+        """Hide all view controls (built-in and component-registered)."""
+        for view in self.registered_views:
+            view['control'].Hide()
+        # Also hide non-cycling controls
+        self.users_listbox.Hide()
+        self.chat_display.Hide()
+        self.message_input.Hide()
+        self.login_panel.Hide()
+
+    def _get_view_index(self, view_id):
+        """Get the index of a view in registered_views by its id."""
+        for i, view in enumerate(self.registered_views):
+            if view['id'] == view_id:
+                return i
+        return -1
+
+    def _focus_current_view_control(self):
+        """Focus the control of the current view (used by Tab/Shift+Tab from statusbar)."""
+        # Check registered views first (includes built-in)
+        for view in self.registered_views:
+            if view['id'] == self.current_list:
+                view['control'].SetFocus()
+                play_applist_sound()
+                vibrate_focus_change()
+                return
+        # Fallback for sub-views (users, messages, contacts, etc.)
+        if self.current_list == "users":
+            self.users_listbox.SetFocus()
+            play_applist_sound()
+            vibrate_focus_change()
+        elif self.current_list == "messages":
+            self.message_input.SetFocus()
+            play_applist_sound()
+            vibrate_focus_change()
+        elif self.current_list in ["contacts", "group_chats"]:
+            self.users_listbox.SetFocus()
+            play_applist_sound()
+            vibrate_focus_change()
+
+    def register_view(self, view_id, label, control, on_show=None, on_activate=None, position='after_network'):
+        """Register a new view for Ctrl+Tab cycling.
+
+        Args:
+            view_id: Unique string identifier (e.g., 'my_component')
+            label: Display label for the view header (e.g., 'My List:')
+            control: wx control (ListBox, TreeCtrl, etc.) parented to self.main_panel
+            on_show: Optional callback called when view is shown
+            on_activate: Optional callback for Enter key activation
+            position: Where to insert - 'after_apps', 'after_games', 'after_network' (default), or int index
+        """
+        # Determine insertion index
+        if isinstance(position, int):
+            insert_idx = min(position, len(self.registered_views))
+        elif position == 'after_apps':
+            idx = self._get_view_index('apps')
+            insert_idx = idx + 1 if idx >= 0 else len(self.registered_views)
+        elif position == 'after_games':
+            idx = self._get_view_index('games')
+            insert_idx = idx + 1 if idx >= 0 else len(self.registered_views)
+        elif position == 'after_network':
+            idx = self._get_view_index('network')
+            insert_idx = idx + 1 if idx >= 0 else len(self.registered_views)
+        else:
+            insert_idx = len(self.registered_views)
+
+        view_entry = {
+            'id': view_id,
+            'label': label,
+            'control': control,
+            'show_method': None,
+            'on_show': on_show,
+            'on_activate': on_activate,
+        }
+
+        self.registered_views.insert(insert_idx, view_entry)
+
+        # Add control to list_sizer (hidden)
+        control.Hide()
+        self.list_sizer.Insert(insert_idx, control, proportion=1, flag=wx.EXPAND | wx.ALL, border=0)
+
+        print(f"[GUI] Registered view '{view_id}' at position {insert_idx} (total views: {len(self.registered_views)})")
+
+    def _show_registered_view(self, view_id):
+        """Show a registered component view by its id."""
+        view_idx = self._get_view_index(view_id)
+        if view_idx < 0:
+            return
+
+        view = self.registered_views[view_idx]
+        self._hide_all_views()
+        view['control'].Show()
+        self.list_label.SetLabel(view['label'])
+        self.current_list = view['id']
+
+        total = len(self.registered_views)
+        speaker.speak(_("{}, {} of {}").format(view['label'].rstrip(':'), view_idx + 1, total))
+        vibrate_menu_open()
+
+        # Call on_show callback if provided
+        if view.get('on_show') and callable(view['on_show']):
+            try:
+                view['on_show']()
+            except Exception as e:
+                print(f"[GUI] Error in on_show for view '{view_id}': {e}")
+
+        self.Layout()
+
+        # Set focus on the control
+        try:
+            if isinstance(view['control'], wx.ListBox) and view['control'].GetCount() > 0:
+                view['control'].SetSelection(0)
+            view['control'].SetFocus()
+        except Exception:
+            pass
+
     def populate_network_options(self):
         self.network_listbox.Clear()
         self.network_listbox.Append(_("Telegram"))
         self.network_listbox.Append(_("Facebook Messenger"))
         self.network_listbox.Append(_("WhatsApp"))
+        self.network_listbox.Append(_("Titan-Net (Beta)"))
+        self.network_listbox.Append(_("EltenLink (Beta)"))
         # Future messaging platforms:
         # self.network_listbox.Append(_("Mastodon"))
         # self.network_listbox.Append(_("Matrix"))
@@ -1400,45 +1618,33 @@ class TitanApp(wx.Frame):
             elif "WhatsApp" in selected_text:
                 # Show WhatsApp WebView (like Messenger)
                 self.show_whatsapp_login()
-            # DISABLED - Titan-Net
-            # elif "Titan-Net" in selected_text:
-            #     if "titannet" in self.active_services:
-            #         # Already logged in - show Titan-Net options
-            #         self.current_service = "titannet"
-            #         self.show_titannet_options()
-            #     else:
-            #         # Not logged in - show login dialog
-            #         if hasattr(self, 'titan_client') and self.titan_client:
-            #             try:
-            #                 from titan_net_gui import show_login_dialog
-            #                 logged_in, offline_mode = show_login_dialog(self, self.titan_client)
-
-            #                 if logged_in:
-            #                     # Store in active services
-            #                     self.active_services["titannet"] = {
-            #                         "client": self.titan_client,
-            #                         "type": "titannet",
-            #                         "name": "Titan-Net",
-            #                         "online_users": [],
-            #                         "unread_messages": {},
-            #                         "user_data": {
-            #                             "username": self.titan_client.username,
-            #                             "titan_number": self.titan_client.titan_number
-            #                         }
-            #                     }
-
-            #                     # Update UI
-            #                     self.populate_network_list()
-            #                     self.show_network_list()
-            #                 elif offline_mode:
-            #                     # User chose offline mode
-            #                     # Application continues without Titan-Net connection
-            #                     pass
-            #             except Exception as e:
-            #                 print(f"Error loading Titan-Net login dialog: {e}")
-            #                 wx.MessageBox(_("Titan-Net is not available"), _("Error"), wx.OK | wx.ICON_ERROR)
-            elif selected_text == _("Other communicators"):
-                wx.MessageBox(_("Other communicators will be available soon."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            elif "Titan-Net" in selected_text:
+                if self.titan_logged_in:
+                    # Already logged in - show Titan-Net main window
+                    self.show_titannet_main()
+                else:
+                    # Not logged in - show login dialog
+                    self.show_titannet_login()
+            elif "EltenLink" in selected_text:
+                # Check if already connected and window exists (may be hidden)
+                if "eltenlink" in self.active_services:
+                    service = self.active_services["eltenlink"]
+                    window = service.get("window")
+                    if window and window.client and window.client.is_connected:
+                        window.Show()
+                        window.Raise()
+                        return
+                # Not connected - show login dialog
+                self.show_elten_login()
+            else:
+                try:
+                    from src.network.im_module_manager import im_module_manager
+                    for info in im_module_manager.modules:
+                        if info['name'] in selected_text:
+                            im_module_manager.open_module(info['id'], self)
+                            return
+                except Exception as _e:
+                    print(f"[GUI] IM module open: {_e}")
         
         elif self.current_list == "telegram_options":
             # Handle Telegram options
@@ -1474,31 +1680,50 @@ class TitanApp(wx.Frame):
         #         self.show_network_list()
 
     def show_telegram_login(self):
-        """Show Telegram login interface"""
-        self.app_listbox.Hide()
-        self.game_tree.Hide()
-        self.network_listbox.Hide()
-        self.users_listbox.Hide()
-        self.chat_display.Hide()
-        self.message_input.Hide()
-        self.login_panel.Show()
+        """Show Telegram login using telegram_gui.py"""
+        try:
+            from src.network.telegram_gui import show_telegram_login
+            import accessible_output3.outputs.auto
+            speaker = accessible_output3.outputs.auto.Auto()
 
-        # Update labels for Telegram
-        self.username_label.SetLabel(_("Numer telefonu (z kodem kraju):"))
-        self.password_label.SetLabel(_("2FA Password (if enabled):"))
+            print("[GUI] Opening Telegram login from telegram_gui.py")
 
-        self.list_label.SetLabel(_("Telegram Login"))
-        self.login_button.SetLabel(_("OK"))
-        self.login_button.Show()
-        self.create_account_button.Hide()  # Hide Create Account for Telegram
+            # Open Telegram login dialog
+            chat_window = show_telegram_login(self)
 
-        # Unbind old event and bind new for Telegram
-        self.login_button.Unbind(wx.EVT_BUTTON)
-        self.login_button.Bind(wx.EVT_BUTTON, self.on_login)
+            if chat_window:
+                # Successfully logged in and opened chat window
+                speaker.speak(_("Logged in to Telegram"))
+                # Sound is played by telegram_gui.py window
 
-        self.current_list = "telegram_login"
-        self.Layout()
-        self.username_text.SetFocus()
+                # Store in active services
+                self.active_services["telegram"] = {
+                    "client": telegram_client.telegram_client,
+                    "type": "telegram",
+                    "name": "Telegram",
+                    "window": chat_window,
+                    "online_users": [],
+                    "unread_messages": {}
+                }
+
+                # Legacy compatibility
+                self.telegram_client = telegram_client.telegram_client
+                self.logged_in = True
+
+                print("[GUI] Telegram login successful")
+            else:
+                speaker.speak(_("Login cancelled"))
+                print("[GUI] Telegram login cancelled")
+
+        except Exception as e:
+            print(f"[GUI] Error loading Telegram: {e}")
+            import traceback
+            traceback.print_exc()
+            wx.MessageBox(
+                _("Cannot launch Telegram.\nError: {error}").format(error=str(e)),
+                _("Telegram Error"),
+                wx.OK | wx.ICON_ERROR
+            )
         
     def show_messenger_login(self):
         """Show Facebook Messenger WebView interface"""
@@ -1561,7 +1786,162 @@ class TitanApp(wx.Frame):
         
         # Setup the callback
         whatsapp_window.add_status_callback(on_whatsapp_status_change)
-    
+
+    def show_titannet_login(self):
+        """Show Titan-Net login dialog"""
+        try:
+            from src.network.titan_net_gui import show_login_dialog
+
+            logged_in, offline_mode = show_login_dialog(self, self.titan_client)
+
+            if logged_in:
+                self.titan_logged_in = True
+                self.titan_username = self.titan_client.username
+
+                # Setup callbacks
+                self.setup_titannet_callbacks()
+
+                # Show main window
+                self.show_titannet_main()
+
+                speaker.speak(_("Logged in to Titan-Net as {username}").format(
+                    username=self.titan_username
+                ))
+                play_sound('titannet/welcome to IM.ogg')
+
+            elif offline_mode:
+                speaker.speak(_("Continuing in offline mode"))
+            else:
+                speaker.speak(_("Login cancelled"))
+
+        except Exception as e:
+            print(f"Error loading Titan-Net login dialog: {e}")
+            import traceback
+            traceback.print_exc()
+            wx.MessageBox(
+                _("Cannot launch Titan-Net.\nError: {error}").format(error=str(e)),
+                _("Titan-Net Error"),
+                wx.OK | wx.ICON_ERROR
+            )
+
+    def show_titannet_main(self):
+        """Show Titan-Net main window"""
+        try:
+            from src.network.titan_net_gui import show_titan_net_window
+
+            if not self.titan_client.is_connected:
+                speaker.speak(_("Not connected to Titan-Net"))
+                play_sound('core/error.ogg')
+                return
+
+            show_titan_net_window(self, self.titan_client)
+            speaker.speak(_("Opening Titan-Net"))
+            play_sound('ui/window_open.ogg')
+
+        except Exception as e:
+            print(f"Error opening Titan-Net window: {e}")
+            import traceback
+            traceback.print_exc()
+            wx.MessageBox(
+                _("Cannot open Titan-Net window.\nError: {error}").format(error=str(e)),
+                _("Titan-Net Error"),
+                wx.OK | wx.ICON_ERROR
+            )
+
+    def setup_titannet_callbacks(self):
+        """Setup callbacks for Titan-Net integration"""
+        def on_user_online(username):
+            wx.CallAfter(speaker.speak, _("{user} is now online").format(user=username))
+            wx.CallAfter(play_sound, 'system/user_online.ogg')
+
+        def on_user_offline(username):
+            wx.CallAfter(speaker.speak, _("{user} went offline").format(user=username))
+            wx.CallAfter(play_sound, 'system/user_offline.ogg')
+
+        def on_message_received(message):
+            sender = message.get('sender_username')
+            wx.CallAfter(speaker.speak, _("New message from {user}").format(user=sender))
+            wx.CallAfter(play_sound, 'titannet/new_message.ogg')
+
+        def on_new_user_broadcast(message):
+            """Handle new user registration broadcast"""
+            from src.settings.settings import get_setting
+
+            # Get broadcast message details
+            broadcast_lang = message.get('language', 'en')
+            broadcast_text = message.get('message', '')
+
+            # Get current user's language
+            current_lang = get_setting('language', 'en')
+
+            # Only show broadcast if it matches user's language
+            if broadcast_lang == current_lang and broadcast_text:
+                wx.CallAfter(speaker.speak, broadcast_text)
+                wx.CallAfter(play_sound, 'titannet/accountcreated.ogg')
+
+        self.titan_client.on_user_online = on_user_online
+        self.titan_client.on_user_offline = on_user_offline
+        self.titan_client.on_message_received = on_message_received
+        self.titan_client.on_new_user_broadcast = on_new_user_broadcast
+
+    def show_elten_login(self):
+        """Show EltenLink login dialog"""
+        try:
+            from src.eltenlink_client.elten_gui import show_elten_login
+
+            chat_window = show_elten_login(self)
+
+            if chat_window:
+                # Store in active services
+                self.active_services["eltenlink"] = {
+                    "client": chat_window.client,
+                    "type": "eltenlink",
+                    "name": "EltenLink (Beta)",
+                    "window": chat_window
+                }
+
+                # Setup callbacks
+                self.setup_elten_callbacks()
+
+                speaker.speak(_("Connected to EltenLink (Beta)"))
+                play_sound('titannet/welcome to IM.ogg')
+            else:
+                speaker.speak(_("Login cancelled"))
+
+        except Exception as e:
+            print(f"Error loading EltenLink (Beta) login dialog: {e}")
+            import traceback
+            traceback.print_exc()
+            wx.MessageBox(
+                _("Cannot open EltenLink (Beta).\nError: {error}").format(error=str(e)),
+                _("EltenLink (Beta) Error"),
+                wx.OK | wx.ICON_ERROR
+            )
+
+    def setup_elten_callbacks(self):
+        """Setup callbacks for EltenLink integration"""
+        if "eltenlink" not in self.active_services:
+            return
+
+        client = self.active_services["eltenlink"]["client"]
+
+        def on_message(message):
+            sender = message.get('sender', 'Unknown')
+            wx.CallAfter(speaker.speak, _("New message from {user}").format(user=sender))
+            wx.CallAfter(play_sound, 'titannet/new_chat.ogg')
+
+        def on_user_online(username):
+            wx.CallAfter(speaker.speak, _("{user} is now online").format(user=username))
+            wx.CallAfter(play_sound, 'system/user_online.ogg')
+
+        def on_user_offline(username):
+            wx.CallAfter(speaker.speak, _("{user} went offline").format(user=username))
+            wx.CallAfter(play_sound, 'system/user_offline.ogg')
+
+        client.on_message_received = on_message
+        client.on_user_online = on_user_online
+        client.on_user_offline = on_user_offline
+
     def open_messenger_webview(self):
         """Open Messenger WebView window"""
         try:
@@ -1634,54 +2014,63 @@ class TitanApp(wx.Frame):
     #     wx.MessageBox(info_text, _("Titan-Net Information"), wx.OK | wx.ICON_INFORMATION)
 
     # DISABLED - Titan-Net callback methods
-    # def _on_titannet_message(self, message):
-    #     """Handle incoming Titan-Net private message"""
-    #     try:
-    #         sender_username = message.get('sender_username', 'Unknown')
-    #         message_text = message.get('message', '')
+    def _on_titannet_message(self, message):
+        """Handle incoming Titan-Net private message"""
+        try:
+            from src.titan_core.stereo_speech import speak_stereo
 
-    #         print(f"Received Titan-Net message from {sender_username}: {message_text}")
+            sender_username = message.get('sender_username', 'Unknown')
+            message_text = message.get('message', '')
 
-    #         # Play notification sound
-    #         play_sound('titannet/new_message.ogg')
+            print(f"[TITAN-NET] Received message from {sender_username}: {message_text[:50]}")
 
-    #         # Show notification
-    #         if hasattr(self, 'show_notification'):
-    #             self.show_notification(_("New Titan-Net message from {user}").format(user=sender_username))
+            # Play notification sound
+            play_sound('titannet/new_message.ogg')
 
-    #         # Update unread messages count
-    #         if "titannet" in self.active_services:
-    #             sender_id = message.get('sender_id')
-    #             if sender_id:
-    #                 if 'unread_messages' not in self.active_services["titannet"]:
-    #                     self.active_services["titannet"]['unread_messages'] = {}
+            # TTS notification with stereo positioning (center)
+            notification_text = _("New Titan-Net message from {user}").format(user=sender_username)
+            speak_stereo(notification_text, pan=0.0, pitch=0)
 
-    #                 if sender_id not in self.active_services["titannet"]['unread_messages']:
-    #                     self.active_services["titannet"]['unread_messages'][sender_id] = 0
+            # Update unread messages count
+            if "titannet" in self.active_services:
+                sender_id = message.get('sender_id')
+                if sender_id:
+                    if 'unread_messages' not in self.active_services["titannet"]:
+                        self.active_services["titannet"]['unread_messages'] = {}
 
-    #                 self.active_services["titannet"]['unread_messages'][sender_id] += 1
+                    if sender_id not in self.active_services["titannet"]['unread_messages']:
+                        self.active_services["titannet"]['unread_messages'][sender_id] = 0
 
-    #     except Exception as e:
-    #         print(f"Error handling Titan-Net message: {e}")
+                    self.active_services["titannet"]['unread_messages'][sender_id] += 1
+                    print(f"[TITAN-NET] Unread messages from {sender_username}: {self.active_services['titannet']['unread_messages'][sender_id]}")
 
-    # def _on_titannet_user_online(self, username):
-    #     """Handle Titan-Net user coming online"""
-    #     try:
-    #         print(f"Titan-Net user online: {username}")
+        except Exception as e:
+            print(f"[TITAN-NET] Error handling message: {e}")
 
-    #         # Play user online sound
-    #         play_sound('system/user_online.ogg')
+    def _on_titannet_user_online(self, username):
+        """Handle Titan-Net user coming online"""
+        try:
+            from src.titan_core.stereo_speech import speak_stereo
 
-    #         # Update online users list
-    #         if "titannet" in self.active_services:
-    #             if 'online_users' not in self.active_services["titannet"]:
-    #                 self.active_services["titannet"]['online_users'] = []
+            print(f"[TITAN-NET] User online: {username}")
 
-    #             if username not in self.active_services["titannet"]['online_users']:
-    #                 self.active_services["titannet"]['online_users'].append(username)
+            # Play user online sound
+            play_sound('titannet/online.ogg')
 
-    #     except Exception as e:
-    #         print(f"Error handling Titan-Net user online: {e}")
+            # TTS notification with stereo positioning (left side)
+            notification_text = _("{user} is now online").format(user=username)
+            speak_stereo(notification_text, pan=-0.3, pitch=-2)
+
+            # Update online users list
+            if "titannet" in self.active_services:
+                if 'online_users' not in self.active_services["titannet"]:
+                    self.active_services["titannet"]['online_users'] = []
+
+                if username not in self.active_services["titannet"]['online_users']:
+                    self.active_services["titannet"]['online_users'].append(username)
+
+        except Exception as e:
+            print(f"[TITAN-NET] Error handling user online: {e}")
 
     # def _on_titannet_user_offline(self, username):
     #     """Handle Titan-Net user going offline"""
@@ -1701,17 +2090,60 @@ class TitanApp(wx.Frame):
     #         print(f"Error handling Titan-Net user offline: {e}")
 
     def show_telegram_options(self):
-        """Show Telegram service options (Contacts, Groups, Settings, Logout)"""
+        """Show Telegram window"""
+        try:
+            import accessible_output3.outputs.auto
+            speaker = accessible_output3.outputs.auto.Auto()
+
+            # Check if window already exists
+            if "telegram" in self.active_services and "window" in self.active_services["telegram"]:
+                window = self.active_services["telegram"]["window"]
+                if window and not window.IsBeingDeleted():
+                    window.Show()
+                    window.Raise()
+                    speaker.speak(_("Opening Telegram"))
+                    play_sound('ui/window_open.ogg')
+                    return
+
+            # No existing window - create new one
+            from src.network.telegram_gui import TelegramChatWindow
+            from src.network.telegram_client import get_user_data
+
+            user_data = get_user_data()
+            username = user_data.get('username') or user_data.get('first_name', 'User')
+
+            chat_window = TelegramChatWindow(self, username)
+            chat_window.Show()
+
+            # Store window reference
+            if "telegram" in self.active_services:
+                self.active_services["telegram"]["window"] = chat_window
+
+            speaker.speak(_("Opening Telegram"))
+            play_sound('ui/window_open.ogg')
+
+        except Exception as e:
+            print(f"[GUI] Error opening Telegram: {e}")
+            import traceback
+            traceback.print_exc()
+            wx.MessageBox(
+                _("Cannot open Telegram.\nError: {error}").format(error=str(e)),
+                _("Telegram Error"),
+                wx.OK | wx.ICON_ERROR
+            )
+
+    def _old_show_telegram_options(self):
+        """OLD: Show Telegram service options (Contacts, Groups, Settings, Logout)"""
         self.app_listbox.Hide()
         self.game_tree.Hide()
         self.users_listbox.Hide()
         self.chat_display.Hide()
         self.message_input.Hide()
         self.login_panel.Hide()
-        
+
         self.network_listbox.Show()
         self.network_listbox.Clear()
-        
+
         # Show Telegram specific options
         self.network_listbox.Append(_("Contacts"))
         self.network_listbox.Append(_("Group Chats"))
@@ -1719,11 +2151,11 @@ class TitanApp(wx.Frame):
         self.network_listbox.Append(_("Information"))
         self.network_listbox.Append(_("Logout"))
         self.network_listbox.Append(_("Back to main menu"))
-        
+
         self.list_label.SetLabel(_("Telegram Options"))
         self.current_list = "telegram_options"
         self.Layout()
-        
+
         if self.network_listbox.GetCount() > 0:
             self.network_listbox.SetFocus()
     
@@ -1926,8 +2358,18 @@ class TitanApp(wx.Frame):
             # self.network_listbox.Append(_("TeamTalk"))
             self.network_listbox.Append(_("Facebook Messenger"))
             self.network_listbox.Append(_("WhatsApp"))
-            # self.network_listbox.Append(_("Titan-Net"))  # DISABLED
-            self.network_listbox.Append(_("Other communicators"))
+            self.network_listbox.Append(_("Titan-Net (Beta)"))
+            self.network_listbox.Append(_("EltenLink (Beta)"))
+            try:
+                from src.network.im_module_manager import im_module_manager
+                for info in im_module_manager.modules:
+                    item = info['name']
+                    status = im_module_manager.get_status_text(info['id'])
+                    if status:
+                        item = f"{item} {status}"
+                    self.network_listbox.Append(item)
+            except Exception as _e:
+                print(f"[GUI] IM modules: {_e}")
         else:
             # Show logged in services with connection status
             if "telegram" in self.active_services:
@@ -1970,38 +2412,54 @@ class TitanApp(wx.Frame):
             else:
                 self.network_listbox.Append(_("WhatsApp"))
 
-            # DISABLED - Titan-Net
-            # if "titannet" in self.active_services:
-            #     username = "user"  # Default
-            #     try:
-            #         titannet_service = self.active_services["titannet"]
-            #         if "user_data" in titannet_service and titannet_service["user_data"]:
-            #             username = titannet_service["user_data"].get("username", "user")
-            #     except:
-            #         pass
-            #     self.network_listbox.Append(_("Titan-Net - connected as {}").format(username))
-            # else:
-            #     self.network_listbox.Append(_("Titan-Net"))
+            # Titan-Net (Beta)
+            if self.titan_logged_in and self.titan_username:
+                self.network_listbox.Append(_("Titan-Net (Beta) - connected as {}").format(self.titan_username))
+            else:
+                self.network_listbox.Append(_("Titan-Net (Beta)"))
 
-            self.network_listbox.Append(_("Other communicators"))
+            if "eltenlink" in self.active_services:
+                eltenlink_service = self.active_services["eltenlink"]
+                username = "user"
+                try:
+                    if "client" in eltenlink_service and hasattr(eltenlink_service["client"], "username"):
+                        username = eltenlink_service["client"].username
+                except:
+                    pass
+                self.network_listbox.Append(_("EltenLink (Beta) - connected as {}").format(username))
+            else:
+                self.network_listbox.Append(_("EltenLink (Beta)"))
+
+            try:
+                from src.network.im_module_manager import im_module_manager
+                for info in im_module_manager.modules:
+                    item = info['name']
+                    status = im_module_manager.get_status_text(info['id'])
+                    if status:
+                        item = f"{item} {status}"
+                    self.network_listbox.Append(item)
+            except Exception as _e:
+                print(f"[GUI] IM modules: {_e}")
 
     def on_toggle_list(self):
         play_sound('ui/switch_list.ogg')
-        vibrate_menu_open()  # Add vibration for section/list switching
+        vibrate_menu_open()
 
-        # Ctrl+Tab przełącza tylko między 3 głównymi widokami
-        if self.current_list == "apps":
-            self.show_game_list()
-        elif self.current_list == "games":
-            self.show_network_list()
-            if self.network_listbox.GetCount() > 0:
-                self.network_listbox.SetFocus()
-        elif self.current_list == "network" or self.current_list in ["users", "messages"]:
-            # Z widoków sieciowych wracamy do aplikacji
-            self.show_app_list()
+        # Find current view index in registered_views
+        current_idx = self._get_view_index(self.current_list)
+
+        # If current_list is a sub-view (users, messages, contacts, etc.), go to first view
+        if current_idx < 0:
+            current_idx = len(self.registered_views) - 1  # Will wrap to 0
+
+        # Advance to next view (wrap around)
+        next_idx = (current_idx + 1) % len(self.registered_views)
+        next_view = self.registered_views[next_idx]
+
+        if next_view.get('show_method'):
+            next_view['show_method']()
         else:
-            # Domyślnie wróć do aplikacji
-            self.show_app_list()
+            self._show_registered_view(next_view['id'])
 
     def on_show_apps(self, event):
         if self.current_list != "apps":

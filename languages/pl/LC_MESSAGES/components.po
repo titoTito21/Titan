@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -17,60 +17,60 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: src/ui/componentmanagergui.py:23
+#: src/ui/componentmanagergui.py:35
 msgid "Installed components:"
 msgstr "Zainstalowane komponenty:"
 
-#: src/ui/componentmanagergui.py:29
+#: src/ui/componentmanagergui.py:41
 msgid "&Actions"
 msgstr "&Akcje"
 
-#: src/ui/componentmanagergui.py:50
+#: src/ui/componentmanagergui.py:62
 msgid "Component manager not available."
 msgstr "Menedżer komponentów niedostępny."
 
-#: src/ui/componentmanagergui.py:61 src/ui/componentmanagergui.py:189
+#: src/ui/componentmanagergui.py:73 src/ui/componentmanagergui.py:201
 msgid "Enabled"
 msgstr "Włączone"
 
-#: src/ui/componentmanagergui.py:61 src/ui/componentmanagergui.py:189
+#: src/ui/componentmanagergui.py:73 src/ui/componentmanagergui.py:201
 msgid "Disabled"
 msgstr "Wyłączone"
 
-#: src/ui/componentmanagergui.py:130
+#: src/ui/componentmanagergui.py:142
 #, python-brace-format
 msgid "Component '{}' is not loaded."
 msgstr "Komponent '{}' nie jest załadowany."
 
-#: src/ui/componentmanagergui.py:130 src/ui/componentmanagergui.py:138
+#: src/ui/componentmanagergui.py:142 src/ui/componentmanagergui.py:150
 msgid "Information"
 msgstr "Informacja"
 
-#: src/ui/componentmanagergui.py:138
+#: src/ui/componentmanagergui.py:150
 #, python-brace-format
 msgid "No available actions for component '{}'."
 msgstr "Brak dostępnych akcji dla komponentu '{}'."
 
-#: src/ui/componentmanagergui.py:142
+#: src/ui/componentmanagergui.py:154
 msgid "Context menu"
 msgstr "Menu kontekstowe"
 
-#: src/ui/componentmanagergui.py:145
+#: src/ui/componentmanagergui.py:157
 msgid "Run"
 msgstr "Uruchom"
 
-#: src/ui/componentmanagergui.py:149
+#: src/ui/componentmanagergui.py:161
 msgid "Settings"
 msgstr "Ustawienia"
 
-#: src/ui/componentmanagergui.py:157
+#: src/ui/componentmanagergui.py:169
 #, python-brace-format
 msgid "Running component {}"
 msgstr "Uruchamianie komponentu {}"
 
-#: src/ui/componentmanagergui.py:169
+#: src/ui/componentmanagergui.py:181
 #, python-brace-format
 msgid ""
 "Error running component '{}':\n"
@@ -79,16 +79,16 @@ msgstr ""
 "Błąd uruchamiania komponentu '{}':\n"
 "{}"
 
-#: src/ui/componentmanagergui.py:169 src/ui/componentmanagergui.py:180
+#: src/ui/componentmanagergui.py:181 src/ui/componentmanagergui.py:192
 msgid "Error"
 msgstr "Błąd"
 
-#: src/ui/componentmanagergui.py:173
+#: src/ui/componentmanagergui.py:185
 #, python-brace-format
 msgid "Opening settings for component {}"
 msgstr "Otwieranie ustawień komponentu {}"
 
-#: src/ui/componentmanagergui.py:180
+#: src/ui/componentmanagergui.py:192
 #, python-brace-format
 msgid ""
 "Error opening settings for '{}':\n"
@@ -97,7 +97,7 @@ msgstr ""
 "Błąd otwierania ustawień dla '{}':\n"
 "{}"
 
-#: src/ui/componentmanagergui.py:192
+#: src/ui/componentmanagergui.py:204
 #, python-brace-format
 msgid "Component {} {}"
 msgstr "Komponent {} {}"

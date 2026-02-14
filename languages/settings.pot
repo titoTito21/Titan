@@ -1,21 +1,21 @@
 # Translations template for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
+# Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:29+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: src/ui/settingsgui.py:206
 msgid "Kategoria ustawień"
@@ -69,7 +69,7 @@ msgstr ""
 msgid "Select sound theme:"
 msgstr ""
 
-#: src/ui/settingsgui.py:404 src/ui/settingsgui.py:879
+#: src/ui/settingsgui.py:404 src/ui/settingsgui.py:880
 msgid "No themes"
 msgstr ""
 
@@ -114,7 +114,7 @@ msgid "Select interface skin:"
 msgstr ""
 
 #: src/ui/settingsgui.py:488 src/ui/settingsgui.py:490
-#: src/ui/settingsgui.py:739 src/ui/settingsgui.py:740
+#: src/ui/settingsgui.py:740 src/ui/settingsgui.py:741
 msgid "Default"
 msgstr ""
 
@@ -226,12 +226,12 @@ msgstr ""
 msgid "Speech volume"
 msgstr ""
 
-#: src/ui/settingsgui.py:788 src/ui/settingsgui.py:823
+#: src/ui/settingsgui.py:789 src/ui/settingsgui.py:824
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
 msgstr ""
 
-#: src/ui/settingsgui.py:794
+#: src/ui/settingsgui.py:795
 #, python-brace-format
 msgid ""
 "Cannot open SAPI settings:\n"
@@ -240,19 +240,19 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:794 src/ui/settingsgui.py:800
-#: src/ui/settingsgui.py:803 src/ui/settingsgui.py:829
-#: src/ui/settingsgui.py:837 src/ui/settingsgui.py:840
+#: src/ui/settingsgui.py:795 src/ui/settingsgui.py:801
+#: src/ui/settingsgui.py:804 src/ui/settingsgui.py:830
+#: src/ui/settingsgui.py:838 src/ui/settingsgui.py:841
 msgid "Error"
 msgstr ""
 
-#: src/ui/settingsgui.py:800
+#: src/ui/settingsgui.py:801
 msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:803
+#: src/ui/settingsgui.py:804
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
@@ -261,7 +261,7 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:829
+#: src/ui/settingsgui.py:830
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
@@ -270,13 +270,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:837
+#: src/ui/settingsgui.py:838
 msgid ""
 "Error: Cannot find accessibility settings. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:840
+#: src/ui/settingsgui.py:841
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
@@ -285,17 +285,17 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:1009
+#: src/ui/settingsgui.py:1011
 msgid ""
 "Settings have been saved. Please restart the application for changes to "
 "take full effect."
 msgstr ""
 
-#: src/ui/settingsgui.py:1011
+#: src/ui/settingsgui.py:1013
 msgid "Settings have been saved."
 msgstr ""
 
-#: src/ui/settingsgui.py:1185 src/ui/settingsgui.py:1190
+#: src/ui/settingsgui.py:1187 src/ui/settingsgui.py:1192
 msgid "Default voice"
 msgstr ""
 

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -17,36 +17,36 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: src/ui/help.py:13
 msgid "Titan Help"
-msgstr "Klawisz Titan:"
+msgstr "Pomoc Titana"
 
 #: src/ui/help.py:59
 msgid "Help file not found."
-msgstr ""
+msgstr "Nie znaleziono pliku pomocy."
 
 #: src/ui/help.py:76
 #, python-brace-format
 msgid "Error reading help file: {}"
-msgstr "Błąd ładowania widżetu: {}"
+msgstr "Błąd odczytu pliku pomocy: {}"
 
 #: src/ui/help.py:79
 #, python-brace-format
 msgid "Unexpected error: {}"
-msgstr "Błąd połączenia: {}"
+msgstr "Nieoczekiwany błąd: {}"
 
 #: src/ui/help.py:90
 msgid "No help content found."
-msgstr ""
+msgstr "Nie znaleziono treści pomocy."
 
 #: src/ui/help.py:92
 #, python-brace-format
 msgid "Error parsing help data: {}"
-msgstr "Błąd ładowania widżetu: {}"
+msgstr "Błąd parsowania danych pomocy: {}"
 
 #: src/ui/help.py:120
 msgid "No content available for this section."
-msgstr ""
+msgstr "Brak treści dla tej sekcji."
 

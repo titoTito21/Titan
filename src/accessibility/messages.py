@@ -11,6 +11,10 @@ import accessible_output3.outputs.auto
 from src.titan_core.sound import play_sound
 from src.titan_core.stereo_speech import speak_stereo
 from src.settings.settings import get_setting
+from src.titan_core.translation import set_language
+
+# Get the translation function
+_ = set_language(get_setting('language', 'pl'))
 
 
 class AccessibilityMessenger:
@@ -141,7 +145,7 @@ def show_invisible_ui_tip(delay=5.0):
         delay (float): Delay in seconds before showing the tip (default: 5.0)
     """
     messenger = get_messenger()
-    message = "To use invisible interface, press tilde key"
+    message = _("To use invisible interface, press tilde key")
 
     messenger.show_timed_message(
         text=message,

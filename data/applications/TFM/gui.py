@@ -1208,6 +1208,14 @@ class FileManager(wx.Frame):
                     self.announce(_("Nie można zaznaczyć wpisu 'Ten folder jest pusty'."))
             event.Skip()
 
+        elif keycode == wx.WXK_F5:
+            # F5 - Copy selected files to other panel
+            self.copy_to_other_panel_commander(panel_side)
+
+        elif keycode == wx.WXK_F6:
+            # F6 - Move selected files to other panel
+            self.move_to_other_panel_commander(panel_side)
+
         else:
             event.Skip()
 
@@ -1267,6 +1275,121 @@ class FileManager(wx.Frame):
         
         self.left_list.Refresh()
         self.right_list.Refresh()
+
+    def copy_to_other_panel_commander(self, panel_side):
+        """Copy selected files from current panel to other panel (F5)"""
+        # Get source and destination paths
+        src_path = self.left_path if panel_side == 'left' else self.right_path
+        dst_path = self.right_path if panel_side == 'left' else self.left_path
+
+        # Get selected items
+        selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+
+        if not selected_items:
+            # If no items selected, get focused item
+            ctrl = self.left_list if panel_side == 'left' else self.right_list
+            item_index = ctrl.GetFocusedItem()
+            if item_index != -1:
+                name = ctrl.GetItemText(item_index)
+                if name != _('Ten folder jest pusty'):
+                    selected_items = {name}
+                else:
+                    play_error_sound()
+                    self.announce(_("Brak plików do skopiowania"))
+                    return
+            else:
+                play_error_sound()
+                self.announce(_("Brak plików do skopiowania"))
+                return
+
+        # Copy files
+        copied_count = 0
+        error_count = 0
+
+        for item_name in selected_items:
+            src_file = os.path.join(src_path, item_name)
+            dst_file = os.path.join(dst_path, item_name)
+
+            try:
+                if os.path.isdir(src_file):
+                    shutil.copytree(src_file, dst_file, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src_file, dst_file)
+                copied_count += 1
+            except Exception as e:
+                error_count += 1
+                print(f"Error copying {item_name}: {e}")
+
+        # Clear selection
+        selected_items.clear()
+
+        # Refresh both panels
+        self.populate_file_list(ctrl=self.left_list)
+        self.populate_file_list(ctrl=self.right_list)
+
+        # Announce result
+        if error_count > 0:
+            play_error_sound()
+            self.announce(_("Skopiowano {} plików, {} błędów").format(copied_count, error_count))
+        else:
+            play_sound(os.path.join(get_sfx_directory(), 'copy.ogg'))
+            self.announce(_("Skopiowano {} plików").format(copied_count))
+
+    def move_to_other_panel_commander(self, panel_side):
+        """Move selected files from current panel to other panel (F6)"""
+        # Get source and destination paths
+        src_path = self.left_path if panel_side == 'left' else self.right_path
+        dst_path = self.right_path if panel_side == 'left' else self.left_path
+
+        # Get selected items
+        selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+
+        if not selected_items:
+            # If no items selected, get focused item
+            ctrl = self.left_list if panel_side == 'left' else self.right_list
+            item_index = ctrl.GetFocusedItem()
+            if item_index != -1:
+                name = ctrl.GetItemText(item_index)
+                if name != _('Ten folder jest pusty'):
+                    selected_items = {name}
+                else:
+                    play_error_sound()
+                    self.announce(_("Brak plików do przeniesienia"))
+                    return
+            else:
+                play_error_sound()
+                self.announce(_("Brak plików do przeniesienia"))
+                return
+
+        # Move files
+        moved_count = 0
+        error_count = 0
+
+        for item_name in selected_items:
+            src_file = os.path.join(src_path, item_name)
+            dst_file = os.path.join(dst_path, item_name)
+
+            try:
+                shutil.move(src_file, dst_file)
+                moved_count += 1
+            except Exception as e:
+                error_count += 1
+                print(f"Error moving {item_name}: {e}")
+
+        # Clear selection
+        selected_items.clear()
+
+        # Refresh both panels
+        self.populate_file_list(ctrl=self.left_list)
+        self.populate_file_list(ctrl=self.right_list)
+
+        # Announce result
+        if error_count > 0:
+            play_error_sound()
+            self.announce(_("Przeniesiono {} plików, {} błędów").format(moved_count, error_count))
+        else:
+            play_sound(os.path.join(get_sfx_directory(), 'move.ogg'))
+            self.announce(_("Przeniesiono {} plików").format(moved_count))
 
     # --- End Commander Mode Handlers ---
 

@@ -1,6 +1,7 @@
 import gettext
 import os
 import sys
+import locale
 from src.settings import settings
 
 # Global variable to hold the current language code.
@@ -31,14 +32,44 @@ TRANSLATION_DOMAINS = [
     'notifications', # Notifications (notifications.py, notificationcenter.py)
     'network',       # Network/messengers (messenger_gui.py, telegram_gui.py, whatsapp_webview.py, etc.)
     'titannet',      # Titan-Net (titan_net.py, titan_net_gui.py)
+    'eltenclient',   # EltenLink client (elten_client.py, elten_gui.py)
     'system',        # System (tce_system.py, system_monitor.py, updater.py)
     'controller',    # Controllers (controller_ui.py, controller_modes.py)
     'help',          # Help (help.py)
     'sound',         # Sound (sound.py)
+    'accessibility', # Accessibility messages (messages.py)
+    'classicstartmenu', # Classic Start Menu (classic_start_menu.py)
+    'exit_dialog',   # Exit confirmation dialog (shutdown_question.py)
+    'launchers',     # Launcher manager (launcher_manager.py)
 ]
 
 # Store translation objects for each domain
 _translations = {}
+
+# Language code to display name mapping
+LANGUAGE_NAMES = {
+    'pl': 'Polski',
+    'en': 'English',
+    'de': 'Deutsch',
+    'fr': 'Français',
+    'es': 'Español',
+    'it': 'Italiano',
+    'ru': 'Русский',
+    'uk': 'Українська',
+    'cs': 'Čeština',
+    'sk': 'Slovenčina',
+}
+
+def get_language_display_name(lang_code):
+    """Returns the display name for a language code."""
+    return LANGUAGE_NAMES.get(lang_code, lang_code)
+
+def get_language_code_from_display_name(display_name):
+    """Returns the language code for a display name."""
+    for code, name in LANGUAGE_NAMES.items():
+        if name == display_name:
+            return code
+    return display_name  # Return as-is if not found
 
 def get_available_languages():
     """Scans the 'languages' directory to find available language codes."""
@@ -52,6 +83,39 @@ def get_available_languages():
     if 'pl' not in languages:
         languages.insert(0, 'pl') # Ensure Polish is always an option
     return sorted(languages)
+
+def get_available_languages_display():
+    """Returns available languages as display names (e.g., 'Polski', 'English')."""
+    lang_codes = get_available_languages()
+    return [get_language_display_name(code) for code in lang_codes]
+
+def get_system_language():
+    """Detects the system language and returns appropriate language code."""
+    try:
+        # Try to get the system locale
+        system_locale = locale.getdefaultlocale()[0]
+        if system_locale:
+            # Extract language code (e.g., 'pl' from 'pl_PL')
+            lang_code = system_locale.split('_')[0].lower()
+
+            # Check if this language is available
+            available_languages = get_available_languages()
+
+            # If system language is available, use it
+            if lang_code in available_languages:
+                return lang_code
+
+            # If Polish, return 'pl'
+            if lang_code == 'pl':
+                return 'pl'
+
+            # For any other language, fallback to English
+            return 'en'
+    except Exception as e:
+        print(f"Error detecting system language: {e}")
+
+    # Default fallback to English if detection fails
+    return 'en'
 
 def set_language(lang_code='pl'):
     """Sets up the translation objects for the given language code."""
@@ -84,14 +148,23 @@ def set_language(lang_code='pl'):
 
     return multi_domain_gettext
 
-# Initialize translations. Priority: LANG env var, then settings, then fallback to 'pl'.
+# Initialize translations. Priority: LANG env var, then settings, then system language detection.
 # The '_' function will be available globally in the modules that import it.
 lang_from_env = os.environ.get('LANG')
 if lang_from_env:
     # Extract the language code (e.g., 'pl' from 'pl_PL.UTF-8')
     initial_language = lang_from_env.split('.')[0].split('_')[0]
 else:
-    initial_language = settings.get_setting('language', 'pl')
+    # Check if user has explicitly set a language preference
+    saved_language = settings.get_setting('language', None)
+    if saved_language:
+        # Use saved preference
+        initial_language = saved_language
+    else:
+        # No saved preference - detect system language
+        initial_language = get_system_language()
+        # Save detected language as default for future use
+        settings.set_setting('language', initial_language)
 
 _ = set_language(initial_language)
 

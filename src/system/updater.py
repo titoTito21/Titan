@@ -165,8 +165,11 @@ class Updater:
         self.version_url = "http://titosofttitan.com/titan/titanchk/version.ver"
         self.changes_url = "http://titosofttitan.com/titan/titanchk/changes.txt"
         self.download_url = "http://titosofttitan.com/titan/titan.main.7z"
+        self.interpreter_url = "http://titosofttitan.com/titan/titan.interpreter.7z"
         self.temp_file = "titan_update.7z"
+        self.temp_interpreter_file = "titan_interpreter.7z"
         self.seven_zip_path = os.path.join("data", "bin", "7z.exe")
+        self.needs_interpreter = False  # Will be set if version ends with 'i'
     
     def get_current_version(self):
         """Get current program version from main.py."""
@@ -183,18 +186,29 @@ class Updater:
         try:
             # Get current version
             current_version = self.get_current_version()
-            
+
             # Get remote version
             response = requests.get(self.version_url, timeout=10)
             response.raise_for_status()
-            remote_version = response.text.strip()
-            
-            # Compare versions (simple string comparison)
+            remote_version_raw = response.text.strip()
+
+            # Check if version ends with 'i' (interpreter flag)
+            if remote_version_raw.endswith('i'):
+                self.needs_interpreter = True
+                # Strip 'i' from version for display and comparison
+                remote_version = remote_version_raw[:-1]
+                print(f"[UPDATER] Version ends with 'i' - will download interpreter package")
+                print(f"[UPDATER] Display version: {remote_version} (raw: {remote_version_raw})")
+            else:
+                self.needs_interpreter = False
+                remote_version = remote_version_raw
+
+            # Compare versions (without 'i' suffix)
             if remote_version != current_version:
                 return True, current_version, remote_version
             else:
                 return False, current_version, remote_version
-                
+
         except Exception as e:
             print(f"Error checking for updates: {e}")
             return False, None, None
@@ -247,31 +261,31 @@ class Updater:
         """Extract update using 7zip."""
         try:
             progress_dialog.update_progress(0, _("Extracting update..."))
-            
+
             if not os.path.exists(self.seven_zip_path):
                 print(f"7zip not found at {self.seven_zip_path}")
                 return False
-            
+
             # Extract to current directory
             cmd = [self.seven_zip_path, 'x', self.temp_file, '-y', '-o.']
-            
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
+
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True)
-            
+
             # Monitor extraction progress (simplified)
             while process.poll() is None:
                 progress_dialog.update_progress(50, _("Extracting update..."))
                 time.sleep(0.5)
-            
+
             returncode = process.wait()
-            
+
             if returncode == 0:
                 progress_dialog.update_progress(100, _("Update extracted successfully"))
                 return True
             else:
                 print(f"7zip extraction failed with code {returncode}")
                 return False
-                
+
         except Exception as e:
             print(f"Error extracting update: {e}")
             return False
@@ -282,6 +296,78 @@ class Updater:
                     os.remove(self.temp_file)
             except:
                 pass
+
+    def download_interpreter(self, progress_dialog):
+        """Download interpreter package with progress reporting."""
+        try:
+            progress_dialog.update_progress(0, _("Downloading Python interpreter..."))
+
+            response = requests.get(self.interpreter_url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            with open(self.temp_interpreter_file, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        # Update progress
+                        if total_size > 0:
+                            progress = int((downloaded / total_size) * 100)
+                            progress_dialog.update_progress(progress, _("Downloading Python interpreter..."))
+
+            print(f"[UPDATER] Interpreter downloaded successfully")
+            return True
+
+        except Exception as e:
+            print(f"Error downloading interpreter: {e}")
+            progress_dialog.update_progress(100, _("Interpreter download failed"))
+            return False
+
+    def extract_interpreter(self, progress_dialog):
+        """Extract interpreter package using 7zip."""
+        try:
+            progress_dialog.update_progress(0, _("Extracting Python interpreter..."))
+
+            if not os.path.exists(self.seven_zip_path):
+                print(f"7zip not found at {self.seven_zip_path}")
+                return False
+
+            # Extract to current directory
+            cmd = [self.seven_zip_path, 'x', self.temp_interpreter_file, '-y', '-o.']
+
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
+
+            # Monitor extraction progress (simplified)
+            while process.poll() is None:
+                progress_dialog.update_progress(50, _("Extracting Python interpreter..."))
+                time.sleep(0.5)
+
+            returncode = process.wait()
+
+            if returncode == 0:
+                progress_dialog.update_progress(100, _("Interpreter extracted successfully"))
+                print(f"[UPDATER] Interpreter extracted successfully")
+                return True
+            else:
+                print(f"7zip extraction of interpreter failed with code {returncode}")
+                return False
+
+        except Exception as e:
+            print(f"Error extracting interpreter: {e}")
+            return False
+        finally:
+            # Clean up temp file
+            try:
+                if os.path.exists(self.temp_interpreter_file):
+                    os.remove(self.temp_interpreter_file)
+                    print(f"[UPDATER] Cleaned up interpreter temp file")
+            except Exception as e:
+                print(f"Error cleaning up interpreter temp file: {e}")
     
     def perform_update(self):
         """Perform the full update process."""
@@ -289,14 +375,24 @@ class Updater:
             # Show progress dialog
             progress_dialog = ProgressDialog(self.parent)
             progress_dialog.Show()
-            
+
             def update_thread():
                 try:
-                    # Download update
+                    # Download main update
                     if self.download_update(progress_dialog):
-                        # Extract update
+                        # Extract main update
                         if self.extract_update(progress_dialog):
-                            wx.CallAfter(self.update_complete, progress_dialog, True)
+                            # If version ends with 'i', also download and extract interpreter
+                            if self.needs_interpreter:
+                                if self.download_interpreter(progress_dialog):
+                                    if self.extract_interpreter(progress_dialog):
+                                        wx.CallAfter(self.update_complete, progress_dialog, True)
+                                    else:
+                                        wx.CallAfter(self.update_complete, progress_dialog, False)
+                                else:
+                                    wx.CallAfter(self.update_complete, progress_dialog, False)
+                            else:
+                                wx.CallAfter(self.update_complete, progress_dialog, True)
                         else:
                             wx.CallAfter(self.update_complete, progress_dialog, False)
                     else:
@@ -304,13 +400,13 @@ class Updater:
                 except Exception as e:
                     print(f"Update thread error: {e}")
                     wx.CallAfter(self.update_complete, progress_dialog, False)
-            
+
             # Start update in separate thread
             thread = threading.Thread(target=update_thread, daemon=True)
             thread.start()
-            
+
             return True
-            
+
         except Exception as e:
             print(f"Error starting update: {e}")
             return False

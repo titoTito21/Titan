@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia widgetów Titan - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html" class="active">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia widgetów Titan</h1>
+            </div>
+            <h1 id="przewodnik-tworzenia-widgetow-titan">Przewodnik tworzenia widgetów Titan</h1>
+
+<h2 id="wprowadzenie">Wprowadzenie</h2>
+
+<p>Widgety Titan to interaktywne komponenty dostępne w niewidzialnym interfejsie, które umożliwiają programistom tworzenie własnych funkcjonalności. System obsługuje dwa typy widgetów: <strong>button</strong> (przycisk) i <strong>grid</strong> (siatka).</p>
+
+<h2 id="architektura-systemu-widgetow">Architektura systemu widgetów</h2>
+
+<h3 id="lokalizacja-widgetow">Lokalizacja widgetów</h3>
+
+<p>Wszystkie widgety znajdują się w katalogu <code>data/applets/</code>. Każdy widget to osobny katalog zawierający:
+- <code>main.py</code> lub <code>init.py</code> - główny plik z kodem widgetu
+- <code>applet.json</code> (opcjonalnie) - metadane widgetu w nowym systemie</p>
+
+<h3 id="klasa-bazowa-basewidget">Klasa bazowa BaseWidget</h3>
+
+<p>Titan udostępnia klasę bazową <code>BaseWidget</code> w <code>invisibleui.py</code>:</p>
+
+<pre><code>class BaseWidget:
+    def __init__(self, speak_func):
+        self.speak = speak_func
+        self.view = None
+
+    def speak_with_position(self, text, position=0.0, pitch_offset=0):
+        """Wypowiada tekst z pozycjonowaniem stereo"""
+        self.speak(text, position=position, pitch_offset=pitch_offset)
+
+    def set_border(self):
+        """Ustawia obramowanie widgetu (dla GUI)"""
+        pass
+
+    def get_current_element(self):
+        """Zwraca opis aktualnego elementu - WYMAGANE"""
+        raise NotImplementedError
+
+    def navigate(self, direction):
+        """Nawigacja w widgecie - WYMAGANE dla typu 'grid'"""
+        raise NotImplementedError
+
+    def activate_current_element(self):
+        """Aktywuje aktualny element - WYMAGANE"""
+        raise NotImplementedError
+</code></pre>
+
+<h2 id="typy-widgetow">Typy widgetów</h2>
+
+<h3 id="1-widget-typu-button">1. Widget typu "button"</h3>
+
+<p>Prosty widget jednokrotnego użycia, który wykonuje akcję po aktywacji.</p>
+
+<p><strong>Przykład implementacji:</strong></p>
+
+<pre><code>class WidgetButton:
+    def __init__(self, speak_func, view=None):
+        self.speak = speak_func
+        self.view = view
+
+    def activate_current_element(self):
+        """Aktywuje widget"""
+        self.speak("Przykładowy przycisk aktywowany!")
+        # Wykonaj akcję
+
+    def get_current_element(self):
+        """Zwraca nazwę przycisku"""
+        return "Przykładowy przycisk"
+
+def get_widget_info():
+    return {
+        "name": "Mój przycisk",
+        "type": "button",
+    }
+
+def get_widget_instance(speak_func, view=None):
+    return WidgetButton(speak_func, view)
+</code></pre>
+
+<h3 id="2-widget-typu-grid">2. Widget typu "grid"</h3>
+
+<p>Interaktywny widget umożliwiający nawigację w różnych kierunkach.</p>
+
+<p><strong>Przykład implementacji:</strong></p>
+
+<pre><code>from invisibleui import BaseWidget
+
+class WidgetGrid(BaseWidget):
+    def __init__(self, speak_func, view=None):
+        super().__init__(speak_func)
+        self.view = view
+        self.grid = [
+            ["Góra-Lewo", "Góra-Prawo"],
+            ["Dół-Lewo", "Dół-Prawo"]
+        ]
+        self.current_pos = [0, 0]  # [wiersz, kolumna]
+
+    def navigate(self, direction):
+        """Nawigacja po siatce"""
+        rows = len(self.grid)
+        cols = len(self.grid[0]) if self.grid else 1
+        old_pos = self.current_pos[:]
+
+        if direction == 'up' and self.current_pos[0] &gt; 0:
+            self.current_pos[0] -= 1
+        elif direction == 'down' and self.current_pos[0] &lt; rows - 1:
+            self.current_pos[0] += 1
+        elif direction == 'left' and self.current_pos[1] &gt; 0:
+            self.current_pos[1] -= 1
+        elif direction == 'right' and self.current_pos[1] &lt; cols - 1:
+            self.current_pos[1] += 1
+        else:
+            return False, self.current_pos[1], cols  # Osiągnięto krawędź
+
+        # Zwróć sukces i pozycję dla stereo pozycjonowania
+        return True, self.current_pos[1], cols
+
+    def activate_current_element(self):
+        """Aktywuje aktualny element"""
+        element = self.get_current_element()
+
+        # Użyj pozycjonowania stereo
+        cols = len(self.grid[0]) if self.grid else 1
+        position = (self.current_pos[1] / (cols - 1) * 2.0) - 1.0 if cols &gt; 1 else 0.0
+
+        self.speak_with_position(f"Aktywowano: {element}", position=position)
+
+    def get_current_element(self):
+        """Zwraca aktualny element"""
+        return self.grid[self.current_pos[0]][self.current_pos[1]]
+
+def get_widget_info():
+    return {
+        "name": "Przykładowa siatka",
+        "type": "grid",
+    }
+
+def get_widget_instance(speak_func, view=None):
+    return WidgetGrid(speak_func, view)
+</code></pre>
+
+<h2 id="metadane-widgetu-appletjson">Metadane widgetu (applet.json)</h2>
+
+<p>Nowy system pozwala na definiowanie metadanych w pliku <code>applet.json</code>:</p>
+
+<pre><code>{
+    "name_pl": "Mój widget",
+    "name_en": "My Widget", 
+    "description_pl": "Opis widgetu po polsku",
+    "description_en": "Widget description in English",
+    "version": "1.0.0",
+    "author": "Twoje imię",
+    "type": "grid"
+}
+</code></pre>
+
+<h2 id="funkcje-stereo-pozycjonowania">Funkcje stereo pozycjonowania</h2>
+
+<h3 id="speak_with_position">speak<em>with</em>position()</h3>
+
+<p>Dziedzicząc z <code>BaseWidget</code>, masz dostęp do metody <code>speak_with_position()</code>:</p>
+
+<pre><code>self.speak_with_position(text, position=0.0, pitch_offset=0)
+</code></pre>
+
+<p><strong>Parametry:</strong>
+- <code>text</code> - tekst do wypowiedzenia
+- <code>position</code> - pozycja stereo: -1.0 (lewo) do 1.0 (prawo), 0.0 = środek<br />
+- <code>pitch_offset</code> - zmiana wysokości głosu: -10 do +10</p>
+
+<h3 id="automatyczne-pozycjonowanie">Automatyczne pozycjonowanie</h3>
+
+<p>System automatycznie pozycjonuje mowę na podstawie zwracanych wartości z <code>navigate()</code>:
+- Nawigacja lewo/prawo używa pozycjonowania stereo
+- Nawigacja góra/dół używa zmiany wysokości głosu</p>
+
+<h2 id="wymagane-metody">Wymagane metody</h2>
+
+<h3 id="get_widget_info">get<em>widget</em>info()</h3>
+
+<p><strong>Wymagana funkcja</strong> na poziomie modułu:</p>
+
+<pre><code>def get_widget_info():
+    return {
+        "name": "Nazwa widgetu",
+        "type": "button" # lub "grid"
+    }
+</code></pre>
+
+<h3 id="get_widget_instance">get<em>widget</em>instance()</h3>
+
+<p><strong>Wymagana funkcja</strong> na poziomie modułu:</p>
+
+<pre><code>def get_widget_instance(speak_func, view=None):
+    return MojWidget(speak_func, view)
+</code></pre>
+
+<h3 id="get_current_element">get<em>current</em>element()</h3>
+
+<p><strong>Wymagana metoda</strong> klasy widgetu - zwraca opis aktualnego elementu.</p>
+
+<h3 id="activate_current_element">activate<em>current</em>element()</h3>
+
+<p><strong>Wymagana metoda</strong> klasy widgetu - wykonuje akcję aktywacji.</p>
+
+<h3 id="navigate-tylko-dla-typu-grid">navigate() (tylko dla typu "grid")</h3>
+
+<p><strong>Wymagana metoda</strong> dla widgetów typu "grid":</p>
+
+<pre><code>def navigate(self, direction):
+    # direction: 'up', 'down', 'left', 'right'
+    # Zwróć: (success, horizontal_index, total_horizontal_items)
+    return True, current_column, total_columns
+</code></pre>
+
+<h2 id="struktura-katalogow">Struktura katalogów</h2>
+
+<h3 id="system-legacy-initpy">System legacy (init.py)</h3>
+
+<pre><code>data/applets/moj_widget/
+├── init.py              # Główny plik widgetu
+</code></pre>
+
+<h3 id="system-nowy-mainpy-appletjson">System nowy (main.py + applet.json)</h3>
+
+<pre><code>data/applets/moj_widget/
+├── main.py              # Główny plik widgetu
+├── applet.json          # Metadane widgetu
+├── babel.cfg            # Konfiguracja tłumaczeń (opcjonalnie)
+└── languages/           # Tłumaczenia (opcjonalnie)
+    ├── messages.pot
+    ├── pl/
+    └── en/
+</code></pre>
+
+<h2 id="internacjonalizacja">Internacjonalizacja</h2>
+
+<h3 id="dodawanie-tłumaczen">Dodawanie tłumaczeń</h3>
+
+<ol>
+<li>Utwórz <code>babel.cfg</code>:</li>
+</ol>
+
+<pre><code>[python: **.py]
+</code></pre>
+
+<ol start="2">
+<li>W kodzie używaj funkcji <code>_()</code>:</li>
+</ol>
+
+<pre><code>import gettext
+import os
+
+# Setup translations
+domain = 'moj_widget'
+localedir = os.path.join(os.path.dirname(__file__), 'languages')
+try:
+    translation = gettext.translation(domain, localedir, fallback=True)
+    _ = translation.gettext
+except Exception:
+    _ = lambda x: x
+
+# W kodzie
+self.speak(_("Text to translate"))
+</code></pre>
+
+<ol start="3">
+<li>Wyciągnij teksty do tłumaczenia:</li>
+</ol>
+
+<pre><code>pybabel extract -o messages.pot --input-dirs=.
+</code></pre>
+
+<ol start="4">
+<li>Utwórz pliki tłumaczeń:</li>
+</ol>
+
+<pre><code>pybabel init -l pl -d languages -i messages.pot
+pybabel init -l en -d languages -i messages.pot
+</code></pre>
+
+<ol start="5">
+<li>Skompiluj tłumaczenia:</li>
+</ol>
+
+<pre><code>pybabel compile -d languages
+</code></pre>
+
+<h2 id="praktyczne-przykłady">Praktyczne przykłady</h2>
+
+<h3 id="przykład-1-widget-zegara">Przykład 1: Widget zegara</h3>
+
+<pre><code>import datetime
+from invisibleui import BaseWidget
+
+class ClockWidget(BaseWidget):
+    def __init__(self, speak_func, view=None):
+        super().__init__(speak_func)
+        self.view = view
+
+    def get_current_element(self):
+        now = datetime.datetime.now()
+        return f"Godzina: {now.strftime('%H:%M:%S')}"
+
+    def activate_current_element(self):
+        self.speak(self.get_current_element())
+
+def get_widget_info():
+    return {"name": "Zegar", "type": "button"}
+
+def get_widget_instance(speak_func, view=None):
+    return ClockWidget(speak_func, view)
+</code></pre>
+
+<h3 id="przykład-2-widget-kalkulatora-prostego">Przykład 2: Widget kalkulatora prostego</h3>
+
+<pre><code>from invisibleui import BaseWidget
+
+class SimpleCalculator(BaseWidget):
+    def __init__(self, speak_func, view=None):
+        super().__init__(speak_func)
+        self.view = view
+        self.operations = [
+            ["1 + 1 = 2", "2 + 2 = 4", "3 + 3 = 6"],
+            ["5 * 5 = 25", "10 / 2 = 5", "2^3 = 8"]
+        ]
+        self.current_pos = [0, 0]
+
+    def navigate(self, direction):
+        rows = len(self.operations)
+        cols = len(self.operations[0])
+
+        if direction == 'up' and self.current_pos[0] &gt; 0:
+            self.current_pos[0] -= 1
+        elif direction == 'down' and self.current_pos[0] &lt; rows - 1:
+            self.current_pos[0] += 1
+        elif direction == 'left' and self.current_pos[1] &gt; 0:
+            self.current_pos[1] -= 1
+        elif direction == 'right' and self.current_pos[1] &lt; cols - 1:
+            self.current_pos[1] += 1
+        else:
+            return False, self.current_pos[1], cols
+
+        return True, self.current_pos[1], cols
+
+    def get_current_element(self):
+        return self.operations[self.current_pos[0]][self.current_pos[1]]
+
+    def activate_current_element(self):
+        element = self.get_current_element()
+        self.speak(f"Wybrany przykład: {element}")
+
+def get_widget_info():
+    return {"name": "Prosty kalkulator", "type": "grid"}
+
+def get_widget_instance(speak_func, view=None):
+    return SimpleCalculator(speak_func, view)
+</code></pre>
+
+<h2 id="testowanie-widgetow">Testowanie widgetów</h2>
+
+<ol>
+<li>Umieść widget w katalogu <code>data/applets/nazwa_widgetu/</code></li>
+<li>Uruchom Titan</li>
+<li>Przejdź do niewidzialnego interfejsu (Ctrl+Shift+strzałki)</li>
+<li>Nawiguj do kategorii "Widgets"</li>
+<li>Wybierz swój widget i przetestuj funkcjonalność</li>
+</ol>
+
+<h2 id="najwazniejsze-wskazowki">Najważniejsze wskazówki</h2>
+
+<ol>
+<li><strong>NIE</strong> używaj <code>self.speak()</code> w metodzie <code>navigate()</code> - system automatycznie obsługuje mowę z pozycjonowaniem</li>
+<li>Wykorzystuj <code>speak_with_position()</code> w <code>activate_current_element()</code> dla lepszego doświadczenia</li>
+<li>Zawsze implementuj wszystkie wymagane metody</li>
+<li>Testuj nawigację we wszystkich kierunkach</li>
+<li>Dodaj obsługę błędów w przypadku nieprawidłowych danych</li>
+<li>Używaj internacjonalizacji dla lepszej dostępności</li>
+</ol>
+
+<h2 id="dostepne-narzedzia">Dostępne narzędzia</h2>
+
+<ul>
+<li><code>self.speak()</code> - podstawowa mowa TTS</li>
+<li><code>self.speak_with_position()</code> - mowa z pozycjonowaniem stereo</li>
+<li><code>play_sound()</code> - odtwarzanie dźwięków (importuj z <code>sound</code>)</li>
+<li>System ustawień (importuj z <code>settings</code>)</li>
+<li>Dostęp do głównej ramki aplikacji przez <code>self.view</code></li>
+</ul>
+
+<p>Titan zapewnia bogate API do tworzenia własnych, dostępnych widgetów z pełnym wsparciem dla użytkowników czytników ekranu.</p>
+
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>
