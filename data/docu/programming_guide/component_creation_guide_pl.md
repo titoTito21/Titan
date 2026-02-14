@@ -2,14 +2,14 @@
 
 ## Wprowadzenie
 
-Komponenty Titan to rozszerzenia systemu, które działają w tle i mogą dodawać funkcjonalności do głównej aplikacji. Komponenty mogą być włączane i wyłączane przez użytkownika oraz integrować się z menu systemowym.
+Komponenty Titan to rozszerzenia systemu, które działają w tle i mogą dodawać funkcjonalności do głównej aplikacji. Komponenty mogą być włączane i wyłączane przez użytkownika, integrować się z menu systemowym, dodawać własne widoki do głównego interfejsu oraz rozszerzać niewidzialny interfejs i tryb Klango.
 
 ## Architektura systemu komponentów
 
 ### Lokalizacja komponentów
 Wszystkie komponenty znajdują się w katalogu `data/components/`. Każdy komponent to osobny katalog zawierający:
-- `init.py` - główny plik z kodem komponentu
-- `__component__.TCE` - plik konfiguracyjny komponentu
+- `init.py` - główny plik z kodem komponentu (NIE `__init__.py`!)
+- `__component__.TCE` - plik konfiguracyjny komponentu (format INI)
 
 ### Cykl życia komponentu
 
@@ -26,12 +26,16 @@ Plik INI z sekcją `[component]`:
 ```ini
 [component]
 name = Nazwa komponentu
-status = 0
+status = 1
+
 ```
 
 **Parametry:**
 - `name` - nazwa wyświetlana w menedżerze komponentów
-- `status` - `0` = włączony, `1` = wyłączony
+- **`status = 1` oznacza WYŁĄCZONY, `status = 0` oznacza WŁĄCZONY** (odwrotnie!)
+- **WAŻNE**: Nazwa pliku to `__component__.TCE` (wielkie litery .TCE)
+- **WAŻNE**: Główny plik to `init.py` (małe litery, NIE `__init__.py`)
+- **WAŻNE**: Dodaj pustą linię na końcu pliku
 
 ## Implementacja komponentu
 
@@ -39,97 +43,578 @@ status = 0
 
 ```python
 # -*- coding: utf-8 -*-
-import wx
-import threading
-import time
+"""
+Nazwa komponentu - opis
+"""
 
-class MojKomponent:
+import os
+import sys
+import wx
+import gettext
+
+# Dodaj katalog komponentu do ścieżki
+COMPONENT_DIR = os.path.dirname(__file__)
+if COMPONENT_DIR not in sys.path:
+    sys.path.insert(0, COMPONENT_DIR)
+
+# Dodaj katalog główny TCE do ścieżki
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+# Importuj moduły TCE
+try:
+    from src.titan_core.sound import play_sound
+    SOUND_AVAILABLE = True
+except ImportError as e:
+    SOUND_AVAILABLE = False
+    print(f"[component_id] Warning: sound module not available: {e}")
+
+try:
+    from src.settings.settings import get_setting
+    SETTINGS_AVAILABLE = True
+except ImportError as e:
+    SETTINGS_AVAILABLE = False
+    print(f"[component_id] Warning: settings module not available: {e}")
+    def get_setting(key, default='', section='general'):
+        return default
+
+# Wsparcie tłumaczeń
+LANGUAGES_DIR = os.path.join(COMPONENT_DIR, 'languages')
+
+try:
+    if SETTINGS_AVAILABLE:
+        lang = get_setting('language', 'pl')
+    else:
+        lang = 'pl'
+
+    translation = gettext.translation('component_id', localedir=LANGUAGES_DIR, languages=[lang], fallback=True)
+    translation.install()
+    _ = translation.gettext
+except Exception as e:
+    print(f"[component_id] Translation loading failed: {e}")
+    def _(text):
+        return text
+
+
+class MyComponent:
+    """Główna klasa komponentu"""
+
     def __init__(self):
-        self.running = False
-        self.thread = None
-    
-    def start(self):
-        """Uruchamia komponent"""
-        if not self.running:
-            self.running = True
-            self.thread = threading.Thread(target=self._run, daemon=True)
-            self.thread.start()
-    
-    def stop(self):
-        """Zatrzymuje komponent"""
-        self.running = False
-    
-    def _run(self):
-        """Główna pętla komponentu"""
-        while self.running:
-            # Tutaj logika komponentu
-            time.sleep(1)
+        """Inicjalizacja komponentu"""
+        self._ = _
+        print(f"[component_id] Component initialized")
+
+    def enable(self):
+        """Włącz funkcjonalność komponentu"""
+        try:
+            # Dodaj logikę komponentu tutaj
+            if SOUND_AVAILABLE:
+                play_sound('ui/dialog.ogg')
+            print(f"[component_id] Component enabled")
+            return True
+        except Exception as e:
+            print(f"[component_id] Error enabling component: {e}")
+            return False
+
+    def disable(self):
+        """Wyłącz funkcjonalność komponentu"""
+        try:
+            # Dodaj logikę czyszczenia tutaj
+            if SOUND_AVAILABLE:
+                play_sound('ui/dialogclose.ogg')
+            print(f"[component_id] Component disabled")
+        except Exception as e:
+            print(f"[component_id] Error disabling component: {e}")
+
 
 # Globalna instancja komponentu
-komponent_instance = None
+_component_instance = None
+
+
+def get_component():
+    """Pobierz globalną instancję komponentu"""
+    global _component_instance
+    if _component_instance is None:
+        _component_instance = MyComponent()
+    return _component_instance
+
 
 def initialize(app=None):
-    """
-    Wywoływane przy inicjalizacji Titan.
-    app - instancja głównej aplikacji (opcjonalne)
-    """
-    global komponent_instance
-    komponent_instance = MojKomponent()
-    komponent_instance.start()
-    print("Komponent zainicjalizowany")
+    """Inicjalizacja komponentu - wywoływana przez ComponentManager"""
+    try:
+        print(f"[component_id] Initializing component...")
+        component = get_component()
+        # Dodaj logikę inicjalizacji tutaj
+        print(f"[component_id] Component initialized successfully")
+    except Exception as e:
+        print(f"[component_id] Error during initialization: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 def shutdown():
-    """Wywoływane przy zamykaniu Titan"""
-    global komponent_instance
-    if komponent_instance:
-        komponent_instance.stop()
-    print("Komponent zamknięty")
-
-def add_menu(component_manager):
-    """
-    Dodaje pozycje do menu komponentów.
-    component_manager - instancja ComponentManager
-    """
-    component_manager.register_menu_function("Opcja komponentu", moja_funkcja_menu)
-
-def add_settings(settings_frame):
-    """
-    Dodaje ustawienia do okna konfiguracji.
-    settings_frame - ramka ustawień Titan
-    """
-    # Tutaj można dodać kontrolki do ustawień
-    pass
-
-def moja_funkcja_menu():
-    """Funkcja wywoływana z menu komponentów"""
-    wx.MessageBox("Akcja komponentu wykonana!", "Komponent", wx.OK | wx.ICON_INFORMATION)
+    """Zamknięcie komponentu - wywoływana przez ComponentManager"""
+    global _component_instance
+    try:
+        print(f"[component_id] Shutting down component...")
+        if _component_instance:
+            _component_instance.disable()
+            _component_instance = None
+        print(f"[component_id] Component shutdown complete")
+    except Exception as e:
+        print(f"[component_id] Error during shutdown: {e}")
+        import traceback
+        traceback.print_exc()
 ```
 
-## Wymagane funkcje
+## Interfejs komponentu
 
-### initialize(app=None)
+### Wymagane funkcje
+
+#### initialize(app=None)
 **Wymagana funkcja** wywoływana przy starcie Titan:
 - `app` - instancja głównej aplikacji wxPython (może być None)
 - Użyj do inicjalizacji zasobów, uruchamiania wątków
 
-### shutdown() (opcjonalna)
+### Opcjonalne funkcje
+
+#### shutdown()
 Wywoływana przy zamykaniu Titan:
 - Zatrzymaj wątki, zwolnij zasoby
 - Zapisz stan komponentu jeśli potrzeba
 
-### add_menu(component_manager) (opcjonalna)
+#### add_menu(component_manager)
 Dodaje pozycje do menu komponentów:
 - `component_manager.register_menu_function(nazwa, funkcja)`
-- Menu dostępne w niewidzialnym interfejsie
+- Menu dostępne w niewidzialnym interfejsie i menu GUI
 
-### add_settings(settings_frame) (opcjonalna)
-Dodaje kontrolki do okna ustawień:
+#### add_settings(settings_frame)
+**Legacy**: Dodaje kontrolki do okna ustawień:
 - `settings_frame` - główne okno ustawień
-- Dodaj panele, checkboxy, suwaki itp.
+- **UWAGA**: Preferuj `add_settings_category()` dla nowych komponentów
+
+#### add_settings_category(component_manager)
+**Zalecane**: Rejestruje kategorię ustawień w modularnym systemie ustawień:
+```python
+def add_settings_category(component_manager):
+    def build_panel(parent):
+        panel = wx.Panel(parent)
+        # ... dodaj kontrolki ...
+        return panel
+
+    def save_settings(panel):
+        # Zapisz ustawienia
+        pass
+
+    def load_settings(panel):
+        # Wczytaj ustawienia
+        pass
+
+    component_manager.register_settings_category(
+        _("Mój komponent"),
+        build_panel,
+        save_settings,
+        load_settings
+    )
+```
+
+## System hooków
+
+### GUI Hooks (get_gui_hooks)
+
+Komponent może zarejestrować hooki do głównego interfejsu GUI:
+
+```python
+def get_gui_hooks():
+    """Zwróć słownik GUI hooks (opcjonalnie)
+
+    Dostępne hooki:
+        'on_gui_init': wywoływana z gui_app (TitanApp wx.Frame) gdy GUI jest inicjalizowane
+    """
+    return {
+        'on_gui_init': on_gui_init
+    }
+
+def on_gui_init(gui_app):
+    """Hook wywoływany gdy GUI jest zainicjalizowane"""
+    # Tutaj możesz np. zarejestrować widok w głównym panelu
+    pass
+```
+
+### Invisible UI Hooks (get_iui_hooks)
+
+Komponent może dodawać własne kategorie do niewidzialnego interfejsu:
+
+```python
+def get_iui_hooks():
+    """Zwróć słownik Invisible UI hooks (opcjonalnie)
+
+    Dostępne hooki:
+        'on_iui_init': wywoływana z iui (InvisibleUI) po build_structure()
+
+    Przykład - dodanie własnej kategorii:
+        def on_iui_init(iui):
+            iui.categories.append({
+                "name": "Mój komponent",
+                "sound": "core/focus.ogg",
+                "elements": ["Opcja 1", "Opcja 2"],
+                "action": lambda name: my_action(name)
+            })
+    """
+    return {
+        'on_iui_init': on_iui_init
+    }
+
+def on_iui_init(iui):
+    """Hook wywoływany gdy Invisible UI jest zainicjalizowany"""
+    iui.categories.append({
+        "name": _("Mój komponent"),
+        "sound": "core/focus.ogg",
+        "elements": [_("Akcja 1"), _("Akcja 2")],
+        "action": lambda name: handle_action(name)
+    })
+```
+
+### Klango Mode Hooks (get_klango_hooks)
+
+Komponent może integrować się z trybem Klango:
+
+```python
+def get_klango_hooks():
+    """Zwróć słownik Klango mode hooks (opcjonalnie)
+
+    Dostępne hooki:
+        'on_klango_init': wywoływana z klango_mode (KlangoMode) gdy Klango mode startuje
+    """
+    return {
+        'on_klango_init': on_klango_init
+    }
+
+def on_klango_init(klango_mode):
+    """Hook wywoływany gdy Klango mode jest zainicjalizowany"""
+    # Dodaj własne pozycje menu do Klango
+    pass
+```
+
+## API rejestracji widoków (Component View Registration)
+
+**NOWOŚĆ!** Komponenty mogą dodawać własne zakładki/widoki do lewego panelu głównego GUI. Zarejestrowane widoki pojawiają się w cyklu Ctrl+Tab obok wbudowanych widoków (Lista aplikacji, Lista gier, Titan IM).
+
+### Parametry register_view()
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `view_id` | str | Tak | Unikalny identyfikator, np. `'my_notes'` |
+| `label` | str | Tak | Tekst nagłówka pokazywany nad kontrolką, np. `'Moje notatki:'` |
+| `control` | wx.Window | Tak | Dowolna kontrolka wx (ListBox, TreeCtrl, itp.), rodzic: `gui_app.main_panel` |
+| `on_show` | callable | Nie | Wywoływana za każdym razem gdy widok staje się widoczny (odświeżanie danych) |
+| `on_activate` | callable | Nie | Wywoływana gdy użytkownik naciśnie Enter na kontrolce |
+| `position` | str/int | Nie | Pozycja w cyklu: `'after_apps'`, `'after_games'`, `'after_network'` (domyślnie), lub indeks liczbowy |
+
+### Jak to działa
+
+- Zarejestrowana kontrolka jest dodawana do sizer'a lewego panelu (domyślnie ukryta)
+- Użytkownik naciska Ctrl+Tab aby przełączać widoki: Aplikacje → Gry → [twój widok] → Titan IM → ...
+- Tab/Shift+Tab nawiguje między kontrolką widoku a paskiem statusu
+- Enter na kontrolce widoku wywołuje `on_activate` (jeśli podano)
+- TTS ogłasza etykietę widoku i pozycję, np. "Moje notatki, 3 z 4"
+
+### Dostępne atrybuty gui_app
+
+| Atrybut | Typ | Opis |
+|---------|-----|------|
+| `gui_app.main_panel` | wx.Panel | Panel rodzica dla tworzenia nowych kontrolek |
+| `gui_app.list_sizer` | wx.BoxSizer | Sizer zawierający wszystkie kontrolki lewego panelu |
+| `gui_app.registered_views` | list | Wszystkie zarejestrowane widoki (wbudowane + komponentowe) |
+| `gui_app.register_view()` | method | Zarejestruj nowy widok do cyklu Ctrl+Tab |
+| `gui_app.component_manager` | ComponentManager | Referencja do menedżera komponentów |
+| `gui_app.settings` | dict | Ustawienia aplikacji |
+| `gui_app.titan_client` | TitanNetClient | Instancja klienta Titan-Net |
 
 ## Przykłady komponentów
 
-### Przykład 1: Monitor systemu
+### Przykład 1: Prosty widok listy (Menedżer zakładek)
+
+Komponent dodający zakładkę "Zakładki" do lewego panelu z listą zapisanych zakładek.
+
+**Plik: `data/components/bookmarks/init.py`**
+```python
+# -*- coding: utf-8 -*-
+"""Komponent zakładek - dodaje listę zakładek do głównego panelu."""
+
+import os
+import sys
+import wx
+import json
+
+COMPONENT_DIR = os.path.dirname(__file__)
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+try:
+    from src.titan_core.sound import play_sound
+except ImportError:
+    def play_sound(name): pass
+
+try:
+    from src.settings.settings import get_setting
+except ImportError:
+    def get_setting(key, default='', section='general'): return default
+
+def _(text):
+    return text
+
+# --- Dane zakładek ---
+BOOKMARKS_FILE = os.path.join(COMPONENT_DIR, 'bookmarks.json')
+_bookmarks = []
+_listbox = None
+
+
+def load_bookmarks():
+    """Wczytaj zakładki z pliku JSON."""
+    global _bookmarks
+    try:
+        if os.path.exists(BOOKMARKS_FILE):
+            with open(BOOKMARKS_FILE, 'r', encoding='utf-8') as f:
+                _bookmarks = json.load(f)
+        else:
+            _bookmarks = [
+                {"name": "Google", "url": "https://google.com"},
+                {"name": "YouTube", "url": "https://youtube.com"},
+            ]
+            save_bookmarks()
+    except Exception as e:
+        print(f"[bookmarks] Error loading bookmarks: {e}")
+        _bookmarks = []
+
+
+def save_bookmarks():
+    """Zapisz zakładki do pliku JSON."""
+    try:
+        with open(BOOKMARKS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_bookmarks, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"[bookmarks] Error saving bookmarks: {e}")
+
+
+def refresh_list():
+    """Odśwież listbox z aktualnymi zakładkami (wywoływane przez on_show)."""
+    if _listbox is None:
+        return
+    _listbox.Clear()
+    for bm in _bookmarks:
+        _listbox.Append(bm['name'])
+    if _listbox.GetCount() > 0:
+        _listbox.SetSelection(0)
+
+
+def on_bookmark_activate(event):
+    """Otwórz wybraną zakładkę w przeglądarce (wywoływane przez Enter)."""
+    if _listbox is None:
+        return
+    sel = _listbox.GetSelection()
+    if sel == wx.NOT_FOUND or sel >= len(_bookmarks):
+        return
+    url = _bookmarks[sel]['url']
+    play_sound('ui/dialog.ogg')
+    import webbrowser
+    webbrowser.open(url)
+
+
+def on_gui_init(gui_app):
+    """Zarejestruj widok zakładek w głównym lewym panelu."""
+    global _listbox
+    _listbox = wx.ListBox(gui_app.main_panel)
+
+    gui_app.register_view(
+        view_id='bookmarks',
+        label=_("Zakładki:"),
+        control=_listbox,
+        on_show=refresh_list,
+        on_activate=on_bookmark_activate,
+        position='after_network'
+    )
+    print("[bookmarks] View registered in main panel")
+
+
+# --- Interfejs komponentu ---
+
+def get_gui_hooks():
+    return {'on_gui_init': on_gui_init}
+
+
+def add_menu(component_manager):
+    def add_bookmark(event):
+        dlg = wx.TextEntryDialog(None, _("Wprowadź nazwę zakładki:"), _("Dodaj zakładkę"))
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue().strip()
+            if name:
+                url_dlg = wx.TextEntryDialog(None, _("Wprowadź URL:"), _("Dodaj zakładkę"), "https://")
+                if url_dlg.ShowModal() == wx.ID_OK:
+                    url = url_dlg.GetValue().strip()
+                    if url:
+                        _bookmarks.append({"name": name, "url": url})
+                        save_bookmarks()
+                        refresh_list()
+                        play_sound('ui/dialog.ogg')
+                url_dlg.Destroy()
+        dlg.Destroy()
+
+    component_manager.register_menu_function(_("Dodaj zakładkę..."), add_bookmark)
+
+
+def initialize(app=None):
+    load_bookmarks()
+    print("[bookmarks] Component initialized")
+
+
+def shutdown():
+    save_bookmarks()
+    print("[bookmarks] Component shutdown")
+```
+
+**Plik: `data/components/bookmarks/__component__.TCE`**
+```ini
+[component]
+name = Bookmarks
+status = 0
+
+```
+
+---
+
+### Przykład 2: Widok drzewa (Przeglądarka plików)
+
+Komponent dodający widok drzewa pokazujący pliki z katalogu.
+
+**Plik: `data/components/filebrowser/init.py`**
+```python
+# -*- coding: utf-8 -*-
+"""Komponent przeglądarki plików - dodaje drzewo plików do głównego panelu."""
+
+import os
+import sys
+import wx
+
+COMPONENT_DIR = os.path.dirname(__file__)
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+try:
+    from src.titan_core.sound import play_sound
+except ImportError:
+    def play_sound(name): pass
+
+def _(text):
+    return text
+
+_tree = None
+_browse_path = os.path.expanduser("~\\Documents")
+
+
+def populate_tree():
+    """Wypełnij drzewo plikami z browse_path (wywoływane przez on_show)."""
+    if _tree is None:
+        return
+
+    _tree.DeleteAllItems()
+    root = _tree.AddRoot(_browse_path)
+
+    try:
+        for item_name in sorted(os.listdir(_browse_path)):
+            full_path = os.path.join(_browse_path, item_name)
+            if os.path.isdir(full_path):
+                _tree.AppendItem(root, f"[KATALOG] {item_name}")
+            else:
+                _tree.AppendItem(root, item_name)
+    except PermissionError:
+        _tree.AppendItem(root, _("Odmowa dostępu"))
+    except Exception as e:
+        _tree.AppendItem(root, f"Błąd: {e}")
+
+    _tree.Expand(root)
+
+    # Wybierz pierwsze dziecko
+    child, cookie = _tree.GetFirstChild(root)
+    if child.IsOk():
+        _tree.SelectItem(child)
+
+
+def on_file_activate(event):
+    """Otwórz wybrany plik (wywoływane przez Enter)."""
+    if _tree is None:
+        return
+    item = _tree.GetSelection()
+    if not item.IsOk():
+        return
+    text = _tree.GetItemText(item)
+    if text.startswith("[KATALOG] "):
+        # Wejdź do katalogu
+        global _browse_path
+        dir_name = text[10:]  # Usuń prefiks "[KATALOG] "
+        _browse_path = os.path.join(_browse_path, dir_name)
+        populate_tree()
+        play_sound('core/focus.ogg')
+    elif text == _("Odmowa dostępu"):
+        return
+    else:
+        # Otwórz plik
+        file_path = os.path.join(_browse_path, text)
+        if os.path.exists(file_path):
+            os.startfile(file_path)
+            play_sound('ui/dialog.ogg')
+
+
+def on_gui_init(gui_app):
+    """Zarejestruj widok przeglądarki plików."""
+    global _tree
+    _tree = wx.TreeCtrl(
+        gui_app.main_panel,
+        style=wx.TR_DEFAULT_STYLE | wx.TR_HIDE_ROOT | wx.TR_SINGLE
+    )
+
+    gui_app.register_view(
+        view_id='filebrowser',
+        label=_("Przeglądarka plików:"),
+        control=_tree,
+        on_show=populate_tree,
+        on_activate=on_file_activate,
+        position='after_games'  # Między Grami a Titan IM
+    )
+    print("[filebrowser] View registered in main panel")
+
+
+# --- Interfejs komponentu ---
+
+def get_gui_hooks():
+    return {'on_gui_init': on_gui_init}
+
+
+def initialize(app=None):
+    print("[filebrowser] Component initialized")
+
+
+def shutdown():
+    print("[filebrowser] Component shutdown")
+```
+
+**Plik: `data/components/filebrowser/__component__.TCE`**
+```ini
+[component]
+name = File Browser
+status = 0
+
+```
+
+---
+
+### Przykład 3: Monitor systemu (tylko tło, bez widoku)
+
+Komponent działający w tle, który monitoruje użycie CPU i pokazuje ostrzeżenie przy wysokim obciążeniu.
+
 ```python
 # -*- coding: utf-8 -*-
 import psutil
@@ -142,23 +627,23 @@ class SystemMonitor:
         self.running = False
         self.thread = None
         self.cpu_threshold = 80.0
-    
+
     def start(self):
         if not self.running:
             self.running = True
             self.thread = threading.Thread(target=self._monitor, daemon=True)
             self.thread.start()
-    
+
     def stop(self):
         self.running = False
-    
+
     def _monitor(self):
         while self.running:
             cpu_percent = psutil.cpu_percent(interval=1)
             if cpu_percent > self.cpu_threshold:
                 wx.CallAfter(self._show_warning, cpu_percent)
             time.sleep(5)
-    
+
     def _show_warning(self, cpu_percent):
         message = f"Wysokie użycie CPU: {cpu_percent:.1f}%"
         wx.MessageBox(message, "Ostrzeżenie systemu", wx.OK | wx.ICON_WARNING)
@@ -178,82 +663,11 @@ def shutdown():
 def add_menu(component_manager):
     component_manager.register_menu_function("Pokaż użycie systemu", show_system_info)
 
-def show_system_info():
+def show_system_info(event=None):
     cpu = psutil.cpu_percent()
     memory = psutil.virtual_memory().percent
     message = f"CPU: {cpu}%\nPamięć: {memory}%"
     wx.MessageBox(message, "Informacje systemowe", wx.OK | wx.ICON_INFORMATION)
-```
-
-### Przykład 2: Powiadomienia czasowe
-```python
-# -*- coding: utf-8 -*-
-import wx
-import threading
-import time
-from datetime import datetime, timedelta
-
-class TimeNotifier:
-    def __init__(self):
-        self.running = False
-        self.thread = None
-        self.notifications = []  # Lista (czas, wiadomość)
-    
-    def start(self):
-        if not self.running:
-            self.running = True
-            self.thread = threading.Thread(target=self._check_notifications, daemon=True)
-            self.thread.start()
-    
-    def stop(self):
-        self.running = False
-    
-    def add_notification(self, minutes_from_now, message):
-        """Dodaje powiadomienie za X minut"""
-        notification_time = datetime.now() + timedelta(minutes=minutes_from_now)
-        self.notifications.append((notification_time, message))
-    
-    def _check_notifications(self):
-        while self.running:
-            now = datetime.now()
-            # Sprawdź powiadomienia do pokazania
-            to_show = [msg for time, msg in self.notifications if time <= now]
-            # Usuń pokazane powiadomienia
-            self.notifications = [(t, m) for t, m in self.notifications if t > now]
-            
-            for message in to_show:
-                wx.CallAfter(self._show_notification, message)
-            
-            time.sleep(10)  # Sprawdzaj co 10 sekund
-    
-    def _show_notification(self, message):
-        wx.MessageBox(message, "Powiadomienie", wx.OK | wx.ICON_INFORMATION)
-
-notifier_instance = None
-
-def initialize(app=None):
-    global notifier_instance
-    notifier_instance = TimeNotifier()
-    notifier_instance.start()
-    # Przykładowe powiadomienie za 1 minutę
-    notifier_instance.add_notification(1, "To jest testowe powiadomienie!")
-
-def shutdown():
-    global notifier_instance
-    if notifier_instance:
-        notifier_instance.stop()
-
-def add_menu(component_manager):
-    component_manager.register_menu_function("Dodaj powiadomienie", add_notification_dialog)
-
-def add_notification_dialog():
-    dlg = wx.TextEntryDialog(None, "Wpisz wiadomość powiadomienia:", "Nowe powiadomienie")
-    if dlg.ShowModal() == wx.ID_OK:
-        message = dlg.GetValue()
-        if notifier_instance and message:
-            notifier_instance.add_notification(5, message)  # Za 5 minut
-            wx.MessageBox("Powiadomienie zostanie pokazane za 5 minut", "Dodano", wx.OK)
-    dlg.Destroy()
 ```
 
 ## Integracja z systemem
@@ -282,7 +696,7 @@ def _update_ui(self, data):
 
 ### Korzystanie z dźwięków systemu
 ```python
-from sound import play_sound, play_error_sound, play_dialog_sound
+from src.titan_core.sound import play_sound, play_error_sound, play_dialog_sound
 
 def moja_funkcja():
     play_sound("focus.ogg")  # Odtwórz dźwięk z motywu
@@ -291,12 +705,12 @@ def moja_funkcja():
 
 ### Dostęp do ustawień
 ```python
-from settings import get_setting, set_setting
+from src.settings.settings import get_setting, set_setting
 
 def initialize(app=None):
     # Odczytaj ustawienie
     enabled = get_setting('my_component_enabled', 'True', section='components')
-    
+
     # Zapisz ustawienie
     set_setting('my_component_value', '42', section='components')
 ```
@@ -320,21 +734,39 @@ status = 0  # 0 = włączony, 1 = wyłączony
 
 ```
 data/components/moj_komponent/
-├── init.py              # Główny plik komponentu
+├── init.py              # Główny plik komponentu (NIE __init__.py!)
 ├── __component__.TCE    # Konfiguracja komponentu
+├── bookmarks.json       # Dane komponentu (przykład)
 ├── resources/           # Zasoby (opcjonalnie)
 │   ├── sounds/
 │   └── images/
-└── config/              # Pliki konfiguracyjne (opcjonalnie)
-    └── settings.ini
+├── data/                # Pliki danych (opcjonalnie)
+└── languages/           # Tłumaczenia (opcjonalnie)
+    ├── component_id.pot
+    ├── pl/
+    │   └── LC_MESSAGES/
+    │       └── component_id.mo
+    └── en/
+        └── LC_MESSAGES/
+            └── component_id.mo
 ```
 
 ## Testowanie komponentów
 
 1. Umieść komponent w `data/components/nazwa_komponentu/`
-2. Uruchom Titan
-3. Sprawdź w menedżerze komponentów czy komponent jest załadowany
-4. Testuj funkcjonalność przez menu komponentów
+2. Upewnij się że plik to `init.py` a nie `__init__.py`
+3. Sprawdź format `__component__.TCE` (INI, wielkie litery .TCE)
+4. Uruchom Titan
+5. Sprawdź w menedżerze komponentów czy komponent jest załadowany
+6. Testuj funkcjonalność przez menu komponentów
+7. Jeśli komponent rejestruje widok, sprawdź cykl Ctrl+Tab
+
+## Typy komponentów
+
+- **Service**: Usługi działające w tle (np. integracja z czytnikiem ekranu, monitoring systemu)
+- **Integration**: Integracje z usługami zewnętrznymi (np. słownik, przeglądarka artykułów)
+- **Feature**: Dodatkowe funkcje (np. terminal, system porad, launchery)
+- **View**: Komponenty dodające zakładkę/widok do głównego lewego panelu (użyj `register_view()`)
 
 ## Najważniejsze wskazówki
 
@@ -345,6 +777,9 @@ data/components/moj_komponent/
 5. **Dodaj obsługę błędów** - komponenty nie powinny crashować Titan
 6. **Oszczędzaj zasoby** - nie wykonuj ciężkich operacji za często
 7. **Dokumentuj funkcje menu** - wyjaśnij co robią
+8. **Używaj get_gui_hooks()** dla widoków zamiast bezpośredniej modyfikacji GUI
+9. **Odśwież dane w on_show** gdy widok staje się widoczny (Ctrl+Tab)
+10. **Dodawaj menu kontekstowe** dla lepszego UX (prawy klik na ListBox/TreeCtrl)
 
 ## Debugowanie
 
@@ -357,7 +792,7 @@ logger = logging.getLogger(__name__)
 
 def initialize(app=None):
     logger.info("Komponent inicjalizowany")
-    
+
 def shutdown():
     logger.info("Komponent zamykany")
 ```
@@ -370,8 +805,25 @@ def initialize(app=None):
         pass
     except Exception as e:
         print(f"Błąd inicjalizacji komponentu: {e}")
-        # Opcjonalnie pokaż dialog błędu
-        wx.MessageBox(f"Błąd komponentu: {e}", "Błąd", wx.OK | wx.ICON_ERROR)
+        import traceback
+        traceback.print_exc()
 ```
+
+## Przykłady referencyjne
+
+- **TitanScreenReader** (`data/components/TitanScreenReader/`): Złożony czytnik ekranu
+  - Komponent typu Service z monitoringiem w tle
+  - Wiele podmodułów (uia_handler, speech_manager, keyboard_handler)
+  - Dialog ustawień z wxPython
+  - Wsparcie tłumaczeń
+
+- **tips** (`data/components/tips/`): System porad
+  - Prosty komponent typu Feature
+  - Wątek w tle dla okresowych porad
+  - Dialog ustawień
+
+- **tDict** (`data/components/tDict/`): Komponent słownika
+  - Podkatalog `data/` dla plików słownika
+  - Wsparcie tłumaczeń
 
 Komponenty Titan umożliwiają rozszerzanie funkcjonalności systemu w sposób modularny i bezpieczny. Dzięki prostemu API można łatwo dodawać nowe możliwości bez modyfikowania głównego kodu aplikacji.

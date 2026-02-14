@@ -58,7 +58,7 @@ from src.controller.controller_vibrations import (
     vibrate_focus_change, vibrate_error, vibrate_notification, test_vibration,
     set_vibration_enabled, set_vibration_strength, get_controller_info
 )
-from src.titan_core.translation import get_available_languages, set_language
+from src.titan_core.translation import get_available_languages, get_available_languages_display, get_language_display_name, get_language_code_from_display_name, set_language
 from src.titan_core.stereo_speech import get_stereo_speech
 from src.system.system_monitor import restart_system_monitor
 from src.titan_core.skin_manager import get_skin_manager, get_current_skin, apply_skin_to_window
@@ -435,8 +435,8 @@ class SettingsFrame(wx.Frame):
 
         self.lang_choice = wx.Choice(self.general_panel)
         self.lang_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        
-        available_languages = get_available_languages()
+
+        available_languages = get_available_languages_display()
         self.lang_choice.AppendItems(available_languages)
         vbox.Add(self.lang_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
@@ -693,10 +693,11 @@ class SettingsFrame(wx.Frame):
     def load_settings_to_ui(self):
         # Language
         current_lang = get_setting('language', 'pl')
-        if self.lang_choice.FindString(current_lang) != wx.NOT_FOUND:
-            self.lang_choice.SetStringSelection(current_lang)
+        current_lang_display = get_language_display_name(current_lang)
+        if self.lang_choice.FindString(current_lang_display) != wx.NOT_FOUND:
+            self.lang_choice.SetStringSelection(current_lang_display)
         else:
-            self.lang_choice.SetStringSelection('pl')
+            self.lang_choice.SetStringSelection(get_language_display_name('pl'))
 
         sound_settings = self.settings.get('sound', {})
         current_theme = sound_settings.get('theme', 'default')
@@ -900,8 +901,9 @@ class SettingsFrame(wx.Frame):
         old_startup_mode = old_settings.get('general', {}).get('startup_mode', 'normal')
         old_language = old_settings.get('general', {}).get('language', 'pl')
 
-        # Save language setting
-        selected_language = self.lang_choice.GetStringSelection()
+        # Save language setting (convert display name to code)
+        selected_language_display = self.lang_choice.GetStringSelection()
+        selected_language = get_language_code_from_display_name(selected_language_display)
         set_setting('language', selected_language)
 
         self.settings['sound'] = {

@@ -1,0 +1,1565 @@
+# Polish translations for EltenLink client.
+# Copyright (C) 2026 TitoSoft
+# This file is distributed under the same license as the TCE Launcher project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TCE Launcher\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-08 14:17+0100\n"
+"PO-Revision-Date: 2026-02-08 15:00+0100\n"
+"Last-Translator: TitoSoft\n"
+"Language: pl\n"
+"Language-Team: pl\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+# ---- Login Dialog ----
+
+msgid "Connect to EltenLink (Beta)"
+msgstr "Połącz z EltenLink (Beta)"
+
+msgid ""
+"EltenLink is a social network for the blind.\n"
+"Connect to chat, forums, and blogs."
+msgstr ""
+"EltenLink to sieć społecznościowa dla niewidomych.\n"
+"Połącz się, aby czatować, uczestniczyć w forach i blogach."
+
+msgid "Username:"
+msgstr "Nazwa użytkownika:"
+
+msgid "Password:"
+msgstr "Hasło:"
+
+msgid "Remember password (not recommended)"
+msgstr "Zapamiętaj hasło (niezalecane)"
+
+msgid "Connect"
+msgstr "Połącz"
+
+msgid "Cancel"
+msgstr "Anuluj"
+
+msgid "Please enter username and password"
+msgstr "Podaj nazwę użytkownika i hasło"
+
+msgid "Connecting to EltenLink (Beta)..."
+msgstr "Łączenie z EltenLink (Beta)..."
+
+msgid "Connected successfully!"
+msgstr "Połączono pomyślnie!"
+
+msgid "Two-factor authentication required"
+msgstr "Wymagana autoryzacja dwuskładnikowa"
+
+msgid "Login failed"
+msgstr "Logowanie nie powiodło się"
+
+msgid "Connection error"
+msgstr "Błąd połączenia"
+
+msgid "Authenticate using SMS"
+msgstr "Autoryzuj przez SMS"
+
+msgid "Authenticate using backup code"
+msgstr "Autoryzuj kodem zapasowym"
+
+msgid "Two-factor authentication is enabled. Select method:"
+msgstr "Autoryzacja dwuskładnikowa jest włączona. Wybierz metodę:"
+
+msgid "Two-Factor Authentication"
+msgstr "Autoryzacja dwuskładnikowa"
+
+msgid "Login cancelled"
+msgstr "Logowanie anulowane"
+
+msgid "Sending SMS code..."
+msgstr "Wysyłanie kodu SMS..."
+
+msgid "SMS sent. Check your phone."
+msgstr "SMS wysłany. Sprawdź swój telefon."
+
+msgid "Failed to send SMS"
+msgstr "Nie udało się wysłać SMS"
+
+msgid "Enter the code from SMS:"
+msgstr "Wpisz kod z SMS:"
+
+msgid "Enter backup code:"
+msgstr "Wpisz kod zapasowy:"
+
+msgid "Code cannot be empty. Try again:"
+msgstr "Kod nie może być pusty. Spróbuj ponownie:"
+
+msgid "Verified successfully!"
+msgstr "Zweryfikowano pomyślnie!"
+
+#, python-brace-format
+msgid "Invalid code. Try again ({}/{}):"
+msgstr "Nieprawidłowy kod. Spróbuj ponownie ({}/{}):"
+
+msgid "Invalid code. Try again."
+msgstr "Nieprawidłowy kod. Spróbuj ponownie."
+
+msgid "Verification failed after 3 attempts."
+msgstr "Weryfikacja nie powiodła się po 3 próbach."
+
+#, python-brace-format
+msgid "Verification error: {}"
+msgstr "Błąd weryfikacji: {}"
+
+#, python-brace-format
+msgid "Error: {}. Try again:"
+msgstr "Błąd: {}. Spróbuj ponownie:"
+
+# ---- Main Window ----
+
+msgid "EltenLink (Beta)"
+msgstr "EltenLink (Beta)"
+
+msgid "Welcome to EltenLink (Beta)!"
+msgstr "Witaj w EltenLink (Beta)!"
+
+msgid "Connected"
+msgstr "Połączono"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "Message:"
+msgstr "Wiadomość:"
+
+msgid "Send"
+msgstr "Wyślij"
+
+msgid "Back"
+msgstr "Wstecz"
+
+msgid "Disconnect"
+msgstr "Rozłącz"
+
+# ---- Menu Bar ----
+
+msgid "Refresh\tF5"
+msgstr "Odśwież\tF5"
+
+msgid "New Message\tCtrl+N"
+msgstr "Nowa wiadomość\tCtrl+N"
+
+msgid "Disconnect\tCtrl+Q"
+msgstr "Rozłącz\tCtrl+Q"
+
+msgid "File"
+msgstr "Plik"
+
+msgid "Menu\tCtrl+H"
+msgstr "Menu\tCtrl+H"
+
+msgid "Contacts\tCtrl+1"
+msgstr "Kontakty\tCtrl+1"
+
+msgid "Conversations\tCtrl+2"
+msgstr "Rozmowy\tCtrl+2"
+
+msgid "Forum\tCtrl+3"
+msgstr "Forum\tCtrl+3"
+
+msgid "Blogs\tCtrl+4"
+msgstr "Blogi\tCtrl+4"
+
+msgid "Online Users\tCtrl+5"
+msgstr "Użytkownicy online\tCtrl+5"
+
+msgid "View"
+msgstr "Widok"
+
+msgid "About EltenLink (Beta)"
+msgstr "O EltenLink (Beta)"
+
+msgid "Help"
+msgstr "Pomoc"
+
+# ---- Posts Panel ----
+
+msgid "No content"
+msgstr "Brak treści"
+
+msgid "(edited)"
+msgstr "(edytowane)"
+
+msgid "Post"
+msgstr "Wpis"
+
+msgid "Comment"
+msgstr "Komentarz"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "No audio available"
+msgstr "Brak dostępnego audio"
+
+msgid "Playing audio post..."
+msgstr "Odtwarzanie wpisu audio..."
+
+msgid "Failed to play audio"
+msgstr "Nie udało się odtworzyć audio"
+
+msgid "Failed to download audio"
+msgstr "Nie udało się pobrać audio"
+
+# ---- User Submenu ----
+
+msgid "Send Message"
+msgstr "Wyślij wiadomość"
+
+msgid "View Profile"
+msgstr "Zobacz profil"
+
+msgid "Open Blog"
+msgstr "Otwórz blog"
+
+msgid "Add to Contacts"
+msgstr "Dodaj do kontaktów"
+
+#, python-brace-format
+msgid "User: {user}"
+msgstr "{user}"
+
+# ---- Menu Items ----
+
+msgid "EltenLink (Beta) - Menu"
+msgstr "EltenLink (Beta) - Menu"
+
+msgid "Contacts"
+msgstr "Kontakty"
+
+msgid "Conversations"
+msgstr "Rozmowy"
+
+msgid "Forum"
+msgstr "Forum"
+
+msgid "Blogs"
+msgstr "Blogi"
+
+msgid "Online Users"
+msgstr "Użytkownicy online"
+
+msgid "Account Settings"
+msgstr "Ustawienia konta"
+
+# ---- Feed ----
+
+msgid "Feed"
+msgstr "Tablica"
+
+msgid "No feed posts"
+msgstr "Brak wpisów na tablicy"
+
+msgid "Feed Post"
+msgstr "Wpis na tablicy"
+
+msgid "Read Post"
+msgstr "Czytaj wpis"
+
+msgid "Unlike"
+msgstr "Przestań lubić ten wpis"
+
+msgid "Like"
+msgstr "Lubię"
+
+msgid "Reply"
+msgstr "Odpowiedź"
+
+msgid "Follow Feed"
+msgstr "Obserwuj tablicę"
+
+msgid "Unfollow Feed"
+msgstr "Przestań obserwować tablicę"
+
+msgid "Delete Post"
+msgstr "Usuń wpis"
+
+msgid "New Post"
+msgstr "Nowy wpis"
+
+msgid "Refresh"
+msgstr "Odśwież"
+
+msgid "Post liked"
+msgstr "Polubiono wpis"
+
+msgid "Post unliked"
+msgstr "Cofnięto polubienie"
+
+msgid "Reply (max 300 characters):"
+msgstr "Odpowiedź (maks. 300 znaków):"
+
+msgid "Reply to Post"
+msgstr "Odpowiedź na wpis"
+
+msgid "Reply posted"
+msgstr "Odpowiedź opublikowana"
+
+msgid "New post (max 300 characters):"
+msgstr "Nowy wpis (maks. 300 znaków):"
+
+msgid "New Feed Post"
+msgstr "Nowy wpis na tablicy"
+
+msgid "Post published"
+msgstr "Wpis opublikowany"
+
+msgid "Delete this post?"
+msgstr "Usunąć ten wpis?"
+
+msgid "Post deleted"
+msgstr "Wpis usunięty"
+
+msgid "Feed followed"
+msgstr "Tablica obserwowana"
+
+msgid "Feed unfollowed"
+msgstr "Przerwano obserwowanie tablicy"
+
+msgid "Loading feed..."
+msgstr "Ładowanie tablicy..."
+
+#, python-brace-format
+msgid "Feed: {user}"
+msgstr "Tablica: {user}"
+
+msgid "Loading..."
+msgstr "Ładowanie..."
+
+# ---- Contacts ----
+
+msgid "No contacts"
+msgstr "Brak kontaktów"
+
+#, python-brace-format
+msgid "{count} contacts"
+msgstr "{count} kontaktów"
+
+# ---- Conversations ----
+
+msgid "No conversations"
+msgstr "Brak rozmów"
+
+#, python-brace-format
+msgid "{count} conversations"
+msgstr "{count} rozmów"
+
+#, python-brace-format
+msgid "Chat with {user}"
+msgstr "Czat z {user}"
+
+msgid "No messages yet. Type a message below."
+msgstr "Brak wiadomości. Wpisz wiadomość poniżej."
+
+msgid "No messages yet."
+msgstr "Brak wiadomości."
+
+# ---- Forum ----
+
+msgid "Forum - Groups"
+msgstr "Forum - Grupy"
+
+msgid "No forum groups"
+msgstr "Brak grup forumowych"
+
+#, python-brace-format
+msgid "{count} forum groups"
+msgstr "{count} grup forumowych"
+
+msgid "No forums in this group"
+msgstr "Brak forów w tej grupie"
+
+msgid "No threads"
+msgstr "Brak wątków"
+
+msgid "Reply:"
+msgstr "Odpowiedź:"
+
+msgid "No posts"
+msgstr "Brak wpisów"
+
+msgid "Load more"
+msgstr "Załaduj więcej"
+
+#, python-brace-format
+msgid "{count} posts"
+msgstr "{count} wpisów"
+
+# ---- Blogs Menu ----
+
+msgid "My blog"
+msgstr "Mój blog"
+
+msgid "Recently updated blogs"
+msgstr "Ostatnio aktualizowane blogi"
+
+msgid "Frequently updated blogs"
+msgstr "Często aktualizowane blogi"
+
+msgid "Frequently commented blogs"
+msgstr "Często komentowane blogi"
+
+msgid "Followed blogs"
+msgstr "Obserwowane blogi"
+
+msgid "Search user's blog"
+msgstr "Szukaj bloga użytkownika"
+
+msgid "No blogs found"
+msgstr "Nie znaleziono blogów"
+
+msgid "Blog Post"
+msgstr "Wpis na blogu"
+
+msgid "Comment:"
+msgstr "Komentarz:"
+
+#, python-brace-format
+msgid "{count} comments"
+msgstr "{count} komentarzy"
+
+# ---- Online Users ----
+
+msgid "No users online"
+msgstr "Brak użytkowników online"
+
+#, python-brace-format
+msgid "{count} users online"
+msgstr "{count} użytkowników online"
+
+# ---- What's New ----
+
+msgid "What's new"
+msgstr "Co nowego"
+
+msgid "Failed to load notifications"
+msgstr "Nie udało się załadować powiadomień"
+
+msgid "Failed to load"
+msgstr "Nie udało się załadować"
+
+msgid "New messages"
+msgstr "Nowe wiadomości"
+
+msgid "New posts in followed threads"
+msgstr "Nowe posty w obserwowanych wątkach"
+
+msgid "New posts on the followed blogs"
+msgstr "Nowe posty na obserwowanych blogach"
+
+msgid "New comments on your blog"
+msgstr "Nowe komentarze na Twoim blogu"
+
+msgid "New threads on followed forums"
+msgstr "Nowe wątki na obserwowanych forach"
+
+msgid "New posts on followed forums"
+msgstr "Nowe posty na obserwowanych forach"
+
+msgid "New friends"
+msgstr "Nowi znajomi"
+
+msgid "Friends' birthday"
+msgstr "Urodziny znajomych"
+
+msgid "Mentions"
+msgstr "Wzmianki"
+
+msgid "Followed blog posts"
+msgstr "Obserwowane posty na blogach"
+
+msgid "Blog followers"
+msgstr "Obserwujący bloga"
+
+msgid "Blog mentions"
+msgstr "Wzmianki na blogach"
+
+msgid "Awaiting group invitations"
+msgstr "Oczekujące zaproszenia do grup"
+
+msgid "There is nothing new."
+msgstr "Nie ma nic nowego."
+
+# ---- Account Settings ----
+
+msgid "Change password"
+msgstr "Zmień hasło"
+
+msgid "Change email"
+msgstr "Zmień e-mail"
+
+msgid "View account info"
+msgstr "Pokaż informacje o koncie"
+
+# ---- Context Menus ----
+
+msgid "New Contact"
+msgstr "Nowy kontakt"
+
+msgid "Remove Contact"
+msgstr "Usuń kontakt"
+
+msgid "Open"
+msgstr "Otwórz"
+
+msgid "Mark as Read"
+msgstr "Oznacz jako przeczytane"
+
+msgid "New Message"
+msgstr "Nowa wiadomość"
+
+msgid "Mark All as Read"
+msgstr "Oznacz wszystko jako przeczytane"
+
+msgid "Search"
+msgstr "Szukaj"
+
+msgid "Delete Conversation"
+msgstr "Usuń rozmowę"
+
+msgid "Group Info"
+msgstr "Informacje o grupie"
+
+msgid "Group Members"
+msgstr "Członkowie grupy"
+
+msgid "Mark Group as Read"
+msgstr "Oznacz grupę jako przeczytaną"
+
+msgid "New Thread"
+msgstr "Nowy wątek"
+
+msgid "Mark Forum as Read"
+msgstr "Oznacz forum jako przeczytane"
+
+msgid "Follow Thread"
+msgstr "Obserwuj wątek"
+
+msgid "Unfollow Thread"
+msgstr "Przestań obserwować wątek"
+
+msgid "Play Audio"
+msgstr "Odtwórz audio"
+
+msgid "Write Reply"
+msgstr "Napisz odpowiedź"
+
+msgid "Unfollow Blog"
+msgstr "Przestań obserwować blog"
+
+msgid "Follow Blog"
+msgstr "Obserwuj blog"
+
+msgid "Mark Blog as Read"
+msgstr "Oznacz blog jako przeczytany"
+
+msgid "Play Audio Post"
+msgstr "Odtwórz wpis audio"
+
+msgid "Unfollow Post"
+msgstr "Przestań obserwować wpis"
+
+msgid "Follow Post"
+msgstr "Obserwuj wpis"
+
+msgid "New Blog Post"
+msgstr "Nowy wpis na blogu"
+
+msgid "New Category"
+msgstr "Nowa kategoria"
+
+msgid "Manage Categories"
+msgstr "Zarządzaj kategoriami"
+
+msgid "Categories"
+msgstr "Kategorie"
+
+msgid "Write Comment"
+msgstr "Napisz komentarz"
+
+msgid "Delete Comment"
+msgstr "Usuń komentarz"
+
+msgid "Show Feed"
+msgstr "Pokaż tablicę"
+
+msgid "Enter username:"
+msgstr "Wpisz nazwę użytkownika:"
+
+msgid "Please enter a username"
+msgstr "Podaj nazwę użytkownika"
+
+#, python-brace-format
+msgid "Remove {user} from contacts?"
+msgstr "Usunąć {user} z kontaktów?"
+
+msgid "Contact removed"
+msgstr "Kontakt usunięty"
+
+msgid "Contact added"
+msgstr "Kontakt dodany"
+
+#, python-brace-format
+msgid "Delete conversation with {user}?"
+msgstr "Usunąć rozmowę z {user}?"
+
+msgid "Conversation deleted"
+msgstr "Rozmowa usunięta"
+
+msgid "Conversation marked as read"
+msgstr "Rozmowa oznaczona jako przeczytana"
+
+msgid "All messages marked as read"
+msgstr "Wszystkie wiadomości oznaczone jako przeczytane"
+
+msgid "Enter username to search:"
+msgstr "Wpisz nazwę użytkownika do wyszukania:"
+
+msgid "Search Conversations"
+msgstr "Szukaj rozmów"
+
+# ---- Forum Group Info ----
+
+msgid "Group"
+msgstr "Grupa"
+
+msgid "Founder"
+msgstr "Założyciel"
+
+msgid "Language"
+msgstr "Język"
+
+msgid "Forums"
+msgstr "Fora"
+
+msgid "Threads"
+msgstr "Wątki"
+
+msgid "Posts"
+msgstr "Wpisy"
+
+msgid "Description"
+msgstr "Opis"
+
+msgid "No members"
+msgstr "Brak członków"
+
+msgid "Enter search query:"
+msgstr "Wpisz frazę do wyszukania:"
+
+msgid "Search Forum"
+msgstr "Szukaj na forum"
+
+msgid "Searching..."
+msgstr "Wyszukiwanie..."
+
+msgid "No results found"
+msgstr "Nie znaleziono wyników"
+
+msgid "Search Results:"
+msgstr "Wyniki wyszukiwania:"
+
+msgid "Search Results"
+msgstr "Wyniki wyszukiwania"
+
+msgid "Group marked as read"
+msgstr "Grupa oznaczona jako przeczytana"
+
+msgid "Forum marked as read"
+msgstr "Forum oznaczone jako przeczytane"
+
+msgid "Thread followed"
+msgstr "Wątek obserwowany"
+
+msgid "Thread unfollowed"
+msgstr "Przerwano obserwowanie wątku"
+
+# ---- Thread/Post Creation ----
+
+msgid "Thread title:"
+msgstr "Tytuł wątku:"
+
+msgid "Title cannot be empty"
+msgstr "Tytuł nie może być pusty"
+
+msgid "Thread content:"
+msgstr "Treść wątku:"
+
+msgid "Content cannot be empty"
+msgstr "Treść nie może być pusta"
+
+msgid "Creating thread..."
+msgstr "Tworzenie wątku..."
+
+msgid "Thread created"
+msgstr "Wątek utworzony"
+
+# ---- Blog Post Creation ----
+
+msgid "Post title:"
+msgstr "Tytuł wpisu:"
+
+msgid "Post content:"
+msgstr "Treść wpisu:"
+
+msgid "Publishing post..."
+msgstr "Publikowanie wpisu..."
+
+msgid "Blog post created"
+msgstr "Wpis na blogu utworzony"
+
+# ---- Blog Category Management ----
+
+msgid "Category name:"
+msgstr "Nazwa kategorii:"
+
+msgid "Name cannot be empty"
+msgstr "Nazwa nie może być pusta"
+
+msgid "Creating category..."
+msgstr "Tworzenie kategorii..."
+
+msgid "Category created"
+msgstr "Kategoria utworzona"
+
+msgid "Loading categories..."
+msgstr "Ładowanie kategorii..."
+
+msgid "No categories"
+msgstr "Brak kategorii"
+
+msgid "Select a category to manage:"
+msgstr "Wybierz kategorię do zarządzania:"
+
+msgid "Blog Categories"
+msgstr "Kategorie bloga"
+
+msgid "Rename"
+msgstr "Zmień nazwę"
+
+msgid "Delete"
+msgstr "Usuń"
+
+#, python-brace-format
+msgid "Action for category '{name}':"
+msgstr "Akcja dla kategorii '{name}':"
+
+msgid "Category Action"
+msgstr "Akcja kategorii"
+
+msgid "New name:"
+msgstr "Nowa nazwa:"
+
+msgid "Rename Category"
+msgstr "Zmień nazwę kategorii"
+
+msgid "Category renamed"
+msgstr "Nazwa kategorii zmieniona"
+
+#, python-brace-format
+msgid "Delete category '{name}'?"
+msgstr "Usunąć kategorię '{name}'?"
+
+msgid "Delete Category"
+msgstr "Usuń kategorię"
+
+msgid "Category deleted"
+msgstr "Kategoria usunięta"
+
+# ---- Blog Actions ----
+
+msgid "Blog unfollowed"
+msgstr "Przerwano obserwowanie bloga"
+
+msgid "Blog followed"
+msgstr "Blog obserwowany"
+
+msgid "Post unfollowed"
+msgstr "Przerwano obserwowanie wpisu"
+
+msgid "Post followed"
+msgstr "Wpis obserwowany"
+
+msgid "Blog marked as read"
+msgstr "Blog oznaczony jako przeczytany"
+
+msgid "Comment deletion is not yet supported"
+msgstr "Usuwanie komentarzy nie jest jeszcze obsługiwane"
+
+msgid "No audio URL available"
+msgstr "Brak dostępnego adresu URL audio"
+
+msgid "User not found"
+msgstr "Nie znaleziono użytkownika"
+
+# ---- New Message ----
+
+msgid "Enter recipient username:"
+msgstr "Wpisz nazwę odbiorcy:"
+
+msgid "Message"
+msgstr "Wiadomość"
+
+# ---- Password/Email Change ----
+
+msgid "Current password:"
+msgstr "Aktualne hasło:"
+
+msgid "New password:"
+msgstr "Nowe hasło:"
+
+msgid "Repeat new password:"
+msgstr "Powtórz nowe hasło:"
+
+msgid "Change"
+msgstr "Zmień"
+
+msgid "Please fill all fields"
+msgstr "Wypełnij wszystkie pola"
+
+msgid "New passwords don't match"
+msgstr "Nowe hasła się nie zgadzają"
+
+msgid "Password must be at least 6 characters"
+msgstr "Hasło musi mieć co najmniej 6 znaków"
+
+msgid "Password changed successfully"
+msgstr "Hasło zmienione pomyślnie"
+
+msgid "Failed to change password"
+msgstr "Nie udało się zmienić hasła"
+
+msgid "New email:"
+msgstr "Nowy e-mail:"
+
+msgid "Invalid email address"
+msgstr "Nieprawidłowy adres e-mail"
+
+msgid "Email changed successfully"
+msgstr "E-mail zmieniony pomyślnie"
+
+msgid "Failed to change email"
+msgstr "Nie udało się zmienić e-maila"
+
+msgid "Failed to load account info"
+msgstr "Nie udało się załadować informacji o koncie"
+
+msgid "Account Information"
+msgstr "Informacje o koncie"
+
+msgid "Registration date"
+msgstr "Data rejestracji"
+
+msgid "Elten version"
+msgstr "Wersja Eltena"
+
+msgid "Forum posts"
+msgstr "Posty na forum"
+
+msgid "Known by"
+msgstr "Znany przez"
+
+msgid "Email"
+msgstr "E-mail"
+
+# ---- Message Sending ----
+
+msgid "Please enter a message"
+msgstr "Wprowadź wiadomość"
+
+msgid "Failed to send message"
+msgstr "Nie udało się wysłać wiadomości"
+
+msgid "Message sent"
+msgstr "Wiadomość wysłana"
+
+msgid "Posting reply..."
+msgstr "Publikowanie odpowiedzi..."
+
+msgid "Failed to post reply"
+msgstr "Nie udało się opublikować odpowiedzi"
+
+msgid "Posting comment..."
+msgstr "Publikowanie komentarza..."
+
+msgid "Failed to post comment"
+msgstr "Nie udało się opublikować komentarza"
+
+msgid "Comment posted"
+msgstr "Komentarz opublikowany"
+
+# ---- Auto-Refresh / Notifications ----
+
+msgid "New conversation"
+msgstr "Nowa rozmowa"
+
+#, python-brace-format
+msgid "New message from {user}"
+msgstr "Nowa wiadomość od {user}"
+
+msgid "is now online"
+msgstr "jest teraz online"
+
+msgid "is now offline"
+msgstr "jest teraz offline"
+
+msgid "Refreshing..."
+msgstr "Odświeżanie..."
+
+msgid "Are you sure you want to disconnect?"
+msgstr "Czy na pewno chcesz się rozłączyć?"
+
+msgid "Disconnected"
+msgstr "Rozłączono"
+
+# ---- Client Error Messages ----
+
+msgid "Database error"
+msgstr "Błąd bazy danych"
+
+msgid "Invalid username or password"
+msgstr "Nieprawidłowa nazwa użytkownika lub hasło"
+
+msgid "Permission denied"
+msgstr "Brak uprawnień"
+
+msgid "Incorrect old password"
+msgstr "Nieprawidłowe stare hasło"
+
+msgid "Email change not allowed"
+msgstr "Zmiana e-maila niedozwolona"
+
+msgid "Connection timeout"
+msgstr "Przekroczono limit czasu połączenia"
+
+msgid "Connection failed"
+msgstr "Połączenie nie powiodło się"
+
+msgid "Not connected"
+msgstr "Nie połączono"
+
+msgid "Token refresh failed"
+msgstr "Odświeżenie tokenu nie powiodło się"
+
+msgid "Empty response from server"
+msgstr "Pusta odpowiedź z serwera"
+
+msgid "Login successful"
+msgstr "Logowanie pomyślne"
+
+msgid "Invalid code"
+msgstr "Nieprawidłowy kod"
+
+msgid "Authentication record not found"
+msgstr "Nie znaleziono rekordu autoryzacji"
+
+msgid "Account created successfully"
+msgstr "Konto utworzone pomyślnie"
+
+msgid "Username already exists or is invalid"
+msgstr "Nazwa użytkownika już istnieje lub jest nieprawidłowa"
+
+msgid "User has blocked you"
+msgstr "Użytkownik cię zablokował"
+
+msgid "Already in contacts"
+msgstr "Już w kontaktach"
+
+msgid "Incorrect password"
+msgstr "Nieprawidłowe hasło"
+
+# ---- Player ----
+
+msgid "Audio player"
+msgstr "Odtwarzacz audio"
+
+msgid "Downloading..."
+msgstr "Pobieranie..."
+
+msgid "Stopped"
+msgstr "Zatrzymano"
+
+msgid "Error"
+msgstr "Błąd"
+
+msgid "Playing"
+msgstr "Odtwarzanie"
+
+msgid "Paused"
+msgstr "Wstrzymano"
+
+msgid "Center"
+msgstr "Środek"
+
+msgid "Reset"
+msgstr "Resetuj"
+
+msgid "Start"
+msgstr "Początek"
+
+msgid "End"
+msgstr "Koniec"
+
+msgid "No file to save"
+msgstr "Brak pliku do zapisania"
+
+msgid "Save audio file"
+msgstr "Zapisz plik audio"
+
+msgid "Audio files"
+msgstr "Pliki audio"
+
+msgid "Saved"
+msgstr "Zapisano"
+
+msgid "Normal"
+msgstr "Normalnie"
+
+# ---- About Dialog ----
+
+msgid "About this program"
+msgstr "O tym programie"
+
+msgid "Account settings coming soon"
+msgstr "Ustawienia konta wkrótce"
+
+msgid "All posts"
+msgstr "Wszystkie wpisy"
+
+msgid "Audio playback error"
+msgstr "Błąd odtwarzania audio"
+
+msgid "Auto-login failed, please login again"
+msgstr "Automatyczne logowanie nie powiodło się, zaloguj się ponownie"
+
+msgid "Blog feature coming soon..."
+msgstr "Funkcja bloga wkrótce..."
+
+msgid "Blog not found"
+msgstr "Nie znaleziono bloga"
+
+#, python-brace-format
+msgid "Error sending SMS: {}"
+msgstr "Błąd wysyłania SMS: {}"
+
+msgid "Verification failed. Too many attempts."
+msgstr "Weryfikacja nie powiodła się. Zbyt wiele prób."
+
+msgid "Forum Groups"
+msgstr "Grupy forumowe"
+
+msgid "Forum threads view coming soon"
+msgstr "Widok wątków forum wkrótce"
+
+msgid "Frequently commented blogs coming soon"
+msgstr "Często komentowane blogi wkrótce"
+
+msgid "Frequently updated blogs coming soon"
+msgstr "Często aktualizowane blogi wkrótce"
+
+msgid "Go to main menu"
+msgstr "Przejdź do menu głównego"
+
+msgid "Items"
+msgstr "Elementy"
+
+msgid "Loading audio..."
+msgstr "Ładowanie audio..."
+
+msgid "Recently updated blogs coming soon"
+msgstr "Ostatnio aktualizowane blogi wkrótce"
+
+msgid "Refresh current view"
+msgstr "Odśwież bieżący widok"
+
+msgid "Saved credentials expired, please login again"
+msgstr "Zapisane dane logowania wygasły, zaloguj się ponownie"
+
+msgid "Show blogs"
+msgstr "Pokaż blogi"
+
+msgid "Show contacts"
+msgstr "Pokaż kontakty"
+
+msgid "Show conversations"
+msgstr "Pokaż rozmowy"
+
+msgid "Show forum"
+msgstr "Pokaż forum"
+
+msgid "Show online users"
+msgstr "Pokaż użytkowników online"
+
+msgid "Disconnect and close"
+msgstr "Rozłącz i zamknij"
+
+# ---- Account Management (accountmanagement.py) ----
+
+msgid "Manage my account"
+msgstr "Zarządzaj moim kontem"
+
+msgid "Manage my account\tCtrl+6"
+msgstr "Zarządzaj moim kontem\tCtrl+6"
+
+msgid "Account"
+msgstr "Konto"
+
+msgid "Category:"
+msgstr "Kategoria:"
+
+msgid "Profile"
+msgstr "Profil"
+
+msgid "Visiting card"
+msgstr "Wizytówka"
+
+msgid "Privacy"
+msgstr "Prywatność"
+
+msgid "Status and signature"
+msgstr "Status i podpis"
+
+msgid "What's new notifications"
+msgstr "Powiadomienia Co nowego"
+
+msgid "Account security"
+msgstr "Bezpieczeństwo konta"
+
+msgid "Others"
+msgstr "Inne"
+
+msgid "Close"
+msgstr "Zamknij"
+
+msgid "Loading settings, please wait..."
+msgstr "Ładowanie ustawień, proszę czekać..."
+
+msgid "Failed to load account settings"
+msgstr "Nie udało się załadować ustawień konta"
+
+msgid "Settings saved"
+msgstr "Ustawienia zapisane"
+
+msgid "Failed to save settings"
+msgstr "Nie udało się zapisać ustawień"
+
+# ---- Profile ----
+
+msgid "Full name:"
+msgstr "Pełna nazwa:"
+
+msgid "Gender:"
+msgstr "Płeć:"
+
+msgid "Female"
+msgstr "Kobieta"
+
+msgid "Male"
+msgstr "Mężczyzna"
+
+msgid "Birth year:"
+msgstr "Rok urodzenia:"
+
+msgid "Don't specify"
+msgstr "Nie podawaj"
+
+msgid "Birth month:"
+msgstr "Miesiąc urodzenia:"
+
+msgid "January"
+msgstr "Styczeń"
+
+msgid "February"
+msgstr "Luty"
+
+msgid "March"
+msgstr "Marzec"
+
+msgid "April"
+msgstr "Kwiecień"
+
+msgid "May"
+msgstr "Maj"
+
+msgid "June"
+msgstr "Czerwiec"
+
+msgid "July"
+msgstr "Lipiec"
+
+msgid "August"
+msgstr "Sierpień"
+
+msgid "September"
+msgstr "Wrzesień"
+
+msgid "October"
+msgstr "Październik"
+
+msgid "November"
+msgstr "Listopad"
+
+msgid "December"
+msgstr "Grudzień"
+
+msgid "Birth day:"
+msgstr "Dzień urodzenia:"
+
+msgid "Save"
+msgstr "Zapisz"
+
+# ---- Visiting Card ----
+
+msgid "Visiting card:"
+msgstr "Wizytówka:"
+
+# ---- Privacy ----
+
+msgid "Hide my profile for strangers"
+msgstr "Ukryj mój profil przed obcymi"
+
+msgid "Prevent banned users from writing me private messages"
+msgstr "Zablokuj wysyłanie prywatnych wiadomości przez zbanowanych użytkowników"
+
+msgid "Accept incoming voice calls:"
+msgstr "Akceptuj przychodzące połączenia głosowe:"
+
+msgid "Never"
+msgstr "Nigdy"
+
+msgid "Only from my friends"
+msgstr "Tylko od moich znajomych"
+
+msgid "From all users"
+msgstr "Od wszystkich użytkowników"
+
+msgid "Manage black list"
+msgstr "Zarządzaj czarną listą"
+
+msgid "Yes"
+msgstr "Tak"
+
+msgid "No"
+msgstr "Nie"
+
+msgid "Black list"
+msgstr "Czarna lista"
+
+msgid "Blacklist is empty"
+msgstr "Czarna lista jest pusta"
+
+msgid "Add"
+msgstr "Dodaj"
+
+msgid "Remove"
+msgstr "Usuń"
+
+msgid "Enter the username to add to the blacklist:"
+msgstr "Wpisz nazwę użytkownika do dodania na czarną listę:"
+
+msgid "Add to blacklist"
+msgstr "Dodaj na czarną listę"
+
+#, python-brace-format
+msgid "Are you sure you want to remove {user} from the blacklist?"
+msgstr "Czy na pewno chcesz usunąć {user} z czarnej listy?"
+
+msgid "Remove from blacklist"
+msgstr "Usuń z czarnej listy"
+
+# ---- Status and Signature ----
+
+msgid "Status displayed after your name on all lists of users:"
+msgstr "Status wyświetlany obok twojej nazwy na wszystkich listach użytkowników:"
+
+msgid "Signature placed below all your forum posts:"
+msgstr "Podpis umieszczany pod wszystkimi twoimi wpisami na forum:"
+
+msgid "Greeting read after you log in to Elten:"
+msgstr "Powitanie odczytywane po zalogowaniu do Eltena:"
+
+# ---- What's New Notifications ----
+
+msgid "Notice and show in what's new"
+msgstr "Powiadamiaj i pokaż w Co nowego"
+
+msgid "Notice only"
+msgstr "Tylko powiadamiaj"
+
+msgid "Ignore"
+msgstr "Ignoruj"
+
+msgid "New messages"
+msgstr "Nowe wiadomości"
+
+msgid "New posts in followed threads"
+msgstr "Nowe wpisy w obserwowanych wątkach"
+
+msgid "New posts on the followed blogs"
+msgstr "Nowe wpisy na obserwowanych blogach"
+
+msgid "New comments on your blog"
+msgstr "Nowe komentarze na twoim blogu"
+
+msgid "New threads on followed forums"
+msgstr "Nowe wątki na obserwowanych forach"
+
+msgid "New posts on followed forums"
+msgstr "Nowe wpisy na obserwowanych forach"
+
+msgid "New friends"
+msgstr "Nowi znajomi"
+
+msgid "Friends' birthday"
+msgstr "Urodziny znajomych"
+
+msgid "Mentions"
+msgstr "Wzmianki"
+
+msgid "Followed blog posts"
+msgstr "Obserwowane wpisy blogowe"
+
+msgid "Blog followers"
+msgstr "Obserwujący blog"
+
+msgid "Blog mentions"
+msgstr "Wzmianki blogowe"
+
+msgid "Awaiting group invitations"
+msgstr "Oczekujące zaproszenia do grup"
+
+# ---- Account Security ----
+
+msgid "Manage Two-Factor Authentication"
+msgstr "Zarządzaj autoryzacją dwuskładnikową"
+
+msgid "Manage mail events-reporting"
+msgstr "Zarządzaj raportowaniem zdarzeń e-mail"
+
+msgid "Manage auto-login tokens"
+msgstr "Zarządzaj tokenami automatycznego logowania"
+
+msgid "Show last logins"
+msgstr "Pokaż ostatnie logowania"
+
+msgid "Checking Two-Factor Authentication status..."
+msgstr "Sprawdzanie stanu autoryzacji dwuskładnikowej..."
+
+msgid "Two-Factor Authentication is enabled."
+msgstr "Autoryzacja dwuskładnikowa jest włączona."
+
+msgid "Two-Factor Authentication is disabled."
+msgstr "Autoryzacja dwuskładnikowa jest wyłączona."
+
+msgid "Disable Two-Factor Authentication"
+msgstr "Wyłącz autoryzację dwuskładnikową"
+
+msgid "Generate backup codes"
+msgstr "Wygeneruj kody zapasowe"
+
+msgid "Enable Two-Factor Authentication"
+msgstr "Włącz autoryzację dwuskładnikową"
+
+msgid "Enter your phone number to enable (e.g. +48123456789):"
+msgstr "Wpisz numer telefonu, aby włączyć (np. +48123456789):"
+
+msgid "Enable"
+msgstr "Włącz"
+
+msgid "Invalid phone number. Must start with + or 00 and be at least 11 characters."
+msgstr "Nieprawidłowy numer telefonu. Musi zaczynać się od + lub 00 i mieć co najmniej 11 znaków."
+
+msgid "Enter your password to disable Two-Factor Authentication:"
+msgstr "Wpisz hasło, aby wyłączyć autoryzację dwuskładnikową:"
+
+msgid "Disable 2FA"
+msgstr "Wyłącz 2FA"
+
+msgid "Enter your password to generate backup codes:"
+msgstr "Wpisz hasło, aby wygenerować kody zapasowe:"
+
+msgid "Backup Codes"
+msgstr "Kody zapasowe"
+
+msgid "Failed to generate backup codes"
+msgstr "Nie udało się wygenerować kodów zapasowych"
+
+msgid "Save these backup codes in a safe place:"
+msgstr "Zapisz te kody zapasowe w bezpiecznym miejscu:"
+
+# ---- Mail Events ----
+
+msgid "Enter your password:"
+msgstr "Wpisz hasło:"
+
+msgid "Mail Events"
+msgstr "Zdarzenia e-mail"
+
+msgid "Checking mail events status..."
+msgstr "Sprawdzanie stanu zdarzeń e-mail..."
+
+msgid "Authentication error. Check your password."
+msgstr "Błąd autoryzacji. Sprawdź hasło."
+
+msgid "Mail events reporting requires email verification. Do you want to verify your email now?"
+msgstr "Raportowanie zdarzeń e-mail wymaga weryfikacji adresu. Czy chcesz teraz zweryfikować swój e-mail?"
+
+msgid "Failed to send verification code"
+msgstr "Nie udało się wysłać kodu weryfikacyjnego"
+
+msgid "The verification code has been sent to your email. Please enter it:"
+msgstr "Kod weryfikacyjny został wysłany na twój e-mail. Proszę go wpisać:"
+
+msgid "Verify Email"
+msgstr "Zweryfikuj e-mail"
+
+msgid "Email verified successfully"
+msgstr "E-mail zweryfikowany pomyślnie"
+
+msgid "Verification failed"
+msgstr "Weryfikacja nie powiodła się"
+
+msgid "Mail events reporting is enabled."
+msgstr "Raportowanie zdarzeń e-mail jest włączone."
+
+msgid "Mail events reporting is disabled."
+msgstr "Raportowanie zdarzeń e-mail jest wyłączone."
+
+msgid "Disable mail events reporting"
+msgstr "Wyłącz raportowanie zdarzeń e-mail"
+
+msgid "Enable mail events reporting"
+msgstr "Włącz raportowanie zdarzeń e-mail"
+
+msgid "Mail events reporting enabled"
+msgstr "Raportowanie zdarzeń e-mail włączone"
+
+msgid "Mail events reporting disabled"
+msgstr "Raportowanie zdarzeń e-mail wyłączone"
+
+msgid "Failed to update mail events setting"
+msgstr "Nie udało się zaktualizować ustawień zdarzeń e-mail"
+
+# ---- Auto-Login Tokens ----
+
+msgid "Auto-login Tokens"
+msgstr "Tokeny automatycznego logowania"
+
+msgid "Loading auto-login tokens..."
+msgstr "Ładowanie tokenów automatycznego logowania..."
+
+msgid "No auto-login tokens"
+msgstr "Brak tokenów automatycznego logowania"
+
+msgid "Log out all sessions"
+msgstr "Wyloguj ze wszystkich sesji"
+
+msgid "Are you sure you want to remove all auto-login tokens and log out all sessions?"
+msgstr "Czy na pewno chcesz usunąć wszystkie tokeny automatycznego logowania i wylogować ze wszystkich sesji?"
+
+msgid "All sessions logged out"
+msgstr "Wylogowano ze wszystkich sesji"
+
+msgid "Failed to log out sessions"
+msgstr "Nie udało się wylogować z sesji"
+
+# ---- Last Logins ----
+
+msgid "Last Logins"
+msgstr "Ostatnie logowania"
+
+msgid "Loading login history..."
+msgstr "Ładowanie historii logowań..."
+
+msgid "No login history"
+msgstr "Brak historii logowań"
+
+# ---- Archive Account ----
+
+msgid "Archive this account"
+msgstr "Zarchiwizuj to konto"
+
+msgid ""
+"Archiving your account will have the following effects:\n"
+"- An indication that the account is archived will be placed next to all "
+"posts on the forum.\n"
+"- The account will not be displayed in the users lists.\n"
+"- The account will be removed from all contact lists.\n"
+"- Users will not be able to send private messages to this account.\n"
+"- The profile will be removed from the server.\n"
+"- You will be opted out of all groups and conversations.\n"
+"- All information about followed threads and pinned groups will be "
+"removed.\n"
+"\n"
+"The account will be automatically unarchived the next time you log in, "
+"but removed data will not be restored."
+msgstr ""
+"Archiwizacja konta spowoduje następujące skutki:\n"
+"- Oznaczenie, że konto jest zarchiwizowane, zostanie umieszczone obok "
+"wszystkich wpisów na forum.\n"
+"- Konto nie będzie wyświetlane na listach użytkowników.\n"
+"- Konto zostanie usunięte ze wszystkich list kontaktów.\n"
+"- Użytkownicy nie będą mogli wysyłać prywatnych wiadomości do tego konta.\n"
+"- Profil zostanie usunięty z serwera.\n"
+"- Zostaniesz wypisany ze wszystkich grup i rozmów.\n"
+"- Wszystkie informacje o obserwowanych wątkach i przypiętych grupach "
+"zostaną usunięte.\n"
+"\n"
+"Konto zostanie automatycznie odarchiwizowane po następnym zalogowaniu, "
+"ale usunięte dane nie zostaną przywrócone."
+
+msgid "Information:"
+msgstr "Informacje:"
+
+msgid "Enter your password to confirm:"
+msgstr "Wpisz hasło, aby potwierdzić:"
+
+msgid "Archive"
+msgstr "Zarchiwizuj"
+
+msgid "Are you sure you want to archive this account?"
+msgstr "Czy na pewno chcesz zarchiwizować to konto?"
+
+msgid "Confirm"
+msgstr "Potwierdź"
+
+msgid "Please enter your password"
+msgstr "Proszę wpisać hasło"
+
+# ---- API Error Messages (elten_client.py) ----
+
+msgid "User added to blacklist"
+msgstr "Użytkownik dodany na czarną listę"
+
+msgid "You cannot add an administrator to the blacklist"
+msgstr "Nie możesz dodać administratora na czarną listę"
+
+msgid "This user is already on your blacklist"
+msgstr "Ten użytkownik jest już na twojej czarnej liście"
+
+msgid "User removed from blacklist"
+msgstr "Użytkownik usunięty z czarnej listy"
+
+msgid "Two-factor authentication enabled"
+msgstr "Autoryzacja dwuskładnikowa włączona"
+
+msgid "Invalid password"
+msgstr "Nieprawidłowe hasło"
+
+msgid "Two-factor authentication disabled"
+msgstr "Autoryzacja dwuskładnikowa wyłączona"
+
+msgid "Account archived"
+msgstr "Konto zarchiwizowane"

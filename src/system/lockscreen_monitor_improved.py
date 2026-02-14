@@ -199,35 +199,30 @@ class ThreadSafeEventMonitor:
             
             if stereo_enabled and self.stereo_speech:
                 # Use stereo speech with positioning and pitch
+                # Stereo speech already has fallback to accessible_output3 built-in
                 try:
                     self.stereo_speech.speak_async(message, position=position, pitch_offset=pitch_offset, use_fallback=True)
                 except Exception as stereo_e:
                     print(f"Stereo speech failed: {stereo_e}")
                     # Fallback to regular accessible_output3
-                    self.speaker.speak(message)
+                    try:
+                        self.speaker.speak(message)
+                    except Exception as ao3_e:
+                        print(f"All TTS methods failed: stereo={stereo_e}, ao3={ao3_e}")
             else:
                 # Use regular accessible_output3 if stereo is disabled
                 try:
                     self.speaker.speak(message)
                 except Exception as ao3_e:
                     print(f"accessible_output3 TTS failed: {ao3_e}")
-                    # Fallback to alternative TTS methods
-                    try:
-                        import pyttsx3
-                        if not hasattr(self, '_pyttsx3_engine'):
-                            self._pyttsx3_engine = pyttsx3.init()
-                        self._pyttsx3_engine.say(message)
-                        self._pyttsx3_engine.runAndWait()
-                    except Exception as pyttsx3_e:
-                        print(f"pyttsx3 TTS failed: {pyttsx3_e}")
-                        # Final fallback to Windows SAPI
+                    # Fallback to stereo_speech which has additional fallback mechanisms
+                    if self.stereo_speech:
                         try:
-                            import win32com.client
-                            if not hasattr(self, '_sapi_voice'):
-                                self._sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
-                            self._sapi_voice.Speak(message)
-                        except Exception as sapi_e:
-                            print(f"All TTS methods failed: ao3={ao3_e}, pyttsx3={pyttsx3_e}, sapi={sapi_e}")
+                            self.stereo_speech.speak_async(message, position=position, pitch_offset=pitch_offset, use_fallback=True)
+                        except Exception as stereo_e:
+                            print(f"All TTS methods failed: ao3={ao3_e}, stereo={stereo_e}")
+                    else:
+                        print(f"No alternative TTS available")
                     
         except Exception as e:
             print(f"Error announcing lock status: {e}")

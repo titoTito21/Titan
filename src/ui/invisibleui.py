@@ -14,6 +14,7 @@ from src.settings.settings import load_settings, get_setting
 from src.titan_core.translation import set_language
 from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
+from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.titan_core.stereo_speech import get_stereo_speech, speak_stereo
 from src.ui import componentmanagergui
 from src.ui import settingsgui
@@ -510,6 +511,12 @@ class InvisibleUI:
         # Safe initialization
         try:
             self.build_structure()
+            # Apply IUI hooks from components after structure is built
+            if self.component_manager:
+                try:
+                    self.component_manager.apply_iui_hooks(self)
+                except Exception as e:
+                    print(f"Warning: Failed to apply IUI hooks: {e}")
         except Exception as e:
             print(f"Error during InvisibleUI initialization: {e}")
             import traceback
@@ -627,6 +634,20 @@ class InvisibleUI:
             self.debug_log.append(buf.getvalue())
             widgets = []
 
+        # Initialize statusbar applet manager
+        try:
+            self.debug_log.append("DEBUG: Loading statusbar applet manager...")
+            self.statusbar_applet_manager = StatusbarAppletManager()
+            self.debug_log.append(f"DEBUG: Loaded {len(self.statusbar_applet_manager.get_applet_names())} statusbar applets")
+        except Exception as e:
+            self.debug_log.append(f"ERROR loading statusbar applet manager: {e}")
+            import traceback
+            import io
+            buf = io.StringIO()
+            traceback.print_exc(file=buf)
+            self.debug_log.append(buf.getvalue())
+            self.statusbar_applet_manager = None
+
         def show_component_manager():
             if self.component_manager:
                 # Auto-disable Titan UI when component manager dialog opens
@@ -741,11 +762,19 @@ class InvisibleUI:
         titan_im_elements = []
         if telegram_client:
             titan_im_elements.append(_("Telegram"))
-        
+
         # Add web applications like in gui.py (remove native messenger client)
         titan_im_elements.append(_("Facebook Messenger"))
         titan_im_elements.append(_("WhatsApp"))
-        
+        titan_im_elements.append(_("Titan-Net (Beta)"))
+        titan_im_elements.append(_("EltenLink (Beta)"))
+        try:
+            from src.network.im_module_manager import im_module_manager
+            for name in im_module_manager.get_module_names():
+                titan_im_elements.append(name)
+        except Exception as _e:
+            print(f"[IUI] IM modules: {_e}")
+
         if not titan_im_elements:
             titan_im_elements = [_("No IM clients available")]
 
@@ -875,12 +904,23 @@ class InvisibleUI:
         
         # Otherwise, generate status items directly (for minimized mode)
         try:
-            return [
+            items = [
                 _("Clock: {}").format(get_current_time()),
                 _("Battery level: {}").format(get_battery_status()),
                 _("Volume: {}").format(get_volume_level()),
                 get_network_status()
             ]
+
+            # Add statusbar applets
+            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+                for applet_name in self.statusbar_applet_manager.get_applet_names():
+                    try:
+                        text = self.statusbar_applet_manager.get_applet_text(applet_name)
+                        items.append(text)
+                    except Exception as e:
+                        print(f"Error getting statusbar applet '{applet_name}': {e}")
+
+            return items
         except Exception as e:
             print(f"Error getting status bar items: {e}")
             return [_("No status bar data")]
@@ -1825,7 +1865,29 @@ class InvisibleUI:
         if any(keyword in item_string.lower() for keyword in ['połączono', 'connected', 'wifi', 'ethernet', 'nie połączono', 'disconnected', 'network']):
             wx.CallAfter(self.main_frame.open_network_settings)
             return
-            
+
+        # Check statusbar applets
+        # Strategy: Check if item matches applet pattern (not exact text, since values change)
+        if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+            for applet_name in self.statusbar_applet_manager.get_applet_names():
+                try:
+                    # Get a fresh applet text to check the pattern
+                    self.statusbar_applet_manager.update_applet_cache(applet_name)
+                    applet_text = self.statusbar_applet_manager.get_applet_text(applet_name)
+
+                    # Extract pattern keywords from applet text (words before colons)
+                    import re
+                    applet_keywords = re.findall(r'(\w+):', applet_text)
+                    item_keywords = re.findall(r'(\w+):', item_string)
+
+                    # Check if item has same keyword pattern as applet
+                    if applet_keywords and item_keywords and set(applet_keywords) == set(item_keywords):
+                        print(f"IUI: Statusbar applet detected: '{applet_name}' (pattern match: {applet_keywords}) - activating...")
+                        wx.CallAfter(self.statusbar_applet_manager.activate_applet, applet_name, self.main_frame)
+                        return
+                except Exception as e:
+                    print(f"Error activating statusbar applet '{applet_name}': {e}")
+
         self.speak(_("No action for this item"))
     
     def activate_volume_panel(self):
@@ -1905,7 +1967,19 @@ class InvisibleUI:
             return self.open_messenger_webview()
         elif platform_name == _("WhatsApp"):
             return self.open_whatsapp_webview()
-            
+        elif platform_name == _("Titan-Net (Beta)") or platform_name == _("Titan-Net"):
+            return self.open_titannet()
+        elif platform_name == _("EltenLink (Beta)"):
+            return self.open_eltenlink()
+
+        # Try dynamic IM modules
+        try:
+            from src.network.im_module_manager import im_module_manager
+            if im_module_manager.open_module(platform_name, getattr(self, 'main_frame', None)):
+                return
+        except Exception as _e:
+            print(f"[IUI] IM module open: {_e}")
+
         # Set current platform for native clients
         if platform_name == _("Telegram"):
             self.titan_im_mode = 'telegram'
@@ -2845,6 +2919,221 @@ class InvisibleUI:
             self._safe_on_dialog_close("whatsapp_webview", None)
             try:
                 self.speak(_("Error opening WhatsApp WebView"))
+            except:
+                pass
+
+    def open_titannet(self):
+        """Open Titan-Net GUI window"""
+        try:
+            # Check if we have a valid main frame
+            if not self.main_frame or self._shutdown_in_progress:
+                self.speak(_("Cannot open Titan-Net - application not ready"))
+                return
+
+            # Check if titan_client exists
+            if not hasattr(self.main_frame, 'titan_client'):
+                self.speak(_("Titan-Net client not available"))
+                return
+
+            # Auto-disable Titan UI when Titan-Net window opens
+            if self.titan_ui_mode:
+                self.temporarily_disable_titan_ui("titannet_window")
+
+            # Get announce_widget_type setting
+            announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
+
+            def launch_titannet():
+                try:
+                    # Additional safety check in wx.CallAfter
+                    if self._shutdown_in_progress or not self.main_frame:
+                        return
+
+                    # Check if logged in
+                    if self.main_frame.titan_logged_in:
+                        # Already logged in - open main window
+                        from src.network.titan_net_gui import show_titan_net_window
+
+                        if self.main_frame.titan_client.is_connected:
+                            titannet_window = show_titan_net_window(self.main_frame, self.main_frame.titan_client)
+
+                            if titannet_window and not titannet_window.IsBeingDeleted():
+                                # Safely bind close event to re-enable Titan UI
+                                try:
+                                    titannet_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("titannet_window", evt))
+                                except Exception as bind_error:
+                                    print(f"Warning: Could not bind close event: {bind_error}")
+
+                                # Speak announcement safely
+                                try:
+                                    if announce_widget_type:
+                                        self.speak(_("Titan-Net, application"))
+                                    else:
+                                        self.speak(_("Titan-Net"))
+                                except Exception as speak_error:
+                                    print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
+                            else:
+                                # Re-enable Titan UI if window creation failed
+                                self._safe_on_dialog_close("titannet_window", None)
+                        else:
+                            self.speak(_("Not connected to Titan-Net server"))
+                            self._safe_on_dialog_close("titannet_window", None)
+
+                    else:
+                        # Not logged in - show login dialog
+                        from src.network.titan_net_gui import show_login_dialog
+
+                        logged_in, offline_mode = show_login_dialog(self.main_frame, self.main_frame.titan_client)
+
+                        if logged_in:
+                            self.main_frame.titan_logged_in = True
+                            self.main_frame.titan_username = self.main_frame.titan_client.username
+
+                            # Setup callbacks
+                            self.main_frame.setup_titannet_callbacks()
+
+                            # Open main window
+                            from src.network.titan_net_gui import show_titan_net_window
+                            titannet_window = show_titan_net_window(self.main_frame, self.main_frame.titan_client)
+
+                            if titannet_window and not titannet_window.IsBeingDeleted():
+                                try:
+                                    titannet_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("titannet_window", evt))
+                                except Exception as bind_error:
+                                    print(f"Warning: Could not bind close event: {bind_error}")
+
+                                # Speak announcement
+                                try:
+                                    if announce_widget_type:
+                                        self.speak(_("Titan-Net, application"))
+                                    else:
+                                        self.speak(_("Titan-Net"))
+                                except Exception as speak_error:
+                                    print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
+                            else:
+                                self._safe_on_dialog_close("titannet_window", None)
+
+                        elif offline_mode:
+                            self.speak(_("Offline mode selected"))
+                            self._safe_on_dialog_close("titannet_window", None)
+                        else:
+                            self.speak(_("Login cancelled"))
+                            self._safe_on_dialog_close("titannet_window", None)
+
+                except Exception as launch_error:
+                    print(f"Error in launch_titannet: {launch_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Re-enable Titan UI on error
+                    self._safe_on_dialog_close("titannet_window", None)
+                    try:
+                        self.speak(_("Error opening Titan-Net"))
+                    except:
+                        pass
+
+            # Use safer wx.CallAfter with error handling
+            try:
+                wx.CallAfter(launch_titannet)
+            except Exception as callafter_error:
+                print(f"Error with wx.CallAfter: {callafter_error}")
+                # Re-enable Titan UI if CallAfter fails
+                self._safe_on_dialog_close("titannet_window", None)
+                self.speak(_("Error opening Titan-Net"))
+
+        except ImportError as ie:
+            print(f"Titan-Net module not available: {ie}")
+            import traceback
+            traceback.print_exc()
+            self.speak(_("Titan-Net not available"))
+        except Exception as e:
+            print(f"Error opening Titan-Net from invisible UI: {e}")
+            import traceback
+            traceback.print_exc()
+            # Re-enable Titan UI on any error
+            self._safe_on_dialog_close("titannet_window", None)
+            try:
+                self.speak(_("Error opening Titan-Net"))
+            except:
+                pass
+
+    def open_eltenlink(self):
+        """Open EltenLink (Beta) GUI window"""
+        try:
+            # Check if we have a valid main frame
+            if not self.main_frame or self._shutdown_in_progress:
+                self.speak(_("Cannot open EltenLink (Beta) - application not ready"))
+                return
+
+            # Auto-disable Titan UI when EltenLink window opens
+            if self.titan_ui_mode:
+                self.temporarily_disable_titan_ui("eltenlink_window")
+
+            # Get announce_widget_type setting
+            announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
+
+            def launch_eltenlink():
+                try:
+                    # Additional safety check in wx.CallAfter
+                    if self._shutdown_in_progress or not self.main_frame:
+                        return
+
+                    # Show EltenLink login dialog
+                    from src.eltenlink_client.elten_gui import show_elten_login
+
+                    eltenlink_window = show_elten_login(self.main_frame)
+
+                    if eltenlink_window and not eltenlink_window.IsBeingDeleted():
+                        # Safely bind close event to re-enable Titan UI
+                        try:
+                            eltenlink_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("eltenlink_window", evt))
+                        except Exception as bind_error:
+                            print(f"Warning: Could not bind close event: {bind_error}")
+
+                        # Speak announcement safely
+                        try:
+                            if announce_widget_type:
+                                self.speak(_("EltenLink (Beta), application"))
+                            else:
+                                self.speak(_("EltenLink (Beta)"))
+                        except Exception as speak_error:
+                            print(f"Warning: Could not speak EltenLink (Beta) announcement: {speak_error}")
+                    else:
+                        # Re-enable Titan UI if window creation failed
+                        self._safe_on_dialog_close("eltenlink_window", None)
+                        self.speak(_("Login cancelled"))
+
+                except Exception as launch_error:
+                    print(f"Error in launch_eltenlink: {launch_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Re-enable Titan UI on error
+                    self._safe_on_dialog_close("eltenlink_window", None)
+                    try:
+                        self.speak(_("Error opening EltenLink (Beta)"))
+                    except:
+                        pass
+
+            # Use safer wx.CallAfter with error handling
+            try:
+                wx.CallAfter(launch_eltenlink)
+            except Exception as callafter_error:
+                print(f"Error with wx.CallAfter: {callafter_error}")
+                # Re-enable Titan UI if CallAfter fails
+                self._safe_on_dialog_close("eltenlink_window", None)
+                self.speak(_("Error opening EltenLink (Beta)"))
+
+        except ImportError as ie:
+            print(f"EltenLink (Beta) module not available: {ie}")
+            import traceback
+            traceback.print_exc()
+            self.speak(_("EltenLink (Beta) not available"))
+        except Exception as e:
+            print(f"Error opening EltenLink (Beta) from invisible UI: {e}")
+            import traceback
+            traceback.print_exc()
+            # Re-enable Titan UI on any error
+            self._safe_on_dialog_close("eltenlink_window", None)
+            try:
+                self.speak(_("Error opening EltenLink (Beta)"))
             except:
                 pass
 

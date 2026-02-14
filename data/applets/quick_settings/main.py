@@ -10,6 +10,7 @@ if TCE_ROOT not in sys.path:
 
 from src.settings.settings import get_setting, set_setting, load_settings
 from src.titan_core.sound import set_theme
+from src.titan_core.translation import get_language_display_name, get_language_code_from_display_name
 
 # BaseWidget definition to avoid circular import
 class BaseWidget:
@@ -80,21 +81,21 @@ class QuickSettingsWidget(BaseWidget):
         self.load_settings()
 
     def get_available_languages(self):
-        """Get available languages with safe error handling"""
+        """Get available languages with safe error handling - returns display names"""
         try:
             lang_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'languages'))
             if not os.path.exists(lang_dir):
-                return ['en', 'pl']
-            
+                return [get_language_display_name('en'), get_language_display_name('pl')]
+
             # Use timeout and limit directory scanning
             languages = []
             for item in os.listdir(lang_dir)[:20]:  # Limit to prevent hangs
                 item_path = os.path.join(lang_dir, item)
                 if os.path.isdir(item_path) and len(item) <= 5:  # Basic validation
-                    languages.append(item)
-            return sorted(languages) if languages else ['en', 'pl']
+                    languages.append(get_language_display_name(item))
+            return sorted(languages) if languages else [get_language_display_name('en'), get_language_display_name('pl')]
         except (OSError, PermissionError, Exception):
-            return ['en', 'pl']
+            return [get_language_display_name('en'), get_language_display_name('pl')]
 
     def get_available_skins(self):
         """Get available skins with safe error handling"""
@@ -193,7 +194,7 @@ class QuickSettingsWidget(BaseWidget):
             
             # Use cached setting to prevent I/O hangs
             value = self._get_cached_setting(item['key'], section=item['section'], default='false')
-            
+
             display_name = item['name']
             if item['key'] == 'language':
                 display_name += f" {_('(requires restart)')}"
@@ -201,8 +202,12 @@ class QuickSettingsWidget(BaseWidget):
             if item['type'] == 'bool':
                 value_str = _('On') if str(value).lower() == 'true' else _('Off')
             else:
-                value_str = str(value) if value else "Unknown"
-                
+                # For language setting, convert code to display name
+                if item['key'] == 'language':
+                    value_str = get_language_display_name(str(value)) if value else "Unknown"
+                else:
+                    value_str = str(value) if value else "Unknown"
+
             return f"{display_name}: {value_str}"
         except Exception as e:
             print(f"Error in get_current_element: {e}")
@@ -273,21 +278,35 @@ class QuickSettingsWidget(BaseWidget):
                     if not choices:
                         self.speak(_("No choices available"))
                         return
-                        
-                    try:
-                        current_choice_index = choices.index(current_value)
-                    except ValueError:
-                        current_choice_index = -1
-                    
-                    new_choice_index = (current_choice_index + 1) % len(choices)
-                    new_value = choices[new_choice_index]
+
+                    # For language setting, convert code to display name for comparison
+                    if item['key'] == 'language':
+                        current_value_display = get_language_display_name(current_value)
+                        try:
+                            current_choice_index = choices.index(current_value_display)
+                        except ValueError:
+                            current_choice_index = -1
+
+                        new_choice_index = (current_choice_index + 1) % len(choices)
+                        new_value_display = choices[new_choice_index]
+                        new_value = get_language_code_from_display_name(new_value_display)
+                    else:
+                        try:
+                            current_choice_index = choices.index(current_value)
+                        except ValueError:
+                            current_choice_index = -1
+
+                        new_choice_index = (current_choice_index + 1) % len(choices)
+                        new_value = choices[new_choice_index]
+                        new_value_display = new_value
+
                     set_setting(item['key'], new_value, section=item['section'])
-                    
+
                     # Clear cache for this setting
                     cache_key = f"{item['section']}.{item['key']}"
                     if cache_key in self._settings_cache:
                         del self._settings_cache[cache_key]
-                    
+
                     if item['key'] == 'theme':
                         try:
                             set_theme(new_value)
@@ -295,7 +314,7 @@ class QuickSettingsWidget(BaseWidget):
                             print(f"Error setting theme: {e}")
 
                     play_sound('core/SELECT.ogg')
-                    self.speak(f"{item['name']}: {new_value}")
+                    self.speak(f"{item['name']}: {new_value_display}")
                     
                 except Exception as e:
                     print(f"Error changing choice setting: {e}")

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -16,77 +16,77 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: src/controller/controller_ui.py:257
+#: src/controller/controller_ui.py:262
 msgid "Game pad connected"
 msgstr ""
 
-#: src/controller/controller_ui.py:271
+#: src/controller/controller_ui.py:276
 msgid "Game pad disconnected"
 msgstr ""
 
-#: src/controller/controller_ui.py:656
+#: src/controller/controller_ui.py:661
 msgid "Controller Information"
 msgstr ""
 
-#: src/controller/controller_ui.py:659 src/controller/controller_ui.py:754
+#: src/controller/controller_ui.py:664 src/controller/controller_ui.py:759
 msgid "Connected controllers"
 msgstr ""
 
-#: src/controller/controller_ui.py:662 src/controller/controller_ui.py:757
+#: src/controller/controller_ui.py:667 src/controller/controller_ui.py:762
 msgid "Controller names"
 msgstr ""
 
-#: src/controller/controller_ui.py:666 src/controller/controller_ui.py:761
+#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
 msgid "Vibration available"
 msgstr ""
 
-#: src/controller/controller_ui.py:666 src/controller/controller_ui.py:761
+#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
 msgid "Yes"
 msgstr ""
 
-#: src/controller/controller_ui.py:666 src/controller/controller_ui.py:761
+#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
 msgid "No"
 msgstr ""
 
-#: src/controller/controller_ui.py:672
+#: src/controller/controller_ui.py:677
 msgid "Vibration Settings"
 msgstr ""
 
-#: src/controller/controller_ui.py:674
+#: src/controller/controller_ui.py:679
 msgid "Enable vibration"
 msgstr ""
 
-#: src/controller/controller_ui.py:679
+#: src/controller/controller_ui.py:684
 msgid "Vibration strength"
 msgstr ""
 
-#: src/controller/controller_ui.py:688 src/controller/controller_ui.py:764
+#: src/controller/controller_ui.py:693 src/controller/controller_ui.py:769
 msgid "Controller Settings"
 msgstr ""
 
-#: src/controller/controller_ui.py:690
+#: src/controller/controller_ui.py:695
 msgid "Enable controller input"
 msgstr ""
 
-#: src/controller/controller_ui.py:695
+#: src/controller/controller_ui.py:700
 msgid "Enable controller navigation"
 msgstr ""
 
-#: src/controller/controller_ui.py:700
+#: src/controller/controller_ui.py:705
 msgid "Analog stick deadzone"
 msgstr ""
 
-#: src/controller/controller_ui.py:711
+#: src/controller/controller_ui.py:716
 msgid "Refresh Controllers"
 msgstr ""
 
-#: src/controller/controller_ui.py:715
+#: src/controller/controller_ui.py:720
 msgid "Test Vibration"
 msgstr ""
 
-#: src/controller/controller_ui.py:764
+#: src/controller/controller_ui.py:769
 msgid "Controllers refreshed successfully"
 msgstr ""
 
@@ -116,36 +116,36 @@ msgstr ""
 msgid "Enter"
 msgstr ""
 
-#: src/controller/controller_modes.py:274
+#: src/controller/controller_modes.py:277
 msgid "System mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:275
+#: src/controller/controller_modes.py:278
 msgid "Controller mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:276
+#: src/controller/controller_modes.py:279
 msgid "Screen reader mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:277
+#: src/controller/controller_modes.py:280
 msgid "Screen keyboard mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:280
+#: src/controller/controller_modes.py:283
 msgid "Unknown mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:498
+#: src/controller/controller_modes.py:519
 msgid "Exiting screen reader"
 msgstr ""
 
-#: src/controller/controller_modes.py:534
+#: src/controller/controller_modes.py:555
 #, python-brace-format
 msgid "Typed {}"
 msgstr ""
 
-#: src/controller/controller_modes.py:541
+#: src/controller/controller_modes.py:562
 msgid "Backspace"
 msgstr ""
 

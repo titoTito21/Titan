@@ -1,0 +1,4 @@
+[im_module]
+name = Example IM
+status = 0
+description = Example communicator module

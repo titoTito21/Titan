@@ -1,0 +1,147 @@
+# Polish translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
+"PO-Revision-Date: 2026-02-05 11:39+0100\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: pl\n"
+"Language-Team: pl <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: src/ui/classic_start_menu.py:161
+msgid "Shut Down"
+msgstr "Zamknij system"
+
+#: src/ui/classic_start_menu.py:190
+msgid "Programs"
+msgstr "Programy"
+
+#: src/ui/classic_start_menu.py:191
+msgid "Documents"
+msgstr "Dokumenty"
+
+#: src/ui/classic_start_menu.py:192 src/ui/classic_start_menu.py:768
+msgid "Settings"
+msgstr "Ustawienia"
+
+#: src/ui/classic_start_menu.py:193 src/ui/classic_start_menu.py:1058
+msgid "Find"
+msgstr "Znajdź"
+
+#: src/ui/classic_start_menu.py:194 src/ui/classic_start_menu.py:1070
+msgid "Help"
+msgstr "Pomoc"
+
+#: src/ui/classic_start_menu.py:195 src/ui/classic_start_menu.py:687
+#: src/ui/classic_start_menu.py:1037
+msgid "Run..."
+msgstr "Uruchom..."
+
+#: src/ui/classic_start_menu.py:197
+msgid "Shut Down..."
+msgstr "Zamknij system..."
+
+#: src/ui/classic_start_menu.py:370 src/ui/classic_start_menu.py:371
+msgid "Titan Applications"
+msgstr "Aplikacje TCE"
+
+#: src/ui/classic_start_menu.py:377 src/ui/classic_start_menu.py:378
+msgid "Titan Games"
+msgstr "Gry TCE"
+
+#: src/ui/classic_start_menu.py:409 src/ui/classic_start_menu.py:410
+msgid "My Documents"
+msgstr "Moje dokumenty"
+
+#: src/ui/classic_start_menu.py:431 src/ui/classic_start_menu.py:432
+msgid "No applications"
+msgstr "Brak aplikacji"
+
+#: src/ui/classic_start_menu.py:463 src/ui/classic_start_menu.py:464
+msgid "No games found"
+msgstr "Nie znaleziono gier"
+
+#: src/ui/classic_start_menu.py:499 src/ui/classic_start_menu.py:500
+msgid "Titan Settings"
+msgstr "Ustawienia Titan"
+
+#: src/ui/classic_start_menu.py:505 src/ui/classic_start_menu.py:506
+#: src/ui/classic_start_menu.py:683
+msgid "Control Panel"
+msgstr "Panel sterowania"
+
+#: src/ui/classic_start_menu.py:520 src/ui/classic_start_menu.py:521
+msgid "Files or Folders..."
+msgstr "Pliki lub foldery..."
+
+#: src/ui/classic_start_menu.py:526 src/ui/classic_start_menu.py:527
+msgid "Computer..."
+msgstr "Komputer..."
+
+#: src/ui/classic_start_menu.py:588
+msgid "Programy"
+msgstr "Programy"
+
+#: src/ui/classic_start_menu.py:617
+msgid "Dokumenty"
+msgstr "Dokumenty"
+
+#: src/ui/classic_start_menu.py:620
+msgid "Moje dokumenty"
+msgstr "Moje dokumenty"
+
+#: src/ui/classic_start_menu.py:622
+msgid "(puste)"
+msgstr "(puste)"
+
+#: src/ui/classic_start_menu.py:628
+msgid "Ustawienia"
+msgstr "Ustawienia"
+
+#: src/ui/classic_start_menu.py:630
+msgid "Panel sterowania"
+msgstr "Panel sterowania"
+
+#: src/ui/classic_start_menu.py:631
+msgid "Drukarki"
+msgstr "Drukarki"
+
+#: src/ui/classic_start_menu.py:632
+msgid "Pasek zadań..."
+msgstr "Pasek zadań..."
+
+#: src/ui/classic_start_menu.py:634
+msgid "Ustawienia Titan"
+msgstr "Ustawienia Titan"
+
+#: src/ui/classic_start_menu.py:1037
+msgid "Enter program name:"
+msgstr "Wprowadź nazwę programu:"
+
+#: src/ui/classic_start_menu.py:1058
+msgid "Search function in development"
+msgstr "Funkcja wyszukiwania w trakcie rozwoju"
+
+#: src/ui/classic_start_menu.py:1070
+msgid "Help function"
+msgstr "Funkcja pomocy"
+
+#: src/ui/classic_start_menu.py:1091
+msgid "Do you want to shut down the system?"
+msgstr "Czy chcesz zamknąć system?"
+
+#: src/ui/classic_start_menu.py:1092
+msgid "Shut Down Windows"
+msgstr "Zamykanie systemu Windows"
+

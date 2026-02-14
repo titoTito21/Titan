@@ -59,6 +59,7 @@ pybabel compile -d languages
 - `controller` - Controllers (src/controller/controller_ui.py, src/controller/controller_modes.py)
 - `help` - Help (src/ui/help.py)
 - `sound` - Sound (src/titan_core/sound.py)
+- `accessibility` - Accessibility messages (src/accessibility/messages.py)
 
 ## Project Architecture
 

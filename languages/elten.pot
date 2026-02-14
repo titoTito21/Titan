@@ -1,0 +1,273 @@
+# Elten Translation Template
+# Copyright (C) 2026 TCE Team
+# This file is distributed under the same license as the Elten package.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Elten 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-05 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Login Dialog
+msgid "Elten Login"
+msgstr ""
+
+msgid "Username:"
+msgstr ""
+
+msgid "Password:"
+msgstr ""
+
+msgid "Remember credentials"
+msgstr ""
+
+msgid "Login"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Please enter username and password"
+msgstr ""
+
+msgid "Logging in..."
+msgstr ""
+
+msgid "Login successful"
+msgstr ""
+
+msgid "Login failed. Please check your credentials."
+msgstr ""
+
+msgid "Invalid response from server"
+msgstr ""
+
+msgid "Authentication failed: {}"
+msgstr ""
+
+msgid "Error connecting to Elten: {}"
+msgstr ""
+
+msgid "Login cancelled"
+msgstr ""
+
+# Main Window
+msgid "Logged in as {}"
+msgstr ""
+
+msgid "Welcome to Elten, {}"
+msgstr ""
+
+msgid "Messages"
+msgstr ""
+
+msgid "Contacts"
+msgstr ""
+
+msgid "Forum"
+msgstr ""
+
+# Menu
+msgid "File"
+msgstr ""
+
+msgid "Logout\tCtrl+L"
+msgstr ""
+
+msgid "Exit\tAlt+F4"
+msgstr ""
+
+msgid "New Message\tCtrl+N"
+msgstr ""
+
+msgid "Refresh\tF5"
+msgstr ""
+
+msgid "Add Contact\tCtrl+A"
+msgstr ""
+
+msgid "Help"
+msgstr ""
+
+msgid "About"
+msgstr ""
+
+# Messages
+msgid "Failed to load messages"
+msgstr ""
+
+msgid "Error loading messages: {}"
+msgstr ""
+
+msgid "New message - not implemented yet"
+msgstr ""
+
+msgid "Refreshing messages..."
+msgstr ""
+
+msgid "New Message"
+msgstr ""
+
+msgid "Recipient:"
+msgstr ""
+
+msgid "Subject:"
+msgstr ""
+
+msgid "Message:"
+msgstr ""
+
+msgid "Send"
+msgstr ""
+
+msgid "Please enter recipient"
+msgstr ""
+
+msgid "Please enter subject"
+msgstr ""
+
+msgid "Please enter message"
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "View Message"
+msgstr ""
+
+msgid "From"
+msgstr ""
+
+msgid "Subject"
+msgstr ""
+
+msgid "Date"
+msgstr ""
+
+msgid "Reply"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Read"
+msgstr ""
+
+msgid "Unread"
+msgstr ""
+
+msgid "Failed to send message"
+msgstr ""
+
+msgid "Failed to delete message"
+msgstr ""
+
+# Contacts
+msgid "Failed to load contacts"
+msgstr ""
+
+msgid "Error loading contacts: {}"
+msgstr ""
+
+msgid "Add contact - not implemented yet"
+msgstr ""
+
+msgid "Refreshing contacts..."
+msgstr ""
+
+msgid "[Sponsor] "
+msgstr ""
+
+msgid "[Online] "
+msgstr ""
+
+msgid "[Offline] "
+msgstr ""
+
+msgid "Failed to add contact"
+msgstr ""
+
+msgid "Failed to remove contact"
+msgstr ""
+
+msgid "User Info: {}"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "Last seen"
+msgstr ""
+
+msgid "Unknown"
+msgstr ""
+
+msgid "Has blog"
+msgstr ""
+
+msgid "Yes"
+msgstr ""
+
+msgid "No"
+msgstr ""
+
+msgid "Known by"
+msgstr ""
+
+msgid "Forum posts"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Registration date"
+msgstr ""
+
+msgid "Send Message"
+msgstr ""
+
+msgid "Add to Contacts"
+msgstr ""
+
+# Forum
+msgid "Refresh forum - not implemented yet"
+msgstr ""
+
+msgid "replies"
+msgstr ""
+
+# Controls
+msgid "Context menu"
+msgstr ""
+
+msgid "Select"
+msgstr ""
+
+msgid "checked"
+msgstr ""
+
+msgid "unchecked"
+msgstr ""
+
+msgid "Empty"
+msgstr ""
+
+# General
+msgid "Logged out"
+msgstr ""
+
+msgid "Closing Elten"
+msgstr ""
+
+msgid "Elten Network desktop client for TCE Launcher"
+msgstr ""

@@ -1,21 +1,21 @@
 # Translations template for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
+# Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: src/titan_core/tce_system_net.py:275
 msgid "Connect to WiFi Network"
@@ -420,43 +420,59 @@ msgstr ""
 msgid "Downloading update..."
 msgstr ""
 
-#: src/system/updater.py:210
+#: src/system/updater.py:224
 msgid "Unable to retrieve changelog."
 msgstr ""
 
-#: src/system/updater.py:243
+#: src/system/updater.py:257
 msgid "Download failed"
 msgstr ""
 
-#: src/system/updater.py:249 src/system/updater.py:263
+#: src/system/updater.py:263 src/system/updater.py:277
 msgid "Extracting update..."
 msgstr ""
 
-#: src/system/updater.py:269
+#: src/system/updater.py:283
 msgid "Update extracted successfully"
 msgstr ""
 
-#: src/system/updater.py:324
+#: src/system/updater.py:303 src/system/updater.py:320
+msgid "Downloading Python interpreter..."
+msgstr ""
+
+#: src/system/updater.py:327
+msgid "Interpreter download failed"
+msgstr ""
+
+#: src/system/updater.py:333 src/system/updater.py:347
+msgid "Extracting Python interpreter..."
+msgstr ""
+
+#: src/system/updater.py:353
+msgid "Interpreter extracted successfully"
+msgstr ""
+
+#: src/system/updater.py:420
 msgid "Update completed successfully! Please restart the application."
 msgstr ""
 
-#: src/system/updater.py:325
+#: src/system/updater.py:421
 msgid "Update Complete"
 msgstr ""
 
-#: src/system/updater.py:334
+#: src/system/updater.py:430
 msgid "Update failed. Please try again later."
 msgstr ""
 
-#: src/system/updater.py:335
+#: src/system/updater.py:431
 msgid "Update Error"
 msgstr ""
 
-#: src/system/lockscreen_monitor_improved.py:170
+#: src/system/lockscreen_monitor_improved.py:185
 msgid "Screen locked"
 msgstr ""
 
-#: src/system/lockscreen_monitor_improved.py:176
+#: src/system/lockscreen_monitor_improved.py:191
 msgid "Screen unlocked"
 msgstr ""
 

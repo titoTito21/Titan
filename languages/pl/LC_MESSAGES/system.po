@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-12-17 12:30+0100\n"
+"POT-Creation-Date: 2026-02-07 10:57+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -17,26 +17,27 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: src/titan_core/tce_system_net.py:275
 msgid "Connect to WiFi Network"
-msgstr "Połącz z siecią WiFi"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:287
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Network: {}"
 msgstr "Sieć: {}"
 
 #: src/titan_core/tce_system_net.py:291
 msgid "Enter WiFi network password:"
-msgstr "Wpisz hasło do sieci WiFi:"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:298
 msgid "Connect automatically"
-msgstr "Połącz automatycznie"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:304 src/titan_core/tce_system_net.py:386
+#, fuzzy
 msgid "Connect"
 msgstr "Połącz"
 
@@ -47,25 +48,27 @@ msgstr "Anuluj"
 
 #: src/titan_core/tce_system_net.py:327
 msgid "Please enter a password"
-msgstr "Proszę wpisać hasło"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:327 src/titan_core/tce_system_net.py:567
 #: src/titan_core/tce_system_net.py:657 src/titan_core/tce_system_net.py:665
 #: src/titan_core/tce_system_net.py:1366 src/titan_core/tce_system_net.py:1425
+#, fuzzy
 msgid "Error"
-msgstr "Błąd"
+msgstr "Błąd logowania"
 
 #: src/titan_core/tce_system_net.py:342
 msgid "Click 'Refresh' to scan for WiFi networks"
-msgstr "Odświeżanie sieci WiFi..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:344
+#, fuzzy
 msgid "Ready"
 msgstr "Nieprzeczytane"
 
 #: src/titan_core/tce_system_net.py:352
 msgid "Scanning WiFi networks..."
-msgstr "Odświeżanie sieci WiFi..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:354
 msgid "Please wait"
@@ -76,47 +79,51 @@ msgstr ""
 #: src/titan_core/tce_system_net.py:868 src/titan_core/tce_system_net.py:1335
 #: src/titan_core/tce_system_net.py:1337
 msgid "WiFi"
-msgstr "WiFi"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:375
+#, fuzzy
 msgid "Network Name"
-msgstr "Nazwa sieci"
+msgstr "Sieć: {}"
 
 #: src/titan_core/tce_system_net.py:376
 msgid "Signal"
-msgstr "Sygnał"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:377
 msgid "Security"
-msgstr "Zabezpieczenia"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:378
+#, fuzzy
 msgid "Status"
 msgstr "Status"
 
 #: src/titan_core/tce_system_net.py:385
 msgid "Refresh"
-msgstr "Odśwież"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:387
 msgid "Disconnect"
-msgstr "Rozłącz"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:437
+#, fuzzy
 msgid "WiFi Scanner"
-msgstr "Menedżer WiFi"
+msgstr "Błąd logowania"
 
 #: src/titan_core/tce_system_net.py:438 src/titan_core/tce_system_net.py:871
 msgid "Scanning for networks..."
-msgstr "Łączenie z siecią..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:454
 msgid "Processing results..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:464
+#, fuzzy
 msgid "Complete!"
-msgstr "Komponenty"
+msgstr "Aktualizacja zakończona"
 
 #: src/titan_core/tce_system_net.py:512
 msgid ""
@@ -126,53 +133,56 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:513
 msgid "Scan Timeout"
-msgstr "Limit czasu logowania"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:520
 #, python-brace-format
 msgid "WiFi scan failed: {}"
-msgstr "Połączenie nie powiodło się: {}"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:521
+#, fuzzy
 msgid "Scan Error"
-msgstr "Błąd wysyłania"
+msgstr "Błąd aktualizacji"
 
 #: src/titan_core/tce_system_net.py:532 src/titan_core/tce_system_net.py:780
 #: src/titan_core/tce_system_net.py:1236 src/titan_core/tce_system_net.py:1341
 msgid "Secured"
-msgstr "Zabezpieczona"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:532 src/titan_core/tce_system_net.py:780
 #: src/titan_core/tce_system_net.py:1236 src/titan_core/tce_system_net.py:1341
 msgid "Open"
-msgstr "Otwarta"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:533 src/titan_core/tce_system_net.py:779
 #: src/titan_core/tce_system_net.py:1235 src/titan_core/tce_system_net.py:1340
+#, fuzzy
 msgid "Connected"
-msgstr "Połączony"
+msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:547
 msgid "No WiFi networks found"
-msgstr "Nie znaleziono widżetów"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:549
 msgid "Try refreshing"
-msgstr "Odśwież"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:567
 msgid "Please select a network"
-msgstr "Proszę wybrać sieć"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:586
+#, fuzzy
 msgid "WiFi Connection"
 msgstr "Połączenie"
 
 #: src/titan_core/tce_system_net.py:587 src/titan_core/tce_system_net.py:895
 #: src/titan_core/tce_system_net.py:1276
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Connecting to {}..."
-msgstr "Łączenie z {}..."
+msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:597
 msgid "Authenticating..."
@@ -180,15 +190,16 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:604
 msgid "Establishing connection..."
-msgstr "Rozłączanie..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:613
+#, fuzzy
 msgid "Connected!"
-msgstr "Połączony"
+msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:613
 msgid "Failed!"
-msgstr "Plik"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:646
 #, python-brace-format
@@ -197,43 +208,45 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:647
 msgid "Connection Timeout"
-msgstr "Limit czasu połączenia"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:902
 #: src/titan_core/tce_system_net.py:1280
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Connected to {}"
 msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:662
+#, fuzzy
 msgid "Success"
 msgstr "Sukces"
 
 #: src/titan_core/tce_system_net.py:657 src/titan_core/tce_system_net.py:906
 #: src/titan_core/tce_system_net.py:1285
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Failed to connect to {}"
-msgstr "Nie udało się połączyć z {}"
+msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:662
 msgid "Disconnected from network"
-msgstr "Rozłączono z siecią"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:665
 msgid "Failed to disconnect"
-msgstr "Nie udało się rozłączyć"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:678 src/titan_core/tce_system_net.py:773
 #: src/titan_core/tce_system_net.py:866 src/titan_core/tce_system_net.py:1335
 msgid "checkbox"
-msgstr "pole wyboru"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:679 src/titan_core/tce_system_net.py:782
 #: src/titan_core/tce_system_net.py:1240 src/titan_core/tce_system_net.py:1343
 msgid "list item"
-msgstr "element listy"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:736
+#, fuzzy
 msgid "Networks updated"
 msgstr "Nazwa sieci"
 
@@ -243,27 +256,30 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:771 src/titan_core/tce_system_net.py:864
 #: src/titan_core/tce_system_net.py:1333
+#, fuzzy
 msgid "Checked"
-msgstr "Zaznaczone"
+msgstr "Ekran zablokowany"
 
 #: src/titan_core/tce_system_net.py:771 src/titan_core/tce_system_net.py:864
 #: src/titan_core/tce_system_net.py:1333
 msgid "Unchecked"
-msgstr "Niezaznaczone"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:786 src/titan_core/tce_system_net.py:1347
+#, fuzzy
 msgid "No WiFi networks available"
 msgstr "Brak dostępnych sieci WiFi"
 
 #: src/titan_core/tce_system_net.py:788 src/titan_core/tce_system_net.py:968
 #: src/titan_core/tce_system_net.py:1371 src/titan_core/tce_system_net.py:1408
+#, fuzzy
 msgid "WiFi Manager"
-msgstr "Menedżer WiFi"
+msgstr "Błąd logowania"
 
 #: src/titan_core/tce_system_net.py:887 src/titan_core/tce_system_net.py:1258
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Already connected to {}"
-msgstr "Już połączono z {}"
+msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:891
 #, python-brace-format
@@ -272,7 +288,7 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:910
 msgid "Connection error"
-msgstr "Błąd połączenia"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:920
 msgid "Scan already in progress"
@@ -280,26 +296,27 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:966
 msgid "WiFi Manager: Widget"
-msgstr "Menedżer WiFi: Widget"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1263
 #, python-brace-format
 msgid "Enter WiFi network password for {}:"
-msgstr "Wpisz hasło do sieci WiFi {}:"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1265
 msgid "Password: "
-msgstr "Hasło: "
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1267
 msgid "Connecting to network..."
-msgstr "Łączenie z siecią..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1270
 msgid "Password required"
-msgstr "Wymagane hasło"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1273
+#, fuzzy
 msgid ""
 "\n"
 "Connection cancelled"
@@ -307,41 +324,42 @@ msgstr "Łączenie anulowane"
 
 #: src/titan_core/tce_system_net.py:1306
 msgid "WiFi manager closed"
-msgstr "Menedżer WiFi zamknięty"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1352
 msgid "Refreshing WiFi networks..."
-msgstr "Odświeżanie sieci WiFi..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1355
 msgid "Networks refreshed"
-msgstr "Sieci odświeżone"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1365
 msgid ""
 "WiFi functionality requires pywifi library.\n"
 "Install with: pip install pywifi"
 msgstr ""
-"Funkcjonalność WiFi wymaga biblioteki pywifi.\n"
-"Zainstaluj poleceniem: pip install pywifi"
 
 #: src/titan_core/tce_system_net.py:1372
+#, fuzzy
 msgid "Initializing WiFi interface..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
 #: src/titan_core/tce_system_net.py:1379
 msgid "Creating network manager..."
-msgstr "Łączenie z siecią..."
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:1393
 msgid "WiFi initialization timed out. Please try again."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1394
+#, fuzzy
 msgid "Timeout Error"
-msgstr "Błąd wylogowania"
+msgstr "Błąd aktualizacji"
 
 #: src/titan_core/tce_system_net.py:1397
+#, fuzzy
 msgid "Checking WiFi interfaces..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
@@ -354,6 +372,7 @@ msgid "WiFi Error"
 msgstr "Błąd logowania"
 
 #: src/titan_core/tce_system_net.py:1405
+#, fuzzy
 msgid "Creating GUI interface..."
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
@@ -362,7 +381,7 @@ msgid "Ready!"
 msgstr "Nieprzeczytane"
 
 #: src/titan_core/tce_system_net.py:1424
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid ""
 "Error creating WiFi interface:\n"
 "{}"
@@ -424,55 +443,593 @@ msgstr "Pobieranie aktualizacji"
 msgid "Downloading update..."
 msgstr "Pobieranie aktualizacji..."
 
-#: src/system/updater.py:210
+#: src/system/updater.py:224
 msgid "Unable to retrieve changelog."
 msgstr "Nie można pobrać listy zmian."
 
-#: src/system/updater.py:243
+#: src/system/updater.py:257
 msgid "Download failed"
 msgstr "Pobieranie nieudane"
 
-#: src/system/updater.py:249 src/system/updater.py:263
+#: src/system/updater.py:263 src/system/updater.py:277
 msgid "Extracting update..."
 msgstr "Rozpakowywanie aktualizacji..."
 
-#: src/system/updater.py:269
+#: src/system/updater.py:283
 msgid "Update extracted successfully"
 msgstr "Aktualizacja rozpakowana pomyślnie"
 
-#: src/system/updater.py:324
+#: src/system/updater.py:303 src/system/updater.py:320
+#, fuzzy
+msgid "Downloading Python interpreter..."
+msgstr "Pobieranie aktualizacji..."
+
+#: src/system/updater.py:327
+#, fuzzy
+msgid "Interpreter download failed"
+msgstr "Pobieranie nieudane"
+
+#: src/system/updater.py:333 src/system/updater.py:347
+#, fuzzy
+msgid "Extracting Python interpreter..."
+msgstr "Rozpakowywanie aktualizacji..."
+
+#: src/system/updater.py:353
+#, fuzzy
+msgid "Interpreter extracted successfully"
+msgstr "Aktualizacja rozpakowana pomyślnie"
+
+#: src/system/updater.py:420
 msgid "Update completed successfully! Please restart the application."
 msgstr "Aktualizacja zakończona pomyślnie! Proszę uruchomić ponownie aplikację."
 
-#: src/system/updater.py:325
+#: src/system/updater.py:421
 msgid "Update Complete"
 msgstr "Aktualizacja zakończona"
 
-#: src/system/updater.py:334
+#: src/system/updater.py:430
 msgid "Update failed. Please try again later."
 msgstr "Aktualizacja nieudana. Spróbuj ponownie później."
 
-#: src/system/updater.py:335
+#: src/system/updater.py:431
 msgid "Update Error"
 msgstr "Błąd aktualizacji"
 
-#: src/system/lockscreen_monitor_improved.py:170
+#: src/system/lockscreen_monitor_improved.py:185
 msgid "Screen locked"
 msgstr "Ekran zablokowany"
 
-#: src/system/lockscreen_monitor_improved.py:176
+#: src/system/lockscreen_monitor_improved.py:191
 msgid "Screen unlocked"
 msgstr "Ekran odblokowany"
 
 #: src/ui/shutdown_question.py:15
 msgid "Confirm Exit"
-msgstr "Potwierdź wyjście"
+msgstr ""
 
 #: src/ui/shutdown_question.py:22
 msgid "Are you sure you want to exit Titan?"
-msgstr "Czy na pewno chcesz wyjść z Titan?"
+msgstr ""
 
 #: src/ui/shutdown_question.py:26
 msgid "OK"
-msgstr "OK"
+msgstr ""
+
+#~ msgid "Connect to WiFi Network"
+#~ msgstr "Połącz z siecią WiFi"
+
+#~ msgid "Enter WiFi network password:"
+#~ msgstr "Wpisz hasło do sieci WiFi:"
+
+#~ msgid "Connect automatically"
+#~ msgstr "Połącz automatycznie"
+
+#~ msgid "Please enter a password"
+#~ msgstr "Proszę wpisać hasło"
+
+#~ msgid "Error"
+#~ msgstr "Błąd"
+
+#~ msgid "Click 'Refresh' to scan for WiFi networks"
+#~ msgstr "Odświeżanie sieci WiFi..."
+
+#~ msgid "Ready"
+#~ msgstr "Nieprzeczytane"
+
+#~ msgid "Scanning WiFi networks..."
+#~ msgstr "Odświeżanie sieci WiFi..."
+
+#~ msgid "Please wait"
+#~ msgstr ""
+
+#~ msgid "WiFi"
+#~ msgstr "WiFi"
+
+#~ msgid "Signal"
+#~ msgstr "Sygnał"
+
+#~ msgid "Security"
+#~ msgstr "Zabezpieczenia"
+
+#~ msgid "Refresh"
+#~ msgstr "Odśwież"
+
+#~ msgid "Disconnect"
+#~ msgstr "Rozłącz"
+
+#~ msgid "WiFi Scanner"
+#~ msgstr "Menedżer WiFi"
+
+#~ msgid "Scanning for networks..."
+#~ msgstr "Łączenie z siecią..."
+
+#~ msgid "Processing results..."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "WiFi scan timed out. This may "
+#~ "happen if your WiFi adapter is "
+#~ "busy or there are many networks "
+#~ "nearby. Please try again."
+#~ msgstr ""
+
+#~ msgid "Scan Timeout"
+#~ msgstr "Limit czasu logowania"
+
+#~ msgid "WiFi scan failed: {}"
+#~ msgstr "Połączenie nie powiodło się: {}"
+
+#~ msgid "Scan Error"
+#~ msgstr "Błąd wysyłania"
+
+#~ msgid "Secured"
+#~ msgstr "Zabezpieczona"
+
+#~ msgid "Open"
+#~ msgstr "Otwarta"
+
+#~ msgid "Connected"
+#~ msgstr "Połączony"
+
+#~ msgid "No WiFi networks found"
+#~ msgstr "Nie znaleziono widżetów"
+
+#~ msgid "Try refreshing"
+#~ msgstr "Odśwież"
+
+#~ msgid "Please select a network"
+#~ msgstr "Proszę wybrać sieć"
+
+#~ msgid "Connecting to {}..."
+#~ msgstr "Łączenie z {}..."
+
+#~ msgid "Authenticating..."
+#~ msgstr ""
+
+#~ msgid "Establishing connection..."
+#~ msgstr "Rozłączanie..."
+
+#~ msgid "Connected!"
+#~ msgstr "Połączony"
+
+#~ msgid "Failed!"
+#~ msgstr "Plik"
+
+#~ msgid "Connection to {} timed out. Please check your password and try again."
+#~ msgstr ""
+
+#~ msgid "Connection Timeout"
+#~ msgstr "Limit czasu połączenia"
+
+#~ msgid "Failed to connect to {}"
+#~ msgstr "Nie udało się połączyć z {}"
+
+#~ msgid "Disconnected from network"
+#~ msgstr "Rozłączono z siecią"
+
+#~ msgid "Failed to disconnect"
+#~ msgstr "Nie udało się rozłączyć"
+
+#~ msgid "checkbox"
+#~ msgstr "pole wyboru"
+
+#~ msgid "list item"
+#~ msgstr "element listy"
+
+#~ msgid "Scanning networks in background..."
+#~ msgstr ""
+
+#~ msgid "Checked"
+#~ msgstr "Zaznaczone"
+
+#~ msgid "Unchecked"
+#~ msgstr "Niezaznaczone"
+
+#~ msgid "WiFi Manager"
+#~ msgstr "Menedżer WiFi"
+
+#~ msgid "Already connected to {}"
+#~ msgstr "Już połączono z {}"
+
+#~ msgid "Network {} requires password. Use GUI interface for password entry."
+#~ msgstr ""
+
+#~ msgid "Connection error"
+#~ msgstr "Błąd połączenia"
+
+#~ msgid "Scan already in progress"
+#~ msgstr ""
+
+#~ msgid "WiFi Manager: Widget"
+#~ msgstr "Menedżer WiFi: Widget"
+
+#~ msgid "Enter WiFi network password for {}:"
+#~ msgstr "Wpisz hasło do sieci WiFi {}:"
+
+#~ msgid "Password: "
+#~ msgstr "Hasło: "
+
+#~ msgid "Connecting to network..."
+#~ msgstr "Łączenie z siecią..."
+
+#~ msgid "Password required"
+#~ msgstr "Wymagane hasło"
+
+#~ msgid "WiFi manager closed"
+#~ msgstr "Menedżer WiFi zamknięty"
+
+#~ msgid "Refreshing WiFi networks..."
+#~ msgstr "Odświeżanie sieci WiFi..."
+
+#~ msgid "Networks refreshed"
+#~ msgstr "Sieci odświeżone"
+
+#~ msgid ""
+#~ "WiFi functionality requires pywifi library.\n"
+#~ "Install with: pip install pywifi"
+#~ msgstr ""
+#~ "Funkcjonalność WiFi wymaga biblioteki pywifi.\n"
+#~ "Zainstaluj poleceniem: pip install pywifi"
+
+#~ msgid "Initializing WiFi interface..."
+#~ msgstr "Błąd podczas otwierania interfejsu WiFi"
+
+#~ msgid "Creating network manager..."
+#~ msgstr "Łączenie z siecią..."
+
+#~ msgid "WiFi initialization timed out. Please try again."
+#~ msgstr ""
+
+#~ msgid "Timeout Error"
+#~ msgstr "Błąd wylogowania"
+
+#~ msgid "No WiFi interfaces available or WiFi initialization failed."
+#~ msgstr ""
+
+#~ msgid "Creating GUI interface..."
+#~ msgstr "Błąd podczas otwierania interfejsu WiFi"
+
+#~ msgid "Confirm Exit"
+#~ msgstr "Potwierdź wyjście"
+
+#~ msgid "Are you sure you want to exit Titan?"
+#~ msgstr "Czy na pewno chcesz wyjść z Titan?"
+
+#~ msgid "OK"
+#~ msgstr "OK"
+
+#~ msgid "Applications"
+#~ msgstr ""
+
+#~ msgid "Games"
+#~ msgstr ""
+
+#~ msgid "Titan IM"
+#~ msgstr ""
+
+#~ msgid "Telegram"
+#~ msgstr ""
+
+#~ msgid "Messenger"
+#~ msgstr ""
+
+#~ msgid "WhatsApp"
+#~ msgstr ""
+
+#~ msgid "Titan-Net (Beta)"
+#~ msgstr ""
+
+#~ msgid "EltenLink (Beta)"
+#~ msgstr ""
+
+#~ msgid "Current Time"
+#~ msgstr "Bieżąca wersja:"
+
+#~ msgid "Battery Status"
+#~ msgstr "Status"
+
+#~ msgid "Volume Level"
+#~ msgstr "Głośność: {}%"
+
+#~ msgid "Program"
+#~ msgstr ""
+
+#~ msgid "Settings"
+#~ msgstr ""
+
+#~ msgid "Component Manager"
+#~ msgstr ""
+
+#~ msgid "Help"
+#~ msgstr ""
+
+#~ msgid "Exit"
+#~ msgstr ""
+
+#~ msgid "Components"
+#~ msgstr "Komponenty"
+
+#~ msgid "Unknown Game"
+#~ msgstr ""
+
+#~ msgid "No games"
+#~ msgstr "Nazwa sieci"
+
+#~ msgid "Clock: {}"
+#~ msgstr "Sieć: {}"
+
+#~ msgid "Battery level: {}"
+#~ msgstr "Ładowanie baterii, poziom baterii {}%"
+
+#~ msgid "Volume: {}"
+#~ msgstr "Głośność: {}%"
+
+#~ msgid "Error getting network status"
+#~ msgstr ""
+
+#~ msgid "Statusbar applet manager not available"
+#~ msgstr ""
+
+#~ msgid "Error activating statusbar item"
+#~ msgstr ""
+
+#~ msgid "To open a menu, press alt"
+#~ msgstr ""
+
+#~ msgid "Menu"
+#~ msgstr ""
+
+#~ msgid "Error executing action"
+#~ msgstr ""
+
+#~ msgid "Empty menu"
+#~ msgstr ""
+
+#~ msgid "Error launching application"
+#~ msgstr ""
+
+#~ msgid "Error launching game"
+#~ msgstr ""
+
+#~ msgid "Groups"
+#~ msgstr ""
+
+#~ msgid "Back"
+#~ msgstr ""
+
+#~ msgid "Telegram Menu"
+#~ msgstr ""
+
+#~ msgid "Telegram client not available"
+#~ msgstr "Dostępna jest aktualizacja programu"
+
+#~ msgid "Error opening Telegram"
+#~ msgstr ""
+
+#~ msgid "Messenger not available"
+#~ msgstr ""
+
+#~ msgid "Error opening Messenger"
+#~ msgstr ""
+
+#~ msgid "WhatsApp not available"
+#~ msgstr ""
+
+#~ msgid "Error opening WhatsApp"
+#~ msgstr ""
+
+#~ msgid "Text Input"
+#~ msgstr ""
+
+#~ msgid "Cancelled"
+#~ msgstr "Anuluj"
+
+#~ msgid "Error getting input"
+#~ msgstr ""
+
+#~ msgid "Titan-Net GUI not available"
+#~ msgstr "Brak dostępnych sieci WiFi"
+
+#~ msgid "Titan-Net client not available"
+#~ msgstr ""
+
+#~ msgid "Opening Titan-Net..."
+#~ msgstr ""
+
+#~ msgid "Continuing in offline mode"
+#~ msgstr ""
+
+#~ msgid "Titan-Net window opened"
+#~ msgstr ""
+
+#~ msgid "Not logged in to Titan-Net"
+#~ msgstr ""
+
+#~ msgid "Error opening Titan-Net"
+#~ msgstr ""
+
+#~ msgid "EltenLink GUI not available"
+#~ msgstr "Brak dostępnych sieci WiFi"
+
+#~ msgid "Opening EltenLink..."
+#~ msgstr ""
+
+#~ msgid "EltenLink window opened"
+#~ msgstr ""
+
+#~ msgid "Error opening EltenLink"
+#~ msgstr ""
+
+#~ msgid "Loading contacts"
+#~ msgstr ""
+
+#~ msgid "Error loading contacts"
+#~ msgstr ""
+
+#~ msgid "Loading groups"
+#~ msgstr "Pobieranie aktualizacji"
+
+#~ msgid "Error loading groups"
+#~ msgstr ""
+
+#~ msgid "Current time"
+#~ msgstr "Bieżąca wersja:"
+
+#~ msgid "Error getting time"
+#~ msgstr ""
+
+#~ msgid "Battery"
+#~ msgstr ""
+
+#~ msgid "Error getting battery status"
+#~ msgstr ""
+
+#~ msgid "Volume"
+#~ msgstr "Głośność: {}%"
+
+#~ msgid "Error getting volume level"
+#~ msgstr ""
+
+#~ msgid "Error opening settings"
+#~ msgstr ""
+
+#~ msgid "Cannot load Component Manager (componentmanagergui.py not found)"
+#~ msgstr ""
+
+#~ msgid "Component Manager has not been initialized."
+#~ msgstr ""
+
+#~ msgid "Error opening component manager"
+#~ msgstr ""
+
+#~ msgid "Error showing help"
+#~ msgstr ""
+
+#~ msgid "Exit cancelled"
+#~ msgstr "Łączenie anulowane"
+
+#~ msgid "Activating component"
+#~ msgstr ""
+
+#~ msgid "Error activating component"
+#~ msgstr ""
+
+#~ msgid "Invalid component function"
+#~ msgstr ""
+
+#~ msgid "Error executing component function"
+#~ msgstr ""
+
+#~ msgid "Unknown Component"
+#~ msgstr ""
+
+#~ msgid "Time settings opened"
+#~ msgstr ""
+
+#~ msgid "Could not open time settings"
+#~ msgstr ""
+
+#~ msgid "Power settings opened"
+#~ msgstr ""
+
+#~ msgid "Could not open power settings"
+#~ msgstr ""
+
+#~ msgid "Volume mixer opened"
+#~ msgstr ""
+
+#~ msgid "Could not open volume mixer"
+#~ msgstr ""
+
+#~ msgid "Could not open network settings"
+#~ msgstr ""
+
+#~ msgid "Titan App Suite"
+#~ msgstr ""
+
+#~ msgid "Unknown Icon"
+#~ msgstr ""
+
+#~ msgid "System Icon"
+#~ msgstr ""
+
+#~ msgid "Unknown"
+#~ msgstr ""
+
+#~ msgid "Hidden"
+#~ msgstr ""
+
+#~ msgid "System Tray"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "System Tray Icons (Enter = click, "
+#~ "Applications key/Context menu = right "
+#~ "click)"
+#~ msgstr ""
+
+#~ msgid "Click (Enter)"
+#~ msgstr ""
+
+#~ msgid "Context Menu (Applications key)"
+#~ msgstr ""
+
+#~ msgid "Close"
+#~ msgstr ""
+
+#~ msgid "No system tray icons found"
+#~ msgstr ""
+
+#~ msgid "System tray list is only available on Windows"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "WiFi interface has failed multiple times recently.\n"
+#~ "Please wait 30 seconds before trying "
+#~ "again, or use system WiFi settings.\n"
+#~ ""
+#~ "\n"
+#~ "Windows WiFi: Win+I → Network & Internet → WiFi"
+#~ msgstr ""
+
+#~ msgid "WiFi Protection Active"
+#~ msgstr "Połączenie"
+
+#~ msgid "WiFi interface is already being opened. Please wait."
+#~ msgstr ""
+
+#~ msgid "WiFi Already Loading"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "WiFi interface loading was forcibly stopped.\n"
+#~ "\n"
+#~ "This prevents your computer from freezing.\n"
+#~ "Please use Windows WiFi settings instead:\n"
+#~ "\n"
+#~ "Press Win+I → Network & Internet → WiFi"
+#~ msgstr ""
+
+#~ msgid "Network Settings"
+#~ msgstr "Nazwa sieci"
 

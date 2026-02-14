@@ -1,214 +1,835 @@
-# Polish translations for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
-# This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# Polish translations for ElevenLabs Client.
+# Copyright (C) 2026 Titosoft
+# This file is distributed under the same license as the ElevenLabs Client project.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: PROJECT VERSION\n"
-"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-15 10:12+0200\n"
-"PO-Revision-Date: 2025-08-15 10:06+0200\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Project-Id-Version: ElevenLabs Client 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 18:30+0100\n"
+"PO-Revision-Date: 2026-02-04 18:30+0100\n"
+"Last-Translator: Titosoft\n"
 "Language: pl\n"
-"Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
-"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language-Team: Polish\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: clonegen.py:9
+# clonegen.py
 msgid "Voice Cloning"
 msgstr "Klonowanie głosu"
 
-#: clonegen.py:14
 msgid "Voice Name:"
 msgstr "Nazwa głosu:"
 
-#: clonegen.py:16
 msgid "Voice Description:"
 msgstr "Opis głosu:"
 
-#: clonegen.py:18
 msgid "Path to Voice:"
 msgstr "Ścieżka do głosu:"
 
-#: clonegen.py:20
 msgid "Browse..."
 msgstr "Przeglądaj..."
 
-#: clonegen.py:30 key_dialog.py:18 settings.py:25 support_dialog.py:20
 msgid "OK"
 msgstr "OK"
 
-#: clonegen.py:31
 msgid "Cancel"
 msgstr "Anuluj"
 
-#: clonegen.py:40
 msgid "Choose a file"
 msgstr "Wybierz plik"
 
-#: clonegen.py:52 clonegen.py:60
-msgid "Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."
+msgid "No API key found. Please configure the API key in settings."
 msgstr "Brak klucza API. Proszę skonfigurować klucz API w ustawieniach."
 
-#: clonegen.py:52 clonegen.py:60 clonegen.py:75 clonegen.py:88 database.py:26
-#: database.py:51 database.py:82 generator.py:22 main.py:78
-msgid "Błąd"
+msgid "Error"
 msgstr "Błąd"
 
-#: clonegen.py:75
-msgid "Nie znaleziono plików audio do klonowania."
+msgid "No audio files found for cloning."
 msgstr "Nie znaleziono plików audio do klonowania."
 
-#: clonegen.py:85
-msgid "Sukces"
+msgid "Success"
 msgstr "Sukces"
 
-#: database.py:16
-msgid "Baza danych głosów"
-msgstr "Baza danych głosów"
+#, python-format
+msgid "Voice '%s' has been successfully cloned!"
+msgstr "Głos '%s' został pomyślnie sklonowany!"
 
-#: database.py:26
-msgid "Nie można połączyć się z serwerem bazy danych głosów"
-msgstr "Nie można połączyć się z serwerem bazy danych głosów"
+#, python-format
+msgid "Error cloning voice: %s"
+msgstr "Błąd podczas klonowania głosu: %s"
 
-#: database.py:36
+# database.py
+msgid "Voice Library"
+msgstr "Biblioteka głosów"
+
+msgid "ElevenLabs Voice Library (Community Voices)"
+msgstr "Biblioteka głosów ElevenLabs (Głosy społeczności)"
+
+msgid "Browse and add voices shared by the ElevenLabs community"
+msgstr "Przeglądaj i dodawaj głosy udostępnione przez społeczność ElevenLabs"
+
+msgid "No shared voices found in ElevenLabs Voice Library."
+msgstr "Nie znaleziono udostępnionych głosów w bibliotece ElevenLabs."
+
+msgid "Shared Voice Library API not available.\nShowing all available voices instead."
+msgstr "API biblioteki współdzielonych głosów niedostępne.\nZamiast tego pokazuję wszystkie dostępne głosy."
+
+msgid "This voice cannot be added (missing owner information)."
+msgstr "Ten głos nie może zostać dodany (brak informacji o właścicielu)."
+
+#, python-format
+msgid "Add '%s' to your voice library?\n\nThis will make it available in your voice selection."
+msgstr "Dodać '%s' do twojej biblioteki głosów?\n\nTo sprawi, że będzie dostępny w twoim wyborze głosów."
+
+msgid "Confirm Add Voice"
+msgstr "Potwierdź dodanie głosu"
+
+#, python-format
+msgid "Voice '%s' successfully added to your library!"
+msgstr "Głos '%s' został pomyślnie dodany do twojej biblioteki!"
+
+msgid "Unable to add voice. The API method may have changed.\n\nTry using the voice ID directly in generation."
+msgstr "Nie można dodać głosu. Metoda API mogła się zmienić.\n\nSpróbuj użyć ID głosu bezpośrednio w generacji."
+
+#, python-format
+msgid "Error adding voice: %s"
+msgstr "Błąd podczas dodawania głosu: %s"
+
+msgid "Search:"
+msgstr "Szukaj:"
+
+msgid "Category:"
+msgstr "Kategoria:"
+
+msgid "All"
+msgstr "Wszystkie"
+
+msgid "Premade"
+msgstr "Wbudowane"
+
+msgid "Cloned"
+msgstr "Sklonowane"
+
+msgid "Generated"
+msgstr "Wygenerowane"
+
+msgid "Professional"
+msgstr "Profesjonalne"
+
+msgid "Language:"
+msgstr "Język:"
+
+msgid "Available Voices:"
+msgstr "Dostępne głosy:"
+
+msgid "Name"
+msgstr "Nazwa"
+
+msgid "Category"
+msgstr "Kategoria"
+
+msgid "Gender"
+msgstr "Płeć"
+
+msgid "Age"
+msgstr "Wiek"
+
+msgid "Accent"
+msgstr "Akcent"
+
+msgid "Use Case"
+msgstr "Zastosowanie"
+
+msgid "Voice Details:"
+msgstr "Szczegóły głosu:"
+
+msgid "Preview Voice"
+msgstr "Podgląd głosu"
+
+msgid "Add to My Voices"
+msgstr "Dodaj do moich głosów"
+
+msgid "Refresh"
+msgstr "Odśwież"
+
+msgid "Close"
+msgstr "Zamknij"
+
+#, python-format
+msgid "Error loading voices: %s"
+msgstr "Błąd podczas ładowania głosów: %s"
+
+msgid "Hello, this is a preview of this voice. How do you like it?"
+msgstr "Witaj, to jest podgląd tego głosu. Jak ci się podoba?"
+
+#, python-format
+msgid "Error previewing voice: %s"
+msgstr "Błąd podczas podglądu głosu: %s"
+
+msgid "This feature is available for voices shared in the ElevenLabs community library."
+msgstr "Ta funkcja jest dostępna dla głosów udostępnionych w bibliotece społeczności ElevenLabs."
+
+msgid "Information"
+msgstr "Informacja"
+
+msgid "Voice library refreshed"
+msgstr "Biblioteka głosów odświeżona"
+
+# generator.py
+msgid "Generating..."
+msgstr "Generowanie..."
+
+msgid "Please select a voice"
+msgstr "Proszę wybrać głos"
+
+msgid "Generate"
+msgstr "Generuj"
+
+#, python-format
+msgid "Error generating audio: %s"
+msgstr "Błąd podczas generowania audio: %s"
+
+#, python-format
+msgid "Error playing audio: %s"
+msgstr "Błąd podczas odtwarzania audio: %s"
+
+msgid "Save audio file"
+msgstr "Zapisz plik audio"
+
+msgid "MP3 files (*.mp3)|*.mp3"
+msgstr "Pliki MP3 (*.mp3)|*.mp3"
+
+#, python-format
+msgid "Error saving file: %s"
+msgstr "Błąd podczas zapisywania pliku: %s"
+
+# history_manager.py
+msgid "History Manager"
+msgstr "Menedżer historii"
+
+msgid "Generation History:"
+msgstr "Historia generowania:"
+
+msgid "Date"
+msgstr "Data"
+
+msgid "Text"
+msgstr "Tekst"
+
+msgid "Voice"
+msgstr "Głos"
+
+msgid "Characters"
+msgstr "Znaki"
+
+msgid "Play"
+msgstr "Odtwórz"
+
 msgid "Download"
 msgstr "Pobierz"
 
-#: database.py:51
-#, fuzzy
-msgid "Proszę najpierw wybrać głos."
-msgstr "Proszę wybrać głos"
+msgid "Delete"
+msgstr "Usuń"
 
-#: database.py:74
-msgid "Voice downloaded"
-msgstr "Głos pobrany"
+#, python-format
+msgid "Error loading history: %s"
+msgstr "Błąd podczas ładowania historii: %s"
 
-#: database.py:74
-msgid ""
-"Do you want to clone this voice and add it to your elevenLabs voice "
-"library?"
-msgstr ""
-"Czy chcesz sklonować ten głos i dodać go do swojej biblioteki głosów "
-"elevenLabs?"
+msgid "History refreshed"
+msgstr "Historia odświeżona"
 
-#: generator.py:26
-msgid "Generowanie..."
-msgstr "Generowanie..."
+msgid "Are you sure you want to delete this history item?"
+msgstr "Czy na pewno chcesz usunąć ten element historii?"
 
-#: generator.py:35
-msgid "Proszę wybrać głos"
-msgstr "Proszę wybrać głos"
+msgid "Confirm Delete"
+msgstr "Potwierdź usunięcie"
 
-#: generator.py:64 main.py:51
-msgid "Generuj"
-msgstr "Generuj"
+msgid "History item deleted successfully"
+msgstr "Element historii został pomyślnie usunięty"
 
-#: generator.py:95
-msgid "Zapisz plik na dysku"
-msgstr "Zapisz plik na dysku"
+#, python-format
+msgid "Error deleting history item: %s"
+msgstr "Błąd podczas usuwania elementu historii: %s"
 
-#: generator.py:95
-msgid "Pliki MP3 (*.mp3)|*.mp3"
-msgstr "Pliki MP3 (*.mp3)|*.mp3"
+msgid "Audio saved successfully"
+msgstr "Audio zapisane pomyślnie"
 
-#: key_dialog.py:6
-msgid "Ustaw klucz API"
+#, python-format
+msgid "Error downloading audio: %s"
+msgstr "Błąd podczas pobierania audio: %s"
+
+# key_dialog.py
+msgid "Set API Key"
 msgstr "Ustaw klucz API"
 
-#: key_dialog.py:10
-msgid "Twój klucz API elevenlabs.io:"
+msgid "Your elevenlabs.io API key:"
 msgstr "Twój klucz API elevenlabs.io:"
 
-#: key_dialog.py:19 settings.py:26
-msgid "Anuluj"
-msgstr "Anuluj"
+# main.py
+msgid "Text to generate:"
+msgstr "Tekst do wygenerowania:"
 
-#: main.py:45
-msgid "Głosy:"
-msgstr "Głosy:"
+msgid "Voice:"
+msgstr "Głos:"
 
-#: main.py:55
-msgid "&Odtwórz"
+msgid "Model:"
+msgstr "Model:"
+
+msgid "Voice Settings..."
+msgstr "Ustawienia głosu..."
+
+msgid "&Play"
 msgstr "&Odtwórz"
 
-#: main.py:60
-msgid "&Zapisz na dysku"
+msgid "&Save to disk"
 msgstr "&Zapisz na dysku"
 
-#: main.py:96
-msgid ""
-"Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć "
-"listę głosów i odblokować funkcje premium elevenlabs.io"
-msgstr ""
-"Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć "
-"listę głosów i odblokować funkcje premium elevenlabs.io"
+msgid "To use the API key, the program must be restarted to refresh the voice list and unlock premium ElevenLabs features."
+msgstr "Aby użyć klucza API, program musi zostać zrestartowany, aby odświeżyć listę głosów i odblokować funkcje premium ElevenLabs."
 
-#: main.py:97
-msgid "Klient Eleven Labs"
-msgstr "Klient Eleven Labs"
-
-#: main.py:113
-msgid "Ustawienia zostały zapisane."
-msgstr "Ustawienia zostały zapisane."
-
-#: main.py:113 settings.py:8
-msgid "Ustawienia klienta"
-msgstr "Ustawienia klienta"
-
-#: main.py:126
-msgid "Klient ElevenLabs"
+msgid "ElevenLabs Client"
 msgstr "Klient ElevenLabs"
 
-#: menu_bar.py:16
-msgid "Ustawienia klienta..."
+msgid "Settings have been saved."
+msgstr "Ustawienia zostały zapisane."
+
+msgid "Client Settings"
+msgstr "Ustawienia klienta"
+
+msgid "Voice Generation Settings"
+msgstr "Ustawienia generowania głosu"
+
+msgid "Stability (0-100):"
+msgstr "Stabilność (0-100):"
+
+msgid "Similarity Boost (0-100):"
+msgstr "Wzmocnienie podobieństwa (0-100):"
+
+msgid "Style (0-100):"
+msgstr "Styl (0-100):"
+
+msgid "Use Speaker Boost"
+msgstr "Użyj wzmocnienia mówcy"
+
+msgid "Stability: Higher values make the voice more consistent\nSimilarity Boost: Higher values make the voice closer to the original\nStyle: Controls the expressiveness (V2 models only)\nSpeaker Boost: Enhances similarity to the original speaker"
+msgstr "Stabilność: Wyższe wartości sprawiają, że głos jest bardziej spójny\nWzmocnienie podobieństwa: Wyższe wartości sprawiają, że głos jest bliższy oryginałowi\nStyl: Kontroluje ekspresję (tylko modele V2)\nWzmocnienie mówcy: Zwiększa podobieństwo do oryginalnego mówcy"
+
+# menu_bar.py
+msgid "File"
+msgstr "Plik"
+
+msgid "Client Settings..."
 msgstr "Ustawienia klienta..."
 
-#: menu_bar.py:17
-msgid "Baza danych głosów..."
+msgid "Exit"
+msgstr "Wyjście"
+
+msgid "Voices"
+msgstr "Głosy"
+
+msgid "Voice Manager..."
+msgstr "Menedżer głosów..."
+
+msgid "Clone Voice..."
+msgstr "Klonuj głos..."
+
+msgid "Voice Database..."
 msgstr "Baza danych głosów..."
 
-#: menu_bar.py:18
-msgid "Klonowanie głosu..."
-msgstr "Klonowanie głosu..."
+msgid "Tools"
+msgstr "Narzędzia"
 
-#: menu_bar.py:20
-msgid "Klient"
-msgstr "Klient"
+msgid "Generation History..."
+msgstr "Historia generowania..."
 
-#: settings.py:13
-msgid "Klucz API:"
+msgid "Speech to Speech..."
+msgstr "Mowa na mowę..."
+
+msgid "Sound Effects..."
+msgstr "Efekty dźwiękowe..."
+
+msgid "Account"
+msgstr "Konto"
+
+msgid "User Info & Subscription..."
+msgstr "Informacje o użytkowniku i subskrypcja..."
+
+msgid "Available Models..."
+msgstr "Dostępne modele..."
+
+# settings.py
+msgid "API Key:"
 msgstr "Klucz API:"
 
-#: settings.py:18
-msgid "Tryb odtwarzania:"
+msgid "Playback Mode:"
 msgstr "Tryb odtwarzania:"
 
-#: settings.py:21
-msgid "mpv (domyślny)"
+msgid "mpv (default)"
 msgstr "mpv (domyślny)"
 
-#: settings.py:21
-msgid "t player (nowy, lecz mniej stabilny)"
-msgstr "t player (nowy, lecz mniej stabilny)"
+msgid "t player (new, less stable)"
+msgstr "t player (nowy, mniej stabilny)"
 
-#: support_dialog.py:7
-msgid "Dziękuję za używanie klienta elevenLabs"
-msgstr "Dziękuję za używanie klienta elevenLabs"
+# sound_effects.py
+msgid "Sound Effects Generation"
+msgstr "Generowanie efektów dźwiękowych"
 
-#: support_dialog.py:11
-msgid ""
-"Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie kawą, "
-"piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy "
-"danych."
-msgstr "Jeśli uważasz, że mój program jest przydatny, rozważ wsparcie mnie kawą, piwem lub paczką papierosów itp. na utrzymanie kosztów serwera bazy danych."
+msgid "Generate sound effects using AI.\nDescribe the sound you want to create."
+msgstr "Generuj efekty dźwiękowe używając AI.\nOpisz dźwięk, który chcesz stworzyć."
 
-#: support_dialog.py:16
-msgid "Dotacja"
+msgid "Sound Description:"
+msgstr "Opis dźwięku:"
+
+msgid "A dog barking"
+msgstr "Szczekanie psa"
+
+msgid "Duration (seconds, 0.5-22):"
+msgstr "Czas trwania (sekundy, 0.5-22):"
+
+msgid "Prompt Influence (0.0-1.0):"
+msgstr "Wpływ opisu (0.0-1.0):"
+
+msgid "Please enter a sound description"
+msgstr "Proszę wprowadzić opis dźwięku"
+
+#, python-format
+msgid "Error during generation: %s"
+msgstr "Błąd podczas generowania: %s"
+
+msgid "Sound effect generated successfully"
+msgstr "Efekt dźwiękowy wygenerowany pomyślnie"
+
+#, python-format
+msgid "Error saving sound: %s"
+msgstr "Błąd podczas zapisywania dźwięku: %s"
+
+msgid "Save sound effect"
+msgstr "Zapisz efekt dźwiękowy"
+
+msgid "Sound effect saved successfully"
+msgstr "Efekt dźwiękowy zapisany pomyślnie"
+
+# speech_to_speech.py
+msgid "Speech to Speech Conversion"
+msgstr "Konwersja mowy na mowę"
+
+msgid "Convert speech from one voice to another.\nSelect an audio file and a target voice to create a new version."
+msgstr "Konwertuj mowę z jednego głosu na inny.\nWybierz plik audio i docelowy głos, aby stworzyć nową wersję."
+
+msgid "Input Audio File:"
+msgstr "Wejściowy plik audio:"
+
+msgid "Target Voice:"
+msgstr "Docelowy głos:"
+
+msgid "Choose audio file"
+msgstr "Wybierz plik audio"
+
+msgid "Audio files (*.mp3;*.wav;*.ogg;*.flac)|*.mp3;*.wav;*.ogg;*.flac|All files (*.*)|*.*"
+msgstr "Pliki audio (*.mp3;*.wav;*.ogg;*.flac)|*.mp3;*.wav;*.ogg;*.flac|Wszystkie pliki (*.*)|*.*"
+
+msgid "Please select an input audio file"
+msgstr "Proszę wybrać wejściowy plik audio"
+
+msgid "Please select a target voice"
+msgstr "Proszę wybrać docelowy głos"
+
+msgid "Converting..."
+msgstr "Konwertowanie..."
+
+msgid "Convert"
+msgstr "Konwertuj"
+
+#, python-format
+msgid "Error during conversion: %s"
+msgstr "Błąd podczas konwersji: %s"
+
+msgid "Conversion completed successfully"
+msgstr "Konwersja zakończona pomyślnie"
+
+msgid "Save converted audio"
+msgstr "Zapisz skonwertowane audio"
+
+msgid "Play Result"
+msgstr "Odtwórz wynik"
+
+msgid "Save Result"
+msgstr "Zapisz wynik"
+
+# support_dialog.py
+msgid "Thank you for using the ElevenLabs Client"
+msgstr "Dziękuję za używanie klienta ElevenLabs"
+
+msgid "If you find this program useful, please consider supporting me with a coffee, beer, or cigarette pack to help maintain the voice database server costs."
+msgstr "Jeśli uważasz, że ten program jest przydatny, rozważ wsparcie mnie kawą, piwem lub paczką papierosów, aby pomóc w utrzymaniu kosztów serwera bazy danych głosów."
+
+msgid "Donate"
 msgstr "Dotacja"
 
+# user_info.py
+msgid "User Information & Subscription"
+msgstr "Informacje o użytkowniku i subskrypcja"
+
+msgid "SUBSCRIPTION INFORMATION"
+msgstr "INFORMACJE O SUBSKRYPCJI"
+
+#, python-format
+msgid "Tier: %s"
+msgstr "Poziom: %s"
+
+#, python-format
+msgid "Character Count: %s"
+msgstr "Liczba znaków: %s"
+
+#, python-format
+msgid "Character Limit: %s"
+msgstr "Limit znaków: %s"
+
+#, python-format
+msgid "Usage: %.1f%%"
+msgstr "Wykorzystanie: %.1f%%"
+
+#, python-format
+msgid "Characters Remaining: %s"
+msgstr "Pozostałe znaki: %s"
+
+#, python-format
+msgid "Can Extend Limit: %s"
+msgstr "Można rozszerzyć limit: %s"
+
+#, python-format
+msgid "Allowed to Extend: %s"
+msgstr "Dozwolone rozszerzenie: %s"
+
+#, python-format
+msgid "Next Reset: %s"
+msgstr "Następny reset: %s"
+
+#, python-format
+msgid "Voice Limit: %s"
+msgstr "Limit głosów: %s"
+
+#, python-format
+msgid "Professional Voice Limit: %s"
+msgstr "Limit głosów profesjonalnych: %s"
+
+#, python-format
+msgid "Instant Voice Cloning: %s"
+msgstr "Natychmiastowe klonowanie głosu: %s"
+
+#, python-format
+msgid "Professional Voice Cloning: %s"
+msgstr "Profesjonalne klonowanie głosu: %s"
+
+msgid "Available Models:"
+msgstr "Dostępne modele:"
+
+#, python-format
+msgid "Can Use Delayed Payment: %s"
+msgstr "Można użyć odroczonej płatności: %s"
+
+msgid "USER INFORMATION"
+msgstr "INFORMACJE O UŻYTKOWNIKU"
+
+#, python-format
+msgid "API Key: %s"
+msgstr "Klucz API: %s"
+
+#, python-format
+msgid "First Name: %s"
+msgstr "Imię: %s"
+
+#, python-format
+msgid "New User: %s"
+msgstr "Nowy użytkownik: %s"
+
+#, python-format
+msgid "Onboarded: %s"
+msgstr "Zarejestrowany: %s"
+
+#, python-format
+msgid "Error loading subscription: %s"
+msgstr "Błąd podczas ładowania subskrypcji: %s"
+
+#, python-format
+msgid "Error loading user info: %s"
+msgstr "Błąd podczas ładowania informacji o użytkowniku: %s"
+
+#, python-format
+msgid "Error loading information: %s"
+msgstr "Błąd podczas ładowania informacji: %s"
+
+msgid "Information refreshed"
+msgstr "Informacje odświeżone"
+
+msgid "Available Models"
+msgstr "Dostępne modele"
+
+msgid "Model ID"
+msgstr "ID modelu"
+
+msgid "Languages"
+msgstr "Języki"
+
+#, python-format
+msgid "Error loading models: %s"
+msgstr "Błąd podczas ładowania modeli: %s"
+
+msgid "Model Details:"
+msgstr "Szczegóły modelu:"
+
+msgid "Models API not available. Showing known models."
+msgstr "API modeli niedostępne. Pokazuję znane modele."
+
+msgid "No API key configured.\n\nPlease set your ElevenLabs API key in:\nFile → Client Settings"
+msgstr "Brak skonfigurowanego klucza API.\n\nProszę ustawić klucz API ElevenLabs w:\nPlik → Ustawienia klienta"
+
+msgid "API Key Required"
+msgstr "Wymagany klucz API"
+
+# api_key_helper.py
+msgid "No API key configured"
+msgstr "Brak skonfigurowanego klucza API"
+
+msgid "To use this feature, you need an ElevenLabs API key.\n\nYou can get your API key for free from ElevenLabs."
+msgstr "Aby użyć tej funkcji, potrzebujesz klucza API ElevenLabs.\n\nMożesz uzyskać klucz API za darmo z ElevenLabs."
+
+msgid "Get API Key (Free)"
+msgstr "Uzyskaj klucz API (Darmowy)"
+
+msgid "Open Settings"
+msgstr "Otwórz ustawienia"
+
+msgid "After getting your API key, paste it in:\nFile → Client Settings → API Key"
+msgstr "Po uzyskaniu klucza API, wklej go w:\nPlik → Ustawienia klienta → Klucz API"
+
+msgid "Get API Key"
+msgstr "Uzyskaj klucz API"
+
+msgid "Opening ElevenLabs API settings in your browser.\n\n1. Sign up or log in to ElevenLabs\n2. Copy your API key\n3. Paste it in: File → Client Settings"
+msgstr "Otwieranie ustawień API ElevenLabs w przeglądarce.\n\n1. Zarejestruj się lub zaloguj do ElevenLabs\n2. Skopiuj swój klucz API\n3. Wklej go w: Plik → Ustawienia klienta"
+
+msgid "API key configured successfully!\n\nPlease restart the feature to use it."
+msgstr "Klucz API skonfigurowany pomyślnie!\n\nProszę uruchomić ponownie funkcję, aby go użyć."
+
+msgid "Subscription information not available via API."
+msgstr "Informacje o subskrypcji niedostępne przez API."
+
+msgid "History API not available."
+msgstr "API historii niedostępne."
+
+msgid "No voices available.\n\nPlease check:\n1. Your API key is configured\n2. You have voices in your ElevenLabs account\n\nYou can add voices from: Voices → Voice Library"
+msgstr "Brak dostępnych głosów.\n\nProszę sprawdzić:\n1. Czy klucz API jest skonfigurowany\n2. Czy masz głosy na koncie ElevenLabs\n\nMożesz dodać głosy z: Głosy → Biblioteka głosów"
+
+msgid "No Voices Available"
+msgstr "Brak dostępnych głosów"
+
+msgid "Invalid voice selection. Please refresh the voice list."
+msgstr "Nieprawidłowy wybór głosu. Proszę odświeżyć listę głosów."
+
+#, python-format
+msgid "Error loading voices: %s\n\nPlease check your API key in File → Client Settings"
+msgstr "Błąd podczas ładowania głosów: %s\n\nProszę sprawdzić klucz API w Plik → Ustawienia klienta"
+
+# voice_manager.py
+msgid "Voice Manager"
+msgstr "Menedżer głosów"
+
+msgid "Your Voices:"
+msgstr "Twoje głosy:"
+
+msgid "Description"
+msgstr "Opis"
+
+msgid "Labels"
+msgstr "Etykiety"
+
+msgid "View Details"
+msgstr "Pokaż szczegóły"
+
+msgid "Edit Voice"
+msgstr "Edytuj głos"
+
+msgid "Voice Settings"
+msgstr "Ustawienia głosu"
+
+msgid "Voice list refreshed"
+msgstr "Lista głosów odświeżona"
+
+msgid "Voice Details"
+msgstr "Szczegóły głosu"
+
+#, python-format
+msgid "Error getting voice details: %s"
+msgstr "Błąd podczas pobierania szczegółów głosu: %s"
+
+msgid "Edit Voice"
+msgstr "Edytuj głos"
+
+msgid "Name:"
+msgstr "Nazwa:"
+
+msgid "Description:"
+msgstr "Opis:"
+
+msgid "Voice updated successfully"
+msgstr "Głos zaktualizowany pomyślnie"
+
+#, python-format
+msgid "Error editing voice: %s"
+msgstr "Błąd podczas edycji głosu: %s"
+
+msgid "Voice settings updated successfully"
+msgstr "Ustawienia głosu zaktualizowane pomyślnie"
+
+#, python-format
+msgid "Error updating voice settings: %s"
+msgstr "Błąd podczas aktualizacji ustawień głosu: %s"
+
+msgid "Are you sure you want to delete this voice?"
+msgstr "Czy na pewno chcesz usunąć ten głos?"
+
+msgid "Voice deleted successfully"
+msgstr "Głos usunięty pomyślnie"
+
+#, python-format
+msgid "Error deleting voice: %s"
+msgstr "Błąd podczas usuwania głosu: %s"
+
+# cache_manager.py and cache_viewer.py
+msgid "Generation Cache"
+msgstr "Pamięć podręczna generacji"
+
+#, python-format
+msgid "Cached Items: %s / %s  |  Size: %.2f MB"
+msgstr "Elementy w pamięci: %s / %s  |  Rozmiar: %.2f MB"
+
+msgid "Cached Generations:"
+msgstr "Zapisane generacje:"
+
+msgid "Time"
+msgstr "Czas"
+
+msgid "Text Preview"
+msgstr "Podgląd tekstu"
+
+msgid "Chars"
+msgstr "Znaki"
+
+msgid "Details:"
+msgstr "Szczegóły:"
+
+msgid "Use This"
+msgstr "Użyj tego"
+
+msgid "Clear All"
+msgstr "Wyczyść wszystko"
+
+#, python-format
+msgid "Error loading cache: %s"
+msgstr "Błąd podczas ładowania pamięci: %s"
+
+msgid "Audio file not found in cache."
+msgstr "Plik audio nie znaleziony w pamięci."
+
+#, python-format
+msgid "Error playing audio: %s"
+msgstr "Błąd podczas odtwarzania audio: %s"
+
+msgid "Could not retrieve cached audio."
+msgstr "Nie można pobrać audio z pamięci."
+
+msgid "Cached audio loaded! You can now play or save it."
+msgstr "Audio z pamięci załadowane! Możesz je teraz odtworzyć lub zapisać."
+
+#, python-format
+msgid "Error using cached audio: %s"
+msgstr "Błąd podczas użycia audio z pamięci: %s"
+
+msgid "Delete this cached item?"
+msgstr "Usunąć ten element z pamięci?"
+
+msgid "Cache item deleted."
+msgstr "Element pamięci usunięty."
+
+#, python-format
+msgid "Error deleting cache item: %s"
+msgstr "Błąd podczas usuwania elementu pamięci: %s"
+
+msgid "Clear entire cache?\n\nThis cannot be undone."
+msgstr "Wyczyścić całą pamięć?\n\nTego nie można cofnąć."
+
+msgid "Confirm Clear"
+msgstr "Potwierdź wyczyszczenie"
+
+msgid "Cache cleared."
+msgstr "Pamięć wyczyszczona."
+
+#, python-format
+msgid "Error clearing cache: %s"
+msgstr "Błąd podczas czyszczenia pamięci: %s"
+
+# generator.py - new features
+msgid "Please enter text to generate."
+msgstr "Proszę wprowadzić tekst do wygenerowania."
+
+msgid "This exact generation already exists in cache.\n\nUse cached version (saves characters)?"
+msgstr "Ta dokładnie taka sama generacja już istnieje w pamięci.\n\nUżyć wersji z pamięci (oszczędza znaki)?"
+
+msgid "Cached Generation Found"
+msgstr "Znaleziono generację w pamięci"
+
+#, python-format
+msgid "Similar text was generated recently:\n\nText: %s...\nVoice: %s\nCharacters: %s\n\nContinue with new generation?"
+msgstr "Podobny tekst został niedawno wygenerowany:\n\nTekst: %s...\nGłos: %s\nZnaki: %s\n\nKontynuować z nową generacją?"
+
+msgid "Similar Generation Detected"
+msgstr "Wykryto podobną generację"
+
+#, python-format
+msgid "This generation will use %s characters.\n\nContinue?"
+msgstr "Ta generacja użyje %s znaków.\n\nKontynuować?"
+
+msgid "Character Usage Confirmation"
+msgstr "Potwierdzenie użycia znaków"
+
+#, python-format
+msgid "Generate preview first?\n\nPreview (first 150 chars): ~150 characters\nFull generation: %s characters\n\nPreview helps test voice settings with minimal cost."
+msgstr "Wygenerować najpierw podgląd?\n\nPodgląd (pierwsze 150 znaków): ~150 znaków\nPełna generacja: %s znaków\n\nPodgląd pomaga przetestować ustawienia głosu przy minimalnym koszcie."
+
+msgid "Preview Option"
+msgstr "Opcja podglądu"
+
+msgid "Preview"
+msgstr "Podgląd"
+
+msgid "Full Generation"
+msgstr "Pełna generacja"
+
+msgid "Generating preview..."
+msgstr "Generowanie podglądu..."
+
+#, python-format
+msgid "Preview generated successfully!\n\nGenerate full text?\nFull text: %s characters"
+msgstr "Podgląd wygenerowany pomyślnie!\n\nWygenerować pełny tekst?\nPełny tekst: %s znaków"
+
+msgid "Preview Complete"
+msgstr "Podgląd zakończony"
+
+#, python-format
+msgid "Generation complete! (%s items in cache)"
+msgstr "Generacja zakończona! (%s elementów w pamięci)"
+
+msgid "Ready"
+msgstr "Gotowy"
+
+msgid "Local Cache..."
+msgstr "Lokalna pamięć..."
+
+# menu_bar.py additions
+msgid "Local Cache..."
+msgstr "Lokalna pamięć..."

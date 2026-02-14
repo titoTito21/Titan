@@ -1,0 +1,48 @@
+Welcome to Titan Computer Environment (TCE) version 0.3
+
+Titan Computer Environment is an accessible desktop environment and application launcher built with wxPython. TCE provides a modular platform for launching applications, managing games, and integrating messaging services with focus on accessibility for screen reader users.
+
+CORE FEATURES
+
+Application and Game Management
+TCE provides a unified launcher for applications and games. The application manager loads programs from data/applications directory using configuration files. The game manager integrates with Steam, Battle.net, and custom game directories.
+
+Accessibility Support
+The system includes screen reader integration using accessible_output3, supporting NVDA, JAWS, and other screen readers. TCE offers an alternative non-visual interface mode for keyboard-driven navigation. All interface elements include keyboard shortcuts and audio feedback.
+
+Audio System
+Multiple audio themes provide sound effects for interface actions. TCE includes themes such as default, Longhorn, and Ubuntu Emacspeak with stereo positioning for spatial audio feedback.
+
+Messaging Integration
+TCE integrates Telegram (full client with voice calling via py-tgcalls), Facebook Messenger, and WhatsApp through webview components.
+
+PROGRAMMABILITY
+
+TCE is fully programmable through its component system. Every aspect of the interface can be extended or modified:
+
+Component System
+Components in data/components can register menu items, provide settings panels, modify the GUI, and respond to system events. Each component consists of __component__.TCE configuration file and init.py implementation. Components are loaded dynamically at startup.
+
+Application Definition
+Applications are defined using __app.TCE files specifying program name, executable path, and metadata. This allows integration of external programs without modifying TCE code.
+
+Applet System
+Custom UI widgets in data/applets extend the taskbar and desktop functionality.
+
+The modular architecture allows developers to create plugins that integrate with the entire system through hooks and callbacks. Components can add functionality to menus, settings, and system events without touching the core codebase.
+
+SYSTEM INTEGRATION
+
+TCE monitors battery status, volume, network connectivity, CPU, memory, and disk usage. The system includes auto-updater, system tray integration, and lock screen detection.
+
+INTERNATIONALIZATION
+
+Modular translation system using gettext with separate domains for each module. Default language is Polish with English support. Additional languages can be added through translation files in the languages directory.
+
+RUNNING TCE
+
+Installation: pip install -r requirements.txt
+Run: python main.py
+Compile: python compiletorelease.py
+
+Titan Computer Environment provides an accessible, fully programmable platform for desktop application management.

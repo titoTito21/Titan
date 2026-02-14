@@ -207,16 +207,24 @@ class SystemAudioFeedback(threading.Thread):
             if not current_window or current_window == 0:
                 return
 
+            # Ignoruj okna Titan
+            if self._is_titan_window(current_window):
+                # Aktualizuj prev_window ale nie odtwarzaj dźwięków
+                self.prev_window = current_window
+                return
+
             if current_window != self.prev_window:
                 # Zamknięcie poprzedniego okna dialog/menu?
                 if self.prev_window and play_sound:
-                    try:
-                        if self._is_menu(self.prev_window):
-                            play_sound("ui/tui_close.ogg")
-                        elif self._is_dialog_or_menu(self.prev_window):
-                            play_sound("ui/applist.ogg")
-                    except Exception:
-                        pass  # Window may no longer exist
+                    # Nie odtwarzaj dźwięku zamknięcia jeśli poprzednie okno było Titan
+                    if not self._is_titan_window(self.prev_window):
+                        try:
+                            if self._is_menu(self.prev_window):
+                                play_sound("ui/tui_close.ogg")
+                            elif self._is_dialog_or_menu(self.prev_window):
+                                play_sound("ui/applist.ogg")
+                        except Exception:
+                            pass  # Window may no longer exist
 
                 # Otwarcie nowego okna
                 self.prev_window = current_window
@@ -231,6 +239,41 @@ class SystemAudioFeedback(threading.Thread):
         except Exception as e:
             # Handle errors getting foreground window
             pass
+
+    def _is_titan_window(self, hwnd) -> bool:
+        """Sprawdza czy okno należy do aplikacji Titan"""
+        try:
+            # Check if window still exists
+            if not win32gui.IsWindow(hwnd):
+                return False
+
+            # Pobierz tytuł okna
+            window_title = win32gui.GetWindowText(hwnd)
+
+            # Sprawdź czy tytuł zawiera "Titan" (główne okno TCE i podokna)
+            if "Titan" in window_title:
+                return True
+
+            # Sprawdź nazwę procesu
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                process = psutil.Process(pid)
+                exe_name = process.name().lower()
+
+                # Sprawdź czy to proces Titan (main.py, main.exe, titan.exe, itp.)
+                if "titan" in exe_name or exe_name == "main.exe" or exe_name == "python.exe":
+                    # Dla python.exe dodatkowo sprawdź tytuł
+                    if exe_name == "python.exe" and "Titan" in window_title:
+                        return True
+                    elif exe_name != "python.exe":
+                        return True
+            except Exception:
+                pass
+
+        except Exception:
+            pass
+
+        return False
 
     def _is_menu(self, hwnd) -> bool:
         """Sprawdza czy okno to menu (kontekstowe, systemowe, etc.)"""
