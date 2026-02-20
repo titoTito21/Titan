@@ -5,6 +5,38 @@ import json
 import platform
 from translation import _
 
+# Screen reader output: accessible_output3 with platform fallback.
+# Primary: integrates with NVDA/JAWS (Windows), VoiceOver (macOS), Orca (Linux).
+# Fallback: platform TTS so speech works even without a screen reader.
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _speaker = _ao3.Auto()
+except Exception:
+    _speaker = None
+
+def _speak(text):
+    # 1) accessible_output3 – preferred on all platforms
+    if _speaker:
+        try:
+            _speaker.speak(text, interrupt=True)
+            return
+        except Exception:
+            pass
+    # 2) Platform fallback
+    try:
+        _sys = platform.system()
+        if _sys == 'Windows':
+            import win32com.client
+            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+        elif _sys == 'Darwin':
+            import subprocess
+            subprocess.Popen(['say', text])
+        else:  # Linux
+            import subprocess
+            subprocess.Popen(['spd-say', text])
+    except Exception:
+        pass
+
 class tNotesApp(wx.Frame):
     def __init__(self, *args, **kw):
         super(tNotesApp, self).__init__(*args, **kw)
@@ -83,6 +115,13 @@ class tNotesApp(wx.Frame):
 
         self.panel.SetSizer(vbox)
 
+        # VoiceOver / screen-reader accessible names
+        self.notebook.SetName(_('Notes list'))
+        self.new_note_btn.SetName(_('New note'))
+        self.new_folder_btn.SetName(_('New folder'))
+        self.delete_btn.SetName(_('Delete'))
+        self.back_btn.SetName(_('Back'))
+
         self.create_menu_bar()
 
         self.Centre()
@@ -128,24 +167,8 @@ class tNotesApp(wx.Frame):
                     self.notebook.Append([first_line, created, edited])
 
     def init_tts(self):
-        system = platform.system()
-        if system == 'Windows':
-            self.speak = self.speak_windows
-        elif system == 'Darwin':  # macOS
-            self.speak = self.speak_mac
-        else:  # Assume Linux
-            self.speak = self.speak_linux
-
-    def speak_windows(self, text):
-        import win32com.client
-        speaker = win32com.client.Dispatch("SAPI.SpVoice")
-        speaker.Speak(text)
-
-    def speak_mac(self, text):
-        os.system(f"say {text}")
-
-    def speak_linux(self, text):
-        os.system(f"spd-say {text}")
+        # Use accessible_output3 on all platforms (VoiceOver, NVDA, JAWS, etc.)
+        self.speak = _speak
 
     def on_new_note(self, event):
         dialog = wx.TextEntryDialog(self, _('Wprowadź tytuł notatki:'), _('Nowa notatka'))

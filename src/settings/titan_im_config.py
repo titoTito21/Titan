@@ -9,15 +9,8 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 def get_titan_im_config_dir():
     """Get the directory for Titan IM configuration files"""
-    if platform.system() == 'Windows':
-        config_dir = os.path.join(os.getenv('APPDATA'), 'titosoft', 'Titan')
-    elif platform.system() == 'Linux':
-        config_dir = os.path.expanduser('~/.config/titosoft/Titan')
-    elif platform.system() == 'Darwin':  # macOS
-        config_dir = os.path.expanduser('~/Library/Application Support/titosoft/Titan')
-    else:
-        raise NotImplementedError('Unsupported platform')
-    
+    from src.platform_utils import get_user_data_dir
+    config_dir = get_user_data_dir()
     os.makedirs(config_dir, exist_ok=True)
     return config_dir
 

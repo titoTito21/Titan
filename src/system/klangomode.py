@@ -2021,52 +2021,92 @@ class KlangoFrame(wx.Frame):
         try:
             import subprocess
             import platform
-            if platform.system() == "Windows":
+            system = platform.system()
+            if system == "Windows":
                 subprocess.run(["control", "timedate.cpl"], check=True)
-                speak_klango(_("Time settings opened"))
-            self.close_menu()
+            elif system == "Darwin":
+                subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
+            else:
+                for cmd in [["gnome-control-center", "datetime"], ["kcmshell5", "clock"], ["timedatectl"]]:
+                    try:
+                        subprocess.Popen(cmd)
+                        break
+                    except FileNotFoundError:
+                        continue
+            speak_klango(_("Time settings opened"))
         except Exception as e:
             print(f"Could not open time settings: {e}")
             speak_klango(_("Could not open time settings"))
+        self.close_menu()
     
     def gui_open_power_settings(self):
         """Open power settings using same method as GUI."""
         try:
             import subprocess
             import platform
-            if platform.system() == "Windows":
+            system = platform.system()
+            if system == "Windows":
                 subprocess.run(["control", "powercfg.cpl"], check=True)
-                speak_klango(_("Power settings opened"))
-            self.close_menu()
+            elif system == "Darwin":
+                subprocess.run(["open", "/System/Library/PreferencePanes/Battery.prefPane"], check=True)
+            else:
+                for cmd in [["gnome-control-center", "power"], ["xfce4-power-manager-settings"], ["kcmshell5", "powerdevilprofilesconfig"]]:
+                    try:
+                        subprocess.Popen(cmd)
+                        break
+                    except FileNotFoundError:
+                        continue
+            speak_klango(_("Power settings opened"))
         except Exception as e:
             print(f"Could not open power settings: {e}")
             speak_klango(_("Could not open power settings"))
+        self.close_menu()
     
     def gui_open_volume_mixer(self):
         """Open volume mixer using same method as GUI."""
         try:
             import subprocess
             import platform
-            if platform.system() == "Windows":
+            system = platform.system()
+            if system == "Windows":
                 subprocess.run(["sndvol.exe"], check=True)
-                speak_klango(_("Volume mixer opened"))
-            self.close_menu()
+            elif system == "Darwin":
+                subprocess.run(["open", "/System/Library/PreferencePanes/Sound.prefPane"], check=True)
+            else:
+                for cmd in [["pavucontrol"], ["gnome-control-center", "sound"], ["kcmshell5", "kcm_pulseaudio"]]:
+                    try:
+                        subprocess.Popen(cmd)
+                        break
+                    except FileNotFoundError:
+                        continue
+            speak_klango(_("Volume mixer opened"))
         except Exception as e:
             print(f"Could not open volume mixer: {e}")
             speak_klango(_("Could not open volume mixer"))
+        self.close_menu()
     
     def gui_open_network_settings(self):
         """Open network settings using same method as GUI."""
         try:
             import subprocess
             import platform
-            if platform.system() == "Windows":
+            system = platform.system()
+            if system == "Windows":
                 subprocess.run(["ncpa.cpl"], check=True)
-                speak_klango(_("Network settings opened"))
-            self.close_menu()
+            elif system == "Darwin":
+                subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
+            else:
+                for cmd in [["nm-connection-editor"], ["gnome-control-center", "network"], ["kcmshell5", "kcm_networkmanagement"]]:
+                    try:
+                        subprocess.Popen(cmd)
+                        break
+                    except FileNotFoundError:
+                        continue
+            speak_klango(_("Network settings opened"))
         except Exception as e:
             print(f"Could not open network settings: {e}")
             speak_klango(_("Could not open network settings"))
+        self.close_menu()
     
     def _load_stereo_settings(self):
         """Load stereo settings from configuration."""

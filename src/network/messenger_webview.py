@@ -2158,12 +2158,8 @@ class MessengerWebViewFrame(wx.Frame):
         try:
             cookies_dir = get_messenger_cookies_dir()
             
-            if platform.system() == 'Windows':
-                os.startfile(cookies_dir)
-            elif platform.system() == 'Darwin':  # macOS
-                os.system(f'open "{cookies_dir}"')
-            else:  # Linux
-                os.system(f'xdg-open "{cookies_dir}"')
+            from src.platform_utils import open_file_manager
+            open_file_manager(cookies_dir)
                 
             if self.tts_item.IsChecked():
                 speaker.speak(_("Otwarto folder cookies"))

@@ -8,10 +8,42 @@ import configparser
 import re
 import pygame
 from translation import _
-import accessible_output3.outputs.auto
+import subprocess
+
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _speaker = _ao3.Auto()
+except Exception:
+    _speaker = None
+
+def _speak(text):
+    """Announce text via accessible_output3 with cross-platform fallback."""
+    # 1) accessible_output3 – preferred (integrates with active screen reader)
+    if _speaker:
+        try:
+            _speaker.speak(text, interrupt=True)
+            return
+        except Exception:
+            pass
+    # 2) Platform fallback when ao3 is unavailable
+    try:
+        _sys = platform.system()
+        if _sys == 'Windows':
+            import win32com.client
+            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+        elif _sys == 'Darwin':
+            subprocess.Popen(['say', text])
+        else:  # Linux
+            subprocess.Popen(['spd-say', text])
+    except Exception:
+        pass
 
 pygame.mixer.init()
-speaker = accessible_output3.outputs.auto.Auto()
+# Legacy alias so existing code using `speaker.speak(...)` still works
+class _SpeakerCompat:
+    def speak(self, text, interrupt=False):
+        _speak(text)
+speaker = _SpeakerCompat()
 
 import requests
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -121,9 +153,9 @@ class DownloadsDialog(wx.Dialog):
         if platform.system() == 'Windows':
             os.startfile(file_path)
         elif platform.system() == 'Darwin':
-            os.system(f"open '{file_path}'")
+            subprocess.Popen(['open', file_path])
         else:
-            os.system(f"xdg-open '{file_path}'")
+            subprocess.Popen(['xdg-open', file_path])
 
     def removeSelectedFile(self):
         selection = self.listbox.GetSelection()

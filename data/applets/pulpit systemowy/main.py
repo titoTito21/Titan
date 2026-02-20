@@ -42,22 +42,32 @@ class DesktopWidget(BaseWidget):
     def _find_shortcuts(self):
         shortcuts = []
         if sys.platform == "win32":
-            desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
-            public_desktop_path = os.path.join(os.path.join(os.environ['PUBLIC']), 'Desktop')
-            
-            for lnk_path in glob.glob(os.path.join(desktop_path, '*.lnk')) + glob.glob(os.path.join(public_desktop_path, '*.lnk')):
+            home = os.path.expanduser('~')
+            desktop_path = os.path.join(home, 'Desktop')
+            public = os.environ.get('PUBLIC', '')
+            public_desktop_path = os.path.join(public, 'Desktop') if public else ''
+
+            paths = glob.glob(os.path.join(desktop_path, '*.lnk'))
+            if public_desktop_path:
+                paths += glob.glob(os.path.join(public_desktop_path, '*.lnk'))
+            for lnk_path in paths:
                 name = os.path.splitext(os.path.basename(lnk_path))[0]
                 shortcuts.append({"name": name, "path": lnk_path})
 
-        elif sys.platform == "darwin": # macOS
+        elif sys.platform == "darwin":  # macOS
             apps_path = "/Applications"
             for app_path in glob.glob(os.path.join(apps_path, '*.app')):
                 name = os.path.splitext(os.path.basename(app_path))[0]
                 shortcuts.append({"name": name, "path": app_path})
-        
-        # Można dodać obsługę Linuksa w przyszłości
-        # elif sys.platform.startswith('linux'):
-        #     ...
+
+        elif sys.platform.startswith('linux'):
+            desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop')
+            if os.path.isdir(desktop_path):
+                for entry in os.listdir(desktop_path):
+                    full = os.path.join(desktop_path, entry)
+                    if os.path.isfile(full):
+                        name = os.path.splitext(entry)[0]
+                        shortcuts.append({"name": name, "path": full})
 
         return shortcuts
 
@@ -99,21 +109,22 @@ class DesktopWidget(BaseWidget):
             shortcut = self.shortcuts[index]
             if shortcut["path"]:
                 try:
-                    # Dla macOS otwieramy aplikacje za pomocą 'open'
                     if sys.platform == "darwin":
                         subprocess.Popen(["open", shortcut["path"]])
-                    else: # Dla Windows i innych
+                    elif sys.platform == "win32":
                         os.startfile(shortcut["path"])
+                    else:
+                        subprocess.Popen(["xdg-open", shortcut["path"]])
                     
                     # Użyj pozycjonowania stereo dla widget activation
                     position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
-                    self.speak_with_position(f"Uruchamiam {shortcut['name']}", position=position)
+                    self.speak_with_position(_("Launching {}").format(shortcut['name']), position=position)
                 except Exception as e:
                     position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
-                    self.speak_with_position(f"Błąd podczas uruchamiania {shortcut['name']}: {e}", position=position)
+                    self.speak_with_position(_("Error launching {}: {}").format(shortcut['name'], e), position=position)
             else:
                 position = (self.current_col / (self.grid_width - 1) * 2.0) - 1.0 if self.grid_width > 1 else 0.0
-                self.speak_with_position("Ten skrót jest pusty.", position=position)
+                self.speak_with_position(_("This shortcut is empty."), position=position)
 
 def get_widget_instance(speak_func):
     return DesktopWidget(speak_func)

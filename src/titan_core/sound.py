@@ -6,6 +6,7 @@ import subprocess
 import atexit
 from threading import Lock
 from src.settings.settings import load_settings
+from src.platform_utils import get_resource_path as _platform_resource_path, IS_WINDOWS, IS_LINUX, IS_MACOS
 
 # Prevent COM cleanup warnings during shutdown
 _com_objects = []
@@ -41,14 +42,7 @@ _mixer_initialized = False
 
 def resource_path(relative_path):
     """Zwraca pełną ścieżkę do plików zasobów, obsługując PyInstaller i Nuitka."""
-    # For both PyInstaller and Nuitka, use executable directory
-    # (data directories are placed next to exe for backward compatibility)
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        base_path = os.path.dirname(sys.executable)
-    else:
-        # Development mode - get project root (2 levels up from src/titan_core/sound.py)
-        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    return os.path.join(base_path, relative_path)
+    return _platform_resource_path(relative_path)
 
 
 def get_sfx_directory():
@@ -63,7 +57,7 @@ def get_available_audio_systems():
     """Zwraca listę dostępnych systemów audio dla danej platformy."""
     systems = []
 
-    if platform.system() == "Windows":
+    if IS_WINDOWS:
         systems.append("Windows Audio (winmm)")
         try:
             import comtypes
@@ -79,23 +73,23 @@ def get_available_audio_systems():
             systems.append("Windows Audio (WASAPI)")
         except ImportError:
             pass
-    elif platform.system() == "Linux":
+    elif IS_LINUX:
         # Check for PulseAudio
         try:
-            subprocess.run(["pactl", "info"], check=True, 
+            subprocess.run(["pactl", "info"], check=True,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             systems.append("PulseAudio")
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
-        
+
         # Check for ALSA
         try:
-            subprocess.run(["amixer", "info"], check=True, 
+            subprocess.run(["amixer", "info"], check=True,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             systems.append("ALSA")
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
-    elif platform.system() == "Darwin":
+    elif IS_MACOS:
         systems.append("macOS Core Audio")
     
     if not systems:
@@ -351,7 +345,7 @@ def set_system_volume(volume):
     global system_volume
     system_volume = volume / 100.0  # Skala 0.0 - 1.0
 
-    if platform.system() == "Windows":
+    if IS_WINDOWS:
         try:
             import ctypes
             devices = ctypes.windll.winmm.waveOutSetVolume
@@ -360,26 +354,26 @@ def set_system_volume(volume):
             devices(0, volume_value)
         except Exception as e:
             print(f"Failed to set system volume on Windows: {e}")
-    elif platform.system() == "Linux":
+    elif IS_LINUX:
         try:
             volume_percent = int(volume)
             # Try PulseAudio first
             try:
-                subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"], 
+                subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"],
                               check=True, stderr=subprocess.DEVNULL)
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Try ALSA as fallback
                 try:
-                    subprocess.run(["amixer", "set", "Master", f"{volume_percent}%"], 
+                    subprocess.run(["amixer", "set", "Master", f"{volume_percent}%"],
                                   check=True, stderr=subprocess.DEVNULL)
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     print("Failed to set system volume on Linux: Neither PulseAudio nor ALSA available")
         except Exception as e:
             print(f"Failed to set system volume on Linux: {e}")
-    elif platform.system() == "Darwin":  # macOS
+    elif IS_MACOS:
         try:
             volume_percent = int(volume)
-            subprocess.run(["osascript", "-e", f"set volume output volume {volume_percent}"], 
+            subprocess.run(["osascript", "-e", f"set volume output volume {volume_percent}"],
                           check=True, stderr=subprocess.DEVNULL)
         except Exception as e:
             print(f"Failed to set system volume on macOS: {e}")

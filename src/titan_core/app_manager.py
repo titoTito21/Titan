@@ -7,6 +7,7 @@ import importlib.util
 from src.settings import settings
 from src.titan_core.sound import play_sound, play_error_sound, play_dialog_sound, play_dialogclose_sound, resource_path
 from src.titan_core.translation import language_code, _
+from src.platform_utils import is_frozen, IS_WINDOWS
 
 
 APP_DIR = resource_path(os.path.join('data', 'applications'))
@@ -15,11 +16,6 @@ SITEPACKAGES_DIR = resource_path(os.path.join('data', 'Titan', 'python_interpret
 # Ensure the sitepackages directory exists
 if not os.path.exists(SITEPACKAGES_DIR):
     os.makedirs(SITEPACKAGES_DIR)
-
-
-def is_frozen():
-    """Check if running in compiled mode (PyInstaller/Nuitka)."""
-    return getattr(sys, 'frozen', False)
 
 
 def get_applications():
@@ -119,7 +115,8 @@ def get_python_executable():
     _debug_log(f"sys.executable={sys.executable}")
 
     if is_frozen():
-        # In compiled mode, use pythonw.exe from _internal directory (GUI apps, no console)
+        # In compiled mode, use python from _internal directory
+        from src.platform_utils import get_python_executable_name
         exe_dir = os.path.dirname(sys.executable)
         internal_dir = os.path.join(exe_dir, '_internal')
 
@@ -131,23 +128,25 @@ def get_python_executable():
             _debug_log(f"ERROR: Internal directory not found")
             return (None, f"Internal directory not found: {internal_dir}")
 
-        # Prefer pythonw.exe for GUI applications (no console window)
-        pythonw_exe = os.path.join(internal_dir, 'pythonw.exe')
-        if os.path.exists(pythonw_exe):
-            _debug_log(f"SUCCESS: Found pythonw.exe")
-            return (pythonw_exe, None)
+        gui_name, console_name = get_python_executable_name()
 
-        # Fallback to python.exe if pythonw.exe not found
-        python_exe = os.path.join(internal_dir, 'python.exe')
-        _debug_log(f"python_exe={python_exe}")
-        _debug_log(f"python_exe exists={os.path.exists(python_exe)}")
+        # Prefer GUI variant (no console window on Windows)
+        gui_exe = os.path.join(internal_dir, gui_name)
+        if os.path.exists(gui_exe):
+            _debug_log(f"SUCCESS: Found {gui_name}")
+            return (gui_exe, None)
 
-        if os.path.exists(python_exe):
-            _debug_log(f"SUCCESS: Found python.exe (fallback)")
-            return (python_exe, None)
+        # Fallback to console variant
+        console_exe = os.path.join(internal_dir, console_name)
+        _debug_log(f"console_exe={console_exe}")
+        _debug_log(f"console_exe exists={os.path.exists(console_exe)}")
+
+        if os.path.exists(console_exe):
+            _debug_log(f"SUCCESS: Found {console_name} (fallback)")
+            return (console_exe, None)
 
         _debug_log(f"ERROR: Python interpreter not found")
-        return (None, f"Python interpreter not found: {python_exe}")
+        return (None, f"Python interpreter not found in: {internal_dir}")
     else:
         # Development mode - use current Python interpreter
         _debug_log(f"Development mode, using sys.executable")
@@ -181,10 +180,19 @@ def find_executable_file(base_path, openfile):
     if os.path.exists(py_file):
         return (py_file, 'py')
 
-    # Check for .exe
-    exe_file = base_name + '.exe'
-    if os.path.exists(exe_file):
-        return (exe_file, 'exe')
+    # Check for executable
+    if IS_WINDOWS:
+        exe_file = base_name + '.exe'
+        if os.path.exists(exe_file):
+            return (exe_file, 'exe')
+    else:
+        # On Linux/macOS, check for executable without extension
+        if os.path.exists(base_name) and os.access(base_name, os.X_OK):
+            return (base_name, 'exe')
+        # macOS .app bundle
+        app_bundle = base_name + '.app'
+        if os.path.exists(app_bundle):
+            return (app_bundle, 'app_bundle')
 
     # Check if original file exists as-is
     if os.path.exists(app_path):
@@ -195,7 +203,7 @@ def find_executable_file(base_path, openfile):
             return (app_path, 'pyc')
         elif ext == '.py':
             return (app_path, 'py')
-        elif ext == '.exe':
+        elif ext == '.exe' or (ext == '' and os.access(app_path, os.X_OK)):
             return (app_path, 'exe')
 
     return (None, None)

@@ -21,10 +21,7 @@ from src.settings.settings import get_setting, load_settings
 from src.titan_core.translation import set_language
 from src.titan_core.skin_manager import get_current_skin, apply_skin_to_window
 
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, open_file_manager, get_system_shutdown_command
 
 # Windows-specific imports
 WIN32_AVAILABLE = False
@@ -74,7 +71,7 @@ class ClassicStartMenu(wx.Frame):
         # Disable TTS in Start Menu to avoid conflicts with screen readers
         self.speaker = None
 
-        self.is_windows = platform.system() == "Windows"
+        self.is_windows = IS_WINDOWS
         self.menu_items = []
         self.current_submenu = None
 
@@ -784,18 +781,16 @@ class ClassicStartMenu(wx.Frame):
                         open_application(tfm_app, documents_path)
                     else:
                         print("TFM application not found")
-                        # Ultimate fallback: open with system explorer
-                        if self.is_windows:
-                            documents_path = os.path.expanduser("~/Documents")
-                            subprocess.run(['explorer', documents_path], shell=True)
-                    
+                        # Ultimate fallback: open with system file manager
+                        documents_path = os.path.expanduser("~/Documents")
+                        open_file_manager(documents_path)
+
                     self.Hide()
                 except Exception as e:
                     print(f"Error opening TFM: {e}")
-                    # Ultimate fallback: open with system explorer
-                    if self.is_windows:
-                        documents_path = os.path.expanduser("~/Documents")
-                        subprocess.run(['explorer', documents_path], shell=True)
+                    # Ultimate fallback: open with system file manager
+                    documents_path = os.path.expanduser("~/Documents")
+                    open_file_manager(documents_path)
             elif action == "shutdown":
                 self.show_shutdown_dialog()
             elif action == "find_files":
@@ -1011,15 +1006,15 @@ class ClassicStartMenu(wx.Frame):
         """Uruchomienie programu"""
         try:
             if program['type'] == 'shortcut' and self.is_windows:
-                # Use Windows startfile for .lnk shortcuts
-                os.startfile(program['path'])
+                # Use platform file opener for shortcuts
+                open_file_manager(program['path'])
             elif program['type'] == 'exe':
                 # Direct executable
                 subprocess.run([program['path']], shell=True)
             else:
                 # Fallback - try to open with system default
-                os.startfile(program['path'])
-            
+                open_file_manager(program['path'])
+
             self.Hide()
             
         except Exception as e:
@@ -1099,24 +1094,12 @@ class ClassicStartMenu(wx.Frame):
             play_sound('ui/applist.ogg')
             
             if result == wx.ID_YES:
-                if self.is_windows:
-                    try:
-                        # Try different Windows shutdown methods
-                        subprocess.run(['shutdown', '/s', '/t', '0'], shell=True)
-                    except Exception:
-                        try:
-                            import ctypes
-                            user32 = ctypes.windll.user32
-                            user32.ExitWindowsEx(0x00000008, 0)  # EWX_SHUTDOWN
-                        except Exception:
-                            # Final fallback - just close the app
-                            self.parent.Close()
-                else:
-                    # Non-Windows systems
-                    try:
-                        subprocess.run(['sudo', 'shutdown', 'now'], shell=True)
-                    except Exception:
-                        self.parent.Close()
+                try:
+                    shutdown_cmd = get_system_shutdown_command()
+                    subprocess.run(shutdown_cmd, shell=(IS_WINDOWS))
+                except Exception:
+                    # Final fallback - just close the app
+                    self.parent.Close()
             
             self.Hide()
             

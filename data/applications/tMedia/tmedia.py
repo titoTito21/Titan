@@ -10,27 +10,54 @@ from Settings import SettingsWindow
 from player import Player  # Import wbudowanego odtwarzacza
 from YoutubeSearch import YoutubeSearchApp  # Importowanie modułu YoutubeSearch
 
+# Screen reader / VoiceOver output via accessible_output3
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _ao3_speaker = _ao3.Auto()
+except Exception:
+    _ao3_speaker = None
+
+
 class TTSThread(threading.Thread):
+    """Lightweight TTS thread backed by accessible_output3.
+
+    Falls back to `say` (macOS) / `espeak` (Linux) / SAPI (Windows)
+    only when accessible_output3 is not available.
+    """
+
     def __init__(self):
-        super().__init__()
+        super().__init__(daemon=True)
         self.message = None
         self._stop_event = threading.Event()
 
     def run(self):
         while not self._stop_event.is_set():
             if self.message:
-                self.speak(self.message)
+                self._do_speak(self.message)
                 self.message = None
+            self._stop_event.wait(timeout=0.05)
+
+    def _do_speak(self, message):
+        try:
+            if _ao3_speaker:
+                _ao3_speaker.speak(message, interrupt=True)
+                return
+        except Exception:
+            pass
+        # Fallback when accessible_output3 unavailable
+        try:
+            if os.name == 'nt':
+                import win32com.client as wincl
+                wincl.Dispatch("SAPI.SpVoice").Speak(message)
+            elif 'darwin' in os.sys.platform:
+                subprocess.run(['say', message], check=False)
+            else:
+                subprocess.run(['spd-say', message], check=False)
+        except Exception:
+            pass
 
     def speak(self, message):
-        if os.name == 'nt':  # Windows
-            import win32com.client as wincl
-            speaker = wincl.Dispatch("SAPI.SpVoice")
-            speaker.Speak(message)
-        elif 'darwin' in os.sys.platform:  # macOS
-            subprocess.run(['say', message])
-        elif os.name == 'posix':  # Linux
-            subprocess.run(['espeak', message])
+        self._do_speak(message)
 
     def interrupt(self):
         self._stop_event.set()
@@ -62,7 +89,8 @@ class TMediaApp(wx.Frame):
 
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        self.function_list = wx.ListBox(panel, choices=["Katalog Mediów", "Wyszukiwarka YouTube"])
+        self.function_list = wx.ListBox(panel, choices=[_("Media Catalog"), _("YouTube Search")])
+        self.function_list.SetName(_("TMedia functions"))
         vbox.Add(self.function_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
         self.function_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_function_select)

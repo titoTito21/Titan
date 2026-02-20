@@ -4,6 +4,7 @@ import requests
 import os
 import sys
 import subprocess
+import shutil
 import time
 from src.titan_core.sound import play_sound, play_focus_sound, play_select_sound
 from src.titan_core.translation import _
@@ -168,7 +169,10 @@ class Updater:
         self.interpreter_url = "http://titosofttitan.com/titan/titan.interpreter.7z"
         self.temp_file = "titan_update.7z"
         self.temp_interpreter_file = "titan_interpreter.7z"
-        self.seven_zip_path = os.path.join("data", "bin", "7z.exe")
+        if sys.platform == 'win32':
+            self.seven_zip_path = os.path.join("data", "bin", "7z.exe")
+        else:
+            self.seven_zip_path = shutil.which("7z") or "7z"
         self.needs_interpreter = False  # Will be set if version ends with 'i'
     
     def get_current_version(self):

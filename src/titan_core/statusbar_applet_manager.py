@@ -14,16 +14,7 @@ import importlib.util
 import threading
 import time
 from typing import Dict, List, Optional, Any
-
-
-def get_project_root():
-    """Get the project root directory."""
-    if getattr(sys, 'frozen', False):
-        # Running as compiled executable
-        return os.path.dirname(sys.executable)
-    else:
-        # Running as script
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.platform_utils import get_base_path as get_project_root
 
 
 class StatusbarAppletManager:

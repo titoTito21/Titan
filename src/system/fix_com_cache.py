@@ -8,7 +8,11 @@ import shutil
 import sys
 
 def clear_comtypes_cache():
-    """Clear comtypes generated cache files."""
+    """Clear comtypes generated cache files (Windows only)."""
+    import platform
+    if platform.system() != 'Windows':
+        print("This utility is only applicable on Windows.")
+        return True
     try:
         # Find comtypes installation
         import comtypes

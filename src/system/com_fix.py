@@ -1,10 +1,12 @@
 """
 COM Error Fix Module
 Provides utilities to prevent VTable errors in COM operations.
+Windows-only module - all functions are no-ops on other platforms.
 """
 import atexit
 import threading
 from functools import wraps
+from src.platform_utils import IS_WINDOWS as _IS_WINDOWS
 
 # Global lock for COM operations
 _com_lock = threading.RLock()
@@ -14,6 +16,9 @@ def com_safe(func):
     """
     Decorator to make COM operations safer by preventing VTable errors.
     """
+    if not _IS_WINDOWS:
+        return func
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         with _com_lock:
@@ -21,14 +26,12 @@ def com_safe(func):
                 return func(*args, **kwargs)
             except (OSError, ValueError, AttributeError) as e:
                 error_msg = str(e).lower()
-                # Check for COM-related errors
                 if any(keyword in error_msg for keyword in [
                     "com method call without vtable",
                     "access violation",
                     "activate",
                     "audiodevice"
                 ]):
-                    # COM error - return None or safe default
                     return None
                 raise
     return wrapper
@@ -37,14 +40,16 @@ def init_com_safe():
     """
     Initialize COM in a safer way to prevent VTable errors.
     """
+    if not _IS_WINDOWS:
+        return
     try:
         import pythoncom
         thread_id = threading.get_ident()
-        
+
         if thread_id not in _com_initialized:
             pythoncom.CoInitialize()
             _com_initialized.add(thread_id)
-            
+
     except Exception:
         pass
 
@@ -52,23 +57,22 @@ def cleanup_com_on_exit():
     """
     Cleanup function to be called on program exit.
     """
+    if not _IS_WINDOWS:
+        return
     try:
         import pythoncom
         import gc
-        
-        # Only cleanup if we're the main thread
+
         if threading.current_thread() is threading.main_thread():
-            # Force garbage collection before COM cleanup
             gc.collect()
-            
+
             for thread_id in _com_initialized:
                 try:
                     pythoncom.CoUninitialize()
                 except:
                     pass
             _com_initialized.clear()
-            
-            # Final garbage collection after COM cleanup
+
             gc.collect()
     except:
         pass

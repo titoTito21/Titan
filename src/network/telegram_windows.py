@@ -1027,14 +1027,16 @@ class IncomingCallDialog(wx.Dialog):
         self.Raise()
         self.RequestUserAttention(wx.USER_ATTENTION_ERROR)
 
-        try:
-            import ctypes
-            hwnd = self.GetHandle()
-            if hwnd:
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
-        except Exception:
-            pass
+        import sys
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                hwnd = self.GetHandle()
+                if hwnd:
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+            except Exception:
+                pass
 
         # Ring timer
         self.ring_timer = wx.Timer(self)

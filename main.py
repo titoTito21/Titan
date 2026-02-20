@@ -13,121 +13,123 @@ import os
 import sys
 import signal
 import gc
+import platform
 
-# Suppress COM errors BEFORE any imports
-try:
-    import warnings
-    warnings.filterwarnings("ignore", message=".*COM.*")
-    warnings.filterwarnings("ignore", category=UserWarning, module="comtypes")
-    
-    class COMErrorSuppressor:
-        def __init__(self):
-            self.original_stderr = sys.stderr
-            self.buffer = ""
-            self.suppress_until_newline = 0
+# Ensure project root is in sys.path (needed on macOS / when run from other directories)
+_project_root = os.path.dirname(os.path.abspath(__file__))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-        def write(self, text):
-            # Suppress single colons/punctuation (COM error fragments)
-            if text.strip() in [':', '', ' ']:
-                return
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 
-            # Simple aggressive suppression: if buffer + text contains error keywords, suppress everything
-            self.buffer += text
+# Suppress COM errors BEFORE any imports (Windows only)
+if IS_WINDOWS:
+    try:
+        import warnings
+        warnings.filterwarnings("ignore", message=".*COM.*")
+        warnings.filterwarnings("ignore", category=UserWarning, module="comtypes")
 
-            # Check for error patterns in buffer
-            buffer_lower = self.buffer.lower()
-
-            # Suppress if we see these keywords
-            if any(keyword in buffer_lower for keyword in [
-                "systemerror", "valueerror", "comtypes", "com method",
-                "__del__", "unknwn", "iunknown", "traceback", "gwspeak", "jfwapi",
-                "win32 exception", "releasing iunknown", "exception occurred"
-            ]):
-                self.suppress_until_newline = 100  # Suppress next 100 writes (increased)
+        class COMErrorSuppressor:
+            def __init__(self):
+                self.original_stderr = sys.stderr
                 self.buffer = ""
-                return
+                self.suppress_until_newline = 0
 
-            # If suppressing, count down
-            if self.suppress_until_newline > 0:
-                self.suppress_until_newline -= 1
-                self.buffer = ""
-                return
+            def write(self, text):
+                if text.strip() in [':', '', ' ']:
+                    return
+                self.buffer += text
+                buffer_lower = self.buffer.lower()
+                if any(keyword in buffer_lower for keyword in [
+                    "systemerror", "valueerror", "comtypes", "com method",
+                    "__del__", "unknwn", "iunknown", "traceback", "gwspeak", "jfwapi",
+                    "win32 exception", "releasing iunknown", "exception occurred"
+                ]):
+                    self.suppress_until_newline = 100
+                    self.buffer = ""
+                    return
+                if self.suppress_until_newline > 0:
+                    self.suppress_until_newline -= 1
+                    self.buffer = ""
+                    return
+                if len(self.buffer) > 200 or '\n' in self.buffer:
+                    self.original_stderr.write(self.buffer)
+                    self.buffer = ""
 
-            # If buffer gets too large without errors, flush it
-            if len(self.buffer) > 200 or '\n' in self.buffer:
-                self.original_stderr.write(self.buffer)
-                self.buffer = ""
+            def flush(self):
+                if self.suppress_until_newline == 0 and self.buffer:
+                    self.original_stderr.write(self.buffer)
+                    self.buffer = ""
+                self.original_stderr.flush()
 
-        def flush(self):
-            # Only flush non-error content
-            if self.suppress_until_newline == 0 and self.buffer:
-                self.original_stderr.write(self.buffer)
-                self.buffer = ""
-            self.original_stderr.flush()
-    
-    sys.stderr = COMErrorSuppressor()
-except Exception as e:
-    pass
+        sys.stderr = COMErrorSuppressor()
+    except Exception as e:
+        pass
 
 import accessible_output3.outputs.auto
 
 # Import libraries used by components for compilation compatibility
 try:
-    import platform
     import subprocess
     import configparser
     import json
-    import keyboard
+    if not IS_MACOS:
+        # On macOS, keyboard import can hang without Accessibility permissions
+        import keyboard
     import speech_recognition as sr
     import pygame
     import random
     import psutil
-    if platform.system() == 'Windows':
+    if IS_WINDOWS:
         import win32com.client
-        import pythoncom  # For TitanScreenReader component
+        import pythoncom
         import win32gui
         import win32process
         import win32api
         import win32con
         import comtypes
         from pycaw.pycaw import AudioUtilities
-        from ctypes import wintypes  # For TitanScreenReader component
-    elif platform.system() == 'Linux':
-        import alsaaudio
-    # Other potential libraries used by components
+        from ctypes import wintypes
+    elif IS_LINUX:
+        try:
+            import alsaaudio
+        except ImportError:
+            pass
     import time
     import random
     import threading
     import os
     import sys
-    from bg5reader import bg5reader
-    
+    try:
+        from bg5reader import bg5reader
+    except ImportError:
+        pass
+
     # Import libraries used by widgets (applets) for compilation compatibility
     import gettext
     import glob
-    if platform.system() == "Windows":
-        # Additional Windows-specific imports for taskbar widget
+    if IS_WINDOWS:
         import win32con
     try:
         import pywinctl as pwc
     except ImportError:
-        pass  # pywinctl is optional
-    # Other widget dependencies
+        pass
     import typing
     from typing import List, Dict, Optional
-    
+
 except ImportError as e:
     print(f"Warning: Could not import component/widget library: {e}")
 
-# Fix COM errors early
-try:
-    from src.system.com_fix import suppress_com_errors, init_com_safe
-    suppress_com_errors()
-    init_com_safe()
-except ImportError:
-    pass
-except Exception as e:
-    pass
+# Fix COM errors early (Windows only)
+if IS_WINDOWS:
+    try:
+        from src.system.com_fix import suppress_com_errors, init_com_safe
+        suppress_com_errors()
+        init_com_safe()
+    except ImportError:
+        pass
+    except Exception as e:
+        pass
 from src.ui.gui import TitanApp
 from src.titan_core.sound import play_startup_sound, initialize_sound, set_theme, play_sound
 from src.settings.settings import get_setting, set_setting, load_settings, save_settings, SETTINGS_FILE_PATH
@@ -141,7 +143,11 @@ from src.titan_core.app_manager import find_application_by_shortname, open_appli
 from src.titan_core.game_manager import *
 from src.titan_core.component_manager import ComponentManager
 from src.ui.menu import MenuBar
-from src.system.lockscreen_monitor_improved import start_lock_monitoring
+if IS_WINDOWS:
+    from src.system.lockscreen_monitor_improved import start_lock_monitoring
+else:
+    def start_lock_monitoring():
+        print("Lock screen monitoring is only available on Windows")
 from src.titan_core.tce_system import start_system_hooks
 from src.system.system_monitor import initialize_system_monitor
 from src.system.updater import check_for_updates_on_startup
@@ -151,7 +157,11 @@ from src.system.updater import check_for_updates_on_startup
 _ = set_language(get_setting('language', get_system_language()))
 
 VERSION = "0.5"
-speaker = accessible_output3.outputs.auto.Auto()
+try:
+    speaker = accessible_output3.outputs.auto.Auto()
+except Exception as _e:
+    print(f"Warning: Could not initialize accessible_output3: {_e}")
+    speaker = None
 
 # Global flag for graceful shutdown
 _shutdown_requested = False
@@ -228,7 +238,8 @@ def main(command_line_args=None):
                 # Mówienie tekstu w osobnym wątku po odczekaniu 1 sekundy (nie blokuje głównego wątku)
                 def delayed_speech():
                     time.sleep(1)  # Odczekaj w tle
-                    speaker.speak(_("Welcome to Titan: Version {}").format(VERSION))
+                    if speaker:
+                        speaker.speak(_("Welcome to Titan: Version {}").format(VERSION))
 
                 speech_thread = threading.Thread(target=delayed_speech, daemon=True)
                 speech_thread.start()
@@ -1124,11 +1135,12 @@ if __name__ == "__main__":
         # AI is now managed by the AI component
         # Shutdown happens automatically through component manager
 
-        # Additional cleanup for COM objects
-        try:
-            from src.system.com_fix import cleanup_com_on_exit
-            cleanup_com_on_exit()
-        except:
-            pass
+        # Additional cleanup for COM objects (Windows only)
+        if IS_WINDOWS:
+            try:
+                from src.system.com_fix import cleanup_com_on_exit
+                cleanup_com_on_exit()
+            except:
+                pass
 
         print("Cleanup completed")

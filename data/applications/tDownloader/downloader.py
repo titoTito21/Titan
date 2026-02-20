@@ -9,7 +9,6 @@ import requests
 import subprocess
 import sys
 from datetime import datetime
-import pyttsx3
 from wx.lib.newevent import NewCommandEvent
 import shutil
 from translation import _
@@ -17,8 +16,12 @@ from translation import _
 # Inicjalizacja Pygame do efektów dźwiękowych
 pygame.mixer.init()
 
-# Inicjalizacja pyttsx3 do komunikatów głosowych
-engine = pyttsx3.init()
+# Screen reader output (VoiceOver / NVDA / JAWS) via accessible_output3
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _ao3_speaker = _ao3.Auto()
+except Exception:
+    _ao3_speaker = None
 
 # Definicja efektów dźwiękowych
 START_SOUND = "sfx/start.ogg"
@@ -30,8 +33,26 @@ def play_sound(sound_file):
     sound.play()
 
 def speak_message(message):
-    engine.say(message)
-    engine.runAndWait()
+    """Announce a message via accessible_output3 with cross-platform fallback."""
+    # 1) accessible_output3 – preferred (integrates with active screen reader)
+    if _ao3_speaker:
+        try:
+            _ao3_speaker.speak(message, interrupt=True)
+            return
+        except Exception:
+            pass
+    # 2) Platform fallback when ao3 is unavailable
+    try:
+        _sys = platform.system()
+        if _sys == 'Windows':
+            import win32com.client
+            win32com.client.Dispatch("SAPI.SpVoice").Speak(message)
+        elif _sys == 'Darwin':
+            subprocess.Popen(['say', message])
+        else:  # Linux
+            subprocess.Popen(['spd-say', message])
+    except Exception:
+        pass
 
 def get_notifications_path():
     if platform.system() == 'Windows':
@@ -115,11 +136,13 @@ class TitanDownloadManager(wx.Frame):
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT)
         self.list_ctrl.InsertColumn(0, _('Nazwa Pliku'), width=140)
         self.list_ctrl.InsertColumn(1, _('Link do Pobrania'), width=300)
+        self.list_ctrl.SetName(_('Download list'))
+        open_folder_btn.SetName(_('Open downloads folder'))
 
         self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.OnRightClick, self.list_ctrl)
 
         vbox.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 20)
-        
+
         self.load_download_list()
         
         menubar = wx.MenuBar()

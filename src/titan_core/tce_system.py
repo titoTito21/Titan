@@ -9,10 +9,7 @@ from src.settings.settings import get_setting
 from src.titan_core.app_manager import find_application_by_shortname, open_application
 from src.titan_core.translation import _
 
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -57,6 +54,9 @@ class SystemHooksManager:
     
     def start_system_interface_hooks(self):
         """Start system interface hooks - Windows key, Escape key, Windows+E, and Windows+B"""
+        if not IS_WINDOWS:
+            print("INFO: System interface hooks are only available on Windows")
+            return
         if self.windows_e_hook_active:
             return
 

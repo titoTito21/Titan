@@ -12,19 +12,7 @@ import configparser
 import importlib.util
 import threading
 import types
-
-
-def _get_base_path():
-    """Get base path for resources, supporting PyInstaller and Nuitka."""
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-
-def _is_frozen():
-    """Check if running as compiled executable."""
-    return hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False)
+from src.platform_utils import get_base_path as _get_base_path, is_frozen as _is_frozen
 
 
 class LauncherConfig:

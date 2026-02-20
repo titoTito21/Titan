@@ -25,6 +25,7 @@ from src.ui.invisibleui import InvisibleUI
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 from src.ui.shutdown_question import show_shutdown_dialog
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 from src.ui.classic_start_menu import create_classic_start_menu
 from src.ui.help import show_help
 from src.controller.controller_vibrations import (
@@ -54,7 +55,19 @@ def _get_base_path():
 PROJECT_ROOT = _get_base_path()
 SKINS_DIR = os.path.join(PROJECT_ROOT, 'skins')
 DEFAULT_SKIN_NAME = _("Default")
-speaker = accessible_output3.outputs.auto.Auto()
+
+class _SilentSpeaker:
+    """No-op fallback used when accessible_output3 cannot be initialized."""
+    def speak(self, text, **kwargs):
+        pass
+    def braille(self, text, **kwargs):
+        pass
+
+try:
+    speaker = accessible_output3.outputs.auto.Auto()
+except Exception as _e:
+    print(f"Warning: Could not initialize accessible_output3 in gui: {_e}")
+    speaker = _SilentSpeaker()
 
 class TaskBarIcon(wx.adv.TaskBarIcon):
     def __init__(self, frame, version, skin_data):
@@ -219,7 +232,7 @@ class TitanApp(wx.Frame):
             # Inicjalizacja Start Menu (tylko dla Windows) - zawsze klasyczne
             # Defer Start Menu creation to avoid blocking during initialization
             self.start_menu = None
-            if platform.system() == "Windows":
+            if IS_WINDOWS:
                 # Create Start Menu later using CallAfter to avoid blocking
                 wx.CallAfter(self._create_start_menu_deferred)
 
@@ -244,6 +257,10 @@ class TitanApp(wx.Frame):
                     self.apply_selected_skin()
                     self.show_app_list()
                     print("[GUI] UI initialization complete")
+                    # macOS: ensure the window is brought to the foreground so
+                    # VoiceOver can detect it immediately after launch
+                    if IS_MACOS:
+                        wx.CallAfter(self._activate_macos_window)
                 except Exception as e:
                     print(f"Error initializing UI: {e}")
                     import traceback
@@ -314,7 +331,7 @@ class TitanApp(wx.Frame):
                 self.apply_selected_skin()
 
                 # Refresh Start Menu with new skin
-                if platform.system() == "Windows" and self.start_menu:
+                if IS_WINDOWS and self.start_menu:
                     try:
                         self.start_menu.apply_skin_settings()
                     except Exception as e:
@@ -492,6 +509,37 @@ class TitanApp(wx.Frame):
         self.SetSize((600, 800))
         self.SetTitle(_("Titan App Suite"))
         self.Centre()
+
+        # macOS: configure VoiceOver accessibility names for all controls
+        if IS_MACOS:
+            self._setup_macos_voiceover()
+
+    def _activate_macos_window(self):
+        """Bring the window to the foreground on macOS so VoiceOver detects it."""
+        try:
+            self.Show(True)
+            self.Raise()
+            self.SetFocus()
+        except Exception as e:
+            print(f"Warning: macOS window activation failed: {e}")
+
+    def _setup_macos_voiceover(self):
+        """Set accessible names on controls so VoiceOver announces them correctly."""
+        try:
+            self.app_listbox.SetName(_("Application List"))
+            self.game_tree.SetName(_("Game List"))
+            self.network_listbox.SetName(_("Titan IM"))
+            self.users_listbox.SetName(_("Online Users"))
+            self.statusbar_listbox.SetName(_("Status Bar"))
+            self.message_input.SetName(_("Type a message"))
+            self.username_text.SetName(_("Phone number with country code"))
+            self.password_text.SetName(_("2FA password"))
+            self.login_button.SetName(_("Log in"))
+            self.create_account_button.SetName(_("Create account"))
+            self.logout_button.SetName(_("Log out"))
+            print("[GUI] macOS VoiceOver accessibility names configured")
+        except Exception as e:
+            print(f"Warning: Failed to configure VoiceOver accessibility names: {e}")
 
     def load_skin_data(self, skin_name):
         skin_data = {
@@ -1178,7 +1226,7 @@ class TitanApp(wx.Frame):
 
         # Handle Alt+F1 (Start Menu) - Linux style only
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_ALT:
-            if self.start_menu and platform.system() == "Windows":
+            if self.start_menu and IS_WINDOWS:
                 self.start_menu.toggle_menu()
                 return
 
@@ -1683,8 +1731,6 @@ class TitanApp(wx.Frame):
         """Show Telegram login using telegram_gui.py"""
         try:
             from src.network.telegram_gui import show_telegram_login
-            import accessible_output3.outputs.auto
-            speaker = accessible_output3.outputs.auto.Auto()
 
             print("[GUI] Opening Telegram login from telegram_gui.py")
 
@@ -2092,9 +2138,6 @@ class TitanApp(wx.Frame):
     def show_telegram_options(self):
         """Show Telegram window"""
         try:
-            import accessible_output3.outputs.auto
-            speaker = accessible_output3.outputs.auto.Auto()
-
             # Check if window already exists
             if "telegram" in self.active_services and "window" in self.active_services["telegram"]:
                 window = self.active_services["telegram"]["window"]
@@ -2240,8 +2283,6 @@ class TitanApp(wx.Frame):
         result = telegram_client.login(phone_number, twofa_password)
         if result.get("status") == "success":
             # Use TTS to announce connection attempt
-            import accessible_output3.outputs.auto
-            speaker = accessible_output3.outputs.auto.Auto()
             speaker.speak(_("Connecting to Telegram..."))
             
             # Start Telegram connection
@@ -2481,9 +2522,9 @@ class TitanApp(wx.Frame):
         event.Skip()
 
     def open_time_settings(self):
-        if platform.system() == "Windows":
+        if IS_WINDOWS:
             subprocess.run(["control", "timedate.cpl"])
-        elif platform.system() == "Linux":
+        elif IS_LINUX:
             try:
                 # Try common Linux time/date settings applications
                 settings_apps = [
@@ -2514,7 +2555,7 @@ class TitanApp(wx.Frame):
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
                 wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Darwin":
+        elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
             except Exception as e:
@@ -2523,12 +2564,12 @@ class TitanApp(wx.Frame):
             wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_power_settings(self):
-        if platform.system() == "Windows":
+        if IS_WINDOWS:
             try:
                 subprocess.run(["control", "powercfg.cpl"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Linux":
+        elif IS_LINUX:
             try:
                 # Try common Linux power management applications
                 power_apps = [
@@ -2574,7 +2615,7 @@ class TitanApp(wx.Frame):
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
                 wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Darwin":
+        elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"], check=True)
             except Exception as e:
@@ -2583,12 +2624,12 @@ class TitanApp(wx.Frame):
             wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_volume_mixer(self):
-        if platform.system() == "Windows":
+        if IS_WINDOWS:
             try:
                 subprocess.run(["sndvol.exe"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Linux":
+        elif IS_LINUX:
             try:
                 # Try common Linux audio control applications
                 audio_apps = [
@@ -2623,7 +2664,7 @@ class TitanApp(wx.Frame):
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
                 wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Darwin":
+        elif IS_MACOS:
             try:
                 subprocess.run(["open", "/Applications/Utilities/Audio MIDI Setup.app"], check=True)
             except Exception as e:
@@ -2679,12 +2720,12 @@ class TitanApp(wx.Frame):
                 pass
         
         # Fallback to system network settings
-        if platform.system() == "Windows":
+        if IS_WINDOWS:
             try:
                 subprocess.run(["explorer", "ms-settings:network-status"], check=True)
             except Exception as e:
                  wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Linux":
+        elif IS_LINUX:
             try:
                 # Try common Linux network management applications
                 network_apps = [
@@ -2732,7 +2773,7 @@ class TitanApp(wx.Frame):
                                          _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
                 wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
-        elif platform.system() == "Darwin":
+        elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
             except Exception as e:

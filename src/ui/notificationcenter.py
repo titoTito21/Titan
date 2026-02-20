@@ -2,22 +2,23 @@ import os
 import platform
 import threading
 import time
-import wmi
 import accessible_output3.outputs.auto
 from src.titan_core.sound import play_sound
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_user_data_dir
+
+if IS_WINDOWS:
+    try:
+        import wmi
+    except ImportError:
+        wmi = None
+else:
+    wmi = None
 
 # Inicjalizacja mówienia
 speaker = accessible_output3.outputs.auto.Auto()
 
 def get_notifications_path():
-    if platform.system() == 'Windows':
-        return os.path.join(os.getenv('APPDATA'), 'titosoft', 'Titan', 'bg5notifications.tno')
-    elif platform.system() == 'Linux':
-        return os.path.expanduser('~/.config/titosoft/Titan/bg5notifications.tno')
-    elif platform.system() == 'Darwin':  # macOS
-        return os.path.expanduser('~/Library/Application Support/titosoft/Titan/bg5notifications.tno')
-    else:
-        raise NotImplementedError('Unsupported platform')
+    return os.path.join(get_user_data_dir(), 'bg5notifications.tno')
 
 NOTIFICATIONS_FILE_PATH = get_notifications_path()
 
@@ -40,7 +41,9 @@ def show_notification(title, message):
     speaker.speak(f"{title}, {message}")
 
 def _monitor_network_events():
-    """Wątek monitorujący zmiany w połączeniach sieciowych."""
+    """Network monitoring using WMI (Windows only)."""
+    if not IS_WINDOWS:
+        return
     import pythoncom
     pythoncom.CoInitialize()
     try:
@@ -67,28 +70,71 @@ def _monitor_network_events():
                 # Wait for a connection or disconnection event
                 connect_event = connect_watcher(timeout_ms=50)
                 if connect_event:
-                    adapter = connect_event.TargetInstance
-                    # It's not straightforward to get the NetConnectionID from here,
-                    # so we'll use a more generic message.
-                    show_notification("Windows", "Połączono z siecią")
+                    show_notification("System", "Connected to network")
 
                 disconnect_event = disconnect_watcher(timeout_ms=50)
                 if disconnect_event:
-                    show_notification("Windows", "Rozłączono z siecią")
-                
+                    show_notification("System", "Disconnected from network")
+
                 time.sleep(0.1) # Small sleep to prevent high CPU usage
 
             except wmi.x_wmi_timed_out:
                 continue
             except Exception as e:
-                print(f"Błąd w monitorowaniu sieci: {e}")
+                print(f"Error in network monitoring: {e}")
                 time.sleep(10)
     finally:
         pythoncom.CoUninitialize()
 
+def _monitor_network_events_crossplatform():
+    """Cross-platform network monitoring using psutil polling."""
+    try:
+        import psutil
+    except ImportError:
+        print("psutil not available, network monitoring disabled")
+        return
+
+    def _get_active_connections():
+        """Get set of active network interface addresses."""
+        addrs = {}
+        try:
+            stats = psutil.net_if_stats()
+            for iface, stat in stats.items():
+                if stat.isup and iface != 'lo':
+                    addrs[iface] = stat.isup
+        except Exception:
+            pass
+        return addrs
+
+    last_state = _get_active_connections()
+
+    while True:
+        try:
+            time.sleep(5)
+            current_state = _get_active_connections()
+
+            # Detect new connections
+            for iface in current_state:
+                if iface not in last_state:
+                    show_notification("System", "Connected to network")
+                    break
+
+            # Detect disconnections
+            for iface in last_state:
+                if iface not in current_state:
+                    show_notification("System", "Disconnected from network")
+                    break
+
+            last_state = current_state
+        except Exception as e:
+            print(f"Error in network monitoring: {e}")
+            time.sleep(10)
+
 def start_monitoring():
     """Uruchamia monitorowanie zdarzeń systemowych w tle."""
-    if platform.system() == 'Windows':
-        # Monitorowanie sieci
+    if IS_WINDOWS:
         network_thread = threading.Thread(target=_monitor_network_events, daemon=True)
+        network_thread.start()
+    else:
+        network_thread = threading.Thread(target=_monitor_network_events_crossplatform, daemon=True)
         network_thread.start()
