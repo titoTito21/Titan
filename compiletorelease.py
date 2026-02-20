@@ -2,6 +2,7 @@
 TCE Launcher Compilation Script
 Compiles the application to a directory structure using PyInstaller.
 Automatically detects and includes dependencies from all applications and games.
+Supports Windows, macOS, and Linux builds.
 """
 
 import subprocess
@@ -10,7 +11,15 @@ import shutil
 import os
 import re
 import ast
+import platform
 from pathlib import Path
+
+IS_WINDOWS = platform.system() == 'Windows'
+IS_MACOS = platform.system() == 'Darwin'
+IS_LINUX = platform.system() == 'Linux'
+
+# PyInstaller --add-data separator differs by platform
+DATA_SEP = ';' if IS_WINDOWS else ':'
 
 def scan_python_imports(file_path):
     """
@@ -160,15 +169,23 @@ def compile_to_release():
         "--noconfirm",  # Overwrite without asking
     ]
 
-    # Add icon if exists
-    if (root_dir / "icon.ico").exists():
+    # Add icon if exists (platform-specific format)
+    if IS_WINDOWS and (root_dir / "icon.ico").exists():
         cmd.extend(["--icon", "icon.ico"])
+    elif IS_MACOS and (root_dir / "icon.icns").exists():
+        cmd.extend(["--icon", "icon.icns"])
+    elif (root_dir / "icon.ico").exists():
+        cmd.extend(["--icon", "icon.ico"])
+
+    # macOS-specific options
+    if IS_MACOS:
+        cmd.extend(["--osx-bundle-identifier", "com.titosoft.tce-launcher"])
 
     # Add data directories
     for src, dst in data_dirs:
         src_path = root_dir / src
         if src_path.exists():
-            cmd.extend(["--add-data", f"{src};{dst}"])
+            cmd.extend(["--add-data", f"{src}{DATA_SEP}{dst}"])
 
     print("Step 2: Building PyInstaller command...")
     print("-" * 70)
@@ -179,9 +196,6 @@ def compile_to_release():
         "accessible_output3",
         "accessible_output3.outputs",
         "accessible_output3.outputs.auto",
-        "accessible_output3.outputs.sapi5",
-        "accessible_output3.outputs.nvda",
-        "accessible_output3.outputs.jaws",
 
         # GUI
         "wx",
@@ -196,24 +210,6 @@ def compile_to_release():
         "pygame",
         "pygame.mixer",
 
-        # Windows COM and system
-        "comtypes",
-        "comtypes.client",
-        "comtypes.stream",
-        "win32com",
-        "win32com.client",
-        "pythoncom",
-        "pywintypes",
-        "win32api",
-        "win32con",
-        "win32gui",
-        "win32process",
-        "pywin32_system32",
-
-        # Audio control
-        "pycaw",
-        "pycaw.pycaw",
-
         # Network
         "websockets",
         "websockets.client",
@@ -223,18 +219,15 @@ def compile_to_release():
 
         # Async
         "asyncio",
-        "asyncio.windows_events",
 
         # Speech recognition
         "speech_recognition",
 
         # Keyboard/input
         "keyboard",
-        "pywinctl",
 
         # System
         "psutil",
-        "wmi",
 
         # i18n
         "babel",
@@ -274,6 +267,7 @@ def compile_to_release():
 
         # Project modules
         "src",
+        "src.platform_utils",
         "src.ui",
         "src.ui.gui",
         "src.ui.invisibleui",
@@ -320,6 +314,36 @@ def compile_to_release():
         "src.controller.controller_vibrations",
     ]
 
+    # Platform-specific hidden imports
+    if IS_WINDOWS:
+        hidden_imports.extend([
+            # Screen reader outputs (Windows-specific)
+            "accessible_output3.outputs.sapi5",
+            "accessible_output3.outputs.nvda",
+            "accessible_output3.outputs.jaws",
+            # Windows COM and system
+            "comtypes",
+            "comtypes.client",
+            "comtypes.stream",
+            "win32com",
+            "win32com.client",
+            "pythoncom",
+            "pywintypes",
+            "win32api",
+            "win32con",
+            "win32gui",
+            "win32process",
+            "pywin32_system32",
+            # Audio control (Windows)
+            "pycaw",
+            "pycaw.pycaw",
+            # Windows async
+            "asyncio.windows_events",
+            # Windows system
+            "wmi",
+            "pywinctl",
+        ])
+
     # Add scanned dependencies from applications and games
     for dep in sorted(app_dependencies):
         if dep not in hidden_imports:
@@ -358,13 +382,27 @@ def compile_to_release():
 
         # Move data directories from _internal to main directory
         output_dir = dist_dir / "TCE Launcher"
-        internal_dir = output_dir / "_internal"
+        if IS_MACOS:
+            # macOS .app bundle: output is in TCE Launcher.app
+            app_bundle = dist_dir / "TCE Launcher.app"
+            if app_bundle.exists():
+                output_dir = app_bundle / "Contents" / "MacOS"
+                internal_dir = output_dir / "_internal"
+            else:
+                internal_dir = output_dir / "_internal"
+        else:
+            internal_dir = output_dir / "_internal"
 
         dirs_to_move = ["data", "languages", "sfx", "skins"]
 
         for dir_name in dirs_to_move:
             src = internal_dir / dir_name
             dst = output_dir / dir_name
+            if IS_MACOS and app_bundle.exists():
+                # On macOS .app bundle, move resources to Contents/Resources/
+                resources_dir = dist_dir / "TCE Launcher.app" / "Contents" / "Resources"
+                resources_dir.mkdir(parents=True, exist_ok=True)
+                dst = resources_dir / dir_name
             if src.exists():
                 if dst.exists():
                     shutil.rmtree(dst)
@@ -374,46 +412,66 @@ def compile_to_release():
         # Copy Python interpreter to _internal
         print("Copying Python interpreter to _internal...")
         python_src = Path(sys.executable)
-        python_dst = internal_dir / "python.exe"
-        if python_src.exists():
-            shutil.copy(str(python_src), str(python_dst))
-            print(f"  Copied: _internal/python.exe")
 
-        # Also copy pythonw.exe for windowless execution (if exists)
-        pythonw_src = python_src.parent / "pythonw.exe"
-        if pythonw_src.exists():
-            pythonw_dst = internal_dir / "pythonw.exe"
-            shutil.copy(str(pythonw_src), str(pythonw_dst))
-            print(f"  Copied: _internal/pythonw.exe")
+        if IS_WINDOWS:
+            python_dst = internal_dir / "python.exe"
+            if python_src.exists():
+                shutil.copy(str(python_src), str(python_dst))
+                print(f"  Copied: _internal/python.exe")
 
-        # Copy python3XX.dll - required for python.exe to run
-        python_version = f"{sys.version_info.major}{sys.version_info.minor}"
-        python_dll_name = f"python{python_version}.dll"
-        python_dll_src = python_src.parent / python_dll_name
-        if python_dll_src.exists():
-            python_dll_dst = internal_dir / python_dll_name
-            shutil.copy(str(python_dll_src), str(python_dll_dst))
-            print(f"  Copied: _internal/{python_dll_name}")
+            # Also copy pythonw.exe for windowless execution (if exists)
+            pythonw_src = python_src.parent / "pythonw.exe"
+            if pythonw_src.exists():
+                pythonw_dst = internal_dir / "pythonw.exe"
+                shutil.copy(str(pythonw_src), str(pythonw_dst))
+                print(f"  Copied: _internal/pythonw.exe")
+
+            # Copy python3XX.dll - required for python.exe to run
+            python_version = f"{sys.version_info.major}{sys.version_info.minor}"
+            python_dll_name = f"python{python_version}.dll"
+            python_dll_src = python_src.parent / python_dll_name
+            if python_dll_src.exists():
+                python_dll_dst = internal_dir / python_dll_name
+                shutil.copy(str(python_dll_src), str(python_dll_dst))
+                print(f"  Copied: _internal/{python_dll_name}")
+            else:
+                print(f"  Warning: {python_dll_name} not found at {python_dll_src}")
+                existing_dll = list(internal_dir.glob(f"python*.dll"))
+                if existing_dll:
+                    print(f"  Note: Found existing Python DLL in _internal: {existing_dll[0].name}")
+
+            # Copy vcruntime140.dll - required for python.exe to run
+            vcruntime_src = python_src.parent / "vcruntime140.dll"
+            if vcruntime_src.exists():
+                vcruntime_dst = internal_dir / "vcruntime140.dll"
+                shutil.copy(str(vcruntime_src), str(vcruntime_dst))
+                print(f"  Copied: _internal/vcruntime140.dll")
+            else:
+                if not (internal_dir / "vcruntime140.dll").exists():
+                    print(f"  Warning: vcruntime140.dll not found - python.exe may not run")
         else:
-            print(f"  Warning: {python_dll_name} not found at {python_dll_src}")
-            # Try to find it in Windows system directory
-            import ctypes
-            system_dir = Path(ctypes.windll.kernel32.GetSystemDirectoryW(None, 0))
-            # Alternative: check if it's already in _internal from PyInstaller
-            existing_dll = list(internal_dir.glob(f"python*.dll"))
-            if existing_dll:
-                print(f"  Note: Found existing Python DLL in _internal: {existing_dll[0].name}")
+            # Linux/macOS: copy python3
+            python_name = "python3"
+            python_dst = internal_dir / python_name
+            if python_src.exists():
+                shutil.copy(str(python_src), str(python_dst))
+                os.chmod(str(python_dst), 0o755)
+                print(f"  Copied: _internal/{python_name}")
 
-        # Copy vcruntime140.dll - required for python.exe to run
-        vcruntime_src = python_src.parent / "vcruntime140.dll"
-        if vcruntime_src.exists():
-            vcruntime_dst = internal_dir / "vcruntime140.dll"
-            shutil.copy(str(vcruntime_src), str(vcruntime_dst))
-            print(f"  Copied: _internal/vcruntime140.dll")
-        else:
-            # Check if already exists in _internal (PyInstaller may have copied it)
-            if not (internal_dir / "vcruntime140.dll").exists():
-                print(f"  Warning: vcruntime140.dll not found - python.exe may not run")
+            # Copy libpythonX.Y shared library if needed
+            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+            if IS_LINUX:
+                lib_names = [f"libpython{python_version}.so.1.0", f"libpython{python_version}.so"]
+            else:  # macOS
+                lib_names = [f"libpython{python_version}.dylib"]
+            for lib_name in lib_names:
+                lib_src = python_src.parent / lib_name
+                if not lib_src.exists():
+                    lib_src = python_src.parent.parent / "lib" / lib_name
+                if lib_src.exists():
+                    shutil.copy(str(lib_src), str(internal_dir / lib_name))
+                    print(f"  Copied: _internal/{lib_name}")
+                    break
 
         # Create standard Python directory structure: Lib/site-packages
         print("Creating standard Python directory structure...")
@@ -447,7 +505,10 @@ def compile_to_release():
 
         # Also copy standard library (Lib folder) from Python installation
         print("Copying standard library from Python installation...")
-        python_lib_dir = Path(sys.executable).parent / "Lib"
+        if IS_WINDOWS:
+            python_lib_dir = Path(sys.executable).parent / "Lib"
+        else:
+            python_lib_dir = Path(sys.executable).parent.parent / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"
         if python_lib_dir.exists():
             stdlib_count = 0
             for item in python_lib_dir.iterdir():
@@ -467,22 +528,23 @@ def compile_to_release():
                     print(f"    Warning: Could not copy {item.name}: {e}")
             print(f"  Copied {stdlib_count} standard library items to Lib/")
 
-        # Copy DLLs folder from Python installation
-        print("Copying DLLs from Python installation...")
-        python_dlls_dir = Path(sys.executable).parent / "DLLs"
-        dlls_dest = internal_dir / "DLLs"
-        if python_dlls_dir.exists():
-            if dlls_dest.exists():
-                shutil.rmtree(dlls_dest)
-            shutil.copytree(str(python_dlls_dir), str(dlls_dest))
-            print(f"  Copied DLLs/ directory")
+        if IS_WINDOWS:
+            # Copy DLLs folder from Python installation
+            print("Copying DLLs from Python installation...")
+            python_dlls_dir = Path(sys.executable).parent / "DLLs"
+            dlls_dest = internal_dir / "DLLs"
+            if python_dlls_dir.exists():
+                if dlls_dest.exists():
+                    shutil.rmtree(dlls_dest)
+                shutil.copytree(str(python_dlls_dir), str(dlls_dest))
+                print(f"  Copied DLLs/ directory")
 
-        # Create python._pth file to configure Python's module search paths
-        # Note: When python._pth exists, PYTHONPATH is ignored, but we can add paths at runtime
-        print("Creating python._pth file for embedded Python...")
-        python_version = f"{sys.version_info.major}{sys.version_info.minor}"
-        pth_file = internal_dir / f"python{python_version}._pth"
-        pth_content = """# Python path configuration for TCE Launcher
+        # Create path configuration file
+        if IS_WINDOWS:
+            print("Creating python._pth file for embedded Python...")
+            python_version = f"{sys.version_info.major}{sys.version_info.minor}"
+            pth_file = internal_dir / f"python{python_version}._pth"
+            pth_content = """# Python path configuration for TCE Launcher
 # Paths are relative to the directory containing python.exe
 .
 Lib
@@ -492,28 +554,26 @@ DLLs
 # Import site to enable .pth file processing in site-packages
 import site
 """
-        with open(pth_file, 'w') as f:
-            f.write(pth_content)
-        print(f"  Created: _internal/python{python_version}._pth")
+            with open(pth_file, 'w') as f:
+                f.write(pth_content)
+            print(f"  Created: _internal/python{python_version}._pth")
 
         print()
         print("Verifying dependencies...")
         # Verify that all scanned dependencies are included
         missing_deps = []
+        ext_pattern = "*.pyd" if IS_WINDOWS else "*.so"
         for dep in sorted(app_dependencies):
-            # Check in site-packages (directories)
             dep_in_site = site_packages_dir / dep
-            # Check for .pyd files in _internal root
-            dep_pyd = list(internal_dir.glob(f"{dep}*.pyd"))
-            # Check in _internal root (directories that weren't moved)
+            dep_ext = list(internal_dir.glob(f"{dep}*{ext_pattern[1:]}"))
             dep_in_root = internal_dir / dep
 
-            if not (dep_in_site.exists() or dep_pyd or dep_in_root.exists()):
+            if not (dep_in_site.exists() or dep_ext or dep_in_root.exists()):
                 missing_deps.append(dep)
 
         if missing_deps:
             print(f"  Warning: {len(missing_deps)} dependencies may be missing:")
-            for dep in missing_deps[:10]:  # Show first 10
+            for dep in missing_deps[:10]:
                 print(f"    - {dep}")
             if len(missing_deps) > 10:
                 print(f"    ... and {len(missing_deps) - 10} more")
@@ -527,31 +587,38 @@ import site
         print("=" * 70)
         print(f"Output directory: {output_dir}")
         print()
+
+        if IS_WINDOWS:
+            exe_name = "TCE Launcher.exe"
+            python_names = "python.exe / pythonw.exe"
+        elif IS_MACOS:
+            exe_name = "TCE Launcher.app"
+            python_names = "python3"
+        else:
+            exe_name = "TCE Launcher"
+            python_names = "python3"
+
         print("Directory structure:")
-        print("  TCE Launcher/")
-        print("    TCE Launcher.exe       - Main application")
-        print("    data/                  - Applications, games, components")
-        print("    languages/             - Translation files")
-        print("    sfx/                   - Sound themes")
-        print("    skins/                 - UI skins")
-        print("    _internal/             - Runtime libraries (all dependencies)")
-        print("      python.exe           - Python interpreter for apps/games")
-        print("      pythonw.exe          - Python interpreter (no console)")
+        print(f"  TCE Launcher/")
+        print(f"    {exe_name:<27s}- Main application")
+        print(f"    data/                  - Applications, games, components")
+        print(f"    languages/             - Translation files")
+        print(f"    sfx/                   - Sound themes")
+        print(f"    skins/                 - UI skins")
+        print(f"    _internal/             - Runtime libraries (all dependencies)")
+        print(f"      {python_names:<23s}- Python interpreter for apps/games")
         print()
         print("Features:")
         print(f"  - {len(app_dependencies)} external dependencies auto-detected and included")
-        print("  - Applications/games run via python.exe subprocess (proper isolation)")
-        print("  - pythonw.exe used for windowless execution (no console)")
+        print(f"  - Applications/games run via {python_names} subprocess (proper isolation)")
         print("  - All libraries available to Python scripts from _internal")
         print("  - No external Python installation required")
         print()
-        print("How it works:")
-        print("  - Applications (.py files) run via pythonw.exe (no console window)")
-        print("  - All dependencies from _internal are available via PYTHONPATH")
-        print("  - Each app/game runs in separate process for proper isolation")
-        print()
         print("To run the compiled application:")
-        print(f"  {output_dir / 'TCE Launcher.exe'}")
+        if IS_MACOS:
+            print(f"  open {dist_dir / 'TCE Launcher.app'}")
+        else:
+            print(f"  {output_dir / exe_name}")
     else:
         print()
         print("=" * 50)

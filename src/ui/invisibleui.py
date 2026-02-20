@@ -1,14 +1,33 @@
 import threading
 import time
-import accessible_output3.outputs.auto
-
-# keyboard module - works on Windows, may require root on Linux
+import sys
 try:
-    import keyboard
-    KEYBOARD_AVAILABLE = True
+    import accessible_output3.outputs.auto
+    _ao3_available = True
+except Exception:
+    _ao3_available = False
+
+# keyboard module - Windows-only (hangs on macOS without Input Monitoring perms)
+try:
+    if sys.platform == 'darwin':
+        # Never import keyboard on macOS - it can hang waiting for permissions
+        KEYBOARD_AVAILABLE = False
+    else:
+        import keyboard
+        KEYBOARD_AVAILABLE = True
 except ImportError:
     KEYBOARD_AVAILABLE = False
     print("Warning: keyboard module not available - hotkeys disabled")
+
+# pynput - macOS/Linux alternative for global keyboard hooks
+# Does not hang: gracefully fails if Accessibility permissions are missing
+PYNPUT_AVAILABLE = False
+try:
+    from pynput import keyboard as _pynput_kb
+    PYNPUT_AVAILABLE = True
+except ImportError:
+    if sys.platform == 'darwin':
+        print("macOS IUI: pynput not found. Install with: pip install pynput")
 from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused, resource_path, get_sfx_directory
 from src.settings.settings import load_settings, get_setting
 from src.titan_core.translation import set_language
@@ -27,6 +46,7 @@ import json
 import traceback
 import re
 import platform
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 # F6 program switching removed
 try:
     from src.network import telegram_client
@@ -85,71 +105,143 @@ def cleanup_speaker():
         pass
 
 class GlobalHotKeys(threading.Thread):
-    """Global hotkey handler using keyboard library without event suppression"""
+    """Global hotkey handler.
+
+    Backend selection:
+    - Windows: `keyboard` library (suppresses keys so system ignores them)
+    - macOS/Linux: `pynput` (requires Accessibility permission on macOS;
+      gracefully skips capturing if permission not granted - does NOT hang)
+    """
 
     def __init__(self, hotkeys):
         super().__init__()
         self.hotkeys = hotkeys
-        self.registered_hotkeys = []
+        self.registered_hotkeys = []   # (str, handle) pairs for keyboard backend
         self.daemon = True
         self._stop_event = threading.Event()
+        self._pynput_listener = None   # pynput GlobalHotKeys instance (macOS/Linux)
+
+    # ------------------------------------------------------------------
+    # Thread entry point
+    # ------------------------------------------------------------------
 
     def run(self):
-        """Run the hotkey listener with error handling"""
         try:
             if not self.hotkeys:
                 return
-
-            if not KEYBOARD_AVAILABLE:
-                print("Keyboard module not available - hotkeys disabled")
-                return
-
-            # Register all hotkeys with suppression
-            for hotkey_str, callback in self.hotkeys.items():
-                # Convert pynput format to keyboard library format
-                # '<ctrl>+<shift>+<up>' -> 'ctrl+shift+up'
-                kb_hotkey = hotkey_str.replace('<', '').replace('>', '')
-
-                try:
-                    # Register hotkeys with event suppression to prevent system from processing them
-                    hotkey_handle = keyboard.add_hotkey(kb_hotkey, callback, suppress=True)
-                    self.registered_hotkeys.append((kb_hotkey, hotkey_handle))
-                except Exception as e:
-                    print(f"Error registering hotkey {kb_hotkey}: {e}")
-
-            # Wait for stop event
-            self._stop_event.wait()
-
+            if sys.platform == 'darwin':
+                self._run_pynput()
+            elif KEYBOARD_AVAILABLE:
+                self._run_keyboard()
+            else:
+                print("IUI: no keyboard backend available - hotkeys disabled")
         except Exception as e:
             print(f"Error in GlobalHotKeys thread: {e}")
         finally:
             self._cleanup()
 
+    # ------------------------------------------------------------------
+    # macOS / Linux backend: pynput
+    # ------------------------------------------------------------------
+
+    def _run_pynput(self):
+        """Use pynput.keyboard.GlobalHotKeys on macOS.
+
+        pynput does not hang when Accessibility permissions are missing -
+        it simply won't capture events, which is the safe fallback.
+        The hotkey dict already uses pynput key-name format:
+          '<up>', '<enter>', '`', '`+<enter>' etc.
+        """
+        if not PYNPUT_AVAILABLE:
+            print("macOS IUI: pynput not available - keyboard navigation disabled")
+            print("  Fix: pip install pynput  (then grant Accessibility permission)")
+            self._stop_event.wait()
+            return
+
+        # Check Accessibility permission and open System Preferences if missing.
+        # pynput will also trigger the system dialog automatically on first use.
+        try:
+            from src.platform_utils import macos_request_accessibility_permission
+            already_trusted = macos_request_accessibility_permission()
+            if not already_trusted:
+                print("macOS IUI: Accessibility permission not yet granted.")
+                print("  System Preferences has been opened.")
+                print("  Add this app to Accessibility list, then relaunch.")
+        except Exception as e:
+            print(f"macOS IUI: accessibility check error: {e}")
+
+        try:
+            # pynput.keyboard.GlobalHotKeys accepts the same '<key>' format
+            # the hotkeys dict already uses.
+            # Starting the listener also triggers the macOS permission dialog
+            # automatically if Accessibility is not yet granted.
+            listener = _pynput_kb.GlobalHotKeys(self.hotkeys)
+            listener.start()
+            self._pynput_listener = listener
+            self._stop_event.wait()
+        except Exception as e:
+            print(f"macOS IUI keyboard error: {e}")
+            print("  Ensure Accessibility permission is granted in")
+            print("  System Preferences > Privacy & Security > Accessibility")
+            self._stop_event.wait()
+        finally:
+            if self._pynput_listener:
+                try:
+                    self._pynput_listener.stop()
+                except Exception:
+                    pass
+                self._pynput_listener = None
+
+    # ------------------------------------------------------------------
+    # Windows backend: keyboard library
+    # ------------------------------------------------------------------
+
+    def _run_keyboard(self):
+        """Use keyboard library on Windows (with key suppression)."""
+        for hotkey_str, callback in self.hotkeys.items():
+            # Convert pynput format to keyboard library format:
+            # '<ctrl>+<shift>+<up>' -> 'ctrl+shift+up'
+            kb_hotkey = hotkey_str.replace('<', '').replace('>', '')
+            try:
+                handle = keyboard.add_hotkey(kb_hotkey, callback, suppress=True)
+                self.registered_hotkeys.append((kb_hotkey, handle))
+            except Exception as e:
+                print(f"Error registering hotkey {kb_hotkey}: {e}")
+
+        self._stop_event.wait()
+
+    # ------------------------------------------------------------------
+    # Stop / cleanup
+    # ------------------------------------------------------------------
+
     def stop(self):
         """Stop the hotkey listener safely"""
         try:
             self._stop_event.set()
+            if self._pynput_listener:
+                try:
+                    self._pynput_listener.stop()
+                except Exception:
+                    pass
         except Exception as e:
             print(f"Error in GlobalHotKeys.stop(): {e}")
         finally:
             self._cleanup()
 
     def _cleanup(self):
-        """Clean up resources and unhook all hotkeys"""
+        """Clean up resources"""
         try:
+            self._pynput_listener = None
             if not KEYBOARD_AVAILABLE:
                 return
-
-            # Unregister all hotkeys using the stored handles
-            for kb_hotkey, hotkey_handle in self.registered_hotkeys:
+            for kb_hotkey, handle in self.registered_hotkeys:
                 try:
-                    keyboard.remove_hotkey(hotkey_handle)
+                    keyboard.remove_hotkey(handle)
                 except Exception as e:
                     print(f"Error removing hotkey {kb_hotkey}: {e}")
-
             self.registered_hotkeys.clear()
         except Exception as e:
-            print(f"Error in cleanup: {e}")
+            print(f"Error in GlobalHotKeys._cleanup: {e}")
 
 class BaseWidget:
     def __init__(self, speak_func):
@@ -216,14 +308,36 @@ class VolumePanel(BaseWidget):
     def get_current_volume(self):
         """Get current system volume level as integer 0-100"""
         try:
-            if platform.system() == "Windows":
+            if IS_WINDOWS:
                 volume_interface = self._get_volume_interface()
                 if volume_interface:
                     return int(volume_interface.GetMasterVolumeLevelScalar() * 100)
                 else:
                     return 50
+            elif IS_LINUX:
+                import subprocess
+                try:
+                    result = subprocess.run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                                           capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        import re
+                        match = re.search(r'(\d+)%', result.stdout)
+                        if match:
+                            return min(int(match.group(1)), 100)
+                except Exception:
+                    pass
+                return 50
+            elif IS_MACOS:
+                import subprocess
+                try:
+                    result = subprocess.run(["osascript", "-e", "output volume of (get volume settings)"],
+                                           capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        return min(int(result.stdout.strip()), 100)
+                except Exception:
+                    pass
+                return 50
             else:
-                # Linux fallback
                 return 50
         except Exception as e:
             print(f"Error getting current volume: {e}")
@@ -232,12 +346,32 @@ class VolumePanel(BaseWidget):
     def get_mute_status(self):
         """Get current mute status"""
         try:
-            if platform.system() == "Windows":
+            if IS_WINDOWS:
                 volume_interface = self._get_volume_interface()
                 if volume_interface:
                     return volume_interface.GetMute()
                 else:
                     return False
+            elif IS_LINUX:
+                import subprocess
+                try:
+                    result = subprocess.run(["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
+                                           capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        return "yes" in result.stdout.lower()
+                except Exception:
+                    pass
+                return False
+            elif IS_MACOS:
+                import subprocess
+                try:
+                    result = subprocess.run(["osascript", "-e", "output muted of (get volume settings)"],
+                                           capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        return "true" in result.stdout.lower()
+                except Exception:
+                    pass
+                return False
             else:
                 return False
         except Exception as e:
@@ -251,7 +385,7 @@ class VolumePanel(BaseWidget):
         if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
             return None
 
-        if self._volume_interface is None and platform.system() == "Windows":
+        if self._volume_interface is None and IS_WINDOWS:
             try:
                 from comtypes import CoInitializeEx, COINIT_APARTMENTTHREADED
                 from pycaw.pycaw import AudioUtilities
@@ -380,13 +514,30 @@ class VolumePanel(BaseWidget):
         
         def update_volume():
             try:
-                if platform.system() == "Windows":
+                if IS_WINDOWS:
                     volume_interface = self._get_volume_interface()
                     if volume_interface:
                         volume_interface.SetMasterVolumeLevelScalar(level / 100.0, None)
                         return True
+                elif IS_LINUX:
+                    import subprocess
+                    try:
+                        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{int(level)}%"],
+                                      check=True, stderr=subprocess.DEVNULL)
+                        return True
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        try:
+                            subprocess.run(["amixer", "set", "Master", f"{int(level)}%"],
+                                          check=True, stderr=subprocess.DEVNULL)
+                            return True
+                        except (subprocess.CalledProcessError, FileNotFoundError):
+                            return False
+                elif IS_MACOS:
+                    import subprocess
+                    subprocess.run(["osascript", "-e", f"set volume output volume {int(level)}"],
+                                  check=True, stderr=subprocess.DEVNULL)
+                    return True
                 else:
-                    # Linux implementation could be added here
                     return True
             except Exception as e:
                 print(f"Error setting volume: {e}")
@@ -401,13 +552,35 @@ class VolumePanel(BaseWidget):
     def toggle_mute(self):
         """Toggle mute status"""
         try:
-            if platform.system() == "Windows":
+            if IS_WINDOWS:
                 volume_interface = self._get_volume_interface()
                 if volume_interface:
                     current_mute = volume_interface.GetMute()
                     volume_interface.SetMute(not current_mute, None)
                     self.is_muted = volume_interface.GetMute()
                     return True
+            elif IS_LINUX:
+                import subprocess
+                try:
+                    subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+                                  check=True, stderr=subprocess.DEVNULL)
+                    self.is_muted = not self.is_muted
+                    return True
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    try:
+                        subprocess.run(["amixer", "set", "Master", "toggle"],
+                                      check=True, stderr=subprocess.DEVNULL)
+                        self.is_muted = not self.is_muted
+                        return True
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        pass
+            elif IS_MACOS:
+                import subprocess
+                toggle = "true" if not self.is_muted else "false"
+                subprocess.run(["osascript", "-e", f"set volume output muted {toggle}"],
+                              check=True, stderr=subprocess.DEVNULL)
+                self.is_muted = not self.is_muted
+                return True
             else:
                 self.is_muted = not self.is_muted
                 return True
@@ -3143,7 +3316,7 @@ class InvisibleUI:
             # Sprawdź czy aplikacja główna ma start menu
             if hasattr(self.main_frame, 'start_menu') and self.main_frame.start_menu:
                 import platform
-                if platform.system() == "Windows":
+                if IS_WINDOWS:
                     # Pokaż menu Start
                     wx.CallAfter(self.main_frame.start_menu.show_menu)
                     self.speak(_("Menu Start"))

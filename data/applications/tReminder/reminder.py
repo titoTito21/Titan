@@ -2,10 +2,12 @@ import wx
 import wx.adv
 import os
 import sys
+import platform
 import datetime
 import threading
 import time
 import json
+import subprocess
 from translation import _
 
 # Importowanie modułu do odtwarzania dźwięków
@@ -14,20 +16,25 @@ try:
 except ImportError:
     pygame = None
 
-# Importowanie modułu do TTS
-import subprocess
+# Screen reader output via accessible_output3
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _ao3_speaker = _ao3.Auto()
+except Exception:
+    _ao3_speaker = None
 
 # Ścieżki do katalogów i plików
-if sys.platform == 'win32':
-    APP_SETTINGS_DIR = os.path.join(
-        os.environ['APPDATA'],
-        'Titosoft', 'Titan', 'appsettings'
-    )
-else:
-    APP_SETTINGS_DIR = os.path.join(
-        os.path.expanduser('~'),
-        '.titosoft', 'titan', 'appsettings'
-    )
+def _get_app_settings_dir():
+    _plat = platform.system()
+    if _plat == 'Windows':
+        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+        return os.path.join(appdata, 'Titosoft', 'Titan', 'appsettings')
+    elif _plat == 'Darwin':
+        return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings')
+    else:
+        return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings')
+
+APP_SETTINGS_DIR = _get_app_settings_dir()
 
 if not os.path.exists(APP_SETTINGS_DIR):
     os.makedirs(APP_SETTINGS_DIR)
@@ -315,23 +322,25 @@ class TitanOrganizer(wx.Frame):
     def speak_text(self, text):
         if not self.settings.tts_enabled:
             return
-        if sys.platform == 'win32':
-            # Użycie SAPI.SpVoice przez COM
-            import win32com.client
-            speaker = win32com.client.Dispatch("SAPI.SpVoice")
-            speaker.Speak(text)
-        elif sys.platform == 'darwin':
-            # Użycie polecenia 'say'
-            subprocess.call(['say', text])
-        else:
-            # Użycie 'espeak' lub 'festival' na Linuxie
+        # 1) accessible_output3 – preferred (VoiceOver / NVDA / JAWS / Orca)
+        if _ao3_speaker:
             try:
-                subprocess.call(['espeak', text])
-            except FileNotFoundError:
-                try:
-                    subprocess.call(['festival', '--tts'], input=text.encode())
-                except FileNotFoundError:
-                    print(_("Nie znaleziono silnika TTS."))
+                _ao3_speaker.speak(text, interrupt=True)
+                return
+            except Exception:
+                pass
+        # 2) Platform fallback
+        try:
+            _plat = platform.system()
+            if _plat == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+            elif _plat == 'Darwin':
+                subprocess.Popen(['say', text])
+            else:
+                subprocess.Popen(['spd-say', text])
+        except Exception:
+            pass
 
     def create_taskbar_icon(self):
         if not self.taskbar_icon:

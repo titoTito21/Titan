@@ -999,6 +999,10 @@ class WiFiInvisibleUI:
         
     def start_keyboard_listener(self):
         """Start keyboard listener for navigation"""
+        import sys as _sys
+        if _sys.platform == 'darwin':
+            print("WiFi keyboard listener: not supported on macOS (no keyboard module)")
+            return
         try:
             import keyboard
         except Exception as e:

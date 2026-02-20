@@ -10,12 +10,14 @@ import threading
 from typing import Optional, Dict, List
 from enum import Enum
 
-try:
-    import keyboard
-    KEYBOARD_AVAILABLE = True
-except ImportError:
-    KEYBOARD_AVAILABLE = False
-    print("Warning: keyboard module not available")
+import sys as _sys
+KEYBOARD_AVAILABLE = False
+if _sys.platform != 'darwin':  # keyboard hangs on macOS without Accessibility permissions
+    try:
+        import keyboard
+        KEYBOARD_AVAILABLE = True
+    except ImportError:
+        print("Warning: keyboard module not available")
 
 from src.titan_core.translation import _
 from src.titan_core.sound import play_sound
@@ -351,6 +353,9 @@ class ControllerModeManager:
             # System mode - do nothing, let controller work normally
             return False
 
+        if not KEYBOARD_AVAILABLE:
+            return False
+
         # Only handle button press events (not release)
         if not pressed:
             return False
@@ -569,6 +574,9 @@ class ControllerModeManager:
 
     def handle_axis_movement(self, axis_id: int, value: float, controller_id: int = 0):
         """Handle analog stick movement based on current mode"""
+        if not KEYBOARD_AVAILABLE:
+            return False
+
         # Apply deadzone
         if abs(value) < self.axis_deadzone:
             value = 0.0
@@ -787,6 +795,9 @@ class ControllerModeManager:
 
     def handle_hat_movement(self, hat_id: int, value: tuple):
         """Handle D-pad movement based on current mode"""
+        if not KEYBOARD_AVAILABLE:
+            return False
+
         if value == (0, 0):
             return False
 

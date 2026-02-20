@@ -9,23 +9,8 @@ import subprocess
 import platform
 import accessible_output3.outputs.auto
 from src.settings.settings import get_setting
+from src.platform_utils import get_base_path as _get_base_path, IS_WINDOWS, IS_LINUX, IS_MACOS
 
-
-def _get_base_path():
-    """Get base path for resources, supporting PyInstaller and Nuitka."""
-    # For both PyInstaller and Nuitka, use executable directory
-    # (data directories are placed next to exe for backward compatibility)
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        # Development mode - get project root (2 levels up from src/titan_core/)
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
 
 # Windows-specific imports
 SAPI_AVAILABLE = False
@@ -91,22 +76,58 @@ class ESpeakDLL:
         self._load_dll()
 
     def _load_dll(self):
-        """Find and load the eSpeak NG DLL"""
+        """Find and load the eSpeak NG shared library (cross-platform)"""
         try:
             proj_root = _get_base_path()
             bundled_dir = os.path.join(proj_root, 'data', 'screen reader engines', 'espeak')
 
-            dll_paths = [
-                os.path.join(bundled_dir, 'libespeak-ng.dll'),
-                os.path.join(bundled_dir, 'espeak-ng.dll'),
-                'libespeak-ng.dll',
-                'espeak-ng.dll',
-            ]
+            # Platform-specific library names
+            if IS_WINDOWS:
+                lib_names = ['libespeak-ng.dll', 'espeak-ng.dll']
+            elif IS_MACOS:
+                lib_names = ['libespeak-ng.dylib', 'libespeak-ng.1.dylib']
+            else:  # Linux
+                lib_names = ['libespeak-ng.so', 'libespeak-ng.so.1']
+
+            # Build search paths: bundled first, then system locations
+            dll_paths = []
+            for name in lib_names:
+                dll_paths.append(os.path.join(bundled_dir, name))
+
+            # System library paths for Linux and macOS
+            if IS_LINUX:
+                system_lib_dirs = [
+                    '/usr/lib',
+                    '/usr/lib/x86_64-linux-gnu',
+                    '/usr/lib/aarch64-linux-gnu',
+                    '/usr/local/lib',
+                ]
+                for lib_dir in system_lib_dirs:
+                    for name in lib_names:
+                        dll_paths.append(os.path.join(lib_dir, name))
+            elif IS_MACOS:
+                system_lib_dirs = [
+                    '/opt/homebrew/lib',
+                    '/usr/local/lib',
+                ]
+                for lib_dir in system_lib_dirs:
+                    for name in lib_names:
+                        dll_paths.append(os.path.join(lib_dir, name))
+
+            # Also try bare names (lets the OS search its own paths)
+            dll_paths.extend(lib_names)
 
             data_paths = [
                 os.path.join(bundled_dir, 'espeak-ng-data'),
                 bundled_dir,
             ]
+            # System espeak data paths
+            if IS_LINUX:
+                data_paths.append('/usr/share/espeak-ng-data')
+                data_paths.append('/usr/lib/espeak-ng-data')
+            elif IS_MACOS:
+                data_paths.append('/opt/homebrew/share/espeak-ng-data')
+                data_paths.append('/usr/local/share/espeak-ng-data')
 
             for path in data_paths:
                 if os.path.isdir(path):
@@ -120,13 +141,18 @@ class ESpeakDLL:
 
                     dll_dir = os.path.dirname(dll_path) if os.path.isabs(dll_path) else bundled_dir
                     if dll_dir and os.path.isdir(dll_dir):
-                        try:
-                            os.add_dll_directory(dll_dir)
-                        except Exception:
-                            pass
-                        current_path = os.environ.get('PATH', '')
+                        # os.add_dll_directory is Windows-only
+                        if IS_WINDOWS:
+                            try:
+                                os.add_dll_directory(dll_dir)
+                            except Exception:
+                                pass
+                        current_path = os.environ.get('PATH', '') if IS_WINDOWS else os.environ.get('LD_LIBRARY_PATH', '')
                         if dll_dir not in current_path:
-                            os.environ['PATH'] = dll_dir + os.pathsep + current_path
+                            if IS_WINDOWS:
+                                os.environ['PATH'] = dll_dir + os.pathsep + current_path
+                            else:
+                                os.environ['LD_LIBRARY_PATH'] = dll_dir + os.pathsep + current_path
 
                     self.dll = ctypes.CDLL(dll_path)
                     print(f"[eSpeak DLL] Loaded: {dll_path}")
@@ -136,7 +162,7 @@ class ESpeakDLL:
                 except Exception as e:
                     continue
 
-            print("[eSpeak DLL] Could not load eSpeak NG DLL")
+            print("[eSpeak DLL] Could not load eSpeak NG library")
         except Exception as e:
             print(f"[eSpeak DLL] Error: {e}")
 
@@ -386,7 +412,8 @@ ESPEAK_DATA_PATH = None
 
 # First, try to find bundled eSpeak in data/screen reader engines/espeak/
 bundled_espeak_dir = os.path.join(project_root, 'data', 'screen reader engines', 'espeak')
-bundled_espeak_exe = os.path.join(bundled_espeak_dir, 'espeak-ng.exe')
+_bundled_exe_name = 'espeak-ng.exe' if IS_WINDOWS else 'espeak-ng'
+bundled_espeak_exe = os.path.join(bundled_espeak_dir, _bundled_exe_name)
 bundled_espeak_data = os.path.join(bundled_espeak_dir, 'espeak-ng-data')
 
 if os.path.exists(bundled_espeak_exe):

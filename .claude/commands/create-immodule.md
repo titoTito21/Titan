@@ -762,6 +762,58 @@ def get_status_text():
     return ""
 ```
 
+## Multiplatform Requirements
+
+All TCE IM modules MUST work on **Windows, macOS, and Linux**.
+
+Note: The injected `sounds` API already handles cross-platform audio. Focus on these rules for your own code:
+
+### Opening files/URLs (cross-platform)
+```python
+import sys, subprocess
+if sys.platform == 'win32':
+    os.startfile(path)           # Windows only
+elif sys.platform == 'darwin':
+    subprocess.Popen(['open', path])
+else:
+    subprocess.Popen(['xdg-open', path])
+# URLs: use webbrowser.open(url) — cross-platform and simpler
+```
+
+### Config/data paths (cross-platform)
+```python
+import platform, os
+
+def get_config_dir(module_name):
+    p = platform.system()
+    if p == 'Windows':
+        base = os.getenv('APPDATA') or os.path.expanduser('~')
+    elif p == 'Darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.path.join(os.path.expanduser('~'), '.config')
+    return os.path.join(base, 'Titosoft', 'Titan', module_name)
+```
+
+### keyboard library — guard on macOS (hangs without Accessibility permission)
+```python
+import sys
+KEYBOARD_AVAILABLE = False
+if sys.platform != 'darwin':
+    try:
+        import keyboard
+        KEYBOARD_AVAILABLE = True
+    except ImportError:
+        pass
+```
+
+### Common mistakes to avoid
+- `os.environ['APPDATA']` → use `os.getenv('APPDATA') or os.path.expanduser('~')`
+- `os.environ['USERPROFILE']` → use `os.path.expanduser('~')`
+- `os.sys.platform` → **AttributeError!** Use `sys.platform` (after `import sys`)
+- `os.system(cmd)` → use `subprocess.Popen(...)`
+- `os.startfile(path)` → Windows only, use platform check above
+
 ## Action:
 
 Ask the user for IM module details and create a complete, working module in `data/titanIM_modules/` following the Titan IM module standard with full Sound API integration.

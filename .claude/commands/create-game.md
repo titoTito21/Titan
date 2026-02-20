@@ -188,9 +188,11 @@ Interactive wizard to create a new game for TCE Launcher.
 6. **Audio-Based Game Template** (for accessible games):
    ```python
    import pygame
-   import accessible_output3.outputs.auto
-
-   speaker = accessible_output3.outputs.auto.Auto()
+   try:
+       import accessible_output3.outputs.auto as _ao3
+       speaker = _ao3.Auto()
+   except Exception:
+       speaker = None
 
    class AudioGame:
        def __init__(self):
@@ -200,8 +202,25 @@ Interactive wizard to create a new game for TCE Launcher.
            self.score = 0
 
        def speak(self, text):
-           """Speak text using screen reader"""
-           speaker.speak(text)
+           """Speak text using screen reader or platform TTS fallback"""
+           if speaker:
+               try:
+                   speaker.speak(text)
+                   return
+               except Exception:
+                   pass
+           import platform, subprocess
+           p = platform.system()
+           try:
+               if p == 'Windows':
+                   import win32com.client
+                   win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+               elif p == 'Darwin':
+                   subprocess.Popen(['say', text])
+               else:
+                   subprocess.Popen(['spd-say', text])
+           except Exception:
+               pass
 
        def play_sound(self, sound_file):
            """Play spatial audio effect"""
@@ -859,6 +878,77 @@ Place the following `.wav` files in the `sfx/` folder:
 - `game_over.wav` - played when the quiz is complete and the final score is shown
 
 ---
+
+## Multiplatform Requirements
+
+All TCE games MUST work on **Windows, macOS, and Linux**. Follow these rules:
+
+### accessible_output3 — always try/except
+```python
+try:
+    import accessible_output3.outputs.auto as _ao3
+    speaker = _ao3.Auto()
+except Exception:
+    speaker = None
+```
+
+### TTS fallback (when no screen reader is running)
+```python
+import platform, subprocess
+
+def speak(text):
+    if speaker:
+        try:
+            speaker.speak(text)
+            return
+        except Exception:
+            pass
+    p = platform.system()
+    try:
+        if p == 'Windows':
+            import win32com.client
+            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+        elif p == 'Darwin':
+            subprocess.Popen(['say', text])
+        else:
+            subprocess.Popen(['spd-say', text])
+    except Exception:
+        pass
+```
+
+### Opening files/URLs (cross-platform)
+```python
+import sys, subprocess
+if sys.platform == 'win32':
+    os.startfile(path)           # Windows only
+elif sys.platform == 'darwin':
+    subprocess.Popen(['open', path])
+else:
+    subprocess.Popen(['xdg-open', path])
+```
+
+### Config/save data paths (cross-platform)
+```python
+import platform, os
+
+def get_save_dir(game_name):
+    p = platform.system()
+    if p == 'Windows':
+        base = os.getenv('APPDATA') or os.path.expanduser('~')
+    elif p == 'Darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.path.join(os.path.expanduser('~'), '.config')
+    return os.path.join(base, 'Titosoft', 'Titan', 'games', game_name)
+```
+
+### Common mistakes to avoid
+- `accessible_output3.outputs.auto.Auto()` without try/except → crashes on non-screen-reader systems
+- `os.environ['APPDATA']` → use `os.getenv('APPDATA') or os.path.expanduser('~')`
+- `os.environ['USERPROFILE']` → use `os.path.expanduser('~')`
+- `os.sys.platform` → **AttributeError!** Use `sys.platform` (after `import sys`)
+- `os.system(cmd)` → use `subprocess.Popen(...)`
+- `os.startfile(path)` → Windows only, use platform check above
 
 ## Action:
 

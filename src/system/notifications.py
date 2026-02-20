@@ -6,10 +6,7 @@ import os
 import glob
 import re
 
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -20,7 +17,7 @@ def get_current_time():
     return now.strftime("%H:%M:%S")
 
 def get_battery_status():
-    if platform.system() == "Windows":
+    if IS_WINDOWS:
         class SYSTEM_POWER_STATUS(ctypes.Structure):
             _fields_ = [
                 ("ACLineStatus", ctypes.c_byte),
@@ -41,7 +38,7 @@ def get_battery_status():
             return "Unknown"
 
         return f"{status.BatteryLifePercent}%"
-    elif platform.system() == "Linux":
+    elif IS_LINUX:
         try:
             # Try to find battery information in /sys/class/power_supply/
             battery_paths = glob.glob("/sys/class/power_supply/BAT*")
@@ -62,7 +59,7 @@ def get_battery_status():
         except Exception as e:
             print(f"Error getting battery status on Linux: {e}")
             return "Unknown"
-    elif platform.system() == "Darwin":  # macOS
+    elif IS_MACOS:  # macOS
         try:
             output = subprocess.check_output(["pmset", "-g", "batt"], text=True)
             # Parse battery percentage from pmset output
@@ -78,7 +75,7 @@ def get_battery_status():
         return "Unknown"
 
 def get_volume_level():
-    if platform.system() == "Windows":
+    if IS_WINDOWS:
         try:
             from pycaw.pycaw import AudioUtilities
 
@@ -91,7 +88,7 @@ def get_volume_level():
         except Exception as e:
             print(f"Error getting volume level: {e}")
             return "Unknown"
-    elif platform.system() == "Linux":
+    elif IS_LINUX:
         try:
             # Try PulseAudio first
             try:
@@ -119,7 +116,7 @@ def get_volume_level():
         except Exception as e:
             print(f"Error getting volume level on Linux: {e}")
             return "Unknown"
-    elif platform.system() == "Darwin":  # macOS
+    elif IS_MACOS:  # macOS
         try:
             output = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"], 
                                             text=True)
@@ -132,7 +129,7 @@ def get_volume_level():
         return "Unknown"
 
 def get_network_status():
-    if platform.system() == "Windows":
+    if IS_WINDOWS:
         try:
             output = subprocess.check_output("netsh wlan show interfaces", shell=True).decode()
             if "There is no wireless interface" in output:
@@ -149,7 +146,7 @@ def get_network_status():
                 return f"Połączono z {ssid}, moc sygnału: {signal}"
         except subprocess.CalledProcessError:
             return "nie połączono, dostępne sieci WiFi"
-    elif platform.system() == "Linux":
+    elif IS_LINUX:
         try:
             # Try NetworkManager first (nmcli)
             try:
@@ -194,7 +191,7 @@ def get_network_status():
         except Exception as e:
             print(f"Error getting network status on Linux: {e}")
             return "Unknown"
-    elif platform.system() == "Darwin":  # macOS
+    elif IS_MACOS:  # macOS
         try:
             # Get current WiFi network
             output = subprocess.check_output(["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"], 

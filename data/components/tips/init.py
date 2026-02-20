@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import subprocess
 import threading
 import time
 import random
@@ -9,10 +10,16 @@ import wx
 import platform
 from src.titan_core.sound import play_sound, resource_path
 
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _ao3_speaker = _ao3.Auto()
+except Exception:
+    _ao3_speaker = None
+
 # Ścieżki
 def get_config_path():
     if platform.system() == 'Windows':
-        appdata = os.getenv('APPDATA')
+        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
         config_dir = os.path.join(appdata, 'Titosoft', 'Titan', 'appsettings')
     elif platform.system() == 'Darwin':  # macOS
         home = os.path.expanduser('~')
@@ -69,15 +76,25 @@ def load_tips():
 # Funkcja mowy
 def speak(text):
     def speak_thread():
-        system = platform.system()
-        if system == 'Windows':
-            import win32com.client
-            speaker = win32com.client.Dispatch("SAPI.SpVoice")
-            speaker.Speak(text)
-        elif system == 'Darwin':  # macOS
-            os.system(f"say '{text}'")
-        else:  # Zakładamy Linux
-            os.system(f"spd-say '{text}'")
+        # 1) accessible_output3 – preferred (VoiceOver / NVDA / JAWS / Orca)
+        if _ao3_speaker:
+            try:
+                _ao3_speaker.speak(text, interrupt=True)
+                return
+            except Exception:
+                pass
+        # 2) Platform fallback when ao3 is unavailable
+        try:
+            _sys = platform.system()
+            if _sys == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+            elif _sys == 'Darwin':
+                subprocess.Popen(['say', text])
+            else:
+                subprocess.Popen(['spd-say', text])
+        except Exception:
+            pass
     threading.Thread(target=speak_thread, daemon=True).start()
 
 # Klasa TipManager

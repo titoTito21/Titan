@@ -6,32 +6,17 @@ import py_compile
 import shutil
 import platform
 import configparser
+from src.platform_utils import get_base_path as _get_base_path, is_frozen as _is_frozen
 
 
 def _log_to_file(message):
     """Log to file for debugging compiled version."""
     try:
-        log_path = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(__file__), 'component_debug.log')
+        log_path = os.path.join(os.path.dirname(sys.executable) if _is_frozen() else os.path.dirname(__file__), 'component_debug.log')
         with open(log_path, 'a', encoding='utf-8') as f:
             f.write(f"{message}\n")
     except:
         pass
-
-
-def _get_base_path():
-    """Get base path for resources, supporting PyInstaller and Nuitka."""
-    # For both PyInstaller and Nuitka, use executable directory
-    # (data directories are placed next to exe for backward compatibility)
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        # Development mode - get project root (2 levels up from src/titan_core/)
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-
-def _is_frozen():
-    """Check if running as compiled executable."""
-    return hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False)
 
 
 class ComponentManager:

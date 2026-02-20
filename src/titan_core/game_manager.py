@@ -4,27 +4,14 @@ import threading
 import sys
 import platform
 import webbrowser
+from src.platform_utils import get_base_path, is_frozen, IS_WINDOWS, IS_LINUX, IS_MACOS
 
 # Windows-only imports
-if platform.system() == 'Windows':
+if IS_WINDOWS:
     import winreg
 
 
-def _get_base_path():
-    """Get base path for resources, supporting PyInstaller and Nuitka."""
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        # Development mode - get project root (2 levels up from src/titan_core/)
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-
-def is_frozen():
-    """Check if running in compiled mode (PyInstaller/Nuitka)."""
-    return getattr(sys, 'frozen', False)
-
-
-PROJECT_ROOT = _get_base_path()
+PROJECT_ROOT = get_base_path()
 GAME_DIR = os.path.join(PROJECT_ROOT, 'data', 'games')
 
 
@@ -85,127 +72,233 @@ def read_game_info(game_path):
     return game_info
 
 
+def _parse_vdf_simple(filepath):
+    """Simple VDF (Valve Data Format) parser for Steam config files."""
+    result = {}
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        # Very basic key-value extraction from VDF format
+        import re
+        # Match "key" "value" patterns
+        for match in re.finditer(r'"([^"]+)"\s+"([^"]*)"', content):
+            result[match.group(1)] = match.group(2)
+    except Exception as e:
+        print(f"Error parsing VDF file {filepath}: {e}")
+    return result
+
+
+def _get_steam_library_paths():
+    """Get Steam library folder paths on Linux/macOS."""
+    paths = []
+
+    if IS_LINUX:
+        candidates = [
+            os.path.expanduser('~/.steam/steam'),
+            os.path.expanduser('~/.local/share/Steam'),
+        ]
+    elif IS_MACOS:
+        candidates = [
+            os.path.expanduser('~/Library/Application Support/Steam'),
+        ]
+    else:
+        return paths
+
+    for base in candidates:
+        steamapps = os.path.join(base, 'steamapps')
+        if os.path.isdir(steamapps):
+            paths.append(steamapps)
+            # Check libraryfolders.vdf for additional library paths
+            lf_path = os.path.join(steamapps, 'libraryfolders.vdf')
+            if os.path.exists(lf_path):
+                vdf = _parse_vdf_simple(lf_path)
+                for key, value in vdf.items():
+                    if key == 'path' or key.isdigit():
+                        extra_steamapps = os.path.join(value, 'steamapps') if not value.endswith('steamapps') else value
+                        if os.path.isdir(extra_steamapps) and extra_steamapps not in paths:
+                            paths.append(extra_steamapps)
+            break  # Found main Steam dir
+
+    return paths
+
+
+def _get_steam_games_from_manifests(steamapps_dirs):
+    """Parse appmanifest_*.acf files to get installed Steam games."""
+    import re
+    games = []
+    seen_ids = set()
+
+    for steamapps_dir in steamapps_dirs:
+        try:
+            for filename in os.listdir(steamapps_dir):
+                if not filename.startswith('appmanifest_') or not filename.endswith('.acf'):
+                    continue
+                manifest_path = os.path.join(steamapps_dir, filename)
+                data = _parse_vdf_simple(manifest_path)
+                app_id = data.get('appid', '')
+                name = data.get('name', '')
+
+                if app_id and name and app_id not in seen_ids:
+                    seen_ids.add(app_id)
+                    games.append({
+                        'name': name,
+                        'platform': 'Steam',
+                        'app_id': app_id,
+                        'launch_url': f'steam://rungameid/{app_id}'
+                    })
+        except Exception as e:
+            print(f"Error reading Steam manifests from {steamapps_dir}: {e}")
+
+    return games
+
+
 def get_steam_games():
-    """Detect installed Steam games from Windows registry."""
+    """Detect installed Steam games (Windows: registry, Linux/macOS: manifest files)."""
     steam_games = []
 
-    if platform.system() != 'Windows':
-        return steam_games
-
-    try:
-        # Try to read Steam path from registry
+    if IS_WINDOWS:
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
-            steam_path = winreg.QueryValueEx(key, "SteamPath")[0]
-            winreg.CloseKey(key)
-        except:
-            steam_path = r"C:\Program Files (x86)\Steam"
+            # Try to read Steam path from registry
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+                steam_path = winreg.QueryValueEx(key, "SteamPath")[0]
+                winreg.CloseKey(key)
+            except:
+                steam_path = r"C:\Program Files (x86)\Steam"
 
-        # Read installed games from registry
-        try:
-            apps_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\Apps")
-            i = 0
-            while True:
-                try:
-                    app_id = winreg.EnumKey(apps_key, i)
-
+            # Read installed games from registry
+            try:
+                apps_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\Apps")
+                i = 0
+                while True:
                     try:
-                        app_key = winreg.OpenKey(apps_key, app_id)
-                        installed = winreg.QueryValueEx(app_key, "Installed")[0]
+                        app_id = winreg.EnumKey(apps_key, i)
 
-                        if installed == 1:
-                            try:
-                                name = winreg.QueryValueEx(app_key, "Name")[0]
-                            except:
-                                name = f"Steam Game {app_id}"
+                        try:
+                            app_key = winreg.OpenKey(apps_key, app_id)
+                            installed = winreg.QueryValueEx(app_key, "Installed")[0]
 
-                            steam_games.append({
-                                'name': name,
-                                'platform': 'Steam',
-                                'app_id': app_id,
-                                'launch_url': f'steam://rungameid/{app_id}'
-                            })
+                            if installed == 1:
+                                try:
+                                    name = winreg.QueryValueEx(app_key, "Name")[0]
+                                except:
+                                    name = f"Steam Game {app_id}"
 
-                        winreg.CloseKey(app_key)
-                    except:
-                        pass
+                                steam_games.append({
+                                    'name': name,
+                                    'platform': 'Steam',
+                                    'app_id': app_id,
+                                    'launch_url': f'steam://rungameid/{app_id}'
+                                })
 
-                    i += 1
-                except OSError:
-                    break
+                            winreg.CloseKey(app_key)
+                        except:
+                            pass
 
-            winreg.CloseKey(apps_key)
+                        i += 1
+                    except OSError:
+                        break
+
+                winreg.CloseKey(apps_key)
+            except Exception as e:
+                print(f"Error reading Steam games: {e}")
+
         except Exception as e:
-            print(f"Error reading Steam games: {e}")
+            print(f"Error accessing Steam registry: {e}")
 
-    except Exception as e:
-        print(f"Error accessing Steam registry: {e}")
+    elif IS_LINUX or IS_MACOS:
+        # Parse Steam manifest files on Linux/macOS
+        try:
+            library_paths = _get_steam_library_paths()
+            steam_games = _get_steam_games_from_manifests(library_paths)
+        except Exception as e:
+            print(f"Error reading Steam games from manifests: {e}")
 
     return steam_games
 
 
 def get_battlenet_games():
-    """Detect installed Battle.net games from Windows registry."""
+    """Detect installed Battle.net games (Windows: registry, Linux/macOS: known paths)."""
     battlenet_games = []
 
-    if platform.system() != 'Windows':
-        return battlenet_games
+    if IS_WINDOWS:
+        try:
+            uninstall_paths = [
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            ]
 
-    try:
-        uninstall_paths = [
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        ]
-
-        for uninstall_path in uninstall_paths:
-            try:
-                uninstall_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, uninstall_path)
-                i = 0
-                while True:
-                    try:
-                        subkey_name = winreg.EnumKey(uninstall_key, i)
-                        subkey = winreg.OpenKey(uninstall_key, subkey_name)
-
+            for uninstall_path in uninstall_paths:
+                try:
+                    uninstall_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, uninstall_path)
+                    i = 0
+                    while True:
                         try:
-                            display_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                            publisher = ""
-                            try:
-                                publisher = winreg.QueryValueEx(subkey, "Publisher")[0]
-                            except:
-                                pass
+                            subkey_name = winreg.EnumKey(uninstall_key, i)
+                            subkey = winreg.OpenKey(uninstall_key, subkey_name)
 
-                            if "Blizzard" in publisher or "Battle.net" in display_name:
-                                install_location = ""
+                            try:
+                                display_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
+                                publisher = ""
                                 try:
-                                    install_location = winreg.QueryValueEx(subkey, "InstallLocation")[0]
+                                    publisher = winreg.QueryValueEx(subkey, "Publisher")[0]
                                 except:
                                     pass
 
-                                if install_location and os.path.exists(install_location):
-                                    product_code = subkey_name.split('_')[-1] if '_' in subkey_name else "launch"
+                                if "Blizzard" in publisher or "Battle.net" in display_name:
+                                    install_location = ""
+                                    try:
+                                        install_location = winreg.QueryValueEx(subkey, "InstallLocation")[0]
+                                    except:
+                                        pass
 
-                                    battlenet_games.append({
-                                        'name': display_name,
-                                        'platform': 'Battle.net',
-                                        'path': install_location,
-                                        'product_code': product_code,
-                                        'launch_url': f'battlenet://launch'
-                                    })
+                                    if install_location and os.path.exists(install_location):
+                                        product_code = subkey_name.split('_')[-1] if '_' in subkey_name else "launch"
 
-                        except:
-                            pass
+                                        battlenet_games.append({
+                                            'name': display_name,
+                                            'platform': 'Battle.net',
+                                            'path': install_location,
+                                            'product_code': product_code,
+                                            'launch_url': f'battlenet://launch'
+                                        })
 
-                        winreg.CloseKey(subkey)
-                        i += 1
-                    except OSError:
-                        break
+                            except:
+                                pass
 
-                winreg.CloseKey(uninstall_key)
-            except:
-                pass
+                            winreg.CloseKey(subkey)
+                            i += 1
+                        except OSError:
+                            break
 
-    except Exception as e:
-        print(f"Error accessing Battle.net registry: {e}")
+                    winreg.CloseKey(uninstall_key)
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"Error accessing Battle.net registry: {e}")
+
+    elif IS_MACOS:
+        # Check macOS Applications folder for Blizzard games
+        blizzard_apps = {
+            'World of Warcraft': '/Applications/World of Warcraft',
+            'Diablo III': '/Applications/Diablo III',
+            'Diablo IV': '/Applications/Diablo IV',
+            'Overwatch 2': '/Applications/Overwatch 2',
+            'Hearthstone': '/Applications/Hearthstone',
+            'StarCraft II': '/Applications/StarCraft II',
+            'Heroes of the Storm': '/Applications/Heroes of the Storm',
+        }
+        for name, path in blizzard_apps.items():
+            if os.path.exists(path) or os.path.exists(path + '.app'):
+                battlenet_games.append({
+                    'name': name,
+                    'platform': 'Battle.net',
+                    'path': path if os.path.exists(path) else path + '.app',
+                    'launch_url': 'battlenet://launch'
+                })
+
+    # Linux: Battle.net typically runs via Wine/Lutris - not reliably detectable
 
     return battlenet_games
 
@@ -231,12 +324,14 @@ def get_games_by_platform():
 def get_python_executable():
     """
     Get Python executable path.
-    In frozen mode, uses pythonw.exe (GUI, no console) from _internal directory.
+    In frozen mode, uses pythonw.exe/python3 from _internal directory.
     In development mode, uses current Python interpreter.
 
     Returns:
         Tuple of (python_path, error_message). If python_path is None, error_message contains the reason.
     """
+    from src.platform_utils import get_python_executable_name
+
     if is_frozen():
         exe_dir = os.path.dirname(sys.executable)
         internal_dir = os.path.join(exe_dir, '_internal')
@@ -244,17 +339,19 @@ def get_python_executable():
         if not os.path.exists(internal_dir):
             return (None, f"Internal directory not found: {internal_dir}")
 
-        # Prefer pythonw.exe for GUI applications (no console window)
-        pythonw_exe = os.path.join(internal_dir, 'pythonw.exe')
-        if os.path.exists(pythonw_exe):
-            return (pythonw_exe, None)
+        gui_name, console_name = get_python_executable_name()
 
-        # Fallback to python.exe
-        python_exe = os.path.join(internal_dir, 'python.exe')
-        if os.path.exists(python_exe):
-            return (python_exe, None)
+        # Prefer GUI variant (no console window on Windows)
+        gui_exe = os.path.join(internal_dir, gui_name)
+        if os.path.exists(gui_exe):
+            return (gui_exe, None)
 
-        return (None, f"Python interpreter not found: {python_exe}")
+        # Fallback to console variant
+        console_exe = os.path.join(internal_dir, console_name)
+        if os.path.exists(console_exe):
+            return (console_exe, None)
+
+        return (None, f"Python interpreter not found in: {internal_dir}")
     else:
         return (sys.executable, None)
 

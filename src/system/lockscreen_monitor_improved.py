@@ -1,7 +1,10 @@
 import threading
 import time
 import platform
-import accessible_output3.outputs.auto
+try:
+    import accessible_output3.outputs.auto
+except Exception:
+    pass
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import _
 from src.settings.settings import get_setting
@@ -9,11 +12,7 @@ import queue
 import sys
 import subprocess
 from src.titan_core.stereo_speech import get_stereo_speech
-
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -37,7 +36,10 @@ class ThreadSafeEventMonitor:
         self.is_locked = False
         self.monitoring = False
         self.monitor_thread = None
-        self.speaker = accessible_output3.outputs.auto.Auto()
+        try:
+            self.speaker = accessible_output3.outputs.auto.Auto()
+        except Exception:
+            self.speaker = None
         self.stereo_speech = get_stereo_speech()
         self.lock_overlay_active = False
         self.keyboard_hook = None
@@ -104,7 +106,13 @@ class ThreadSafeEventMonitor:
         return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
     
     def is_workstation_locked_fast(self):
-        """Improved Windows lock screen detection with multiple methods"""
+        """Cross-platform lock screen detection"""
+        if IS_MACOS:
+            return self._is_locked_macos()
+        elif IS_LINUX:
+            return self._is_locked_linux()
+        elif not IS_WINDOWS:
+            return False
         try:
             # Method 1: Check for LogonUI.exe process (most reliable)
             try:
@@ -143,6 +151,51 @@ class ThreadSafeEventMonitor:
             print(f"Error in lock detection: {e}")
             return False
     
+    def _is_locked_macos(self):
+        """macOS lock screen detection via CGSession."""
+        try:
+            result = subprocess.run(
+                ['python3', '-c', 'import Quartz; d=Quartz.CGSessionCopyCurrentDictionary(); print(d.get("CGSSessionScreenIsLocked", False))'],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0 and 'True' in result.stdout:
+                return True
+        except Exception:
+            pass
+        # Fallback: check if screen saver is running
+        try:
+            result = subprocess.run(
+                ['pgrep', '-x', 'ScreenSaverEngine'],
+                capture_output=True, timeout=3
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _is_locked_linux(self):
+        """Linux lock screen detection via loginctl/D-Bus."""
+        try:
+            # Try loginctl (systemd)
+            result = subprocess.run(
+                ['loginctl', 'show-session', 'auto', '-p', 'LockedHint', '--value'],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0:
+                return result.stdout.strip() == 'yes'
+        except Exception:
+            pass
+        # Fallback: check GNOME screensaver
+        try:
+            result = subprocess.run(
+                ['gnome-screensaver-command', '-q'],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0:
+                return 'is active' in result.stdout.lower()
+        except Exception:
+            pass
+        return False
+
     def play_lock_sound(self):
         """Play lock screen sound safely"""
         # Check if screen lock announcement is enabled
@@ -244,22 +297,24 @@ class ThreadSafeEventMonitor:
         with self.state_lock:
             if not self.lock_overlay_active:
                 self.lock_overlay_active = True
-                try:
-                    self.keyboard_hook = keyboard.on_press(self.on_key_press, suppress=False)
-                except Exception as e:
-                    print(f"Failed to start keyboard hook: {e}")
+                if IS_WINDOWS:
+                    try:
+                        self.keyboard_hook = keyboard.on_press(self.on_key_press, suppress=False)
+                    except Exception as e:
+                        print(f"Failed to start keyboard hook: {e}")
     
     def stop_lock_overlay(self):
         """Stop keyboard monitoring"""
         with self.state_lock:
             if self.lock_overlay_active:
                 self.lock_overlay_active = False
-                try:
-                    if self.keyboard_hook:
-                        keyboard.unhook(self.keyboard_hook)
-                        self.keyboard_hook = None
-                except Exception as e:
-                    print(f"Failed to stop keyboard hook: {e}")
+                if IS_WINDOWS:
+                    try:
+                        if self.keyboard_hook:
+                            keyboard.unhook(self.keyboard_hook)
+                            self.keyboard_hook = None
+                    except Exception as e:
+                        print(f"Failed to stop keyboard hook: {e}")
     
     def _process_events(self):
         """Process session change events from queue"""
@@ -451,18 +506,13 @@ def get_lock_monitor():
         return _lock_monitor
 
 def start_lock_monitoring():
-    """Start lock screen monitoring (Windows only)"""
-    if not IS_WINDOWS:
-        print("Lock screen monitoring is only available on Windows")
-        return
-
+    """Start lock screen monitoring (all platforms)"""
     monitor = get_lock_monitor()
+    monitor.platform_supported = True
     monitor.start_monitoring()
 
 def stop_lock_monitoring():
     """Stop lock screen monitoring"""
-    if not IS_WINDOWS:
-        return
 
     global _lock_monitor
     with _monitor_lock:

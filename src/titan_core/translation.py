@@ -3,21 +3,11 @@ import os
 import sys
 import locale
 from src.settings import settings
+from src.platform_utils import get_resource_path
 
 # Global variable to hold the current language code.
 # This can be imported by other modules.
 language_code = 'pl'
-
-
-def _get_base_path():
-    """Get base path for resources, supporting PyInstaller and Nuitka."""
-    # For both PyInstaller and Nuitka, use executable directory
-    # (data directories are placed next to exe for backward compatibility)
-    if hasattr(sys, '_MEIPASS') or getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        # Development mode - get project root (2 levels up from src/titan_core/translation.py)
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Translation domains for modular translations
 TRANSLATION_DOMAINS = [
@@ -73,7 +63,7 @@ def get_language_code_from_display_name(display_name):
 
 def get_available_languages():
     """Scans the 'languages' directory to find available language codes."""
-    lang_dir = os.path.join(_get_base_path(), 'languages')
+    lang_dir = os.path.join(get_resource_path(), 'languages')
     if not os.path.isdir(lang_dir):
         return ['en']  # Default to English if languages dir doesn't exist
 
@@ -125,7 +115,7 @@ def set_language(lang_code='pl'):
         lang_code = 'pl'
 
     language_code = lang_code  # Update the global variable
-    localedir = os.path.join(_get_base_path(), 'languages')
+    localedir = os.path.join(get_resource_path(), 'languages')
 
     # Load all translation domains
     _translations = {}

@@ -4,7 +4,11 @@ import threading
 import time
 import platform
 import subprocess
-import accessible_output3.outputs.auto
+try:
+    import accessible_output3.outputs.auto as _ao3_mod
+    _ao3_mod_available = True
+except Exception:
+    _ao3_mod_available = False
 from src.titan_core.sound import play_sound, initialize_sound
 from src.settings.settings import get_setting
 from src.titan_core.translation import set_language

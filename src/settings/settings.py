@@ -3,7 +3,8 @@ import platform
 
 def get_settings_path():
     if platform.system() == 'Windows':
-        return os.path.join(os.getenv('APPDATA'), 'titosoft', 'Titan', 'bg5settings.ini')
+        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+        return os.path.join(appdata, 'titosoft', 'Titan', 'bg5settings.ini')
     elif platform.system() == 'Linux':
         return os.path.expanduser('~/.config/titosoft/Titan/bg5settings.ini')
     elif platform.system() == 'Darwin':  # macOS

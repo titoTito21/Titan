@@ -11,9 +11,7 @@ from src.titan_core.sound import play_sound
 from src.controller.controller_vibrations import vibrate_cursor_move, vibrate_selection, vibrate_menu_open
 from src.titan_core.translation import _
 from src.settings.settings import get_setting
-
-# Platform detection
-IS_WINDOWS = platform.system() == 'Windows'
+from src.platform_utils import IS_WINDOWS
 
 # Windows-specific imports
 if IS_WINDOWS:

@@ -245,12 +245,16 @@ class MenuBar(wx.MenuBar):
                         wx.CallAfter(self.update_progress_dialog, i)
 
             elif file_path.endswith(".7z"):
-                sevenzip_executable = os.path.join("data", "bin", "7z")
-                if not os.path.exists(sevenzip_executable) and not (os.path.exists(sevenzip_executable + '.exe') and os.name == 'nt'):
-                     wx.CallAfter(self.show_message_box, _("Error: 7z executable not found. Make sure it is in the 'data/bin/' directory."), _("Executable file error"), wx.OK | wx.ICON_ERROR)
+                # Find 7z executable: bundled path on Windows, system PATH on macOS/Linux
+                if os.name == 'nt':
+                    sevenzip_executable = os.path.join("data", "bin", "7z.exe")
+                    if not os.path.exists(sevenzip_executable):
+                        sevenzip_executable = os.path.join("data", "bin", "7z")
+                else:
+                    sevenzip_executable = shutil.which("7z") or "7z"
+                if not os.path.exists(sevenzip_executable) and not shutil.which(sevenzip_executable):
+                     wx.CallAfter(self.show_message_box, _("Error: 7z executable not found. Make sure it is installed or in the 'data/bin/' directory."), _("Executable file error"), wx.OK | wx.ICON_ERROR)
                      return
-                if os.name == 'nt' and not os.path.exists(sevenzip_executable) and os.path.exists(sevenzip_executable + '.exe'):
-                    sevenzip_executable += '.exe'
 
                 command = [sevenzip_executable, 'x', file_path, f'-o{dest_dir}', '-aoa']
 

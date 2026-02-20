@@ -666,6 +666,50 @@ def on_statusbar_item_activate(parent_frame=None):
 
 ---
 
+## Multiplatform Requirements
+
+All TCE statusbar applets MUST work on **Windows, macOS, and Linux**.
+
+`get_statusbar_item_text()` runs on all platforms — avoid platform-specific APIs without guards:
+
+### Platform-safe data gathering
+```python
+import sys, platform
+
+# psutil is cross-platform — always wrap in try/except
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+# Windows-only APIs (registry, WMI, etc.)
+if sys.platform == 'win32':
+    import winreg  # OK here
+```
+
+### Config/data paths (cross-platform)
+```python
+import platform, os
+
+def get_config_dir(applet_name):
+    p = platform.system()
+    if p == 'Windows':
+        base = os.getenv('APPDATA') or os.path.expanduser('~')
+    elif p == 'Darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.path.join(os.path.expanduser('~'), '.config')
+    return os.path.join(base, 'Titosoft', 'Titan', applet_name)
+```
+
+### Common mistakes to avoid
+- `os.environ['APPDATA']` → use `os.getenv('APPDATA') or os.path.expanduser('~')`
+- `os.environ['USERPROFILE']` → use `os.path.expanduser('~')`
+- `os.sys.platform` → **AttributeError!** Use `sys.platform` (after `import sys`)
+- `os.system(cmd)` → use `subprocess.Popen(...)`
+- `os.startfile(path)` → Windows only; use platform check in `on_statusbar_item_activate()`
+
 ## Action:
 
 Ask the user for applet details and create a complete, working statusbar applet following the current TCE standard.

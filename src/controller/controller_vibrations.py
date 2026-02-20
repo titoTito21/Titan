@@ -8,6 +8,7 @@ import threading
 import time
 from typing import List, Optional, Dict, Any
 from src.titan_core.translation import _
+from src.platform_utils import IS_WINDOWS
 
 # Set SDL2 environment variables for Xbox controller support
 os.environ['SDL_JOYSTICK_HIDAPI_XBOX'] = '1'
@@ -16,9 +17,11 @@ os.environ['SDL_JOYSTICK_HIDAPI'] = '1'
 
 # Try to import XInput for Windows
 XINPUT_AVAILABLE = False
-try:
-    import platform
-    if platform.system() == 'Windows':
+xinput = None
+XINPUT_VIBRATION = None
+
+if IS_WINDOWS:
+    try:
         import ctypes
         from ctypes import wintypes, Structure
 
@@ -41,8 +44,10 @@ try:
             print("XInput support enabled")
         else:
             print("XInput not available")
-except Exception as e:
-    print(f"Failed to initialize XInput: {e}")
+    except Exception as e:
+        print(f"Failed to initialize XInput: {e}")
+else:
+    print(f"XInput not available on this platform")
 
 class SimpleControllerVibration:
     def __init__(self):
@@ -73,7 +78,7 @@ class SimpleControllerVibration:
 
         def vibrate_thread():
             # Try XInput first (most reliable for Xbox controllers)
-            if XINPUT_AVAILABLE and platform.system() == 'Windows':
+            if XINPUT_AVAILABLE and IS_WINDOWS:
                 try:
                     left_motor = int(intensity * 65535)
                     right_motor = int(intensity * 65535)
@@ -98,6 +103,22 @@ class SimpleControllerVibration:
                             return  # Success, exit
                 except Exception as e:
                     pass  # Continue to pygame fallback
+
+            # Pygame SDL2 rumble fallback (macOS/Linux, or if XInput failed)
+            try:
+                import pygame
+                if pygame.joystick.get_init():
+                    for i in range(pygame.joystick.get_count()):
+                        try:
+                            js = pygame.joystick.Joystick(i)
+                            if not js.get_init():
+                                js.init()
+                            js.rumble(intensity, intensity, int(duration * 1000))
+                            return
+                        except Exception:
+                            continue
+            except Exception:
+                pass
 
         # Run in background thread
         threading.Thread(target=vibrate_thread, daemon=True).start()
@@ -168,7 +189,7 @@ class SimpleControllerVibration:
 
     def cleanup(self):
         """Clean up controller resources"""
-        if XINPUT_AVAILABLE and platform.system() == 'Windows':
+        if XINPUT_AVAILABLE and IS_WINDOWS:
             try:
                 for controller_id in range(4):
                     stop_vib = XINPUT_VIBRATION()

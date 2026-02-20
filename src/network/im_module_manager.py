@@ -12,6 +12,7 @@ import configparser
 import importlib.util
 
 from src.network.titanim_sound_api import TitanIMSoundAPI
+from src.platform_utils import get_base_path
 
 # Shared sound API instance for all modules
 _sound_api = TitanIMSoundAPI()
@@ -24,8 +25,7 @@ class TitanIMModuleManager:
     def load_modules(self):
         """Scan data/titanIM_modules/ and load all valid modules."""
         self.modules = []
-        base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__)))), "data", "titanIM_modules")
+        base_dir = os.path.join(get_base_path(), "data", "titanIM_modules")
 
         if not os.path.isdir(base_dir):
             return

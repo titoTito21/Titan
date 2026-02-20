@@ -3,9 +3,11 @@ import wx
 import threading
 import time
 import platform
+import subprocess
 import psutil
+from src.platform_utils import IS_WINDOWS, IS_MACOS, IS_LINUX
 
-if platform.system() == "Windows":
+if IS_WINDOWS:
     import win32gui
     import win32process
     import win32api
@@ -15,16 +17,21 @@ if platform.system() == "Windows":
 play_sound = None
 
 # Lista procesów systemowych
-SYSTEM_PROCESSES = {
-    "explorer.exe",
-    "taskmgr.exe",
-    "cmd.exe",
-    "ms-settings.exe",
-    "services.exe",
-    "svchost.exe",
-    "winlogon.exe",
-    "lsass.exe",
-}
+if IS_WINDOWS:
+    SYSTEM_PROCESSES = {
+        "explorer.exe", "taskmgr.exe", "cmd.exe", "ms-settings.exe",
+        "services.exe", "svchost.exe", "winlogon.exe", "lsass.exe",
+    }
+elif IS_MACOS:
+    SYSTEM_PROCESSES = {
+        "finder", "activity monitor", "terminal", "system preferences",
+        "systemuiserver", "dock", "loginwindow",
+    }
+else:
+    SYSTEM_PROCESSES = {
+        "nautilus", "thunar", "dolphin", "gnome-terminal", "konsole",
+        "xterm", "gnome-system-monitor", "systemd",
+    }
 
 
 class SystemAudioFeedback(threading.Thread):
@@ -52,13 +59,10 @@ class SystemAudioFeedback(threading.Thread):
 
         # Poprzednio aktywne okno
         self.prev_window = None
+        self.prev_window_name = None
 
     def run(self):
         global play_sound
-
-        if platform.system() != "Windows":
-            print("SystemAudioFeedback działa tylko na Windows.")
-            return
 
         # Import play_sound here to ensure sound system is initialized first
         try:
@@ -73,7 +77,7 @@ class SystemAudioFeedback(threading.Thread):
 
         while not self._stop_event.is_set():
             try:
-                # 1. Monitoruj procesy
+                # 1. Monitoruj procesy (cross-platform via psutil)
                 self._monitor_processes()
                 # 2. Monitoruj okna procesów
                 self._monitor_windows()
@@ -81,7 +85,6 @@ class SystemAudioFeedback(threading.Thread):
                 self._monitor_active_window()
             except Exception as e:
                 print(f"Error in SystemAudioFeedback monitoring loop: {e}")
-                # Don't crash the thread, just continue
 
             time.sleep(0.1)
 
@@ -127,7 +130,6 @@ class SystemAudioFeedback(threading.Thread):
                 "had_window": False
             }
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            # Process already gone or inaccessible
             pass
         except Exception as e:
             print(f"Error monitoring new process {pid}: {e}")
@@ -158,20 +160,26 @@ class SystemAudioFeedback(threading.Thread):
         """
         global play_sound
 
+        if IS_WINDOWS:
+            self._monitor_windows_win32()
+        else:
+            self._monitor_windows_crossplatform()
+
+    def _monitor_windows_win32(self):
+        """Windows: enumerate windows via win32gui."""
+        global play_sound
+
         def enum_handler(hwnd, _):
             try:
-                # Check if window still exists
                 if not win32gui.IsWindow(hwnd):
                     return True
-
                 if not win32gui.IsWindowVisible(hwnd):
-                    return True  # pomiń ukryte okna
+                    return True
 
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 if pid in self.process_info:
                     info = self.process_info[pid]
                     if not info.get("had_window") and play_sound:
-                        # Pierwsze okno = odtwarzamy dźwięk otwarcia
                         info["had_window"] = True
                         try:
                             if info.get("is_system"):
@@ -180,16 +188,47 @@ class SystemAudioFeedback(threading.Thread):
                                 play_sound("ui/uiopen.ogg")
                         except Exception as e:
                             print(f"Error playing open sound: {e}")
-            except Exception as e:
-                # Silently handle window enumeration errors
+            except Exception:
                 pass
-
             return True
 
         try:
             win32gui.EnumWindows(enum_handler, None)
         except Exception as e:
             print(f"Error enumerating windows: {e}")
+
+    def _monitor_windows_crossplatform(self):
+        """macOS/Linux: mark processes that have GUI windows via psutil."""
+        global play_sound
+        for pid, info in list(self.process_info.items()):
+            if info.get("had_window"):
+                continue
+            try:
+                proc = psutil.Process(pid)
+                # Check if process has any open files that suggest a GUI
+                # Or just check if it has connections (basic heuristic)
+                # On macOS/Linux we can't easily enumerate windows without X11/Quartz
+                # Use a simple heuristic: processes with a terminal or display connection
+                if proc.status() == psutil.STATUS_RUNNING:
+                    # Check if the process has a DISPLAY env var (X11) or is a known GUI app
+                    try:
+                        environ = proc.environ()
+                        if 'DISPLAY' in environ or 'WAYLAND_DISPLAY' in environ or IS_MACOS:
+                            # Heuristic: if process has been alive > 1 second and has a display, assume GUI
+                            if time.time() - proc.create_time() > 1.0:
+                                info["had_window"] = True
+                                if play_sound:
+                                    try:
+                                        if info.get("is_system"):
+                                            play_sound("system/sysprocess_open.ogg")
+                                        else:
+                                            play_sound("ui/uiopen.ogg")
+                                    except Exception:
+                                        pass
+                    except (psutil.AccessDenied, psutil.NoSuchProcess):
+                        pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
 
     # --------------------------------------------------------------------------
     #              MONITOROWANIE AKTYWNEGO OKNA (dialogi, menu, focus)
@@ -200,31 +239,36 @@ class SystemAudioFeedback(threading.Thread):
         if not play_sound:
             return
 
+        if IS_WINDOWS:
+            self._monitor_active_window_win32()
+        else:
+            self._monitor_active_window_crossplatform()
+
+    def _monitor_active_window_win32(self):
+        """Windows: monitor active window via win32gui."""
+        global play_sound
         try:
             current_window = win32gui.GetForegroundWindow()
 
-            # Ignore invalid window handles
             if not current_window or current_window == 0:
                 return
 
             # Ignoruj okna Titan
-            if self._is_titan_window(current_window):
-                # Aktualizuj prev_window ale nie odtwarzaj dźwięków
+            if self._is_titan_window_win32(current_window):
                 self.prev_window = current_window
                 return
 
             if current_window != self.prev_window:
                 # Zamknięcie poprzedniego okna dialog/menu?
                 if self.prev_window and play_sound:
-                    # Nie odtwarzaj dźwięku zamknięcia jeśli poprzednie okno było Titan
-                    if not self._is_titan_window(self.prev_window):
+                    if not self._is_titan_window_win32(self.prev_window):
                         try:
                             if self._is_menu(self.prev_window):
                                 play_sound("ui/tui_close.ogg")
                             elif self._is_dialog_or_menu(self.prev_window):
                                 play_sound("ui/applist.ogg")
                         except Exception:
-                            pass  # Window may no longer exist
+                            pass
 
                 # Otwarcie nowego okna
                 self.prev_window = current_window
@@ -234,35 +278,85 @@ class SystemAudioFeedback(threading.Thread):
                     elif self._is_dialog_or_menu(current_window):
                         play_sound("ui/statusbar.ogg")
                     else:
-                        # Zwykła zmiana fokusa / skok kursora
                         play_sound("core/FOCUS.ogg")
-        except Exception as e:
-            # Handle errors getting foreground window
+        except Exception:
             pass
 
-    def _is_titan_window(self, hwnd) -> bool:
+    def _monitor_active_window_crossplatform(self):
+        """macOS/Linux: monitor active window name changes."""
+        global play_sound
+        try:
+            current_name = self._get_active_window_name()
+            if not current_name:
+                return
+
+            # Skip Titan windows
+            if "titan" in current_name.lower():
+                self.prev_window_name = current_name
+                return
+
+            if current_name != self.prev_window_name:
+                self.prev_window_name = current_name
+                if play_sound:
+                    play_sound("core/FOCUS.ogg")
+        except Exception:
+            pass
+
+    def _get_active_window_name(self):
+        """Get the name of the currently active window (cross-platform)."""
+        try:
+            if IS_MACOS:
+                result = subprocess.run(
+                    ['osascript', '-e', 'tell application "System Events" to get name of first application process whose frontmost is true'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            elif IS_LINUX:
+                # Try xdotool (X11)
+                try:
+                    result = subprocess.run(
+                        ['xdotool', 'getactivewindow', 'getwindowname'],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    if result.returncode == 0:
+                        return result.stdout.strip()
+                except FileNotFoundError:
+                    pass
+                # Fallback: xprop
+                try:
+                    result = subprocess.run(
+                        ['xprop', '-root', '_NET_ACTIVE_WINDOW'],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    if result.returncode == 0 and 'window id' in result.stdout:
+                        return result.stdout.strip()
+                except FileNotFoundError:
+                    pass
+        except Exception:
+            pass
+        return None
+
+    # --------------------------------------------------------------------------
+    #         WINDOWS-SPECIFIC HELPERS (only called when IS_WINDOWS)
+    # --------------------------------------------------------------------------
+    def _is_titan_window_win32(self, hwnd) -> bool:
         """Sprawdza czy okno należy do aplikacji Titan"""
         try:
-            # Check if window still exists
             if not win32gui.IsWindow(hwnd):
                 return False
 
-            # Pobierz tytuł okna
             window_title = win32gui.GetWindowText(hwnd)
 
-            # Sprawdź czy tytuł zawiera "Titan" (główne okno TCE i podokna)
             if "Titan" in window_title:
                 return True
 
-            # Sprawdź nazwę procesu
             try:
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
                 process = psutil.Process(pid)
                 exe_name = process.name().lower()
 
-                # Sprawdź czy to proces Titan (main.py, main.exe, titan.exe, itp.)
                 if "titan" in exe_name or exe_name == "main.exe" or exe_name == "python.exe":
-                    # Dla python.exe dodatkowo sprawdź tytuł
                     if exe_name == "python.exe" and "Titan" in window_title:
                         return True
                     elif exe_name != "python.exe":
@@ -278,7 +372,6 @@ class SystemAudioFeedback(threading.Thread):
     def _is_menu(self, hwnd) -> bool:
         """Sprawdza czy okno to menu (kontekstowe, systemowe, etc.)"""
         try:
-            # Check if window still exists
             if not win32gui.IsWindow(hwnd):
                 return False
 
@@ -288,7 +381,6 @@ class SystemAudioFeedback(threading.Thread):
             if class_name == "#32768":
                 return True
 
-            # Sprawdź inne klasy menu
             menu_classes = ["menu", "menubar", "popup", "dropdown", "context"]
             if any(mc in class_name.lower() for mc in menu_classes):
                 return True
@@ -301,30 +393,23 @@ class SystemAudioFeedback(threading.Thread):
     def _is_dialog_or_menu(self, hwnd) -> bool:
         """Sprawdza czy okno to dialog Windows z przyciskami (np. MessageBox, potwierdzenia)"""
         try:
-            # Check if window still exists
             if not win32gui.IsWindow(hwnd):
                 return False
 
-            # Sprawdź klasę okna - #32770 to standardowa klasa dialogu Windows
             class_name = win32gui.GetClassName(hwnd)
 
-            # #32770 to główna klasa dialogów Windows
             if class_name == "#32770":
-                # Dodatkowo sprawdź czy ma przyciski (child windows typu Button)
                 if self._has_buttons(hwnd):
                     return True
 
-            # Sprawdź styl okna - dialog musi mieć WS_DLGFRAME i WS_POPUP
             try:
                 style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
                 ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
             except Exception:
                 return False
 
-            # Dialog powinien mieć WS_DLGFRAME lub DS_MODALFRAME
             is_dialog_frame = (style & win32con.WS_DLGFRAME) or ((style & win32con.WS_POPUP) and (ex_style & win32con.WS_EX_DLGMODALFRAME))
 
-            # Jeśli ma styl dialogu, sprawdź czy ma przyciski
             if is_dialog_frame and self._has_buttons(hwnd):
                 return True
 
@@ -336,7 +421,6 @@ class SystemAudioFeedback(threading.Thread):
     def _has_buttons(self, hwnd) -> bool:
         """Sprawdza czy okno ma przyciski (child windows)"""
         try:
-            # Check if window still exists
             if not win32gui.IsWindow(hwnd):
                 return False
 
@@ -347,11 +431,10 @@ class SystemAudioFeedback(threading.Thread):
                     if not win32gui.IsWindow(child_hwnd):
                         return True
                     child_class = win32gui.GetClassName(child_hwnd)
-                    # Sprawdź czy to przycisk
                     if child_class.lower() in ["button", "static", "edit"]:
                         if child_class.lower() == "button":
                             buttons_found[0] = True
-                            return False  # Zatrzymaj enumerację
+                            return False
                 except Exception:
                     pass
                 return True
@@ -380,14 +463,11 @@ def add_menu(menubar):
 #    TEST LOKALNY
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    if platform.system() != "Windows":
-        print("Ten komponent działa tylko na Windows.")
-    else:
-        app = wx.App(False)
-        frame = wx.Frame(None, title="System Audio Feedback", size=(300, 200))
-        frame.Show()
+    app = wx.App(False)
+    frame = wx.Frame(None, title="System Audio Feedback", size=(300, 200))
+    frame.Show()
 
-        feedback_thread = initialize(app)
-        app.MainLoop()
+    feedback_thread = initialize(app)
+    app.MainLoop()
 
-        feedback_thread.stop()
+    feedback_thread.stop()

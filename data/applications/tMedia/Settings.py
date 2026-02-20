@@ -1,17 +1,20 @@
 import wx
 import os
+import sys
+import platform
 import configparser
 import subprocess
 
 # Funkcja określająca ścieżkę do pliku konfiguracyjnego w zależności od platformy
 def get_config_path():
-    if os.name == 'nt':  # Windows
-        return os.path.join(os.getenv('APPDATA'), 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-    elif os.name == 'posix':  # Linux, macOS
-        if 'darwin' in os.sys.platform:  # macOS
-            return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-        else:  # Linux
-            return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
+    _plat = platform.system()
+    if _plat == 'Windows':
+        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+        return os.path.join(appdata, 'Titosoft', 'Titan', 'appsettings', 'media.ini')
+    elif _plat == 'Darwin':  # macOS
+        return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
+    else:  # Linux
+        return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
 
 class SettingsWindow(wx.Frame):
     def __init__(self, parent, config):
@@ -76,9 +79,19 @@ class SettingsWindow(wx.Frame):
         self.Close()
 
     def install_vlc(self):
-        if os.name == 'nt':  # Windows
-            subprocess.run(["powershell", "-Command", "(New-Object System.Net.WebClient).DownloadFile('https://get.videolan.org/vlc/last/win64/vlc-3.0.11-win64.exe', 'vlc_installer.exe'); Start-Process 'vlc_installer.exe' -Wait"])
-        elif os.name == 'posix':  # Linux
-            subprocess.run(["sudo", "apt-get", "install", "-y", "vlc"])
-        elif 'darwin' in os.sys.platform:  # macOS
+        _plat = platform.system()
+        if _plat == 'Darwin':
             subprocess.run(["brew", "install", "vlc"])
+        elif _plat == 'Linux':
+            # Try common package managers in order
+            for cmd in [["apt-get", "install", "-y", "vlc"],
+                        ["dnf", "install", "-y", "vlc"],
+                        ["pacman", "-S", "--noconfirm", "vlc"]]:
+                if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                    subprocess.run(["sudo"] + cmd)
+                    break
+        else:  # Windows
+            subprocess.run(["powershell", "-Command",
+                "(New-Object System.Net.WebClient).DownloadFile("
+                "'https://get.videolan.org/vlc/last/win64/vlc-3.0.11-win64.exe',"
+                " 'vlc_installer.exe'); Start-Process 'vlc_installer.exe' -Wait"])

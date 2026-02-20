@@ -1,6 +1,7 @@
 # TFM/gui.py
 import sys
 import os
+import subprocess
 import wx
 import datetime
 import shutil
@@ -16,14 +17,70 @@ from sound import initialize_sound, play_startup_sound, get_sfx_directory, play_
 
 import string
 
+# Screen reader output (accessible_output3) for VoiceOver / NVDA / JAWS
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _speaker = _ao3.Auto()
+except Exception:
+    _speaker = None
+
+
 def _get_drives():
-    drives = []
-    if platform.system() == "Windows":
+    """Return available storage roots for the current platform.
+
+    - Windows: drive letters (C:\\, D:\\, ...)
+    - macOS:   /Volumes entries + home directory shortcut
+    - Linux:   /mnt and /media entries + home directory shortcut
+    """
+    system = platform.system()
+    if system == "Windows":
+        drives = []
         for letter in string.ascii_uppercase:
             drive = f"{letter}:\\"
             if os.path.exists(drive):
                 drives.append(drive)
-    return drives
+        return drives
+    elif system == "Darwin":  # macOS
+        volumes = []
+        volumes_dir = "/Volumes"
+        try:
+            if os.path.isdir(volumes_dir):
+                for entry in sorted(os.listdir(volumes_dir)):
+                    full = os.path.join(volumes_dir, entry)
+                    if os.path.isdir(full):
+                        volumes.append(full)
+        except Exception:
+            pass
+        home = os.path.expanduser("~")
+        if home not in volumes:
+            volumes.insert(0, home)
+        return volumes
+    else:  # Linux
+        roots = []
+        for base in ("/mnt", "/media"):
+            try:
+                if os.path.isdir(base):
+                    for entry in sorted(os.listdir(base)):
+                        full = os.path.join(base, entry)
+                        if os.path.isdir(full):
+                            roots.append(full)
+            except Exception:
+                pass
+        home = os.path.expanduser("~")
+        if home not in roots:
+            roots.insert(0, home)
+        if not roots:
+            roots.append("/")
+        return roots
+
+
+def _is_fs_root(path):
+    """Return True when *path* is a filesystem root that has no parent.
+
+    Replaces the old Windows-only ``len(path) == 3 and path[1] == ':'`` check.
+    Works on Windows (C:\\), macOS (/Volumes/Disk), and Linux (/).
+    """
+    return os.path.dirname(path) == path
 
 # Inicjalizacja pygame do dźwięku
 # Initialize sound AFTER wx.App is created in tfm.py (handled there now)
@@ -176,6 +233,10 @@ class FileManager(wx.Frame):
 
         panel.SetSizer(self.main_sizer)
 
+        # macOS VoiceOver: assign accessible names to list controls
+        if platform.system() == 'Darwin':
+            self._setup_voiceover_names()
+
         # Skróty klawiaturowe
         accel_tbl = wx.AcceleratorTable([
             (wx.ACCEL_CTRL, ord('C'), wx.ID_COPY),
@@ -202,9 +263,28 @@ class FileManager(wx.Frame):
         self.update_window_title()
         self.Show()
 
+    def _setup_voiceover_names(self):
+        """Set VoiceOver-readable names on interactive controls (macOS only)."""
+        try:
+            if hasattr(self, 'file_list'):
+                self.file_list.SetName(_("File list"))
+            if hasattr(self, 'left_list'):
+                self.left_list.SetName(_("Left panel"))
+            if hasattr(self, 'right_list'):
+                self.right_list.SetName(_("Right panel"))
+            if hasattr(self, 'notebook'):
+                self.notebook.SetName(_("File tabs"))
+        except Exception as e:
+            print(f"TFM: VoiceOver name setup failed: {e}")
+
     def update_window_title(self):
         if self.is_drive_selection_mode:
-            self.SetTitle(_("Wybór dysku"))
+            if platform.system() == 'Darwin':
+                self.SetTitle(_("Volume selection"))
+            elif platform.system() == 'Linux':
+                self.SetTitle(_("Mount point selection"))
+            else:
+                self.SetTitle(_("Wybór dysku"))
             return
 
         mode = self.settings.get_window_title_mode()
@@ -441,11 +521,27 @@ class FileManager(wx.Frame):
 
 
     def announce(self, message):
-        # Update the status text label. Screen readers should pick this up.
+        # Update the status text label so wx-aware screen readers pick it up.
         self.status_text.SetLabel(message)
-        # print(f"Announcement: {message}") # Optional: Print announcements to console
-        # Direct TTS removed as requested
-        # self.speak(message)
+        # 1) accessible_output3 – preferred (VoiceOver / NVDA / JAWS / Orca)
+        if _speaker:
+            try:
+                _speaker.speak(message, interrupt=True)
+                return
+            except Exception:
+                pass
+        # 2) Platform fallback when ao3 is unavailable
+        try:
+            _sys = platform.system()
+            if _sys == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(message)
+            elif _sys == 'Darwin':
+                subprocess.Popen(['say', message])
+            else:  # Linux
+                subprocess.Popen(['spd-say', message])
+        except Exception:
+            pass
 
 
     # Removed init_tts and speak_dummy as direct TTS is no longer used
@@ -815,18 +911,12 @@ class FileManager(wx.Frame):
             if system == 'Windows':
                 os.startfile(path)
             elif system == 'Darwin':  # macOS
-                # Using subprocess.run is generally preferred over os.system for better control and security
-                # import subprocess
-                # subprocess.run(['open', path])
-                os.system(f'open "{path}"') # Keep os.system for consistency with original code
+                subprocess.Popen(['open', path])
             else:  # Linux
-                # Using subprocess.run is generally preferred over os.system
-                # import subprocess
-                # subprocess.run(['xdg-open', path])
-                os.system(f'xdg-open "{path}"') # Keep os.system for consistency with original code
+                subprocess.Popen(['xdg-open', path])
         except Exception as e:
-            print(f"System file open error for {path}: {e}") # Log the error
-            raise # Re-raise the exception to be caught by the caller (on_open)
+            print(f"System file open error for {path}: {e}")
+            raise
 
 
     def on_focus(self, event):
@@ -908,12 +998,12 @@ class FileManager(wx.Frame):
         folder_to_select = os.path.basename(current_path)
         parent_path = os.path.dirname(current_path)
 
-        # Check if current_path is a drive root (e.g., 'C:\')
-        is_drive_root = (len(current_path) == 3 and current_path[1] == ':' and current_path[2] == '\\')
+        # Check if current_path is a filesystem root (cross-platform)
+        is_drive_root = _is_fs_root(current_path)
 
         if self.is_drive_selection_mode:
             play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
-            self.announce(_("Jesteś w widoku wyboru dysku."))
+            self.announce(_("You are in drive/volume selection view."))
             return
 
         if is_drive_root:
@@ -921,7 +1011,7 @@ class FileManager(wx.Frame):
             self.populate_file_list(ctrl=active_ctrl)
             self.update_window_title()
             play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-            self.announce(_("Przejście do widoku wyboru dysku."))
+            self.announce(_("Switched to drive/volume selection view."))
         elif parent_path != current_path and os.path.isdir(parent_path):
             setattr(self, current_path_attr, parent_path)
             getattr(self, selected_items_attr).clear()
@@ -937,7 +1027,7 @@ class FileManager(wx.Frame):
             
             self.update_window_title()
             play_sound(os.path.join(get_sfx_directory(), 'select.ogg'))
-            self.announce(_("Przejście do katalogu nadrzędnego: {}")).format(os.path.basename(parent_path) or '/')
+            self.announce(_("Przejście do katalogu nadrzędnego: {}").format(os.path.basename(parent_path) or '/'))
         else:
             play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
             self.announce(_("Jesteś w katalogu głównym."))

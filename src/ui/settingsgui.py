@@ -527,10 +527,13 @@ class SettingsFrame(wx.Frame):
         self.announce_screen_lock_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.announce_screen_lock_cb, flag=wx.LEFT | wx.TOP, border=10)
 
-        self.windows_e_hook_cb = wx.CheckBox(self.environment_panel, label=_("Modify system interface"))
-        self.windows_e_hook_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
-        vbox.Add(self.windows_e_hook_cb, flag=wx.LEFT | wx.TOP, border=10)
+        if sys.platform == 'win32':
+            self.windows_e_hook_cb = wx.CheckBox(self.environment_panel, label=_("Modify system interface"))
+            self.windows_e_hook_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+            self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+            vbox.Add(self.windows_e_hook_cb, flag=wx.LEFT | wx.TOP, border=10)
+        else:
+            self.windows_e_hook_cb = None
 
         self.enable_tce_sounds_cb = wx.CheckBox(self.environment_panel, label=_("Enable TCE sounds outside environment"))
         self.enable_tce_sounds_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -749,7 +752,8 @@ class SettingsFrame(wx.Frame):
 
         environment_settings = self.settings.get('environment', {})
         self.announce_screen_lock_cb.SetValue(str(environment_settings.get('announce_screen_lock', 'True')).lower() in ['true', '1'])
-        self.windows_e_hook_cb.SetValue(str(environment_settings.get('windows_e_hook', 'False')).lower() in ['true', '1'])
+        if self.windows_e_hook_cb is not None:
+            self.windows_e_hook_cb.SetValue(str(environment_settings.get('windows_e_hook', 'False')).lower() in ['true', '1'])
         self.enable_tce_sounds_cb.SetValue(str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1'])
 
         # Load system monitor settings
@@ -779,6 +783,10 @@ class SettingsFrame(wx.Frame):
 
 
     def OnSapiSettings(self, event):
+        if sys.platform != 'win32':
+            wx.MessageBox(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            event.Skip()
+            return
         try:
             # Use subprocess to run control panel command for SAPI settings
             command = ["control.exe", "sapi.cpl"]
@@ -807,6 +815,10 @@ class SettingsFrame(wx.Frame):
 
 
     def OnEaseOfAccess(self, event):
+        if sys.platform != 'win32':
+            wx.MessageBox(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            event.Skip()
+            return
         try:
             # Try modern Settings app first (Windows 10/11)
             command = ["ms-settings:easeofaccess"]
@@ -936,11 +948,13 @@ class SettingsFrame(wx.Frame):
             'stereo_speech': str(self.stereo_speech_cb.GetValue())  # Keep for backward compatibility
         }
 
-        self.settings['environment'] = {
+        env_settings = {
             'announce_screen_lock': str(self.announce_screen_lock_cb.GetValue()),
-            'windows_e_hook': str(self.windows_e_hook_cb.GetValue()),
             'enable_tce_sounds': str(self.enable_tce_sounds_cb.GetValue())
         }
+        if self.windows_e_hook_cb is not None:
+            env_settings['windows_e_hook'] = str(self.windows_e_hook_cb.GetValue())
+        self.settings['environment'] = env_settings
 
         # Save system monitor settings
         volume_monitor_options = ['none', 'sound', 'speech', 'both']

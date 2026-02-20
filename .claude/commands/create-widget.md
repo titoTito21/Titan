@@ -876,6 +876,93 @@ def get_widget_info():
     }
 ```
 
+## Multiplatform Requirements
+
+All TCE widgets MUST work on **Windows, macOS, and Linux**. Follow these rules:
+
+### accessible_output3 — always try/except
+```python
+try:
+    import accessible_output3.outputs.auto as _ao3
+    _ao3_speaker = _ao3.Auto()
+except Exception:
+    _ao3_speaker = None
+```
+
+### TTS fallback (when no screen reader is running)
+```python
+import platform, subprocess
+
+def speak(text):
+    if _ao3_speaker:
+        try:
+            _ao3_speaker.speak(text, interrupt=True)
+            return
+        except Exception:
+            pass
+    p = platform.system()
+    try:
+        if p == 'Windows':
+            import win32com.client
+            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+        elif p == 'Darwin':
+            subprocess.Popen(['say', text])
+        else:
+            subprocess.Popen(['spd-say', text])
+    except Exception:
+        pass
+```
+
+### Opening files/URLs (cross-platform)
+```python
+import sys, subprocess
+if sys.platform == 'win32':
+    os.startfile(path)           # Windows only
+elif sys.platform == 'darwin':
+    subprocess.Popen(['open', path])
+else:
+    subprocess.Popen(['xdg-open', path])
+```
+
+### Config/data directory (cross-platform)
+```python
+import platform, os
+
+def get_config_dir(app_name):
+    p = platform.system()
+    if p == 'Windows':
+        base = os.getenv('APPDATA') or os.path.expanduser('~')
+    elif p == 'Darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.path.join(os.path.expanduser('~'), '.config')
+    return os.path.join(base, 'Titosoft', 'Titan', app_name)
+```
+
+### Platform-specific paths
+```python
+import sys, os
+# Desktop shortcuts: Windows=.lnk, macOS=.app, Linux=any file
+if sys.platform == 'win32':
+    desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+    public_desktop = os.environ.get('PUBLIC', '')
+    if public_desktop:
+        public_desktop = os.path.join(public_desktop, 'Desktop')
+elif sys.platform == 'darwin':
+    desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+else:
+    desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+```
+
+### Common mistakes to avoid
+- `os.environ['APPDATA']` → use `os.getenv('APPDATA') or os.path.expanduser('~')` (KeyError on Linux/macOS)
+- `os.environ['USERPROFILE']` → use `os.path.expanduser('~')` (works on all platforms)
+- `os.environ['PUBLIC']` → use `os.environ.get('PUBLIC', '')` (only exists on Windows)
+- `os.sys.platform` → **AttributeError!** Use `sys.platform` (after `import sys`)
+- `os.system(cmd)` → use `subprocess.Popen(...)` (safer, cross-platform)
+- `os.startfile(path)` → Windows only, always use the platform check above
+- `os.path.expanduser("~\\Documents")` → use `os.path.join(os.path.expanduser('~'), 'Documents')` (cross-platform)
+
 ## Action:
 
 Ask the user for widget details and create a complete, working widget following the current TCE standard.
