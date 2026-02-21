@@ -10987,3 +10987,432 @@ Checking folder: TTerm
 Total components loaded: 3
 Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
 Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.py
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}
+=== Component Loading Started ===
+Project root: C:\Users\win8k\OneDrive\projects\TCE Launcher
+Components dir: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'tsr', 'TTerm']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TArticle\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\tips\init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: C:\Users\win8k\OneDrive\projects\TCE Launcher\data\components\TTerm\init.pyc
+  Calling load_component...
+  load_component returned
+=== Component Loading Finished ===
+Total components loaded: 3
+Component states: {'TArticle': 0, 'tips': 0, 'tsr': 0, 'TTerm': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'tsr': 'tsr', 'TTerm': 'Terminal'}

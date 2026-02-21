@@ -70,3 +70,21 @@
 [2026-02-20 12:43:31.455256] get_python_executable called, is_frozen=False
 [2026-02-20 12:43:31.455630] sys.executable=/Library/Frameworks/Python.framework/Versions/3.13/bin/python3
 [2026-02-20 12:43:31.455747] Development mode, using sys.executable
+[2026-02-20 18:58:07.625091] get_python_executable called, is_frozen=False
+[2026-02-20 18:58:07.627580] sys.executable=C:\Python314\python.exe
+[2026-02-20 18:58:07.629142] Development mode, using sys.executable
+[2026-02-20 19:00:06.876741] get_python_executable called, is_frozen=False
+[2026-02-20 19:00:06.878355] sys.executable=C:\Python314\python.exe
+[2026-02-20 19:00:06.879162] Development mode, using sys.executable
+[2026-02-20 19:18:11.656414] get_python_executable called, is_frozen=False
+[2026-02-20 19:18:11.657586] sys.executable=C:\Python314\python.exe
+[2026-02-20 19:18:11.658326] Development mode, using sys.executable
+[2026-02-20 19:20:31.804459] get_python_executable called, is_frozen=False
+[2026-02-20 19:20:31.805593] sys.executable=C:\Python314\python.exe
+[2026-02-20 19:20:31.806332] Development mode, using sys.executable
+[2026-02-20 19:21:49.390922] get_python_executable called, is_frozen=False
+[2026-02-20 19:21:49.392483] sys.executable=C:\Python314\python.exe
+[2026-02-20 19:21:49.393290] Development mode, using sys.executable
+[2026-02-20 19:25:52.020490] get_python_executable called, is_frozen=False
+[2026-02-20 19:25:52.021567] sys.executable=C:\Python314\python.exe
+[2026-02-20 19:25:52.022405] Development mode, using sys.executable

@@ -1,0 +1,99 @@
+=== Component Loading Started ===
+Project root: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher
+Components dir: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'TTerm', 'tsr']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TArticle/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/tips/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TTerm/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+=== Component Loading Finished ===
+Total components loaded: 0
+Component states: {'TArticle': 0, 'tips': 0, 'TTerm': 0, 'tsr': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'TTerm': 'Terminal', 'tsr': 'tsr'}
+=== Component Loading Started ===
+Project root: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher
+Components dir: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'TTerm', 'tsr']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TArticle/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/tips/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TTerm/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+=== Component Loading Finished ===
+Total components loaded: 0
+Component states: {'TArticle': 0, 'tips': 0, 'TTerm': 0, 'tsr': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'TTerm': 'Terminal', 'tsr': 'tsr'}
+=== Component Loading Started ===
+Project root: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher
+Components dir: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components
+Is frozen: False
+Components dir exists: True
+Components dir contents: ['TArticle', 'tips', 'TTerm', 'tsr']
+Checking folder: TArticle
+  Status: 0
+  Friendly name: TArticle
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TArticle/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tips
+  Status: 0
+  Friendly name: Porady
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/tips/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: TTerm
+  Status: 0
+  Friendly name: Terminal
+  Init path: /Users/tito/Library/CloudStorage/OneDrive-Osobisty/projects/TCE Launcher/data/components/TTerm/init.pyc
+  Calling load_component...
+  load_component returned
+Checking folder: tsr
+  Status: 0
+  Friendly name: tsr
+  Init path: None
+  ERROR: No init file found
+=== Component Loading Finished ===
+Total components loaded: 0
+Component states: {'TArticle': 0, 'tips': 0, 'TTerm': 0, 'tsr': 0}
+Friendly names: {'TArticle': 'TArticle', 'tips': 'Porady', 'TTerm': 'Terminal', 'tsr': 'tsr'}
