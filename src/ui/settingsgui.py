@@ -968,23 +968,22 @@ class SettingsFrame(wx.Frame):
 
         # Save stereo speech settings if enabled
         if self.stereo_speech_cb.GetValue():
-            # Get current engine
-            engine_selection = self.engine_choice.GetStringSelection()
-            engine = 'espeak' if engine_selection == 'eSpeak' else 'sapi5'
+            # Get current engine from display name
+            engine_display = self.engine_choice.GetStringSelection()
+            engine = self._display_to_engine(engine_display)
 
-            # Get voice (format depends on engine)
+            # Get voice (dict-based engines save ID, string-based save name)
             stereo_speech = get_stereo_speech()
             voice_index = self.voice_choice.GetSelection()
             voice_value = ''
 
-            if engine == 'espeak' and voice_index >= 0:
-                # For eSpeak, save voice ID
+            if voice_index >= 0:
                 voices = stereo_speech.get_available_voices()
-                if voice_index < len(voices) and isinstance(voices[voice_index], dict):
-                    voice_value = voices[voice_index]['id']
-            else:
-                # For SAPI5, save voice name
-                voice_value = self.voice_choice.GetStringSelection()
+                if voice_index < len(voices):
+                    if isinstance(voices[voice_index], dict):
+                        voice_value = voices[voice_index]['id']
+                    else:
+                        voice_value = self.voice_choice.GetStringSelection()
 
             self.settings['stereo_speech'] = {
                 'engine': engine,
@@ -1085,39 +1084,50 @@ class SettingsFrame(wx.Frame):
             vibrate_focus_change()  # Add vibration for checkbox unchecked
         event.Skip()
 
+    def _get_engine_display_names(self):
+        """Get mapping between engine IDs and display names."""
+        return {
+            'espeak': 'eSpeak NG',
+            'sapi5': 'SAPI5',
+            'say': _('macOS Speech'),
+            'spd': _('Speech Dispatcher'),
+        }
+
+    def _engine_to_display(self, engine_id):
+        """Convert engine ID to display name."""
+        return self._get_engine_display_names().get(engine_id, engine_id)
+
+    def _display_to_engine(self, display_name):
+        """Convert display name to engine ID."""
+        reverse = {v: k for k, v in self._get_engine_display_names().items()}
+        return reverse.get(display_name, display_name)
+
     def load_stereo_speech_settings(self):
         """Load stereo speech settings from file"""
-        # Load available engines
         self.engine_choice.Clear()
         stereo_speech = get_stereo_speech()
         available_engines = stereo_speech.get_available_engines()
 
-        # Add engine options
+        # Add engine options with display names
         for engine in available_engines:
-            if engine == 'sapi5':
-                self.engine_choice.Append("SAPI5")
-            elif engine == 'espeak':
-                self.engine_choice.Append("eSpeak")
+            self.engine_choice.Append(self._engine_to_display(engine))
 
         # Load settings
         stereo_settings = self.settings.get('stereo_speech', {})
         invisible_interface_settings = self.settings.get('invisible_interface', {})
 
-        # Load enabled state from invisible_interface settings (for backward compatibility)
+        # Load enabled state
         stereo_enabled = str(invisible_interface_settings.get('stereo_speech', 'False')).lower() in ['true', '1']
         self.stereo_speech_cb.SetValue(stereo_enabled)
 
         # Load engine selection
-        engine = stereo_settings.get('engine', 'sapi5')
+        engine = stereo_settings.get('engine', 'espeak')
         stereo_speech.set_engine(engine)
 
         # Set engine in UI
-        if engine == 'espeak':
-            if self.engine_choice.FindString("eSpeak") != wx.NOT_FOUND:
-                self.engine_choice.SetStringSelection("eSpeak")
-        else:
-            if self.engine_choice.FindString("SAPI5") != wx.NOT_FOUND:
-                self.engine_choice.SetStringSelection("SAPI5")
+        display_name = self._engine_to_display(engine)
+        if self.engine_choice.FindString(display_name) != wx.NOT_FOUND:
+            self.engine_choice.SetStringSelection(display_name)
 
         # If no engines available, set first one
         if self.engine_choice.GetSelection() == wx.NOT_FOUND and self.engine_choice.GetCount() > 0:
@@ -1129,17 +1139,16 @@ class SettingsFrame(wx.Frame):
         # Set voice
         voice = stereo_settings.get('voice', '')
         if voice:
-            # For eSpeak, voice is stored as voice ID, need to find in list
-            if engine == 'espeak':
-                # Find voice by ID in the voice list
-                voices = stereo_speech.get_available_voices()
+            voices = stereo_speech.get_available_voices()
+            # Dict-based voices (eSpeak, say, spd) — match by ID
+            if voices and isinstance(voices[0], dict):
                 for i, v in enumerate(voices):
-                    if isinstance(v, dict) and v.get('id') == voice:
+                    if v.get('id') == voice:
                         self.voice_choice.SetSelection(i)
                         stereo_speech.set_voice(i)
                         break
             else:
-                # For SAPI5, use voice name
+                # String-based voices (SAPI5) — match by name
                 if self.voice_choice.FindString(voice) != wx.NOT_FOUND:
                     self.voice_choice.SetStringSelection(voice)
                     try:
@@ -1181,22 +1190,15 @@ class SettingsFrame(wx.Frame):
 
         try:
             stereo_speech = get_stereo_speech()
-            engine = stereo_speech.get_engine()
             voices = stereo_speech.get_available_voices()
 
             if voices:
-                if engine == 'espeak':
-                    # eSpeak returns list of dicts
-                    for voice in voices:
-                        if isinstance(voice, dict):
-                            self.voice_choice.Append(voice['display_name'])
-                        else:
-                            self.voice_choice.Append(str(voice))
-                else:
-                    # SAPI5 returns list of strings
-                    for voice in voices:
-                        self.voice_choice.Append(voice)
-                print(f"Loaded {len(voices)} voices for engine {engine}")
+                for voice in voices:
+                    if isinstance(voice, dict):
+                        self.voice_choice.Append(voice.get('display_name', str(voice)))
+                    else:
+                        self.voice_choice.Append(str(voice))
+                print(f"Loaded {len(voices)} voices for engine {stereo_speech.get_engine()}")
             else:
                 self.voice_choice.Append(_("Default voice"))
         except Exception as e:
@@ -1212,16 +1214,10 @@ class SettingsFrame(wx.Frame):
         try:
             engine_selection = self.engine_choice.GetSelection()
             if engine_selection >= 0:
-                engine_name = self.engine_choice.GetString(engine_selection)
+                display_name = self.engine_choice.GetString(engine_selection)
+                engine_id = self._display_to_engine(display_name)
                 stereo_speech = get_stereo_speech()
-
-                # Set engine based on selection
-                if engine_name == "eSpeak":
-                    stereo_speech.set_engine('espeak')
-                else:
-                    stereo_speech.set_engine('sapi5')
-
-                # Reload voices for the new engine
+                stereo_speech.set_engine(engine_id)
                 self.load_available_voices()
         except Exception as e:
             print(f"Error setting engine: {e}")

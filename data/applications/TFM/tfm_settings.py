@@ -63,10 +63,10 @@ class SettingsManager:
             'sort_mode': 'name'
         }
         self.config['Interface'] = {
-            'confirm_delete': 'true',  # potwierdzenie przed usunięciem
-            'explorer_view_mode': 'klasyczny', # inne: lista, commander, wiele kart
-            'window_title_mode': 'nazwa aplikacji', # inne: nazwa katalogu, ścieżka
-            'copy_dialog_mode': 'klasyczny' # inne: systemowy
+            'confirm_delete': 'true',
+            'explorer_view_mode': 'classic',  # list, commander, classic, multi-tab
+            'window_title_mode': 'app-name',  # app-name, folder-name, path
+            'copy_dialog_mode': 'classic'     # classic, system
         }
 
         self.save_settings()
@@ -84,13 +84,13 @@ class SettingsManager:
             self.config['Interface']['confirm_delete'] = 'true'
             changed = True
         if 'explorer_view_mode' not in self.config['Interface']:
-            self.config['Interface']['explorer_view_mode'] = 'klasyczny'
+            self.config['Interface']['explorer_view_mode'] = 'classic'
             changed = True
         if 'window_title_mode' not in self.config['Interface']:
-            self.config['Interface']['window_title_mode'] = 'nazwa aplikacji'
+            self.config['Interface']['window_title_mode'] = 'app-name'
             changed = True
         if 'copy_dialog_mode' not in self.config['Interface']:
-            self.config['Interface']['copy_dialog_mode'] = 'klasyczny'
+            self.config['Interface']['copy_dialog_mode'] = 'classic'
             changed = True
 
         if changed:
@@ -149,11 +149,11 @@ class SettingsManager:
         self.save_settings()
 
     def get_explorer_view_mode(self):
-        return self.config.get('Interface', 'explorer_view_mode', fallback='klasyczny')
+        return self.config.get('Interface', 'explorer_view_mode', fallback='classic')
 
     def set_explorer_view_mode(self, mode):
         if 'Interface' not in self.config: self.config['Interface'] = {}
-        valid_modes = ["lista", "commander", "klasyczny", "wiele kart"]
+        valid_modes = ["list", "commander", "classic", "multi-tab"]
         if mode in valid_modes:
             self.config['Interface']['explorer_view_mode'] = mode
             self.save_settings()
@@ -162,11 +162,11 @@ class SettingsManager:
 
 
     def get_window_title_mode(self):
-        return self.config.get('Interface', 'window_title_mode', fallback='nazwa aplikacji')
+        return self.config.get('Interface', 'window_title_mode', fallback='app-name')
 
     def set_window_title_mode(self, mode):
         if 'Interface' not in self.config: self.config['Interface'] = {}
-        valid_modes = ["nazwa aplikacji", "nazwa katalogu", "ścieżka"]
+        valid_modes = ["app-name", "folder-name", "path"]
         if mode in valid_modes:
             self.config['Interface']['window_title_mode'] = mode
             self.save_settings()
@@ -175,11 +175,11 @@ class SettingsManager:
 
 
     def get_copy_dialog_mode(self):
-        return self.config.get('Interface', 'copy_dialog_mode', fallback='klasyczny')
+        return self.config.get('Interface', 'copy_dialog_mode', fallback='classic')
 
     def set_copy_dialog_mode(self, mode):
         if 'Interface' not in self.config: self.config['Interface'] = {}
-        valid_modes = ["klasyczny", "systemowy"]
+        valid_modes = ["classic", "system"]
         if mode in valid_modes:
             self.config['Interface']['copy_dialog_mode'] = mode
             self.save_settings()
@@ -190,7 +190,7 @@ class SettingsManager:
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, settings):
         # Pass parent to the wx.Dialog constructor
-        wx.Dialog.__init__(self, parent, title=_("Ustawienia Eksploratora"), size=(500, 400))
+        wx.Dialog.__init__(self, parent, title=_("File Manager Settings"), size=(500, 400))
         self.settings = settings
 
         panel = wx.Panel(self)
@@ -202,27 +202,25 @@ class SettingsDialog(wx.Dialog):
         general_sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Pokaż ukryte pliki
-        self.show_hidden_checkbox = wx.CheckBox(general_panel, label=_("Pokaż ukryte pliki"))
+        self.show_hidden_checkbox = wx.CheckBox(general_panel, label=_("Show hidden files"))
         self.show_hidden_checkbox.SetValue(self.settings.get_show_hidden())
-        general_sizer.Add(self.show_hidden_checkbox, 0, wx.ALL, 10) # Add checkbox directly to sizer
+        general_sizer.Add(self.show_hidden_checkbox, 0, wx.ALL, 10)
 
-        # Pokaż rozszerzenia plików
-        self.show_extensions_checkbox = wx.CheckBox(general_panel, label=_("Pokaż rozszerzenia plików"))
+        self.show_extensions_checkbox = wx.CheckBox(general_panel, label=_("Show file extensions"))
         self.show_extensions_checkbox.SetValue(self.settings.get_show_extensions())
-        general_sizer.Add(self.show_extensions_checkbox, 0, wx.ALL, 10) # Add checkbox directly to sizer
+        general_sizer.Add(self.show_extensions_checkbox, 0, wx.ALL, 10)
 
-        # Potwierdzenie przed usunięciem
-        self.confirm_delete_checkbox = wx.CheckBox(general_panel, label=_("Potwierdzenie przed usunięciem"))
+        self.confirm_delete_checkbox = wx.CheckBox(general_panel, label=_("Confirm before deleting"))
         self.confirm_delete_checkbox.SetValue(self.settings.get_confirm_delete())
-        general_sizer.Add(self.confirm_delete_checkbox, 0, wx.ALL, 10) # Add checkbox directly to sizer
+        general_sizer.Add(self.confirm_delete_checkbox, 0, wx.ALL, 10)
 
 
-        view_box = wx.StaticBox(general_panel, label=_("Wyświetlanie danych pliku"))
+        view_box = wx.StaticBox(general_panel, label=_("File info columns"))
         view_sizer = wx.StaticBoxSizer(view_box, wx.VERTICAL)
 
-        self.view_name = wx.CheckBox(general_panel, label=_("Nazwa"))
-        self.view_date = wx.CheckBox(general_panel, label=_("Data modyfikacji"))
-        self.view_type = wx.CheckBox(general_panel, label=_("Typ"))
+        self.view_name = wx.CheckBox(general_panel, label=_("Name"))
+        self.view_date = wx.CheckBox(general_panel, label=_("Date modified"))
+        self.view_type = wx.CheckBox(general_panel, label=_("Type"))
 
         current_view = self.settings.get_view_settings()
         self.view_name.SetValue('name' in current_view)
@@ -245,36 +243,44 @@ class SettingsDialog(wx.Dialog):
         appearance_panel = wx.Panel(notebook)
         appearance_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Widok eksploratora
-        explorer_view_box = wx.StaticBox(appearance_panel, label=_("Widok Eksploratora"))
+        # Explorer view
+        self._explorer_keys = ["list", "commander", "classic", "multi-tab"]
+        explorer_view_box = wx.StaticBox(appearance_panel, label=_("Explorer view"))
         explorer_view_sizer = wx.StaticBoxSizer(explorer_view_box, wx.VERTICAL)
-        # Add a StaticText label for the choice control
-        explorer_view_label = wx.StaticText(appearance_panel, label=_("Tryb widoku eksploratora:"))
+        explorer_view_label = wx.StaticText(appearance_panel, label=_("Explorer view mode:"))
         explorer_view_sizer.Add(explorer_view_label, 0, wx.ALL, 5)
-        self.explorer_view_choice = wx.Choice(appearance_panel, choices=["lista", "commander", "klasyczny", "wiele kart"])
-        self.explorer_view_choice.SetStringSelection(self.settings.get_explorer_view_mode())
-        explorer_view_sizer.Add(self.explorer_view_choice, 0, wx.ALL | wx.EXPAND, 5) # Expand the choice control
+        explorer_labels = [_("List"), _("Commander"), _("Classic"), _("Multi-tab")]
+        self.explorer_view_choice = wx.Choice(appearance_panel, choices=explorer_labels)
+        cur_key = self.settings.get_explorer_view_mode()
+        self.explorer_view_choice.SetSelection(
+            self._explorer_keys.index(cur_key) if cur_key in self._explorer_keys else 2)
+        explorer_view_sizer.Add(self.explorer_view_choice, 0, wx.ALL | wx.EXPAND, 5)
 
-        # Tytuł okna
-        window_title_box = wx.StaticBox(appearance_panel, label=_("Tytuł okna"))
+        # Window title
+        self._window_title_keys = ["app-name", "folder-name", "path"]
+        window_title_box = wx.StaticBox(appearance_panel, label=_("Window title"))
         window_title_sizer = wx.StaticBoxSizer(window_title_box, wx.VERTICAL)
-        # Add a StaticText label for the choice control
-        window_title_label = wx.StaticText(appearance_panel, label=_("Tryb tytułu okna:"))
+        window_title_label = wx.StaticText(appearance_panel, label=_("Window title mode:"))
         window_title_sizer.Add(window_title_label, 0, wx.ALL, 5)
-        self.window_title_choice = wx.Choice(appearance_panel, choices=["nazwa aplikacji", "nazwa katalogu", "ścieżka"])
-        self.window_title_choice.SetStringSelection(self.settings.get_window_title_mode())
-        window_title_sizer.Add(self.window_title_choice, 0, wx.ALL | wx.EXPAND, 5) # Expand the choice control
+        window_title_labels = [_("App name"), _("Folder name"), _("Path")]
+        self.window_title_choice = wx.Choice(appearance_panel, choices=window_title_labels)
+        cur_key = self.settings.get_window_title_mode()
+        self.window_title_choice.SetSelection(
+            self._window_title_keys.index(cur_key) if cur_key in self._window_title_keys else 0)
+        window_title_sizer.Add(self.window_title_choice, 0, wx.ALL | wx.EXPAND, 5)
 
-
-        # Dialog kopiowania
-        copy_dialog_box = wx.StaticBox(appearance_panel, label=_("Dialog kopiowania plik��w"))
+        # Copy dialog
+        self._copy_dialog_keys = ["classic", "system"]
+        copy_dialog_box = wx.StaticBox(appearance_panel, label=_("Copy dialog"))
         copy_dialog_sizer = wx.StaticBoxSizer(copy_dialog_box, wx.VERTICAL)
-        # Add a StaticText label for the choice control
-        copy_dialog_label = wx.StaticText(appearance_panel, label=_("Tryb dialogu kopiowania:"))
+        copy_dialog_label = wx.StaticText(appearance_panel, label=_("Copy dialog mode:"))
         copy_dialog_sizer.Add(copy_dialog_label, 0, wx.ALL, 5)
-        self.copy_dialog_choice = wx.Choice(appearance_panel, choices=["klasyczny", "systemowy"])
-        self.copy_dialog_choice.SetStringSelection(self.settings.get_copy_dialog_mode())
-        copy_dialog_sizer.Add(self.copy_dialog_choice, 0, wx.ALL | wx.EXPAND, 5) # Expand the choice control
+        copy_dialog_labels = [_("Classic"), _("System")]
+        self.copy_dialog_choice = wx.Choice(appearance_panel, choices=copy_dialog_labels)
+        cur_key = self.settings.get_copy_dialog_mode()
+        self.copy_dialog_choice.SetSelection(
+            self._copy_dialog_keys.index(cur_key) if cur_key in self._copy_dialog_keys else 0)
+        copy_dialog_sizer.Add(self.copy_dialog_choice, 0, wx.ALL | wx.EXPAND, 5)
 
         appearance_sizer.Add(explorer_view_sizer, 0, wx.ALL | wx.EXPAND, 10)
         appearance_sizer.Add(window_title_sizer, 0, wx.ALL | wx.EXPAND, 10)
@@ -282,11 +288,11 @@ class SettingsDialog(wx.Dialog):
 
         appearance_panel.SetSizer(appearance_sizer)
 
-        notebook.AddPage(general_panel, _("Ogólne"))
-        notebook.AddPage(appearance_panel, _("Wygląd"))
+        notebook.AddPage(general_panel, _("General"))
+        notebook.AddPage(appearance_panel, _("Appearance"))
 
-        save_button = wx.Button(panel, label=_("Zatwierdź"))
-        cancel_button = wx.Button(panel, label=_("Anuluj"))
+        save_button = wx.Button(panel, label=_("Save"))
+        cancel_button = wx.Button(panel, label=_("Cancel"))
 
         self.Bind(wx.EVT_BUTTON, self.on_save, save_button)
         self.Bind(wx.EVT_BUTTON, self.on_cancel, cancel_button)
@@ -302,17 +308,17 @@ class SettingsDialog(wx.Dialog):
         self.Layout() # Adjust layout after adding buttons
 
         # Set accessibility help texts for controls (optional but good practice)
-        self.show_hidden_checkbox.SetHelpText(_("Zaznacz, aby wyświetlić ukryte pliki w liście."))
-        self.show_extensions_checkbox.SetHelpText(_("Zaznacz, aby wyświetlić rozszerzenia plików w liście."))
-        self.confirm_delete_checkbox.SetHelpText(_("Zaznacz, aby program pytał o potwierdzenie przed usunięciem plików."))
-        self.view_name.SetHelpText(_("Zaznacz, aby wyświetlić nazwę pliku w liście."))
-        self.view_date.SetHelpText(_("Zaznacz, aby wyświetlić datę modyfikacji pliku w liście."))
-        self.view_type.SetHelpText(_("Zaznacz, aby wyświetlić typ pliku (folder/plik) w liście."))
-        self.explorer_view_choice.SetHelpText(_("Wybierz tryb wyświetlania plików: lista, commander (dwa panele), klasyczny, wiele kart."))
-        self.window_title_choice.SetHelpText(_("Wybierz co będzie wyświetlane w tytule okna: nazwa aplikacji, nazwa bieżącego folderu, pełna ścieżka."))
-        self.copy_dialog_choice.SetHelpText(_("Wybierz tryb dialogu kopiowania/przenoszenia: klasyczny (z paskiem postępu) lub systemowy."))
-        save_button.SetHelpText(_("Zapisz zmiany ustawień."))
-        cancel_button.SetHelpText(_("Anuluj zmiany ustawień."))
+        self.show_hidden_checkbox.SetHelpText(_("Check to show hidden files in the list."))
+        self.show_extensions_checkbox.SetHelpText(_("Check to show file extensions in the list."))
+        self.confirm_delete_checkbox.SetHelpText(_("Check to ask for confirmation before deleting files."))
+        self.view_name.SetHelpText(_("Check to show the file name column."))
+        self.view_date.SetHelpText(_("Check to show the date modified column."))
+        self.view_type.SetHelpText(_("Check to show the file type column."))
+        self.explorer_view_choice.SetHelpText(_("Select view mode: list, commander (two panels), classic, multi-tab."))
+        self.window_title_choice.SetHelpText(_("Select what is shown in the window title: app name, folder name, or full path."))
+        self.copy_dialog_choice.SetHelpText(_("Select copy/move dialog mode: classic (with progress bar) or system."))
+        save_button.SetHelpText(_("Save settings."))
+        cancel_button.SetHelpText(_("Cancel settings."))
 
 
     def on_save(self, event):
@@ -329,10 +335,16 @@ class SettingsDialog(wx.Dialog):
             selected_view.append('type')
         self.settings.set_view_settings(selected_view)
 
-        # Zapis ustawień z zakładki Wygląd
-        self.settings.set_explorer_view_mode(self.explorer_view_choice.GetStringSelection())
-        self.settings.set_window_title_mode(self.window_title_choice.GetStringSelection())
-        self.settings.set_copy_dialog_mode(self.copy_dialog_choice.GetStringSelection())
+        # Save Appearance tab settings using internal English keys
+        idx = self.explorer_view_choice.GetSelection()
+        if idx >= 0:
+            self.settings.set_explorer_view_mode(self._explorer_keys[idx])
+        idx = self.window_title_choice.GetSelection()
+        if idx >= 0:
+            self.settings.set_window_title_mode(self._window_title_keys[idx])
+        idx = self.copy_dialog_choice.GetSelection()
+        if idx >= 0:
+            self.settings.set_copy_dialog_mode(self._copy_dialog_keys[idx])
 
         self.EndModal(wx.ID_OK)
 

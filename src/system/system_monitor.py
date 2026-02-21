@@ -13,23 +13,57 @@ from src.titan_core.sound import play_sound, initialize_sound
 from src.settings.settings import get_setting
 from src.titan_core.translation import set_language
 from src.system.com_fix import com_safe, init_com_safe
+from src.titan_core.stereo_speech import get_stereo_speech
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
 
 # Speaker initialization moved to avoid TTS conflicts
-speaker = None
+_speaker = None
+_stereo_speech = get_stereo_speech()
 
-def get_safe_system_speaker():
-    """Get speaker instance safely with proper error handling"""
-    global speaker
-    if speaker is None:
+def _get_speaker():
+    """Get ao3 speaker instance, initializing lazily."""
+    global _speaker
+    if _speaker is None and _ao3_mod_available:
         try:
-            speaker = accessible_output3.outputs.auto.Auto()
+            _speaker = _ao3_mod.Auto()
         except Exception as e:
             print(f"Error initializing system monitor speaker: {e}")
-            return None
-    return speaker
+    return _speaker
+
+def _speak(message, interrupt=False):
+    """Speak using Titan TTS: stereo_speech when enabled, ao3 otherwise, with cross-fallback."""
+    stereo_enabled = get_setting('stereo_speech', 'False', 'invisible_interface').lower() in ['true', '1']
+    if stereo_enabled and _stereo_speech:
+        try:
+            _stereo_speech.speak_async(message, use_fallback=True)
+            return
+        except Exception as stereo_e:
+            print(f"Stereo speech failed: {stereo_e}")
+    sp = _get_speaker()
+    if sp:
+        try:
+            sp.speak(message, interrupt=interrupt)
+            return
+        except Exception as ao3_e:
+            print(f"ao3 TTS failed: {ao3_e}")
+            if _stereo_speech:
+                try:
+                    _stereo_speech.speak_async(message, use_fallback=True)
+                except Exception as stereo_e:
+                    print(f"All TTS methods failed: ao3={ao3_e}, stereo={stereo_e}")
+
+
+def _speak_positional(message, position=0.0, pitch_offset=0):
+    """Speak with stereo position and pitch using stereo_speech, fallback to _speak."""
+    if _stereo_speech:
+        try:
+            _stereo_speech.speak_async(message, position=position, pitch_offset=pitch_offset, use_fallback=True)
+            return
+        except Exception as e:
+            print(f"Positional speech failed: {e}")
+    _speak(message)
 
 # Attempt to import psutil for battery monitoring
 try:
@@ -45,6 +79,25 @@ try:
 except ImportError:
     PYCAW_AVAILABLE = False
     print("pycaw not found, Windows volume monitoring will be disabled.")
+
+# Check for Linux volume tools (pactl for PulseAudio/PipeWire, amixer for ALSA)
+_LINUX_VOLUME_TOOL = None
+if platform.system() == 'Linux':
+    try:
+        import alsaaudio
+        _LINUX_VOLUME_TOOL = 'alsaaudio'
+    except ImportError:
+        result = subprocess.run(['which', 'pactl'], capture_output=True)
+        if result.returncode == 0:
+            _LINUX_VOLUME_TOOL = 'pactl'
+        else:
+            result = subprocess.run(['which', 'amixer'], capture_output=True)
+            if result.returncode == 0:
+                _LINUX_VOLUME_TOOL = 'amixer'
+    if _LINUX_VOLUME_TOOL:
+        print(f"Linux volume monitoring using: {_LINUX_VOLUME_TOOL}")
+    else:
+        print("No Linux volume tool found (install alsaaudio, pulseaudio-utils or alsa-utils)")
 
 # Sound system will be initialized by main.py
 # DO NOT initialize pygame here as it conflicts with sound.py
@@ -85,21 +138,37 @@ class SystemMonitor:
                 import traceback
                 traceback.print_exc()
 
-            # Start AudioMonitor based on volume monitor setting (only if pycaw available on Windows)
+            # Start AudioMonitor based on volume monitor setting
             try:
                 volume_monitor_mode = get_setting('volume_monitor', 'sound', section='system_monitor')
                 if volume_monitor_mode != 'none':
-                    if platform.system() != 'Windows' or PYCAW_AVAILABLE:
-                        # On Windows, give COM extra time to initialize before starting audio monitor
+                    can_monitor = (
+                        (platform.system() == 'Windows' and PYCAW_AVAILABLE) or
+                        (platform.system() == 'Darwin') or
+                        (platform.system() == 'Linux' and _LINUX_VOLUME_TOOL is not None)
+                    )
+                    if can_monitor:
                         if platform.system() == 'Windows':
-                            time.sleep(0.5)  # Short delay to allow COM initialization
+                            time.sleep(0.5)
                         audio_monitor = AudioMonitor(volume_monitor_mode)
                         audio_monitor.start()
                         self.monitors.append(audio_monitor)
                     else:
-                        print("Volume monitoring disabled on Windows - pycaw not available")
+                        print("Volume monitoring disabled - no suitable audio API available")
             except Exception as e:
                 print(f"Error starting AudioMonitor: {e}")
+                import traceback
+                traceback.print_exc()
+
+            # Start NetworkMonitor on Windows if enabled
+            try:
+                if (platform.system() == 'Windows' and
+                        get_setting('monitor_network', True, section='system_monitor')):
+                    network_monitor = NetworkMonitor()
+                    network_monitor.start()
+                    self.monitors.append(network_monitor)
+            except Exception as e:
+                print(f"Error starting NetworkMonitor: {e}")
                 import traceback
                 traceback.print_exc()
         except Exception as e:
@@ -194,26 +263,18 @@ class ChargerMonitor(threading.Thread):
 
     def on_charger_connect(self, percentage):
         play_sound('system/charger_connect.ogg')
-        safe_speaker = get_safe_system_speaker()
-        if safe_speaker:
-            safe_speaker.speak(_("Connected to power adapter, battery level is {}%").format(percentage))
+        _speak_positional(_("Connected to power adapter, battery level is {}%").format(percentage), position=0.8)
 
     def on_charger_disconnect(self, percentage):
         self.charged_notification_sent = False
         play_sound('system/charger_disconnect.ogg')
-        safe_speaker = get_safe_system_speaker()
-        if safe_speaker:
-            safe_speaker.speak(_("Power adapter disconnected, battery level is {}%").format(percentage))
+        _speak_positional(_("Power adapter disconnected, battery level is {}%").format(percentage), position=-0.8, pitch_offset=-10)
 
     def on_battery_charging(self, percentage):
-        safe_speaker = get_safe_system_speaker()
-        if safe_speaker:
-            safe_speaker.speak(_("Charging battery, battery level {}%").format(percentage))
+        _speak(_("Charging battery, battery level {}%").format(percentage))
 
     def on_battery_charged(self):
-        safe_speaker = get_safe_system_speaker()
-        if safe_speaker:
-            safe_speaker.speak(_("Battery is fully charged"))
+        _speak(_("Battery is fully charged"))
 
     def stop(self):
         self.running = False
@@ -306,11 +367,9 @@ class AudioMonitor(threading.Thread):
         """Announce volume change based on current settings"""
         if self.announce_mode in ['sound', 'both']:
             play_sound('system/volume.ogg')
-        
+
         if self.announce_mode in ['speech', 'both']:
-            safe_speaker = get_safe_system_speaker()
-            if safe_speaker:
-                safe_speaker.speak(_("Volume: {}%").format(volume), interrupt=True)
+            _speak_positional(_("Volume: {}%").format(volume), pitch_offset=10)
 
     def get_volume_percentage_safe(self):
         """Safe version of get_volume_percentage with timeout protection"""
@@ -416,12 +475,39 @@ class AudioMonitor(threading.Thread):
             return -1
 
     def get_volume_linux(self):
-        try:
-            import alsaaudio
-            mixer = alsaaudio.Mixer()
-            return mixer.getvolume()[0]
-        except (ImportError, alsaaudio.ALSAAudioError) as e:
-            return -1
+        import re
+        if _LINUX_VOLUME_TOOL == 'alsaaudio':
+            try:
+                import alsaaudio
+                mixer = alsaaudio.Mixer()
+                return int(mixer.getvolume()[0])
+            except Exception:
+                pass
+        if _LINUX_VOLUME_TOOL in ('alsaaudio', 'pactl'):
+            try:
+                result = subprocess.run(
+                    ['pactl', 'get-sink-volume', '@DEFAULT_SINK@'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    match = re.search(r'(\d+)%', result.stdout)
+                    if match:
+                        return int(match.group(1))
+            except Exception:
+                pass
+        if _LINUX_VOLUME_TOOL in ('alsaaudio', 'pactl', 'amixer'):
+            try:
+                result = subprocess.run(
+                    ['amixer', 'sget', 'Master'],
+                    capture_output=True, text=True, timeout=2
+                )
+                if result.returncode == 0:
+                    match = re.search(r'\[(\d+)%\]', result.stdout)
+                    if match:
+                        return int(match.group(1))
+            except Exception:
+                pass
+        return -1
 
     def stop(self):
         self.running = False
@@ -429,6 +515,104 @@ class AudioMonitor(threading.Thread):
     def __del__(self):
         """Ensure cleanup on object destruction"""
         self.stop()
+
+class NetworkMonitor(threading.Thread):
+    """Monitor network connections on Windows and announce when connected to a new network"""
+
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+        self.running = True
+        self.previous_ssid = None
+        self.previous_interfaces = set()
+
+    def _get_wifi_ssid(self):
+        """Return current WiFi SSID via netsh, or None if not connected"""
+        try:
+            result = subprocess.run(
+                ['netsh', 'wlan', 'show', 'interfaces'],
+                capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=5
+            )
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                # "SSID" line but NOT "BSSID" line
+                if ':' in line:
+                    key, _, val = line.partition(':')
+                    key = key.strip()
+                    val = val.strip()
+                    if key.upper() == 'SSID' and val:
+                        return val
+        except Exception:
+            pass
+        return None
+
+    def _get_active_ethernet(self):
+        """Return set of active non-WiFi interfaces that have an IPv4 address"""
+        active = set()
+        if not psutil:
+            return active
+        try:
+            stats = psutil.net_if_stats()
+            addrs = psutil.net_if_addrs()
+            wifi_names = {'wi-fi', 'wifi', 'wireless', 'wlan'}
+            for iface, stat in stats.items():
+                if not stat.isup:
+                    continue
+                iface_lower = iface.lower()
+                if any(w in iface_lower for w in wifi_names):
+                    continue  # handled by WiFi monitor
+                if iface in addrs:
+                    for addr in addrs[iface]:
+                        if getattr(addr, 'family', None) == 2:  # AF_INET
+                            if not addr.address.startswith('127.') and addr.address != '0.0.0.0':
+                                active.add(iface)
+                                break
+        except Exception:
+            pass
+        return active
+
+    def _init_state(self):
+        self.previous_ssid = self._get_wifi_ssid()
+        self.previous_interfaces = self._get_active_ethernet()
+
+    def run(self):
+        # Wait for system to settle before monitoring
+        time.sleep(15)
+        self._init_state()
+        while self.running:
+            try:
+                # --- WiFi ---
+                current_ssid = self._get_wifi_ssid()
+                if current_ssid != self.previous_ssid:
+                    if current_ssid:
+                        self.on_connected(current_ssid)
+                    elif self.previous_ssid:
+                        self.on_disconnected(self.previous_ssid)
+                self.previous_ssid = current_ssid
+
+                # --- Ethernet / other interfaces ---
+                current_interfaces = self._get_active_ethernet()
+                for iface in current_interfaces - self.previous_interfaces:
+                    self.on_connected(iface)
+                for iface in self.previous_interfaces - current_interfaces:
+                    self.on_disconnected(iface)
+                self.previous_interfaces = current_interfaces
+
+            except Exception as e:
+                print(f"NetworkMonitor error: {e}")
+            time.sleep(5)
+
+    def on_connected(self, name):
+        play_sound('system/network_connect.ogg')
+        _speak_positional(_("Connected to {}").format(name), position=0.8)
+
+    def on_disconnected(self, name):
+        _speak_positional(_("Disconnected from {}").format(name), position=-0.8, pitch_offset=-10)
+
+    def stop(self):
+        self.running = False
+
 
 # Global system monitor instance
 _system_monitor = None
