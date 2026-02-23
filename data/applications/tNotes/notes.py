@@ -6,33 +6,43 @@ import json
 import platform
 from translation import _
 
-# Screen reader output: accessible_output3 with platform fallback.
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _speaker = _ao3.Auto()
-except Exception:
-    _speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
 
-def _speak(text):
-    if _speaker:
+if _tce_speak is not None:
+    def _speak(text):
+        _tce_speak(text)
+else:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _speaker = _ao3.Auto()
+    except Exception:
+        _speaker = None
+
+    def _speak(text):
+        if _speaker:
+            try:
+                _speaker.speak(text, interrupt=True)
+                return
+            except Exception:
+                pass
         try:
-            _speaker.speak(text, interrupt=True)
-            return
+            _sys = platform.system()
+            if _sys == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+            elif _sys == 'Darwin':
+                import subprocess
+                subprocess.Popen(['say', text])
+            else:
+                import subprocess
+                subprocess.Popen(['spd-say', text])
         except Exception:
             pass
-    try:
-        _sys = platform.system()
-        if _sys == 'Windows':
-            import win32com.client
-            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
-        elif _sys == 'Darwin':
-            import subprocess
-            subprocess.Popen(['say', text])
-        else:
-            import subprocess
-            subprocess.Popen(['spd-say', text])
-    except Exception:
-        pass
 
 
 class tNotesApp(wx.Frame):

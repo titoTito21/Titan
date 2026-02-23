@@ -1,4 +1,4 @@
-# Polish translations for PROJECT.
+# Polish translations for tBrowser (tWeb).
 # Copyright (C) 2025 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
@@ -7,193 +7,246 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-11 15:02+0200\n"
-"PO-Revision-Date: 2025-07-11 15:02+0200\n"
+"POT-Creation-Date: 2026-02-23 08:38+0100\n"
+"PO-Revision-Date: 2026-02-23 08:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: pl <LL@li.org>\n"
 "Language: pl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"Generated-By: Babel 2.17.0\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: web.py:87
+#: data/applications/tWeb/web.py:115
 #, python-brace-format
 msgid "Nie znaleziono pliku dźwiękowego: {}"
 msgstr "Nie znaleziono pliku dźwiękowego: {}"
 
-#: web.py:93
+#: data/applications/tWeb/web.py:121
 #, python-brace-format
 msgid "Nie można odtworzyć dźwięku: {}"
 msgstr "Nie można odtworzyć dźwięku: {}"
 
-#: web.py:100
+#: data/applications/tWeb/web.py:128
 msgid "Pobrane pliki"
 msgstr "Pobrane pliki"
 
-#: web.py:107
+#: data/applications/tWeb/web.py:135
 msgid "Lista plików pobranych przez tBrowser:"
 msgstr "Lista plików pobranych przez tBrowser:"
 
-#: web.py:168
+#: data/applications/tWeb/web.py:196
 msgid "tBrowser"
 msgstr "tBrowser"
 
-#: web.py:179
+#: data/applications/tWeb/web.py:207
 msgid "Wstecz"
 msgstr "Wstecz"
 
-#: web.py:180
+#: data/applications/tWeb/web.py:208
 msgid "Dalej"
 msgstr "Dalej"
 
-#: web.py:181
+#: data/applications/tWeb/web.py:209
 msgid "Odśwież"
 msgstr "Odśwież"
 
-#: web.py:183
+#: data/applications/tWeb/web.py:211
 msgid "Przycisk Wstecz"
 msgstr "Przycisk Wstecz"
 
-#: web.py:184
+#: data/applications/tWeb/web.py:212
 msgid "Przycisk Dalej"
 msgstr "Przycisk Dalej"
 
-#: web.py:185
+#: data/applications/tWeb/web.py:213
 msgid "Przycisk Odśwież"
 msgstr "Przycisk Odśwież"
 
-#: web.py:188
+#: data/applications/tWeb/web.py:216
 msgid "Wpisz adres lub wyszukaj w Google"
 msgstr "Wpisz adres lub wyszukaj w Google"
 
-#: web.py:257
+#: data/applications/tWeb/web.py:285
 msgid "Ustawienia..."
 msgstr "Ustawienia..."
 
-#: web.py:258
+#: data/applications/tWeb/web.py:286
 msgid "Aplikacja"
 msgstr "Aplikacja"
 
-#: web.py:273
+#: data/applications/tWeb/web.py:301
 msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
 msgstr "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
 
-#: web.py:274 web.py:282 web.py:425 web.py:662
+#: data/applications/tWeb/web.py:302 data/applications/tWeb/web.py:310
+#: data/applications/tWeb/web.py:461 data/applications/tWeb/web.py:835
 msgid "Informacja"
 msgstr "Informacja"
 
-#: web.py:281
+#: data/applications/tWeb/web.py:309
 msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
 msgstr "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
 
-#: web.py:293 web.py:300 web.py:472
+#: data/applications/tWeb/web.py:321 data/applications/tWeb/web.py:328
+#: data/applications/tWeb/web.py:643
 msgid "Ładowanie strony..."
 msgstr "Ładowanie strony..."
 
-#: web.py:304 web.py:499
+#: data/applications/tWeb/web.py:332 data/applications/tWeb/web.py:670
 msgid "Strona załadowana."
 msgstr "Strona załadowana."
 
-#: web.py:313
+#: data/applications/tWeb/web.py:341
 #, python-brace-format
 msgid "Załadowano stronę {}"
 msgstr "Załadowano stronę {}"
 
-#: web.py:425
+#: data/applications/tWeb/web.py:461
 #, python-brace-format
 msgid "Kliknięto przycisk: {}"
 msgstr "Kliknięto przycisk: {}"
 
-#: web.py:459 web.py:467
+#: data/applications/tWeb/web.py:499 data/applications/tWeb/web.py:507
 #, python-brace-format
-msgid ""
-"Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgid "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
 msgstr ""
 "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
 
-#: web.py:503
-msgid "Załadowano stronę"
-msgstr "Załadowano stronę"
-
-#: web.py:516
+#: data/applications/tWeb/web.py:547
 #, python-brace-format
-msgid "Błąd podczas ładowania strony: {}"
-msgstr "Błąd podczas ładowania strony: {}"
+msgid "Pole edycji: {}"
+msgstr "Pole edycji: {}"
 
-#: web.py:517
-msgid "Błąd podczas ładowania strony."
-msgstr "Błąd podczas ładowania strony."
-
-#: web.py:545
+#: data/applications/tWeb/web.py:549 data/applications/tWeb/web.py:581
 #, python-brace-format
-msgid "Łącze: {}"
-msgstr "Łącze: {}"
+msgid ", Wartość: {}"
+msgstr ", Wartość: {}"
 
-#: web.py:558
+#: data/applications/tWeb/web.py:555
+msgid "Przycisk bez etykiety"
+msgstr "Przycisk bez etykiety"
+
+#: data/applications/tWeb/web.py:556 data/applications/tWeb/web.py:735
 #, python-brace-format
 msgid "Przycisk: {}"
 msgstr "Przycisk: {}"
 
-#: web.py:569
-#, python-brace-format
-msgid ""
-"\n"
-"Nagłówek: {}\n"
-msgstr ""
-"\n"
-"Nagłówek: {}\n"
+#: data/applications/tWeb/web.py:561 data/applications/tWeb/web.py:638
+msgid "zaznaczone"
+msgstr "zaznaczone"
 
-#: web.py:581
+#: data/applications/tWeb/web.py:561 data/applications/tWeb/web.py:638
+msgid "niezaznaczone"
+msgstr "niezaznaczone"
+
+#: data/applications/tWeb/web.py:563
+#, python-brace-format
+msgid "Pole wyboru: {} ({})"
+msgstr "Pole wyboru: {} ({})"
+
+#: data/applications/tWeb/web.py:565
+#, python-brace-format
+msgid "Przycisk radiowy: {} ({})"
+msgstr "Przycisk radiowy: {} ({})"
+
+#: data/applications/tWeb/web.py:579
+#, python-brace-format
+msgid "Pole tekstowe: {}"
+msgstr "Pole tekstowe: {}"
+
+#: data/applications/tWeb/web.py:598
+#, python-brace-format
+msgid "Wprowadź tekst dla: {}"
+msgstr "Wprowadź tekst dla: {}"
+
+#: data/applications/tWeb/web.py:598
+msgid "Edycja pola"
+msgstr "Edycja pola"
+
+#: data/applications/tWeb/web.py:609
+#, python-brace-format
+msgid "Wpisano: {}"
+msgstr "Wpisano: {}"
+
+#: data/applications/tWeb/web.py:639
+#, python-brace-format
+msgid "{} {}"
+msgstr "{} {}"
+
+#: data/applications/tWeb/web.py:674
+msgid "Załadowano stronę"
+msgstr "Załadowano stronę"
+
+#: data/applications/tWeb/web.py:687
+#, python-brace-format
+msgid "Błąd podczas ładowania strony: {}"
+msgstr "Błąd podczas ładowania strony: {}"
+
+#: data/applications/tWeb/web.py:688
+msgid "Błąd podczas ładowania strony."
+msgstr "Błąd podczas ładowania strony."
+
+#: data/applications/tWeb/web.py:725
+#, python-brace-format
+msgid "Łącze: {}"
+msgstr "Łącze: {}"
+
+#: data/applications/tWeb/web.py:733
+msgid "Przycisk"
+msgstr "Przycisk"
+
+#: data/applications/tWeb/web.py:754
 msgid "Ustawienia tBrowser"
 msgstr "Ustawienia tBrowser"
 
-#: web.py:588
+#: data/applications/tWeb/web.py:761
 msgid "Oznajmianie"
 msgstr "Oznajmianie"
 
-#: web.py:591
+#: data/applications/tWeb/web.py:764
 msgid "Oznajmiaj podsumowanie strony"
 msgstr "Oznajmiaj podsumowanie strony"
 
-#: web.py:594
+#: data/applications/tWeb/web.py:767
 msgid "Komunikaty o ładowaniu strony"
 msgstr "Komunikaty o ładowaniu strony"
 
-#: web.py:601
+#: data/applications/tWeb/web.py:774
 msgid "Interfejs"
 msgstr "Interfejs"
 
-#: web.py:604
+#: data/applications/tWeb/web.py:777
 msgid "Wybierz tryb przeglądania strony:"
 msgstr "Wybierz tryb przeglądania strony:"
 
-#: web.py:606
+#: data/applications/tWeb/web.py:779
 msgid "Widok sieciowy (edge)"
 msgstr "Widok sieciowy (edge)"
 
-#: web.py:606
+#: data/applications/tWeb/web.py:779
 msgid "Tryb wirtualnego bufora"
 msgstr "Tryb wirtualnego bufora"
 
-#: web.py:617
+#: data/applications/tWeb/web.py:790
 msgid "Prywatność"
 msgstr "Prywatność"
 
-#: web.py:621
+#: data/applications/tWeb/web.py:794
 msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
 msgstr "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
 
-#: web.py:628
+#: data/applications/tWeb/web.py:801
 msgid "Zapisz"
 msgstr "Zapisz"
 
-#: web.py:629
+#: data/applications/tWeb/web.py:802
 msgid "Anuluj"
 msgstr "Anuluj"
 
-#: web.py:661
+#: data/applications/tWeb/web.py:834
 msgid ""
 "Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
 "zmiany."

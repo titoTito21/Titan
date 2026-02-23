@@ -16,12 +16,19 @@ try:
 except ImportError:
     pygame = None
 
-# Screen reader output via accessible_output3
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _ao3_speaker = _ao3.Auto()
-except Exception:
-    _ao3_speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
+
+if _tce_speak is None:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _ao3_speaker = _ao3.Auto()
+    except Exception:
+        _ao3_speaker = None
 
 # Ścieżki do katalogów i plików
 def _get_app_settings_dir():
@@ -322,14 +329,16 @@ class TitanOrganizer(wx.Frame):
     def speak_text(self, text):
         if not self.settings.tts_enabled:
             return
-        # 1) accessible_output3 – preferred (VoiceOver / NVDA / JAWS / Orca)
+        if _tce_speak is not None:
+            _tce_speak(text)
+            return
+        # Standalone fallback
         if _ao3_speaker:
             try:
                 _ao3_speaker.speak(text, interrupt=True)
                 return
             except Exception:
                 pass
-        # 2) Platform fallback
         try:
             _plat = platform.system()
             if _plat == 'Windows':

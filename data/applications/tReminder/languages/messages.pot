@@ -1,237 +1,239 @@
 # Translations template for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
+# Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-11 14:53+0200\n"
+"POT-Creation-Date: 2026-02-23 08:38+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: reminder.py:53 reminder.py:369
+#: data/applications/tReminder/reminder.py:54
+#: data/applications/tReminder/reminder.py:373
 msgid "Titan Organizer"
 msgstr ""
 
-#: reminder.py:142
+#: data/applications/tReminder/reminder.py:142
 msgid "&Nowe przypomnienie\tCtrl+N"
 msgstr ""
 
-#: reminder.py:143
+#: data/applications/tReminder/reminder.py:143
 msgid "&Ustawienia programu"
 msgstr ""
 
-#: reminder.py:144
+#: data/applications/tReminder/reminder.py:144
 msgid "&Usuń przypomnienie\tDelete"
 msgstr ""
 
-#: reminder.py:145
+#: data/applications/tReminder/reminder.py:145
 msgid "&Zminimalizuj do zasobnika"
 msgstr ""
 
-#: reminder.py:146
+#: data/applications/tReminder/reminder.py:146
 msgid "&Wyjdź\tAlt+F4"
 msgstr ""
 
-#: reminder.py:147
+#: data/applications/tReminder/reminder.py:147
 msgid "&Plik"
 msgstr ""
 
-#: reminder.py:151
+#: data/applications/tReminder/reminder.py:151
 msgid "Nazwa &1"
 msgstr ""
 
-#: reminder.py:152
+#: data/applications/tReminder/reminder.py:152
 msgid "Priorytet &2"
 msgstr ""
 
-#: reminder.py:153
+#: data/applications/tReminder/reminder.py:153
 msgid "Data &3"
 msgstr ""
 
-#: reminder.py:154
+#: data/applications/tReminder/reminder.py:154
 msgid "Sortuj według"
 msgstr ""
 
-#: reminder.py:155
+#: data/applications/tReminder/reminder.py:155
 msgid "&Widok"
 msgstr ""
 
-#: reminder.py:180
+#: data/applications/tReminder/reminder.py:180
 msgid "Nazwa"
 msgstr ""
 
-#: reminder.py:181
+#: data/applications/tReminder/reminder.py:181
 msgid "Opis"
 msgstr ""
 
-#: reminder.py:182
+#: data/applications/tReminder/reminder.py:182
 msgid "Data"
 msgstr ""
 
-#: reminder.py:183
+#: data/applications/tReminder/reminder.py:183
 msgid "Godzina"
 msgstr ""
 
-#: reminder.py:184
+#: data/applications/tReminder/reminder.py:184
 msgid "Priorytet"
 msgstr ""
 
-#: reminder.py:262 reminder.py:464
+#: data/applications/tReminder/reminder.py:262
+#: data/applications/tReminder/reminder.py:468
 msgid "Niski"
 msgstr ""
 
-#: reminder.py:262 reminder.py:464
+#: data/applications/tReminder/reminder.py:262
+#: data/applications/tReminder/reminder.py:468
 msgid "Średni"
 msgstr ""
 
-#: reminder.py:262 reminder.py:464
+#: data/applications/tReminder/reminder.py:262
+#: data/applications/tReminder/reminder.py:468
 msgid "Wysoki"
 msgstr ""
 
-#: reminder.py:327
+#: data/applications/tReminder/reminder.py:327
 #, python-brace-format
 msgid "Plik dźwiękowy {} nie został znaleziony."
 msgstr ""
 
-#: reminder.py:348
-msgid "Nie znaleziono silnika TTS."
-msgstr ""
-
-#: reminder.py:360
+#: data/applications/tReminder/reminder.py:364
 #, python-brace-format
 msgid "Titan reminder - {} przypomnień, {} - wykonano, {} - niewykonano"
 msgstr ""
 
-#: reminder.py:382
+#: data/applications/tReminder/reminder.py:386
 msgid "Przywróć"
 msgstr ""
 
-#: reminder.py:383
+#: data/applications/tReminder/reminder.py:387
 msgid "Wyjdź"
 msgstr ""
 
-#: reminder.py:398
+#: data/applications/tReminder/reminder.py:402
 msgid "Nowe przypomnienie"
 msgstr ""
 
-#: reminder.py:411
+#: data/applications/tReminder/reminder.py:415
 msgid "Nazwa przypomnienia:"
 msgstr ""
 
-#: reminder.py:419
+#: data/applications/tReminder/reminder.py:423
 msgid "Opis:"
 msgstr ""
 
-#: reminder.py:427
+#: data/applications/tReminder/reminder.py:431
 msgid "Data:"
 msgstr ""
 
-#: reminder.py:436
+#: data/applications/tReminder/reminder.py:440
 msgid "Dzień:"
 msgstr ""
 
-#: reminder.py:438
+#: data/applications/tReminder/reminder.py:442
 msgid "Miesiąc:"
 msgstr ""
 
-#: reminder.py:440
+#: data/applications/tReminder/reminder.py:444
 msgid "Rok:"
 msgstr ""
 
-#: reminder.py:446
+#: data/applications/tReminder/reminder.py:450
 msgid "Czas:"
 msgstr ""
 
-#: reminder.py:454
+#: data/applications/tReminder/reminder.py:458
 msgid "Godzina:"
 msgstr ""
 
-#: reminder.py:456
+#: data/applications/tReminder/reminder.py:460
 msgid "Minuta:"
 msgstr ""
 
-#: reminder.py:462
+#: data/applications/tReminder/reminder.py:466
 msgid "Priorytet:"
 msgstr ""
 
-#: reminder.py:471
+#: data/applications/tReminder/reminder.py:475
 msgid "Powtórz:"
 msgstr ""
 
-#: reminder.py:474
+#: data/applications/tReminder/reminder.py:478
 msgid "2 razy co 3 minuty"
 msgstr ""
 
-#: reminder.py:475
+#: data/applications/tReminder/reminder.py:479
 msgid "4 razy co minutę"
 msgstr ""
 
-#: reminder.py:476
+#: data/applications/tReminder/reminder.py:480
 msgid "Co 15 minut"
 msgstr ""
 
-#: reminder.py:477
+#: data/applications/tReminder/reminder.py:481
 msgid "Tylko raz"
 msgstr ""
 
-#: reminder.py:485 reminder.py:594
+#: data/applications/tReminder/reminder.py:489
+#: data/applications/tReminder/reminder.py:598
 msgid "OK"
 msgstr ""
 
-#: reminder.py:486 reminder.py:595
+#: data/applications/tReminder/reminder.py:490
+#: data/applications/tReminder/reminder.py:599
 msgid "Anuluj"
 msgstr ""
 
-#: reminder.py:516
+#: data/applications/tReminder/reminder.py:520
 msgid "Przypomnienie"
 msgstr ""
 
-#: reminder.py:531
+#: data/applications/tReminder/reminder.py:535
 msgid "Wykonano"
 msgstr ""
 
-#: reminder.py:532
+#: data/applications/tReminder/reminder.py:536
 msgid "Moment"
 msgstr ""
 
-#: reminder.py:541
+#: data/applications/tReminder/reminder.py:545
 msgid "Ustawienia programu"
 msgstr ""
 
-#: reminder.py:554
+#: data/applications/tReminder/reminder.py:558
 msgid "Dźwięki"
 msgstr ""
 
-#: reminder.py:561
+#: data/applications/tReminder/reminder.py:565
 msgid "Temat dźwiękowy:"
 msgstr ""
 
-#: reminder.py:575
+#: data/applications/tReminder/reminder.py:579
 msgid "Tekst na mowę"
 msgstr ""
 
-#: reminder.py:582
+#: data/applications/tReminder/reminder.py:586
 msgid "Widok listy przypomnień:"
 msgstr ""
 
-#: reminder.py:584
+#: data/applications/tReminder/reminder.py:588
 msgid "Lista (zalecane dla osób z niepełnosprawnością wzroku)"
 msgstr ""
 
-#: reminder.py:584
+#: data/applications/tReminder/reminder.py:588
 msgid "Widok kalendarza"
 msgstr ""
 
-#: reminder.py:613
+#: data/applications/tReminder/reminder.py:617
 msgid "Moduł pygame nie jest dostępny."
 msgstr ""
 

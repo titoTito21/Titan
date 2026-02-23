@@ -1,169 +1,190 @@
 # Translations template for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
+# Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-11 14:33+0200\n"
+"POT-Creation-Date: 2026-02-23 08:38+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: notes.py:65
+#: data/applications/tNotes/notes.py:102
 msgid "tNotes"
 msgstr ""
 
-#: notes.py:70
-msgid "Tytuł notatki"
+#: data/applications/tNotes/notes.py:107
+msgid "Note title"
 msgstr ""
 
-#: notes.py:71
-msgid "Data utworzenia"
+#: data/applications/tNotes/notes.py:108
+msgid "Date created"
 msgstr ""
 
-#: notes.py:72
-msgid "Data edytowania"
+#: data/applications/tNotes/notes.py:109
+msgid "Date modified"
 msgstr ""
 
-#: notes.py:76 notes.py:164 notes.py:171
-msgid "Nowa notatka"
+#: data/applications/tNotes/notes.py:113 data/applications/tNotes/notes.py:137
+#: data/applications/tNotes/notes.py:251 data/applications/tNotes/notes.py:260
+msgid "New note"
 msgstr ""
 
-#: notes.py:79 notes.py:213
-msgid "Nowy katalog"
+#: data/applications/tNotes/notes.py:116 data/applications/tNotes/notes.py:138
+#: data/applications/tNotes/notes.py:355
+msgid "New folder"
 msgstr ""
 
-#: notes.py:82
-msgid "Usuń"
+#: data/applications/tNotes/notes.py:119 data/applications/tNotes/notes.py:139
+msgid "Delete"
 msgstr ""
 
-#: notes.py:85
-msgid "Powrót"
+#: data/applications/tNotes/notes.py:122 data/applications/tNotes/notes.py:140
+msgid "Back"
 msgstr ""
 
-#: notes.py:108
-msgid "&Nowa notatka\tCtrl+N"
+#: data/applications/tNotes/notes.py:136
+msgid "Notes list"
 msgstr ""
 
-#: notes.py:109
-msgid "Nowy &katalog\tCtrl+Shift+N"
+#: data/applications/tNotes/notes.py:150
+msgid "&New note\tCtrl+N"
 msgstr ""
 
-#: notes.py:111
-msgid "Ustawienia tNotes..."
+#: data/applications/tNotes/notes.py:151
+msgid "New &folder\tCtrl+Shift+N"
 msgstr ""
 
-#: notes.py:113
-msgid "&Zamknij tNotes\tCtrl+W"
+#: data/applications/tNotes/notes.py:153
+msgid "tNotes settings..."
 msgstr ""
 
-#: notes.py:120
-msgid "&Plik"
+#: data/applications/tNotes/notes.py:155
+msgid "&Close tNotes\tCtrl+W"
 msgstr ""
 
-#: notes.py:125
+#: data/applications/tNotes/notes.py:162
+msgid "&File"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:191
 #, python-brace-format
-msgid "Katalog {} nie istnieje."
+msgid "[Folder] {} ({} notes)"
 msgstr ""
 
-#: notes.py:133
+#: data/applications/tNotes/notes.py:193
 #, python-brace-format
-msgid "[Katalog] {}"
+msgid "[Folder] {}"
 msgstr ""
 
-#: notes.py:133
+#: data/applications/tNotes/notes.py:244
+msgid "Note file not found."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:251
+msgid "Enter note title:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:264 data/applications/tNotes/notes.py:294
+msgid "Title:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:266 data/applications/tNotes/notes.py:296
+msgid "Content:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:269 data/applications/tNotes/notes.py:299
+#: data/applications/tNotes/notes.py:441
+msgid "Save"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:271 data/applications/tNotes/notes.py:301
+#: data/applications/tNotes/notes.py:443
+msgid "Cancel"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:290
+msgid "Edit note"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:323
+msgid "Please enter a title."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:342
+msgid "Failed to save note."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:348
+msgid "Note saved!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:355
+msgid "Enter folder name:"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:362
+msgid "Folder already exists."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:366
+msgid "Folder created!"
+msgstr ""
+
+#: data/applications/tNotes/notes.py:375
+msgid "No item selected."
+msgstr ""
+
+#: data/applications/tNotes/notes.py:391
 #, python-brace-format
-msgid "Katalog {}, zawiera {} notatek"
+msgid "Folder \"{}\" is not empty. Delete it and all its contents?"
 msgstr ""
 
-#: notes.py:164
-msgid "Wprowadź tytuł notatki:"
+#: data/applications/tNotes/notes.py:392
+msgid "Confirm Delete"
 msgstr ""
 
-#: notes.py:175 notes.py:255
-msgid "Tytuł:"
+#: data/applications/tNotes/notes.py:402 data/applications/tNotes/notes.py:408
+msgid "Failed to delete folder."
 msgstr ""
 
-#: notes.py:177 notes.py:257
-msgid "Treść:"
+#: data/applications/tNotes/notes.py:410
+msgid "Folder deleted!"
 msgstr ""
 
-#: notes.py:180 notes.py:260 notes.py:325
-msgid "Zapisz"
+#: data/applications/tNotes/notes.py:416
+msgid "Note deleted!"
 msgstr ""
 
-#: notes.py:183 notes.py:263 notes.py:328
-msgid "Anuluj"
+#: data/applications/tNotes/notes.py:418
+msgid "Failed to delete note."
 msgstr ""
 
-#: notes.py:207
-msgid "Notatka została zapisana!"
+#: data/applications/tNotes/notes.py:421
+msgid "Note not found."
 msgstr ""
 
-#: notes.py:213
-msgid "Wprowadź nazwę katalogu:"
+#: data/applications/tNotes/notes.py:432
+msgid "tNotes Settings"
 msgstr ""
 
-#: notes.py:220
-msgid "Katalog został utworzony!"
+#: data/applications/tNotes/notes.py:436
+msgid "Announce folder note count"
 msgstr ""
 
-#: notes.py:222
-#, python-brace-format
-msgid "Katalog {} już istnieje."
+#: data/applications/tNotes/notes.py:438
+msgid "Announce keyboard shortcuts"
 msgstr ""
 
-#: notes.py:228 notes.py:283
-msgid "[Katalog]"
-msgstr ""
-
-#: notes.py:234 notes.py:293
-msgid "Katalog"
-msgstr ""
-
-#: notes.py:248
-#, python-brace-format
-msgid "Plik {} nie istnieje."
-msgstr ""
-
-#: notes.py:251
-msgid "Edytuj notatkę"
-msgstr ""
-
-#: notes.py:290 notes.py:300
-msgid "Katalog został usunięty!"
-msgstr ""
-
-#: notes.py:292 notes.py:302
-#, python-brace-format
-msgid "Katalog {} nie jest pusty."
-msgstr ""
-
-#: notes.py:307
-msgid "Notatka została usunięta!"
-msgstr ""
-
-#: notes.py:316
-msgid "Ustawienia tNotes"
-msgstr ""
-
-#: notes.py:320
-msgid "Oznajmij katalogi"
-msgstr ""
-
-#: notes.py:322
-msgid "Oznajmij skróty klawiszowe"
-msgstr ""
-
-#: notes.py:346
-msgid "Ustawienia zostały zapisane!"
+#: data/applications/tNotes/notes.py:462
+msgid "Settings saved!"
 msgstr ""
 

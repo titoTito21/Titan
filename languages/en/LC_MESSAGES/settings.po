@@ -301,6 +301,14 @@ msgstr ""
 msgid "Default voice"
 msgstr ""
 
+#: src/ui/settingsgui.py:681
+msgid "ElevenLabs API Key:"
+msgstr "ElevenLabs API Key:"
+
+#: src/ui/settingsgui.py:685
+msgid "Your ElevenLabs API key. Get it from elevenlabs.io"
+msgstr "Your ElevenLabs API key. Get it from elevenlabs.io"
+
 #~ msgid "Titan key:"
 #~ msgstr ""
 

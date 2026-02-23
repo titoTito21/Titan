@@ -1,4 +1,4 @@
-# Polish translations for PROJECT.
+# Polish translations for TMedia.
 # Copyright (C) 2025 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-12 15:07+0200\n"
-"PO-Revision-Date: 2025-07-12 15:07+0200\n"
+"POT-Creation-Date: 2026-02-23 08:38+0100\n"
+"PO-Revision-Date: 2026-02-23 09:00+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
@@ -17,22 +17,63 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: YoutubeSearch.py:14
-msgid "Wyszukiwarka YouTube"
-msgstr ""
+#: data/applications/tMedia/YoutubeSearch.py:10
+#: data/applications/tMedia/tmedia.py:99
+msgid "YouTube Search"
+msgstr "Wyszukiwarka YouTube"
 
-#: YoutubeSearch.py:23
-msgid "Szukaj"
-msgstr ""
+#: data/applications/tMedia/YoutubeSearch.py:20
+msgid "Search"
+msgstr "Szukaj"
 
-#: YoutubeSearch.py:65
-msgid "Wyniki zostały załadowane"
-msgstr ""
-
-#: YoutubeSearch.py:67
+#: data/applications/tMedia/YoutubeSearch.py:73
 #, python-format
-msgid "Błąd podczas wyszukiwania: %s"
-msgstr ""
+msgid "Found %d cached results for: %s"
+msgstr "Znaleziono %d wyników z pamięci podręcznej dla: %s"
 
+#: data/applications/tMedia/YoutubeSearch.py:75
+msgid "No cached results found"
+msgstr "Nie znaleziono wyników w pamięci podręcznej"
+
+#: data/applications/tMedia/YoutubeSearch.py:131
+#, python-format
+msgid "Found %d results for: %s"
+msgstr "Znaleziono %d wyników dla: %s"
+
+#: data/applications/tMedia/YoutubeSearch.py:133
+#: data/applications/tMedia/YoutubeSearch.py:135
+#, python-format
+msgid "No results found for: %s"
+msgstr "Nie znaleziono wyników dla: %s"
+
+#: data/applications/tMedia/YoutubeSearch.py:141
+msgid "Network connection error. Check your internet connection."
+msgstr "Błąd połączenia sieciowego. Sprawdź swoje połączenie internetowe."
+
+#: data/applications/tMedia/YoutubeSearch.py:143
+msgid "Search timed out. Please try again."
+msgstr "Wyszukiwanie przekroczyło limit czasu. Spróbuj ponownie."
+
+#: data/applications/tMedia/YoutubeSearch.py:145
+#, python-format
+msgid "Search error: %s"
+msgstr "Błąd wyszukiwania: %s"
+
+#: data/applications/tMedia/YoutubeSearch.py:153
+#: data/applications/tMedia/YoutubeSearch.py:183
+msgid "Open in Browser"
+msgstr "Otwórz w przeglądarce"
+
+#: data/applications/tMedia/YoutubeSearch.py:208
+msgid "No valid video URL found"
+msgstr "Nie znaleziono prawidłowego adresu URL filmu"
+
+#: data/applications/tMedia/tmedia.py:99
+msgid "Media Catalog"
+msgstr "Katalog mediów"
+
+#: data/applications/tMedia/tmedia.py:100
+msgid "TMedia functions"
+msgstr "Funkcje TMedia"

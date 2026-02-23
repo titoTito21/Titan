@@ -5,21 +5,24 @@ polib
 Nuitka
 requests
 psutil
+
+# Windows-only dependencies
 wmi; platform_system == "Windows"
 pywinusb; platform_system == "Windows"
 pywin32; platform_system == "Windows"
-pywinctl
-
-# Linux audio dependencies
+pywinctl; platform_system == "Windows"
 pycaw; platform_system == "Windows"
 comtypes; platform_system == "Windows"
+keyboard; platform_system == "Windows"
+
+# Cross-platform keyboard/mouse input (used on macOS/Linux instead of keyboard module)
+pynput
 
 pyenchant
 pytube
 beautifulsoup4
 yt-dlp
 python-vlc
-keyboard
 SpeechRecognition
 aiortc
 telethon
@@ -41,6 +44,9 @@ gtts  # Text-to-speech fallback
 # Ubuntu/Debian: pulseaudio-utils, alsa-utils
 # Fedora/RHEL: pulseaudio-utils, alsa-utils
 # Arch: pulseaudio-alsa, alsa-utils
+
+# macOS system integration (optional)
+# pyobjc-framework-Quartz is needed for window/screen detection on macOS
 
 # Titan-net server dependencies
 websockets

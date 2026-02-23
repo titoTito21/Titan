@@ -16,12 +16,11 @@ from translation import _
 # Inicjalizacja Pygame do efektów dźwiękowych
 pygame.mixer.init()
 
-# Screen reader output (VoiceOver / NVDA / JAWS) via accessible_output3
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _ao3_speaker = _ao3.Auto()
-except Exception:
-    _ao3_speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
 
 # Definicja efektów dźwiękowych
 START_SOUND = "sfx/start.ogg"
@@ -32,27 +31,37 @@ def play_sound(sound_file):
     sound = pygame.mixer.Sound(sound_file)
     sound.play()
 
-def speak_message(message):
-    """Announce a message via accessible_output3 with cross-platform fallback."""
-    # 1) accessible_output3 – preferred (integrates with active screen reader)
-    if _ao3_speaker:
+if _tce_speak is not None:
+    def speak_message(message):
+        """Announce a message via Titan TTS engine."""
+        _tce_speak(message)
+else:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _ao3_speaker = _ao3.Auto()
+    except Exception:
+        _ao3_speaker = None
+
+    def speak_message(message):
+        """Announce a message via accessible_output3 with cross-platform fallback."""
+        if _ao3_speaker:
+            try:
+                _ao3_speaker.speak(message, interrupt=True)
+                return
+            except Exception:
+                pass
         try:
-            _ao3_speaker.speak(message, interrupt=True)
-            return
+            _sys = platform.system()
+            if _sys == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(message)
+            elif _sys == 'Darwin':
+                subprocess.Popen(['say', message])
+            else:
+                subprocess.Popen(['spd-say', message])
         except Exception:
             pass
-    # 2) Platform fallback when ao3 is unavailable
-    try:
-        _sys = platform.system()
-        if _sys == 'Windows':
-            import win32com.client
-            win32com.client.Dispatch("SAPI.SpVoice").Speak(message)
-        elif _sys == 'Darwin':
-            subprocess.Popen(['say', message])
-        else:  # Linux
-            subprocess.Popen(['spd-say', message])
-    except Exception:
-        pass
 
 def get_notifications_path():
     if platform.system() == 'Windows':
