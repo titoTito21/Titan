@@ -10,33 +10,42 @@ import pygame
 from translation import _
 import subprocess
 
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _speaker = _ao3.Auto()
-except Exception:
-    _speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
 
-def _speak(text):
-    """Announce text via accessible_output3 with cross-platform fallback."""
-    # 1) accessible_output3 – preferred (integrates with active screen reader)
-    if _speaker:
+if _tce_speak is not None:
+    def _speak(text):
+        _tce_speak(text)
+else:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _speaker = _ao3.Auto()
+    except Exception:
+        _speaker = None
+
+    def _speak(text):
+        """Announce text via accessible_output3 with cross-platform fallback."""
+        if _speaker:
+            try:
+                _speaker.speak(text, interrupt=True)
+                return
+            except Exception:
+                pass
         try:
-            _speaker.speak(text, interrupt=True)
-            return
+            _sys = platform.system()
+            if _sys == 'Windows':
+                import win32com.client
+                win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
+            elif _sys == 'Darwin':
+                subprocess.Popen(['say', text])
+            else:
+                subprocess.Popen(['spd-say', text])
         except Exception:
             pass
-    # 2) Platform fallback when ao3 is unavailable
-    try:
-        _sys = platform.system()
-        if _sys == 'Windows':
-            import win32com.client
-            win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
-        elif _sys == 'Darwin':
-            subprocess.Popen(['say', text])
-        else:  # Linux
-            subprocess.Popen(['spd-say', text])
-    except Exception:
-        pass
 
 pygame.mixer.init()
 # Legacy alias so existing code using `speaker.speak(...)` still works

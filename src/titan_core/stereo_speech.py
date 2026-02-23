@@ -7,6 +7,7 @@ import sys
 import io
 import subprocess
 import platform
+import importlib.util as _importlib_util
 import accessible_output3.outputs.auto
 from src.settings.settings import get_setting
 from src.platform_utils import get_base_path as _get_base_path, IS_WINDOWS, IS_LINUX, IS_MACOS
@@ -35,6 +36,28 @@ except ImportError:
     PYDUB_AVAILABLE = False
     PYDUB_SILENCE_AVAILABLE = False
 
+# ---------------------------------------------------------------------------
+# ElevenLabs engine (loaded via importlib - filename contains a space)
+# ---------------------------------------------------------------------------
+ELEVENLABS_AVAILABLE = False
+_elevenlabs_module = None
+
+try:
+    _el_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'tts', 'elevenLabs engine.py')
+    )
+    if os.path.exists(_el_path):
+        _el_spec = _importlib_util.spec_from_file_location("elevenlabs_engine", _el_path)
+        _elevenlabs_module = _importlib_util.module_from_spec(_el_spec)
+        _el_spec.loader.exec_module(_elevenlabs_module)
+        ELEVENLABS_AVAILABLE = True
+        print("[StereoSpeech] ElevenLabs TTS engine loaded")
+    else:
+        print(f"[StereoSpeech] ElevenLabs engine not found at: {_el_path}")
+except Exception as _el_err:
+    print(f"[StereoSpeech] ElevenLabs engine load error: {_el_err}")
+
+# ---------------------------------------------------------------------------
 # eSpeak DLL constants (from speak_lib.h)
 import ctypes
 import shutil
@@ -299,7 +322,12 @@ class ESpeakDLL:
                     wav_buf.seek(0)
 
                     sound = pygame.mixer.Sound(wav_buf)
-                    channel = pygame.mixer.find_channel(True)
+                    # Use dedicated TTS channel so UI sounds never collide
+                    try:
+                        from src.titan_core.sound import get_tts_channel
+                        channel = get_tts_channel()
+                    except Exception:
+                        channel = pygame.mixer.find_channel(True)
                     if channel:
                         channel.play(sound)
                         self._play_channel = channel
@@ -783,6 +811,15 @@ class StereoSpeech:
         # Fallback speaker (accessible_output3)
         self.fallback_speaker = accessible_output3.outputs.auto.Auto()
 
+        # ElevenLabs engine instance
+        self.elevenlabs = None
+        if ELEVENLABS_AVAILABLE:
+            try:
+                self.elevenlabs = _elevenlabs_module.get_elevenlabs_engine()
+                print("[StereoSpeech] ElevenLabs engine instance ready")
+            except Exception as e:
+                print(f"[StereoSpeech] ElevenLabs instance error: {e}")
+
         # Platform-specific engine selection
         # Prefer eSpeak DLL (fastest), then eSpeak exe, then platform native
         if ESPEAK_DLL_AVAILABLE:
@@ -1237,6 +1274,43 @@ class StereoSpeech:
                 except Exception:
                     pass
 
+    def _generate_elevenlabs_to_memory(self, text, pitch_offset=0):
+        """
+        Generate TTS via ElevenLabs API with disk caching.
+
+        Normalises punctuation, checks cache, calls API on miss,
+        then applies pitch offset via pydub frame-rate trick.
+
+        Args:
+            text (str):         Text to synthesize.
+            pitch_offset (int): Semitone shift -10..+10.
+
+        Returns:
+            pydub.AudioSegment or None
+        """
+        if not ELEVENLABS_AVAILABLE or not self.elevenlabs:
+            return None
+        if not PYDUB_AVAILABLE:
+            return None
+        try:
+            audio = self.elevenlabs.generate(text, pitch_offset)
+            if audio is not None:
+                print(f"[StereoSpeech] ElevenLabs: {len(audio)} ms audio ready")
+            return audio
+        except Exception as e:
+            print(f"[StereoSpeech] ElevenLabs generation error: {e}")
+            return None
+
+    def set_elevenlabs_api_key(self, api_key):
+        """Set ElevenLabs API key on the engine instance."""
+        if self.elevenlabs:
+            self.elevenlabs.set_api_key(api_key)
+
+    def set_elevenlabs_voice_id(self, voice_id):
+        """Set ElevenLabs voice ID on the engine instance."""
+        if self.elevenlabs:
+            self.elevenlabs.set_voice_id(voice_id)
+
     def _speak_native_say(self, text):
         """Direct speech using macOS 'say' command (no stereo)."""
         if not SAY_AVAILABLE:
@@ -1286,7 +1360,7 @@ class StereoSpeech:
             print(f"[StereoSpeech] spd-say direct error: {e}")
             return False
 
-    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True):
+    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True, _seq=None):
         """
         Speaks text with optional stereo positioning and pitch control.
 
@@ -1298,6 +1372,7 @@ class StereoSpeech:
             position (float): Stereo position from -1.0 (left) to 1.0 (right)
             pitch_offset (int): Pitch offset -10 to +10
             use_fallback (bool): Whether to use fallback if engine fails
+            _seq (int|None): Sequence number from speak_async for freshness check
         """
         if not text:
             return
@@ -1310,6 +1385,10 @@ class StereoSpeech:
                 print("Warning: Could not acquire speech lock, using fallback")
                 if use_fallback:
                     self.fallback_speaker.speak(text)
+                return
+
+            # Check if a newer message superseded this one while waiting for the lock
+            if _seq is not None and _seq != self._speak_seq:
                 return
 
             self.stop()
@@ -1351,6 +1430,12 @@ class StereoSpeech:
                 temp_file = None
 
                 if self.engine in ('espeak_dll', 'espeak'):
+                    # Release lock during eSpeak generation (subprocess ~100-300ms)
+                    # so newer messages aren't blocked waiting for the lock
+                    if lock_acquired:
+                        self.speech_lock.release()
+                        lock_acquired = False
+
                     # Prefer EXE subprocess (fast, no re-initialization)
                     if ESPEAK_AVAILABLE:
                         audio = self._generate_espeak_dll_to_memory(text, pitch_offset)
@@ -1359,8 +1444,25 @@ class StereoSpeech:
                     # DLL-only fallback: re-init in RETRIEVAL mode (no double-playback)
                     if not audio and self.espeak_dll:
                         audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset)
-                    if not self.is_speaking:
-                        return  # Interrupted during generation
+
+                    # Check if a newer message arrived during generation
+                    if _seq is not None and _seq != self._speak_seq:
+                        return
+
+                    # Re-acquire lock for playback
+                    lock_acquired = self.speech_lock.acquire(timeout=2.0)
+                    if not lock_acquired:
+                        if use_fallback:
+                            self.fallback_speaker.speak(text)
+                        return
+
+                    # Check freshness again after lock acquisition
+                    if _seq is not None and _seq != self._speak_seq:
+                        return
+
+                    self.stop()  # Stop any playback that started while unlocked
+                    self.is_speaking = True
+
                     if not audio:
                         # All generation failed: DLL direct speak (no stereo/pitch)
                         if self.espeak_dll:
@@ -1388,6 +1490,37 @@ class StereoSpeech:
                         return  # Interrupted during generation
                     if not audio:
                         self._speak_native_say(text)
+                        return
+                elif self.engine == 'elevenlabs':
+                    # Release lock during ElevenLabs API call (1-2s) so newer
+                    # messages aren't blocked waiting for the lock
+                    if lock_acquired:
+                        self.speech_lock.release()
+                        lock_acquired = False
+
+                    audio = self._generate_elevenlabs_to_memory(text, pitch_offset)
+
+                    # Check if a newer message arrived during generation
+                    if _seq is not None and _seq != self._speak_seq:
+                        return
+
+                    # Re-acquire lock for playback
+                    lock_acquired = self.speech_lock.acquire(timeout=2.0)
+                    if not lock_acquired:
+                        if use_fallback:
+                            self.fallback_speaker.speak(text)
+                        return
+
+                    # Double-check freshness after lock acquisition
+                    if _seq is not None and _seq != self._speak_seq:
+                        return
+
+                    self.stop()  # Stop any playback that started while unlocked
+                    self.is_speaking = True
+
+                    if not audio:
+                        if use_fallback:
+                            self.fallback_speaker.speak(text)
                         return
                 else:
                     if use_fallback:
@@ -1419,7 +1552,7 @@ class StereoSpeech:
                             self.fallback_speaker.speak(text)
                         return
 
-                    # Play via pygame dedicated TTS channel
+                    # Play via dedicated Titan TTS channel (channel 4)
                     try:
                         import pygame
 
@@ -1433,19 +1566,17 @@ class StereoSpeech:
                                     self.fallback_speaker.speak(text)
                                 return
 
-                        # Find free TTS channel (skip channel 0 used by UI)
+                        # Always use dedicated TTS channel – never steals UI sound slots
                         tts_channel = None
                         try:
-                            for channel_id in range(1, pygame.mixer.get_num_channels()):
-                                channel = pygame.mixer.Channel(channel_id)
-                                if not channel.get_busy():
-                                    tts_channel = channel
-                                    break
-                            if not tts_channel:
-                                pygame.mixer.set_num_channels(pygame.mixer.get_num_channels() + 1)
-                                tts_channel = pygame.mixer.Channel(pygame.mixer.get_num_channels() - 1)
-                        except Exception as e:
-                            print(f"[StereoSpeech] Error finding TTS channel: {e}")
+                            from src.titan_core.sound import get_tts_channel
+                            tts_channel = get_tts_channel()
+                        except Exception as _e:
+                            print(f"[StereoSpeech] get_tts_channel failed: {_e}")
+                        if tts_channel is None:
+                            # Fallback: find any free channel (should rarely happen)
+                            tts_channel = pygame.mixer.find_channel()
+                        if not tts_channel:
                             if use_fallback:
                                 self.fallback_speaker.speak(text)
                             return
@@ -1520,7 +1651,7 @@ class StereoSpeech:
             # If a newer message arrived while we were waiting, skip this one
             if my_seq != self._speak_seq:
                 return
-            self.speak(text, position, pitch_offset, use_fallback)
+            self.speak(text, position, pitch_offset, use_fallback, _seq=my_seq)
 
         thread = threading.Thread(target=speak_thread)
         thread.daemon = True
@@ -1601,6 +1732,12 @@ class StereoSpeech:
         elif engine == 'spd' and IS_LINUX and SPD_AVAILABLE:
             self.engine = 'spd'
             print("[StereoSpeech] Switched to Speech Dispatcher engine")
+        elif engine == 'elevenlabs':
+            if ELEVENLABS_AVAILABLE:
+                self.engine = 'elevenlabs'
+                print("[StereoSpeech] Switched to ElevenLabs TTS engine")
+            else:
+                print("[StereoSpeech] ElevenLabs engine not available (missing deps)")
         else:
             print(f"[StereoSpeech] Engine '{engine}' not available on this platform")
 
@@ -1631,6 +1768,9 @@ class StereoSpeech:
             engines.append('say')
         if IS_LINUX and SPD_AVAILABLE:
             engines.append('spd')
+        # ElevenLabs - cloud-based, always listed (requires API key to work)
+        if ELEVENLABS_AVAILABLE:
+            engines.append('elevenlabs')
         return engines
 
     def set_rate(self, rate):
@@ -1939,6 +2079,10 @@ class StereoSpeech:
                 return self.get_say_voices()
             elif self.engine == 'spd':
                 return self.get_spd_voices()
+            elif self.engine == 'elevenlabs':
+                if self.elevenlabs:
+                    return self.elevenlabs.get_voices()
+                return []
             else:
                 return []
         except Exception as e:
@@ -1977,6 +2121,12 @@ class StereoSpeech:
                 if 0 <= voice_index < len(voices):
                     self.spd_voice = voices[voice_index]['id']
                     print(f"[StereoSpeech] spd-say voice set to: {voices[voice_index]['display_name']}")
+            elif self.engine == 'elevenlabs':
+                voices = self.elevenlabs.get_voices() if self.elevenlabs else []
+                if 0 <= voice_index < len(voices):
+                    voice_id = voices[voice_index]['id']
+                    self.set_elevenlabs_voice_id(voice_id)
+                    print(f"[StereoSpeech] ElevenLabs voice set to: {voices[voice_index]['display_name']}")
         except Exception as e:
             print(f"[StereoSpeech] Error setting voice: {e}")
 

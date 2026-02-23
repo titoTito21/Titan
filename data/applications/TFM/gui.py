@@ -17,12 +17,19 @@ from sound import initialize_sound, play_startup_sound, get_sfx_directory, play_
 
 import string
 
-# Screen reader output (accessible_output3) for VoiceOver / NVDA / JAWS
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _speaker = _ao3.Auto()
-except Exception:
-    _speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
+
+if _tce_speak is None:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _speaker = _ao3.Auto()
+    except Exception:
+        _speaker = None
 
 
 def _get_drives():
@@ -434,6 +441,9 @@ class FileManager(wx.Frame):
 
     def announce(self, message):
         self.status_text.SetLabel(message)
+        if _tce_speak is not None:
+            _tce_speak(message)
+            return
         if _speaker:
             try:
                 _speaker.speak(message, interrupt=True)

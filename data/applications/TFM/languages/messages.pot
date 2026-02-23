@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-20 19:25+0100\n"
+"POT-Creation-Date: 2026-02-23 08:38+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,638 +17,650 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: copy_move.py:42
+#: data/applications/TFM/copy_move.py:42
 msgid "Copying files"
 msgstr ""
 
-#: copy_move.py:54
+#: data/applications/TFM/copy_move.py:54
 #, python-brace-format
 msgid "Copied: {}"
 msgstr ""
 
-#: copy_move.py:57 gui.py:617
+#: data/applications/TFM/copy_move.py:57 data/applications/TFM/gui.py:627
 #, python-brace-format
 msgid "Copy error for {}: {}"
 msgstr ""
 
-#: copy_move.py:58 gui.py:617
+#: data/applications/TFM/copy_move.py:58 data/applications/TFM/gui.py:627
 msgid "Copy Error"
 msgstr ""
 
-#: copy_move.py:60 gui.py:618
+#: data/applications/TFM/copy_move.py:60 data/applications/TFM/gui.py:628
 #, python-brace-format
 msgid "Error copying: {}"
 msgstr ""
 
-#: copy_move.py:71
+#: data/applications/TFM/copy_move.py:71
 msgid "Moving files"
 msgstr ""
 
-#: copy_move.py:80
+#: data/applications/TFM/copy_move.py:80
 #, python-brace-format
 msgid "Moved: {}"
 msgstr ""
 
-#: copy_move.py:83 gui.py:625
+#: data/applications/TFM/copy_move.py:83 data/applications/TFM/gui.py:635
 #, python-brace-format
 msgid "Move error for {}: {}"
 msgstr ""
 
-#: copy_move.py:84 gui.py:625
+#: data/applications/TFM/copy_move.py:84 data/applications/TFM/gui.py:635
 msgid "Move Error"
 msgstr ""
 
-#: copy_move.py:86 gui.py:626
+#: data/applications/TFM/copy_move.py:86 data/applications/TFM/gui.py:636
 #, python-brace-format
 msgid "Error moving: {}"
 msgstr ""
 
-#: gui.py:88 gui.py:264 gui.py:269
+#: data/applications/TFM/gui.py:95 data/applications/TFM/gui.py:271
+#: data/applications/TFM/gui.py:276
 msgid "File Manager"
 msgstr ""
 
-#: gui.py:115
+#: data/applications/TFM/gui.py:122
 msgid "Cannot access last directory. Switching to drive selection view."
 msgstr ""
 
-#: gui.py:131
+#: data/applications/TFM/gui.py:138
 msgid "&File"
 msgstr ""
 
-#: gui.py:132
+#: data/applications/TFM/gui.py:139
 msgid "&Edit"
 msgstr ""
 
-#: gui.py:133
+#: data/applications/TFM/gui.py:140
 msgid "&View"
 msgstr ""
 
-#: gui.py:182
+#: data/applications/TFM/gui.py:189
 msgid "Tab 1"
 msgstr ""
 
-#: gui.py:235
+#: data/applications/TFM/gui.py:242
 msgid "File list"
 msgstr ""
 
-#: gui.py:237
+#: data/applications/TFM/gui.py:244
 msgid "Left panel"
 msgstr ""
 
-#: gui.py:239
+#: data/applications/TFM/gui.py:246
 msgid "Right panel"
 msgstr ""
 
-#: gui.py:241
+#: data/applications/TFM/gui.py:248
 msgid "File tabs"
 msgstr ""
 
-#: gui.py:248
+#: data/applications/TFM/gui.py:255
 msgid "Volume selection"
 msgstr ""
 
-#: gui.py:250
+#: data/applications/TFM/gui.py:257
 msgid "Mount point selection"
 msgstr ""
 
-#: gui.py:252
+#: data/applications/TFM/gui.py:259
 msgid "Drive selection"
 msgstr ""
 
-#: gui.py:292 menu.py:46 tfm_settings.py:221
+#: data/applications/TFM/gui.py:299 data/applications/TFM/menu.py:46
+#: data/applications/TFM/tfm_settings.py:221
 msgid "Name"
 msgstr ""
 
-#: gui.py:295 gui.py:339 gui.py:368 gui.py:400 menu.py:47 tfm_settings.py:222
+#: data/applications/TFM/gui.py:302 data/applications/TFM/gui.py:346
+#: data/applications/TFM/gui.py:375 data/applications/TFM/gui.py:407
+#: data/applications/TFM/menu.py:47 data/applications/TFM/tfm_settings.py:222
 msgid "Date modified"
 msgstr ""
 
-#: gui.py:298 gui.py:347 gui.py:376 gui.py:409 menu.py:48 tfm_settings.py:223
+#: data/applications/TFM/gui.py:305 data/applications/TFM/gui.py:354
+#: data/applications/TFM/gui.py:383 data/applications/TFM/gui.py:416
+#: data/applications/TFM/menu.py:48 data/applications/TFM/tfm_settings.py:223
 msgid "Type"
 msgstr ""
 
-#: gui.py:332
+#: data/applications/TFM/gui.py:339
 msgid "No drives available"
 msgstr ""
 
-#: gui.py:351
+#: data/applications/TFM/gui.py:358
 msgid "Drive"
 msgstr ""
 
-#: gui.py:364 gui.py:418 gui.py:499 gui.py:544 gui.py:568 gui.py:655 gui.py:670
-#: gui.py:701 gui.py:794 gui.py:1025 gui.py:1093 gui.py:1133 gui.py:1186
-#: gui.py:1237
+#: data/applications/TFM/gui.py:371 data/applications/TFM/gui.py:425
+#: data/applications/TFM/gui.py:509 data/applications/TFM/gui.py:554
+#: data/applications/TFM/gui.py:578 data/applications/TFM/gui.py:665
+#: data/applications/TFM/gui.py:680 data/applications/TFM/gui.py:711
+#: data/applications/TFM/gui.py:804 data/applications/TFM/gui.py:1035
+#: data/applications/TFM/gui.py:1103 data/applications/TFM/gui.py:1143
+#: data/applications/TFM/gui.py:1196 data/applications/TFM/gui.py:1247
 msgid "This folder is empty"
 msgstr ""
 
-#: gui.py:393
+#: data/applications/TFM/gui.py:400
 msgid "Folder"
 msgstr ""
 
-#: gui.py:393
+#: data/applications/TFM/gui.py:400
 msgid "File"
 msgstr ""
 
-#: gui.py:427
+#: data/applications/TFM/gui.py:434
 msgid "Access denied"
 msgstr ""
 
-#: gui.py:427
+#: data/applications/TFM/gui.py:434
 msgid "Error"
 msgstr ""
 
-#: gui.py:428
+#: data/applications/TFM/gui.py:435
 msgid "Access denied."
 msgstr ""
 
-#: gui.py:460
+#: data/applications/TFM/gui.py:470
 msgid "Enter new file name:"
 msgstr ""
 
-#: gui.py:460
+#: data/applications/TFM/gui.py:470
 msgid "New File"
 msgstr ""
 
-#: gui.py:468
+#: data/applications/TFM/gui.py:478
 #, python-brace-format
 msgid "Created new file: {}"
 msgstr ""
 
-#: gui.py:470
+#: data/applications/TFM/gui.py:480
 #, python-brace-format
 msgid "Could not create file {}: {}"
 msgstr ""
 
-#: gui.py:470
+#: data/applications/TFM/gui.py:480
 msgid "File Creation Error"
 msgstr ""
 
-#: gui.py:471
+#: data/applications/TFM/gui.py:481
 #, python-brace-format
 msgid "Error creating file: {}"
 msgstr ""
 
-#: gui.py:475
+#: data/applications/TFM/gui.py:485
 msgid "Enter new folder name:"
 msgstr ""
 
-#: gui.py:475
+#: data/applications/TFM/gui.py:485
 msgid "New Folder"
 msgstr ""
 
-#: gui.py:483
+#: data/applications/TFM/gui.py:493
 #, python-brace-format
 msgid "Created new folder: {}"
 msgstr ""
 
-#: gui.py:485
+#: data/applications/TFM/gui.py:495
 #, python-brace-format
 msgid "Could not create folder {}: {}"
 msgstr ""
 
-#: gui.py:485
+#: data/applications/TFM/gui.py:495
 msgid "Folder Creation Error"
 msgstr ""
 
-#: gui.py:486
+#: data/applications/TFM/gui.py:496
 #, python-brace-format
 msgid "Error creating folder: {}"
 msgstr ""
 
-#: gui.py:492
+#: data/applications/TFM/gui.py:502
 msgid "No active file list to rename from."
 msgstr ""
 
-#: gui.py:500
+#: data/applications/TFM/gui.py:510
 msgid "Cannot rename this entry."
 msgstr ""
 
-#: gui.py:509
+#: data/applications/TFM/gui.py:519
 msgid "Enter new name:"
 msgstr ""
 
-#: gui.py:509
+#: data/applications/TFM/gui.py:519
 msgid "Rename"
 msgstr ""
 
-#: gui.py:521
+#: data/applications/TFM/gui.py:531
 #, python-brace-format
 msgid "Renamed {} to {}"
 msgstr ""
 
-#: gui.py:523
+#: data/applications/TFM/gui.py:533
 msgid "Rename Error"
 msgstr ""
 
-#: gui.py:524
+#: data/applications/TFM/gui.py:534
 #, python-brace-format
 msgid "Error renaming: {}"
 msgstr ""
 
-#: gui.py:526
+#: data/applications/TFM/gui.py:536
 msgid "Name not changed."
 msgstr ""
 
-#: gui.py:528 gui.py:530
+#: data/applications/TFM/gui.py:538 data/applications/TFM/gui.py:540
 msgid "Rename cancelled."
 msgstr ""
 
-#: gui.py:533
+#: data/applications/TFM/gui.py:543
 msgid "No item selected to rename."
 msgstr ""
 
-#: gui.py:539
+#: data/applications/TFM/gui.py:549
 msgid "No active file list to copy from."
 msgstr ""
 
-#: gui.py:554
+#: data/applications/TFM/gui.py:564
 #, python-brace-format
 msgid "Copied {} items to clipboard."
 msgstr ""
 
-#: gui.py:557
+#: data/applications/TFM/gui.py:567
 msgid "No items selected to copy."
 msgstr ""
 
-#: gui.py:563
+#: data/applications/TFM/gui.py:573
 msgid "No active file list to cut from."
 msgstr ""
 
-#: gui.py:578
+#: data/applications/TFM/gui.py:588
 #, python-brace-format
 msgid "Cut {} items to clipboard."
 msgstr ""
 
-#: gui.py:581
+#: data/applications/TFM/gui.py:591
 msgid "No items selected to cut."
 msgstr ""
 
-#: gui.py:586
+#: data/applications/TFM/gui.py:596
 msgid "Clipboard is empty."
 msgstr ""
 
-#: gui.py:630
+#: data/applications/TFM/gui.py:640
 msgid "Paste operation complete."
 msgstr ""
 
-#: gui.py:642
+#: data/applications/TFM/gui.py:652
 msgid "Nothing to paste."
 msgstr ""
 
-#: gui.py:648 gui.py:687 gui.py:867
+#: data/applications/TFM/gui.py:658 data/applications/TFM/gui.py:697
+#: data/applications/TFM/gui.py:877
 msgid "No active file list."
 msgstr ""
 
-#: gui.py:661
+#: data/applications/TFM/gui.py:671
 #, python-brace-format
 msgid "Selected all ({}) items."
 msgstr ""
 
-#: gui.py:663
+#: data/applications/TFM/gui.py:673
 msgid "No items to select."
 msgstr ""
 
-#: gui.py:696
+#: data/applications/TFM/gui.py:706
 msgid "No item selected."
 msgstr ""
 
-#: gui.py:703 gui.py:1027
+#: data/applications/TFM/gui.py:713 data/applications/TFM/gui.py:1037
 msgid "Folder is empty."
 msgstr ""
 
-#: gui.py:716 gui.py:1043
+#: data/applications/TFM/gui.py:726 data/applications/TFM/gui.py:1053
 #, python-brace-format
 msgid "Selected drive does not exist: {}"
 msgstr ""
 
-#: gui.py:737 gui.py:1063
+#: data/applications/TFM/gui.py:747 data/applications/TFM/gui.py:1073
 #, python-brace-format
 msgid "Opened: {}"
 msgstr ""
 
-#: gui.py:739 gui.py:1065
+#: data/applications/TFM/gui.py:749 data/applications/TFM/gui.py:1075
 #, python-brace-format
 msgid "Could not open {}: {}"
 msgstr ""
 
-#: gui.py:739 gui.py:1065
+#: data/applications/TFM/gui.py:749 data/applications/TFM/gui.py:1075
 msgid "Open Error"
 msgstr ""
 
-#: gui.py:741 gui.py:1067
+#: data/applications/TFM/gui.py:751 data/applications/TFM/gui.py:1077
 #, python-brace-format
 msgid "Error opening: {}"
 msgstr ""
 
-#: gui.py:744 gui.py:1070
+#: data/applications/TFM/gui.py:754 data/applications/TFM/gui.py:1080
 #, python-brace-format
 msgid "Item not found: {}"
 msgstr ""
 
-#: gui.py:765
+#: data/applications/TFM/gui.py:775
 #, python-brace-format
 msgid "Current directory: {}"
 msgstr ""
 
-#: gui.py:768
+#: data/applications/TFM/gui.py:778
 #, python-brace-format
 msgid "{}. Focus: {}."
 msgstr ""
 
-#: gui.py:798 gui.py:1098
+#: data/applications/TFM/gui.py:808 data/applications/TFM/gui.py:1108
 #, python-brace-format
 msgid "Deselected: {}. Total: {}"
 msgstr ""
 
-#: gui.py:802 gui.py:1102
+#: data/applications/TFM/gui.py:812 data/applications/TFM/gui.py:1112
 #, python-brace-format
 msgid "Selected: {}. Total: {}"
 msgstr ""
 
-#: gui.py:805 gui.py:1105
+#: data/applications/TFM/gui.py:815 data/applications/TFM/gui.py:1115
 msgid "Cannot select this entry."
 msgstr ""
 
-#: gui.py:836
+#: data/applications/TFM/gui.py:846
 msgid "Already in drive selection view."
 msgstr ""
 
-#: gui.py:861
+#: data/applications/TFM/gui.py:871
 msgid "Already at root."
 msgstr ""
 
-#: gui.py:873
+#: data/applications/TFM/gui.py:883
 msgid "No items selected to delete."
 msgstr ""
 
-#: gui.py:882
+#: data/applications/TFM/gui.py:892
 #, python-brace-format
 msgid "Delete these items? {}"
 msgstr ""
 
-#: gui.py:883
+#: data/applications/TFM/gui.py:893
 #, python-brace-format
 msgid "Delete this item? {}"
 msgstr ""
 
-#: gui.py:885
+#: data/applications/TFM/gui.py:895
 msgid "Confirm Delete"
 msgstr ""
 
-#: gui.py:886
+#: data/applications/TFM/gui.py:896
 msgid "Delete cancelled."
 msgstr ""
 
-#: gui.py:908
+#: data/applications/TFM/gui.py:918
 #, python-brace-format
 msgid "Could not delete {}: {}"
 msgstr ""
 
-#: gui.py:908
+#: data/applications/TFM/gui.py:918
 msgid "Delete Error"
 msgstr ""
 
-#: gui.py:909
+#: data/applications/TFM/gui.py:919
 #, python-brace-format
 msgid "Error deleting: {}"
 msgstr ""
 
-#: gui.py:918
+#: data/applications/TFM/gui.py:928
 #, python-brace-format
 msgid "Deleted {} of {} items."
 msgstr ""
 
-#: gui.py:920
+#: data/applications/TFM/gui.py:930
 msgid "Could not delete any items."
 msgstr ""
 
-#: gui.py:932
+#: data/applications/TFM/gui.py:942
 msgid "Settings saved and applied."
 msgstr ""
 
-#: gui.py:934
+#: data/applications/TFM/gui.py:944
 msgid "Settings cancelled."
 msgstr ""
 
-#: gui.py:941
+#: data/applications/TFM/gui.py:951
 msgid "Sorted by name."
 msgstr ""
 
-#: gui.py:947
+#: data/applications/TFM/gui.py:957
 msgid "Sorted by date modified."
 msgstr ""
 
-#: gui.py:953
+#: data/applications/TFM/gui.py:963
 msgid "Sorted by type."
 msgstr ""
 
-#: gui.py:1190 gui.py:1194
+#: data/applications/TFM/gui.py:1200 data/applications/TFM/gui.py:1204
 msgid "No files to copy."
 msgstr ""
 
-#: gui.py:1220
+#: data/applications/TFM/gui.py:1230
 #, python-brace-format
 msgid "Copied {} files, {} errors."
 msgstr ""
 
-#: gui.py:1223
+#: data/applications/TFM/gui.py:1233
 #, python-brace-format
 msgid "Copied {} files."
 msgstr ""
 
-#: gui.py:1241 gui.py:1245
+#: data/applications/TFM/gui.py:1251 data/applications/TFM/gui.py:1255
 msgid "No files to move."
 msgstr ""
 
-#: gui.py:1268
+#: data/applications/TFM/gui.py:1278
 #, python-brace-format
 msgid "Moved {} files, {} errors."
 msgstr ""
 
-#: gui.py:1271
+#: data/applications/TFM/gui.py:1281
 #, python-brace-format
 msgid "Moved {} files."
 msgstr ""
 
-#: menu.py:10
+#: data/applications/TFM/menu.py:10
 msgid "&New file\tCtrl+N"
 msgstr ""
 
-#: menu.py:11
+#: data/applications/TFM/menu.py:11
 msgid "New folder\tCtrl+Shift+N"
 msgstr ""
 
-#: menu.py:13
+#: data/applications/TFM/menu.py:13
 msgid "Settings\tCtrl+S"
 msgstr ""
 
-#: menu.py:15
+#: data/applications/TFM/menu.py:15
 msgid "Exit"
 msgstr ""
 
-#: menu.py:26
+#: data/applications/TFM/menu.py:26
 msgid "Copy\tCtrl+C"
 msgstr ""
 
-#: menu.py:27
+#: data/applications/TFM/menu.py:27
 msgid "Cut\tCtrl+X"
 msgstr ""
 
-#: menu.py:28
+#: data/applications/TFM/menu.py:28
 msgid "Paste\tCtrl+V"
 msgstr ""
 
-#: menu.py:30
+#: data/applications/TFM/menu.py:30
 msgid "Select all\tCtrl+A"
 msgstr ""
 
-#: menu.py:31
+#: data/applications/TFM/menu.py:31
 msgid "Rename\tF2"
 msgstr ""
 
-#: menu.py:32
+#: data/applications/TFM/menu.py:32
 msgid "Delete\tDelete"
 msgstr ""
 
-#: menu.py:54
+#: data/applications/TFM/menu.py:54
 msgid "Sort by"
 msgstr ""
 
-#: tfm_settings.py:193
+#: data/applications/TFM/tfm_settings.py:193
 msgid "File Manager Settings"
 msgstr ""
 
-#: tfm_settings.py:205
+#: data/applications/TFM/tfm_settings.py:205
 msgid "Show hidden files"
 msgstr ""
 
-#: tfm_settings.py:209
+#: data/applications/TFM/tfm_settings.py:209
 msgid "Show file extensions"
 msgstr ""
 
-#: tfm_settings.py:213
+#: data/applications/TFM/tfm_settings.py:213
 msgid "Confirm before deleting"
 msgstr ""
 
-#: tfm_settings.py:218
+#: data/applications/TFM/tfm_settings.py:218
 msgid "File info columns"
 msgstr ""
 
-#: tfm_settings.py:248
+#: data/applications/TFM/tfm_settings.py:248
 msgid "Explorer view"
 msgstr ""
 
-#: tfm_settings.py:250
+#: data/applications/TFM/tfm_settings.py:250
 msgid "Explorer view mode:"
 msgstr ""
 
-#: tfm_settings.py:252
+#: data/applications/TFM/tfm_settings.py:252
 msgid "List"
 msgstr ""
 
-#: tfm_settings.py:252
+#: data/applications/TFM/tfm_settings.py:252
 msgid "Commander"
 msgstr ""
 
-#: tfm_settings.py:252 tfm_settings.py:278
+#: data/applications/TFM/tfm_settings.py:252
+#: data/applications/TFM/tfm_settings.py:278
 msgid "Classic"
 msgstr ""
 
-#: tfm_settings.py:252
+#: data/applications/TFM/tfm_settings.py:252
 msgid "Multi-tab"
 msgstr ""
 
-#: tfm_settings.py:261
+#: data/applications/TFM/tfm_settings.py:261
 msgid "Window title"
 msgstr ""
 
-#: tfm_settings.py:263
+#: data/applications/TFM/tfm_settings.py:263
 msgid "Window title mode:"
 msgstr ""
 
-#: tfm_settings.py:265
+#: data/applications/TFM/tfm_settings.py:265
 msgid "App name"
 msgstr ""
 
-#: tfm_settings.py:265
+#: data/applications/TFM/tfm_settings.py:265
 msgid "Folder name"
 msgstr ""
 
-#: tfm_settings.py:265
+#: data/applications/TFM/tfm_settings.py:265
 msgid "Path"
 msgstr ""
 
-#: tfm_settings.py:274
+#: data/applications/TFM/tfm_settings.py:274
 msgid "Copy dialog"
 msgstr ""
 
-#: tfm_settings.py:276
+#: data/applications/TFM/tfm_settings.py:276
 msgid "Copy dialog mode:"
 msgstr ""
 
-#: tfm_settings.py:278
+#: data/applications/TFM/tfm_settings.py:278
 msgid "System"
 msgstr ""
 
-#: tfm_settings.py:291
+#: data/applications/TFM/tfm_settings.py:291
 msgid "General"
 msgstr ""
 
-#: tfm_settings.py:292
+#: data/applications/TFM/tfm_settings.py:292
 msgid "Appearance"
 msgstr ""
 
-#: tfm_settings.py:294
+#: data/applications/TFM/tfm_settings.py:294
 msgid "Save"
 msgstr ""
 
-#: tfm_settings.py:295
+#: data/applications/TFM/tfm_settings.py:295
 msgid "Cancel"
 msgstr ""
 
-#: tfm_settings.py:311
+#: data/applications/TFM/tfm_settings.py:311
 msgid "Check to show hidden files in the list."
 msgstr ""
 
-#: tfm_settings.py:312
+#: data/applications/TFM/tfm_settings.py:312
 msgid "Check to show file extensions in the list."
 msgstr ""
 
-#: tfm_settings.py:313
+#: data/applications/TFM/tfm_settings.py:313
 msgid "Check to ask for confirmation before deleting files."
 msgstr ""
 
-#: tfm_settings.py:314
+#: data/applications/TFM/tfm_settings.py:314
 msgid "Check to show the file name column."
 msgstr ""
 
-#: tfm_settings.py:315
+#: data/applications/TFM/tfm_settings.py:315
 msgid "Check to show the date modified column."
 msgstr ""
 
-#: tfm_settings.py:316
+#: data/applications/TFM/tfm_settings.py:316
 msgid "Check to show the file type column."
 msgstr ""
 
-#: tfm_settings.py:317
+#: data/applications/TFM/tfm_settings.py:317
 msgid "Select view mode: list, commander (two panels), classic, multi-tab."
 msgstr ""
 
-#: tfm_settings.py:318
+#: data/applications/TFM/tfm_settings.py:318
 msgid ""
 "Select what is shown in the window title: app name, folder name, or full "
 "path."
 msgstr ""
 
-#: tfm_settings.py:319
+#: data/applications/TFM/tfm_settings.py:319
 msgid "Select copy/move dialog mode: classic (with progress bar) or system."
 msgstr ""
 
-#: tfm_settings.py:320
+#: data/applications/TFM/tfm_settings.py:320
 msgid "Save settings."
 msgstr ""
 
-#: tfm_settings.py:321
+#: data/applications/TFM/tfm_settings.py:321
 msgid "Cancel settings."
 msgstr ""
 

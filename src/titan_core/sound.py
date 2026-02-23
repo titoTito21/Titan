@@ -20,6 +20,19 @@ def _cleanup_com():
 
 atexit.register(_cleanup_com)
 
+# ---------------------------------------------------------------------------
+# Channel layout (pygame.mixer channels)
+# ---------------------------------------------------------------------------
+#  0   – free for find_channel() UI sounds (default pygame slot)
+#  1   – background_channel   (background music loop)
+#  2   – voice_message_channel (voice messages / recordings)
+#  3   – ai_tts_channel        (AI chat TTS)
+#  4   – tts_speech_channel    (Titan TTS: eSpeak / SAPI5 / ElevenLabs / say)
+#  5–15 – free for UI sounds (find_channel won't steal 1-4)
+# ---------------------------------------------------------------------------
+TTS_CHANNEL_ID = 4          # Dedicated channel for Titan TTS speech
+_TOTAL_CHANNELS = 16        # Total channels to allocate
+
 # Inicjalizacja zmiennych globalnych
 current_theme = 'default'
 background_channel = None
@@ -35,6 +48,9 @@ voice_message_paused = False
 
 # AI TTS channel
 ai_tts_channel = None
+
+# Dedicated Titan TTS speech channel (eSpeak, SAPI5, ElevenLabs, etc.)
+tts_speech_channel = None
 
 # Global flag to track pygame mixer initialization
 _mixer_initialized = False
@@ -100,7 +116,7 @@ def get_available_audio_systems():
 
 def initialize_sound():
     """Inicjalizuje system dźwiękowy z bezpiecznym podwójnym sprawdzeniem."""
-    global _mixer_initialized, background_channel, voice_message_channel, ai_tts_channel
+    global _mixer_initialized, background_channel, voice_message_channel, ai_tts_channel, tts_speech_channel
 
     if _mixer_initialized:
         print("Audio system already initialized")
@@ -116,11 +132,21 @@ def initialize_sound():
                 print(f"Failed to initialize pygame mixer: {e}")
                 return False
 
-        # Safely get channels
+        # Ensure we have enough channels for all reserved + free slots
         try:
-            background_channel = pygame.mixer.Channel(1)
+            current_count = pygame.mixer.get_num_channels()
+            if current_count < _TOTAL_CHANNELS:
+                pygame.mixer.set_num_channels(_TOTAL_CHANNELS)
+                print(f"[Sound] Channels expanded: {current_count} -> {_TOTAL_CHANNELS}")
+        except pygame.error as e:
+            print(f"[Sound] Could not set channel count: {e}")
+
+        # Safely get reserved channels
+        try:
+            background_channel    = pygame.mixer.Channel(1)
             voice_message_channel = pygame.mixer.Channel(2)
-            ai_tts_channel = pygame.mixer.Channel(3)
+            ai_tts_channel        = pygame.mixer.Channel(3)
+            tts_speech_channel    = pygame.mixer.Channel(TTS_CHANNEL_ID)
         except (pygame.error, IndexError) as e:
             print(f"Failed to get audio channels: {e}")
             # Try to get any available channels
@@ -128,10 +154,12 @@ def initialize_sound():
                 background_channel = pygame.mixer.find_channel()
                 voice_message_channel = pygame.mixer.find_channel()
                 ai_tts_channel = pygame.mixer.find_channel()
+                tts_speech_channel = pygame.mixer.find_channel()
             except Exception:
                 background_channel = None
                 voice_message_channel = None
                 ai_tts_channel = None
+                tts_speech_channel = None
         
         _mixer_initialized = True
         print(f"Audio system initialized on {platform.system()}")
@@ -199,12 +227,19 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
                 print(f"Failed to load sound file {sound_path}: {e}")
                 return False
             
-            # Find available channel
+            # Find a free channel, but never steal reserved channels (1-4)
             try:
-                channel = pygame.mixer.find_channel(True)
+                channel = pygame.mixer.find_channel()  # non-stealing
                 if not channel:
-                    print(f"No available audio channel for: {sound_file}")
-                    return False
+                    # All free channels busy – pick any non-reserved channel
+                    for _cid in range(5, pygame.mixer.get_num_channels()):
+                        _ch = pygame.mixer.Channel(_cid)
+                        if not _ch.get_busy():
+                            channel = _ch
+                            break
+                if not channel:
+                    # As last resort use channel 5 (still avoid TTS channel 4)
+                    channel = pygame.mixer.Channel(5)
             except (pygame.error, AttributeError) as e:
                 print(f"Failed to find audio channel: {e}")
                 return False
@@ -556,6 +591,28 @@ def is_ai_tts_playing():
         return ai_tts_channel and ai_tts_channel.get_busy()
     except Exception:
         return False
+
+
+def get_tts_channel():
+    """
+    Return the dedicated Titan TTS pygame channel (channel 4).
+
+    Initializes the sound system if needed.  Always returns a Channel object
+    so callers can call .stop() / .play() / .get_busy() without None-checks.
+    """
+    global tts_speech_channel
+    try:
+        if not _mixer_initialized or pygame.mixer.get_init() is None:
+            initialize_sound()
+        if tts_speech_channel is None:
+            # Ensure channel slot exists
+            if pygame.mixer.get_num_channels() <= TTS_CHANNEL_ID:
+                pygame.mixer.set_num_channels(TTS_CHANNEL_ID + 4)
+            tts_speech_channel = pygame.mixer.Channel(TTS_CHANNEL_ID)
+        return tts_speech_channel
+    except Exception as e:
+        print(f"[Sound] get_tts_channel error: {e}")
+        return None
 
 
 # Sound system will be initialized by main.py when needed

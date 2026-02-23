@@ -415,6 +415,13 @@ def open_game(game_info):
             webbrowser.open(launch_url)
             return
 
+        # Set language environment variable for games
+        try:
+            from src.titan_core.translation import language_code
+            os.environ['LANG'] = language_code
+        except Exception:
+            pass
+
         # Titan-Games - find best executable
         openfile = game_info.get('openfile', '')
         if not openfile:

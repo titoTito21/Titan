@@ -677,6 +677,20 @@ class SettingsFrame(wx.Frame):
         self.speech_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.speech_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
 
+        # --- ElevenLabs-specific controls (shown only when ElevenLabs engine selected) ---
+        self.elevenlabs_api_key_label = wx.StaticText(panel, label=_("ElevenLabs API Key:"))
+        vbox.Add(self.elevenlabs_api_key_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.elevenlabs_api_key_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        self.elevenlabs_api_key_ctrl.SetToolTip(_("Your ElevenLabs API key. Get it from elevenlabs.io"))
+        self.elevenlabs_api_key_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.elevenlabs_api_key_ctrl.Bind(wx.EVT_KILL_FOCUS, self.OnElevenLabsApiKeyChanged)
+        vbox.Add(self.elevenlabs_api_key_ctrl, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Initially hidden - shown only when ElevenLabs engine is selected
+        self.elevenlabs_api_key_label.Hide()
+        self.elevenlabs_api_key_ctrl.Hide()
+
         panel.SetSizer(vbox)
         panel.Layout()
 
@@ -985,11 +999,22 @@ class SettingsFrame(wx.Frame):
                     else:
                         voice_value = self.voice_choice.GetStringSelection()
 
+            # Save ElevenLabs API key if present
+            elevenlabs_api_key = self.elevenlabs_api_key_ctrl.GetValue().strip()
+            if elevenlabs_api_key:
+                try:
+                    stereo_speech_obj = get_stereo_speech()
+                    if hasattr(stereo_speech_obj, 'set_elevenlabs_api_key'):
+                        stereo_speech_obj.set_elevenlabs_api_key(elevenlabs_api_key)
+                except Exception as e:
+                    print(f"Error applying ElevenLabs API key on save: {e}")
+
             self.settings['stereo_speech'] = {
                 'engine': engine,
                 'voice': voice_value,
                 'rate': str(self.rate_slider.GetValue()),
-                'volume': str(self.speech_volume_slider.GetValue())
+                'volume': str(self.speech_volume_slider.GetValue()),
+                'elevenlabs_api_key': elevenlabs_api_key,
             }
 
         if hasattr(self, 'windows_panel'):
@@ -1091,6 +1116,7 @@ class SettingsFrame(wx.Frame):
             'sapi5': 'SAPI5',
             'say': _('macOS Speech'),
             'spd': _('Speech Dispatcher'),
+            'elevenlabs': 'ElevenLabs TTS',
         }
 
     def _engine_to_display(self, engine_id):
@@ -1132,6 +1158,22 @@ class SettingsFrame(wx.Frame):
         # If no engines available, set first one
         if self.engine_choice.GetSelection() == wx.NOT_FOUND and self.engine_choice.GetCount() > 0:
             self.engine_choice.SetSelection(0)
+
+        # Load ElevenLabs API key (before loading voices so the API call can succeed)
+        elevenlabs_api_key = stereo_settings.get('elevenlabs_api_key', '')
+        self.elevenlabs_api_key_ctrl.SetValue(elevenlabs_api_key)
+        if elevenlabs_api_key:
+            try:
+                stereo_speech_obj = get_stereo_speech()
+                if hasattr(stereo_speech_obj, 'set_elevenlabs_api_key'):
+                    stereo_speech_obj.set_elevenlabs_api_key(elevenlabs_api_key)
+            except Exception as e:
+                print(f"Error setting ElevenLabs API key from settings: {e}")
+
+        # Show/hide ElevenLabs controls based on loaded engine
+        is_elevenlabs = (engine == 'elevenlabs')
+        self.elevenlabs_api_key_label.Show(is_elevenlabs)
+        self.elevenlabs_api_key_ctrl.Show(is_elevenlabs)
 
         # Load voices for current engine
         self.load_available_voices()
@@ -1219,6 +1261,13 @@ class SettingsFrame(wx.Frame):
                 stereo_speech = get_stereo_speech()
                 stereo_speech.set_engine(engine_id)
                 self.load_available_voices()
+
+                # Show/hide ElevenLabs-specific controls
+                is_elevenlabs = (engine_id == 'elevenlabs')
+                self.elevenlabs_api_key_label.Show(is_elevenlabs)
+                self.elevenlabs_api_key_ctrl.Show(is_elevenlabs)
+                self.stereo_speech_panel.Layout()
+                self.content_panel.FitInside()
         except Exception as e:
             print(f"Error setting engine: {e}")
 
@@ -1236,6 +1285,20 @@ class SettingsFrame(wx.Frame):
         except Exception as e:
             print(f"Error setting voice: {e}")
 
+        event.Skip()
+
+    def OnElevenLabsApiKeyChanged(self, event):
+        """Apply ElevenLabs API key immediately when the field loses focus."""
+        try:
+            api_key = self.elevenlabs_api_key_ctrl.GetValue().strip()
+            if api_key:
+                stereo_speech = get_stereo_speech()
+                if hasattr(stereo_speech, 'set_elevenlabs_api_key'):
+                    stereo_speech.set_elevenlabs_api_key(api_key)
+                    # Reload voices now that a key is available
+                    self.load_available_voices()
+        except Exception as e:
+            print(f"Error applying ElevenLabs API key: {e}")
         event.Skip()
 
     def OnRateChanged(self, event):

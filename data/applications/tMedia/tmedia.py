@@ -10,20 +10,23 @@ from Settings import SettingsWindow
 from player import Player  # Import wbudowanego odtwarzacza
 from YoutubeSearch import YoutubeSearchApp  # Importowanie modułu YoutubeSearch
 
-# Screen reader / VoiceOver output via accessible_output3
+# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
-    import accessible_output3.outputs.auto as _ao3
-    _ao3_speaker = _ao3.Auto()
-except Exception:
-    _ao3_speaker = None
+    from src.titan_core.tce_speech import speak as _tce_speak
+except ImportError:
+    _tce_speak = None
+
+if _tce_speak is None:
+    # Standalone fallback (outside Titan environment)
+    try:
+        import accessible_output3.outputs.auto as _ao3
+        _ao3_speaker = _ao3.Auto()
+    except Exception:
+        _ao3_speaker = None
 
 
 class TTSThread(threading.Thread):
-    """Lightweight TTS thread backed by accessible_output3.
-
-    Falls back to `say` (macOS) / `espeak` (Linux) / SAPI (Windows)
-    only when accessible_output3 is not available.
-    """
+    """Lightweight TTS thread backed by TCE Speech / accessible_output3."""
 
     def __init__(self):
         super().__init__(daemon=True)
@@ -38,6 +41,9 @@ class TTSThread(threading.Thread):
             self._stop_event.wait(timeout=0.05)
 
     def _do_speak(self, message):
+        if _tce_speak is not None:
+            _tce_speak(message)
+            return
         try:
             if _ao3_speaker:
                 _ao3_speaker.speak(message, interrupt=True)
@@ -46,10 +52,11 @@ class TTSThread(threading.Thread):
             pass
         # Fallback when accessible_output3 unavailable
         try:
-            if os.name == 'nt':
+            import sys as _sys
+            if _sys.platform == 'win32':
                 import win32com.client as wincl
                 wincl.Dispatch("SAPI.SpVoice").Speak(message)
-            elif 'darwin' in os.sys.platform:
+            elif _sys.platform == 'darwin':
                 subprocess.run(['say', message], check=False)
             else:
                 subprocess.run(['spd-say', message], check=False)
