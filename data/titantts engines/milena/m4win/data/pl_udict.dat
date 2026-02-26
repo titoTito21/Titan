@@ -1,0 +1,3297 @@
+// _ opcjonalna spacja
+// + spacja
+// ` opcjonalny apostrof wraz z wiod±cymi oraz nastêpuj±cymi spacjami
+// ' apostrof wraz z nastêpuj±cymi spacjami
+// ~ my¶lnik lub spacja
+// ~~ dowolny ci±g my¶lników i spacji (równie¿ pusty)
+
+// znaki steruj±ce w []:
+// n - wyraz nieakcentowany
+// f - forma grzeczno¶ciowa (np. 'pan', tylko jednosylabowe na razie)
+// k - s³owo wymawiane jest ³±cznie z nastêpnym (np. 'nie' + czasownik)
+// s - s³owo to spójnik
+// b - superseparator (zawsze dzieli frazê)
+// cyfra - podstawowy akcent (od koñca)
+// +cyfra - akcent poboczny (od pocz±tku)
+
+
+// koñcówki dla nazwisk i nazw
+
+#nifin (skiego|skiemu|skie|skimi|skim|skich|ski|ska|sk±|scy)
+#czfin (|a|u|em|ena|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#cfin (|a|u|em|e|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#nfin (|a|u|em|ie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#wfin (|a|u|em|ie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#mfin (|a|u|em|ie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#sfin (|a|u|em|ie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#dfin (|a|u|em|zie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#gfin (|a|u|iem|i|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#hfin (|a|u|em|e|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#kfin (|a|u|iem|i|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#lfin (|a|u|em|e|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#rfin (|a|u|em|ze|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#rfina (a|±|ê|ze|y|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+#rcity (|a|u|em|ze|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi|ski|skiemu|skiego|skim|ska|skiej|sk±|scy|skie|skich|skimi|czyk|czyka|czykowi|czykiem|czycy|czykom|czyków|czykami|czykach)
+#apefin (a|u|em|ie|y|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi|)
+#apyfin (ego|emu)
+#tfin (ta|tu|tem|cie|ty|towi|towie|tów|tom|tami|tach|towa|tow±|towej|towy|towe|towego|towemu|towych|towym|towymi|towski|towskiego|towskiej|towskiemu|towska|towsk±|towskiej|towscy|towskie|towskim|towskimi|t)
+#yfin (a|em|owi|u|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+
+// koñcówki skrótów
+
+#fsho (a|u|owi|em|ie)
+#lsho (a|u|owi|em)
+#rsho (a|u|owi|em|ze)
+#ssho (u|a|owi|em|ie|y|om|ami|ów)
+
+// marciano, diacini itd.
+#noifin (o|iego|iemu|imi|ich|im|ie|i|a|em|owi|owie|ów|om|ami|ach|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)
+
+po+raz [n]poraz
+// Admin z atmana mo¿e mi skoczyæ na chuj 
+na+(dó³|noc|bok|wie¶|wsi|dno|chuj) na% $e
+na+ty naty $1e
+nie $1e
+ju¿+(nic|to|co¶)	[n]ju¿ [1]% $e
+no+(wiêc|tak|ju¿|nie|co) no% $1e
+ni¿+(ja|ty|on|my|wy|mnie|nas|was|j±|jej|ich|im|nam|wam) [n]ni¿ [1]% $e
+byle+(co|gdzie|jak) [n]byle [1]% $e
+tak	$1e
+(jest|by³|s±)+(tam|tu) [n]% [1]% $e
+(a|o)_¿esz %¿esz $2
+(bardzo|bardziej|najbardziej)_(siê|bym|by¶|by|chcê|chcesz|chce|chc±) [2]% [n]%
+
+przeze+mnie	przezemnie
+beze+mnie	bezemnie
+ode+mnie	odemnie
+pode+mnie	podemnie
+(przede|nade|poza)+mn(±|ie)	%mn%
+ko³o+(mnie|nas|niej|was|nich) ko³o%
+poza+(tym|nas|was|ni±)	poza%
+//na+dwór nadwór $e
+ho+ho	hoh~!o $e
+// "je" jako czasownik?
+nie+je [k]nie [v1]je
+
+nie+wstyd	[k]nie vstyd
+
+//(ni¿|jak)+(ja|ty|my|wy|nas|was|ich|je|on|to|ten|ta|te|ci|tam|tu|tych) [n]% [1]% $e
+
+(w|z)+(jej|nas|nich|niej|nim|ni±|tej|t±|tê|tym|to|was|kim|czym|co¶) % [1]% $e
+(w|z)+(kim|czym)+to % [1]% [n]to $e
+(jak|kim|czym)+to [1]% [n]to $q
+te¿ $1e
+jak+to jakto $O
+(ale|a)+jak+to % jakto $q
+na_wpó³ nafpó³ $1
+
+
+co+pan c~'opan
+ze+wsi zewsi
+pan $1e
+
+pa,+pa	papa $1e
+
+o,+bo¿e o bo¿e $e
+o,+rany o rany $e
+o,+nie [n]o [1]nie $e
+o,+rany o rany $e
+o,+kurwa o kurwa $e
+o,+cholera o cholera $e
+
+
+itepe $1
+itede $1
+
+hej,+ho(p|) hejho% $1e
+hej~ho(p|) hejho% $1e
+hej_-_ho(p|) hejho% $1e
+
+ajaj $1
+ajajaj $1
+ajajajaj $1
+ojoj $1
+ojej $1
+ojojoj $1
+ojejej $1
+ojojojoj $1
+
+si	s~'i
+
+msza+¶w.	msza ¶wiêta
+mszê+¶w.	mszê ¶wiêt±
+mszy+¶w.	mszy ¶wiêtej
+
+¶p.	¶wiêtej pamiêci
+¶._p.	¶wiêtej pamiêci
+
+///homografiki - willa posz³a do imion
+Mani(a|ê|±) mañi%
+Dani(a|±|ê|i)	dañj%
+na+linie	na liñe
+
+// bawimy siê w matrosów
+aye(,|)+aye ajaj $1
+may~day mejdej $1
+tajest $1
+
+
+// takie co powinny byæ analizowane na koñcu
+
+deep dip
+
+//salsa, hip-hop, musica disco
+
+aerosmith erosmis $3
+guns'n'roses gansen ro³z~'is
+guns+n'roses gansen ro³z~'is
+zz+top z~'iz~'itop $1
+duran~duran [1]diran [1]diran
+bee~~gees bid¿is $1
+bee~~gees(ami|ach|om|ów) bid¿is%
+beatles bit@ls
+bon_jovi bon d¿ovi
+deep_purple [n]dip parp@l
+everly $3
+radiohead rejdjo³hed $3
+
+(b|c|d)~(dur|moll|mol) %e% $1
+(e|a)~(dur|moll|mol) %% $1
+f~(dur|moll|mol) ef% $1
+g~(dur|moll|mol) gie% $1
+h~(dur|moll|mol) ha% $1
+cis~(dur|moll|mol) c~'is% $1
+ces~(dur|moll|mol) ces% $1
+(d|f|g|h)(i|e)s~(dur|moll|mol) %%s% $1
+(a|e)s~(dur|moll|mol) %s% $1
+(a|e)is~(dur|moll|mol) %js% $1
+al+fine alfine
+al+segno	alseñjo
+segno		señjo
+da+capo	dakapo
+maanam(em|ie|u|) manam%
+lynyrd_skynyrd lajnard skajnard
+
+za+z³e zaz³e $e
+spode+³ba spode³ba
+np\. na przyk³ad
+
+//proc\. procent
+
+p._n._e. przed n~!asz± [n]er±
+(ach|nie|no|ano|och|o|a)+tak		%tak	$1e
+(ach|nie|no|ano|och|o|a),+tak		%tak	$1e
+ho,_ho hoho $1e
+pa+pa		papa $1e
+ryzyk(o|a|iem|u) ryzyk% $3
+za+m±¿		zam±¿ $2
+(co|na)+dzieñ	%dzieñ $e
+w_ub._roku	w ubieg³ym roku
+ub._roku ubieg³ego roku
+// nie jako zaimek
+w+nie	wnie $u
+(poza|przez|po|nad|pod|przed|za|na|o)+nie %nie
+(miêdzy|pomiêdzy)+nie [n]% [1]nie
+w+tê+i+we_w_tê	[2+1]wte~'iwewte
+(przede|pode|nade)+mn± %mn± $2
+lat+wstecz [n]lat [1]wstecz $e
+wstecz $1e
+m._in. miêdzy innymi
+m._inn. miêdzy innymi
+sie_(masz|macie|ma) sie%
+abc $S
+A[BCDEFGKL] $S
+adhd $S
+adm-#(fsho) ade~'em%
+adm	$S
+adsl $S
+adsl-(ami|ach|a|em|u|om) ade~'esel%
+agd $S
+aids ejds
+AJC	$S
+ak~~47	[1]aka czterdzie¶ci siedem
+algol-#(lsho) algol%
+amd $S
+amg $S
+apd $S
+apk $S
+AR-#(rsho) a~'er%
+AR	$S
+ASP $S
+AIX ajiks
+AIX-#(ssho) ajiks%
+asean-#(fsho) ase³~'an%
+AUX $S
+avacs-(a|em|ie|y|ów|ami|ach) avaks%
+awf $S
+awf-#(fsho) awu³~'ef%
+aws $S
+aws-#(fsho) awu³~'es%
+azs $S
+azs-#(fsho) azetes%
+bbc bibis~'~!i
+cbos cebos
+cbos-(u|em|ie|owi) cebos%
+cb	s~'ib~!i
+cbs s~'ibi~'es $1
+cd(-|)rom s~'idir~!om
+cd(-|)rom(-|)(u|owi|ie|em|y|ach|ów|om|ami) s~'idirom%2
+cezas-(u|em|ie)	cezas%
+CIA s~'i~'aj~!ej
+cnn s~'i~'en~!en
+codis-(u|em|owi|ie) kodis%
+cpn-(u|em|ie|owi|y|ami|ach|om) cepe~'en%
+cpu $S
+CSI $S
+CV s~'iwi $1
+cwks-(u|em|ie) cewuka³~'es%
+DFO	$S
+dkf-(u|em|ie) deka~'ef%
+DNA $S
+dos-(u|em|ie) dos%
+dpi $S
+d/s	do spraw
+ds.	do spraw
+dsl-(ami|ach|a|em|u|om) de~'esel%
+DVD divid~!i
+EEG $S
+ekg $S
+etc.	[n]et c~!etera
+EWG $S
+fbi efbi~'~!aj
+fiat-(a|em)	fiat%
+fsm-(u|em|ie|owi) efesem%
+GBU $S
+GIODO gjodo
+gkkfit-cie  giekakaficie
+gkkfit	giekakafit $1
+gkkfit-(u|em) giekakafit%
+gopr-(u|em|owskim|owski|owca|owcy|owców|owiec|owcami) gopr%
+gps d¿ipi~'es $1
+gps-(u|em|ie|owi) d¿ipi~'es%
+grom-(em|u|ie|owi) grom%
+GRU $S
+HBO ejczbijo³ $1
+hortex-(em|u|ie|owi) horteks%
+ibm ajbi~'~!em
+ibm-(a|u|em|ie|owi|y|ach|om) ajbi~'em%
+icl ajs~'i~'~!el
+icl-(a|u|em|e|owi|ów|ach|om) ajs~'i~'el%
+idg $S
+IE  $S
+//Inc. inkorporejt@d
+IP  ajp~!i
+IQ	ajkju $1
+isbn $S
+isbn-(u|em|ie) i~'esbe~'en%
+itd $S
+itp $S
+jfk d¿ejefkej $1
+jpeg jotpeg
+kfc	kejefs~'i $1
+MKiS $S
+mkis-(em|u|ie|owi) emka~'i~'es%
+mkol	emka~!ol
+mkol-(u|em|owi) emkaol%
+mks-(em|u|ie|owi) emkaes%
+mtv emtivi $1
+NBA enbijej $1
+NCIC ens~'i³ajs~'i $1
+NCIS ens~'i³ajes $1
+NYPD en³ajpidi $1
+LAPD elejpidi $1
+NIP-(u|em|ie) nip%
+nr\. [n]numer
+NRD-ow(skimi|skim|skiego|skiemu|skiej|skie|skich|ski|scy|iec|cami|cach|ca|cowi|com|cem|cy|cu|ców) enerdow%
+NSA $S
+oiom~(u|em|ie|owi) ojom%
+omg $S
+onz $S
+onz-(em|owi|u|owa|ow±|owej|owy|owe|owego|owemu|owych|owym|owymi|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi)	oenzet%
+onz-(tem|towi|tu|towa|tow±|towej|towy|towe|towego|towemu|towych|towym|towymi|towski|towskiego|towskiej|towskiemu|towska|towsk±|towskiej|towscy|towskie|towskim|towskimi|cie)	oenze%
+Oss $S
+owp $S
+pda $S
+pin-(em|owi|u|ie) pin%
+pko $S
+pks-#(sfin) peka~'es%
+P._P._H._U. pepeha~'~!u
+PR-(em|owi|u|ze) pe_er%
+raf-(u|em|ie|owi) raf%
+rna $S
+rpa $S
+rsa $S
+SAS	$S
+sci-fi sajfaj $1
+s~f esef $1
+sig-(a|owi|iem) s~'ig%
+s-(ka|k±|ki|ce) spó³%
+s-(ka|k±|ki|ce)_z_o\._o spó³% z@o³~'~!o
+sms-(ami|ach|a|y|om|ów|em|owi|ie) esemes%
+SOS $S
+SI $S
+spó³(ka|k±|ki|ce)_z_o\._o spó³% z@o³~'~!o
+str. strona
+svga $S
+swat-cie s³ocie
+swat-ie	s³ocie
+swat-(u|em|owi) s³ot%
+tj.	to jest
+tsa $S
+TWA $S
+uhf $S
+ukf $S
+url $S
+usa $S
+usb $S
+usc $S
+usd $S
+usf $S
+usg $S
+usr $S
+UPS	$S
+USS	ju³~'eses $1
+utf	$S
+unesco junesko
+UV $S
+unix juniks
+unix~(ach|ami|a|owi|em|ie|owymi|owym|owych|owy|owemu|owe) juniks%
+vat-(em|owi|u) vat%
+vga $S
+vip-(owskiego|owskiemu|owskie|owskimi|owskim|owskich|owski|ach|ami|owi|em|ie|y|om|ów|a) vip%
+wf-u	wu~'efu
+wf-em	wu~'efem
+wf-ie	wu~'efie
+wf-owi	wu~'efowi
+who hu
+WHO $S
+wnba dablju [1]enbijej
+xvga $S
+Y	$S
+zus-(em|u|ie|owi) zus%
+ymca ³ajems~'i~'ej $1
+
+wsch. wschód
+zach. zachód
+
+// elle
+stelle	ste~'lle
+weddell#(lfin) ³edel%
+maxwell#(lfin) maks³el%
+abitelle abite~'lle
+akantelle akante~'lle
+campanelle kampane~'lle
+celle ce~'lle
+centelle cente~'lle
+delle de~'lle
+friczjelle friczje~'lle
+kabatielle kabatje~'lle
+kolumelle kolume~'lle
+lamelle lame~'lle
+libelle libe~'lle
+marbelle marbe~'lle
+mozzarelle mocare~'lle
+nitelle nite~'lle
+organelle organe~'lle
+otelle	 ote~'lle
+paelle	 pae~'lle
+pastorelle pastore~'lle
+predelle prede~'lle
+//pulcinelle pulczine~'lle
+pulcinelle pulczine~'l~'le
+reticelle retice~'lle
+salmonelle salmone~'lle
+shelle she~'lle
+skartabelle skartabe~'lle
+stracciatelle stracziate~'lle
+straciatelle stracziate~'lle
+tarantelle tarante~'lle
+telle te~'lle
+tunicelle tunice~'lle
+villanelle villane~'lle
+vitanelle vitane~'lle
+
+// samochodziki i inne marki
+7~eleven seven ilewen
+7~up seven [1]ap
+7eleven seven ilewen
+7up seven [1]ap
+adobe ado³bi
+adventurer $3
+aegis id¿is
+alvear alve~'ar $1
+apache`#(apefin) apacz%
+ariane arjan $1
+at_&_t ejti~'ent~!i
+auchan osz~!±~'
+auchan(ie|em|a|u|owi) oszon%
+barco barko
+boeing(ach|ami|a|iem|i|om|owi|ów|u|) be³ing%
+bronco bronko
+buick(ach|ami|a|iem|i|om|owi|ów|u|) bju³ik%
+//camaro kamaro
+carrefour $1
+cartier kartje $1
+carrera karera
+//chevrolet(ami|ach|a|owi|om|em|) szewrolet%
+//chevrolecie szewrolecie
+//chevy szewy
+//chewrolet(ami|ach|a|owi|om|em|ów|) szewrolet%
+//chewrolecie szewrolecie
+che(e|)rokee cziro³ki $1
+cheytac(ach|ami|a|om|owi|ów|) czejtak%
+cheytacem czejtakiem
+chrysler#(rfin) krajzler%
+//citro[eë]n*	s~'itroen%
+cisco	s~'isko
+civicem	s~'iwikiem //reszta w pho
+
+colgate kolgejt
+
+comanche`#(apefin) komancz%
+//concorde	konkord $1
+//concord(em|a|zie)	konkord%
+//concorde`(em|a)	konkord%
+concorde'ie konkordzie
+
+//corvette korwet $1
+daci(a|±|ê|i|ami|ach|om) daczj%
+daewoo	dej³u
+django d¿ango
+dodgem	dod¿em
+dodge	dod¿
+dodge'#(apefin)	dod¿%
+dreamliner#(rfin) drimlajner%
+
+eagle ig@l
+eagle'#(apefin)	igl%
+enquire	ink³ajer
+gaz-(ach|ami|owi|em|ie|y|om|ów|a) gaz%
+gulfstream#(mfin) galfstrim%
+haganah	hagan~!a
+hawkeye ho³kaj
+hawkeye'(a|owi|em|u|ami|om|ów|ami|ach) ho³kaj%
+huey(|a|u|owi|e|ów|om||ami|ach) hiuj%
+hummer#(rfin)	hamer%
+humvee	hamvi
+hurricane(s|) hariken% $3
+hurricane'#(apefin) hariken%
+ivec(owi|o|a|u)	ivek%
+jumbo	d¿ambo
+je(t|tem|ta|ty|tami|tach|tów) d¿e%
+jumbo~je#(tfin) d¿ambo d¿e%
+
+kmar#(tfin) kejmar%
+k-mar#(tfin) kejmar%
+
+kia(ch|mi|) kija%
+ki(±|ê|i) kij%
+lamborg(h|)ini(ch|m|ego|emu|) lambord¿ini%1
+
+lanci(a|i|±|ê|e|ami|ach|om) lanczi%
+le+royal ler³ajal $1
+lear~je#(tfin)	lird¿e%
+leic(a|±|ê) lejk%
+lockheed#(dfin) lok~'hid%
+maersk mersk
+mirage mira¿ $1
+mirage'(ami|ach|a|em|u|om|ów) mira¿%
+netscape netskejp
+//octavi(a|ê|±|i|ami|ach) oktawi%
+oldsmobile oldsmobil
+oldsmobile'#(apefin) oldsmobil%
+patek+philippe	[1]patek [1]filip
+pick~up(ie|em|owi|ach|ami|a|u|y|ów|om|) pikap%
+packard#(dfin) pakard%
+peugeot $1
+pontiacem pontiakiem // a to zostanie?
+prelude preljud $1
+
+range~rover(ami|ach|a|om|owi|ów|y|em|ze|)	rend¿ ro³ver%
+renaul#(tfin) reno% // do przerobki i wywalenia
+renault	reno $1
+rover(|a|em|rze|y|om|ami|ach) ro³wer% // do wywalenia
+royce	rojs //do wywalenia
+roycem	rojsem
+royce'#(apefin)	rojs%
+
+sagem(|a|em|owi|y|om|ami|ach|ów) sa¿em%
+savannah savena $2
+scenic(|a|owi|e|om|ów|ami|ach) scenik%
+scenicem scenikiem
+scud(|a|owi|em|zie|y|ami|ach|ów|om) skad%
+sidewinder#(rfin) sajd³inder% // do wywalenia
+siemens#(sfin) z~'imens%
+simc(a|±|ê|ami|ach|om) s~!imk%
+skype skajp
+sparrow(ami|ach|om|ów|y|owi|em|wie|a|) sparo³% //do wywalenia
+steyr(|a|owi|em|ze|y|owie|ami|ach|om|ów) sztejer%
+suv-(ach|ami|owi|em|ie|y|om|ów|a) suv%
+
+t-mobile'#(apefin)	[1]ti mobajl%
+t-mobilem	[1]ti mobajlem
+t-mobilu	[1]ti mobajlu
+t-mobile [1]ti [1]mobajl
+
+t-bird(ami|ach|a|em|zie|owi|om|ów|y|) tiberd%
+
+terracan(a|em|ie|owi|y|ami|ach|ów|om) terakan%
+terracan terakan $3
+
+titanic(a|owi|u|) titanik%
+titanicem titanikiem
+
+// thunderbirdy do wywalenia do pho
+thunderbird tenderberd $3
+thunderbird(ami|ach|a|em|zie|owi|om|ów|y) tenderberd%
+tory_burch tori barcz
+town+car(ami|ach|om|y|a|em|ze|owi|) ta³n kar%
+trane	trejn
+//tomca#(tfin) tomke%
+twentieth_century t³enis [3]senczery
+uaz-(ach|ami|owi|em|ie|y|om|ów|a) u³~'az%
+
+vauxha(l|)l#(lfin)	voks~'hol%1
+wachovi(a|±|ê|i)	³okovi%
+wal~mar#(tfin) ³olmar%
+wearhouse`#(apefin) ³er~'h~'a³s%
+wearhousem ³er~'h~'a³sem
+wearhouse ³er~'h~'a³s
+willys#(sfin)	³ilis
+winnebago ³inibejgo³
+
+zodiac(ami|ach|a|u|owi|om|ów|) zodiak%
+zodiacem zodiakiem
+
+// gazetki
+chronicle kronajk@l
+computerworld kompi~!uter³erld
+computerworld(a|owi|em|zie) kompiuter³erld%
+
+crimespree krajmspri
+
+enquirer(a|owi|em|ze|) ink³ajrer%
+entertainment entertejnment
+esquire esk³ajer
+esquire'(a|owi|em) esk³ajer%
+examiner(a|owi|em|ze) egzaminer%
+examiner egzaminer $3
+daily dejli
+//weekly ³ikli
+fortune forczjun
+france~presse franspres $1
+france~soir	frans [1]su³ar
+globe glo³b
+inquirer(a|owi|erze|em|) ink³ajrer%
+la_presse lapres$
+la_patrie lapatri $1
+la_minerve laminerw $1
+le_monde lem±~' $1
+l'etendard letandar $1
+monthly monsli
+myspace majspejs
+//newsweek(a|iem|owi|) nius³ik%
+punch(|a|em|owi|u)	pancz%
+zeitung	cajtung
+l`humanit[eé] limanite $1
+ja[sz]eera	d¿az~'ira
+telegraph $3
+tiffany(m|s|) tifani% $3
+tiffany'(ego|emu) tifani%
+tiffany'(m|s)	tifani% $3
+times tajms
+times`(a|ie|owi|om|em|) tajms%
+tribune	tribiun $1
+today	tudej $1
+youtube jutjub $1
+voice vojs
+voicem vojsem
+voice'(a|u|ie|owi|em) vojs%
+sapi4linux sapi [n]for linux
+
+// firmy
+//google poszed³ do pho
+microsoft $3
+yahoo	jah~!u
+usair ju³es~!er
+usair-(u|em|ze) ju³eser%
+
+// kreskówki
+scooby+doo skubidu $1
+cartoon kartun
+
+// poprawki pl
+
+cacek c~'ac~'ek
+³apu~capu	[n]³apu c~'apu
+
+e_=_mc(^|)2 [1]e [n]równe emce kwadrat
+
+// nauka
+dr\. doktor
+mgr. magister
+dr\.+hab. doktor habilitowany
+prof. profesor
+doc.+dr\.+hab. docent doktor habilitowany
+
+// s³ownik wyrazów obcych
+
+20th t³enis
+accessibility akces~'ibility $3
+acid ejs~'id
+action eksz@n
+ad+hoc adhok $1
+adieu	adje $1
+adios	adijos
+ad+oculos adokulos $3
+advanced edvansd $1
+aerospace erospejs $3
+agency	ejd¿ensy $3
+air [n]er
+airbus(ami|ach|a|em|y|om|owi|ów|u|ie|) erbas%
+air+force+one	erfors³an $1
+air+force+two	erforstu  $1
+air+france erfrans $1
+airlines erlajns
+airplane erplejn $1
+airways	er³ejs
+al(ej|ai)ku(u|)m alejkum $3
+a`propos apropo
+[aá]_propos apropo
+american em~!erik@n
+amity $3
+amnesty $3
+ancienne	±~'sjen $1
+apple ep@l
+ap(p|)aloos(a|±|ê|y|ie|ami|ach|om)	apaluz%1
+arigat[oóô]	arigato $1
+ar(r|)ivederci arivederczi
+art+déco	art [1]deko
+as~sala(a|)m [n]as [1]salam
+associated esosjejt@d
+association(s|) esosjejsz@n%
+associates esosjejts $3
+atelier	atelje $1
+atomicem	atomikiem
+atomic(a|u|owi|) atomik%
+attach[ée] atasze $1
+attacha(tem,towi,tom,ty,tu,tów,tami,tach,t,cie) atasza%
+attack	at~!ak
+autotrack	autotrak $3
+autotrack(a|owi|iem|u) autotrak%
+au+bois ob³a $1
+au_contraire okontrer $1+1
+au+revoir orewu³ar $1+1
+audacious o³~'dejsz@s
+avenue awenju $3
+award(s|) a³ord%
+
+b_&_b	bi~'endb~!i
+baader	bader
+baby~sit(t|)er babysiter
+//babysiter $4
+backspace bekspejs
+banj(o|em|a|u)	band¿%
+banque	bank
+banshee	banszi
+barach(³o|³a|³em|le) barach% $1
+base~bal(l|)(|a|owi|u|e|ami|i|ach|ów|owy|owego|owemu|owym|owa|ow±|owej|owe|owych|owym|owymi) bejzbol%1
+belgique bel¿ik $1
+believe biliv $1
+biggle big@l
+bil(l|)board(u|a|em|zie|y|ów|om|ami|ach|) bilbord%1
+birthday bersdej
+black_jack(a|owi|iem|u|) blek d¿ek%
+//blanc	blank
+//blanca blanka
+//blanco blanko
+//blanche blansz
+boa+noite bu³~'a nojt
+bon~app[eé]tit b±~' [1]apetit
+bon_jour	b±~'¿ur $1
+bon+voyage	b±~'v³aja¿ $1
+bon+vivant	b±~'vivan $1
+bon+viveur	b±~'viver $1
+bon~ton		b±~'t±~' $1
+
+borussi(a|i|±|ê) borusj%
+
+boulevard	bulvar // akcent?
+boutique butik $1
+break~dance	brejkdens
+bridge	brid¿
+buenos+d[ií]as [2]bu³~'enos [2]dijas
+bungee band¿i
+bye	baj
+
+cabr[oó]n kabron $1
+cajun#(nfin) kejd¿en%
+cajuni kejd¿eni
+cajuñ#(nifin) kejd¿eñ%
+call_girl kolgerl
+canoe	kanu $1
+capisce	kapiszcze
+caprice kapris
+caravan	$3
+caribbean karabijen
+carte~blanche kartblansz $1
+cas(s|)apanc(a|±|ê|om|ami|ach) kasapank%1
+
+centre	senter
+center	senter
+centre+pompidou sê~'tr pompid~!u
+century senczery $3
+c'est [n]se
+c`est+faix sef~!e
+c`est+la+guerre	seleger $1
+c`est+la+vie	selawi $1
+c`est+moi	semu³~'a $1
+c`est_[cç]a sesa $1
+c`est+tout setu $1
+c`est+tout+ce+que+conte [1]setu [1]sekek±~'t
+[cç]a_va sav~!a
+[cç]a_va_bien savabiê~' $1
+
+certainement sertenem±~' $1+1
+challenge	czelend¿
+chanel	szan~!el //fr
+chanel+No.+5	szan~!el nos~!ê~'k
+channel	czanel	//en
+chanson		szans± $1
+charg[ée]+d`affaires szar¿dafer $1
+charmant	szarman $1
+charme		szarm
+charmeur	szarmer $1
+charmeuse	szarmez $1
+ch[âa]teau(x|)	szato $1
+chapeau		szapo $1
+chapeau+bas	szapoba $1
+cher	szer
+cherchez_la_femme [1]szersze [1]lafem
+cheri	szeri $1
+ch[eé]vre szevr
+chief czif
+chinook	$1
+//chip(ami|ach|a|u|ów|em|ie|y|om|) czip%
+//chiqui(ta|tê|ty|cie) cziki%
+ciudad	sjudad $1
+chow~chow	cza³cza³ $1
+
+
+ciao	czia³
+
+cinq sê~'k
+
+cicer+cum+caule	c~'icerkumka³le
+ci~devant	s~'idewan $1
+circa		c~'irka
+circle		s~'irk@l
+circulus	c~'irkulus $3
+cito		c~'ito
+clich[ée]	klisz
+coconut cokonat $3
+//clou	klu
+//cod(a|ê|±|y) 	kod%
+cojones	kohones
+collage		kola¿ $1
+college		koled¿		//en
+college'(u|em|ach|om|ów|ami)		koled¿%		//en
+collége		kole¿ $1	//fr
+cologne		kol±~'	$1
+//commedi(a|±|ê|i)	komedi%
+comment+[çc]a_va kom~!±~' saw~!a
+comment+s'apelle	kom~!± sap~!el
+commercial komersz@l
+commonwealth	k~!omon³els
+commonwealth(u|em|owi|ie)	komon³els%
+commonwealsie komon³elsie
+
+company $3
+compliance komplens $1
+comte	k±~'t
+comtesse	k±~'tes $1
+con	kon
+con+carne kon karne
+concepci[oó]nes	konsepsjones
+concierge	konsjer¿ $1
+conciergerie	konsjer¿eri $1
+conditio	kondicjo
+contra		kontra
+cool		kul
+copyright	kopyrajt $3
+coraz[óo]n	korazon $1
+corporation	korporejsz@n
+cosa+nostra	koza nostra
+cottage		kotyd¿
+cottages		kotyd¿is $3
+
+coup[ée](e|)		kupe $1
+coup~de~gr[âa]ce	kudegras $1
+coup_de_foudre k~!u [n]de f~!udr
+coxsackie koksaki
+//crescend(o|a|ach|ami|em|om|u|) kreszczend%
+
+crazy(m|)	krejzy%
+cubiculum	kubikulum $3
+cucarach(a|±|ê|y) kukaracz%
+cu[eé]rvo	k³ervo
+culpa		kulpa
+//cum	kum
+cum_laude	kumla³de
+curriculum	kurikulum $3
+cza-cz(a|ê|±|y) czacz%
+
+daisy	dejzy
+danger	dend¿er
+danger`s dend¿ers
+danse+macabre	dans mak~!abr
+dare_devil(a|em|owi|)	dejrdevil%
+d`amour		damur $1
+d`affaires	dafers $1
+dead		ded
+defen[cs]e		defens $1
+de+facto	defakto
+de+iure		dejure
+d[ée]j[áa]~vu(e|)	de¿awi $1
+de+la		dela $u
+dell`arte	delar $1
+del`arte	delar $1
+deluxe		deluks $1
+der		$u
+//deutsch		dojcz
+deuxi[ée]me	deksjem $1
+didgerido[oó]	did¿eridu~+ $1+1
+dies	dijes
+dieu	dje
+digest dajd¿est
+dinghy		dingi
+dios		dijos
+disease diz~'is $1
+don't	dont
+donuts do³~'nats
+dossier(s|)		dosje% $1
+drive drajv
+drive`#(apefin)	drajw%
+drivem drajwem
+drivie drajwie
+driver#(rfin)	drajwer%
+droit dr³a
+droit_du_seigneur dr³~!a [n]di senj~'~!er
+d¿elabi(a|e|±|i|ami|ach)	d¿elabij%
+dunciad dans~'ijed $3
+
+eagle(s|) ig@l%
+e._coli	e koli
+econoline ekonolajn $3
+eject	ed¿ekt $1
+e~mail(i|a|owi|em|u|e|ami|ach|om|owy|owego|owemu|owych|owymi|owym|ow±|owe|owa|owej|) imejl%
+empire empajer
+en+face	ê~'fas $1
+en+masse ê~'mas $1
+encyclopaedia_britannica [2]encyklopedia [3]britanika
+endeavor endever $2
+enfant_terrible [1]enf±~' [1]terib~'l
+engine end¿in
+enginem end¿inem
+enginu end¿inu
+engine'#(apefin) end¿in%
+england(a|owi|em|zie|owie|om|ów|ach|ami|)	inglend%
+english		inglisz
+enterprise	enterprajs $3
+enterprises	enterprajz~'is
+entr[eé][eé]	entr~!e
+entre+nous	[2]±~'tre [1]nu
+epoque		epok $1
+eroic(a|±|ê)	eroik%
+escape		eskejp $1
+est[áa](s|)	esta% $1
+estate		estejt $1
+evening		ivning
+evidence	evidens $3
+et+c(a|)etera	[n]et c~!etera
+exchange eksczend¿ $1
+exit		eks~'it
+expos[eé]	ekspoze $1
+expressway ekspres³ej $3
+expressway(u|a|em|owi|e|ów|om|ami|ach) ekspres³ej%
+eye(s|)	aj%
+faciendi	fasjendi
+facility	fas~'ility $3
+facilities	fas~'ilitis $3
+facit		fac~'it
+fair		fer
+fair~play	ferplej $1
+faux~pas	fopa	$1
+federal_express [3]federal [1]ikspres
+femme_fatale	famfat~!al
+financial	fajnensz@l
+fin+de+si[eé]cle fê~'desjekl $1
+fin+de+si[eé]cle`(u|em|owy|owa|owego|owej|owe|owymi|owych|owym) fê~'desjekl%
+first ferst
+five fajv
+fourth	fors
+foyer		fu³aje	$1
+foreign		foren
+forge		ford¿
+fountain 	fa³nt@n
+fr[äa]ulein	frolajn $1
+frisbee		frizbi
+game~boy(a|em|owi|) gejmboj%
+gauloise'#(apefin) golu³az%
+gauloisem golu³azem
+gauloise golu³a $1
+g[eé]an#(tfin) ¿an%
+general d¿eneral $3
+gentleman 	d¿ent@lmen $3
+gentlemen 	d¿ent@lmen $3
+gentleman's 	d¿ent@lmens $3
+gentelman 	d¿ent@lmen $3
+gentelman's 	d¿ent@lmens $3
+geographic	d¿ijogrefik $3
+
+gillette ¿ilet $1
+gitane(s|) ¿itan $1
+gitane(s|)'(a|y|ów|om|ie|em) ¿itan%1
+
+glue glu
+
+goddam god_dam
+goddem god_~'dam
+
+goodbye gudbaj $1
+
+//gracias	grasjas
+graecas		grekas
+grand~prix granpr~!i
+grazie gracje
+grateful grejtful
+graceful grejsful
+great(est|er|) grejt%
+
+//greenpeace	grinpis
+//greenpeacem	grinpisem
+//greenpeace`(a|u|owi|ie|em) grinpis%
+
+grimoire	grimu³ar $1
+grimoir(a|u|owi|em|ze|y|ów|ach|om|ami)	grimu³ar%
+grimoire`(a|u|owi|em|ze|y|ów|ach|om|ami)	grimu³ar%
+
+grizzly grizli
+
+guernic(a|±|ê)	gernik%
+
+//równiez jako nazwisko
+hall#(lfin) hol%
+
+halloween	helo³in $3
+
+happy	hepi
+
+helvetic(a|±|ê)	helvetik%
+hi~fi	hajfi $1
+hi~power hajpa³er
+hiawatha haja³ofa
+home ho³m
+
+how+do+you+do [1]ha³ [1]dujudu
+how+are+you [2]ha³arju
+
+i+am	aj em
+i-ching [n]i czing
+i+ching [n]i czing
+id[ée]e~fixe	idefiks $1
+identities ajdentitis $3
+image	ima¿ $1
+imaging	imejd¿ing
+image'(em|u|owi) ima¿%
+impossible impos~'ib@l	$3
+independence independens
+industrial indastriel
+industries indastris
+institute+of+technology [3]institjut [3]oftekno³~'lo³~'d¿i
+insuranse inszurens
+intelligence intelid¿ens $3
+interface interfejs
+international(s|) internasz@n@l% $3
+interview	interwiu $1
+ip(o|a)d(ach|ami|a|owi|om|em|zie|y|ów|) ajp%d%
+iphone ajfon
+ivy	ajvy
+
+//irae	ire
+//posz³o do pl_pho
+//jazz(u|em|ie|owy|owego|owemu|owym|owe|owych|owymi|owa|ow±|owej|ów|) d¿ez%
+
+jacuzzi	d¿akuz~'i
+jamboree d¿embori~+ $3
+jawohl	javol $1
+jaws(|a|em|ie|owi) d¿e³s%
+jedi	d¿edaji
+je+m'ap(p|)elle	¿emap~!el
+je+suis ¿es³i $1
+jefe	hefe
+jelly d¿eli
+judge d¿ad¿
+judgem d¿ad¿em
+judge`#(apefin) d¿ad¿%
+
+
+// jersey w znaczeniu 'materia³'
+jersey(u|owy|owego|owemu|owym|owych|owymi|owa|owej|ow±|owe|em) d¿ersej%
+jogging(u|iem|owi|) d¿oging%
+joint~venture d¿ojnt venczer
+joost(a|u|em|owi|) d¿ust%
+joo¶cie	d¿u¶cie
+jubilee d¿ubili~+ $3
+judiciales hudisjales
+junction d¿anksz@n
+khaki	kaki
+karimas[hz]ta	karimaszta $1
+konichiwa	koniczi³a $1
+kombawa		komba³a $1
+
+kufi(a|e|±|i|ami|ach)	kufij%
+
+la+vie	lavi $1
+ladies lejdis
+lady's	lejdys
+le+grand legra~'n $1
+le+theatre lete~!atr
+lorgnon	lorni±~' $1
+lounge la³nd¿
+love lov
+luma~lite	l~!umalajt
+
+macaren(|ach|ami|a|ie|om|o|y|±|ê) makaren%
+macumb(|ach|ami|a|ie|om|o|y|±|ê) makumb%
+make~up(u|em|ie|owi|) mejkap%
+manicure $1
+macho(s|)	maczo%
+madame	madam $1
+made_in	mejdin
+mademoiselle madm³azel $1
+maglite maglajt
+ma[îi]tr[ée]`d	metred $1
+ma[îi]tr[ée]+d`h[oô]tel	metr~,edot~!el
+ma(ks|x)im(um|a|om)	maksim%1 $3
+mamma+mia mama mija
+manit(o|)u		manitu $1
+manneken	maneken $3
+mansion`(s|)		mensz@n%
+marine(s|) merin% $1
+mary+celeste mery [1]selest
+medicaid m~!edikejd
+medicare m~!edikejr
+medical m~!edik@l
+medicine medis@n $3
+merci	mers~'i $1
+merde	merd
+messieurs mesje $1
+mexican(a|±|ê|ie) mehikan%
+milady	milejdy
+mission	misz@n
+mlle	madm³azel $1
+mme	madam $1
+mon+ami	monami $1
+mon+cher	m±~'szer $1
+mon+dieu	m±~'die $1
+money	many
+monsieur(s|) mesje $1
+monsignor(e|)	mons~'iñjor $1
+moulin+rouge milê~'r~!u¿
+muchas+gracias	muczas grasjas
+muy	mui
+muy+bien	muibien $1
+mr\. mister
+mrs\. mis~'is
+my_name_is majnejmis $2
+n'est~ce+pas nesepa $1
+nachtmusik nachtmuz~'ik $3
+national(s|)	nasz@n@l% $3
+nacional	nasjonal $1
+nein	najn
+nemesis		nemez~'is
+new	niu
+new+age niu ejd¿
+nielzia	nielz~'ia $1
+
+nisi+mens+sit+rea nis~'i mens s~'it rea
+noblesse+oblige [1]nobles [1]obli¿~'
+noches noczes
+non~iron(u|em|y|ami|ach|owych|owymi|owy|owego|owemu|owe|ow±|owa|a|) nonajron%
+nosier no³zjer
+nunc nunk
+
+obeah obija $3
+oceanside o³sz@nsajd $3
+ocean_heights o³sz@n hejts
+ocean_drive o³sz@n drajv
+ocean_avenue o³sz@n [3]avenju
+ocean_shore(s|) o³sz@n szor%
+ocean`s	o³sz@ns
+
+of	$u
+of+the	o~,f [n]the
+of $1e
+of+course ofkors $1
+
+oikoumen[eì] oj~'kumene
+
+okay	okej $1
+ok.	oko³o
+Ok	okej $1
+okej	$1
+on~line	onlajn $1
+ooga uga
+ooga_chaca uga czaka
+operation(s|)	operejsz@n%
+operational operejsz@nel $3
+opéra	$1
+orange	orend¿
+oui u³i $1
+ouija	³id¿a
+overlord o³~'verlord $3
+
+papier~m[âa]ch[eé] papi~,ermasz~!e
+par+excel(l|)ence parekselê~'s $1
+paramount paramont $3
+par+avion	parawi±~' $1
+pardon pard±~' $1
+parisienne parisjê~' $1
+parlez~vous+fran[cç]ais parlev~!u frans~!e
+parlez~vous+anglais parlev~!u angl~!e
+pas+de+probl[eé]me padeproblem $1+1
+paszo³ $1
+peacemaker#(rfin) pismejker%
+pedicure $1
+peep pip
+people pip@l
+people's pip@ls
+performance	performens
+performance'(u|em)	performens%
+piacere piaczere
+picture(s|) pikczer%
+pince~nez pesne $1
+pizza~hut	pica hat
+plain(s|)	plejn%
+//play	plej
+point(a|±|ê|y) pu³ent%
+poincie pu³encie
+polizei policaj $1
+poste~restante postrest±~' $1
+ponch(o|a|em) poncz%
+pre~paid(u|owi|em|zie|) pripejd%
+princi[ée]re prensjer $1
+professional profesz@nel $3
+pro_hac_vice pro hak vice
+properties propertis $3
+property	$3
+pulseaudio	pulsa³djo
+//princes	prins@s
+prudential prudensz@l
+pub(u|owi|em|ie|y|ach|ami|om|ów|) pab%
+publico publiko
+public+relations [n]pablik [2]rilejsz@ns
+publicity publis~'iti $3
+purple parp@l
+
+quality k³olity $3
+que ke
+que_sera keser~!a
+que_sera(,|)_sera keser~!a ser~!a
+quien kjen
+qui+pro+quo kwiprokwo $1
+
+radio+shack rejdjo³szek $3
+ragnar(oe|o|ö)k ragnarek $3
+raki(e|±|i|ami|ach|a)	rakij%
+realty rilty
+redial ridajel
+register red¿ister $3
+registered red¿isterd $3
+r[ae]ndez~vou[sz] randewu $1
+requiem rekwiem
+response	rispons $1
+reversi revers~'i
+//road	ro³d
+rock'n'roll(a|em|u) rokendrol%
+rock'n'roll rokendrol $1
+rock_&_roll rokendrol $1
+rock+and+roll	rokendrol $1
+//rouge ru¿
+rue ri
+russian rasz@n
+
+sala(a|)m salam $1
+saloon $1
+sacr[eé]_bleu sakr~,ebl~!y
+save(d|)	sejw%
+savoir~vivre saw³arwiwr $1
+savoir~vivre`(em|u) saw³ar wiwr%
+savoir~vivrem saw³ar wiwrem
+
+//schengen	szengen
+science saj@ns
+science+et+vie s~'ij~!ans ev~!i
+science~fiction sajens fiksz@n
+scientific saj@ntifik
+scotland	skotlend
+secret s~'ikret
+security	sekiurity $3
+
+sea	s~'i~+
+seigneur	señj~!er
+
+service servis
+service'(em|u|owi|ami|ach|om|ów|y) servis%
+
+shore`#(apefin) szo³r%
+shore szo³r
+sic	s~'ik
+sic+transit [n]s~'ik [2]trans~'it
+s'il+vous+pla[îi]t s~'ilwuple $1
+silkie(ch|mi|m|) s~'ilki%
+
+sine+qua+non	s~'~,ine kwan~!on
+sir	[f]ser
+sire	s~'ir
+s[ií]och[áa]n(a|) szjehan%
+sl[áa]inte sloj~'ncze
+sky skaj
+skye skaj
+
+space~oper(ami|ach|a|±|ê|y|ze) spejs oper%
+
+special+service spejsz@l servis
+speedway(u|a|em|owi|e|ów|om|ami|ach|) spid³ej%
+square sk³er
+state	stejt
+states	stejts
+//street		strit
+sunrise sanrajs
+sunshine sanszajn
+superglue superglu $3
+supplies suplajz $1
+sur[eé]t[eé]	s~'irete $1
+surveillance survejlens
+//swatch(a|em|)	s³ocz%
+
+//kanadyjski przecinek
+tab[ae]rnac tabarnak $1
+tab[ae]rnouche tabarnusz $1
+
+tae~~kwon~~do tek³ondo
+
+tai~chi tajczi $1
+technical teknik@l $3
+t[eé]te~[aá]~t[eé]te tetat~!et
+terrace teris
+terraces teris~'is $3
+the $u
+thanks fenks
+thank+you fenkj~!u
+third	ferd
+this	z~'is
+three	fri
+timbre	tembr
+timbrem tembrem
+timbre'u tembru
+time tajm
+time'a tajma
+to+you [n]tu [1]ju
+treasure tre¿er
+true tru
+t~shir(tem|ty|cie|tów|tami|tach|ta|tu|t) tiszer%
+tonight tunajt $1
+touch tocz
+touchpad(ami|ach|a|em|zie|owi|om|) toczpad%
+touch[ée]	tusze $1
+tourn[ée]e	turne $1
+tout+va+bien tuvabi~!ê~'
+trackball(a|em|owi|u|e|ami|ach|om|) trekbol%
+trade_mark trejd mark
+traverse travers $1
+trinity $3
+tutti_capi tuti kapi
+twentieth t³enis
+twilight t³ajlajt
+twin t³in
+tzw\.	tak zwany
+
+u~boo#(tfin) ubo%
+ufficio uficzio
+un_instant inê~'stan $1
+united junajt@d
+university juniv~!ers~'ity
+unknown	ankno³n
+unlimited anlimited $3
+us_navy ju³~'es nejvi
+usability juzability $3
+using juz~'ing
+uzi	uz~'i
+
+va+banque	vabank $1
+van+der		vander $u
+vari[eé]t[eé](s|)	varjete $1
+venture venczer
+viejo	vieho
+vip-(ami|ach|a|ów|om|ie|em|owi|y) vip%
+vis~[aá]~vis	wizawi $1
+vitae	wite
+vivace		wiwacze
+voil[aá]	w³ala $1
+von		fon $Uu
+voodoo		vudu
+
+
+walkie~talkie	³okitoki
+wireless	³ajerles $3
+wi-fi		³ajfi $1
+woman ³omen
+women ³imin
+women's	³imins
+
+// niektórzy nie powinni siê wysilaæ na pinyin... niestety to jedyne
+// chiñskie s³owo które znam :(
+xiexie	szesze $1
+yuppie(m|ch|) jupi%
+zombie	zombi
+
+// kuchnia, kuchnia, je¶æ nam siê chce!
+ragout	ragu $1
+fondue	f±~'di $1
+
+[aá]+la		ala $1u
+[aá]+la+mode ala mod
+[aá]+deux	ade $1
+
+anchois	anszu³a $1
+anchovis	anszu³a $1
+armagnac	armañjak $1
+armagnac(a|em|owi) armañjak%
+artois artu³a $1
+au+gratin	ogratê~' $1
+au+naturel(le|)	onatirel $1
+au+poivre	opu³avr $1
+au+lait	ole $1
+barbecue	barbikju $3
+b[eé]arnaise	bearnez $3
+beaujolais	bo¿ole $1
+beefeater	bifiter
+boeuf	bef
+bourbon(a|em|ie|u|owi|) burbon%
+brie	bri
+
+cabernet	kaberne $1
+//caberne(tami|ta|tem|cie|tom|tu)	kaberne%
+camembert	kamember $1
+//camember(tami|ta|tem|cie|tom|tu)	kamember%
+
+caf[eé]		kafe $1
+//cap(p|)uc(c|)in(o|a|i|em) kapuczin%2
+carskoje $3
+cassis kas~'i $1
+cayenne	kajen $1
+ceviche	sevicze
+chablis		szabli $1
+chambertin#(nfin)	szamberten%
+chambertin	szambert~!ê~'
+chantilly	szantili $1
+chardonnay	szardonej $1
+chartreuse	szartriz $1
+chassagne	szasan $1
+chianti		kjanti
+//chil(l|)i		czili
+//chil(l|)i+con+carne	czilikonkarne $+1
+//chips(ami|ach|a|u|ów|em|ie|y|om|) czips%
+chivas	kivas
+churro	czurro
+cliquot klik~'o
+chop~suey	czopsu~'i $1
+//coca		koka
+//col(a|±|ê|i)		kol%
+coleslaw	kolslo³
+coq+au+vin	kokowê~'	$1
+coquille	kokil $1
+cordon~bleu	kord±ble $1
+c(o|)urv(a|o)isier#(rfin) kurwazjer%2
+c(o|)urv(a|o)isier	kurwazje $1
+c[ôo]te~r[ôo]tie kot [1]roti
+cr[ée]me	krem
+croissant	kruazan $1
+croissants	kruazans $1
+croissant(a|em|y|ów|ami|om)	kruazant%
+croissancie	kruazancie
+cuisine	k³iz~'in $1
+cumberland	kamberlend $3
+cumberland#(dfin)	kamberlend%
+
+cura_[çc]ao	kirasao
+curry		kary
+
+daiquiri	dajkiri
+de+la+maison	delamez± $1
+de+volaille	dewolaj $1
+drouhin dru³~!ê~'
+d¿em(u|em|ie|)	d~'¿em%
+
+en+papilotte	ê~'papilot $1
+
+fajitas	fahitas
+feuilles+de+vignes f~!uj dev~!in
+foie+gras f³agra $1
+fried frajd
+fromage		from~!a¿
+
+gazpacho(s|)	gazpaczo%
+glenmorangie	gl~!enmorend¿i
+glenfiddich(em|a|owi|u|)	glenfidicz%
+guin(n|)es(s|)#(sfin) gines%2
+
+haut~m[ée]doc [1]u [1]midok
+
+igristoje $3
+
+jack_daniels d¿ek denils
+jacka_danielsa d¿eka denilsa
+jackiem_danielsem d¿ekiem denilsem
+
+jalape(n|ñj|ò)o	halapeñjo
+
+kim~chi	kimczi $1
+
+l`absinthe labs~!ê~'t
+lasagne	lazañje
+
+lunch(u|em|e|ami|ach|)	lancz%
+
+margaux	margo $1
+montrachet	m±~'rasz~!e
+muesli		musli
+müsli		musli
+osso_buco	osobuko
+pepsi		peps~'i
+perignon	perinion $1
+perrier		perje $1
+pinot+noir [1]pino [1]nu³ar
+prosciutto	proszutto
+//pop~corn(|u|em|ie|a)	popkorn%
+pur[ée][ée]	pire $1
+quiche		kisz
+ratatouille	ratatuj $1
+r[eé]moulade remulad $1
+ri[sz]ot(to|ta|em|cie) rizo%
+sauvignon	savini~!±~'
+sp[ée]cialit[ée]	spesjalite $1
+
+steak stek
+strogonoff	strogonof $3
+sowietskoje $3
+szampanskoje $3
+taboule tabil $1
+taco	tako
+tequil(a|i|ê|±|e|ami|ach|) tekil%
+
+veuve_cliquot vyv klik~'o
+
+vinaigrette 	winegret $1
+vindaloo	vindalu $1
+winegret	$1
+
+whisky	³iski
+whiskey ³iski
+worcestershire ³~!usterszer
+
+// Ogólnie anglojêzyczny zgni³y zachód
+
+
+aberdeen(em|ie|owi|u) aberdin%
+aberdeen ab@rdin $3
+abilene abelin $3
+adirondack	edirondak
+albany	$3
+albermarle albermarl $3
+albury olberi $3
+alcatraz alkatraz $3
+algonquin algonkin
+america	emerika $3
+ames	ejmz
+amoskeag ejmaskijeg
+anchorage	ankorid¿ $3
+annapolis $3
+angeles and¿eles $3
+albuquerque	albukerki $2
+arapaho(e|) arapaho³ $3
+arkan[sz]as arkanzo³ $3
+armitage	armatejd¿ $3
+arundel $3
+asheville eszvil
+atlantic etlentik
+auburn obern
+auckland(u|em|zie|owi|) oklend%
+audubon oduben $3
+avon	ejvon
+avondale ejvondejl $3
+baltimore baltimor $3
+baltimore`s baltimors $3
+baja+california baha kalifornia
+barstow barsto³
+baseline bejzlajn
+battery $3
+bay bej
+bayview bejvju
+//beach bicz
+bel~air beler $1
+bellevue belvju
+belle+isle belajl $1
+berkeley berkli
+biscayne biskejn $1 // akcent amerykañski
+boca+raton boka [1]rato³~'n
+bodleian bo³~'dlijen $3
+botany bo³teny $3
+bozeman#(nfin) bo³zmen%
+bozeman`s bo³zmens
+brisbane`#(apefin) brizben% // równie¿ jako nazwisko
+brisban(em|ie)	brisben%
+brooklyn(em|ie|u|) bruklin%
+brookline bruklajn
+buffalo bafalo³ $3
+caernarfon kernarvon $2
+calgary	kalgary $3
+californi(a|ê|i|o|) kaliforni%
+cambridge kembrid¿
+cambridge'#(apefin) kembrid¿%
+camp_david [n]kemp dejvid
+camp_lejeune [n]kemp led¿un
+canaveral $3
+canterbury kanterberi
+cape	kejp
+capetown kepta³n
+carnegie k~!orned¿i
+causeway(u|em|) koz³ej%
+catawb(a|±|ê|ie) ketob%
+centennial sentiñjel
+chancery czans@ri $3
+chattanooga czetanuga
+chelsea	czels~'i
+chesapeake czesapik $3
+ch[ae]ttahooch[ie]e	czetahuczi
+charing czering
+charlottesville szarlotsvil $3
+chadwick#(kfin) czed³ik%
+chatham czatem
+chatwick#(kfin) czet³ik%
+chevy+chase	szevy czejs
+chevy+chas(em|ie)	szevy czejs%
+chevy+chase'#(apefin)	szevy czejs%
+cheyenne czejen $1
+//chicago czikago
+//chicagow(skim|skiemu|ski|skich|skimi|skie|skiej|scy|ska) czikago%
+chickasaw czikeso³ $3
+chinatown czajnata³n $3
+chincoteague czenkotig $1
+cincinnati s~'ins~'inati
+claremont klermont
+cocoa+beach koko³ bicz
+colorado kolorado
+columbi(a|±|ê|i|o) kolambi%
+connecticut	konektikat $3
+cronkite	kronkajt
+cucamonga kukamonga
+dahlonega dalonega $3
+deceit	des~'it $1
+delaware dela³or $3
+des_moines demojn $1
+detroit ditro~'it $3
+dundee dandi
+durham dar~'h~'em
+edinburgh	edinboro
+elawah ila³e
+encino ens~'ino
+erie	iri
+everglades everglejds $3
+exeter $3
+eyre	ejr
+fairbanks	ferbanks
+fairview fervju
+fahouragh fahura
+faneuil feñjol
+francisco frans~'isko
+gatwick	get³ik
+glasgow glezgo³
+gloucester#(rcity) gloster%
+//greenpoin(tu|towi|tem|t|cie) grinpojn%
+grange grend¿
+grosvenor gro³w@nor $3
+galveston $3
+georgi(a|±|ê|i|o) d¿ord¿j%
+georgetown d¿ord¿ta³n
+greenwich grin³icz
+greyfriars grejfrajers $3
+grove gro³v
+gwynedd g³yned
+harbour harbor
+hawaii	ho³aj~'i
+hawaiian(n|)	ho³ejen
+heathrow hifro³
+hialeah hajalija
+homestead ho³msted
+holyrood holirud $3
+hoosierville hus~'irvil $3
+illinois ilinoj $3
+idaho	ajdaho³ $3
+incline inklajn
+inverness $3
+iow(a|±|ê|y|ie) ajo³%
+ipswich ips³icz
+island(s|) ajlend%
+// kolizja z 'jersey' jako materia³ - wybra³em bardziej popularne
+jersey	d¿er~'z~'i
+jamaica d¿amajka
+juneau	d¿uno³
+kentucky	kentaki
+kennesaw	keneso $3
+kirkcaldy	kerkodi
+kootenai	kutenaj $1
+lakehurst	lejk~'h~'erst
+lakeside lejksajd
+laramie leremi $3
+las+vegas	[n]las vegas
+lauderdale laderdejl $3
+leavenworth leven³ers $3
+leicester lest@r
+leucadi(a|ê|±|i) lukejdj%
+
+llanberis	szanberis $2
+llangollen	szangoh~'len $2
+llanystumdwy	szanystjund³y $2
+
+los+angeles [n]los [3]and¿eles
+louisian(a|ê|±|ie|y)	luizjan%
+lower	lo³er
+//maine mejn
+maida+vale mejda vejl
+manchester	$3
+maryland	$3
+massachusetts masaczusets
+melbourne	melbern
+m[eé]xico	m~!ehiko
+mexico+city	m~!eks~'iko s~'ity
+mexico+tenoch(t|)itl[aá]n m~!ehiko tenocztitl~!an
+marylebone m~!aryleb~!o³n
+miami majami
+miami_vice	majami vajs
+miccosukee	mikosuki
+michigan	miczigen $3
+michoacan miczo³~'akan $1
+milwaukee mil³oki $3
+minneapolis	min~'i~'apolis $3
+mis(s|)is(s|)ip(p|)i	mis~'is~'ipi
+missouri	mizuri
+mojave	mohave
+monongahela mononga hila
+monterrey	monteri $2
+monterey $3
+mount	ma³nt
+mountain	ma³~'nt@n
+mountain`s	ma³~'nt@ns
+mulholland malho³~'lend
+muscogee(s|) maskogi%
+nantucket	nantaket
+new+jersey niud¿er~'zy
+new+orlean	[n]niu orl~!in
+new+york niujork $1
+new+mexico niumeks~'iko $3
+newark niu³ork
+newbury niuberi $3
+north nort
+northern norsern
+norwalk nor³olk
+norwich nor³icz
+oak_ridge o³krid¿
+ocean_avenue o³szyn [3]avenju
+o'hare	o³~'her $1
+ohio ohajo
+okeechobee o³~'kiczo³~'bi
+okefenokee okifeno³~'ki
+o'rourke o³rurk $1
+o'toole o³tul $1
+pacheco	paczeko
+paducah padjuka $3
+passaic pesej~'ik
+palisades palisejds $3
+palmdale palmdejl
+penzance penzens $1
+phoenix feniks
+pimlico pimliko³ $3
+pineville pajnvil
+pittsburgh(u|owi|iem|) pitsberg%
+plum+island	plam ajlend
+port~au~prince potoprê~'s $1
+potomac(u|owi|) potomak%
+potomacem potomakiem
+poughkeepsie pokips~'i
+princeton prinseton $3
+providence providens $3
+pwllheli puszheli
+quantico k³antiko
+quartzite k³ortc~'ajt
+//queens	k³ins
+rarities rejritiz $3
+rensselaer renseli~+r $3
+rhode ro³d
+ridge rid¿
+roncesvalles ransesvejlz $3 // patrz roncevaux
+samsonite samsonajt $3
+san+francisco sanfrans~'isko
+sandusky sendaski
+saskatchewan(em|u|ie) saskacziu³en%
+saskatchewan s~!askaczi~,u³en
+savile_row savil ro³
+saxmundham saksmandem $3
+seattle s~'ijet@l
+shaftesbury szaftsberi $3
+shenandoah szenendo³e
+shillelagh szilejla
+shoreditch szordicz
+sidewalk sajd³olk
+skyline(s|) skajlajn%
+south sa³f
+southern sudern
+steeplechase stip@lczejs $3
+st._louis	sentlu~'is
+st._quentin	sentk³entin
+salt+lake salt lejk
+san_quentin sank³entin
+staples stejp@ls
+staten+island stejt@n ajlend
+staten+garden stejt@n garden
+statenville stejt@nvil $3
+stonehenge	sto³nhend¿
+suites s³its
+susquehann(a|ê|±|y|ie) sask³ahen%
+sussex saseks
+sycamore sykamor $3
+sylacau(ga|gê|g±|gi|dze) s~'ileko%
+syracuse syrakjuz $3
+swindon s³indon
+tahoe taho³
+tallahassee talahas~'i $2
+tappan+zee tapen z~'i~'i
+tennessee tenes~'i $3
+three+mile	fri majl
+three+mile+island fri majl ajlend
+//town	ta³n
+tottenham	toten~'h~'am $3
+tucson	tukson
+turnpike ternpajk
+turnpike'(u|iem|owi|a) ternpajk%
+turnpikiem ternpajkiem
+tuscaloos(a|±|ê|ie) taskalus%
+upland aplend
+upper aper
+utah juta
+venice venis
+village vilid¿
+virgini(a|±|ê|i|o) wird¿ini%
+wakefield ³ejkfild
+watergate ³otergejt $3
+waterloo ³oterlu $3
+waverly ³ejverli $3
+waverly+place [3]³ejverli plejs
+west ³est
+westlake ³estlejk
+westlow	³estlo³
+wichita	³iczita $3
+wilderness ³yldernes $3
+winnipeg ³inipeg $3
+winnipeg(u|iem) ³inipeg%
+winnipesaukee ³inipesaki
+wisconsin ³iskons~'in
+worcester#(rcity) ³uster%
+wyoming ³ajo³~'min
+wyoming(u|owy|iem) ³ajo³~'ming%
+yellowstone  jelusto³n $3
+
+
+// geografia frankofonów - ochotnicy potrzebni!
+
+antibes ±~'tib $1
+d'_antibes d±~'tib $1
+arles	arl
+d'_arles arl
+arles~sur~tech [2]arl@ [1]sjurtek
+auteuil otej $1
+avignon aviñj~!±~'
+avignon(u|em|ie|owi) aviñjon%
+bagn[ée]res bañjer $1
+bagn[ée]res~de~luchon [1]bañjer [1]delisz±~'
+bagn[ée]res~de~bigorre [1]bañjer [1]debigor
+bourgogne burg~!on
+bourguignonne burgiñjon $1
+
+caen k±~'
+chavaux szavo $1
+c[ôo]te~des~neiges k~!ote den~!e¿
+(ste.|ste)~catherine sê~'tkatrin $1
+(ste.|ste)~cunegondel sê~'tkineg±~'del $1
+(ste.|ste)~angele sê~'tan¿el $1
+(ste.|ste)~anne sê~'tan $1
+
+(st.|saint|st)~andr[eé]	santandre $1
+(st.|saint|st)~antoine	santant³an $1
+(st.|saint|st)~basile	sê~'baz~'il $1
+(st.|saint|st)~bernard	sê~'bernar $1
+(st.|saint|st)~calixte	sê~'kalikst $1
+(st.|saint|st)~denis	sê~'deni $1
+(st.|saint|st)~cyr	sê~'s~'ir $1
+(st.|saint|st)~dominique	sê~'dominik $1
+(st.|saint|st)~edouard	santedu³ar $1
+(st.|saint|st)~[eé]tienne	santetiê~' $1
+(st.|saint|st)~francis_xavier	[1]sê~'frans~'i [1]ksawie
+(st.|saint|st)~germain(e|)	sê~'¿ermê~' $1
+(st.|saint|st)~georges	sê~'¿or¿ $1
+(st.|saint|st)~henri	santenri~' $1
+(st.|saint|st)~isidor	santiz~'idor $1
+(st.|saint|st)~jean	sê~'¿±~' $1
+(st.|saint|st)~jacques	sê~'¿ak $1
+(st.|saint|st)~jerome	sê~'¿erom $1
+(st.|saint|st)~jovite	sê~'¿owit $1
+(st.|saint|st)~lambert	sê~'lamber $1
+(st.|saint|st)~laurent	sê~'lorê~' $1
+(st.|saint|st)~lazare	sê~'lazar $1
+(st.|saint|st)~michel	sê~'miszel  $1
+(st.|saint|st)~malo	sê~'malo	$1
+(st.|saint|st)~nazaire	sê~'nazar	$1
+(st.|saint|st)~paul~du~nord	[1]sê~'pol [1]dinor
+(st.|saint|st)~pierre	sê~'pier	$1
+(st.|saint|st)~urbain	santirbê~'	$1
+(mt.|mont)~(st.|saint|st)~michel	[1]m±~' [1]sê~'miszel
+(mt.|mont)~blanc	m±~'blank	$1
+(mt.|mont)~royal m±~'r³aj~!al
+
+caen	k±~'
+calais kale $1
+cannes kan
+centre~ville santre vil
+chemin+royal szem~!ê~' r³aj~!al
+champs~elys[eé]es szanzelize $1
+chillon szil~!±~'
+cl[eé]ry kleri $1
+c[ôo]te+d'azur kot [1]daz~'ir
+la+c[ôo]te+d'azur [1]lakot [1]daz~'ir
+c[ôo]te+d'ivoire kot [1]div³ar
+la+c[ôo]te+d'ivoire [1]lakot [1]div³ar
+l'[eé]toile	let³al $1
+dijon	di¿±~' $1
+dordogne dordoñ $1
+
+fuiss[ée] fise $1
+
+gare_du_nord gar [1]dinor
+gare_de_l'est	[1] gar [1]delest
+
+[ée]lys[ée]es eliz~!e
+
+les+halles [n]le [2]ale
+
+ille~et~vilaine [2]ile [1]vilen
+
+pointe~du~lac p³ê~' [1]dilak
+lac+st\.~louis lak [1]sê~'lu³i
+lac+des+deux~montagnes lak ded~!i m±~'t~!an
+la+grande+chartreuse lagr~!an szartr~!iz
+la_manche	lamansz $1
+le+mans	lem±~' $1
+
+lejeune le¿en $1
+
+lourdes lurd
+
+montmartre montmart $1
+montmartre'#(apefin) montmartr%
+
+montréal m±~'re~'al $1
+moutier#(rfin) mutier%
+moutier mutie $1
+neuilly nej~'i~+ $1
+notre~dame [2]notr@ [1]dam
+noailles nu³~!aj
+
+orly	orli $1
+perpignan perpiñj±~' $1
+pigalle pig~!al
+place_ville~marie plas vil~!e mar~!i
+
+//paris	pari $1
+
+place+blanche plasblansz $1
+place+clichy plaskliszi $1
+petits~champs p@t~!it sz~!an
+pouilly p³ili $1
+quai+des+orf[ée]vres ke [1]dezorfewr
+quai+d'orsay ke [1]dorse
+
+rennes ren
+r[ée]union	rejuni~!±~'
+roncevaux	r±svo $1
+
+verdun verdê~' $1
+
+
+// geografia ró¿ne
+
+//la co¶tam
+
+la_joll(a|±|ê|i) [n]la h~!oj~'%
+
+aandalsnes ondalsnes $3
+[aã]ndalsnes ondalsnes $3
+acapulco akapulko
+aletschhorn $3
+amalienborg emeljenborg $3
+amritsar(u|ze|em|owi) amric~'er%
+amritsar	amric~'e
+amsterdam $3
+anaheim $3
+ancuaque ancz³ake
+anhuej	an huji
+aranjuez $1
+//auschwitz a³szwic
+baja_del bah~'a [n]del
+bardufoss bardifos $3
+barranca baranka
+beng(h|)azi bengaz~'i
+buchenwald $3
+bullerbyn bylerbin $3
+benelu(x|ks) b~!eneluks
+cahujenga ka³enga $2
+callej[óo]n kajehon $1
+callejones  kajehones
+cairo kajro
+canc[uú]n	kankun $1
+caracas karakas
+celebes selebez
+chagres czagres
+changchun(u|em|ie|owi|) czangczun%
+chichen cziczen
+chicxulub [1]czik [1]szulub
+chiricahua czirika³a
+chitzen czic~'en
+chiclayo cziklajo
+chihuahua czju³a³a
+chile czile
+cien(e|a)(ga|g±|dze|gi) sjen%0%1
+ci[ée]ne[ea]ga	sjenaga $3
+cluj klu¿
+coach_lane ko³cz lejn
+concepci[óo]n	konsepsj~!on
+copa_caban(a|y|ê|±|ie|o) kopakaban%
+//costa kosta
+cro~magnon kromani±~' $1
+cuzco kuz~'ko
+
+encinal ensenal $1
+
+fuji	fud¿i
+
+galápagos galapahos $3
+Graz(u|em|)	grac%
+gstaad g@szta~+d $1
+
+//cruz kruz
+//delhi	deli
+
+helsing(oe|ö|o)r hels~'inger $1
+
+innsbruck(u|iem|owi|) insbruk%
+isfjorden $3
+jaff(a|±|ê|y|ie) d¿af%
+jenisiej	$3
+jinan(ie|u|em|owi|) d¿inan%
+j[oö]nk[oö]ping jenszeping $3
+jostedalsbreen j~!usted~,alsbre³~'n
+jostedalsbreen(em|ie|u|owi) justedalsbre³~'n%
+jumbilla humbija
+krk	kyrk
+llano	j~'ano
+lambayeque lambaszjeke
+las+palmas	laspalmas
+lesjaskog leszeskug $3
+lilongwe	lilong³ej
+link[oö]ping linszeping $3
+lukachukai l~!oka~+czek~!ai
+machu~picchu maczu pikczu
+Nyos naj~'os
+oaxen u³aksen $3
+Odessie	odesie
+osijek(u|iem|) os~'ijek%
+ouagadougou ³agadugu
+rap(p|)erswil rapersvil $3
+rotterdam $3
+said(|a|u|em|owi|zie|owie|ów|om|ami|ach) saj~'id%
+salinger#(rfin) salind¿er%
+salinger salind¿er $3
+sandman#(nfin) sendmen%
+san+diego	sandiego
+san+jos[eé]	sanhoze $1
+san+paulo	sanpa³lo
+san+sebastian	sansebastian
+schiphol	skipol
+sien(a|±|ê|y|ie) sjen%
+// seul poszed³ do pl_pho
+sk(ae|a|ä)rg(aa|a|ã)rdskrog hergordskrug $3
+// sri lance - trzeba dodaæ bo 'lance' mo¿e byæ podmienione!
+sri+lance srilanc~'e~'
+//lesotho lesoto
+panamá panama $1
+pernambuco pernambuko
+picoroco pikoroko
+recife res~'ifi
+romsdal rumsdal
+romsdalen rumsdalen $3
+ta[ji]pe[ji]	tajpej $1
+taj+mahal tad¿ [1]mahal
+tijuan(a|y|ê|±|ie) tihu~'an%
+tbilisi	tbilis~'i
+wiesbaden visbaden
+zimbabwe z~'imbabwe
+zur[iy]ch(u|owi|em|) c~'urich%
+s[aâ]o sa³ $u // w portugalskich po³±czeniach
+st.+petersburg	[n]sankt p~!etersburg
+st.+petersburg(a|u|iem|owi)	[n]sankt petersburg%
+st\.+p(oe|o|ö)lten [n]sankt pelten
+st\.+pauli [n]sankt pauli
+stavanger sta~+vanger $3
+s[oö]dert[äa]lje sedertelje $2
+sulawesi sulavez~'i
+örebro erebru $3
+tampico tampiko
+tenochtitl[aá]n $3
+v(a|ä)ster(a|aa|ã)s	veszteros $3
+v[aä]xj[öo]	veksze
+v[äa]sterg[öo]tland vesterjetland $2+1
+wagadugu ³agadugu
+weingarten vajngarten
+qu[eé]bec(u|owi|)	kebek%
+québec kebek $1
+quebek(u|owi|iem) kebek%
+
+rio	rijo
+janeiro ¿anejro
+
+//imiona ro¿ne mêskie - przyk³adowe
+
+agc(ach|a|o|y|±|ê)	ag~'cz%
+alain#(nfin) alen%
+alain al~!ê~'
+alaster	$3
+aldous(a|owi|em|ie|) oldes%
+aleksiej(ach|ami|a|e|em|om|owi|u) aleks~'iej%
+aleksiej aleks~'i~!ej
+alistair#(rfin)	alister%
+alistair	~!alister
+alois#(sfin)	alu³as%
+alois	alu³~!a
+alphonse	alfons $1
+alphonse'#(apefin)	alfons%
+
+andr[ée]	andre $1
+andrew endriu
+
+//andy zostawiamy - przecie¿ to jakie¶ pagórki
+andym endym
+andy`(ego|emu) endi%
+
+anthony(m|) entony%
+anthony'(emu|ego) enton%
+antoine ant³an $1
+antoine'#(apefin) ant³an%
+antoinie ant³anie
+
+archie(m|) erczi%
+archie(go|mu) erczje%
+
+barack#(kfin) barak%
+barrie	bari
+bertie berti
+blaise`#(apefin) blejs%
+blaise blejs
+blais(em|ie)	blejs%
+brian#(nfin) brajen%
+bruce`#(apefin) brus%
+bubb(a|ê|±|ie) bab%
+buddy bady
+buddym badym
+buddy'#(apyfin) badj%
+
+
+chad(a|owi|em|zie|) czad%
+//charles#(sfin) czarls%
+charlie(m|) czerli%
+charlie(go|mu) czerlie%
+che(ta|towi|tem|t|cie) cze%
+chris#(sfin) kris
+clarence`#(apefin) klarens%
+clarencem klarensem
+claude klod
+cleve kliv
+clevem klivem
+clevowi klivovi
+cleve`#(apefin) kliv%
+damon#(nfin)	dejmon%
+damon	dejm@n
+dickie	diki
+domenic(owi|a|o|u)	domenik%
+domenicem	domenikiem
+douglas#(sfin) dugles%
+dozzie(|m)	doz~'i%
+dozzie(go|mu)		doz~'ie%
+duffy'#(apyfin) dafi%
+duffy(m|) dafi%
+duke'(a|owi) djuk%
+duke'em djukiem
+duke djuk
+duncan#(nfin) danken%
+
+emory(m|)	emori%	$3
+enrique	enrike
+
+erskine	erskin
+
+eugene'#(apefin) jud¿in%
+eugene jud¿in $1
+eugenem jud¿inem
+
+eugéne'#(apefin) y¿en%
+eugéne y¿en $1
+eugénem y¿enem
+
+eustace	j~'ustejs
+
+fran[çc]ois#(sfin) fransu³as%
+fran[çc]ois fransu³a $1
+fran[çc]oise'#(apefin) fransu³az%
+fran[çc]oise fransu³az~' $1
+
+//fridtjof(|a|owi|em|ie) fridsuf%
+//frit[ji]of(|a|owi|em|ie) fritsuf%
+
+gaston gast~!±~'
+
+geoffrey(a|em|owi|u) d¿efrej%
+geoffrey	d¿efri
+george d¿ord¿
+george`(a|em|owi|u) d¿ord¿%
+georgem d¿ord¿em
+george's d¿ord¿@s
+gerald(a|em|owi|zie|) d¿erald%
+
+girard ¿irar $1
+giscard ¿iskar $1
+
+gunther#(rfin) ginter // bez umlauta
+//haakon#(nfin) hokun%
+harry(m|) hary%
+harry'(ego|emu) har%
+harry's haris
+//heinz#(cfin)	hajnc%
+//henry'(ego|emu) henri%
+henri	ê~'ri $1
+honoré	onor $1
+humphrey	hamfri
+
+jacques(a|owi|) ¿ak%
+jacquesem ¿akiem
+jackquesie ¿aksie
+
+jared#(dfin) d¿ere%
+
+//james#(sfin) d¿ejms%
+jean#(nfin) ¿an%
+jean ¿±~'
+jean~paul#(lfin) ¿±~'pol%
+jean~paul ¿±~'pol $1
+jean~pierre ¿±~'pier $1
+jean~pierrem ¿±~'pierem
+jean~pierre'#(apefin) ¿anpier%
+jean~baptiste	¿±~'baptist $1
+jean~baptistem	¿±~'baptistem
+jean~baptiste'#(apefin)	¿±~'baptist%
+jean~luc(a|owi|u) ¿±~'lik%
+jean~lucem ¿±~'likiem
+jean~luc ¿±~'lik $1
+jean~loup(a|owi|em|ie) ¿±~'lup%
+jean~loup ¿±~'lup $1
+
+jerome d¿ero³m
+jerome'#(apefin) d¿ero³m%
+jeromem d¿ero³mem
+
+jér[oô]me ¿erom $1
+jér[oô]me'#(apefin) ¿erom%
+jér[oô]mem ¿eromem
+
+//jerry(m|) d¿ery%
+//jerry'(ego|emu) d¿eri%
+jesse d¿es
+jesse'#(apefin) d¿es%
+
+jim(ów|ami|ach|a|om|owie|owi|em|ie|) d¿im%
+jimmy(ch|mi|m|) d¿imi%
+jimmy'(ego|emu) d¿imi%
+jo[aâ]o ¿u³~'a³ $1
+joe	d¿o³
+joe(go|mu|m) d¿o³e%
+john(a|owi|em|ie|) d¿on%
+johnnie	d¿oni
+jolly'#(apyfin) d¿olj%
+jolly(m|) d¿oli%
+joshu(a|ê|i|y)	d¿oszu~'% $3
+jorge(mu|m|go|) hor~'h~'e%
+
+//nie ma dobrze... musieli chiñczyki tak swoj± z³otówkê nazwaæ?
+Juan(a|owi|em|ie) hu³~'an%
+Juan	hu³~'~!an
+juán	$1
+jules(a|em|owi|) ¿il%
+julesie	¿ilsie
+
+keith(ami|ach|a|em|owie|owi|ów|om|u|) kicz%
+keithie kisie
+kerouac#(kfin) keru³ak%
+kerouacem keru³akiem
+kerouac keru³~!ak
+
+kjartan#(nfin) ¶jartan%
+
+larry(m|) lery%
+larry'(ego|emu) leri%
+larry's leris
+laurence lorens
+lawrence lorens
+lauren#(tfin) loren%
+laurent lor~!ê~'
+laurenty la³renty
+leslie lesli
+liam#(mfin) lijem%
+luigi(m|)  luj~'id¿i%
+luigie(mu|go) luj~'id¿je%
+lucien(a|em|owi|em) lusjen%
+lucien	lusjê~' $1
+luke`#(apefin) luk%
+
+maurice	moris $1
+mauricem morisem
+maurice'#(apefin) moris%
+
+michael#(lfin) majkel%
+michael majk@l
+michaels#(sfin) majkels%
+michaels majk@ls
+
+michel#(lfin) miszel%
+michel miszel $1
+mikael $3
+mike majk
+mike'#(apefin) majk%
+myron#(nfin) majron%
+
+noam#(mfin) no³m%
+
+//a co, w koñcu te¿ imiê...
+obi~wan obi³on $3
+obi~wan(|em|ie|owi|a) obi³on%
+
+ozzie(|m)	oz~'i%
+ozzie(go|mu)		oz~'ie%
+
+paco pako
+panch(owi|o|a|em) pancz%
+panch(owi|o|a|em)_vill(a|±|i) pancz%0 vij%1
+paul#(lfin) pol%
+percy persy
+philippe	filip $1
+pierce pirs
+piercem pirsem
+pierce`#(apefin) pirs%
+pierce pirs
+pierre	pier
+pierre`#(apefin) pier%
+
+richard#(dfin) riczard%
+richie	riczi
+// roald poszed³ do pho
+robbie(m|) robi%
+rudyard#(dfin) radjerd%
+russel(em|u|ach|ami|a|om|owie|) rasel%
+
+sean(a|owi|em|ie|)	szon%
+simon(a|owi|em|ie|owie|ów|ach|om|) sajmon%
+simeon(a|owi|em|ie|owie|ów|ach|om|) sajmon%
+spike spajk
+spike'#(apefin) spajk%
+spikiem spajkiem
+steve stiw
+steve`#(apefin) stiw%
+stevie stivi
+stevie(go|mu) stivi%
+steviem stivim
+
+thomas#(sfin) to³mes%
+timothy $3
+tolliver $3
+
+valerý	valeri $1
+vic(o|a|owi|u|) vik%
+vicem vikiem
+vincent(a|owi|em|owie|ów|ach|ami|om|) vinsent%
+vincencie vinsensie
+
+//william(ami|ach|a|ie|owi|om|em|) ³iljem%
+
+// Will vs. willa
+will(owi|em|iego|im|ym|) ³il%
+//will(a|ach|om|ami|ach) will%
+//Will(a|ach|om|ami|ach) ³il%
+//winston#(nfin)	³inston%
+winchester#(rfin) ³inczester%
+woodrow#(wfin) ³udru³%
+woodrow ³udru
+//nazwiska czêsto spotykane
+
+abecassis	abekaz~'i $1
+ab(e|é|ai)lard	abel~!ar
+abercrombie aberkrombi
+ahearn#(nfin) ehern%
+ahearn ehern $1
+ahonen	$3
+alembert	alemb~!er
+allister	$3
+alister	$3
+andr[aá]ssy`#(apyfin)	ondraszj%
+andr[aá]ssy	ondraszy $3
+
+andrews#(sfin) endrius%
+anouilh	eno³i $1 //wg. forvo.com
+anouilh#(hfin) eno³il%
+arc#(tfin)	arc~'%
+argrow#(wfin)	ergro³%
+atatürk $1
+ataturk#(kfin) atatirk%
+ataturk atatirk $1
+auden#(nfin) oden%
+auerbach $3
+avery(|ch|m) ejv@ri% $3
+avery'(ego|emu) ejv@rj%
+aznavour $1
+babbage`#(apefin) babid¿%
+babbage babid¿
+babbagem babid¿em
+
+baez bajez $1
+baker#(rfin) bejker%
+balzacem balzakiem
+barrymore barimor $3
+barrymore'#(apefin) barimor%
+barysznikow $3
+baskerwil $3 // hm...
+baudo(u|)in bod³ê $1
+
+beagle big@l
+beck(u|iem|owi|) bek%
+Beck#(kfin) bek%
+becquerel $1
+b[ée]caud#(dfin) bekod%
+b[ée]caud beko $1
+becket#(tfin) beke%
+becke#(tfin) beke%
+bellamy	b~!elami
+bellow#(wfin) belo³%
+benoit benu³a $1
+bj[oö]rneboe bjornbe
+blake blejk
+blake'#(apefin) blejk%
+blanchard blanszar $1
+blanchot blanszo $1
+blanqui(m|) blanki% $1
+bolitar $3
+boucher $1
+boulanger $1
+bourvil $1
+boyle bojl
+borgi(a|±|ê|i|owie|ów|om|ami|ach|owski|owskiego|owskiej|owskiemu|owska|owsk±|owskiej|owscy|owskie|owskim|owskimi) bord¿j%
+br[eé]gue#(tfin)	bre¿e%
+br[eé]guet	bre¿et $1
+
+bresson bres~!±~'
+brewster#(rfin) bruster%
+brontë bronti $1
+browne bra³n
+
+burke berk
+burke'#(apefin) berk%
+
+
+//caf(f|)erty(m|) kaferty%1 $3
+//caf(f|)erty'(ego|emu) kafert%1
+caffrey kefri
+caffrey(a|em|owi|u|owie|ów|om|ami|ach) kefrej%
+cage`#(apefin) kejd¿%
+calhoun#(nfin) kalhun%
+calhoun kalhun $1
+callahan $3
+cameron $3
+camus#(sfin) kamis%
+camus kami $1
+
+caramel $3
+
+carlisle'#(apefin) kerlajl%
+carlisle kerlajl $1
+carlislem kerlajlem
+
+carmichael#(lfin) karmikejl%
+carmichael karmikejl $3
+
+carnot karno $1
+
+carpenter $3
+carpentier $1
+
+carstairs#(sfin) karsters%
+cavendish $3
+
+c(e|)au[ºs]escu cza³szesku
+c[eé]zanne sez~!an
+chabrol $1
+chagall $1
+chamberlain $3
+chamfor#(tfin) szamfor%
+chamfort szamfor$1
+champol(l|)ion#(nfin) szampoljon%
+champol(l|)ion szampolj~!±~'
+
+cha(p|)pel(l|)#(lfin) czepel%2
+chapelier#(rfin) szapeljer%
+chapelier(s|) szapelje $1
+charbonneau	szarbon~!o
+chardin szard~!ê~'
+chateaubriand szatobrij~!an
+//chaplin#(nfin) czeplin%
+//charleston#(nfin)	czarlston%
+
+che+guevar#(rfina) cze gevar%
+
+chekov#(wfin)	czekov%
+chevalier#(rfin) szewaljer%
+chevalier szewalje $1
+
+childe czajld
+chippendale'#(apefin) czipendejl%
+chippendale	czipendejl $3
+
+chiricem kirikiem // reszta w pho
+
+christie	kristi
+
+clancy	klensy
+clancy'#(apyfin) klensj%
+clarke	klerk
+clarke'#(apefin) klerk%
+cleveland#(dfin) kliwlend%
+clouseau	kluz~!o
+clouzot kluz~!o
+
+coach#(hfin) ko³cz%
+cochrane kokrejn
+
+coelho k³eljo
+paul(a|em|u|owi|o)_coelho pa³l% k³eljo
+//cohen#(nfin) ko³en%
+
+coleman#(nfin) ko³lmen%
+
+colón	$1
+Colon	$1
+
+corot koro $1
+
+//cooper#(rfin) kuper%
+couch#(hfin) ka³cz%
+cousteau kusto $1
+crow#(wfin) kro³%
+cruise`#(apefin) kruz%
+cummings#(sfin) kamings%
+cunha	kuñja
+cunningham#(mfin) kaningem%
+cunningham kaningem $3
+curie kiri $1
+
+daladier daladj~!e
+d'alembert	dalemb~!er
+daumier domie $1
+de_mille demil $1
+de_mille'#(apefin) demil%
+de_felice defelis $1
+de_felice'#(apefin) defelis%
+defoe defo³ $1
+derain der~!ê~'
+d`estaing#(gfin)	desten%
+d`estaing dest~!ê~'
+diderot didero $1
+didier didie $1
+dil(l|)inger#(rfin)	dilind¿er%1
+dil(l|)inger	dilind¿er $3
+
+do_nascimento du nas~'imentu
+doe do³
+dorl[eé]ac#(cfin) dorle~'ak%
+dorl[eé]ac dorle~'ak $1
+dorl[eé]acem dorle~'akiem
+down#(nfin)	da³n%
+doyle dojl
+du_brul#(lfin) dibril%
+du_brul dibril $1
+dubois#(sfin)	dibu³az%
+dubois	dibu³a $1
+dumas#(sfin) dimas%
+dumas dim~!a
+druon#(nfin) drijon%
+druon drij~!±~'
+dunkin#(nfin)	dankin%
+dunkins	dankins
+dunkin's dankins
+dupon#(tfin) dip±%
+dupont dip±~' $1
+d[üu]r(r|)enma#(tfin) direnma%1
+d[üu]r(r|)enmat#(tfin) direnma%1
+d[üu]r(r|)enmat(t|) direnmat $3
+dyson#(nfin) dajson%
+
+faberg[ée] faber¿e $1
+faberg[ée]m faber¿em
+faberg[ée]'#(apefin) faber¿%
+
+fahrenhei#(tfin) farenajt%
+fahrenheit farenajt $3
+
+farlane farlejn
+farlane'#(apefin) farlejn%
+
+farquhar#(rfin) faker%
+farquharson#(nfin) fakerson%
+farquharson fakerson $3
+
+fawcet#(tfin) fo³ce%
+fawce#(tfin) fo³ce%
+
+
+fitzgerald#(dfin) fic~'d¿erald%
+fitzgerald fic~'d¿erald $3
+
+foucaul#(tfin)	fuko%
+foucauld#(dfin) fukod%
+foucaul[td]	fuko $1
+feuerbach $3
+firenze`#(apefin) fi~'renc~'%
+firenze(m|go|mu|) fi~'renc~'e%
+flaubert flob~!er
+fonsec(a|±|ê|e) fonsek%
+forbes#(sfin) forbs%
+fourier	furj~!e
+franck#(kfin) frank%
+Franco	franko
+frazier#(rfin) frejzer%
+//french#(hfin) frencz%
+funes#(sfin) fines%
+funes fin~!e
+
+gabin#(nfin)	gaben%
+gabin	gabê~' $1
+gaiman#(nfin) gejmen%
+gayle gejl
+gayle`s gejls
+gayle`#(apefin) gejl%
+//gates#(sfin)	gejts%
+gianfranc(owi|owie|om|o|ami|ach|a|ów|u) d¿janfrank%
+gielgud#(dfin)	gilgud%
+girardot	¿irardo $1
+glyndwr#(rfin) glendur%
+glyndwr glendur $1
+gounod	guno $1
+grahame'#(apefin) grejem%
+grahame grejem
+Graves#(sfin) grejv~'s%
+graves(e|o)n#(nfin) grejv~'s%0n%1
+greene	gri~+n
+greer#(rfin) grir%
+greer gri~+r
+grillparzer#(rfin)	grilparcer%
+guermantes#(sfin)	¿ermant%
+guermantes	¿erm~!ant
+guermantesie	¿ermancie
+guillaume	gij~!om
+guillaume'#(apefin) gijom%
+guillaumowi gijomovi
+guignol#(lfin) ¿iñjol%
+guignol ¿iñj~!ol
+guillemin#(nfin) gijoman%
+guillemin	gijom~!an
+guitry'#(apyfin) d¿itri%
+guitry	d¿itr~!i
+guitrym	d¿itrim
+gyver#(rfin) gajver%
+
+hepburn#(nfin) hepbern%
+hinz#(sfin) hinc%
+hobbes#(sfin) ho³bs%
+hoesick#(kfin) hez~'ik%
+holmes#(sfin) holms%
+hope'#(apefin) ho³p
+hopewell#(lfin) ho³p³el%
+houseman#(nfin) ha³smen%
+hubblem hablem
+hubble hab@l
+hubble'#(apefin) habl%
+
+humperdinck#(kfin) hamperdink%
+humperdinck	h~!amperdink
+
+jacobs#(sfin)	d¿ekobs%
+jacquard#(dfin) ¿akard%
+jacquard	¿ak~!ard
+jagger#(rfin)	d¿eger%
+johnson#(nfin) d¿onson%
+jones#(sfin)	d¿o³ns%
+joplin#(nfin)	d¿oplin%
+jackson#(nfin) d¿ekson%
+jekyll#(lfin)	d¿ekil%
+jenner#(rfin)	d¿ener%
+jennings#(sfin) d¿enings%
+jewison#(nfin)	d¿e³ison%
+jewison	d¿e³ison $3
+jobs#(sfin) d¿obs%
+jolio#(tfin) ¿oljo%
+joliot	¿oljo $1
+jordaens#(sfin) yordens%
+joule	d¿ul
+joule'#(apefin)	d¿ul%
+jouve#(tfin)	¿uve%
+jouvetcie	¿uvecie
+jouvet	¿uv~!e
+joyce d¿ojs
+ketchum#(mfin)	keczam%
+kennedy(ch|m|)	kenedy% $3
+kennedy'e(go|mu)	kenedie%
+kincaid#(dfin) kinkejd%
+kildare kilder
+kildare`#(apefin) kilder%
+kojak#(kfin)	ko³~'d¿ak%
+krueger#(rfin) kriger%
+
+//l'hospital lospital $1
+
+lancelot lanslo $1
+lamarck $1
+lancaster $3
+marie_laurencin mari [1]lor±~'sê~'
+
+le_mesurier#(rfin) lemezyrjer% $+2
+le_mesurier lem~,ezyrj~!e
+
+laurencin lor±~'sê~' $1
+lautrec#(kfin) lotrek%
+lautrec	lotrek $1
+lautrekiem lotrekiem
+
+lavalle lawal $1
+lavalle'#(apefin) lawal%
+lavoisier#(rfin) lav³azjer%
+lavoisier lav³azj~!e
+leblanc	lebl~!an
+leclanch[eé] leklansze $1
+lee li~'i
+//l(e|)euwenhoek#(kfin) lej³en~'huk%1
+//l(e|)euwenhoek lej³en~'huk $3
+//lincoln#(nfin) linkoln%
+lehanem	lehejnem
+lehane`#(apefin) lehejn%
+lehane	lehejn $1
+leroy#(yfin) liroj%
+leroy liroj $1
+leroy~merlin [1]leru³a [1]merlê~'
+levinem	levinem
+levine`#(apefin) levin%
+levine	levin $1
+
+lions lj±~'
+lumi[ée]re limi~!e
+
+// mac lub mc, mo¿liwa spacja
+// du¿o mo¿na wywaliæ przy is_mac
+
+macbeth(a|owi|em|)	makbet%
+macbe(th|c)ie	makbecie
+
+
+mac	mek $u
+//m(a|)c_cartney(a|em|owi|u|owie|ów|om|ami|ach) mekkartnej%1
+//m(a|)c_donald#(dfin)	mekdonald%1
+m(a|)c_bride mekbr~!ajd
+m(a|)c_bride'#(apefin) mekbrajd%1
+
+m(a|)c_cabe mekkejb $1
+m(a|)c_cabe'#(apefin) mekkejb%1
+
+m(a|)c_clure`#(apefin) mekklur%1
+m(a|)c_clure mekklur $1
+
+m(a|)c_cormack#(kfin)	[n]mek kormek%1
+
+m(a|)c_culloch#(kfin) [n]mek kalok%1
+m(a|)c_cullochem [n]mek kalokiem
+
+m(a|)c_[ei]nt[iy]re`(a|owi|em|owie|om|ów|om|ach|) mekintajer%1
+m(a|)c_ewan#(nfin) mekju³en%1
+m(a|)c_henry mek~'henry
+m(a|)c_henry`#(apyfin) mek~'henrj%1
+
+m(a|)c_kay(ach|ami|a|owi|em|u|ów|) [n]mek kej%1
+// jak siê tego mackenziego odmienia?
+m(a|)c_kenzie(m|)	mekenz~'i%1
+m(a|)c_kenzie(go|mu)	mekenz~'ie%1
+
+m(a|)c_tiernan#(nfin) [n]mek tijernen%1
+m(a|)c_tiernan [n]mek t~!ijernen
+
+
+
+//m(a|)c_lean#(nfin) meklin%1
+//m(a|)c_lean meklin $1
+//m(a|)c_kinley(a|owi|em|u|owie|ów|ach|ami|)	mekkinlej%1
+//m(a|)c_neil meknil $1
+//m(a|)c_neil#(lfin)	meknil%1
+//m(a|c)_queen#(nfin) mekk³in%1
+//m(a|c)_quinn#(nfin) mekk³in%1
+//m(a|c)_queen mekk³in $1
+//m(a|c)_quinn mekk³in $1
+macovich#(czfin) makovicz%
+marais#(sfin) mares%
+marais mare $1
+marcian#(noifin) marczjan%
+mayhew#(wfin) mej~'h~'ju³%
+mayhew mej~'h~'ju
+maxwel(l|)#(lfin) maks³el%1
+maginot ma¿in~!o
+maigret magr~!e
+#mancini(emu|ego|mi|m|ch|) manczini%
+maupassant mopas~!an
+meehan#(nfin) mihan%
+meille#(tfin) meje%
+meillet mej~!e
+mercier mers~'ij~!e
+michelin#(nfin) miszlen%
+michelin miszlê~' $1
+mi[eé]ville'#(apefin) mijewil%
+mi[eé]ville mijewil
+mi[eé]villem mijewilem
+miles#(sfin) majls%
+modugno	moduñjo
+montherlant m±~'terl~!an
+montgolfier m±~'golfi~!e
+neeson#(nfin) nison%
+moneypenny manypeny
+monroe monro³
+montpassant m±~'pas~!an
+moore mur
+morse mors
+mueller#(rfin) miller%
+mulligan#(nfin) muligen%
+mulligan muligen $3
+murdoch#(czfin) mardok%
+murdochem mardokiem
+myrtle	myrt@l
+myrtle`s	myrt@ls
+myrtle`#(apefin) myrtl%
+nascimento nas~'imentu
+naipaul#(lfin) nypol%
+naipaul	nyp~!ol
+neil#(lfin) nil%
+n[eé]meth(a|owi|em|) nemet%
+nightingale najtingejl $3
+
+
+
+//irlandzkie
+o'shea	o³sz~!e
+o'leary(m|ch|) o³lery%
+o'leary`(ego|emu) o³leri%
+
+o`brien#(nfin) o³brajen%
+o`har(a|ê|y|ze|owie|om|ów|ach) o³hejr%
+o'neal o³nil $1
+o'neal(a|owi|em|u|ach|ami|om|owie) o³nil%
+o`reilly`(ego|emu|m) o³rejli%
+o'grady(m|ch|) o³grejdy%
+o'toole'#(apefin) o³tul%
+o'toole o³tu~+l $1
+
+oates#(sfin) o³ts%
+ogilvie o³~'g@lvi $3
+osborne osborn
+
+pacin(o|em|ie|a) paczin%
+page pejd¿
+pagem pejd¿em
+page'#(apefin) pejd¿%
+peckinpah pekinpa $3
+pee~wee	pi~+³~+ $1
+peltier peltj~!e
+piaget pia¿~!e
+pichet pisz~!e
+poe po³
+pope po³p
+popeye popaj
+poincar[eé] p±k~!ar
+price prajs
+price'#(apefin) prajs%
+
+//prince`#(apefin) prins%
+//princem	prinsem
+
+quarterback#(kfin) k³oterbek%
+quarterback k³oterbek $3
+
+rae'#(apefin) rej%
+rae rej
+ramadier ramadj~!e
+raskolnikow $3
+reagan#(nfin) rigen%
+reeve ri~+v
+rhyme rajm
+rhyme'#(apefin) rajm%
+rhymie rajmie
+ribbentrop $3
+rice rajs // odmiana automatyczna
+rich(ami|ach|a|em|u|owi|om|ów) ricz%
+richelieu	riszelje $1
+robeson#(nfin) ro³bson%
+roche#(tfin) rosze%
+rochet rosz~!e
+Rodin#(nfin) roden%
+Rodin rod~!ê~'
+rojas#(sfin) rohas%
+roosevel#(tfin) ruzwel%
+ro(w|)botham#(mfin) ro³bofem%1
+ro(w|)botham ro³bofem $3
+rougemont ru¿m~!±~'
+ru[iy]sdael#(lfin) rojzdal%
+rutherford#(dfin) razerford%
+rutherford	razerford $3
+ruthven#(nfin)	riven%
+ryder#(rfin)	rajder%
+
+sabatier sabatje $1
+sachs#(sfin) saks%
+salisbury(m|) solsbri%
+salisbury'(ego|emu) solsbri%
+
+sawyer#(rfin) sojer%
+
+schetyn(a|ê|ie|y|owie|ów|om|ami|ach) s~'chetyn%
+sedgwick#(kfin) sed¿³ik%
+shane'#(apefin) szejn%
+shane szejn
+shanem szejnem
+shakespeare szekspir
+shallow#(wfin) szelo³%
+shuttleworcie szat@l³urcie
+shylock#(kfin) szajlok%
+sihanouk#(kfin) s~'ijeno~'ek%
+silhouette s~'il³et $1
+silhouettes s~'il³ets $1
+simenon	s~'imen±~' $1
+skywalker#(rfin) skaj³oker%
+slade'#(apefin) slejd%
+slade slejd
+sloan#(nfin) slo³n%
+sloane slo³n
+sloane'#(apefin) slo³n
+
+// smith(ami|ach|a|em|owie|ie|owi|ów|om|) smis%
+
+spencer#(rfin)	spenser%
+spock#(kfin) spok%
+//springsteen#(nfin) springstin%
+
+steinbeck#(kfin) sztajnbek%
+// steward(ach|a|owi|zie|om|ów|) stiuard%
+
+stones#(sfin)	sto³ns%
+
+stuyvesan#(tfin)	stajv@sen%
+stuyvesant		stajv@sent $3
+
+sullivan#(nfin) saliven%
+sullivan saliven $3
+sundance sandens
+sundancem sandensem
+sundance`#(apefin) sandens%
+
+sykes#(sfin) sajks%
+
+ta[yi]l[oe]r#(rfin) tejler%
+
+thibaul#(tfin) tibo%
+thibault	tibo $1
+
+thiers	tjer
+
+tocqueville'#(apefin)	tokevil%
+tocquevillem		tokevilem
+tocqueville	tokevil $1
+
+tournier	turnie $1
+toussain#(tfin)	tusan%
+toussaint	tusan $1
+
+toynbee(|mi|m|ich)	tojnbi%
+toynbee(go|mu)		tojnbie%
+
+tremaine tremejn $1
+tremaine'#(apefin) tremejn%
+tremainem tremejnem
+trench#(hfin) trencz%
+
+trintignan#(tfin) trentiñj±%
+trintignant	trentiñj±~' $1
+
+tyson#(nfin) tajson%
+tyson`s	tajsons
+tylor#(rfin) tajlor%
+tylor`s tajlors
+tyler#(rfin) tajler%
+tyler`s tajlers
+
+vader#(rfin)	vejder%
+
+van+dyck(a|owi|iem|u) vandek%
+van+dyck vandek $1
+van+dyke`#(apefin) vandajk%
+van+dyke vandajk $1
+van+dyke'em vandajkiem
+verne`#(apefin) vern%
+verne vern
+vercors#(sfin) verkors
+versace(go|mu|m|) versacze%
+villon vij±~' $1
+vlaminck#(kfin) vlam±~'k%
+vlaminck vlam±~'k $1
+vredeman $3
+vuillard vij~'ar $1
+walken#(nfin)	³oken%
+wallace'#(apefin) ³oles%
+wallacem ³olesem
+wallace ³oles
+
+washington#(nfin) ³oszyngton%
+washington ³oszyngton $3
+//watkins#(sfin) ³otkins%
+//watson#(nfin) ³otson%
+waverley#(yfin) ³ejverlej%
+waverley ³ejverli $3
+weaver#(rfin) ³iver%
+weill#(lfin) vajl%
+weir#(rfin)	³ir%
+welch#(czfin) ³elcz%
+wesson#(nfin) ³eson%
+
+whicie ³ajcie
+whitaker#(rfin)	³ajteker%
+whitaker ³ajteker $3
+whitehead#(dfin) ³ajt~'hed
+wing#(gfin) ³ing%
+wilde`#(apefin)	³ajld%
+w[ao]rwick#(kfin) ³or³ik%
+//wrigh#(tfin) raj%
+wynn#(nfin) ³yn%
+
+//imiona ró¿ne ¿eñskie
+abigail abigel $3
+acaci(a|ê|±|i|o) akasj%
+adélaide adela~'id $1
+adelaide adelejd $3
+adrienne adrjen $1
+aim[ée]e	ejmi
+aileen ajlin
+alice	elis
+alison	alison $3
+allison	alison $3
+agatha	agata
+amy	emy
+angie	end¿i
+arianne arjan $1
+audrey odri
+
+barbie	barbi
+b[ée]atrice beatris $1
+becky	beki
+bernadine bernadin $1
+bernadette bernadet $1
+bernadelle bernadel $1
+
+beverly $3
+bonnie bo³ni
+
+camille kamil $1
+carol	kerol
+caroline	kerolajn $3
+carolyn	karolin $3
+carrie keri
+catherine katrin
+cathy	kati
+cecily $3
+celine sel~!in
+charity czerity $3
+charlene szarli~+n $1
+charlotte szarlot $1
+cheryl	szeryl
+christine kristin $1
+circe	kirke
+clare	kler
+clarisse klaris $1
+claudine klodin $1
+col(l|)een kolin $1
+connie koni
+constance konstans $1
+
+debbie debi
+deborah debora $3
+deirdre	dirdra
+denise denis $1
+d[ée]sir[ée]e dez~'ire $1
+doreen dorin
+dorothy doro³~'ti $3
+
+edith edit
+eileen ajlin
+elaine	elejn $1
+eli[zs]abeth elizabet $3
+emily emili $3
+emmeline emelin $3
+emmylou emilu $2
+evangeline evand¿elin $3
+eve iv
+evelyn ivlin
+
+florence florens
+frances franses
+frederic(±|ê) frederik%
+
+genevieve d¿eneviv $3
+geneviéve ¿envijev $1
+géraldine ¿eraldin $1
+geraldine d¿eraldin $3
+gillian	d¿iljen
+ginny d¿in~'i
+gladys gledys
+Grace	grejs
+graciel(a|±|ê|o|i)	gracjel%
+gwendolyn g³endolin $3
+gwen g³en
+
+hazel hejzel
+
+isabelle izabel $1
+ivonne iwon $1
+
+
+
+jane	d¿ejn
+janet	d¿anet
+jackie	d¿eki
+jacqueline ¿aklin $1
+janice	d¿enis
+janis	d¿enis
+jeanette	¿anet $1
+jeanne	¿an
+jeannie	d¿ini
+jen(n|)ifer d¿enif@r $3
+jenny	d¿eny
+jenny's	d¿enys
+jessik(a|i|±|ê) d¿es~'i% $3
+jessic(ach|om|o|a|±|ê)	d¿es~'ik%	$3
+jessice	d¿es~'ice $3
+jessi[ck]ami	d¿es~'ikami
+joan d¿o³n
+jocelyn d¿o³slin
+jodie d¿o³~'di
+josephine d¿ozefin $3
+judith d¿udit
+kathleen ketli~+n $1
+katherine katrin
+kristine kristin $1
+kylie kajli
+
+lacey	lejs~'i
+lacey's	lejs~'is
+laurie lori
+lizzy  liz~'i
+lizzie liz~'i
+lorraine lo³~'rejn $1
+louise lu³~'iz $1
+lucienne lusjen $1
+lucille	lus~'il $1
+
+madeleine madlen $1
+mae	mej
+maggie	megi
+margie	mard¿i
+marianne marjen $1
+marilyn merlin
+margaret margret
+marge mard¿
+marjorie mard¿ori $3
+maureen	morin $1
+
+m[eé]ad(h|)bh mejv
+maeve	mejv
+
+michelle miszel $1
+
+millicent milisent $3
+
+mortici(a|±|ê|o|i) mortisj%
+
+nadine nadin $1
+
+nancy nansy
+// no ale...
+nancy'#(apyfin) nansj%
+
+niamh	n~'i~'uv
+
+patrici(a|ê|i|o|±) patrisj%
+pocahontas pokahontas
+prudence prudens
+
+rachel rejczel
+raquel rakel
+rosalind ro³zalind $3
+rosemary ro³zmeri $3
+rosemary`s ro³zmeris $3
+
+
+sadie	sej~'di
+sigourney segurny $3
+simone s~'im± $1
+sin[ée]ad szin~!ejd
+s[ií]obh[aá]n	sziv~!a~+n
+solange solan¿ $1
+sookie suki
+stephany $3
+stephanie stefani $3
+stéphanie stefani $1
+sue sju
+susan sjuz@n
+suzanne s~'izan $1
+suzi	suz~'i
+
+tracy trejs~'i
+
+valerie valeri $1
+violet vajolet $3
+vivian	vivjen
+vivienne	vivjen $1
+wendy	³endy
+whitney ³itni
+yvonne iwon $1
+
+//inne
+c[úu]chulain(n|) kuh~'ulin $3
+c[úu]chulain(n|)(a|em|ie|owi) kuh~'ulin%1
+diarmuid dij~'ermud $3
+diarmuid(a|em|zie|owi) dij~'ermud%
+
+diaz(a|em|ie|owi|ów|om|ach|) dijaz%
+fianna	fijana $3
+garci(a|±|ê|i) gars~'ij%
+jos[eé]	hoze $1
+jos[eé](go|mu|m) hoze%
+javi[eé]r	hawier $1
+javi[eé]r(a|owi|em|ze)	hawier%
+//eisenstein(ami|a|owi|om|em|ie|ów|) ajzensztajn%
+//eisenstein ajzensztajn $3
+//einstein#(nfin) ajnsztajn%
+//einsteinowsk(iego|iemu|iej|ie|imi|im|ich|i|a|±) ajnsztajnowsk%
+//eisenhower(ami|ach|a|owi|om|em|ze|ów|) ajzenha³er%
+//felician(o|a|owi|ie) felisjan%
+//iglesias(a|owi|em|ie) iglezjas%
+ljökelsöy $3
+los+lobos	[n]los lobos
+ratzinger	$3
+//sanchez(a|owi|em|ie|ów|om|ami|ach|) sanczez%
+krasin#(nfin) kras~'in%
+//de+gaulle`#(apefin) degol%
+//de+gaulle degol $1
+//gaulle`#(apefin) gol%
+//goethe(m|go|) gete
+//goethe'* get%
+//be(e|)tho[vw]en#(nfin) betowen%1
+
+tuatha+d[ée]+dana[an]n [2]tu³at [2]dedanan
+vinci	winczi
+da+vinci dawinczi
+zeppelin#(nfin) cepelin%
+zeppelin cepelin $3
+
+// literatura - przyk³ady
+// Tom Clancy
+ryan#(nfin) rajen%
+//chavez(ami|ach|a|em|ie|owi|om|ów|) czawez%
+clark#(kfin) klerk%
+
+// Verne
+cyrus#(sfin) sajrus%
+pencroff(a|owi|em|ie|) penkrof%
+
+// Christie
+
+poirot	p³aro $1
+poiro(ta|towi|tem|cie) p³aro%
+marple	merp@l
+
+//charteris
+
+charteris czertris
+templar#(rfin) templer%
+teal(a|owi|em|u) til%
+teal	ti~+l
+
+// cooper
+
+chingachgook czingaczguk $3
+chingachgook(a|owi|em|u) czingaczguk%
+
+// ringworld - chyba kompletny (bez "budowniczych!")
+
+//louis(a|em|ie|owi|) luis%
+pierson(a|) pirson%
+interworld $3
+//interworld(u|em|zie) inter³erld%
+teel(a|±|ê|i) til%
+kzin(u|ie|em|ami|ach|a|om|owie|owi|ów|) k~'z~'in%
+products pro³dakts
+slaver(a|ze|) slejwer%
+gummidgy gamid¿i $3
+bandersnatch bandersnacz $3
+bandersnatch(em|e|om|ów|y|owi|a) bandersnacz%
+jinx(owie|ów|ie|om|) d¿inks%
+wunderland $3
+steubena stojbena
+zignamuclickclick z~'ignamukliklik
+thrumb(a|em|ie|) frumb%
+
+// Connelly
+cielo+az[úu]l	sjelo [1]azul

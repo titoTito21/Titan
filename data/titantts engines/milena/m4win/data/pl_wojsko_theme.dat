@@ -1,0 +1,147 @@
+// rozwiniêcia skrótów stopni genera³ i porucznik oraz numerki batalionów
+choice wojsta 4 gen
+choice wojstad 4 gen
+choice wojstac 4 gen
+choice wojstab 4 gen
+choice wojstan 4 gen
+choice wojstam 4 gen
+choiceval wojsta 4 genera³
+choiceval wojstad 4 genera³a
+choiceval wojstac 4 genera³owi
+choiceval wojstab 4 genera³a
+choiceval wojstan 4 genera³em
+choiceval wojstam 4 generale
+
+choice wojsta 5 por
+choice wojstad 5 por
+choice wojstab 5 por
+choice wojstac 5 por
+choice wojstam 5 por
+choice wojstan 5 por
+choiceval wojsta 5 porucznik
+choiceval wojstad 5 porucznika
+choiceval wojstac 5 porucznikowi
+choiceval wojstab 5 porucznika
+choiceval wojstan 5 porucznikiem
+choiceval wojstam 5 poruczniku
+
+choice generaly 0 dyw
+choiceval generaly 1 dywizji
+choice generaly 1 bryg
+choiceval generaly 1 brygady
+choice generaly 2 broni
+choiceval generaly 2 broni
+
+recognize generalek gen.\ {s:cgeneraly}\.
+sayas generalek genera³ {s:cgeneraly}
+
+recognize generalekd gen.\ {s:cgeneraly}\. {i:eimiemdo}
+sayas generalekd genera³a {s} {i}
+recognize generalekc gen.\ {s:cgeneraly}\. {i:eimiemce}
+sayas generalekc genera³owi {s} {i}
+recognize generalekb gen.\ {s:cgeneraly}\. {i:eimiembi}
+sayas generalekb genera³a {s} {i}
+recognize generalekn gen.\ {s:cgeneraly}\. {i:eimiemna}
+sayas generalekn genera³em {s} {i}
+recognize generalekm gen.\ {s:cgeneraly}\. {i:eimiemmc}
+sayas generalekm generale {s} {i}
+
+expr brygada (brygada|kompania|dywizja|flotylla|eskadra)
+expr samzmota (samodzielna|zmotoryzowana|konna|piesza|pancerna)
+recognize nbrygada {d:d1-999}\. {e:ebrygada}
+recognize nbrygadsa {d:d1-999}\. {f:esamzmota} {e:ebrygada}
+recognize nbrygada {d:r1-29}\. {e:ebrygada}
+recognize nbrygadsa {d:r1-29}\. {f:esamzmota} {e:ebrygada}
+sayas nbrygada {d:dfm} {e}
+sayas nbrygadsa {d:dfm} {f} {e}
+
+expr brygadad (brygady|kompanii|brygadzie|dywizji|flotylli|eskadry|eskadrze)
+expr samzmotad (samodzielnej|zmotoryzowanej|konnej|pieszej|pancernej)
+recognize nbrygadad {d:d1-999}\. {e:ebrygadad}
+recognize nbrygadsad {d:d1-999}\. {f:esamzmotad} {e:ebrygadad}
+recognize nbrygadad {d:r1-29}\. {e:ebrygadad}
+recognize nbrygadsad {d:r1-29}\. {f:esamzmotad} {e:ebrygadad}
+sayas nbrygadad {d:dfd} {e}
+sayas nbrygadsad {d:dfd} {f} {e}
+
+expr brygadan (brygad±|kompani±|brygadê|kompani±|kompaniê|dywizj±|dywizjê|flotyll±|flotyllê|eskadr±|eskadrê)
+expr samzmotan (samodzieln±|zmotoryzowan±|konn±|piesz±|pancern±)
+recognize nbrygadan {d:d1-999}\. {e:ebrygadan}
+recognize nbrygadsan {d:d1-999}\. {f:esamzmotan} {e:ebrygadan}
+recognize nbrygadan {d:r1-29}\. {e:ebrygadan}
+recognize nbrygadsan {d:r1-29}\. {f:esamzmotan} {e:ebrygadan}
+sayas nbrygadan {d:dfb} {e}
+sayas nbrygadsan {d:dfb} {f} {e}
+
+expr pulkbat (pu³k|batalion|dywizjon|baon)
+expr samzmot (samodzielny|zmotoryzowany|konny|pieszy|pancerny)
+recognize npulkbat {d:d1-999}\. {e:epulkbat}
+recognize npulkbats {d:d1-999}\. {f:esamzmot} {e:epulkbat}
+recognize npulkbat {d:r1-29}\. {e:epulkbat}
+recognize npulkbats {d:r1-29}\. {f:esamzmot} {e:epulkbat}
+sayas npulkbat {d:dmm} {e}
+sayas npulkbats {d:dmm} {f} {e}
+
+recognize wpdyon {d:d1-999}\. dyon
+sayas wpdyon {d:dmm} diwizjon
+recognize wpdyons {d:d1-999}\. {f:esamot} dyon
+sayas wpdyons {d:dmm} {f} diwizjon
+
+
+expr pulkbatn (pu³ku|batalionie|pu³kiem|batalionem|dywizjonem|dywizjonie|baonem|baonie)
+expr samzmotn (samodzielnym|zmotoryzowanym|konnym|pieszym|pancernym)
+recognize npulkbatn {d:d1-999}\. {e:epulkbatn}
+recognize npulkbatsn {d:d1-999}\. {f:esamzmotn} {e:epulkbatn}
+recognize npulkbatn {d:r1-29}\. {e:epulkbatn}
+recognize npulkbatsn {d:r1-29}\. {f:esamzmotn} {e:epulkbatn}
+sayas npulkbatn {d:dmn} {e}
+sayas npulkbatsn {d:dmn} {f} {e}
+
+recognize wpdyonna {d:d1-999}\. dyonem
+sayas wpdyonna {d:dmn} diwizjonem
+recognize wpdyonsa {d:d1-999}\. {f:esamot} dyonem
+sayas wpdyonsa {d:dmn} {f} diwizjonem
+
+recognize wpdyonnb {d:d1-999}\. dyonie
+sayas wpdyonnb {d:dmn} diwizjonie
+recognize wpdyonsb {d:d1-999}\. {f:esamot} dyonie
+sayas wpdyonsb {d:dmn} {f} diwizjonie
+
+
+expr pulkbatc (pu³kowi|batalionowi|dywizjonowi|baonowi)
+expr samzmotc (samodzielnemu|zmotoryzowanemu|konnemu|pieszemu|pancernemu)
+recognize npulkbatc {d:d1-999}\. {e:epulkbatc}
+recognize npulkbatsc {d:d1-999}\. {f:esamzmotc} {e:epulkbatc}
+recognize npulkbatc {d:r1-29}\. {e:epulkbatc}
+recognize npulkbatsc {d:r1-29}\. {f:esamzmotc} {e:epulkbatc}
+sayas npulkbatc {d:dmc} {e}
+sayas npulkbatsc {d:dmc} {f} {e}
+
+recognize wpdyonc {d:d1-999}\. dyonowi
+sayas wpdyonc {d:dmm} diwizjonowi
+recognize wpdyonc {d:d1-999}\. {f:esamot} dyonowi
+sayas wpdyonsc {d:dmm} {f} diwizjonowi
+
+
+expr pulkbatd (pu³ku|batalionu|dywizjonu|baonu)
+expr samzmotd (samodzielnego|zmotoryzowanego|konnego|pieszego|pancernego)
+recognize npulkbatd {d:d1-999}\. {e:epulkbatd}
+recognize npulkbatsd {d:d1-999}\. {f:esamzmotd} {e:epulkbatd}
+recognize npulkbatd {d:r1-29}\. {e:epulkbatd}
+recognize npulkbatsd {d:r1-29}\. {f:esamzmotd} {e:epulkbatd}
+sayas npulkbatd {d:dmd} {e}
+sayas npulkbatsd {d:dmd} {f} {e}
+
+recognize wpdyonb {d:d1-999}\. dyonu
+sayas wpdyonb {d:dmm} diwizjonu
+recognize wpdyonxb {d:d1-999}\. {f:esamot} dyonu
+sayas wpdyonxb {d:dmm} {f} diwizjonu
+
+recognize wopulku {e:ewo} {d:d1-999}\. pu³ku
+recognize wopulku {e:ewo} {d:r1-29}\. pu³ku
+sayas wopulku {e} {d:dmn} pu³ku
+
+
+
+// dyon* => dywizjon%
+// baon => bez rozwiniêcia - zrobiony

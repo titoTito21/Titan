@@ -1,0 +1,18 @@
+pause comma 20
+pause statement 100
+pause exclamation 100
+pause question 180
+pause colon 50
+pause ellipsis 220
+pause conj 15
+pause break 220
+
+pause dialog comma 40
+pause dialog statement 150
+pause dialog exclamation 80
+pause dialog question 80
+pause dialog colon 50
+pause dialog ellipsis 180
+pause dialog break 50
+
+length stress 5

@@ -1,0 +1,406 @@
+// Przyk³adowy s³ownik ukierunkowany na jêzyk angielski
+// podobne s³owniki powinny powstaæ dla innych popularnych
+// jêzyków (np. francuski, hiszpañski, niemiecki, w³oski)
+
+//homogramy
+
+jack(a|owi|iem|u|owie|ok|ów|ami|) d¿ek%
+jack`s d¿eks
+lady lejdy $U
+Abby ebi
+Amie ejmi
+Ann en
+Anne en
+Annie's enis
+
+Cal(a|u|em|owi) kal%
+charlotte szarlot $2
+Cole ko³l
+davy dejvi
+Dome do³m
+Drew dru
+gaby gejbi
+gabe gejb
+Grace grejs
+Jamie d¿emi
+Jessie d¿es~'i
+Kate kejt
+Winnie ³ini
+Mary mery
+mary+celeste mery [1]selest
+Marie mari $1
+Melanie melany $3
+Rosie ro³z~'i
+Susie suz~'i
+Mason#(nfin) mejson%
+mason's mejsons
+Jake d¿ejk
+Jason#(nfin) d¿ejson%
+Jamie d¿ejmi
+lake lejk
+Lane lejn
+lone lo³n
+Ocean_Front o³sz@n front
+police po³~'lis $1
+Place plejs
+Singleton $3
+Dian(a|ê|ie|±|y) dajan%
+san $#u
+la $#u
+Lis(a|ê|y|ie|o|±) lajz%
+Yale jejl
+Wirgini(a|ê|i|o|±) vird¿iñj%
+Kim $1
+Graham#(mfin) grejh~'em%
+gunther#(rfin) ganfer%
+will(a|ach|om|ami|ach) will%
+Will(a|ach|om|ami|ach) ³il%
+police po³~'l~!is
+Jade d¿ejd
+Julie d¿uli
+jerome`#(apefin) d¿ero³m%
+jerome d¿ero³m $1
+jeromem d¿ero³mem
+
+buzz(a|owi|em|ie|) baz%
+
+hope ho³p
+
+Jordan(a|em|owi|) d¿ordan%
+
+st(.|) sent $#u
+Judy d¿udi
+¶w._judy ¶wiêtego judy
+
+Blade blejd
+Bryce'#(apefin) brajs%
+Bryce brajs
+Brycem brajsem
+mona_lisa mona liza
+mony_lisy mony lizy
+mona_lisy mona lizy
+mon±_lis± mon± liz±
+mona_lis± mona liz±
+monê_lisê monê lizê
+mona_lisê mona lizê
+monie_lisie monie lizie
+mona_lisie mona lizie
+
+// ró¿ne takie
+and end
+course kors
+court kort
+face fejs
+just d¿ast
+LA elej $1
+DC dis~'i $1
+NY en³aj $1
+line lajn
+game gejm
+
+beaumont $2
+boulevard bulvar $#2
+criminal $3
+crime krajm
+agents ejd¿ents
+abc ejbis~'~!i
+mgm emd¿i_em $1
+humane hjumejn $1
+museum mjuz~'ijem
+paradise paradajs $3
+regency rid¿ensy $3
+route ra³t
+soldier(s|) so³d¿er%
+soldier's so³d¿ers
+institute institjut $#3
+ice ajs
+theater s~'ijecz@r
+Sladem slejdem
+Sinai sajnaj
+palace palis
+
+
+//geografia szczegolowa
+
+Macon mejk@n
+mitre majt@r
+glendale glendejl
+irwindale ir³indejl $3
+ocean+way	o³szyn ³ej
+
+// imiona
+iris ajris
+trici(a|±|ê) trisz%
+tricii	triszy
+
+eleanor elinor $3
+
+frances frans@s
+
+jonah d¿ona
+peter#(rfin) piter%
+peterson#(nfin) piterson%
+peterson piterson $3
+reginald	$3
+steven#(nfin) stiwen%
+steve stiw
+steve'#(apefin) stiw%
+stevem stiwem
+dave dejw
+dave'#(apefin) dejw%
+davem dejwem
+bennie beni
+benniego beniego
+benniemu beniemu
+cyril#(lfin) sajril%
+cecil#(lfin) ses~'il%
+Ike ajk
+Ike'#(apefin) ajk%
+Ikiem ajkiem
+pete pit
+pete'#(apefin) pit%
+Rosie	ro³zi
+terence terens
+terrance terens
+arlene arlin
+beatrice b~!i~'etris
+jeremiah d¿eremaja
+jeremiah(a|em|owi|u) d¿eremajasz%
+joe's d¿o³s
+katie kejti
+Mackie(m|) meki%
+Mackie(go|mu) mekie%
+vickie viki
+penelope penelopi $3
+
+// tu te¿ jest miejsce na nazwiska i inne nazwy
+// rzadziej spotykane
+
+battery $3
+bellevue beliwiu $3
+berkeley berk@li $3
+
+corcoran korkoren $3
+ludowici ludo³is~'i $3
+chisholm#(mfin) kiszo³m%
+jedediah d¿edidaja
+pearl perl
+pike pajk
+
+// ró¿ne takie
+
+accuracy ekiuresy $3
+advocate advoket $3
+alpine alpajn
+barefoot berfut
+cocoa koko³ $#
+marble marb@l
+melody $3
+point pojnt $u
+chapel czep@l
+community komjunity $3
+force fors
+federal $3
+navy nejvy
+rite	rajt
+special spejsz@l
+trade trejd
+trading trejding
+union juñjon
+strategy strated¿i $3
+tide tajd
+range rend¿
+ride rajd
+ride`s rajds
+republic repablik
+abercromby(mi|ch|m|) eberkrombi%
+abercromby'#(apyfin) eberkrombi%
+
+isles ajls
+justice d¿astis
+
+aberlady eberlejdy
+aberlee ~!eberli
+academy akademi $3
+aviemore avimor $3
+berwick ber³ik
+
+// rzadziej spotykane nazwy
+// escalade eskalade
+
+21~~club t³~,enty~!³an klab
+One_Police ³an [1]po³~'lis
+
+//amerykanie z meksyku
+// poszli do g³ównego
+//baja+del baha [n]del
+//si s~'i
+//imiona hg
+
+jean d¿i~'in
+jeanie d¿ini
+jean~pierre ¿anpier $1
+jean~pierre'#(apefin) ¿anpier%
+jean~baptiste ¿anbaptist $1
+jean~baptiste'#(apefin) ¿anbaptist%
+jean~luc(a|owi|u) ¿anl~!ik%
+jean~luc ¿anl~!ik
+
+// poprawki akcentu
+tambury $2
+express $1
+
+// korekta ee
+albee albe~'e
+altee alte~'e
+amenorrhee amenorrhe~'e
+andree andre~'e
+arktogee arktoge~'e
+choree chore~'e
+diastee diaste~'e
+dulcynee dulcyne~'e
+echinacee echinace~'e
+echmee echme~'e
+farmakopee farmakope~'e
+frizee frize~'e
+gonoree gonore~'e
+gwinee gwine~'e
+hewee hewe~'e
+hilee hile~'e
+hornee horne~'e
+howee howe~'e
+ipomee ipome~'e
+jubee jube~'e
+kalatee kalate~'e
+kamee kame~'e
+klee kle~'e
+kobee kobe~'e
+koree kore~'e
+kosmee kosme~'e
+logoree logore~'e
+mamee mame~'e
+mammee mame~'e
+maree mare~'e
+melopee melope~'e
+menippee menipe~'e
+mezoglee mezogle~'e
+moszee mosze~'e
+neogee neoge~'e
+nopalee nopale~'e
+notogee notoge~'e
+pimelee pimele~'e
+rochee roche~'e
+salomee salome~'e
+spiree spire~'e
+stanhopee stanhope~'e
+trachee trache~'e
+urorrhoee urorrhoe~'e
+valonee valone~'e
+wandee wande~'e
+
+// liczebniki
+
+two tu~+ $1
+nine najn
+
+// liczebniki porz±dkowe
+1(-|)st ferst
+2(-|)nd sek@nd
+3(-|)rd ferd
+4(-|)th fors
+5(-|)th fifs
+6(-|)th s~'iksf
+7(-|)th sevens
+8(-|)th ejts
+9(-|)th najns
+10(-|)th tens
+11(-|)th ilevens
+12(-|)th t³elvs
+13(-|)th firtins
+14(-|)th fortins
+15(-|)th fiftins
+16(-|)th s~'ikst~!ins
+17(-|)th seventins $3
+18(-|)th eitins
+19(-|)th najntins
+20(-|)th t³elvs
+21(-|)st t³enty ferst
+22(-|)nd t³enty sek@nd
+23(-|)rd t³enty ferd
+24(-|)th t³enty fors
+25(-|)th t³enty fifs
+26(-|)th t³enty s~'iksf
+27(-|)th t³enty sevens
+28(-|)th t³enty ejts
+29(-|)th t³enty najns
+30(-|)th firtys
+31(-|)st firty ferst
+32(-|)nd firty sek@nd
+33(-|)rd firty ferd
+34(-|)th firty fors
+35(-|)th firty fifs
+36(-|)th firty s~'iksf
+37(-|)th firty sevens
+38(-|)th firty ejts
+39(-|)th firty najns
+40(-|)th fortys
+41(-|)st forty ferst
+42(-|)nd forty sek@nd
+43(-|)rd forty ferd
+44(-|)th forty fors
+45(-|)th forty fifs
+46(-|)th forty s~'iksf
+47(-|)th forty sevens
+48(-|)th forty ejts
+49(-|)th forty najns
+50(-|)th fiftys
+51(-|)st fifty ferst
+52(-|)nd fifty sek@nd
+53(-|)rd fifty ferd
+54(-|)th fifty fors
+55(-|)th fifty fifs
+56(-|)th fifty s~'iksf
+57(-|)th fifty sevens
+58(-|)th fifty ejts
+59(-|)th fifty najns
+60(-|)th s~'ikstys
+61(-|)st s~'iksty ferst
+62(-|)nd s~'iksty sek@nd
+63(-|)rd s~'iksty ferd
+64(-|)th s~'iksty fors
+65(-|)th s~'iksty fifs
+66(-|)th s~'iksty s~'iksf
+67(-|)th s~'iksty sevens
+68(-|)th s~'iksty ejts
+69(-|)th s~'iksty najns
+70(-|)th seventys $3
+71(-|)st [3]seventy ferst
+72(-|)nd [3]seventy sek@nd
+73(-|)rd [3]seventy ferd
+74(-|)th [3]seventy fors
+75(-|)th [3]seventy fifs
+76(-|)th [3]seventy s~'iksf
+77(-|)th [3]seventy sevens
+78(-|)th [3]seventy ejts
+79(-|)th [3]seventy najns
+80(-|)th ejtys
+81(-|)st ejty ferst
+82(-|)nd ejty sek@nd
+83(-|)rd ejty ferd
+84(-|)th ejty fors
+85(-|)th ejty fifs
+86(-|)th ejty s~'iksf
+87(-|)th ejty sevens
+88(-|)th ejty ejts
+89(-|)th ejty najns
+90(-|)th najntys
+91(-|)st najnty ferst
+92(-|)nd najnty sek@nd
+93(-|)rd najnty ferd
+94(-|)th najnty fors
+95(-|)th najnty fifs
+96(-|)th najnty s~'iksf
+97(-|)th najnty sevens
+98(-|)th najnty ejts
+99(-|)th najnty najns
+

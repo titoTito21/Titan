@@ -1,0 +1,4187 @@
+charset a±bcædeêfghiíjklå³mnñoópqrs¶tuvwxyz¼¿üß@áéúýöä&çãõôòâë¹è_
+
+declare A a±eêioóuyüí@áéúýöäãõâëô
+declare E aeiouyüöäëô
+declare D bdgz¿¼
+declare T cæfhkps¶tqßxç¹è
+declare R lå³rwv
+declare V a±eêioóuyüáéúýöäílå³rvwmnñj@ãõòâë
+declare M mnñjò
+declare P bdgkptqx
+declare C bcædfghjklå³mnñpqrs¶tvwxz¼¿ßç¹è
+declare B ±ê¶æñó¼¿³
+
+macro U A,CA,CCA,CCCA,CCCCA
+
+;makra G i K wymagaj± duuuu¿o pracy
+;ogólnie ud¿wiêcznianie/ubezd¼wiêcznianie te¿
+
+macro K (#w#,#z#,#)(T,(D,R,M)T),$
+;macro G (#w#,#z#,#)((D,R,M)(D,V))
+macro G (#w#,#z#,#)((D(D,V)),RD)
+
+macro S3 y,ó,±,ê,a((m,li)(!c),u(!#),o(d,l,z),(!#dlnz))
+macro S7 zw((a,o)(!nñ),(!ao))
+
+macro S4 i(e,om,ê,±,ami,ach,a,o)#
+
+; testowo
+macro S5 #,#(nie,post,przed)
+
+; widget vs bridgetown
+macro S6 cie,rze,mie,nie,sie,(t,r,m,n,s)(ows(cy#,k(i,u)),(ach,ami,a,u,ów,owie,owi,om,em,y)#)
+
+;nickie na koñcu - przymiotnik
+macro S8 (±,iego,iemu,ie,imi,im,ich,i)#
+
+;angielskie - koñcówki po 'Cle' tworz±ce 'le' a nie '@l'
+macro S9 y,(C,CC)ows(c,k),(C,CC,(go,mu,(C,CC)(ami,ach,a,owie,owi,om,ów,y,em,e,ie,u)))#
+
+replace º	sz
+replace ¾	¿
+replace	þ	cz
+replace	»	æ
+replace à	r
+replace µ	l
+replace	î	i
+replace ï	d¼
+replace	ð	d¿
+replace	ø	¿
+replace	ù	u
+replace	û	u
+replace	ì	e
+
+
+letter _ _
+:'	~!
+\
+
+; ntilde => ò
+letter ò ñ
+:A	ñj
+\
+
+; otilde => õ
+letter õ o
+[hu]:	o
+A: ³
+\
+
+letter	ô o
+A:A	~'o~'
+A:	~'o
+:A	o~'
+\
+
+
+letter & e
+:	-
+\
+
+letter ü i
+(s,z,c): ~'i
+[es,pt]g:(e,i)	u³
+\
+
+letter ß s
+:(z,h,i,ch) s~'
+\
+
+letter @ @
+e(C,CC,CCC,CCCC): y
+\
+
+letter ç s
+:(z,h,i) s~'
+\
+
+; aring
+letter ã o
+h:kon	oku$$
+[ro]:	a
+\
+
+letter â a
+[ro]:	y
+\
+
+letter a a
+:' a
+; powielenie
+:aa	-
+; aalesund, aalsborg
+#:al	o$
+;aaron
+#:a	-
+#(z,niez,poz,ultr):aU	a~'
+h:arlem	-
+cl:udiA	a³$
+cl:ud	o$
+:oCette o$
+sk:teboar	ejt$$
+h:akon	oku$$$
+
+[en]fl:men(l,c)	a
+[en]fl:mer ej
+[en]fl:me(#,C) ejm$$
+
+:ux#	o$$
+
+
+[en]#(wyci,wyg,poz,hu,sa)n:nce# a
+[en]n:nce# ens$$$
+[en]#:e	-
+
+str:wb	o³$
+[en]#:nge(l#,ls#) e
+[en]#b:ker	ej
+[en]mount:in	e$
+#g:ilard(iA,yj#) a
+#g:il*¶	a
+#g:il	ej$
+#(u,roz,wy)m:ili aj
+m:il	ej$
+:inmen(t,c) ej$
+f:ith	ej$
+rnfl:kes	ejk$$
+[en]l:ke(#,s)	ejk$$
+[se]g:tan#	o
+[en]#m:y(ach,ami,a,em,owie,owi,ów,e,om,u)# aj$
+[en]C:y(s,#,(ach,ami,a,em,owie,owi,ów,e,om,u)#) ej$
+
+[en]!m:ture(s#,#,r) ej
+[en]#b:ker ej
+[en]puderm:ntle a
+[en]m:ntleS9	a
+[en]m:ntle ent@l$$$$
+[en]m:ntl& e
+freem:ntl& e
+
+y:tes	ejt$$
+
+m:id	ej$
+C:w&A	ej³$$
+C:c&A	ejs$$
+C:C&A ej
+C:nc&A ens$$$
+C:ng&A end¿$$$
+;C:CC&A ej
+str:wber	o³$
+
+[fr]Cl:nch	±~'$
+
+:ughA	o³$$$
+:ugh	o~'$$$
+
+g:ugui(ñ,nA) oge$$$$
+g:uguin# ogê~'$$$$$
+
+:bl&	ej
+[en](k,#(kons,kone,no,skar)t,#t,deksprym,sz,skr):ble#	a
+[en](C,Ay):ble#	ejbyl$$$
+
+r:wlin(s,gs) o³$
+
+br:il	aj$
+#br:in	ej$
+l:is#	e$$
+l:ise#	-$$
+l:is&	e$
+l:ist	a
+l:is	e$
+
+#:ce(fal,t(y,o,a),naft,di(a,±,ê),dyj)	ac~'$
+[en]#:ce ejs$
+:cing	ejs~'i$$
+f:cebook ejsbu$$$$$
+
+j:eger	-
+disr:elA	ej$
+clop:e	-
+c:esar	-
+d:e(a,±,ê,e,o,ó,u)	-
+
+[en]migd:le	a
+[en]#wand:le	a
+[en]B*:le#	a
+[en]#alkid:le#	a
+[en]korod:le#	a
+[en]brzyd:le#	a
+[en]#d:le#	a
+[en]feud:le#	a
+[en]hawd:le#	a
+[en]klajdesd:le	a
+[en]#mand:le#	a
+[en]#med:le#	a
+[en]#odd:le#	a
+[en]#ped:le#	a
+[en]profund:le#	a
+[en]#rod:le#	a
+[en]#sand:le#	a
+[en]skand:le#	a
+[en]#synod:le#	a
+[en]#brynd:le#	a
+[en]#dud:le#	a
+[en]#fud:le#	a
+[en]gwizd:le#	a
+[en]#had:le#	a
+[en]czad:le#	a
+[en]#myrd:le#	a
+[en]#nad:le#	a
+[en]#vid:le#	a
+[en]d:le#	ejl$$
+Angd:le#	ejl$$
+[en]tion:l#	e
+[en]pl:in	ej$
+[en]#g:ter	ej
+#g:te(k,r)#	a
+#g:ter	ej
+#g:te(#,C)	ejt$$
+
+#b:bysite	ejby$$
+h:ncock	e
+:etz	-
+m:eter	-
+(me,gi)g:erg	a
+g:er	e$
+S5h:e	-
+
+:yn(e,&) e
+f:ulk	o$
+
+:n&t	a
+; :C&	ej
+sh:w	o³$
+[en]C:ve#	ejw$$
+[en]C:ve(r,n,l)(#,(ami,ach,a,owi,om,ów,ze,ie,u)#)	ej
+[en]C:ve(go,mu)#	ej
+[en]C:vey#	ejwy$$$
+[en]C:vey	ejwij$$$
+[en]C:ve	ejw$$
+
+#d:vie#		ejvi~'$$$
+d:vis(#,A)	ej
+d:vies(#,A)	ejvi$$$
+der:in	e$
+:w(kins,son)	o³$
+#:ulay	ole$$$
+l:ugh	af$$$
+m:ugham	o³$$$$
+m:upass o$
+m:igre	a$
+m:ryland eryle$$$$
+m:yflow e
+p:ypal	e
+[en]C:tive# ejtiv$$$$
+[en]C:tiv(&,em) ej
+[en]:sh	e
+[en]:ted(z,r,¼,¿) a
+[en]:ted ejty$$
+
+ch:wk	a
+h:wk	o³$
+cob:in	ej$
+cl:ud(#,e)	o$
+fl:uber		o$
+[es,pt]l:urel	a³$
+l:uren(cj,t)	a³$
+l:ure(l,n)	o$
+l:wrenc	o$
+d:umier	o$
+#cl:y	e
+rl:in	e$
+#:rrow	ero³$$$$
+:twood	et³u$$$$
+[en]b:ldwin old³y$$$$
+[en]#b:sin	ejz$
+#b:con	ejk$
+
+#p:gemaker	ejd¿mej$$$$
+#sav:g(e#,&) id¿$$
+#cl:ud(e#,&) od$$$
+elb:ck	e$
+th*:ck e$
+
+b:udelai	od$$$
+#b:ud(#,(a,y,ów,om,em)#) o$
+#b:udoin od³en$$$$$
+#b:udouin od³en$$$$$$
+
+#(l,b):ud	a³$
+:ud#A o_$$
+:ud# o$$
+:udowski	o$
+:ud(ami,ach,a,em,ów,y,om,owa,ow±,owie,owi,owej,owego,owemu,owe,owscy,zie,zi)# o$
+#:uld o$
+:uld# o$$$
+:uldowski	o$$
+:uld(ami,ach,a,em,ów,y,om,owa,ow±,owie,owi,owej,owego,owemu,owe,owscy,zie,zi)# o$$
+:ult# o$$$
+:ultowski	o$$
+:ult(ami,ach,a,em,ów,y,om,owa,ow±,owie,owi,owej,owego,owemu,owe,owscy)# o$$
+:ul(cie,ci)# o$$
+
+gr:celand	ejs$$
+gr:pefrui(t,c)	ejpfru$$$$$$
+
+[en](ll,³³):h#	ah$
+[en](ajud,tyrd,fat,#pt,#br,sz,jagr,#sp,ahd,szib,#wat,#yam):h# ah$
+[en]:h#	a$
+
+[en]ch:wk	a
+[en]h:wk	o³$
+
+:ldrin	o
+h:ndica	e
+playb:ck	e$
+b:ckup	eka$$$
+#b:ck	ek$$
+p:ger	ejd¿$
+een:ge	ejd¿$
+
+sh:k(er,in(#,g)) ej
+
+n:omi	aw'
+[en]t:tion#	ejszy$$$
+[en]t,kr,#(k,glut,him,kim):tion	a
+[en]C:tion	ejszy$$$
+
+fr:me#	ejm$$
+fr:m&	ejm$
+willi:m	e
+; main
+
+om:in(#,(ach,ami,a,om,o,ie,y,±,ê)#) a
+m:in ej$
+
+; lawrance - przyk³adowe wykorzystanie '&'
+
+l:wrance# orens$$$$$$$
+l:wrens(&,@) o$
+
+r:ke# ejk$$
+r:k& ej
+
+; gaulle
+:ulle# ol$$$$
+:ull(&,A) o$$
+
+;air
+#:ire(#,s#) aj$
+z:ir	aji$
+k:ir	aji$
+n:irob aj$
+;#n:ir(a,±,ze,y,om)# aji$
+#n,#nien:ir aji$
+:ire# er$$$
+:ir e$
+
+#r:i(n,d)	aj$
+#s:int	e$
+s:iC	aj$
+
+;baseball i pochodne
+b:seball	ejzbol$$$$$$
+b:sebal	ejzbo$$$$
+
+h:ndou enda³$$$$
+
+#:usti o$
+:'n	a'$
+pl:y	e
+
+walh:ll	a$
+h:ll(#,em#,u#,a#,owi#) o$
+
+b:sice	ejz~'ikJ$$$
+b:sic(#,A) ejz~'ik$$$
+
+[en]d:vi(d,s)	ej
+
+:ine#	ejn$$$
+
+[en]BC:te a
+[en](bo,ro,pie)g:te#	a
+[en](mitry,sol)d:tes	a
+[en](mor,bro)d:te#	a
+[en](popie,rzyd)l:te#	a
+[en](#cy,niecy,czu,dzio,gar,czer)b:te#	a
+[en]g:tek# a
+[en]#g:teC	ejt$$
+[en](b,d,g,l,t):te(#,s)	ejt$$
+[en](b,d,g,l,t):t&iA	ejci$$$
+[en](b,d,g,l,t):t&	ej
+[en](#(ka,ku,ra,sa,sza,celi,ri,ru,sor,absor,adsor,wom,ar,a,stereo,stylo),#)b:tem# a
+[en]b:tem#	ej
+
+[en]baj:der a
+[en]cyn:der a
+[en]bark:der a
+[en]drom:der a
+[en]#fl:der a
+[en]#j:der a
+[en]kask:der a
+[en]#m:der a
+[en]#n:der a
+[en]#obl:der a
+[en]#w:der a
+[en]#z:der a
+[en]B:der a
+[en]C:der(#,(\
+	s,u,em,ze,zy,y,owie,owi,ów,om,ami,ach,a,\
+	owa,ow±,owej,owych,owym,owy,owego,owemu,owscy)#,owski,sowski,\
+	s(ami,ach,a,om,ów,owie,owi,ów,om,ie,i,\
+	owa,ow±,owej,owych,owym,owy,owego,owemu,owscy)#) ej
+
+#tro:d	a
+ro:d	w
+ro:ch(#,A)	³cz$$
+
+bl:ck e$
+r:ig	ej$
+d:im	aj$
+
+#m:tthewA	esju³$$$$$
+#m:tthew	esju$$$$$
+
+[en]:pplS9	e
+[en]:pple	ep@l$$$$
+[en]:ppl&	e$
+
+p:perback	ejperbe$$$$$$
+sh:ughness	a³$$$
+iz:akA	a:
+
+:#A	a_
+:e# e$
+#b:edek	-
+b:e	a~'
+\
+
+letter á a
+:'	a~'
+\
+
+letter ä e
+\
+
+
+letter ± ±
+:' ±~'
+:p,b	om	; k±piel
+\
+
+letter b b
+:'h	b~'h$
+:'#	b
+:'	b~'
+:z# b
+ja:³k	pk$$	; jab³ko
+:hemog	b~'h$
+su:hA	b~'h$
+co:ham be$$
+o:hA	b~'h$
+:hA	b$
+[en]:ble# byl$$$
+:b	-
+\
+
+letter c c
+:'#	c
+:'	c~'
+(ver,#m)oni:(a,±,ê,o,#) k
+ni:o(l,r)	k
+pas:al	k
+(t,n)i:al	k
+advo:a	k
+va:lav	c
+:lea(r,n) k$$$
+#(b,d,v,y)o:(#,a#)	k
+#vo:e#	cz
+:eau	k
+bonifa:i cz
+:ipr c~'
+:amb	k
+vo:i	cz
+vo:A	k
+yu:A	k
+:iend	sj$
+ra:ias#	sj$
+medi:i#	cz
+#ar:us		k
+#:osinus	k
+#:otang		k
+#lo:(a,e,u,o) k
+medi:i(A)	czj$
+medi:(#,A) k
+:ialist(as,a)# sj$
+spe:ial sz@$$
+deli:a# c
+deli:a k
+di:apri	k
+#al:o	k
+kan:on(#,A)	c
+elegan:onA	c
+n:on	k
+
+publi:!yze	k
+
+:um#	k
+peli:an k
+
+:oochee#	kuczi$$$$$$
+:ien(fuegA,egA)	sj$
+#gen:i(a,±,ê,e,ami,ach,i)# sj$
+
+:lust	kla$$
+[en]:lurr(y(#,m#),&) kle$$
+abo:lu#	k
+:lu#	c
+(szpi,#hy):l	c
+:lu	k
+
+[en]ody:ee#	c
+[en]:ee#	s~'i$$
+
+#amfor:e	c
+for:e(#,m#)	s
+for:eC		s$
+
+:lip	k
+cy:lo	k
+:ator	k
+:rescA kreszcz$$$$
+:richton kraj$$$$
+ala:ant	k
+#ma:is	ci$
+:is#	c~'
+pris:ill -
+(ph,f)arma:o	k
+#bu:ol	c
+:ol(ami,ach,a,±,ê,i,e,om,o)# k
+:ill	c~'
+:ioccA	czj$$
+:Ax	k
+:od&	ko³$
+:Ativ	k
+[en]:ode# ko³d$$$
+:odeK	kot$$$
+:ode	kod$$$
+:odzie#	k
+:od(zie,wu,ekad)	c
+A:oda(wc,jn) c
+:odysz c
+skrzyp,¿ywi,pra,p³u,owo:o	c
+:od	k
+de:im	c~'
+#e:o	k
+(potw,#h,#nieh,#poh,#zah,szw,kw,dwup)ar:o c
+#(j,k)ar:o(m,wi)# c
+kar:on(ego,emu,ych,ymi,ym,y,a,±,e,o)# c
+#mar:owa	c
+#mar:ow(a(#,li,ni,ñ,³,æ),y,i#,±,ego,emu,ej,e) c
+#star:o	c
+ar:o	k
+e:onom	k
+#lan:elo(t,c) s$
+:(o,ó)atl ko$
+sei:en(t,cie) cz
+sotadi:#,A	k
+di:am		k
+mante:#,!Ai	k
+titi:ace#	k
+titi:ac(i(#,C),!Ai)	kak$$
+tegu:igal	s~'
+#:and(i,ym#,y#,&)	ke$
+(bru,n)be:k(#,(ami,ach,a,owi,iem,u,ów)#) -
+(bb,dd,ll)o:k(#,(ami,ach,a,owi,iem,u,ów,om)#) -
+rebe:k(#,(ami,ach,a,ê,±,om)#) -
+corni:k	-
+#wi:k(ami,ach,a,owi,ich,imi,im,iego,iemu,iem,iej,u,ów,om,±)# c
+:k(iewicz,owsk,owscy#) c
+#ki:k(ich,iego,iemu,iej,ie,imi,im,i,±) c
+#fi:k(ich,iego,iemu,iej,ie,imi,im,i,±) c
+#bi:k(ich,iego,iemu,iej,ie,imi,im,i,±) c
+#li:k(ich,iego,iemu,iej,ie,imi,im,i,±) c
+#Ci:k	-
+#:eltic	seltik$$$$$
+:lou	k
+cabo:l	k
+:lock	k
+:los(#,A)	k
+:loth		k
+:ats#		ke$
+
+nalaz:(ami,ach,a)#	c
+roz:api	c
+(±,ê)z:a	c
+Az:a	k
+
+ian:(a,o,u,±,ê) k
+
+[en]A:eutical(#,s#) szutike$$$$$$
+
+:ade³	c
+:ade	k
+
+pro:ur k
+mara:u(j,i#) k
+#:uiC	k³i$$
+robo:op	k
+
+#a:aB,an((y,u,ów,owie,owi,om,k(om,o,i,ê,±,ami,ach,a),\
+	i(om,mi,m,emu,ej,ego,e,ch,±,ami,ach,a),i,em,ek,ce,ami,ach,a)#,#) c
+#a:e(fal,t(y,o,a),naft,di(a,±,ê),dyj)	c
+#a:(!Aiy)	k
+
+
+lla:#,a,o,u,ó	k
+lla:em#	ki
+an:esc cz
+ja:ob	k
+lla:ie#	ci$$
+lla:iA	czj$
+lla:i	cz
+medi:ie czj$
+medi:i(#,m,ch)	cz
+nets:ap	kej$
+:q	-
+petrar:e#	c
+petrar:y#	ki$
+petrar:A	k
+balti:(#,A)	k
+pia:enzi	czenc~'$$$
+ia:e(#,t(a,o,y))	c
+ia:(#,a,e,o,u) k
+
+a,e,i,o,u:i(o,ó)n#	sjo$$
+
+
+gua:a		k
+#Ce,#e:u	k
+
+:eylo(n,ñ)	c
+:ey		s
+
+:(e,é)zann	s
+#mek#:ain kej$$
+#lor,#or:(a,±,ê)#	k
+
+#gio:A	k
+
+ommer:e#	s$
+ommer:&iA	s$
+ommer:&		s
+
+(bi,b,h,k,m,prop,#top,#drzewop,skw,dw,z)or:(a,±,ê)# c
+or:(a,±,ê)# k
+
+:ad(o,em,zie,owie,owi,ów,om)# k
+
+mara:a(!#$) k
+du:at k
+
+clini:	k
+ko:hinchi czinh$$$$$
+gu:hi	cz$
+n:hl	cz$
+:halker	cz$
+:halmer	cz$
+:harter cz$
+ben:h	cz$
+[en]:hats cz$
+[en]:hain czej$$$
+[en]an:hor k$
+
+ar:her	cz$
+san:hez	cz$
+bian:hi k$
+ma:hismA cz$
+en:hilad cz$
+:hopp	cz$
+:hapar	cz$
+#na:hos	cz$
+#:himichang	czimicz$$$$$$
+:hupaca	czupak$$$$$
+:hachapo(y,j) czacz$$$$
+mu:hachA	czacz$$$$
+domeni:hin	k$
+domini:(#,a,o,o,ó) k
+domini:em#	ki
+domini:i(#,A)	cz
+ma:hiavel	kj$$
+mi:helangel	k$
+:heddar		cze$$$
+:hinook		czinu$$$$$
+teno:htitl	cz$
+:hell(e,&)	sz$
+[en]:huk(#,(ach,a,owi,om,ów,iem,u)#) cz$
+
+lu:as	k
+#lu:(#,(a,owi,u)#) k
+r:oni	k
+r:us	k
+spe:ustaw c
+[en]:ust ka$
+:ust k
+
+:heap	czi$$$
+
+#pa:ific(#,±,a,o,ê) s~'ifik$$$$
+#pa:ifik	s~'
+
+:assid(y,&)	kes~'$$$
+
+le:lanch	klansz$$$$$
+feli:iani	czj$
+feli:iA	sj$
+gali:i((ach,ami,a,±,ê,om,i,o)#,an)	cj$
+ali:i((ach,ami,a,±,ê,om,i,o)#,an)	sj$
+mer:ier	s~'ij$
+
+#in:(a,±,ê)#,as	k
+i:ar	k
+ex:al	k
+ex:elsiA c
+ex:el	-
+ex:i	c~'
+#(a,o):almy(¿,#) c
+:alm k
+:alt k
+ssi:#,A	k
+
+[en,it]#lu:i(owi,o,ami,ach,a,ów,em,u) czj$
+#lu:ii# czj$
+lu:ian czj$
+
+s:op	k
+sti:#	k
+
+cor:(!Ai) k
+
+#e:l	k
+ovi:h(a,o,ó,e,#) cz$
+#se:(a,o,u)	k
+pontia,balza:(#,A)	k
+lu:hin	k$
+#:herr(y,&)	sz$
+#:hesh	cz$
+:hild(#,e,z,o,&) czaj$$
+:hapli	 cze$$
+:h(a,á)vez	cz$
+:hetti	cz$
+:hapma(n,ñ) czepme$$$$$
+:hurch	czercz$$$$$
+#:homsk(y,&,ie)	cz$
+#:heck	cze$$$
+#:huck cza$$$
+:heckS8 ch$
+[en](szla,#wie,#sta,#p³a,#ci,#su):heck(a,u)# ch$
+[en]:heck	cze$$$
+#a(le,mi):(#,a,o,u,ó) k
+pino:he(t,c)	cz$
+#pi:he(t,c)	sz$
+ri:hmon	cz$
+[en]#ri:hter ch$
+[en]#ri:h cz$
+[en]:hri k$
+#vi:e	c
+vi:e#	s$
+ve:A	k
+#pi:k	-
+(d,#)do:k	-
+:ks	-
+wuksni:k(a,u)#	c
+(s,#)ha:k	-
+sho:k	-
+#glo:ki		-
+:kS8 c
+sni:k	-
+#(nielin,lin):k(i,a)	c
+lin:k	-
+che:k	c
+he:k	-
+:kh	k$
+vA:k	-
+barra:u	k
+bara:u	k
+#ar:t(#,(ach,ami,a,om,em)#,ow,ó)	c
+r:t	k
+(!Cn):t	k
+o:tan	c
+o:ta	k
+s:ar	k
+sit:om	k
+:lay	kle$$
+#:leni(em,e,a)# c
+#:le#	c
+:lon(y,e,±#,a#) c
+(!Cn):l	k
+:omi(nut,e(rz,siê))	c
+miejs:om#	c
+(cambri,canti,cario,s,inter):om# k
+:om# c
+:omeback	kombe$$$$$$
+ój:o	c
+B:o	c
+:om k
+
+ti:e#	c
+ti:em# kj'
+ti:ellA	C
+ti:(#,s#,A) k
+
+flamen:	k
+:corsi	kors~'$$$$
+:c(a,o,u,±,ê)	k$
+:ard	k
+#i:cha	c~'
+A:cell	cz$
+
+(reti,nie,tuni,pedi,#):ell	c
+(bo,i,n,a,e):ell	cz
+A:ch	k$$
+so:real	c
+szpi:ru	c
+
+:uster	ka$
+
+:roixiA	kr³asi$$$$$
+:roixA	kr³az$$$$
+:roix#A kr³a_$$$$
+:roix	kr³a$$$$
+
+:rack	kra$$$
+:rawl	kra³$$$
+:ross kro$$$
+:r(a,o)wC kro³$$$
+:ro	k
+s:ratch	krecz$$$$$
+:r	k
+
+:lusiA	kluzj$$$$
+
+#:lay	kle$$
+#:la	k
+s:otch k
+s:u(s,m,l)	k
+:au	k
+ata:aC k
+be:quere	k$$$
+
+#ra:o((tem,tu,ta,t)#,cie,ckA) c
+
+:ynthiA	s
+
+:habrol	cz$
+:hadwick czed³i$$$$$$
+:hagall	cz$
+:hardin czarde$$$$$
+:hamber cze$$
+:hair cz$
+:handler	cze$$
+:hateau	sz$
+:haucer szas$$$$
+
+:ohen	ko³$$
+:o(i,í)mbr	k
+#:oks	k
+#:ox	k
+#:onie	c
+#:hang(#,C,(ami,ach,a,owie,owi,iem,om,ów)#)	cz$
+#:hen	cz$
+:herbour	sz$
+:hichester	cz$
+:hioggi		k$
+:hira(c,kiem)	sz$
+:hiric		kirik$$$$$
+:hrist		k$
+:iampi		czj$
+:ius(#,em#,a,o,ie#,ów#) cj$
+(#,A):iccio	cz
+bou:h	sz$
+:icer	c~'
+#:inghaj	k
+#:inquece	czinkecz$$$$$$
+#:irc(!Ai)	s~'irk$$$
+#:ivic	s~'ivik$$$$
+#:iv	s~'
+:la(pton,rk)	kle$$
+
+s:on	k
+
+ima:(#,a,e,o,u,ó)	k
+:ag	k
+
+:airn	ke$$
+
+ami:is	cz
+#ami:A	k
+
+al:a(tel,zar)	k
+#a:ce(n,s)	k
+a:oncaguA	konkag³$$$$$$
+
+:ocaco	kokak$$$$
+:ocy(c,k)l cocyk$$$$
+:oc(!Ai,t) kok$$
+
+lipi:a	c
+pi:a(b,d,r,n,s) k
+soni:i	c
+soni:(#,A)	k
+
+:app	k
+
+
+#s:ot(t,c)	ko$$
+#s:o	k
+#s:al(a,e,i,±,ê,on) c
+#s:a³	c
+#s:api	c
+#s:a	k
+#re:o	k
+:ontin	k
+(ö,ä,ü):k	-
+:anal	k
+:anti	k
+re:ita	cz
+my:o(#,m#) c
+js:(a,u)#	c
+s:(a,o,u,±,ê)# k
+
+
+#pe:k	-
+handi:ap	ke$
+przemy:o c
+my:o	k
+:au	k
+:astlet kastel$$$$$
+:astle# kestyl$$$$$
+:astl kes$$
+:lair k
+±:tA	c
+o:t(an(#,A),owA,ów) c
+#o:t	c
+u:tytu(³,l)	c
+[en]:tional#	kszyne$$$$$
+[en]:tion	kszy$$$
+[en]:ation	kejszy$$$$
+szmu:t		c
+(a,e,i,u,y):t(!w)	k
+A:t(#,A)	k
+
+:iv s
+
+i:ias#	sj$
+
+#mi:kiew	c
+#mi:k	-
+mer:ur	k
+cli:k	-
+
+blan:he#	sz$$
+blan:h		sz$
+b(l,i)an:e#		c
+b(l,i)an:(#,A)	k
+plan:k		-
+:helard#	szlar$$$$$$
+:helard		sz$$
+:helet#		szle$$$$$
+:hele(t,cie#)		sz$$
+
+#:arlyl(e#,&) kerlal$$$$$$
+:arl	k
+
+prin:ie#	si$
+prin:ez(A,#) c ; ruska princeza
+prin:es(sA,kA,ek),eps,ip c
+#vin,#vi:enzi#	czenc~'$$$
+#vin,#vi:enzA	czenc$$$
+
+(pr,#v)in:e#	s$
+(pr,#v)in:i	s~'
+(pr,#v)in:A	s
+:ows(ki,c)	c
+in:o	k
+:ind	s~'
+n:inA	cz
+dra:(a,o,u)	k
+cha:kA	c
+ha:k	-
+
+&ar:#	k
+&ar:y#	s~'i$
+&ar:&iA	sj$$
+&ar:&i	s~'$$
+&ar:&A	s$
+&ar:h	k$
+&ar:	k
+
+#mari:#,(!Ai)	c
+#usturi:#,(!Ai) c
+#gori,kuri,#podgori:#,(!Ai) c
+czubri:#,(!Ai)	c
+ri:yklo	c
+ri:e# c
+ri:e(cie#,t#,t(u,em,owi,ami,ach,om,a,y,ów)#) c
+tri:e(ra,ps) c
+ri:#,(!Ai±êó) k
+
+nies:(a,o,u)	c
+es:(a,o,u) k
+
+[en]A:tional#	kszyne$$$$$
+[en]A:tion	kszy$$$
+linto:k		-
+
+(mani,pedi):ure#	kir$$$
+(mani,pedi):ur	ki$
+
+;klocki
+klo:k(a,i,o,ó,u)	c
+(C,#):ock	ko$$
+;block, glock, flock, lock i Bullock
+lo:k	-
+
+:kliw	c
+:kn(i(j,A,#),±,ê,echt) c
+:krot	c
+ter:kwa	c
+[en]:kwA	k³$$
+:kwick	kwi$$$$
+spe:klucz	c
+±:k		c
+:k(C,ing,ins)	-
+
+;rock
+#ro:k	-
+sero:k	c
+#tro:kA	c
+ro:k# -
+ro:k(owy,owego,owemu,owym)# -
+ro:k(owa,owej,ow±)# -
+ro:k(owi,owych,owymi,owe)# -
+ro:k(a,iem)# -
+
+;electron
+e:trz	k
+:trz c
+:tr  k
+(!s)troni:#	k
+
+:ast	k
+s:a(t,d) k
+
+;concarneau i concerto
+
+#con:(e,i)	cz
+#con:A		k
+
+;cook
+
+:oosz	c
+#:oo(#,o)	c
+:oo#A	ku_$$
+:oord	k
+:oo	ku$$
+
+;#:ar(av,b,c,d,g,i,l,m,n,p,q,r,t,v)	k
+#:abanAs	k
+#:aba(j,n,k,ckA,B)	c
+#:a(xto,vendish)	ke$
+
+:asz	c
+ob:as	c
+cy:a(st,¶) c
+:as	k
+:az	k
+#:af(k,³,ni)	c
+#:a(b,f,g,h,i,m,t,v,y,x)	k
+#:ache#	kesz$$$$
+#:achuch kaczucz$$$$$$
+#:ach kesz$$$
+#:ac(k(i,e,o,a,ó),ow,ów,z)	c
+#:ac(y#,u(s,¶),an,ik,ka) c
+#:acie#	k
+#:acA	kak$$
+#:acc	kacz$$$
+#:ac	k
+
+#:ad(y,ów#,ow)	c
+#:ad	k
+
+#:allback	kolbe$$$$$$
+#:all	ka$$
+#:al(v,d,en,l,eb)	k
+#:al#	c
+#:al(ach,ami,ach,acie,at,a)#	c
+#:alat(ach,ami,a,om,o,y,±,ê)#	c
+#:ala	k
+:ale(b,d,n(C,!Ai)) k
+:all	ko$$
+#:alo(m#,wA) c
+#:alcip	kalc~'$$$
+#:alciu	kalcj$$$$
+#:alo k
+#:alisiA	kalisj$$$$$
+#:ali(#,ne,ñ,k,z,¼)	c
+#:alico	kalik$$$$
+#:ali	k
+#:alyp	kali$$$
+ke:alkoa	c
+:alk	k
+#:anzi	kanc~'$$$
+#:anzA	kanc$$$
+#:anow	c
+#:an	k
+ma:an(t,ci#) c
+:ank(a,±#,ê#,ow,om#,o#,i) c
+:ance# c
+:anC k
+
+(#mal,wier,ser,sz,rz,ch):an c
+B*:an c
+(!Cchp):an	k
+
+:ash	ke$
+:(i,í)sh	s~'
+:Ash	k
+
+#:apo(m,wi)#	c
+#:apo	k
+:ape(m,k)# c
+:ape	k
+#:api#	c
+#:api(k,m,B,aB,eB,e,a)#	c
+#:apie#	c
+#:apiego# c
+#:apiej c
+#:apiemu# c
+#:apieni c
+#:apili	c
+#:apim(y,i)# c
+#:api(sz,cie)# c
+#:api k
+#:apstrz	c
+ka:ap	c
+:a(p,b)(s,r)	k
+#:apu(¶,(s,n)iA)	c
+#:apu	k
+#:apt k
+#:ar# c
+#:ar(owie,em,rze,owi,ów,ami,ach,a)# c
+#:ara(cie,t)# c
+#:arat(ach,ami,em,om,owi,u,y,ów)# c
+#:arani(st,¶) c
+#:ars(ki,k(±,a)#,cy#) c
+#:arew(icz,n) c
+#:aryc#	c
+#:aryc(a,ê,y,±,o,e) c
+#:aryñ	c
+#:arobó c
+#:arogr c
+#:aryzm c
+#:arcino kars$$$
+#:arrefour	kar$$$$
+#:arr	ka$$
+#:ar k
+#:ecil	ses$$
+#:erv(ant,ez)	s
+#:icc	cz
+#:ig c ~'
+#:ink	c~'
+#:in	s~'
+#:irr	c~'
+#:ir	s~'
+#:itr	s~'
+:it(y,i) s~'
+#:oach	ko³cz$$$$
+#:oa	k
+#:oby(#,¶,m#) c
+#:ob	k
+#:ocz	c
+:ochran	kokrej$$$$$
+:occA	kok$$$
+:och	c
+#:oc	k
+#:odwu	c
+#:odz	c
+#:od	k
+:oe#	ko³$$
+:oe	k
+#:ogodz c
+#:og	k
+#:oi	k
+#:ol	k
+:oll	k
+#:om(iesiê,inut,b(er#,r),#)	c
+#:om	k
+#:on(ied,oc)	c
+#:on	k
+:onC	k
+hard:ore#	kor$$$
+hard:or	k
+#:or(ann,ocz,az#)	c
+#:op(i±,oniedz,ijA) c
+#:op	k
+#:or	k
+:orn	k
+:orp	k
+:off	k
+
+:os(ekun,tw,z,podn,obot) c
+ma:osi#	c
+³u:os c
+owo:os c
+±:o	c
+#:osi(k,A) c
+:osiC	kos~'$$
+:os k
+:otyg	c
+#:ot	k
+:otwór  c
+:otchaw c
+:ot	k
+
+:ount	ka$$
+:ougar	ka³ge$$$$
+:ould	ku$$$
+:ou	k$
+:ov	k
+dis:(o,a,u)	k
+[en]#:ow(iecz,torkow) cow$$
+[en]#:ow	k
+#:ow(b,le,man)	ko³$$
+#:oy	k
+#:uru(¶#,siA)	c
+#:u(t,b,p(!n),l,r)	k
+:umb	k
+
+; #a:ad k
+
+fal:ow	c
+fal:o	k
+
+mal:ol	k
+
+:heese	cziz$$$$$
+:heeC	czi$$$
+:halleng cze$$
+:hest	cz$
+#:hess cze$$$
+:hess(#,A)	sze$$$
+:hev	sz$
+:hewrol sz$
+:hampion cze$$
+:hampla cze$$
+:hamp#	sz±~'$$$$$
+;:hampA	sz$
+:hamp	sz±~'$$$
+fr(e,a)n:h	cz$
+mar:hais#  sze$$$$
+:harles czarl$$$$$
+[en]:harl cze$$
+ri:hards	cz$
+
+le:hick	ch$
+(#,A):hick czi$$$
+
+in:h#	cz$
+in:h(em,owi,u,owie,ami,ach,a,om,owa,owej,ow±)# cz$
+
+:hile#	cz$
+:hilij	cz$
+#a:hill	ch$
+:hill	cz$
+
+(#,b,r)ar:a	k
+ar:tur	k
+
+bron:hic chik$$$
+:hica	czik$$$
+:hopin	szope$$$$
+mar:k	-
+±:z³	c~'
+:ing	s~'
+:í	s~'
+gori:k	c
+n:tw	c
+n:t	k
+se:u	k
+se:ans	k
+her:ul	k
+
+#o:cie#	c
+pe:cie#	k
+:ci	cz$
+
+di:(a(#,(mi,ch)#),(om,um,ów)#) k
+A:ca(t(#,A),ci)	k$
+
+i:t(#,A)	k
+die:t	k
+:osecA	k
+(v,r,#n)i:ky#	ki$$
+(v,r,#n)i:kie#	ki$$$
+(v,r,#n,fl)i:k	k$
+:ke	k$
+
+:z#	cz$
+
+(d,t)i:k -
+(d,t)i:(!Crhz)	k
+rte:(o,a)	c
+ste:(o,a)	c
+(d,t)e:(o,a)	k
+#e:k	-
+
+(#,#nie)rosto:k	c
+B*sto:k	c
+sto:k	-
+
+:oast	ko³$$
+
+kova:s	cz$
+:s	k
+:to(r,v)	k
+:ub	k
+:umul	k
+:linch	klincz$$$$$
+:lin	k
+:l(o,e)s(tw,kA,cy#)	c
+:l(a,eu,eo,e,o,u)s	k
+mpi:#,(a,owi,om,ów)#	k
+
+
+:z	cz$
+ni:hol	k$
+bran:hio	ch$
+ran:h	cz$
+:hees	czis$$$$
+:hiqui	cziki$$$$$
+:hiquA	czik$$$$
+ar:hi	ch$
+:hip	cz$
+#:hiliñ	 ch$
+#:hil	cz$
+#:hihul	cz$
+:h	ch$
+
+B*:at	c
+pal:at	c
+tom:at#	ke$
+[en]va:at# k
+[en]#s:at# k
+[en]:at#	ke$
+:at#	k
+cy:at	c
+#(pu,niepu):at	c
+(tom,ll):at(ach,ami,a,owi,om,ów,y,em)# ke$
+:at(ach,ami,a,owi,om,ów,y,em)# k
+
+B*:acie	c
+#(ma,zma,pa):acie c
+Ama:acie#	c
+(szm,wr,kr,tr,gr,obr,og,wilg,Ap,sier,kab,winow,lik,mech)a:acie#	c
+(rz,sm,k,#oc,#doc,#k,przyk,#zr)u:acie c
+siero:acie	c
+(obi,kwi,szp,i,skl,pol,zl,zal)e:acie c
+(#h,nas,wys,pods,chw,przes,cz,sz,przem,zas)y:acie c
+(rozma,jednol,k)i:acie c
+(wier,szlach,kop,kap,#pal):acie c
+
+(tom,ll):acie ke$
+:acie#	k
+
+
+:liv(e#,&) klajv$$$$
+:lyd&i klajdz$$$$
+:lyd(e#,&) klajd$$$$
+
+#:l(±,ê) c
+#:li(#,³,æ,li(#,by,¶),my#,j(#,cie,my,¿)) c
+#:l k
+:lif	k
+:lit	k
+
+
+cler:#,A	k
+
+
+:id(³,e³,le) c
+:id	c~'
+:it	c~'
+
+
+:iA	ci$
+:&iA	sj$$
+:i	c
+sili:on,at	k
+:ulak	c
+o:ul	k
+her:ul	k
+:s#	k
+A:usi	c
+A:us(#,A)	k
+:lub 	k	;interclub, euroclub i inne discopolo
+
+kan:ler	c
+:ler	k
+:lem#	c
+:lem	k
+
+dis:#,o,m		k
+:man	k
+ti:#	k
+ti:y	c
+ti:ie#	c
+ti:i	c
+ti:!he	k
+\
+
+letter æ æ
+\
+
+letter è cz
+\
+
+letter d d
+:'#	d
+:'	d~'
+#:hA	d$
+n:hi	d$
+
+:ding -
+:dle&	-
+:dley	-
+:dleC#	-
+:dler	-
+:dle	d@l$$$
+
+#bu:d(A,zi)	d
+
+o:dol	d
+A:dosta	d
+:do	-
+
+:esign	dizaj$$$$
+
+:die(#,m#)		di$$$
+#(po,na,pona):di	d
+:di	-
+
+:d(z,¿,¼,r)	d
+:dC		d$
+r:t	-
+pi:gin d¿$
+:jang	d¿$
+mi:gaard	dgo$$$
+[en]#o:g d
+#po:ger(#,(a,owi,em,ze,owie,ów,om,ami,ach)#) ³d¿$
+[en]#(nie,p,niep,po,niepo,pop,niepop)o:g	d
+[en]ra:gos(ki,cy,z) d
+[en]#(na,niena):gA		d
+[en]prze:gA	d
+[en]mi:gar	d
+[en]#e:gar	d
+[en]e:gar(#,(a,em,ze,owie,om,ów,ami,ach)#) d
+[en](i,e,o,a,u):ge(#,port,ton,town,woo,fie)	d¿$$
+ri:ges(#,(owie,owi,om,ów,ami,ach,a,ie,em)#)		d¿i$$
+[en](i,e,o,a,u):geS6	d¿$
+[en](i,e,o,a,u):geCC	d¿$
+[en](i,e,o,a,u):ge*A	d¿$$
+[en](i,e,o,a,u):g(a,e,i,o)		d¿$
+(i,e,o,a,u):g&A 		d¿$$
+ri:ge(#,port,porcie,ton,town,woo,C*AC)		d¿$$
+ri:ge		d¿$
+
+
+:ge(t,ci)	d¿$
+
+; concorde i co jeszcze?
+cor:e#	d$
+
+bu:¿e(t(#,A),cie#)	d~'
+;#(po,na):z(iem,bi,(o,ó)r)	d
+#na:zy# dz$
+m(e,a)na:¿er	d¿$
+#o,#prze,po,na,¶ró,pona,nieo:¿(A,D,M),z((!Ai),D,M,(!Rw)),S7	d~'
+
+#o,#prze,po,na,¶ró,pona,nieo:zi(p,m,ar,em,om) d~'
+o:ziêbi	d~'
+
+go:zill	d¿$
+:ziA	dzi$$
+:zi	dz$
+:z	dz$
+(!n)a:ha	d$
+A:hA		d
+
+:rz(T,K)	cz$$
+:rz	d
+#sk±:¿e		d~'
+:¿(T,K)	cz$
+:¿	d¿$
+:¼	d
+\
+
+letter é e~'
+:'	e~'
+:e	-
+\
+
+letter ë e
+i:	~'e
+:A	e~'
+\
+
+letter e e
+:+i	e~'i$
+:+	e~'
+:'i	e~'i$
+:'	e~'
+b:etho(v,w)en et$$$
+b:enha	-
+b:ef	i$
+(b,sh,ph):ar	e$
+(d,f):ar	i$
+[en]g:an	ii$
+[en]g:ar	ie$
+st:ak	ej$
+#b:er(#,s) i$		; holenderski de beers i angielski beer
+[en]:ader	i$
+[en]cr:at	ijej$
+#:arth  e$
+b:agl(&,e) i$
+eaur:gard# gar$$$$
+eaur:gard -
+:iden	aj$
+C:asure(#,!Cr) e¿er$$$$$
+C:asurer e¿e$$$
+C:asur& e¿e$$$
+
+[en]ded:erA	e~'
+[en]d:er	i$
+
+#b:em(ek#,kA,w(uch,u#,ic)) e~'
+[en]#!Cdr:eC	i$
+[en]:en(zym,erg) e
+[en](r,l):en	i$
+
+t:uf(el,l)	oj$
+
+:ux#	e$$
+
+iff:#	-
+h:wle(t,cie)	ju$
+[en]dunl:av	e$
+[en]l:av	i$
+[en]b:am	i$
+cr:am	i$
+#l:eds	i$
+[en]C:ech	icz$$$
+[en]#C:ach	icz$$$
+[en]C:acem#	is$$
+[en]C:ace#	is$$$
+[en]C:ac&	is$$
+[en]C:aseK	is$$$
+[en]C:asem#	iz$$
+[en]C:ase#	iz$$$
+[en]C:as&	iz$$
+
+#y:at	aj$
+
+l:euw	ej$$
+l:uwen	ej$
+pop:y(e,&)	a
+kl:ene(x,ks) i$
+kl:e	-
+gr:en i$
+sp:ed i$
+fl:et	i$
+b:ep i$
+fr:e i$
+#f:ed i$
+f:edback idbe$$$$$
+f:e(der,ling) i$
+s:ed	i$
+[en]s:e	i$
+bard:en	i$
+t:en i$
+#m:er -
+str:e(t,p)	i$
+sl:ep i$
+r:e(duk,dyc,kspor,lek,migr,misj,wang) e~'
+r:e(d,v,bo)	i$
+h:wit(t,cie#) juj'$
+#mek#:wan	ju³e$$
+:ese#	is$$$
+#g,#p,#pep:es(em,ie)#	e
+:esie#		i$
+:esem#		i$
+:es&	i$
+
+[en]gr:at	ej$
+
+#h:il	aj$
+
+:aco	ik$$
+:ador	e
+br:ad	e$
+r:ad	i$
+r:ach	icz$$$
+r:alplay i$
+
+l:igh#	i$$$
+l:igh	ig$$$
+
+g:ist	aj$
+#s:i(n,t) aj$
+
+gi:lle#	e
+chlor:lle#	e
+cyt:lle#	e
+ksante:lle#	e
+rgane:lle#	e
+
+:lle#	~!el$$$
+
+
+; herre pierre de la guerre
+#h:rr	e$
+:rre#	~!er$$$
+
+
+
+#:ustas&	justej$$$$
+#:urocar jurok$$$$
+
+cl:aC	i$
+h:ath	i$
+k:at	i$
+h:asie	i$
+y:ar	e$
+andr:a	e
+s:arch	ercz$$$$
+:ast	i$
+dr:am(#,C)	i$
+h:art	-
+br:ak	ej$
+
+nukl:ar	e
+bal:ar	e
+:r(kty,cti)	e
+l:arn	e$
+#el:ar	e
+l:ar	i$
+
+p,#:arl e$
+p:ar(son,y,&i)	ie$
+sp:ars i$
+p:ars	e$
+
+:ucht	ojsz$$$
+t:uff(e,l)	oj$$
+g:ar	ii$
+ni:i	ej
+#sz:ik	ej$
+w:imar	aj$
+pr:is	aj$
+pr:uss	oj$$
+pr:us	oj$
+h:i(n,t,cie#)	aj$
+kr:is	aj$
+:i(ss,sberg,p,lh,h,f(sw,etz,er(t,ci))) aj$
+(l,r):ib	aj$
+:ight		ej$$$
+:i(b,g,ll,v)	ej$
+:icest		e$$$
+lov:cr		-
+k:y(#,C)	i$
+[en]C:ey(#,&)	i$
+#f:eriA	e:
+
+thorn:#	-
+
+:ee	-
+e:e	e$
+#:e#	e$
+[en](id,odyc):e#	e~'
+[en]:e#A	ii_$
+[en]:e#	ii$
+r:ud	oj$
+n:ue	oj$
+n:uman	oj$
+:ugh	oj$
+t:uch	ucz$$$
+s:ul(#,ow,(u,em)#) o³$
+:ulos	-
+#fr:i	aj$
+#:iff	aj$$
+#(ni,prz):eU	e~'
+:ów	e
+
+arlen:#	-
+
+:i#	e
+aparth:i	ej$
+(!Ccs,els)h:i	aj$
+schw:iC		aj$
+i:u#A	e_$
+i:u#	e$
+:u#	eu$
+
+[en]mor:#	-
+[en]oyl:#	-
+a(y,i)n:#	-
+
+artr:#	-
+
+;ea
+b:atl	i$
+tr:ak	i$
+str:am	i$
+sh:a#A	ii_$
+sh:a#	ii$
+l:id(³,e³) e
+#l:i(f,gh) ej$
+(k,o)l:imy# e
+l:i(b,d,f,g,h,m,t(z,er,m))	aj$
+
+
+#l:ar#	ii$
+#l:a(d,n,r,g)	i$
+#(ni,tel,wic,id):a	e
+s:ab	i$
+#p:ak	i$
+sp:ak	i$
+id:al	e
+n:ades	e
+[en]b:auchamp icze$$$$$
+b:auchamp	o$$
+b:aut(i,y)	ju$$
+d:alki	e
+d:anim	e
+#d:an(dre,ton)	e
+d:a(l,n,v) i$
+d:acA	ik$$
+d:ath	ef$$$
+p:ace#	is$$$
+p:asA	i$
+p:ach	icz$$$
+p:ac	is~'$$
+
+
+
+
+; francuskie
+:aux	o$$$
+:au	o$$
+
+; angielskie
+#:ak	ej$
+#:aC	i$
+
+[en]r:ag(uj,ow,ent,enci)	e~'
+[en]:a(v,g)	i$
+
+t:at(r,yn,yñ)	e~'
+(al,aryma,gala,kala)t:a	e~'
+lut:aln	e~'
+st:a(ryn,ran,topygi,ty(t,ci)) e~'
+t:akow	e~'
+prot:az	e~'
+t:acie#	e~'
+brakt:at	e~'
+t:ad	e$
+t:aC	i$
+
+
+l:igh#A	i_$$$
+l:ighA  ij$$$
+l:igh	i$$$
+
+;niemieckie
+:ise(n,r)	ajz$$
+:iss	aj$$
+kl,ol:ist(ego,emu,ej,e)#	e
+:ist(e,r)	aj$
+:ich		aj$
+:iß		ajs$$
+:it(z,l,n,m)	aj$
+:ue(r,n)	oj$
+d:ut(z,sch) oj$
+n:u(b,geb,stad)	oj$
+C:ub(en,ach)	oj$
+h:id(t,c)	aj$$
+trach:id	e~'i$
+h:id		aj$
+arb:i(t,c)	aj$
+
+#kl:in		aj$
+#:inar	ej$
+#:in	aj$
+h:in	aj$
+chom:in	e
+m:in	aj$
+:utz	oj$
+r:ute	oj$
+
+#w:i	ej
+[en]r:ws(#,A)	ju$
+
+
+n:ws(k,cy)	e
+n:ws	Ju$
+
+ol:ast(er#,r)	e
+l:asA	iz$$
+l:as	i$
+
+m:adow	edo³$$$$
+(l,m,n):a(d,t)	i$
+(h,st):a(d,n,l,m,v)	e$
+
+:o	e
+cr:e(y,C)	i$
+
+
+[en]#p:ter(cymen,s(en,sen,bur(g,s,¿)))	e~'
+[en]#p:ter	i
+
+; specjalnie dla kretynów z Ivo Software co wynale¼li miasto Pitersburg
+#p:ter	e~'
+
+\
+
+letter ê ê
+:' ê~'
+
+;wi,pi:tna(s,¶)	e	;	piêtna¶cie, dziewiêtna¶cie
+;wi,pi:ædzie	en'$	; 	piêædziesi±t
+
+;:#A	e_
+;:l,³,#	e
+;:æ,ci,d¼,dzi,¶,si	en'
+;:t,d	en
+;:p,b	em
+;:k,g	eN
+\
+
+letter f f
+:'#	f
+:'	f~'
+:f	-
+of:ice# fis$$$
+of:ic&	fis$$
+\
+
+letter g g
+:'#	g~'
+:'	g~'
+
+S5:iacc	d¿iak$$$$
+S5:iac	d¿iak$$$
+[en] #:iant(s#,#)	gaje$$
+S5,S5gior:i(an,o,u)	d¿i$
+S5:irard	¿
+S5:iscard	¿
+
+#:in(ami,ach,a,y,om,u,owi,em)# d¿
+#:in# d¿
+
+ya:er	d¿
+
+:érard	¿
+[en]re:inald	d¿
+
+#:mail	d¿imej$$$
+
+:g&	g
+:&	d¿
+
+(ll,av)en:er	d¿
+llen:&	d¿
+en:ineer	d¿ini$$$$
+[fr]#ro:er	¿
+[en]#ro:er	³d¿
+#ro:er	d¿
+#ran:er	d¿
+ber:erac(#,a,e,o,ó) ¿erak$$$$
+ber:eraki ¿
+boulan:er	¿
+lobri:id	d¿
+pia:e(t,ci)		¿
+
+ver:encia	hensj$$$$
+
+ma:ino(cie,t)	¿
+ma:nani	ñj$
+#pa:nol ñj$
+ccompa:nA ñj$
+mante:nA	ñj$
+codo:ni	-
+sca:ni	-
+parmi:iani	d¿ia$$
+peru:i(A,n)	d¿i
+arta:nan	ñj$
+(a,e,i,o,u,y):li(a,e,o,u,ó,±,ê,i)	-
+
+:entlem(a,e)(n,ñ) d¿entelme$$$$$$$
+
+
+; maggiem to Maggio czy Magg?
+[it]A:giem#	d¿i$$
+a:giem#	d¿i$$
+A:giem# -
+
+; loggie albo Maggie
+#lo:gie# d¿$
+A:gie#	gi$$$
+A:giA	d¿j$$
+[en]:gle# g@l$$$
+:g	-
+:h(o,e)lm g
+:h(i,a)ll	g
+:hair		g
+:hami#	g$
+:ham	ge$$
+:haus	g
+:horn	g
+:h	g$
+
+; poni¿sze pewnie nie dla Ivony
+;:³#((R,T)(T,DT),T(A,R),K,(D,T,R,M)K,RDK)	k$
+;:³$	k$
+;:$	k
+;:³#	g$
+;:³D	g$
+;:(R,T)(T,DT),T(A,R),K,(D,T,R,M)K,RDK	k
+
+\
+
+letter h h
+:'A	h~'
+:+#	h
+:'#	h
+:+	h~'
+:'	h~'
+
+
+#r:	-
+kur:an	h
+super:	h
+hiper:	h
+hyper:	h
+r:(eim,ead,ound,au(s,z),avn,e(li,nd),o(rn,ld,us,f,v),ydr)	h
+r:eug	hoj$$
+ester:	h
+hAr:Ar	h
+or:an	h
+war:ol	h
+r:ood	h
+r:awk	h
+r:	-
+
+[en]elija:A	sz
+
+ar:a(c,nci,nt,t)	h
+ta:it(i,a) ~'
+:ra(bi,d)	h
+ba:ra(j,ñ,i(n,ñ))	h
+:recz	h
+:rubiesz	h
+del:i	-
+bra:m	-
+E:r	-
+o:m	-
+dru:n	h
+:uil	³$
+rn:ar -
+wa:n(±,ê,i(e,ê,j)) h
+oe,ö:m	-
+ü:l	-
+E:n	-
+E:lm	-
+pa:lav	h
+wa:liw	h
+#u:lA	h
+A:l	-
+n:ei(t,cie) aj$$
+#(l,d)&:A	-
+#:arlequin	arleki$$$$$$$
+#:je(l,m)	sz$
+#k:#	hy
+#k:m#	hym$
+#:m(m#,mm#,mmm#,#) hym$
+\
+
+letter i i
+:+	i~'
+
+:'i	ii$
+:'u	i~'u$
+:'A	ij
+:' i~'
+:grek i
+
+sole:l# j$
+
+magl:cie,t(owi#,om#,ów#,ach#,e,&) aj
+#:phon aj
+ka:ser	jz$
+#f:a³	ij
+(k,g)r:eg	i$
+#w:ener	i$
+#w:ese iz$$
+; [de]b:er	i$
+b:erstub	irsz$$$
+d:eter		i$
+nav:exper(t,c)	i~'e$
+ba:l	j
+#a:(b,d) ~'i
+:yA	i
+#:rish	aj
+br:d& ajd$
+[en]br:de#	ajd$$
+sp:derma(n,ñ)	ajderme$$$$$
+[en]#p:nes(kA,ce#,ek#)	i
+[en]#p:ne(#,s,a) ajn$$
+dr:ve#	ajv$$
+dr:v(A,&)	aj
+#vr:es	i$
+#p:new(oo,ee) ajn$$
+#p:neapp	ajne$$$
+sh:eld		i$
+thf:nder	aj
+surv:val ajve$$
+tr:um#	j
+tr:um	i~'
+f:eld	i$
+[en]g:rland i
+[en]g:rl e
+g:rl#	e
+:e(tz,hl)	i$
+l:e(b,cht,sch)	i$
+d:et(rich,l) i$
+cl:jster ej$
+l:onel	aj
+#l:ons	j
+#l:on	aj
+po:n(t,cie)	j
+[fr]#l:on#A	j±~'$$
+[fr]#l:onA	j
+l:fe#	ajf$$
+l:f&	aj
+#:apet	j
+fr:ed	i$
+r:der	aj
+pier:e	j
+r:ed	i$
+[en]el:jah	ajd¿$
+
+llesp:e		i$
+
+[en](bb,dd,ff,ll,mm,nn,pp,rr,ss,tt):es	i~'$
+
+[en]#:von(a,±,ê,y,ie)# i
+[en]#:vano(w,v)	iwano$$$$
+[en]#:vaC	ajve$$
+[en]#:vA	aj
+
+[en]sh:ne#	ajn$$
+sh:n&		aj
+
+#r:epi j
+#r:eC	i$
+r:jkaard ek$$$
+
+pr:estle(y,j) es$$$
+
+#:rons	aj
+[es,pt]:saacem#	iza:aki$$$$
+[es,pt]:saac(#,A)	izaak$$$$
+#:saacem#	ajzeki$$$$
+#:saac(#,A) ajzek$$$$
+
+b:rd	e
+h:gh	aj$$
+f:rem(ce,kA,ek) i
+f:re#	ajer$$
+#f:re	ajer$$
+f:r&	ajer$
+C:gh(t,ci)	aj$$
+
+b:rming	e
+b:o(r(±,ê,cA),dr(A,z),der)	i
+
+; test ivo
+
+#b:o	i~'
+#nub:o	i
+b:olog	i~'
+#tr:(om,o,ach,ami,a,u)# i~'
+; retriever
+r:ev	i$
+
+f:ndesiecl	ê~'desjek$$$$$$$
+
+m:cro(sof,chip) ajk$
+d:es(el#,lA) iz$$
+¿m,rak:i#	ij
+
+mult:A	i~'
+per:odon	i~'
+per:od	j
+(im,dra,lam)per:A	i
+per:A	i~'
+
+pol:i#	ji$
+
+pol:a#,ach#,ami#,ê,±,e#,o#,om#,owirus,oz,u#,ó	j
+pol:er(#,a#,±,ê,y#,o#,om#,ze#,ami#,ach#)	j
+pol:A	i
+
+:i	ji$
+(#nie,#)u:(¶,cz) ~'i
+#A: j
+nie:r	i
+e:ro	j
+moza:k,c	j
+
+
+A:A	j
+alici:#	i
+A:#	ji
+
+A:st(ycz,k)	~'i
+A:st(y,ê,±,owie,ami,ach,ów,om,o,a)#	~'i
+A:¶	ji
+A:d(#,zi)	~'i
+A:d(y,ê,±,owie,ami,ach,ów,om,o,a)#	~'i
+A:zm,¼m,zac	~'i
+
+Ce:(cie,t)#	~'i
+Ce:t(owi,u,em,y,ami,ach,a,om,o,ów)#	~'i
+Ce:towA	~'i
+
+be:i	j
+;hei
+she:	j
+he:	~'i
+
+;kei
+hoke:	~'i
+ke:	j
+
+;lei
+(k,o,te)le:	~'i
+le:	j
+
+;mei
+chome:	~'i
+me:ster	j
+me:zm,zac,stA	~'i
+me:	~'i
+
+;nei
+ne:zm	~'i
+ne:t(#,A),cie ~'i
+#ene:d	~'i
+ne:	j
+
+;rei
+(p,z)re:	~'i
+mure:n(#,(ach,ami,a,om,o,y,ie,±,ê)#) ~'i
+re:n(karn,terp,stal,fek,tegr,west)	~'i
+re:terac	~'i
+re:(n,t)	j
+
+A:	~'i
+:i	j
+
+
+
+f,t,d,h,cz:e,S3,a(lic,l(!i),(!mb)),(o,u)#,on	i ; j?
+b,c,g,k,m,n,p,s,w:A#	i
+p,b,w,m:e,S3,a(lic,l(!i),(!mb)),(o,u)#,on	i ; j?
+hig,e,o,#:e(!m)	j
+aug:a	j
+b,c,g,k,m,n,p,s,w:A	i
+kl:en(t,c)	ij
+#:A ij
+:A	i ; czy na pewno?
+\
+
+letter í i
+(c,s,z):'	~'i~'
+:'	i~'
+(c,s,z):A	~'ij
+(c,s,z):  ~'i
+:A	ij
+\
+
+letter j j
+:'	j
+(s,c,z):ua(r,n)(e,é)z	~'hu~'$
+:ua(r,n)(e,é)z	hu~'$
+[es]#:uan	hu~'$
+[pt]#:uan	¿u~'$
+tru:ill		h
+:abber	d¿a$$
+s:ero	j
+[pt]d:ero(s,#)	~'¿
+[pt]:ero(s,#)	¿
+(s,z,c):ero(s,#)	~'h
+:ero(s,#)	h
+:azz	d¿e$$
+:ack(!A) d¿e$$
+:ee	d¿i$$
+:armusch	d¿
+:arvis		d¿e$
+:ervis		d¿$
+:asper	d¿
+:avik	j
+:av	d¿
+#:erem(y,&) d¿
+:en(kin,ks,ner)	d¿
+#:oin(#,t,c) d¿oj$$
+#:ournal	¿$
+#:ooml		d¿u$$
+[en]#:ess	d¿
+
+#:et(t,cie#) d¿
+#:oe(l,y) d¿
+
+[pt]#:acin(tA,cie#) ¿as$$
+#:acin(tA,cie#) has$$
+:ak&	d¿ej$
+
+#:ivarA	h
+nin:(a,±,ê,i)	d¿
+:amb(a,o)la(y,i#)	d¿e$
+[en]:oseph	d¿oz$$
+:im(e,é)nez h
+#:oaquim	¿u~'ak$$$$
+#:oaqu(i,í)n	ho~'ak$$$$
+ale:andr	h
+(s,c,z):uez	~'h
+:uez	h
+#:uán	h
+#:uani(t,c)	h
+#:un(tA,cie#)	h
+#:osh	d¿
+#:ump	d¿a$
+#:ustin	d¿a$
+S5pu:ol ¿
+#:ihad	d¿
+[en]#:amie(g,m)	d¿ejm$$
+[en]#:amies d¿ejmi$$$$
+#ko:ak	d¿
+:ames	d¿ejm$$$
+:ay	d¿ej$$
+#:err	d¿e$$
+#:oggA	d¿og$$$
+[en]#:id(i,y)sz j
+[en]#:i(!A)	d¿
+#:oy	d¿
+#:ock	d¿o$$
+[en]#ma:estic d¿
+gud:ohn	j
+:onathan d¿
+:ohn	d¿o$$
+[en]#:ason	d¿ej$
+[en]#:onah	d¿
+:eff	d¿e$$
+[en]#:usti	d¿a$
+#:eans(#,A)	d¿i$$
+:oker d¿
+[en]#:ob#(¿e,twoj,jeg,jewo,was)	j
+[en]#:ob¿ j
+[en]#:ob			d¿
+na(w,v)a:A h
+\
+
+letter k k
+:+#	k
+:'#	k
+:+	k~'
+:'	k~'
+
+:nigh	-
+
+#:h	-
+c:h	k
+:haven k
+:holm	k
+:hau(s,z) k
+:hous	k
+:hend	k
+:hur(st,¶c) khe$$
+gur:hA	k$
+(r,n):hA k$
+:h -
+
+nic:leb(&,y) kel$$
+
+ê:kV	-
+\
+
+letter l l
+:+#	l
+:'#	l
+:+	l~'
+:'	l~'
+
+torti:lA	j$
+(truj,cabr)i:lA	j$
+:lac(#,a,o,u,ó,em#) -
+
+#vi:lon	j$
+
+[en]l:age# id¿$$$
+[en]l:ag(em,owi,u,ów,ach,om,a)# id¿$$
+[en](¿A,wra,si,tria,#ti,tan)ng:e#	l
+[en]cyng:e#	l
+[en]Ang:ey# li$$
+[en]Ang:ey   lej$$
+[en]Ang:er l
+[en]Ang:e(#,C) @l$
+[en]ck:(en,e)b(u,e,o)rg	l
+[en]ck:e(#,C)  @l$
+
+z(a,á)po:yA	j$
+
+(#,#ma):lor(c,ki#) j$
+
+:l&	-
+:l(!A)	-
+:ly#	li$$
+:lyC	li$$
+:lie#	li$$$
+;:lie	-
+:liA	-
+\
+
+letter ³ ³
+:'#	³
+:+#	³
+:'	³
+:+	³
+³:(!A)	-
+
+;(mys,giez):#	³
+;s,z,g,k,D:(#,b)	-
+\
+
+letter å l
+\
+
+letter m m
+:+#	m
+:'#	m
+:+	m~'
+:'	m~'
+#mh,#h:#	my
+#:hm#	m
+#:brol	em
+#to:my#		mi$$
+co:m	-
+e:manuel	-
+:mi	-
+:m(!A)	-
+\
+
+letter n n
+:'#	n
+:+#	n
+:'	n~'
+:+	n~'
+
+:ii#	ñji$$
+#:iede(rl,nth)	ni$$
+#:ietzscheA	nicz$$$$$$$$
+#:ietzsch	nicz$$$$$$$
+[en]:nies	ni$$$
+#:ewsk	n
+#:ewral n
+#:ewA	n
+#:ew	niu$$
+
+pri:cip	n
+#i:ci	nc~'$
+:igel	najd¿$$
+:iven	naj$
+
+
+:nC	-
+C:n	-
+
+i:nui	-
+:n(±,ê,ik,icz,ictw,ic(±,ê,y,e,ami,ach,a,om)#,ic#,o¶)	n~'
+:nie(#,j)	n~'
+:nov	-
+gie:nad -
+iA:n	n~'
+(³,¿)A:n	n~'
+vA:n	-
+wA:n	n~'
+yA:n	-
+
+hrebe:n	n~'
+zabobo:n	n~'
+bA:n	-
+c(e,i):n	n~'
+cA:n	-
+do:nel	-
+d(e,o):n	n~'
+dA:n	-
+brytfa:n	n~'
+fA:n	-
+oge:n	n~'
+(nie,naj,z)go:n	n~'
+#go:n	n~'
+biegu:n	n~'
+naga:n	n~'
+gA:n	-
+gehe:n	n~;
+#he:n(a,±,ê,ie,y)# n~'
+#he:nin(#,A)	n~'
+kuche:n	n~'
+#ha:n(y,ie,ami,ach,a)# n~'
+hA:n	-
+(woje,kaje,staje,marcja):n	n~'
+jA:n	-
+ko:n	n~'
+kA:n	-
+(do,kot,¶)li:n	n~'
+sole:n	n~'
+(#,nie)le:n(ach,ami,a,ie,i,e,ych,ymi,ymi,ym)# n~'
+lA:n	-
+gmi:n	n~'
+me:nic	n~'
+#ma:n(a,y)#	n~'
+#ma:noz	n~'
+mA:n	-
+równi:n	n~'
+nA:n	-
+harpu:n	n~'
+(æ,¶nie)pa:n	n~'
+#pa:n(ie,y,ami,ach,om,o,a)# n~'
+#pa:nic n~'
+pe:nin	n~'
+pA:n	-
+
+str(o,u):n	n~'
+chro:n	n~'
+suwere:n	n~'
+#ra:n(ego,emu,emi,em,ej,e,±,ych,ymi,ym,y,a,i)# n~'
+#ry:n(B,ami,ach,a,y)# n~'
+(po,za,sta,co,wczesno,pó¼no)ra:n	n~'
+(#,bez,#o)bro:n	n~'
+
+#poro:n	n~'
+koro:n	n~'
+
+;runn - mo¿na jeszcze poprawiæ
+ru:n	n~'
+rA:n	-
+
+(³,bez,wio,przeciw,#nie)se:n n~'
+#(na,niena)se:n	n~'
+#se:n(ego,emu,emi,em,ej,e,±,ych,ymi,ym,y,a,i)# n~'
+#sa:n(±,ê,y,ami,om,ie,ach,a)# n~'
+#(ho,ro)sa:n	n~'
+³osi:n	n~'
+sA:n	-
+
+(fon,us,kwaran,#su)ta:n	n~'
+monoto:n	n~'
+fortu:n	n~'
+(sz,B,pus)ty:n	n~'
+tA:n	-
+
+zi:n	n~'
+(r,c,d,s)zA:n	n~'
+zA:n	-
+
+; poni¿sze chyba niepotrzebne?
+#ma:n(a,ie)# n~'
+#do:n(ov,el)	-
+la:nA	-
+(mado,lado,de,#do):nA n~'
+#³u:n	n~'
+biegu:n	n~'
+(st,(³,wiel,enk,ótk)o,nie,dwu)ru:nA	n~'
+#ru:n(ego,emu,a,±,ej,i,e,ymi,ych,y)#	n~'
+(y,j,s,g,r,b,c,f)u:n	-
+(ma,pe):n(#,(a,em,owi,ie)#) -
+dA:n	-
+brytfa:n n~'
+fA:n	-
+
+:n#	-
+:n(i(!A),A) n~'
+:n -
+
+:cis(#,A)	ns~'$
+
+:cing	ns~'$
+beztale:ci	ñ
+val(e,é):ci(ami,ach,a,om,o,±,ê,e)#	nsj$$
+ale:ci(ami,ach,a,om,o,±,ê,ów,owie)#	ncz$
+:æ,ci,d¼,dzi	ñ
+a:gel(i(z,¼,s,¶,A),ol)	n ;N
+ewa:geli	n ;N
+a:gel	nd¿$
+
+
+:knigh	n
+:ckh	n ;N
+:kh(olm,au(s,z),end,ur(st,¶c))	n ;N
+:kh n
+
+
+:(g,k) n ;N
+:horn	n
+se:hor,ior	ñj$
+#se:or		ñj
+
+:igh(t,ci)	n
+
+:i(#,(!A)) n
+; tu potrzebny s³ownik
+; (kocham grepowanie morfologika)
+
+
+; unia - najprostsza
+(kom,rum)u:ie#	ni$
+nocu:ia#	ni$
+(#,kom,rum,pet,Ac)u:S4 ñj$
+u:S4	ni$
+
+; scania
+sca:S4	ñj$
+#ska,toska:S4 ñj$
+
+; inia - do korekty
+#pauli:ie#	ni$
+;#li:ie#		ni$
+li:ie#		ñj$
+georgi:ie#	ñj$
+cuki:ie#	ñj$
+i:ie#	ni$
+(¶,osk,ob)wi:S4	ni$
+ski:S4		ni$
+#trzebi:S4	ni$
+i:S4 ñj$
+
+; enia
+
+
+
+
+(y,wi,odo,oo,diu,rzy,gor)go:S4	ni$
+gamo:S4 ni$
+(s,t)o:ie ni$
+(diako,drago):ie#	ni$
+#da:ia#	ni$
+#(ma,cha):S4 ñj$
+#mile:iA ñj$
+
+(#o,f,(i,pet,ch,#a)r,\
+	(#,e,h,y)d,g,\
+	(br,t)i,j,\
+	(as,n,a,r,li,w)k,\
+	(#ko,pó³ko)l,\
+	m,n,Ap,s,t,paw,piw,amaz)o:\
+		S4	ñj$
+
+(arm,bad,czecz,eug,ifi,rkm,og,ast,tot,ofr)e:S4 ñj$
+
+tyra:ie	ni$
+#kompa,#alba,tyra:S4	ñj$
+:ium#	ñj$
+:ietsch ni$$
+:iels(s,cy,k,tw) ni$
+:iels	ni$$
+
+#mi:iu(#,j)	ni$
+#mi:iu	ni~'$
+
+#mi:io(n(a,±,emu,emi,ego,ej,e,ymi,ym,ych,y)#,w(a,±#,e,i#,y,o#)) ni$
+#mi:io ni~'$
+
+#mi:ie(#,(my,cie,ni,sz)#,r(z,sk,(ami,ach,a,em,owi,om,ów)#)) ni$
+#mi:ie ni~'$
+
+#mi:iat(u,o)r ni$
+#mi:ia	ni~'$
+
+:ielle#	~!niel5
+:iA	ni$
+:i	n
+
+\
+
+letter ñ ñ
+\
+
+letter o o
+:+i	o~'i$
+:+	o~'
+:oo	-
+:'i	o~'i$
+:'	o~'
+; roald
+#r:a(ld,r)	u~'
+;koontz
+k:ontz	u$
+t:oth	u$
+h:od	u$
+t:wnC	a³$
+s:und	a³$
+h:und	a³$
+v:ucher o³cz$$$
+t:uar	u~'$
+p:incar	±~'k$$$
+#br:wn	a³$
+#b:und	a³$
+t:epl	-
+:ugh	o³$$$
+t:uch	ucz$$$
+
+:ux#	u$$
+:ux(ach,ami,a,owi,ów,em,ie)# us$$
+
+[en]ost:pe#	o
+[en]:pe#	o³p$$
+
+:wning		a³$
+
+:ek(#,ows(k,c),(ami,ach,a,u,om,owie,iem,ów)#) u$
+p:ol(#,ow,(u,om,i,em,ami,ach,a)#)	u$
+p:wer(t(uj,owa),sals(k,c),niks(owa,uj)) o
+p:wer	a³$
+
+pr:u(st,¶)	-
+:C&	o³
+k:e(h,nig,st)	-
+laok:on	-
+lel:uch	usz$$$
+l:u(i,p)	-
+h:uston j
+hol:ub	-
+l:ud	a³$
+#f:ur#	o$
+(f,v):u	-
+:ull	-
+:theres# o
+:ther	az$$
+s:uthampt	a³fhe$$$$
+:ë	o~'
+#k:u	o~'$
+#r:gers	o³d¿$
+n:uv	-
+
+r:ugh#	o$$$
+
+
+
+#h:ved	u	; skandynawskie
+[en]:ve# ow$$
+[en]:ve o³
+
+
+; gouda vs gould
+#g:ud	o³$
+S5g:uC	-
+
+#cl:u(#,se,zo) -
+h:wer	a³$
+grub:u	o
+b:urne# orn$$$$
+b:urn(e,&) o$
+b:u	-
+c:a(st,¶cie#) o³$
+
+#:ak	o³$
+b:a(t,cie#) o³$
+b:ard	o$
+fl:wer	a³$
+m:ntherlan	±~'$
+m:ntgolfier	±~'$$
+m:ntserra(t,c)	unsa$$$$$
+m:unier	-
+m:unt a³$
+
+st:nek#		o
+#st:ney		o³
+[en]st:n(e#,&)	o³n$$
+#st:n(e#,&)	o³n$$
+[en]st:neC*AC	o³n$$
+[en]st:ne	o³
+
+[en]r:seK	o³s$$
+[en]r:s(e#,&)	o³z$$
+
+n:teboo	o³t$$
+n:tepad	o³t$$
+
+p:llack	o³le$$$$
+p:llock	o³lo$$$$
+
+y:ung	a$
+y:ur	o$
+y:u	-
+
+C:isson#	³as±~'$$$$$
+C:isson		³a$$
+p:itier	³a$
+p:ussinette	us~'$$$
+p:ussin#		us±~'$$$$$
+p:ussin		uso$$$$
+
+p:wer(boo,#,ze#,A,s(#,(ach,ami,a,om,owie,owi,em,ie,ów)#,ows))	a³$
+
+#m:ir	oj$
+:ir(#,(em,owi,owie,ze,ami,ach,om,ów,y,a)#,ows) u³a$
+
+#de#h:och	-
+#h:och	ucz$$$
+#h:oC	u$
+:odporn	o
+jasn:o(k(i,(a,±)#),cy#) o
+sn:oC	u$
+z:om(#,(em,ach,ami,a,ie,om,owi,ow±,y,ów,u)#,owa,owy,owe) u$
+z:o o~'
+#baz:o(k,c)	u$
+f:o(d,l,t) u$
+bl:o(C,y)	u$
+fl:o(C,y)	u$
+cl:o(C,y)	u$
+sal:on		u$
+
+[en]#(h,l,m,n):ow	u³$$
+[en]#(h,l,m,n):o		u$
+[en]#p,#niep:o(B,CB,lim,z(d,n),wij,t(acz,rz,ula,wier),\
+		b(B,ala,ci,dra,dz,gry,ie(d,r),ija,jad,je¿,k,le(k,p,w),\
+			licz,ma(c,w),mi(a,e),ni¿,ozo,ra(b,c,s,B),\
+			ryw,rz,sad,ser,si(a,e),suw,syc,sz,tacz,t³,trB,\
+			tyk,wi),\
+		c(iA,h,zA),\
+		d(bier,bij,chA,ci,cz,da(l,w)A,dych,dzi,\
+			ej,garn,gina,gradz,gryz,grz,\
+			je¿,kle,krA,kurz,k³,\
+			lat,miA,mra,myk,naj,nawiA,nos(i,z),no¶,\
+			pad,parz,prow,pruw,prysk,pych,p³,\
+			racz,rast,ryw,rzA,rB,skak,suw,szu,sB,\
+			tyk,walA,wiedz,wij,wo(zi,¼,¿),wrac),\
+		g(B,l±,radz,romn,rywa,ryza),\
+		jcows,\
+		k(B,ra,ryw,rB,upac,urz),\
+		limpi,\
+		m(iat,B),\
+		ndul,\
+		p(B,era,ada,ala,asu,asy,atr,ie,isuj,isyw,lata,owia,rawia,usz),\
+		r(B,a(l,³,n),z),\
+		s(B,adz,iad,iedl,siA,trz),\
+		t(B,acza,rz(±,ê),ula,wiera),\
+		w(B,ija),\
+		z(B,dabi,nacz)) o~'
+[en]p:o		u$
+[en](³,dr)ug:o	o~'
+#g:od	u$
+[en]g:o(b,d)	u$
+[en](±,ê)d:wn	o
+[en]d:wni# o
+[en]d:wn(±,ê,o¶) o
+[en]d:wnik(owi,iem,u,i,ami,ów,ach,a)# o
+[en]d:wnicz o
+[en]d:wnictw o
+[en]d:wnic(ê,y,±,e,ami,ach,ów,a)# o
+[en]d:wni(ejsz,(c,k,ach,ami,a,ów,om,o,±,ê,ejsi,ej,e)#) o
+[en]przecud,#prz,najcud: o
+[en]#cud:wn	o
+[en]d:wn a³$
+
+t:wn#	a³$
+t:wer a³$
+
+; moebius
+m:eb	-
+tr:em	-
+r:ent	-
+(#,sc)h:eC -
+
+; goes vs. goering
+#g:es(#,A)	o³$
+#(g,b):eC	-
+
+energ:e	o~'
+nag:e o~'
+g:eC -
+ph:e	-
+
+; boole, booty, booki, google i inne
+g:og	u$
+#b:o	u$
+grub:o	o~'
+gleb:o	o~'
+turb:o	o~'
+[en]b:ore#	ur$$$
+b:o(b,d,k,l,m,n,p,s,t)	u$
+
+; moorda
+
+:odpor	o~'
+:organ	o~'
+:ochro	o~'
+:osz	o~'
+sam:o	o~'
+term:o	o~'
+:obywat o~'
+
+m:ore#	ur$$$
+m:o	u$
+
+;roo
+br:ok	u$
+aer:o	o~'
+astr:o	o~'
+bur:o	o~'
+bystr:o	o~'
+chlor:o o~'
+czter:o o~'
+czwor:o o~'
+elektr:o o~'
+eur:o o~'
+fosfor:o o~'
+heter:o o~'
+m(i,a)kr:o o~'
+modr:o	o~'
+s(t,z)ar:o	o~'
+udar:o o~'
+¿ar:o	o~'
+;r:ok(iego,iemu,imi,ich,im,±,iej,ie,i)# o~'
+r:o	u$
+
+t:ur	-
+:ut(wa,yk,len,r±) o³
+#koh:ut	o³
+r:und	a³$
+(elekt,czte,ost,mak,mik)r:u	o
+pr:unij	o
+r:uge	u¿$$$
+r:usse# us$$$$
+r:uss&	-
+r:uss	u$$
+r:u	-
+:ut	a³$
+
+C:ugan(ia,dyj) o~'u$
+C:ug	-
+
+h:use#	a³s$$$
+(nie,#)h:usto(n,ñ) iu
+h:us	a³$
+h:uC	u$	
+
+
+:u#	-
+d:u(sz,cz,st,bez) o~'
+d:u -
+A:ux#	³u$$
+:ux#	o$$
+A:u	~'
+; oo vs oo
+d:ok(o³,ól)	o
+:o(p³,pty,ct,rgan,szcz,dpor,sobow,por,gni,pera,kres,brot,biek,bszar,woc) o~'
+
+#d:or(#,s,way)	o$
+[en]#d,#nied:o(B,dby,kol,kB,kre¶,ra(B,li,nA),r(uj,yw,z),trz) o~'
+[en]pseud:o	o~'
+[en]d:o	u$
+
+d,jedn,czter,czwor,sze¶ci,siedmi,o¶mi,êci,nast,iest,wiel,\
+	wielk,ma³,on,sk,êst,lakt,lek,³t,piêkn,\
+	astr,aer,aut,fot,kos,modr,sam,¶n,nisk,ysok,³us,now,\
+	bi,ow,itn,chlor,ciemn,jasn,arn,mi,sam,\
+	mikr,makr,#nan,iz,#p,#niep:oU	o~'
+
+m:ntpass	±~'$$
+
+g:ethA	et$$$
+g:er	e$
+;:e	o
+\
+
+letter ó u
+:'i	o~'i$
+:'	o~'
+g:me	o	;gómez
+lmod:(v,war) o	;almodóvar
+bart:k	o
+t:bal	o	;cristóbal
+col:n	o	;colón
+#le:n	o	;león
+\
+
+letter p p
+:+	p
+:'	p
+hi:hop	p
+ra:hach p$
+a:heli	p
+she:h(a,e)rd	p$
+:hnom	p$
+:h	f$
+#a:p	-
+knei:p	-
+
+
+:ple(#,C)	p@l$$$
+:pC		-
+co:p	-
+
+cam:bell be$$$
+
+:feiffe faj$$$$
+
+;testowa poprawka ud¼wiêczniania
+:#(b,d,g)	p_
+:#	p
+
+:d,R((!Dz)A,my,Dmy),my,Tmy,TDmy,G,TTRG,(TT,TD,TR,T,R,M)G	b
+\
+
+letter q k
+
+; najpierw wyj±tki
+:ueensland k³insle$$$$$$$
+:ueen	k³i$$$
+:uinn	k³i$$$
+:uez	k$
+:uai#	ke$$$
+:uais#	ke$$$$
+:uais	ke$$$
+:uasiA	k³az~'i~'$$$$
+:uasi	k³az~'i$$$$
+:uinc	k³ins$$$$
+:uip	ki$$
+:ui(é,e)	kij$$
+:ue#		k$$
+r:uema		k$
+algon:ui	k$
+mos:ui	ki$$
+:uetzal k$
+[en]:uA	k³$
+[es,pt]:uA	k$
+:uill	k$
+blan:ui#	ki$$
+blan:ui	k$
+:uist k³$
+i:ue#	k$$
+:uA	kv$
+\
+
+letter r r
+:+#	r
+:'# r
+:'hA	r~'h$
+:+	r~'
+:' r~'
+a:rheni	-
+A:rhA	r$$
+:r&	-
+:rie#	ri$$$
+:riA	-
+f:iend	re$$
+#e:za(c,tz)	r~'
+:zhi	rc~'$
+:zh	rc$
+#ba:zo#	r~'
+e:zog	rc$
+h:zei	rcaj$$$
+h:zeu	rcoj$$$
+(!c)h:zi	rc~'$
+(!c)h:zA	rc$
+:z(ö,ä) rc$
+A*:h(avn,amn#,ead#,ausen) rh$
+
+
+; b³êdny (dawny) 'Herz', ale 'bogini Herze'
+
+#he:ze#	rz$
+(mega,kilo)he:z(#,!Ai) rc$
+#he:z(#,a,(om,ów,y)#)   rc$
+
+:z³	r~'
+#he:zi	rc~'$
+#he:z	rc$
+be:zeliu	rc$
+#ha:zi	rc~'$
+#ha:z	rc$
+#sfo:z(a,ê,y,ó,o)	rc$
+supe:zA#	¿$
+#supe:z	r~'
+#(p,w,b):# rry
+#,#o,#nieo,po,prze,wy,ode,za,na:zn	r~'
+A:zn(ê,iê(æ#,ci,t))	r~'
+#mu:zasichl	r~'
+#mi:z(a,±#,ê#,y#,o)		r~'
+:z(RD,i,³#)	r~'
+ma:z(l,³,n) r~'
+bmie:z(l,³,n) r~'
+;#ma,#(u,od,pod,po,wy,za,roz,prze,)ma,#mie,#(ob,prze,z)mie:z(l,³,n)(#,A)	r~'
+uma:za	¿$
+koma:za	¿$
+ma:zaj± r~'
+(od,poza,wy,o,za,roz,na,prze,pod,przy)ma:za r~'
+#ta:zan(#,a#,ow)	r~'
+:z	rz$
+\
+
+letter s s
+:+#	s
+:'#	s
+:+	s~'
+[ru]:'#	¶
+:' s~'
+
+[ru]:iemion sj$
+#(je,na):ion s
+[en]C:ion(#,s#) sz@$$
+[en]:ion(#,s#) ¿@$$
+
+:ian(us,ae) sj$
+:imov s~'
+
+a,e,i,o,u:i(o,ó)n#	sjo$$
+
+s:&iA	j$$
+:&ie(go,mu)# sj$
+:&iA	s$
+
+scorse:(e,&)	z
+
+; najpierw wyj±tki
+#:si(e#,j)	s~'
+#:ieg	z~'i$$
+:iou(x,ks)	sj$$
+#:iu(x,ks)	sj$
+#:judad s
+hiro:im	sz
+:ikh(#,A) s~'ikx$$$
+[se]tor:ten	sz
+wood:tock	sto$$$
+[de]:tock	szto$$$
+:trasse	sztras$$$$$
+:traße sz
+:köpi	sz$
+:kjA	sz$$
+[se]#:j(est,e¶,en) s
+[se]#:j(a,e,i,o,u,ö,ä) h$
+#:jö	sz$
+:ignor	s~'iñj$$$
+excel:io	sj$
+:inatr	s~'
+:inbajew s~'
+pergole:i	s~'
+maga:ine	s~'	; skandynawskie
+:pitz	sz
+:ix	s~'
+o:pielic	s
+:hakespear	szekspi$$$$$$$$
+#:heen(#,A)	szi$$$
+
+(#j,#)o:ip	s~'
+
+:tieber		szti$$$
+:tiC*tz		sz
+:tockh		sz
+:toibe		sztoj$$$
+:trasbour	s
+:trasz		s
+:tras		sz
+:trehl		sz
+:treisand	strajse$$$$$$
+:tuhr		sz
+
+:piel	szpi$$$
+:pieg(el,l)	szpi$$$
+:turm(ban,f(uhr,ue,ü)) sz
+:tabs(unter,feld,gefr)	sz
+
+[en]:ugar	sz
+[en]i:ion# ¿y$$
+cor:ice	s~'
+cor:ic	s~'ik$$
+cor:iC	s~'
+de:cartesiA	karci$$$$$$$
+de:cartes(#,A)	kart$$$$$$
+
+#:alzbur	zalc$$$
+#han:atag	z
+
+#pa:s(±#,ê#,y#,ie#,a(#,mi#,ach#))	s~'
+pa:sC	s$
+pa:s	-
+ko:sucie	sz$
+ko:suth		szut$$$$
+hu:sein		saj$$$
+je:ienin	s~'
+:sier	-
+:ier#	zje$$$
+:ier((ami,ach,a,em,owi,om,ów,ze)#,ows(k,c)) zj$
+
+:sion#	szy$$$
+:sbA	s$
+
+alek:iejew s~'
+[ru]alek:iej	s~'
+
+pa:siA	sj$$
+
+:ite#	sajt$$$
+:it&	saj$
+:ic&	saj$
+
+lugo:iA	zj$
+lugo:i	z~'
+
+bre:son	-
+jo:i(f,p)	s~'
+gdra:il	s~'
+[en]#ba:il	z~'
+#ba:il	s~'
+:ill	s~'
+n:il	s~'
+:il(j,ij,cow)	s~'
+[ru]wa:ili	s~'
+[ru]:ier(gi,io)	s~'
+[ru]w:iewo³A	s~'ieva$$$$
+(#,#p,#sk)ep:i	s~'
+hel:i(n,ñ)	s~'
+ham:in	s~'
+pe:inA	s~'
+:si(n,r)(#,A)	s~'$
+:si(m,f,t,#,emu#,ch#)	s~'$
+le:sie#		s$
+le:siA		sj$$
+:s#	-
+ak:ionow	sj$
+r:ifa	s~'
+
+(we,ea,cy,ek,mi):te s
+:tern(#,(em,ie,owie,owi,ów,om,ami,ach,a,y)#,ows) sz
+
+pa:ibrz s
+ko:ib	s
+kwa:ib	s
+:ibi(n(#,A),ñ,ls(kA,cy))	s
+:ib	s~'
+:ierr	s~'ie$$$
+:iev	s~'i$$
+:ikk	s~'i$$
+:ici(ón,as)# s~'
+:icil	s~'ic~'$$
+
+:ideK	sajt$$$
+:ide#	sajd$$$
+:id&	saj$
+
+:ida	s~'
+
+de:icie#	s~'
+:itk	s
+:itars	s
+:itodr	s
+#:it#	s
+#:it(ach#,ak,ek#,ami#,arz,ecz,em#,o#,ok,om#,owA,w#,wA,B,a#) s
+szympan:ic	s
+n:ic#	z~'ik$$
+n:i(t,c)	z~'
+:itnA	s
+:it s~'
+
+du:ig	s
+:ig³	s
+:ig	s~'
+:ilv	s~'
+:ister	s~'
+:is(t,z,³,k) s
+#:isi(#,A,c)	s
+:is	s~'
+za,wy,we,ode:si(e#,j)	s~'
+za,wy,we,ode:sA		s~'
+#pa:s(a,ie,y)#	s~'
+#la:sA	s~'
+:s(u,ego,emu,em,ie,ych,ym,y,owie,ów,om,ach,owa,owej,ow±,owych,owymi,owy,a)# -
+(#,A):sen	s~'
+:sen	-
+(geni,cy):t	s
+#o:tein	s
+
+:tein sztaj$$$
+:traus sz
+:tauf sz
+
+:tadcz	sz
+:tadciA		sztadz$$$$
+:tad(t,c)	szta$$$
+
+:earch sercz$$$$$
+#:eans s
+#:eat(#,(owi,em,y,om,ów,ami,a)#) s
+#:eaci(e,k) s
+#:eaC	s~'i$$
+
+; iglesias & arthasiastra
+e:iasz si$
+e:ias(A,#,t) zj$
+a:iastr zj$
+
+; casius
+
+:iusie# sj$
+:iusi	si$
+:ius	sj$
+
+; casimirus z casio
+
+#ca:i	s~'
+
+; osiris i neosirianie
+
+:iri	s~'
+
+; isidor
+
+#i:iC	s~'
+
+; niewiele jest polskich wyrazów z "sh"
+:hend z$
+(#,#nie)(ek,dy):hA	s~'
+#e:hael	s~'
+:hire# szer$$$$
+:hir&	sze$$
+:huttle	sza$$
+#:h	sz$
+A*:h(orn,ill,olm,elm,ead,ausen,avn,amn#)	s~'
+:heim	s~'haj$$$
+:h	sz$
+
+; ¿aden polski wyraz nie zawiera "schwarz" :)
+:chwarzi	szvarc~'$$$$$$
+:chwarz	szvarc$$$$$$
+:chwy(t,æ,c) s~'
+:chwa³ s~'
+:chw sz$$
+
+:chiappa sk$$
+:chool	sku$$$$
+:cholar sk$$
+
+:ch*(tz,ü,ö,ä,ß)	sz$$
+ö,ü,ä:ch	sz$$
+bo:ch(#,A)	sz$$
+
+:chab(#,A)	s~'
+:chab	sz$$
+:chadow s
+:chadz	s
+:chad	sz$$
+:chae	sz$$$
+:chau	sz$$
+:chaffer	sze$$$$ ; b³êdna pisownia schäffer?
+:chaf(t,ci,f) sz$$
+r:ch	sz$$
+(oe,ö):ch sz$$
+:cherzi	skerc~'$$$$$
+:cherz(#,A)	skerc$$$$$
+:chmur	s~'
+:chm	sz$$
+:chroe szre$$$$$
+:chr(a,ö,e,i,ü)  sz$$
+:chrup	s~'
+:chru	sz$$
+:chr	s~'
+
+:che(m(at,i,ac),rl,d(#,A,z))	s~'
+:che	sz$$
+
+
+:chulz	szulc$$$$$
+i:chur(iA,yj#) s~'
+:chud(n,l,³)	s~'
+:chu sz$$
+
+i:chi(as,o)	s~'
+:chiñ	s~'
+:chiz(o,m(A,#))	s~'
+A:chi(#,(ego,emu,imi,im,ich)#) sk$$
+#:chiele	szi$$$$
+:chi	sz$$
+
+w:chow	s~'
+w:ch(ó,o)d s~'
+:chow(a,kA,ek)	s~'
+:chorz	s~'
+:chorow	s~'
+:chomeinizo	s~'
+:cholA	s~'
+:chod(A,z,¼,kA,ni)	s~'
+:chomik s~'
+:cho	sz$$
+
+#pa:chA#	s~'
+:chA#	sz$$
+:chA	s~'
+
+:chlie	szli$$$$$
+:chli(#,by,¶,³,ñ) s~'
+:chli	sz$$
+:ch(³,¶,æ,ñ,l(i¶,iby,i#,ej,udn,ebi(a,æ#,l,³),eb#,ej,e#,anA,apa,asta,asz,añ,aj,am(#,y#),anA,ap(#,A,cie,my),ali,aB,ak,a#))	s~'
+:chnitz sz$$
+:chnei	sznaj$$$$$
+:chn(e,a)	sz$$
+:chn	s~'
+
+
+:ch(!A)	sz$$
+
+
+#p:t# sy
+:inus	s~'
+#:ilencj	s~'
+#:in(!A)	s~'
+:inal		s~'
+:si(!Cj)	s~'$
+
+#:irot(#,k,c,A) s
+#:iroccA	s~'irok$$$$$
+#:ir	s~'
+
+au:e(r,n)	z
+
+;kompleksie vs pleksi
+:i³	s
+plek:i(!A)	s~'
+mak:i(!A)	s~'
+elik:i(!A)	s~'
+(in,out):ider	saj$
+#:ile#	s
+#:id(³,e³)	s
+:ilim(#,y)		s
+:il(ec,ca,cem,cowi,cu,ce,cach,cami,com,ców,scy)#	s
+:ilsk	s
+:imbier	s
+:im*ñ	s
+:inkiew s
+#:il#siê#	s
+#:i(alic,al(!i),li(k,f,m,t),d,l(!Ai±ê),l(!Cn),l#,m,s,nan,nol,nu,ning)	s~'
+A,#,R:ili(k,c)(o,a)	s~'
+p:io(ñ,n(#,a,o,ó)) sj$
+
+jeni:iej	sj$
+
+:iv	s~'
+:siv	s~'$
+e:id	s~'
+:imul	s~'
+:imm	s~'
+
+:ing	s~'
+
+#:tutt	sz
+; no i defaulty
+sile:iA	zj$
+:i	s
+
+:s&ie#   s$
+:s&ie   sj$$
+:sie#	¶~'
+:sie(my,sz,cie)#	¶
+:siA	sj$$
+
+n:wA	z
+:s(K,G)	-
+:czA	s
+;A:s	s~'
+A:s	-
+:son	-
+(#,#nie)po:t	st$
+#fa:t	st$
+r:td	z$
+my:³	s
+
+;:trz strz$$$
+
+:t s
+
+ek:zapa	s~'
+:z	sz$
+
+:sC	s$
+
+; dziwactwa Ewy
+
+A:$	s~'
+\
+
+letter ¶ ¶
+sze:ædzi	¼$
+sze:æset	¶$
+\
+
+letter ¹ sz
+\
+
+letter t t
+:+	t
+:'	t
+&:#	t
+
+:hietmar	ti$$$
+#:hier		t$
+:hackeray	takere$$$$$$$
+frid:j(o,ö)f sze$$
+fri:(j,i)(o,ö)f tsze$$
+spi:sberg c$
+:sch	cz$$$
+
+kon:rze# tsz$$
+kon:rzA tr~'z$$
+adven:ure(s#,#)	czer$$$
+adven:ure	cze$
+[en]ma:ure(s#,#) tur$$$
+[en]ma:ure t
+[en]:ure(s#,#) czer$$$
+[en]:urer cze$
+[en]c:ural(s#,#) cz@re$$$
+
+e:te#	t$$
+oe:hi	c$
+oe:h	t~'$
+A*:h(avn,amn#,ead#,ausen) t~'
+:h&iA	si$$$
+:h&	s$$
+:hy&	t$$$
+nigh:hA	t~'
+s:ewar(d,t)	tju³$$
+smi:hsA	t~'$
+smi:hC	s~'$
+
+:heriA	t$
+o:heres# t$
+
+[en]#bas,js:ion	t
+[en]A:ion(#,al#) szy$$
+[en]C:ion(#,al#) tszy$$
+
+:z³	t~'
+(pos,#ar):zi	t~'
+:zi	c~'$
+:z	c$
+
+:tle#	t@l$$$
+:tleworth	t@l$$$
+
+; th
+:hril t$
+:hieu# tje$$$$
+
+#:he#yA ze$$
+#:he#(i,í,ea,ee) ze$$
+#:he#A	z~'i$$
+#:he#	ze$$
+:h#	s$
+ar:ha#	t$
+an:ha#	t$
+:hill	t~'
+C:hie	ci$$
+:hie	si$$
+luf:han	t~'
+t:thof	t~'$
+pen:house#	t~'ha³s$$$$$
+pen:hous	t~'ha³$$$
+r:heim	t~'
+C:ham(pt,psh,sh)	t~'he$$
+sch*:horn	t~'
+C:h	t$
+:h#	s$
+:h(owi,em,e,owie,ów,om,ami,ach,a)# s$
+:her(#,(ami,ach,a,owie,owi,om,ów,em,ze,y)#,ows(k,cy#)) z$
+A:horn	t~'
+:h	t$
+
+
+;tch
+:ch(aw,³,ó,e³,li,n(i,±,ê,e))	t~'
+#:chem#	t~'
+#:chu# t~'
+(eas,wes):chA tcz$$
+:ch cz$$
+
+; tt
+se:tys	t
+sco:t	-
+o:t(o,em,a)#	t
+#a:tach	-
+#a:ta	t
+#ge:to	t
+#ha:tri(ck,k) t
+#lo:to(#,ma(t,c))	t
+#(bru,ne,perfe):to	t
+:t	-
+
+#,A:rz t
+#kon:rze# t
+#kon:rzA*C#	tr~'$
+
+;:RD(T(A,D,T,R),(!Mm),m(!Ay),(!Rw)),rz(K,A)	cz
+;:RD(D,w,my),rzG	sz
+;:ci,t#	-
+;n±:RzA	cz
+;n:Rw	d
+;:³#	t$
+\
+
+letter ú u
+:'	u+
+:#A	u_
+e:	w'u
+\
+
+
+letter u u
+:+i	u~'i$
+:+	u~'
+:'i	u~'i$
+:'	u~'
+
+; najpierw wyj±tkowe
+h:r(st,¶cie) e
+s:therland azerle$$$$$$
+s:nderland anderle$$$$$$
+r:nn(er,ing)	a$
+m:rchie#	arczi$$$$$
+m:rchie(mu,go)#	arczj$$$$
+m:rchie	arczi$$$$$
+m:rchi	arcz$$$
+:nder(groun,woo) a
+b:tter	at$$
+h:nt	a
+pe:geot#	¿o$$$$
+pe:geo		¿$$
+bl:e		u$
+b:ild		i$
+sl:ms		a
+g:e#	-$
+g:&	-
+h:mphr	a
+r(e,é):nio(n,ñ) ju
+cr:is		u$
+
+v:illard	ij$$$
+#s:i(t,cie#) ³i$
+
+[en]C:tive# jutiw$$$$
+[en]C:tiv(&A,em#) ju
+[en]C:tion ju
+[en]C:ture	ju
+
+; gbury, szarobury i newbury
+[en](#,#g,ka,nie,awo,ono,sko,cko,aro,³to,³oto,¿y,#tam,nam,kalam)b:ry#	u
+[en]b:ry   eri$$
+
+
+[en]hajd:ck	u
+[en]d:ck	a$
+f:ck	a$
+f:ehr	i$$
+[en]:tch acz$$$
+S5h:tch	a
+S5h:xley	a
+S5h:ygens o
+
+#g:e	-
+
+; b³êdna pisownia glück
+S5gl:ck	i$
+; i ogólniej
+
+(s,z,c):eck	~'i$$
+:eck	i$$
+
+f:hrer	i$
+
+
+#:nderhil	a
+jag:ar	u~'
+vang:ard	-
+
+b:r(ns,ton)	e
+b:chanan	juke$$$
+br:egh(el#,l)	eh$$$
+br:eg(el#,l)	eh$$
+
+#ed:ard	³
+d:stin	a
+m:sic(#,al)	juz~'ik$$$
+m:sica us~'ik$$$
+:ck(er,ing)	a$
+kent:ckijs	a$
+
+; francuskie
+d:val	i
+d:mas(#,A)	i
+l:mi(e,é)r	i
+(e,é):r(#,(ami,ach,a,em,om,owi,y,zy,ze,ów)#) -
+[fr]d:nant i
+[fr]#l:c(#,(a,owi,u)#) i
+
+; hiszpañskie
+
+g:ez	-
+mig:el	-
+[es,pt]g:i#	³
+[es,pt]g:i		-
+[es,pt]g:e		-
+
+
+h:gh#	ju$$
+h:ghesK	ju$$$
+h:ghesiA juzi$$$$$
+h:ghes(#,A)	juz$$$$
+h:ghes	ju$$$
+h:ghiA	juj$$$
+h:ghA	juj$$
+h:gh	ju
+
+f:nk(c,t)	u
+f:nk	a
+
+s:nflow	a
+#s:ns	a
+#nie:	u
+#se:l		~'u
+e:s,m#,rg	~'u
+na:kA,cz,k#,ce#,miA,mow	~'u
+#za:to,dio,rop	³
+#za:	~'u
+#la:r(kA,ce#,ek,ecz)	~'u
+
+(a,i)g:(a,(±,ê)#)	³
+(a,i)g:i#		³i$
+(a,i)g:y#		³y$
+
+
+; buck i k³obuck
+starb:ck	a$
+[en]#b:ck	a$
+[en]b:ck(a,u,±,o,imi,im,iej,iego,ie,ich,i)# u
+[en]k³ob:ck u
+[en]b:ck	a$
+
+r:ssell	a$
+d:sseldorf i$
+d:esseldorf i$$
+br:ckner	i$
+br:eck	i$$
+:erg		i$
+; biznesmeny
+:sinnes iz$$$
+:sines iz$$
+
+poza,pra:	~'u
+oza:r		³
+#na:ty		³
+#b:(!Ay)	³
+a:	³
+e:j	~'u
+(!r)ze,(!zi)e:(!sm),s(!#z),m(!#)	³
+:(i,y)	u
+:A	u~'
+\
+
+letter v w
+:+#	w
+:'#	w
+:+	w~'
+:'	w~'
+:ille#	wil$$$$
+:iew(#,C)	wiu$$$
+:olk	f
+:ater	f
+#:og((el,la,lem,lu)#,lo) f
+#:oig(t,cie) fo$$
+\
+
+letter w w
+^:$	wu
+#:$	wy
+:+#	w
+:'#	w
+:+	w~'
+:'	w~'
+; #:#A	w~'
+:ee	³i$$
+:arez	³o$
+:alkman ³okme$$$$$
+:arh	³o$
+:arren	³o$$
+:atch	³o$
+:alters ³o$
+:edding ³e$$
+
+#:ya(tt,tcie#,cie#) ³aj$
+:riter	raj$$
+:restl	-
+:iesen	wiz$$$
+:alsh	³o$
+:elsh	³e$
+:embl	³e$
+:ilbur	³ilbe$$$$
+:eather ³ez$$$$
+:onder	³
+jabber:ock	³o$$
+[en]B*:ing	v
+[en]rewol:ing	v
+[en]z:ing	v
+[en]#mero:ing	v
+[en]:ing	w
+[en]#:oldañ v
+[en]:old ³u$
+[en]:att	³o$
+[en]s:amp	³o$
+[en]:*th	³
+:eigh(t,ci)		³ej$$$$
+rro:#	³
+[en]rro:ows,(ie,i,ami,ach,a,owie,owi,om,ów,em)# ³
+s:ann	³a$$
+s:anson ³o$
+t:ain	³e$$
+t:itter	³
+#t:i(x#,ks) ³
+(for,back):ard	³e$
+
+[en]#:ing	³
+:il(lis,kin)	³
+:im(bled,sey)		³
+:ilkes	welk$$$$
+:in(frey,d(star,sor),s(let,ton))	³
+#:ray	re$$
+
+
+wood:ard	³o$
+
+:in(frey,d(star,sor))	³
+
+#:ei(den,gel,gl,n)	waj$$
+#:eizman		wajc$$$
+#:esse(x,ks)		³
+
+(#fa,#d,#przest,#ja,#ma,#ot,#pot,#ut,#st,#za,#¶pi,#z,#t,#):ork\
+	(ow(s,y),(ow(±,i,a),u,iem,ach,ami,a,i,om,ów,±,ê)#) w
+#:orkow	w
+:ork	³
+
+:ash	³o$
+:eathe  ³ez$$$$
+:ebster ³
+:inslow ³
+winslo: ³
+:hitey#	³ajti$$$$$
+:hitey	³ajtej$$$$$
+:hite	³ajt$$$$
+:hit&	³ajt$$$
+:heeC	³i$$$
+:hawk	³
+:hee	³i$$$
+:hea	³i$$$
+:hA	³$
+:righ	-
+:igh	³
+:ish	³
+:il(co(ks,x),lard) ³
+:indow(#,s)	³indo³$$$$$
+:ould	³u$$$
+:arwick ³or³i$$$$$
+ha:thorn	-
+bo:den	³
+fo:ler	³
+fo:les	³l$$
+ho:ard	³o$
+fello:	³
+marlo:	³
+l:ard	³o$
+o:man	³me$$
+[en]#co:	³
+[en]bo:iem	w
+[en]bo:eni(t,c)	w
+[en]#bo:	³
+s:if(t,ci)	³
+[en]bre:er(iA,yj) w
+[en]bre:er	³
+
+[en]lang:edo	w
+[en]sang:ini	w
+[en]#sang:in(#,A) w
+[en]ang:A	³
+
+[en]#nieng:an	v
+[en]eng:A	³
+
+lilong:e(#,j)	³
+[en]ong:A	³
+[en]yng:A	³
+
+ung:A	³ ; quenya "ungwe"
+yerro:	³
+
+ck:ater	³o$
+#far,#kil,k:ater	w
+#:ater(baksz,sz,kloze,reus) w
+:ater ³o$
+
+Co:s(#,(a,owie,owi,om,em,ie,ów)#) ³
+
+#:ebe(r,³)	w
+#:eb(#,!Aê,ma,desi) ³
+
+[fr]bald:in#	³ê~'$$
+[fr]bald:in	³e$
+
+s:orthy	³ort$$$$
+s:orth	³urs$$$$
+
+sh:A	³
+
+de:ey	³
+
+:ordzie	³
+:ord(z,licz) w
+:ord	³
+:orld	³e$
+
+net:ork	³e$
+lo:elas	w
+[en]#lo:	³
+
+:ell	³
+(!Ai):li(ng,son) ³
+
+;popracowaæ nad woo
+
+#:oobszcz wo~'$
+#:oo	³u$$
+no:ood(kry,wie) wo~'$
+:oo(d,f)	³u$$
+:ooliw	w
+:ool	³u$$
+
+#:ildamor w
+#:ildze#  w
+#:ild ³aj$
+
+#:ilkins ³
+#:ill(y#,ie,iam) ³
+:alk(er,man) ³o$$
+
+#:atteau	v
+#:att	³o$$
+#:at(ford,son,kins)	³o$
+#:ar(den,hol,ner,ren) ³o$
+
+sjo:al	v
+(ö,ä,ë)*:A	v
+:all(en,ander,str)	v
+:allot(ach,ami,om,y,±,ê,a,o)# v
+:allo(t,cie)# v
+:allombroz	v
+:all	³o$$
+;(hard,soft,free):are#	³er$$$
+:are# ³er$$$
+:ar& ³er$$
+(hard,soft,free):arA	³er$$
+t:i(st,¶c) ³
+(s,ir):ing	³
+:ay	³ej$$
+:orth	³urs$$$$
+#:est(chn,fal,erplat,alk,alek,alsk,ybul)	v
+#:e(ll,st)	³
+#:ebb	³
+#:ebster	³
+(nor,sou)th:est	³
+[en]:est# ³
+:inds ³
+sho:(ymi,ym,ych,y,ego,emu,ej,e,i,a,±,o)# w
+sho:	³
+:ilson	³
+:ills	³
+#o:en(#,A) ³
+#:hite(#,h) ³ajt$$$$
+#:arner	³o$
+
+[en]B*ng:A	w
+[en]ling:i(st,zm,B,e#),B,(a,o,y)#	w
+[en]sang:ini	w
+[en]#sang:in(#,a) w
+[en]ping:in	w
+[en]ling:afon	w
+[en]lang:edoc	w
+[en]ng:ar	³o$
+[en]ng:A	³
+
+[en]:ick±# wic$$
+[en]:icki(#,(e(go,mu,j),mi,m,ch)#) wic$$
+[en]:iccy# wic$$
+[en]B*n:	w
+[en]in:entar(s,y,z)	w
+[en]in:est(!Ai) w
+[en]#in:	w
+[en]in:az	w
+[en]in:er(s,t)A	w
+[en]in:igil(a,o,u) w
+[en]#kan:(#,A)	w
+[en](#kon,#skon,niekon,nieskon):(#,A)	w
+[en]n:a(ld,lid,les,B)	w
+[en]korn:aliA	w
+[en]kon:er(s,t)	w
+[en]arson:aliza	w
+; dokonczyc!
+[en]n:ar	³o$
+[en]n:ick	³i$$
+[en]n:A		³
+
+:yndham ³ynde$$$$$
+[en]:ynn ³y$$
+; chyba Ivona ma z tym problem?
+;ier:szA	-
+
+¶,æ:	w
+:#	w
+aus:ei(s,ß)	waj$$
+\
+
+letter x ks
+
+:x	-
+:s	k
+:ie(go,mu)#	ks~'
+#di:ie		ks~'i$$
+
+[fr]#:avier	gz
+[es]#:avier	h
+[pt]#:avier	sz
+#:bo(x,ks)	iks
+#:iA		si$
+#:injia		sindzi$$$$
+#:ining		s
+:i(e#,±,ê) ks
+
+
+:i(e#,±,ê) ks
+:i	ks~'
+\
+
+letter ý y
+:'	y~'
+\
+
+letter y y
+:+i	y~'i$
+:'i y~'i$
+:+	y~'
+:' y
+
+sn:der	aj
+#sk:(l,p,v) aj
+fl:#	aj
+C:ing	aji$
+w:erodo y
+C:er	aj
+#:vette	i
+arc:A		y~'
+
+l:nch	incz$$$
+#e:ck	-$
+#br:an	aje$
+l:cr	ajk$
+ant:y	y~'
+(ant,per,miêdz):A	y~'
+(w,trz):A	y~'
+
+;norsk - longyearbyen
+b:en(#,(u,em,ie,owi)#) i$
+
+b:ron	aj
+s:th(#,a,em#,o,ów#) ajt$$
+s:thie#	ajci$$$
+
+#h:de#	ajd$$
+#h:d&ie	ajdzi$$$
+#h:d&	aj
+
+(c,s)k:#	i
+lobb:in	i$
+pin:in ji$	; jebana Ewa nie potrafi tego powiedzieæ
+anta(k,l):i# ji$
+C:i(!A) yji$
+:i	ji$
+:yy	-
+:y	yy$
+
+prz:(o,ó,u) y~'
+prz:A	y~'
+
+b:pass	ajpa$$$
+b:pas	aj
+
+;smythe
+C:the#	ajs$$$
+C:the	ajs$$
+C:th&	aj
+
+(po,pol)l:ann i~'an$$
+[en]C:aC	aje$
+
+
+:A	j
+statu:#	y
+(!Ay):(!j)	j
+\
+
+letter z z
+:+#	z
+:'#	z
+:+	z~'
+:' 	z~'
+#b:# zzy
+#:$	zy
+#:ieg	z~'i$$
+zan:ib	z~'
+mue:i(n,ñ)	z~'
+mue:zi(n,ñ)	z~'$
+:itz		z~'
+uffi:i#		c~'
+uffi:iA		cj$
+:ini(!C³¶æ)	c~'
+C:auer	c
+C:heiC	c~'haj$$$
+:wei	cwaj$$$
+
+:öll	c
+fi:ier	c~'i$$
+mo:art	c
+mo:zar	c$
+lian:i	c~'
+lian:	c
+un:i(em,a,o,ó)	cj$
+#a,#:iz	z~'
+mo:ill	z~'
+anasa:i(#,C)	z~'
+:ien#	zj$
+
+:eppeli(n,ñ) ce$$
+:ing	z~'
+
+;cerveza
+
+cerve:A	s
+
+; heinz, prinz, konzert etc
+
+in:i	c~'
+in:	c
+kon:i	c~'
+kon:(#,A)	c
+tan:C	c
+schAn:i  c~'
+schAn:  c
+
+;stazione i inne makarony
+
+¿ela:ione	zi$
+(a,i,o):ion(e,al)		cj$
+(#,w,wy):ioni	zi$
+:ioni(#,e)	cj$
+man:an	c
+an:on	c
+:s(#,a(#,(mi,ch)#),em#,o((m,wi)#,wski),ów#)	sz$
+
+;graziano italiano
+B*:ia	zi$
+#(ma,niema):ia zi$
+Ca:ian(#,(om,o,ami,ach,a,ów,ie,em)#,ell) cj$
+
+#:uck	c
+(a,ü)n:er	c
+#,en:oll	c
+hol:er		c
+leibni:i	c~'
+leibni:		c
+mel:er		c
+de:i	z~'
+³a:iA$	zi$
+³a:i(!Ai)	zi$
+³a:i	z
+(#nie,#be,#ro,#):i(s,d) 	z~'
+:isk	z
+:isz	z
+:ist	z
+A,#:is	z~'
+#ro:i	z~'
+#be:ik(#,A)	z
+#be:i	z~'
+
+:imm		c~'im$$$
+#:eiss	caj$$$
+:ei(ß,t,g,ch)	caj$$
+#:eis	caj$$
+:eue	ca³$$
+#:im(n,A,#)	z
+#:ip(n,a,i,#)	z
+#:i(!A)	z~'
+nie,be,ro,#:z	z~'
+
+#(di,i):zA	z$ ; izzy
+
+:z(#,(a,owi,em,u,y,om,±,ê,o)#) c$
+:zat	c$
+
+
+:zie#		c~'i$$$
+:ziA		cj$$
+:zi		c~'$
+
+:zoli	c$
+:zar	c$
+
+pi:z(#,A)	c$
+:wing		cw$
+kon:ert		c
+al:heim	c~'haj$$$
+
+:d(¼,zi)	z ;Z'
+:æ,ci		z ;S'
+:mie#	¼
+:ii	z
+:iA	zi$
+:i	z
+\
+
+letter ¿ ¿
+\
+
+letter ¼ ¼
+\
+
+letter ö e
+A:A	~'e~'
+A:	~'e
+:A	e~'
+\

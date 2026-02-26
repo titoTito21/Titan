@@ -1,0 +1,108 @@
+// klasy szkolne
+
+recognize klasama klasa {k:r1-12}
+recognize klasama kl. {k:r1-12}
+sayas klasama klasa {k:dfm}
+
+expr zdood (z|do|od|o)
+expr zdoodw (z|do|od|w|o)
+
+recognize zdoklasy {e:ezdood} kl. {k:r1-12}
+sayas zdoklasy {e} klasy {k:dfd}
+
+recognize klasem klasê {k:r1-12}
+sayas klasem klasê {k:dfb}
+
+expr naprzez (na|przez)
+recognize naklasem {e:enaprzez} kl. {k:r1-12}
+sayas naklasem {e} klasê {k:dfb}
+
+recognize klasom klas± {k:r1-12}
+sayas klasom klas± {k:dfb}
+
+recognize klasie klasie {k:r1-12}
+sayas klasie klasie {k:dfd}
+
+recognize wklasie w kl. {k:r1-12}
+sayas wklasie w klasie {k:dfd}
+
+recognize aklasy klasy {k:r1-12}
+sayas aklasy klasy {k:dfd}
+
+
+choice singlett 1 a
+choiceval singlett 1 [1]a
+choice singlett 2 b
+choiceval singlett 2 [1]be
+choice singlett 3 c
+choiceval singlett 3 [1]ce
+choice singlett 4 d
+choiceval singlett 4 [1]de
+choice singlett 5 e
+choiceval singlett 5 [1]e
+choice singlett 6 f
+choiceval singlett 6 [1]ef
+choice singlett 7 g
+choiceval singlett 7 [1]gie
+choice singlett 8 h
+choiceval singlett 8 [1]ha
+choice singlett 9 i
+choiceval singlett 9 [1]i
+choice singlett 10 j
+choiceval singlett 10 [1]jot
+choice singlett 11 ka
+choiceval singlett 11 [1]ka
+choice singlett 12 l
+choiceval singlett 12 [1]el
+choice singlett 13 m
+choiceval singlett 13 [1]em
+choice singlett 14 n
+choiceval singlett 14 [1]en
+choice singlett 15 o
+choiceval singlett 15 [1]o
+choice singlett 16 p
+choiceval singlett 16 [1]pe
+choice singlett 17 q
+choiceval singlett 17 [1]ku
+choice singlett 18 r
+choiceval singlett 18 [1]er
+choice singlett 19 s
+choiceval singlett 19 [1]es
+choice singlett 20 t
+choiceval singlett 20 [1]te
+choice singlett 21 u
+choiceval singlett 21 [1]u
+choice singlett 22 v
+choiceval singlett 22 [1]fa³
+choice singlett 23 w
+choiceval singlett 23 [1]vu
+choice singlett 24 x
+choiceval singlett 24 [1]iks
+choice singlett 25 y
+choiceval singlett 25 [2]y
+choice singlett 26 z
+choiceval singlett 26 [1]zet
+
+
+recognize klapsma {k:r1-12} {l:csinglett}
+sayas klapsma {k:dfm} {l}
+
+recognize klapsdo {e:ezdoodw} {k:r1-12} {l:csinglett}
+sayas klapsdo {e} {k:dfd} {l}
+
+expr uczen (uczeñ|ucznia|uczniowi|uczniem|uczniu|uczniowie|uczniów|uczniom|uczniami|uczniach)
+expr uczen (wychowawca|wychowawcy|wychowawc±|wychowawco|wychowawcy|wychowawców|wychowawcom|wychowawcami|wychowawcom)
+expr uczen (uczennica|uczennicê|uczennicy|uczennic±|uczennico)
+expr uczen (uczennice|uczennicom|uczennicami|uczennicach)
+expr uczen (wychowawczyni|wychowawczyniê|wychowawczyni±)
+expr uczen (wychowawczynie|wychowawczyñ|wychowawczyniami|wychowawczyniach|wychowawczyniom)
+expr uczen (reszta|reszcie|resztê|reszty|reszt±)
+expr uczen (wiêkszo¶æ|wiêkszo¶ci|wiêkszo¶ci±)
+recognize uczenklasy {e:euczen} kl. {k:r1-12}
+sayas uczenklasy {e} klasy {k:dfd}
+
+recognize uczenktorej {e:euczen} {k:r1-12} {l:csinglett}
+sayas uczenktorej {e} {k:dfd} {l}
+
+recognize naklasemz {e:enaprzez} {k:r1-12} {l:csinglett}
+sayas naklasemz {e} {k:dfb} {l}

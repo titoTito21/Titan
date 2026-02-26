@@ -1,0 +1,24 @@
+spell { {1}klamra{0}
+spell } {1}po klamrze{0}
+spell [ {1}nawias kwadratowy{0}
+spell ] {1}po nawiasie kwadratowym{0}
+spell < {1}mniejsze{0}
+spell > {1}wiêksze{0}
+spell / {1}slesz{0}
+spell \ {1}bekslesz{0}
+spell + {1}plus{0}
+spell = {1}równe{0}
+spell _ {1}podkre¶lenie{0}
+spell ~ {1}tylda{0}
+spell ' {1}apostrof{0}
+spell " {1}cudzys³ów{0}
+spell * {1}gwiazdka{0}
+spell ^ {1}daszek{0}
+spell ` {1}grawis{0}
+spell ( {1}nawias{0}
+spell ) {1}po nawiasie{0}
+spell , {1}przecinek{0}
+spell . {1}kropka{0}
+spell - {1}my¶lnik{0}
+spell : {1}dwukropek{0}
+spell ; {1}¶rednik{0}

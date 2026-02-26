@@ -1,0 +1,67 @@
+// numerowane ulice Manhattanu
+
+recognize ntaulica {u:d1-199} ulica
+recognize ntaulica {u:d1-199}. ulica
+sayas ntaulica {u:dfm} ulica
+recognize ntaaleja {u:d1-99} aleja
+recognize ntaaleja {u:d1-99}. aleja
+sayas ntaaleja {u:dfm} aleja
+recognize ntejulicy {u:d1-199} ulicy
+recognize ntejulicy {u:d1-199}. ulicy
+sayas ntejulicy {u:dfd} ulicy
+
+expr ulicomcom (ulicê|ulic±)
+recognize ntomulicom {u:d1-199} {e:eulicomcom}
+recognize ntomulicom {u:d1-199}. {e:eulicomcom}
+sayas ntomulicom {u:dfb} {e}
+
+
+recognize odentuldoentul od {a:d1-199} do {b:d1-199} ulicy
+recognize odentuldoentul od {a:d1-199}. do {b:d1-199}. ulicy
+sayas odentuldoentul od {a:dfd} do {b:dfd} ulicy
+
+// 12 wschodnia
+
+expr wzodnia (wschodnia|zachodnia|miêdzystanowa)
+expr wzodniom (wschodni±|zachodni±|miêdzystanow±)
+expr wzodniej (wschodniej|zachodniej|miêdzystanowej)
+
+recognize ntaulicawz {u:d1-199} {e:ewzodnia}
+recognize ntaulicywz {u:d1-199} {e:ewzodniej}
+recognize ntaulicomwz {u:d1-199} {e:ewzodniom}
+recognize ntaulicawz {u:d1-199}. {e:ewzodnia}
+recognize ntaulicywz {u:d1-199}. {e:ewzodniej}
+recognize ntaulicomwz {u:d1-199}. {e:ewzodniom}
+
+sayas ntaulicawz {u:dfm} {e}
+sayas ntaulicywz {u:dfd} {e}
+sayas ntaulicomwz {u:dfb} {e}
+
+
+recognize miendzyntymul {x:emiendzy} {a:d1-199}. {i:eia} {b:d1-199}. ulic±
+recognize miendzyntymul {x:emiendzy} {a:d1-199} {i:eia} {b:d1-199} ulic±
+sayas miendzyntymul {x} {a:dfb} {i} {b:dfb} ulic±
+
+recognize oddontymul od {a:d1-199}. do {b:d1-199}. ulicy
+recognize oddontymul od {a:d1-199} do {b:d1-199} ulicy
+sayas oddontymul od {a:dfd} do {b:dfd} ulicy
+
+expr rogulec (róg|rogowi|rogu|rogiem)
+expr roguled (skrzy¿owanie|skrzy¿owania|skrzy¿owaniu|skrzy¿owaniem)
+expr roguled (przeciêcie|przeciêcia|przeciêciu|przeciêciem)
+
+expr rogulea (lexington|park|madison|broadwayu|broadway|broadwayem}
+
+frest restmanhalley:_^*?
+frest restmanhalley:_{e:rogulea}
+
+recognize xrogulec {e:erogulec} {a:d1-199} i{:restmanhalley}
+recognize xrogulec {e:erogulec} {a:d1-199}. i{:restmanhalley}
+recognize xrogulec {e:eroguled} {a:d1-199} i{:restmanhalley}
+recognize xrogulec {e:eroguled} {a:d1-199}. i{:restmanhalley}
+sayas xrogulec {e} {a:dfd} i
+
+
+recognize xroguled {e:eroguled} {a:d1-199} z{:restmanhalley}
+recognize xroguled {e:eroguled} {a:d1-199}. z{:restmanhalley}
+sayas xroguled {e} {a:dfd} z
