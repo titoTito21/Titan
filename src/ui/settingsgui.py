@@ -677,19 +677,14 @@ class SettingsFrame(wx.Frame):
         self.speech_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.speech_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
 
-        # --- ElevenLabs-specific controls (shown only when ElevenLabs engine selected) ---
-        self.elevenlabs_api_key_label = wx.StaticText(panel, label=_("ElevenLabs API Key:"))
-        vbox.Add(self.elevenlabs_api_key_label, flag=wx.LEFT | wx.TOP, border=10)
+        # --- Dynamic engine config controls (rendered from engine.get_config_fields()) ---
+        self._engine_config_sizer = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(self._engine_config_sizer, flag=wx.LEFT | wx.EXPAND, border=10)
+        self._engine_config_controls = {}  # key -> (label_widget, value_widget, field_descriptor)
 
-        self.elevenlabs_api_key_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
-        self.elevenlabs_api_key_ctrl.SetToolTip(_("Your ElevenLabs API key. Get it from elevenlabs.io"))
-        self.elevenlabs_api_key_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        self.elevenlabs_api_key_ctrl.Bind(wx.EVT_KILL_FOCUS, self.OnElevenLabsApiKeyChanged)
-        vbox.Add(self.elevenlabs_api_key_ctrl, flag=wx.LEFT | wx.EXPAND, border=10)
-
-        # Initially hidden - shown only when ElevenLabs engine is selected
-        self.elevenlabs_api_key_label.Hide()
-        self.elevenlabs_api_key_ctrl.Hide()
+        # Legacy attributes for backward compatibility
+        self.elevenlabs_api_key_label = None
+        self.elevenlabs_api_key_ctrl = None
 
         panel.SetSizer(vbox)
         panel.Layout()
@@ -999,23 +994,31 @@ class SettingsFrame(wx.Frame):
                     else:
                         voice_value = self.voice_choice.GetStringSelection()
 
-            # Save ElevenLabs API key if present
-            elevenlabs_api_key = self.elevenlabs_api_key_ctrl.GetValue().strip()
-            if elevenlabs_api_key:
-                try:
-                    stereo_speech_obj = get_stereo_speech()
-                    if hasattr(stereo_speech_obj, 'set_elevenlabs_api_key'):
-                        stereo_speech_obj.set_elevenlabs_api_key(elevenlabs_api_key)
-                except Exception as e:
-                    print(f"Error applying ElevenLabs API key on save: {e}")
-
-            self.settings['stereo_speech'] = {
+            stereo_speech_settings = {
                 'engine': engine,
                 'voice': voice_value,
                 'rate': str(self.rate_slider.GetValue()),
                 'volume': str(self.speech_volume_slider.GetValue()),
-                'elevenlabs_api_key': elevenlabs_api_key,
             }
+
+            # Save dynamic engine config controls with prefix engine.{id}.{key}
+            for ctrl_key, (label, ctrl, field) in self._engine_config_controls.items():
+                value = self._get_config_control_value(ctrl, field)
+                setting_key = f'engine.{engine}.{ctrl_key}'
+                stereo_speech_settings[setting_key] = value
+
+                # Apply config to engine immediately
+                stereo_speech_obj = get_stereo_speech()
+                if stereo_speech_obj:
+                    stereo_speech_obj.set_engine_config(engine, ctrl_key, value)
+
+            # Preserve engine configs for other engines (not currently selected)
+            old_settings = self.settings.get('stereo_speech', {})
+            for old_key, old_value in old_settings.items():
+                if old_key.startswith('engine.') and old_key not in stereo_speech_settings:
+                    stereo_speech_settings[old_key] = old_value
+
+            self.settings['stereo_speech'] = stereo_speech_settings
 
         if hasattr(self, 'windows_panel'):
             self.settings['windows'] = {
@@ -1109,14 +1112,169 @@ class SettingsFrame(wx.Frame):
             vibrate_focus_change()  # Add vibration for checkbox unchecked
         event.Skip()
 
+    def _rebuild_engine_config_controls(self, engine_id):
+        """
+        Dynamically create config controls based on the engine's get_config_fields().
+
+        Destroys old controls and creates new ones for the selected engine.
+        """
+        panel = self.stereo_speech_panel
+
+        # Destroy existing dynamic controls
+        for key, (label, ctrl, field) in self._engine_config_controls.items():
+            if label:
+                label.Destroy()
+            if ctrl:
+                ctrl.Destroy()
+        self._engine_config_controls = {}
+        self._engine_config_sizer.Clear()
+
+        # Get engine's config fields from registry
+        try:
+            from src.tts.engine_registry import get_engine_registry
+            registry = get_engine_registry()
+            if not registry:
+                panel.Layout()
+                self.content_panel.FitInside()
+                return
+
+            engine = registry.get_engine(engine_id)
+            if not engine or not hasattr(engine, 'get_config_fields'):
+                panel.Layout()
+                self.content_panel.FitInside()
+                return
+
+            fields = engine.get_config_fields()
+            if not fields:
+                panel.Layout()
+                self.content_panel.FitInside()
+                return
+
+            for field in fields:
+                field_key = field.get('key', '')
+                field_label = field.get('label', field_key)
+                field_type = field.get('type', 'text')
+                field_tooltip = field.get('tooltip', '')
+                field_default = field.get('default', '')
+
+                # Create label
+                label_widget = wx.StaticText(panel, label=field_label)
+                self._engine_config_sizer.Add(label_widget, flag=wx.TOP, border=5)
+
+                # Create control based on type
+                ctrl = None
+                if field_type == 'password':
+                    ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+                    ctrl.SetValue(str(field_default))
+                    ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_engine_config_changed)
+                elif field_type == 'text':
+                    ctrl = wx.TextCtrl(panel)
+                    ctrl.SetValue(str(field_default))
+                    ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_engine_config_changed)
+                elif field_type == 'choice':
+                    ctrl = wx.Choice(panel)
+                    options = field.get('options', [])
+                    for val, display in options:
+                        ctrl.Append(display)
+                    # Select default
+                    for i, (val, display) in enumerate(options):
+                        if val == field_default:
+                            ctrl.SetSelection(i)
+                            break
+                    if ctrl.GetSelection() == wx.NOT_FOUND and ctrl.GetCount() > 0:
+                        ctrl.SetSelection(0)
+                    ctrl.Bind(wx.EVT_CHOICE, self._on_engine_config_changed)
+                elif field_type == 'slider':
+                    min_val = field.get('min', 0)
+                    max_val = field.get('max', 100)
+                    ctrl = wx.Slider(panel, value=int(field_default or min_val),
+                                     minValue=min_val, maxValue=max_val,
+                                     style=wx.SL_HORIZONTAL | wx.SL_LABELS)
+                    ctrl.Bind(wx.EVT_SLIDER, self._on_engine_config_changed)
+                elif field_type == 'checkbox':
+                    ctrl = wx.CheckBox(panel, label='')
+                    ctrl.SetValue(bool(field_default))
+                    ctrl.Bind(wx.EVT_CHECKBOX, self._on_engine_config_changed)
+
+                if ctrl:
+                    if field_tooltip:
+                        ctrl.SetToolTip(field_tooltip)
+                    ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+                    self._engine_config_sizer.Add(ctrl, flag=wx.EXPAND | wx.TOP, border=2)
+                    self._engine_config_controls[field_key] = (label_widget, ctrl, field)
+
+        except Exception as e:
+            print(f"[Settings] Error building engine config controls: {e}")
+            import traceback
+            traceback.print_exc()
+
+        panel.Layout()
+        self.content_panel.FitInside()
+
+    def _on_engine_config_changed(self, event):
+        """Handle changes to dynamic engine config controls - apply immediately."""
+        try:
+            engine_display = self.engine_choice.GetStringSelection()
+            engine_id = self._display_to_engine(engine_display)
+
+            stereo_speech = get_stereo_speech()
+            if not stereo_speech:
+                event.Skip()
+                return
+
+            for key, (label, ctrl, field) in self._engine_config_controls.items():
+                value = self._get_config_control_value(ctrl, field)
+                stereo_speech.set_engine_config(engine_id, key, value)
+
+            # Reload voices if API key or similar config changed
+            field_key = None
+            for k, (l, c, f) in self._engine_config_controls.items():
+                if c == event.GetEventObject():
+                    field_key = k
+                    break
+
+            if field_key in ('api_key',):
+                self.load_available_voices()
+
+        except Exception as e:
+            print(f"[Settings] Error applying engine config: {e}")
+        event.Skip()
+
+    def _get_config_control_value(self, ctrl, field):
+        """Extract value from a dynamic config control."""
+        field_type = field.get('type', 'text')
+        if field_type in ('text', 'password'):
+            return ctrl.GetValue().strip()
+        elif field_type == 'choice':
+            sel = ctrl.GetSelection()
+            options = field.get('options', [])
+            if 0 <= sel < len(options):
+                return options[sel][0]
+            return field.get('default', '')
+        elif field_type == 'slider':
+            return str(ctrl.GetValue())
+        elif field_type == 'checkbox':
+            return str(ctrl.GetValue())
+        return ''
+
     def _get_engine_display_names(self):
-        """Get mapping between engine IDs and display names."""
+        """Get mapping between engine IDs and display names from registry."""
+        try:
+            from src.tts.engine_registry import get_engine_registry
+            registry = get_engine_registry()
+            if registry:
+                names = {}
+                for engine in registry.get_all_engines():
+                    names[engine.engine_id] = engine.engine_name
+                return names
+        except Exception as e:
+            print(f"[Settings] Error getting engine names from registry: {e}")
+        # Fallback
         return {
             'espeak': 'eSpeak NG',
             'sapi5': 'SAPI5',
             'say': _('macOS Speech'),
             'spd': _('Speech Dispatcher'),
-            'elevenlabs': 'ElevenLabs TTS',
         }
 
     def _engine_to_display(self, engine_id):
@@ -1159,21 +1317,46 @@ class SettingsFrame(wx.Frame):
         if self.engine_choice.GetSelection() == wx.NOT_FOUND and self.engine_choice.GetCount() > 0:
             self.engine_choice.SetSelection(0)
 
-        # Load ElevenLabs API key (before loading voices so the API call can succeed)
-        elevenlabs_api_key = stereo_settings.get('elevenlabs_api_key', '')
-        self.elevenlabs_api_key_ctrl.SetValue(elevenlabs_api_key)
-        if elevenlabs_api_key:
-            try:
-                stereo_speech_obj = get_stereo_speech()
-                if hasattr(stereo_speech_obj, 'set_elevenlabs_api_key'):
-                    stereo_speech_obj.set_elevenlabs_api_key(elevenlabs_api_key)
-            except Exception as e:
-                print(f"Error setting ElevenLabs API key from settings: {e}")
+        # Backward compat: migrate old elevenlabs_api_key to new format
+        old_api_key = stereo_settings.get('elevenlabs_api_key', '')
+        new_api_key_key = 'engine.elevenlabs.api_key'
+        if old_api_key and new_api_key_key not in stereo_settings:
+            stereo_settings[new_api_key_key] = old_api_key
 
-        # Show/hide ElevenLabs controls based on loaded engine
-        is_elevenlabs = (engine == 'elevenlabs')
-        self.elevenlabs_api_key_label.Show(is_elevenlabs)
-        self.elevenlabs_api_key_ctrl.Show(is_elevenlabs)
+        # Load engine-specific config from settings and apply to engine
+        stereo_speech_obj = get_stereo_speech()
+        if stereo_speech_obj:
+            for setting_key, value in stereo_settings.items():
+                if setting_key.startswith('engine.'):
+                    parts = setting_key.split('.', 2)  # engine.{id}.{key}
+                    if len(parts) == 3:
+                        eng_id, cfg_key = parts[1], parts[2]
+                        stereo_speech_obj.set_engine_config(eng_id, cfg_key, value)
+
+        # Build dynamic engine config controls for current engine
+        self._rebuild_engine_config_controls(engine)
+
+        # Load saved values into dynamic controls
+        for ctrl_key, (label, ctrl, field) in self._engine_config_controls.items():
+            setting_key = f'engine.{engine}.{ctrl_key}'
+            saved_value = stereo_settings.get(setting_key, '')
+            if saved_value:
+                field_type = field.get('type', 'text')
+                if field_type in ('text', 'password'):
+                    ctrl.SetValue(saved_value)
+                elif field_type == 'choice':
+                    options = field.get('options', [])
+                    for i, (val, display) in enumerate(options):
+                        if val == saved_value:
+                            ctrl.SetSelection(i)
+                            break
+                elif field_type == 'slider':
+                    try:
+                        ctrl.SetValue(int(saved_value))
+                    except (ValueError, TypeError):
+                        pass
+                elif field_type == 'checkbox':
+                    ctrl.SetValue(saved_value.lower() in ('true', '1'))
 
         # Load voices for current engine
         self.load_available_voices()
@@ -1262,12 +1445,8 @@ class SettingsFrame(wx.Frame):
                 stereo_speech.set_engine(engine_id)
                 self.load_available_voices()
 
-                # Show/hide ElevenLabs-specific controls
-                is_elevenlabs = (engine_id == 'elevenlabs')
-                self.elevenlabs_api_key_label.Show(is_elevenlabs)
-                self.elevenlabs_api_key_ctrl.Show(is_elevenlabs)
-                self.stereo_speech_panel.Layout()
-                self.content_panel.FitInside()
+                # Rebuild dynamic engine config controls
+                self._rebuild_engine_config_controls(engine_id)
         except Exception as e:
             print(f"Error setting engine: {e}")
 
@@ -1288,17 +1467,7 @@ class SettingsFrame(wx.Frame):
         event.Skip()
 
     def OnElevenLabsApiKeyChanged(self, event):
-        """Apply ElevenLabs API key immediately when the field loses focus."""
-        try:
-            api_key = self.elevenlabs_api_key_ctrl.GetValue().strip()
-            if api_key:
-                stereo_speech = get_stereo_speech()
-                if hasattr(stereo_speech, 'set_elevenlabs_api_key'):
-                    stereo_speech.set_elevenlabs_api_key(api_key)
-                    # Reload voices now that a key is available
-                    self.load_available_voices()
-        except Exception as e:
-            print(f"Error applying ElevenLabs API key: {e}")
+        """Legacy handler - now handled by _on_engine_config_changed."""
         event.Skip()
 
     def OnRateChanged(self, event):

@@ -1,0 +1,74 @@
+recognize godzina {H:d0-24}:{M:2d0-59}
+sayas godzina {H:dfm} {M:df0}
+recognize godzinas {H:d0-24}:{M:2d0-59}:{S:2d0-59}
+sayas godzinas {H:dfm} {M:df0} i {S:dfx} {S:usek}
+expr odgodz (od|do|godziny|po|ko³o|oko³o|o|z)
+recognize godziny {e:eodgodz} {H:d0-24}:{M:2d0-59}
+sayas godziny {e} {H:dfd} {M:df0}
+recognize godzinyqq godziny {H:d0-24}.{M:2d0-59}
+sayas godzinyqq godziny {H:dfd} {M:df0}
+expr nagodz (na|godzinê|przed|godzin±)
+expr gogodz (godzinê|godzin±)
+expr pokazegodz (wskazywa³|pokazywa³|wskazywa³y|pokazywa³y|wskaza³y|pokaza³y|wskaza³|pokaza³)
+expr pokazegodz (wskazuje|pokazuje|wska¿e|poka¿e)
+recognize godzine {e:enagodz} {H:d0-24}:{M:2d0-59}
+recognize godzine {e:egogodz} {H:d0-24}.{M:2d0-59}
+recognize godzine {e:epokazegodz} {H:d0-24}:{M:2d0-59}
+sayas godzine {e} {H:dfb} {M:df0}
+recognize godzinedok {e:epokazegodz} dok³adnie {H:d0-24}:{M:2d0-59}
+sayas godzinedok {e} dok³adnie {H:dfb} {M:df0}
+
+recognize okgodz ok. {H:d0-24}:{M:2d0-59}
+sayas okgodz oko³o {H:dfd} {M:df0}
+recognize godzinie godzinie {H:d0-24}:{M:2d0-59}
+recognize godzinie godzinie {H:d0-24}.{M:2d0-59}
+sayas godzinie godzinie {H:dfd} {M:df0}
+recognize godzinies godzinie {H:d0-24}:{M:2d0-59}:{S:2d0-59}
+sayas godzinies godzinie {H:dfd} {M:df0} i {S:dfx} {S:usek}
+recognize odokgodzinie o dok³adnie {H:d0-24}:{M:2d0-59}
+sayas odokgodzinie o dok³adnie {H:dfd} {M:df0}
+recognize odokgodzinies o dok³adnie {H:d0-24}:{M:2d0-59}:{S:2d0-59}
+sayas odokgodzinies o dok³adnie {H:dfd} {M:df0} i {S:dfx} {S:usek}
+
+recognize ogodzdot o godz. {H:d0-24}:{M:2d0-59}
+recognize ogodzdot o godz. {H:d0-24}.{M:2d0-59}
+sayas ogodzdot o godzinie {H:dfd} {M:df0}
+recognize odgodzdot {e:eodgodot} godz. {H:d0-24}:{M:2d0-59}
+recognize odgodzdot {e:eodgodot} godz. {H:d0-24}.{M:2d0-59}
+expr odgodot (od|do|oko³o)
+sayas odgodzdot {e} godziny {H:dfd} {M:df0}
+recognize godzinadot godz. {H:d0-24}:{M:2d0-59}
+recognize godzinadot godz. {H:d0-24}.{M:2d0-59}
+sayas godzinadot godzina {H:dfm} {M:df0}
+
+recognize miedzygodz miêdzy {H:d0-24}:{M:2d0-59} a {E:d0-24}:{F:2d0-59}
+sayas miedzygodz miêdzy {H:dfb} {M:df0} a {E:dfb} {F:df0}
+
+recognize wgodzinach w godz. {H:d0-24}:{M:2d0-59}\ -\ {I:d0-24}:{N:2d0-59}
+recognize wgodzinach w godz. {H:d0-24}.{M:2d0-59}\ -\ {I:d0-24}.{N:2d0-59}
+recognize wgodzinach w godz. {H:d0-24}:{M:2d0-59} do {I:d0-24}:{N:2d0-59}
+recognize wgodzinach w godz. {H:d0-24}.{M:2d0-59} do {I:d0-24}.{N:2d0-59}
+recognize wgodzinach w godzinach {H:d0-24}:{M:2d0-59}\ -\ {I:d0-24}:{N:2d0-59}
+recognize wgodzinach w godzinach {H:d0-24}.{M:2d0-59}\ -\ {I:d0-24}.{N:2d0-59}
+sayas wgodzinach w godzinach {H:dfm} {M:df0} do {I:dfd} {N:df0}
+
+recognize godzinachr godz. {H:d0-24}:{M:2d0-59}\ -\ {I:d0-24}:{N:2d0-59}
+recognize godzinachr godz. {H:d0-24}.{M:2d0-59}\ -\ {I:d0-24}.{N:2d0-59}
+sayas godzinachr godzina {H:dfm} {M:df0} do {I:dfd} {N:df0}
+
+// korekta dla "wynik..."
+// jeden do zera?
+expr wynikiem (wynikiem|wyniku|wynik|rezultatem|rezultacie|rezultat)
+recognize ejedendodwuh {w:ewynikiem} {a:d}:{b:d2-999}
+sayas ejedendodwuh {w} {a:dmx} do {b:dxn}
+
+choice zerojeden 0 0
+choiceval zerojeden 0 zera
+choice zerojeden 1 1
+choiceval zerojeden 1 jednego
+
+
+recognize ejedendozera {w:ewynikiem} {a:d}:{b:czerojeden}
+sayas ejedendozera {w} {a:dmx} do {b:czerojeden}
+
+recognize macadres {a:2x}:{b:2x}:{c:2x}:{d:2x}:{e:2x}:{f:2x}

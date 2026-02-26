@@ -1,0 +1,642 @@
+; regu³ki dla code:
+; fonem|$|@|* flagi
+; $ - koniec frazy
+; @ - samog³oska
+; * - cokolwiek
+; lub:
+; fonem|^|@:fonem|$|@|*|
+; ^ - pocz±tek frazy
+; flagi:
+; _ podzia³
+; liczba - d³ugo¶æ
+; + d³ugo¶æ jest dodawana do obliczonej
+; - d³ugo¶æ jest odejmowana od obliczonej
+; = dodanie krótkiego I (pseudosamog³oska)
+; ! nastêpny fonem zostaje poprzedzony bardzo krótk± duplikacj±
+; N - dodanie N
+; n - dodanie n
+; # - bez modyfikacji
+; J - dodanie zmiêkczacza
+; j - dodanie krótkiego j (konektor) przed fonemem
+; s - dodanie krótkiego "s" przed fonemem (korekta b³êdu)
+; f - dodanie krótkiego "f" przed fonemem (korekta b³êdu)
+; S - dodanie krótkiego "¶" przed fonemem (korekta b³êdu)
+; H - dodanie krótkiego "sz" przed fonemem (korekta b³êdu)
+; Z - dodanie krótkiego "¿" przed fonemem (korekta b³êdu)
+; z - dodanie krótkiego "z" przed fonemem (korekta b³êdu)
+
+length palatizer 5	; zmiêkczacz
+length extrai 25	; pseudosamog³oska
+length extraj 1		; konektor
+length extraf 1		; korektor
+length extras 4		; korektor
+length geminator 5	; duplikacja
+length separator 2	; podzia³
+length minlast 100	; najkrótsza mo¿liwa spó³g³oska na koñcu
+length stress 20	; dodanie do akcentowanej samog³oski
+			; dla podstawowego akcentu x2
+
+pause comma 120
+pause statement 240
+pause exclamation 200
+pause question 240
+pause colon 120
+pause ellipsis 260
+pause conj 20
+pause break 240
+
+pause dialog comma 120
+pause dialog statement 200
+pause dialog exclamation 150
+pause dialog question 120
+pause dialog colon 120
+pause dialog ellipsis 250
+pause dialog break 120
+
+break normal 400
+break dialog 450
+break predial 600
+break postdial 650
+break long 1000
+
+
+equ comp 20
+equ mpx 0.2
+equ min 50
+
+modify 1 1.0 1.3
+modify 2 0.8 0.6
+
+
+code _ _ 2
+\
+
+; placeholder
+code : _ 0
+\
+
+code a+ a/v 150
+C:$ H+100
+C:_ H+80
+D:$ z+100
+D:_ z+80
+G:$  Z+100
+G:_  Z+80
+e:$	j+100
+e:_	j+80
+c:$	s+100
+c:_	s+80
+x:$	f+100
+x:_	f+80
+G' +50
+J:d +15
+d +30
+w +30
+t +30
+$ +100
+_ +80
+\
+
+code a a/v 85
+C:$ H+100
+C:_ H+80
+D:$ z+100
+D:_ z+80
+G:$  Z+100
+G:_  Z+80
+e:$	j+100
+e:_	j+80
+c:$	s+100
+c:_	s+80
+x:$	f+100
+x:_	f+80
+G' +50
+J:d +15
+d +30
+w +30
+t +30
+$ +100
+_ +80
+\
+
+code e e/v 85
+C:_ H+52
+C:$ H+91
+D:$ z+91
+D:_ z+52
+G:$  Z+91
+G:_  Z+52
+e:_	j+52
+e:$	j+91
+c:$	f+91
+c:_	f+52
+x:$	f+91
+x:_	f+52
+$ +91
+_ +62
+c'	!
+\
+
+code e+ e/v 150
+C:_ H+52
+C:$ H+91
+D:$ z+91
+D:_ z+52
+G:$  Z+91
+G:_  Z+52
+e:_	j+52
+e:$	j+91
+c:$	f+91
+c:_	f+52
+x:$	f+91
+x:_	f+52
+$ +91
+_ +62
+c'	!
+\
+
+code E e~/v 125
+C:_ H+40
+C:$ H+55
+D:$ z+55
+D:_ z+40
+G:$  Z+55
+G:_  Z+40
+e:_	j+40
+e:$	j+55
+e:	j
+c:$	s+55
+c:_	s+40
+x:$	f+55
+x:_	f+40
+$ +55
+_ +40
+\
+
+code O o~/v 100
+C:_ H+40
+C:$ H+85
+D:$ z+85
+D:_ z+40
+G:$  Z+85
+G:_  Z+40
+e:_	j+40
+e:$	j+85
+c:_	j+40
+c:$	j+85
+e:	j
+$ +85
+_ +40
+
+\
+
+code i i/v 85
+C':_	S+40
+C':$	S+90
+C':	S
+e:_	j+40
+e:$	j+90
+$ +90
+_ +40
+\
+
+code i+ i/v 150
+C':_	S+40
+C':$	S+90
+C':	S
+e:_	j+40
+e:$	j+90
+$ +90
+_ +40
+\
+
+code o+ o/v 150
+C:_	H+40
+C:$	H+90
+D:$ z+90
+D:_ z+40
+G:$  Z+90
+G:_  Z+40
+e:_	j+40
+e:$	j+90
+c:$	f+90
+c:_	j+60
+x:$	j+90
+x:_	f+60
+$ +90
+_ +40
+\
+
+code o o/v 85
+C:_	H+40
+C:$	H+90
+D:$ z+90
+D:_ z+40
+G:$  Z+90
+G:_  Z+40
+e:_	j+40
+e:$	j+90
+c:$	f+90
+c:_	j+60
+x:$	j+90
+x:_	f+60
+$ +90
+_ +40
+\
+
+code u u/v 85
+C:_ H+40
+C:$ H+120
+D:$ z+120
+D:_ z+40
+G:$  Z+120
+G:_  Z+40
+c:$	j+120
+c:_	j+60
+x:$	f+120
+x:_	f+90
+$ +120
+_ +40
+\
+
+code u+ u/v 150
+C:_ H+40
+C:$ H+120
+D:$ z+120
+D:_ z+40
+G:$  Z+120
+G:_  Z+40
+c:$	j+120
+c:_	j+60
+x:$	f+120
+x:_	f+90
+$ +120
+_ +40
+\
+
+code y I/v 85
+C:_ H+40
+C:$ H+120
+D:$ z+120
+D:_ z+40
+G:$  Z+120
+G:_  Z+40
+$ +120
+_ +40
+@ +40
+c' !
+\
+
+code y+ I/v 150
+C:_ H+40
+C:$ H+120
+D:$ z+120
+D:_ z+40
+G:$  Z+120
+G:_  Z+40
+$ +120
+_ +40
+@ +40
+c' !
+\
+
+code a' a/v 100
+g -15N
+k -15N
+n -15
+* N
+\
+
+
+; spó³g³oski
+
+
+
+code b b 70
+\
+
+code p p 55
+;J 55
+;t 55
+;r 55
+;w 56
+;n 55
+;m 55
+;l 55
+;f 55
+;k 55
+;c 55
+;c' 55
+;S 55
+;@ 55
+\
+
+code c ts 85
+\
+
+code D dz 85
+;@ 35
+\
+
+code C tS 85
+\
+
+code G dZ 85
+;_:@ +30
+\
+
+code C' ts' 110
+@ 65
+i 90
+J 65
+\
+
+code G' dz' 70
+r:J 60
+r:i 60
+v:i 60
+v:J 60
+J 20
+i 20
+@ 30
+\
+
+code t t 50
+x	80
+p	70
+\
+
+code d d 35
+d 70
+G' 70
+r 70
+Z' 70
+\
+
+code f f 70
+p 100
+\
+code v v 35
+r 55
+l 55
+w 55
+J 55
+a 50
+o 20
+i 20
+u 20
+e 20
+Z' 55
+\
+
+
+code h x 20
+\
+
+code x x 55
+@ +30
+C'	+30_
+*m	=
+\
+
+
+code j j 40
+d:@ +40
+r: 80
+L: 100
+G	!
+\
+
+code j' j 10
+\
+
+code k k 50
+@ 65
+c' _
+\
+
+code g g 65
+\
+
+code l l 65
+\
+
+code L l 10
+\
+
+code w w 50
+p:C' <100
+@:$ 105
+@: 40
+@ 85
+$ 105
+\
+
+code w' w 10
+@:R 30
+\
+
+code W' w 1
+@ -1
+\
+
+code m m 85
+i:$ 5
+i:@ 20
+@ 55
+\
+
+
+code n n 55
+t 85
+$ 85
+\
+code N N 50
+\
+
+code n' n' 50
+\
+
+code r r 50
+\
+code R r 20
+\
+
+
+code s s 105
+\
+code z z 65
+\
+
+code S S 105
+C:@ 20
+C: 40
+\
+code Z Z 65
+\
+
+code S' s' 105
+J	85
+\
+code Z' z' 65
+\
+
+; specjalne
+
+; V rozdziela spó³g³oski na koñcu wyrazu
+code V I 40
+\
+
+; Y i I to schwa
+code Y e/v 40
+$ +55
+_ +40
+\
+
+code I I/v 40
+$ +55
+_ +40
+\
+
+code J i 7
+@ 14
+\
+
+; spó³g³oskosamog³oski
+
+code *h x/v 200
+* =
+\
+
+code *m m/v 200
+\
+
+code *s s/v 150
+* =
+\
+
+code *z z/v 150
+* =
+\
+
+code *r r/v 105
+* =
+\
+
+code *S S/v 155
+\
+
+code *S' s'/v 155
+\
+
+code *Z Z/v 155
+\
+
+code *Z' z'/v 155
+\
+
+
+;equal L l
+;equal h x
+equal H S
+equal T s
+equal Q z
+equal R' r
+equal U i
+
+code b' b 70
+i #
+@ J
+* J_
+\
+
+code p' p 70
+i #
+@ J
+r J
+* J_
+\
+
+code c' ts 70
+i #
+@ J
+* J_
+\
+
+code D' dz 70
+i #
+@ J
+* J_
+\
+
+code t' t 70
+i #
+@ J
+* J_
+\
+
+code d' d 70
+i #
+@ J
+* J_
+\
+
+code f' f 70
+i #
+@ J
+* J_
+\
+
+code v' v 70
+i #
+@ J
+* J_
+\
+
+code g' g 65
+i #
+@ J
+* J_
+\
+
+code k' k 50
+i #
+@ J
+* J_
+\
+
+code l' l 65
+i #
+@ J
+* J_
+\
+
+code r' r 50
+i #
+@ J
+* J_
+\
+
+code s' s 105
+i #
+@ J
+* J_
+\
+
+code x' x 55
+i #
+@ J
+* J_
+\
+
+code m' m 85
+i #
+@ J
+* J_
+\
+
+code z' z 65
+i #
+@ J
+* J_
+\

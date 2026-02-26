@@ -1,0 +1,137 @@
+[keys]
+space spacja
+underscore podkre¶lnik
+double-quote cudzys³ów
+control kontrol
+backspace bekspejs
+break brejk
+delete dil~!ejt
+down w dó³
+escape esk~!ejp
+home ho³m
+kp-enter pad enter
+left w lewo
+num-lock numlok
+pause pa³za
+return
+right w prawo
+scroll-lock skrollok
+up w górê
+window ³indo³
+
+[desc]
+ill nielegalny
+let litera
+cap wielkie
+caplet wielka litera
+lig ligatura
+caplig wielka ligatura
+sym znak
+ced cedilla
+bre brevis
+dot z kropk±
+dia umla³t
+acu ostre
+gra ciê¿kie
+ac2 hungarumla³t
+cir z daszkiem
+mac nadkre¶lone
+rin z kó³kiem
+str skre¶lone
+ogo z ogonkiem
+til z tyld±
+dot z kropk±
+car z haczkiem
+mdo kropkowane
+
+[chars]
+x15b [1]¶i
+x107 [1]æi
+x17a [1]¼i
+x144 [1]ñi
+x17c [1]¿et
+x142 [1]e³
+
+xa0 twarda spacja
+xa1 odwrotny wykrzyknik
+xa2 cent
+xa3 funt
+xa4 waluta
+xa5 j~'en
+xa6 pipa z pa³z±
+xa7 paragraf
+xa8 umla³t
+xa9 [3]kopyrajt
+xaa ¿eñski
+xab lewy podwójny ostry
+xac not
+xad miêkki my¶lnik
+xae rejestr
+xaf nadkre¶lenie
+xb0 stopieñ
+xb1 plusminus
+xb2 kwadrat
+xb3 sze¶cian
+xb4 ostry akcent
+xb5 mikro
+xb6 akapit
+xb7 kropka w ¶rodku
+xb8 cedilla
+xb9 super jeden
+xba mêski
+xbb prawy podwójny ostry
+xbc æwieræ
+xbd pó³
+xbe trzy czwarte
+xbf odwrotny pytajnik
+
+xd7 mno¿enie
+xdf szarfen es
+xf0 et
+xf3 [1]o z kresk±
+xf7 dzielenie
+xfe torn
+x131 [1]i bezkropki
+x138 kra
+x14b eng
+x17f d³ugie [1]es
+
+x2c7 hacek
+x2d9 górna kropka
+x2da górne kó³ko
+x2db ogonek
+x2dc ma³a tylda
+x2d8 brevis
+x2dd hungarumla³t
+
+
+x2013 pó³pa³za
+x2014 pa³za
+x2015 kreska pozioma
+
+x2022 bulbon
+x2026 wielokropek
+x2030 promil
+x20a0 euro
+x2116 numer
+x2122 trejdmark
+
+x2190 strza³ka w lewo
+x2192 strza³ka w prawo
+x2191 strza³ka w górê
+x2193 strza³ka w dó³
+x2194 lewoprawo
+x2195 [1]góradó³
+
+x2153 jedna trzecia
+x2154 dwie trzecie
+x2155 jedna pi±ta
+x2156 dwie pi±te
+x2157 trzy pi±te
+x2158 cztery pi±te
+x2159 jedna szósta
+x215a piêæ szóstych
+x215b jedna ósma
+x215c trzy ósme
+x215d piêæ ósmych
+x215e siedem ósmych

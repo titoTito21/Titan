@@ -3,7 +3,8 @@
 TCE Speech - Unified speech API for TCE applications and games.
 
 Provides access to Titan's TTS engine (StereoSpeech) when enabled in settings,
-with fallback to accessible_output3 / platform TTS when disabled or unavailable.
+with stereo positioning and pitch/tone control. Falls back to accessible_output3 /
+platform TTS when disabled or unavailable.
 
 Works in both development mode and compiled (PyInstaller) mode.
 
@@ -18,6 +19,14 @@ Usage in apps/games:
         speak("Hello world")
         speak("Left side", position=-0.5)
         speak("Right side", position=0.5)
+        speak("High pitch", pitch_offset=5)
+        speak("Low left", position=-0.8, pitch_offset=-3)
+
+    # Control rate, volume, pitch, engine, voice:
+    from src.titan_core.tce_speech import set_rate, set_volume, set_pitch
+    set_rate(3)       # -10 to +10
+    set_volume(80)    # 0 to 100
+    set_pitch(2)      # -10 to +10
 """
 
 import os
@@ -156,10 +165,21 @@ def _apply_stereo_settings(stereo):
         except (ValueError, TypeError):
             pass
 
-        # 4. Set ElevenLabs API key (before loading voices)
-        elevenlabs_key = _get_setting('elevenlabs_api_key', '', 'stereo_speech')
-        if elevenlabs_key and hasattr(stereo, 'set_elevenlabs_api_key'):
-            stereo.set_elevenlabs_api_key(elevenlabs_key)
+        # 4. Apply engine-specific config (API keys, model, etc.)
+        stereo_section = _load_settings().get('stereo_speech', {})
+
+        # Backward compat: migrate old elevenlabs_api_key
+        old_api_key = stereo_section.get('elevenlabs_api_key', '')
+        if old_api_key and 'engine.elevenlabs.api_key' not in stereo_section:
+            stereo_section['engine.elevenlabs.api_key'] = old_api_key
+
+        # Apply all engine.{id}.{key} settings
+        for setting_key, value in stereo_section.items():
+            if setting_key.startswith('engine.'):
+                parts = setting_key.split('.', 2)  # engine.{id}.{key}
+                if len(parts) == 3 and hasattr(stereo, 'set_engine_config'):
+                    eng_id, cfg_key = parts[1], parts[2]
+                    stereo.set_engine_config(eng_id, cfg_key, value)
 
         # 5. Set voice (stored as ID/name, need to find matching index)
         voice_id = _get_setting('voice', '', 'stereo_speech')
@@ -204,9 +224,12 @@ _init_lock = threading.Lock()
 _initialized = False
 
 
+_uses_stereo = False
+
+
 def _init():
     """Lazy-initialize the speech engine based on Titan settings."""
-    global _speaker, _initialized
+    global _speaker, _initialized, _uses_stereo
     if _initialized:
         return
     with _init_lock:
@@ -223,6 +246,7 @@ def _init():
                 from src.titan_core.stereo_speech import StereoSpeech
                 _speaker = StereoSpeech()
                 _apply_stereo_settings(_speaker)
+                _uses_stereo = True
                 _initialized = True
                 return
             except Exception as e:
@@ -238,21 +262,18 @@ def _init():
 # ---------------------------------------------------------------------------
 
 def speak(text, position=0.0, interrupt=True, pitch_offset=0):
-    """Speak text with optional stereo positioning.
+    """Speak text with stereo positioning and pitch control.
 
     Args:
         text: The text to speak.
         position: Stereo position from -1.0 (left) to 1.0 (right), 0.0 = center.
-                  Only effective when Titan TTS (stereo speech) is enabled.
         interrupt: If True, stop any current speech before speaking.
-        pitch_offset: Pitch offset (engine-dependent).
+        pitch_offset: Pitch offset from -10 to +10.
     """
     _init()
     if _speaker:
         if interrupt and hasattr(_speaker, 'stop'):
             _speaker.stop()
-        # StereoSpeech.speak() uses (text, position, pitch_offset) — no interrupt param
-        # _BasicEngine.speak() accepts interrupt via keyword
         if isinstance(_speaker, _BasicEngine):
             _speaker.speak(text, position=position, interrupt=interrupt, pitch_offset=pitch_offset)
         else:
@@ -279,3 +300,131 @@ def stop():
     _init()
     if _speaker:
         _speaker.stop()
+
+
+# ---------------------------------------------------------------------------
+# Extended API — rate, volume, pitch, engine, voice control
+# ---------------------------------------------------------------------------
+
+def set_rate(rate):
+    """Set speech rate.
+
+    Args:
+        rate: Rate from -10 (slowest) to +10 (fastest). 0 = default.
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_rate'):
+        _speaker.set_rate(rate)
+
+
+def set_volume(volume):
+    """Set speech volume.
+
+    Args:
+        volume: Volume from 0 (silent) to 100 (loudest).
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_volume'):
+        _speaker.set_volume(volume)
+
+
+def set_pitch(pitch):
+    """Set base voice pitch.
+
+    Args:
+        pitch: Pitch from -10 (lowest) to +10 (highest). 0 = default.
+              This sets the base pitch; pitch_offset in speak() is additive.
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_pitch'):
+        _speaker.set_pitch(pitch)
+
+
+def set_engine(engine):
+    """Set the TTS engine.
+
+    Args:
+        engine: Engine identifier ('espeak', 'espeak_dll', 'sapi5',
+                'say', 'spd', 'elevenlabs', 'milena').
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_engine'):
+        _speaker.set_engine(engine)
+
+
+def get_available_engines():
+    """Get list of available TTS engines on this platform.
+
+    Returns:
+        list: Engine identifiers (e.g. ['espeak_dll', 'sapi5']).
+              Empty list if StereoSpeech is not available.
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'get_available_engines'):
+        return _speaker.get_available_engines()
+    return []
+
+
+def get_available_voices():
+    """Get list of available voices for the current engine.
+
+    Returns:
+        list: Voice names or dicts (engine-dependent).
+              Empty list if StereoSpeech is not available.
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'get_available_voices'):
+        return _speaker.get_available_voices()
+    return []
+
+
+def set_voice(voice_index):
+    """Set voice by index from get_available_voices().
+
+    Args:
+        voice_index: Index into the list returned by get_available_voices().
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_voice'):
+        _speaker.set_voice(voice_index)
+
+
+def set_engine_config(engine_id, key, value):
+    """Set a configuration value on a TitanTTS engine.
+
+    Args:
+        engine_id: Engine identifier (e.g. 'elevenlabs')
+        key: Config key (e.g. 'api_key')
+        value: Value to set
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'set_engine_config'):
+        _speaker.set_engine_config(engine_id, key, value)
+
+
+def get_engine_config(engine_id, key, default=None):
+    """Get a configuration value from a TitanTTS engine.
+
+    Args:
+        engine_id: Engine identifier
+        key: Config key
+        default: Default value if not set
+
+    Returns:
+        The config value, or default
+    """
+    _init()
+    if _uses_stereo and hasattr(_speaker, 'get_engine_config'):
+        return _speaker.get_engine_config(engine_id, key, default)
+    return default
+
+
+def is_stereo_available():
+    """Check if full stereo/pitch support is active.
+
+    Returns:
+        bool: True if StereoSpeech is loaded (stereo positioning and
+              pitch control work). False if using basic fallback engine.
+    """
+    _init()
+    return _uses_stereo

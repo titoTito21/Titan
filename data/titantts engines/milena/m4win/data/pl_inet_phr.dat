@@ -1,0 +1,3 @@
+//korekta b³êdu Onet.pl w tytu³ach wiadomo¶ci
+
+recognize .dmyr -{d:d1-31}-{m:r1-12}-{y:d}

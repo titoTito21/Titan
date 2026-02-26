@@ -37,25 +37,21 @@ except ImportError:
     PYDUB_SILENCE_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
-# ElevenLabs engine (loaded via importlib - filename contains a space)
+# TitanTTS Engine Registry (loads ElevenLabs, Milena, and plugin engines)
 # ---------------------------------------------------------------------------
-ELEVENLABS_AVAILABLE = False
-_elevenlabs_module = None
+_engine_registry = None
 
-try:
-    _el_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), '..', 'tts', 'elevenLabs engine.py')
-    )
-    if os.path.exists(_el_path):
-        _el_spec = _importlib_util.spec_from_file_location("elevenlabs_engine", _el_path)
-        _elevenlabs_module = _importlib_util.module_from_spec(_el_spec)
-        _el_spec.loader.exec_module(_elevenlabs_module)
-        ELEVENLABS_AVAILABLE = True
-        print("[StereoSpeech] ElevenLabs TTS engine loaded")
-    else:
-        print(f"[StereoSpeech] ElevenLabs engine not found at: {_el_path}")
-except Exception as _el_err:
-    print(f"[StereoSpeech] ElevenLabs engine load error: {_el_err}")
+def _get_engine_registry():
+    """Lazy-load the engine registry to avoid circular imports."""
+    global _engine_registry
+    if _engine_registry is None:
+        try:
+            from src.tts.engine_registry import get_engine_registry
+            _engine_registry = get_engine_registry()
+            print("[StereoSpeech] TitanTTS Engine Registry loaded")
+        except Exception as e:
+            print(f"[StereoSpeech] Engine Registry load error: {e}")
+    return _engine_registry
 
 # ---------------------------------------------------------------------------
 # eSpeak DLL constants (from speak_lib.h)
@@ -118,7 +114,7 @@ class ESpeakDLL:
         """Find and load the eSpeak NG shared library (cross-platform)"""
         try:
             proj_root = _get_base_path()
-            bundled_dir = os.path.join(proj_root, 'data', 'screen reader engines', 'espeak')
+            bundled_dir = os.path.join(proj_root, 'data', 'titantts engines', 'espeak')
 
             # Platform-specific library names
             if IS_WINDOWS:
@@ -578,8 +574,8 @@ ESPEAK_AVAILABLE = False
 ESPEAK_PATH = None
 ESPEAK_DATA_PATH = None
 
-# First, try to find bundled eSpeak in data/screen reader engines/espeak/
-bundled_espeak_dir = os.path.join(project_root, 'data', 'screen reader engines', 'espeak')
+# First, try to find bundled eSpeak in data/titantts engines/espeak/
+bundled_espeak_dir = os.path.join(project_root, 'data', 'titantts engines', 'espeak')
 _bundled_exe_name = 'espeak-ng.exe' if IS_WINDOWS else 'espeak-ng'
 bundled_espeak_exe = os.path.join(bundled_espeak_dir, _bundled_exe_name)
 bundled_espeak_data = os.path.join(bundled_espeak_dir, 'espeak-ng-data')
@@ -811,14 +807,22 @@ class StereoSpeech:
         # Fallback speaker (accessible_output3)
         self.fallback_speaker = accessible_output3.outputs.auto.Auto()
 
-        # ElevenLabs engine instance
+        # TitanTTS Engine Registry - provides ElevenLabs, Milena, and plugin engines
+        self._registry = _get_engine_registry()
+
+        # Legacy references for backward compatibility
         self.elevenlabs = None
-        if ELEVENLABS_AVAILABLE:
-            try:
-                self.elevenlabs = _elevenlabs_module.get_elevenlabs_engine()
-                print("[StereoSpeech] ElevenLabs engine instance ready")
-            except Exception as e:
-                print(f"[StereoSpeech] ElevenLabs instance error: {e}")
+        self.milena = None
+        self._milena_process = None
+        if self._registry:
+            el = self._registry.get_titantts_engine('elevenlabs')
+            if el:
+                self.elevenlabs = el
+                print("[StereoSpeech] ElevenLabs engine instance ready (via registry)")
+            mil = self._registry.get_titantts_engine('milena')
+            if mil:
+                self.milena = mil
+                print("[StereoSpeech] Milena engine instance ready (via registry)")
 
         # Platform-specific engine selection
         # Prefer eSpeak DLL (fastest), then eSpeak exe, then platform native
@@ -843,7 +847,21 @@ class StereoSpeech:
             except Exception as e:
                 print(f"[StereoSpeech] SAPI5 init error: {e}")
                 self.sapi = None
-    
+
+        # Register platform engines in registry
+        if self._registry:
+            self._registry.register_platform_engine('espeak', 'eSpeak NG',
+                                                     ESPEAK_AVAILABLE or ESPEAK_DLL_AVAILABLE)
+            if IS_WINDOWS:
+                self._registry.register_platform_engine('sapi5', 'SAPI5',
+                                                         self.sapi is not None)
+            if IS_MACOS:
+                self._registry.register_platform_engine('say', 'macOS Speech',
+                                                         SAY_AVAILABLE)
+            if IS_LINUX:
+                self._registry.register_platform_engine('spd', 'Speech Dispatcher',
+                                                         SPD_AVAILABLE)
+
     def __del__(self):
         """Cleanup COM objects on destruction safely."""
         try:
@@ -1301,15 +1319,72 @@ class StereoSpeech:
             print(f"[StereoSpeech] ElevenLabs generation error: {e}")
             return None
 
+    def _generate_milena_to_memory(self, text, pitch_offset=0):
+        """
+        Generate TTS via Milena engine (milena4w.exe) with disk caching.
+
+        Args:
+            text (str):         Text to synthesize.
+            pitch_offset (int): Semitone shift -10..+10.
+
+        Returns:
+            pydub.AudioSegment or None
+        """
+        if not MILENA_AVAILABLE or not self.milena:
+            return None
+        if not PYDUB_AVAILABLE:
+            return None
+        try:
+            audio = self.milena.generate(text, pitch_offset)
+            if audio is not None:
+                print(f"[StereoSpeech] Milena: {len(audio)} ms audio ready")
+            return audio
+        except Exception as e:
+            print(f"[StereoSpeech] Milena generation error: {e}")
+            return None
+
     def set_elevenlabs_api_key(self, api_key):
-        """Set ElevenLabs API key on the engine instance."""
-        if self.elevenlabs:
-            self.elevenlabs.set_api_key(api_key)
+        """Set ElevenLabs API key on the engine instance. (Backward compat)"""
+        self.set_engine_config('elevenlabs', 'api_key', api_key)
 
     def set_elevenlabs_voice_id(self, voice_id):
-        """Set ElevenLabs voice ID on the engine instance."""
+        """Set ElevenLabs voice ID on the engine instance. (Backward compat)"""
         if self.elevenlabs:
             self.elevenlabs.set_voice_id(voice_id)
+
+    def set_engine_config(self, engine_id, key, value):
+        """
+        Set a configuration value on a TitanTTS engine.
+
+        Args:
+            engine_id (str): Engine identifier (e.g. 'elevenlabs')
+            key (str): Config key (e.g. 'api_key')
+            value: Value to set
+        """
+        registry = _get_engine_registry()
+        if registry:
+            engine = registry.get_titantts_engine(engine_id)
+            if engine and hasattr(engine, 'configure'):
+                engine.configure(key, value)
+
+    def get_engine_config(self, engine_id, key, default=None):
+        """
+        Get a configuration value from a TitanTTS engine.
+
+        Args:
+            engine_id (str): Engine identifier
+            key (str): Config key
+            default: Default value if not set
+
+        Returns:
+            The config value, or default
+        """
+        registry = _get_engine_registry()
+        if registry:
+            engine = registry.get_titantts_engine(engine_id)
+            if engine and hasattr(engine, 'get_config'):
+                return engine.get_config(key, default)
+        return default
 
     def _speak_native_say(self, text):
         """Direct speech using macOS 'say' command (no stereo)."""
@@ -1491,41 +1566,50 @@ class StereoSpeech:
                     if not audio:
                         self._speak_native_say(text)
                         return
-                elif self.engine == 'elevenlabs':
-                    # Release lock during ElevenLabs API call (1-2s) so newer
-                    # messages aren't blocked waiting for the lock
-                    if lock_acquired:
-                        self.speech_lock.release()
-                        lock_acquired = False
-
-                    audio = self._generate_elevenlabs_to_memory(text, pitch_offset)
-
-                    # Check if a newer message arrived during generation
-                    if _seq is not None and _seq != self._speak_seq:
-                        return
-
-                    # Re-acquire lock for playback
-                    lock_acquired = self.speech_lock.acquire(timeout=2.0)
-                    if not lock_acquired:
-                        if use_fallback:
-                            self.fallback_speaker.speak(text)
-                        return
-
-                    # Double-check freshness after lock acquisition
-                    if _seq is not None and _seq != self._speak_seq:
-                        return
-
-                    self.stop()  # Stop any playback that started while unlocked
-                    self.is_speaking = True
-
-                    if not audio:
-                        if use_fallback:
-                            self.fallback_speaker.speak(text)
-                        return
                 else:
-                    if use_fallback:
-                        self.fallback_speaker.speak(text)
-                    return
+                    # Generic TitanTTS engine dispatch (registry engines)
+                    registry = _get_engine_registry()
+                    tts_engine = registry.get_titantts_engine(self.engine) if registry else None
+                    if tts_engine and tts_engine.is_available():
+                        # Release lock during slow generation (API/subprocess)
+                        if getattr(tts_engine, 'needs_lock_release', False):
+                            if lock_acquired:
+                                self.speech_lock.release()
+                                lock_acquired = False
+
+                        try:
+                            audio = tts_engine.generate(text, pitch_offset)
+                        except Exception as e:
+                            print(f"[StereoSpeech] {tts_engine.engine_name} generation error: {e}")
+                            audio = None
+
+                        if getattr(tts_engine, 'needs_lock_release', False):
+                            # Check if a newer message arrived during generation
+                            if _seq is not None and _seq != self._speak_seq:
+                                return
+
+                            # Re-acquire lock for playback
+                            lock_acquired = self.speech_lock.acquire(timeout=2.0)
+                            if not lock_acquired:
+                                if use_fallback:
+                                    self.fallback_speaker.speak(text)
+                                return
+
+                            # Double-check freshness after lock acquisition
+                            if _seq is not None and _seq != self._speak_seq:
+                                return
+
+                            self.stop()
+                            self.is_speaking = True
+
+                        if not audio:
+                            if use_fallback:
+                                self.fallback_speaker.speak(text)
+                            return
+                    else:
+                        if use_fallback:
+                            self.fallback_speaker.speak(text)
+                        return
 
                 try:
                     # Trim silence (always active - improves responsiveness)
@@ -1695,6 +1779,16 @@ class StereoSpeech:
                     pass
                 self._espeak_process = None
 
+            # Stop TitanTTS engine (Milena, plugin engines, etc.)
+            registry = _get_engine_registry()
+            if registry:
+                tts_engine = registry.get_titantts_engine(self.engine) if hasattr(self, 'engine') else None
+                if tts_engine and hasattr(tts_engine, 'stop'):
+                    try:
+                        tts_engine.stop()
+                    except Exception:
+                        pass
+
             # Stop native TTS subprocess (macOS say / Linux spd-say)
             if hasattr(self, '_native_process') and self._native_process:
                 try:
@@ -1732,14 +1826,18 @@ class StereoSpeech:
         elif engine == 'spd' and IS_LINUX and SPD_AVAILABLE:
             self.engine = 'spd'
             print("[StereoSpeech] Switched to Speech Dispatcher engine")
-        elif engine == 'elevenlabs':
-            if ELEVENLABS_AVAILABLE:
-                self.engine = 'elevenlabs'
-                print("[StereoSpeech] Switched to ElevenLabs TTS engine")
-            else:
-                print("[StereoSpeech] ElevenLabs engine not available (missing deps)")
         else:
-            print(f"[StereoSpeech] Engine '{engine}' not available on this platform")
+            # Check TitanTTS engine registry for custom/plugin engines
+            registry = _get_engine_registry()
+            if registry and registry.is_titantts_engine(engine):
+                tts_engine = registry.get_titantts_engine(engine)
+                if tts_engine:
+                    self.engine = engine
+                    print(f"[StereoSpeech] Switched to TitanTTS engine: {tts_engine.engine_name}")
+                else:
+                    print(f"[StereoSpeech] TitanTTS engine '{engine}' not available")
+            else:
+                print(f"[StereoSpeech] Engine '{engine}' not available on this platform")
 
     def get_engine(self):
         """
@@ -1754,23 +1852,32 @@ class StereoSpeech:
         """
         Returns list of available TTS engines (platform-dependent).
 
+        TitanTTS engines are always listed (they have config UIs in settings),
+        platform engines only when available on this platform.
+
         Returns:
-            list: List of available engine identifiers
+            list: List of engine identifiers, TitanTTS first then platform
         """
+        registry = _get_engine_registry()
+        if registry:
+            # TitanTTS engines always shown (user can configure them in settings)
+            titantts = [e.engine_id for e in registry.get_all_engines()
+                        if e.engine_category == 'titantts']
+            # Platform engines only when available
+            platform = [e.engine_id for e in registry.get_all_engines()
+                        if e.engine_category == 'platform' and e.is_available()]
+            return titantts + platform
+
+        # Fallback if registry not available
         engines = []
-        # eSpeak is cross-platform
         if ESPEAK_AVAILABLE or ESPEAK_DLL_AVAILABLE:
             engines.append('espeak')
-        # Platform-specific native engines
         if IS_WINDOWS and self.sapi:
             engines.append('sapi5')
         if IS_MACOS and SAY_AVAILABLE:
             engines.append('say')
         if IS_LINUX and SPD_AVAILABLE:
             engines.append('spd')
-        # ElevenLabs - cloud-based, always listed (requires API key to work)
-        if ELEVENLABS_AVAILABLE:
-            engines.append('elevenlabs')
         return engines
 
     def set_rate(self, rate):
@@ -1797,6 +1904,13 @@ class StereoSpeech:
             elif self.engine == 'spd':
                 # spd-say: map -10..10 to -100..100
                 self.spd_rate = max(-100, min(100, rate * 10))
+            else:
+                # Delegate to TitanTTS engine via registry
+                registry = _get_engine_registry()
+                if registry:
+                    tts_engine = registry.get_titantts_engine(self.engine)
+                    if tts_engine and hasattr(tts_engine, 'set_rate'):
+                        tts_engine.set_rate(rate)
         except Exception as e:
             print(f"[StereoSpeech] Error setting rate: {e}")
 
@@ -1821,6 +1935,13 @@ class StereoSpeech:
             elif self.engine in ('say', 'spd'):
                 # Native engines use 0-100 directly
                 pass  # Volume controlled at system level
+            else:
+                # Delegate to TitanTTS engine via registry
+                registry = _get_engine_registry()
+                if registry:
+                    tts_engine = registry.get_titantts_engine(self.engine)
+                    if tts_engine and hasattr(tts_engine, 'set_volume'):
+                        tts_engine.set_volume(max(0, min(100, volume)))
         except Exception as e:
             print(f"[StereoSpeech] Error setting volume: {e}")
 
@@ -2079,11 +2200,13 @@ class StereoSpeech:
                 return self.get_say_voices()
             elif self.engine == 'spd':
                 return self.get_spd_voices()
-            elif self.engine == 'elevenlabs':
-                if self.elevenlabs:
-                    return self.elevenlabs.get_voices()
-                return []
             else:
+                # Delegate to TitanTTS engine via registry
+                registry = _get_engine_registry()
+                if registry:
+                    tts_engine = registry.get_titantts_engine(self.engine)
+                    if tts_engine:
+                        return tts_engine.get_voices()
                 return []
         except Exception as e:
             print(f"[StereoSpeech] Error getting voices: {e}")
@@ -2121,12 +2244,16 @@ class StereoSpeech:
                 if 0 <= voice_index < len(voices):
                     self.spd_voice = voices[voice_index]['id']
                     print(f"[StereoSpeech] spd-say voice set to: {voices[voice_index]['display_name']}")
-            elif self.engine == 'elevenlabs':
-                voices = self.elevenlabs.get_voices() if self.elevenlabs else []
-                if 0 <= voice_index < len(voices):
-                    voice_id = voices[voice_index]['id']
-                    self.set_elevenlabs_voice_id(voice_id)
-                    print(f"[StereoSpeech] ElevenLabs voice set to: {voices[voice_index]['display_name']}")
+            else:
+                # Delegate to TitanTTS engine via registry
+                registry = _get_engine_registry()
+                if registry:
+                    tts_engine = registry.get_titantts_engine(self.engine)
+                    if tts_engine:
+                        voices = tts_engine.get_voices()
+                        if 0 <= voice_index < len(voices):
+                            tts_engine.set_voice(voices[voice_index]['id'])
+                            print(f"[StereoSpeech] {tts_engine.engine_name} voice set to: {voices[voice_index]['display_name']}")
         except Exception as e:
             print(f"[StereoSpeech] Error setting voice: {e}")
 

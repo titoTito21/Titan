@@ -1,0 +1,16 @@
+esc	eskejp $1
+escape	eskejp $1
+etc	$S
+orc(a|±|ê)	ork%
+speech~dispatcher(a|em|owi|ze|)	spicz dispaczer%
+opentts opentete~'es $1
+emacspeak $3
+
+idg.pl idegi~!e pe~'~!el
+onet.pl [n]onet pe~'~!el
+gazeta.pl gazeta pe~'~!el
+
+mysql	majesku~'el $1
+
+sitemap sajtmap
+warzone ³orzo³n

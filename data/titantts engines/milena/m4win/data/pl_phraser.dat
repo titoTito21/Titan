@@ -1,0 +1,1887 @@
+spell % procent
+spell @ ma³pa
+spell & end
+spell $ dolar
+spell + plus
+spell = równe
+spell * gwiazdka
+spell & and
+spell / przez
+spell > wiêksze
+spell < mniejsze
+spell ° stopieñ
+spell § paragraf
+spell | pipa
+spell # hasz
+spell ^ daszek
+spell ~ tylda
+spell _ podkre¶l
+spell ` gravis
+spell ¤ waluta
+spell ÷ dzielone
+spell × razy
+
+unit z³ z³oty|z³ote|z³otych|z³otego
+unit gr grosz|grosze|groszy|grosza
+unit m metr|metry|metrów|metra
+unit km kilometr|kilometry|kilometrów|kilometra
+unit mm milimetr|milimetry|milimetrów|milimetra
+unit cm centymetr|centymetry|centymetrów|centymetra
+unit km/h kilometr na godzinê|kilometry na godzinê|kilometrów na godzinê|kilometra na godzinê
+unit km/godz kilometr na godzinê|kilometry na godzinê|kilometrów na godzinê|kilometra na godzinê
+unit km/s kilometr na sekundê|kilometry na sekundê|kilometrów na sekundê|kilometra na sekundê
+unit m/s metr na sekundê|metry na sekundê|metrów na sekundê|metra na sekundê
+unit km/sek kilometr na sekundê|kilometry na sekundê|kilometrów na sekundê|kilometra na sekundê
+unit m/sek metr na sekundê|metry na sekundê|metrów na sekundê|metra na sekundê
+unit km/sec kilometr na sekundê|kilometry na sekundê|kilometrów na sekundê|kilometra na sekundê
+unit m/sec metr na sekundê|metry na sekundê|metrów na sekundê|metra na sekundê
+unit mm/sec milimetr na sekundê|milimetry na sekundê|milimetrów na sekundê|milimetra na sekundê
+unit mm/sek milimetr na sekundê|milimetry na sekundê|milimetrów na sekundê|milimetra na sekundê
+unit mm/s milimetr na sekundê|milimetry na sekundê|milimetrów na sekundê|milimetra na sekundê
+unit cm/sec centymetr na sekundê|centymetry na sekundê|centymetrów na sekundê|centymetra na sekundê
+unit cm/sek centymetr na sekundê|centymetry na sekundê|centymetrów na sekundê|centymetra na sekundê
+unit cm/s centymetr na sekundê|centymetry na sekundê|centymetrów na sekundê|centymetra na sekundê
+unit ° stopieñ|stopnie|stopni|stopnia
+unit °C stopieñ celsjusza|stopnie celsjusza|stopni celsjusza|stopnia celsjusza
+unit °F stopieñ farenajta|stopnie farenajta|stopni farenajta|stopnia farenajta
+unit hPa hektopaskal|hektopaskale|hektopaskali|hektopaskala
+unitf sek sekunda|sekundy|sekund|sekundy
+unitf sec sekunda|sekundy|sekund|sekundy
+unitf msec milisekunda|milisekundy|milisekund|milisekundy
+unitf mikrosec mikrosekunda|mikrosekundy|mikrosekund|mikrosekundy
+unitfh min minuta|minuty|minut|minuty
+unitf mph mila na godzinê|mile na godzinê|mil na godzinê|mili na godzinê
+unit $ dolar|dolary|dolarów|dolara
+unit tys. tysi±c|tysi±ce|tysiêcy|tysi±ca
+unit mln milion|miliony|milionów|miliona
+unit mln. milion|miliony|milionów|miliona
+unit mld miliard|miliardy|miliardów|miliarda
+unit mld. miliard|miliardy|miliardów|miliarda
+unit GHz gigaherc|gigaherce|gigaherców|gigaherca
+unit Ghz gigaherc|gigaherce|gigaherców|gigaherca
+unit MHz megaherc|megaherce|megaherców|megaherca
+unit Mhz megaherc|megaherce|megaherców|megaherca
+unit kHz kiloherc|kiloherce|kiloherców|kiloherca
+unit Hz herc|herce|herców|herca
+unit kg kilogram|kilogramy|kilogramów|kilograma
+unit dag dekagram|dekagramy|dekagramów|dekagrama
+unit g gram|gramy|gramów|grama
+unit ml mililitr|mililitry|mililitrów|mililitra
+unit hl hektolitr|hektolitry|hektolitrów|hektolitra
+unit l litr|litry|litrów|litra
+unit V volt|volty|voltów|volta
+unit kV kilovolt|kilovolty|kilovoltów|kilovolta
+unit mV milivolt|milivolty|milivoltów|milivolta
+unit eV elektronovolt|elektronovolty|elektronovoltów|elektronovolta
+unit keV kiloelektronovolt|kiloelektronovolty|kiloelektronovoltów|kiloelektronovolta
+unit MeV megaelektronovolt|megaelektronovolty|megaelektronovoltów|megaelektronovolta
+unit m^2 metr kwadratowy|metry kwadratowe|metrów kwadratowych|metra kwadratowego
+unit m2 metr kwadratowy|metry kwadratowe|metrów kwadratowych|metra kwadratowego
+unit m^3 metr sze¶cienny|metry sze¶cienne|metrów sze¶ciennych|metra sze¶ciennego
+unit m3 metr sze¶cienny|metry sze¶cienne|metrów sze¶ciennych|metra sze¶ciennego
+unit mm^2 milimetr kwadratowy|milimetry kwadratowe|milimetrów kwadratowych|milimetra kwadratowego
+unit mm2 milimetr kwadratowy|milimetry kwadratowe|milimetrów kwadratowych|milimetra kwadratowego
+unit cm^2 centymetr kwadratowy|centymetry kwadratowe|centymetrów kwadratowych|centymetra kwadratowego
+unit cm2 centymetr kwadratowy|centymetry kwadratowe|centymetrów kwadratowych|centymetra kwadratowego
+unit cm^3 centymetr sze¶cienny|centymetry sze¶cienne|centymetrów sze¶ciennych|centymetra sze¶ciennego
+unit cm3 centymetr sze¶cienny|centymetry sze¶cienne|centymetrów sze¶ciennych|centymetra sze¶ciennego
+unit kg/cm^2 kilogram na centymetr kwadratowy|kilogramy na centymetr kwadratowy|kilogramów na centymetr kwadratowy|kilograma na centymetr kwadratowy
+unit kg/cm2 kilogram na centymetr kwadratowy|kilogramy na centymetr kwadratowy|kilogramów na centymetr kwadratowy|kilograma na centymetr kwadratowy
+
+
+pseudo hm hm
+pseudo hm* hmm
+pseudo m*hm* mhm
+pseudo ps*t pst
+pseudo prr* pr
+pseudo brr* br
+pseudo bzz* bz
+pseudo wrr* wr
+pseudo khh*  kh
+pseudo kh kh
+pseudo khm khm
+pseudo khh*m  khm
+
+// mac polskie
+mac ach
+mac acie
+mac ade³*
+mac ad³*
+mac ajcie
+mac ajcie¿
+mac ajmy
+mac ajmy¿
+mac aj±*
+mac aj¿e
+mac aka
+mac akach
+mac akami
+mac aki
+mac akiem
+mac akom
+mac akowi
+mac aku
+mac aków
+mac ali
+mac aliby
+mac aliby¶*
+mac ali¶*
+mac ami
+mac amy
+mac ana
+mac ance
+mac anci
+mac ancie
+mac ane
+mac anego
+mac anej
+mac anek
+mac anemu
+mac ani
+mac ania
+mac aniach
+mac aniami
+mac anie
+mac aniem
+mac anin
+mac anina
+mac aninach
+mac aninami
+mac aninie
+mac anino
+mac aninom
+mac aniny
+mac anin±
+mac aninê
+mac aniom
+mac aniu
+mac anka
+mac ankach
+mac ankami
+mac anki
+mac anko
+mac ankom
+mac ank±
+mac ankê
+mac ano
+mac ant
+mac anta
+mac antach
+mac antami
+mac antem
+mac antom
+mac antowi
+mac anty
+mac antów
+mac any
+mac anych
+mac anym
+mac anymi
+mac an±
+mac asz
+mac a³*
+mac eba
+mac ebach
+mac ebami
+mac ebie
+mac ebo
+mac ebom
+mac eby
+mac eb±
+mac ebê
+mac edoni*
+mac edoñ*
+mac erac*
+mac erale
+mac erat*
+mac era³*
+mac erowa*
+mac eruj*
+mac ew
+mac ewa
+mac ewach
+mac ewami
+mac ewicz*
+mac ewie
+mac ewo
+mac ewom
+mac ewy
+mac ew±
+mac ewê
+mac h*
+mac iach*
+mac iasz*
+mac iak*
+mac iacz*
+mac iami
+mac ia³*
+mac ica
+mac icach
+mac icami
+mac ice
+mac ico
+mac icom
+mac icy
+mac icz*
+mac ic±
+mac icê
+mac ie*
+mac ik*
+mac io³*
+mac iom
+mac ior*
+mac iosi*
+mac iosz*
+mac	isa
+mac isach
+mac isami
+mac isem
+mac isie
+mac isom
+mac isowi
+mac isu
+mac isy
+mac isów
+mac isz*
+mac iu*
+mac i±*
+mac iê*
+mac ió*
+mac i³*
+mac iñ*
+mac i¶*
+mac iæ*
+mac i¿*
+mac i¼*
+mac kach
+mac kami
+mac kie*
+mac kom
+mac kowi*
+mac kowa*
+mac ków
+mac nie*
+mac niê*
+mac nij*
+mac n±*
+mac nê*
+mac z*
+mac ³*
+mac och
+mac ocha
+mac ochach
+mac ochami
+mac ocho
+mac ochom
+mac ochy
+mac och±
+mac ochê
+mac osi
+mac osz*
+mac owa
+mac owe
+mac owego
+mac owej
+mac owemu
+mac owi
+mac owy
+mac owych
+mac owym
+mac owymi
+mac ow±
+mac ro*
+mac udz*
+mac uga*
+mac ugi*
+mac ug±
+mac ugê
+mac ugo*
+mac ulca
+mac ulcach
+mac ulcami
+mac ulce
+mac ulcem
+mac ulcom
+mac ulcowi
+mac ulcu
+mac ulców
+mac ule*
+mac u³*
+mac ur*
+mac ó*
+
+//	mm - drugi
+//	fm - druga
+//	nm - drugie
+//	mc - drugiemu
+//	fd - drugiej
+//	md - drugiego
+//	fb - drug±
+//	mn - drugim
+//	ap - drugo-
+//	mx - dwa
+//	fx - dwie
+//	f0 - zero dwie
+//	ac - dwu-
+//	mt - miesi±ca
+//	xn - dwóch
+
+
+//strona - fallback w udict
+
+
+expr zeoddo (ze|od|do)
+recognize nastronie na str. {s:d1-9999}
+recognize nastronie na stronie {s:d1-9999}
+sayas nastronie na stronie {s:dfd}
+
+recognize zestrony {e:ezeoddo} str. {s:d1-9999}
+recognize zestrony {e:ezeoddo} strony {s:d1-9999}
+sayas zestrony {e} strony {s:dfd}
+
+recognize oddostrony od str. {s:d1-9999} do {t:d2-9999}
+recognize oddostrony od strony {s:d1-9999} do {t:d2-9999}
+sayas oddostrony od strony {s:dfd} do {t:dfd}
+
+recognize stronasy str. {s:d1-9999}\ -\ {t:d2-9999}
+sayas stronasy strony {s:dmx} do {t:dmx}
+
+recognize nastronasy na str. {s:d1-9999}\ -\ {t:d2-9999}
+recognize nastronasy na stronach {s:d1-9999}\ -\ {t:d2-9999}
+sayas nastronasy na stronach {s:dmx} do {t:dmx}
+
+// fallback ile¶ minut
+expr minusegodz (sekundy|minuty|godziny)
+recognize zaminuty {d:d2-992} {e:eminusegodz}
+sayas zaminuty {d:dfx} {e}
+
+//fallback 'w 1968'
+
+recognize wbezroku w {r:d1000-2099}
+sayas wbezroku w {r:dmn}
+
+expr ia (a|i)
+expr wo (w|o)
+
+
+recognize .procent {d:d1-200} proc\.
+sayas procent {d:dmx} procent
+
+recognize .inc inc\.
+sayas inc inkorporejt@d
+
+recognize anabe {a:d}\ x\ {b:d}
+recognize anabe {a:d}\ ×\ {b:d}
+sayas anabe {a:dmx} na {b:dmx}
+
+choice kiergeo 1 N
+choiceval kiergeo 1 nort
+choice kiergeo 2 E
+choiceval kiergeo 2 ist
+choice kiergeo 3 S
+choiceval kiergeo 3 sud
+choice kiergeo 4 W
+choiceval kiergeo 4 ³est
+
+
+recognize degmin {s:d0-180}\ °\ {m:d0-59}\ '
+sayas degmin {s:dmx} {s:u°} {m:dfx} {m:umin}
+recognize degminkier {s:d0-180}\ °\ {m:d0-59}\ '\ {r:ckiergeo}
+sayas degminkier {s:dmx} {s:u°} {m:dfx} {m:umin} {r:ckiergeo}
+
+recognize degminsek {s:d0-180}\ °\ {m:d0-59}\ '\ {k:d0-59}\ "
+recognize degminsek {s:d0-180}\ °\ {m:d0-59}\ '\ {k:d0-59}\ ''
+sayas degminsek {s:dmx} {s:u°} {m:dfx} {m:umin} {k:dfx} {k:usek}
+
+recognize degminsekier {s:d0-180}\ °\ {m:d0-59}\ '\ {k:d0-59}\ "\ {r:ckiergeo}
+recognize degminsekier {s:d0-180}\ °\ {m:d0-59}\ '\ {k:d0-59}\ ''\ {r:ckiergeo}
+sayas degminsekier {s:dmx} {s:u°} {m:dfx} {m:umin} {k:dfx} {k:usek} {r:ckiergeo}
+
+
+expr oddo (od|do)
+expr oddoprze (od|do|ci±gu|przeci±gu|sprzed)
+expr oddoprze (poprzednich|nastêpnych|ubieg³ych)
+expr dnilat (minut|sekund|lat|dni|tygodni|miesiêcy|godzin)
+expr minseka (minutach|sekundach|godzinach|latach|dniach|tygodniach|miesi±cach)
+
+recognize iminsek {i:d2-999} {m:eminseka}
+sayas iminsek {i:dxn} {m}
+
+recognize idnilat {a:eoddoprze} {i:d2-999} {m:ednilat}
+sayas idnilat {a} {i:dxn} {m}
+
+
+recognize ilemile {d:d} mile
+sayas ilemile {d:dfx} mile
+
+recognize ntego	{d:d}-go
+recognize ntego	{d:r1-39}-go
+sayas ntego {d:dmd}
+
+recognize ntemu	{d:d}-mu
+recognize ntemu	{d:r1-39}-mu
+sayas ntemu {d:dmc}
+
+recognize gostopnia {d:r1-39} stopnia
+sayas gostopnia {d:dmd} stopnia
+
+//co to kurwa...
+//recognize bymon {e:ebymon} {d:d1-31}
+//expr bymon (jest|by³)
+//expr bymon  (by³)
+//sayas bymon {e} {d:dmm}
+
+recognize dmnom {d:d1-31} {m:emnom}
+recognize dm {d:d1-31} {m:r1-12}
+recognize dm {d:d1-31}.\ {m:r1-12}
+recognize dm {d:d1-31} {m:cmond}
+
+recognize dmod1 od {d:d1-31} do {e:d1-31} {m:cmond}
+recognize dmod1 {d:d1-31}-{e:d1-31} {m:cmond}
+
+recognize dmy {d:d1-31} {m:r1-12} {y:d}
+recognize dmy2 {d:d1-31}-{m:r1-12}-{y:d}
+recognize dmy2 {d:d1-31}-{m:2d1-12}-{y:d}
+recognize dmy {d:d1-31}.\ {m:r1-12}.\ {y:d}
+recognize dmy2 {d:2d1-31}.{m:2d1-12}.{y:d}
+recognize dmy {d:d1-31} {m:cmond} {y:d}
+
+recognize dmnx {e:eprzedpo} {d:d1-31} {m:cmond}
+recognize dmnx {e:eprzedpo} {d:d1-31} {m:r1-12}
+recognize dmnx {e:eprzedpo} {d:d1-31}.{m:r1-12}
+recognize dmny {e:ebyljest} {d:d1-31} {m:cmond}
+recognize dmny {e:ebyljest} {d:d1-31} {m:r1-12}
+recognize dmny {e:ebyljest} {d:d1-31}.{m:r1-12}
+expr przedpo (przed|po)
+expr byljest (by³|jest)
+sayas dmnx {e} {d:dmn} {m:dmt}
+sayas dmny {e} {d:dmm} {m:dmt}
+
+recognize .dmyr {d:d1-31} {m:r1-12} {y:d}\ r\.
+recognize .dmyr {d:d1-31}-{m:r1-12}-{y:d}\ r\.
+recognize .dmyr {d:d1-31}-{m:2d1-12}-{y:d}\ r\.
+recognize .dmyr {d:d1-31} {m:cmond} {y:d}\ r\.
+recognize .dmyr {d:d1-31}.{m:r1-12}.{y:d}\ r\.
+recognize .dmyr {d:d1-31}.{m:d1-12}.{y:d1900-2100}\ r\.
+
+recognize .pdmyrn {e:eprzedpo} {d:d1-31} {m:r1-12} {y:d}
+recognize .pdmyrn {e:eprzedpo} {d:d1-31}-{m:r1-12}-{y:d}
+recognize .pdmyrn {e:eprzedpo} {d:d1-31}-{m:2d1-12}-{y:d}
+recognize .pdmyrn {e:eprzedpo} {d:d1-31} {m:cmond} {y:d}
+recognize .pdmyrn {e:eprzedpo} {d:d1-31}.{m:r1-12}.{y:d}
+
+recognize .pdmyr {e:eprzedpo} {d:d1-31} {m:r1-12} {y:d}\ r\.
+recognize .pdmyr {e:eprzedpo} {d:d1-31}-{m:r1-12}-{y:d}\ r\.
+recognize .pdmyr {e:eprzedpo} {d:d1-31}-{m:2d1-12}-{y:d}\ r\.
+recognize .pdmyr {e:eprzedpo} {d:d1-31} {m:cmond} {y:d}\ r\.
+recognize .pdmyr {e:eprzedpo} {d:d1-31}.{m:r1-12}.{y:d}\ r\.
+recognize .pdmyr {e:eprzedpo} {d:d1-31}.{m:d1-12}.{y:d1900-2100}\ r\.
+
+recognize .bdmyrn {e:ebyljest} {d:d1-31} {m:r1-12} {y:d}
+recognize .bdmyrn {e:ebyljest} {d:d1-31}-{m:r1-12}-{y:d}
+recognize .bdmyrn {e:ebyljest} {d:d1-31}-{m:2d1-12}-{y:d}
+recognize .bdmyrn {e:ebyljest} {d:d1-31} {m:cmond} {y:d}
+recognize .bdmyrn {e:ebyljest} {d:d1-31}.{m:r1-12}.{y:d}
+recognize .bdmyrn {e:ebyljest} {d:d1-31}.{m:d1-12}.{y:d1900-2100}
+
+recognize .bdmyr {e:ebyljest} {d:d1-31} {m:r1-12} {y:d}\ r\.
+recognize .bdmyr {e:ebyljest} {d:d1-31}-{m:r1-12}-{y:d}\ r\.
+recognize .bdmyr {e:ebyljest} {d:d1-31}-{m:2d1-12}-{y:d}\ r\.
+recognize .bdmyr {e:ebyljest} {d:d1-31} {m:cmond} {y:d}\ r\.
+recognize .bdmyr {e:ebyljest} {d:d1-31}.{m:r1-12}.{y:d}\ r\.
+recognize .bdmyr {e:ebyljest} {d:d1-31}.{m:d1-12}.{y:d1900-2100}\ r\.
+
+recognize .myr {m:cmond} {y:d10-9999} {f:eroku}
+
+recognize .myrg {e:emcu} {y:d10-9999} {f:eroku}
+expr mcu (styczniu|lutym|marcu|kwietniu|maju|czerwcu|lipcu|sierpniu|wrze¶niu|pa¼dzierniku|listopadzie|grudniu)
+expr mcu (styczeñ|luty|marzec|kwiecieñ|maj|czerwiec|lipiec|sierpieñ|wrzesieñ|pa¼dziernik|listopad|grudzieñ)
+expr mcu wiosn(a|y|±|ê)
+expr mcu (wio¶nie|lecie)
+expr mcu lat(o|em|a)
+expr mcu jesie(ñ|ni±|ni)
+expr mcu zim(a|±|ie|y)
+expr mcu (wielki pi±tek|wielkiego pi±tku|wielkim pi±tkiem)
+expr mcu (wielka sobota|wielkiej soboty|wielkiej sobocie|wielk± sobot±|wielk± sobotê)
+expr mcu (bo¿ego narodzenia|bo¿ym narodzeniem|bo¿ym narodzeniu)
+expr mcu (wielkanoc|wielkanocy|wielkiejnocy|wielkanoc±|wielk±noc±)
+expr mcu (niedziela wielkanocna|niedzielê wielkanocn±|niedziel± wielkanocn±|niedzieli wielkanocnej)
+
+
+expr mnom (styczeñ|luty|marzec|kwiecieñ|maj|czerwiec|lipiec|sierpieñ|wrzesieñ|pa¼dziernik|listopad|grudzieñ)
+
+sayas myr	{m:dmt} {y:dmd} roku
+sayas myrg	{e} {y:dmd} roku
+
+expr miendzy (miêdzy|pomiêdzy)
+recognize miedzya {q:emiendzy} {a:d1-31} {i:eia} {b:d1-31} {m:cmond}
+sayas miedzya {q} {a:dmn} {i} {b:dmn} {m:dmt}
+
+recognize miedzyb {q:emiendzy} {a:d1-31} {n:cmond} {i:eia} {b:d1-31} {m:cmond}
+sayas miedzyb {q} {a:dmn} {n:dmt} {i} {b:dmn} {m:dmt}
+
+recognize .miedzyar {q:emiendzy} {a:d1-31} {i:eia} {b:d1-31} {m:cmond} {r:d}\ {f:eroku}
+sayas miedzyar {q} {a:dmn} {i} {b:dmn} {m:dmt} {r:dmd} roku
+
+recognize .miedzybr {q:emiendzy} {a:d1-31} {n:cmond} {i:eia} {b:d1-31} {m:cmond} {r:d}\ {f:eroku}
+sayas miedzybr {q} {a:dmn} {n:dmt} {i} {b:dmn} {m:dmt} {r:dmd} roku
+
+recognize znadm z {d:d1-31} na {f:d1-31} {m:cmond}
+recognize znadm z {d:d1-31} na {f:d1-31} {m:r1-12}
+sayas znadm z {d:dmd} na {f:dmd} {m:dmt}
+
+recognize znadmy z {d:d1-31} na {f:d1-31} {m:cmond} {y:d}
+recognize znadmy z {d:d1-31} na {f:d1-31} {m:r1-12} {y:d}
+sayas znadmy z {d:dmd} na {f:dmd} {m:dmt} {y:dmx}
+
+recognize .znadmyr z {d:d1-31} na {f:d1-31} {m:cmond} {y:d}
+recognize .znadmyr z {d:d1-31} na {f:d1-31} {m:r1-12} {y:d}
+sayas znadmyr z {d:dmd} na {f:dmd} {m:dmt} {y:dmd} roku
+
+sayas dm {d:dmd} {m:dmt}
+sayas dmod1 od {d:dmd} do {e:dmd} {m:dmt}
+sayas dmy {d:dmd} {m:dmt} {y:dmd}
+sayas dmy2 {d:dmd} {m:dmt} {y:dmx}
+sayas dmyr {d:dmd} {m:dmt} {y:dmd} roku
+sayas pdmyr {e} {d:dmn} {m:dmt} {y:dmd} roku
+sayas pdmyrn {e} {d:dmn} {m:dmt} {y:dmd}
+sayas bdmyr {e} {d:dmm} {m:dmt} {y:dmd} roku
+sayas bdmyrn {e} {d:dmm} {m:dmt} {y:dmd}
+sayas dmnom {d:dmm} {m}
+
+choice smon 1 sty
+choice smon 2 lut
+choice smon 3 mar
+choice smon 4 kwi
+choice smon 5 maj
+choice smon 6 cze
+choice smon 7 lip
+choice smon 8 sie
+choice smon 9 wrz
+choice smon 10 paz
+choice smon 10 pa¼
+choice smon 11 lis
+choice smon 12 gru
+
+recognize udate0 {d:d1-31} {m:csmon} {y:d}
+sayas udate0 {d:dmd} {m:dmt} {y:dmx}
+
+recognize udate {d:d1-31} {m:csmon} {y:d}, {H:2d0-23}:{M:2d0-59}:{S:2d0-59}
+sayas udate {d:dmd} {m:dmt} {y:dmx} godzina {H:dfm} {M:df0} i {S:dfx} {S:usek}
+
+recognize udate2 {w:cdow}, {d:d1-31} {m:csmon} {y:d}, {H:2d0-23}:{M:2d0-59}:{S:2d0-59}
+sayas udate2 {w:cdow} {d:dmd} {m:dmt} {y:dmx} godzina {H:dfm} {M:df0} i {S:dfx} {S:usek}
+
+choice dow 1 pon
+choiceval dow 1 poniedzia³ek
+choice dow 2 wto
+choiceval dow 2 wtorek
+choice dow 3 sro
+choice dow 3 ¶ro
+choiceval dow 3 ¶roda
+choice dow 4 czw
+choiceval dow 4 czwartek
+choice dow 5 pi±
+choice dow 5 pia
+choiceval dow 5 pi±tek
+choice dow 6 sob
+choiceval dow 6 sobota
+choice dow 7 nie
+choiceval dow 7 niedziela
+
+//////
+// francuski kalendarz rewolucyjny - na razie miesi±ce
+
+choice frmona 1 vendemiaire'a
+choice frmona 1 vendémiaire'a
+choice frmona 1 vendémiaira
+choice frmona 1 vendémiaira
+choiceval frmona 1 vandemiera
+
+choice frmona 2 brumaire'a
+choice frmona 2 brumaira
+choiceval frmona 2 brimera
+
+choice frmona 3 frimaire'a
+choice frmona 3 frimaira
+choiceval frmona 3 frimera
+
+choice frmona 4 nivôse'a
+choice frmona 4 nivôsa
+choice frmona 4 nivose'a
+choice frmona 4 nivosa
+choiceval frmona 4 nivosa
+
+choice frmona 5 pluviose'a
+choice frmona 5 pluviosa
+choice frmona 5 pluviôse'a
+choice frmona 5 pluviôsa
+choiceval frmona 5 pliviosa
+
+choice frmona 6 ventôse'a
+choice frmona 6 ventôsa
+choice frmona 6 ventose'a
+choice frmona 6 ventosa
+choiceval frmona 6 ventosa
+
+choice frmona 7 germinala
+choiceval frmona 7 ¿erminala
+
+choice frmona 8 floréala
+choice frmona 8 floreala
+choiceval frmona 8 floreala
+
+choice frmona 9 prairiala
+choiceval frmona 9 preriala
+
+choice frmona 10 messidora
+choice frmona 10 mesidora
+choiceval frmona 10 mes~'idora
+
+choice frmona 11 thermidora
+choice frmona 11 termidora
+choiceval frmona 11 termidora
+
+choice frmona 12 fructidora
+choice frmona 12 fruktidora
+choiceval frmona 12 friktidora
+
+recognize frmontego {d:d1-30} {m:cfrmona}
+sayas frmontego {d:dmd} {m:cfrmona}
+
+recognize frdmod1 od {d:d1-31} do {e:d1-31} {m:cfrmona}
+recognize frdmod1 {d:d1-31}-{e:d1-31} {m:cfrmona}
+sayas frdmod1 od {d:dmd} do {e:dmd} {m:cfrmona}
+
+
+recognize frdmnx {e:eprzedpo} {d:d1-31} {m:cfrmona}
+recognize frdmny {e:ebyljest} {d:d1-31} {m:cfrmona}
+sayas frdmnx {e} {d:dmn} {m:cfrmona}
+sayas frdmny {e} {d:dmm} {m:cfrmona}
+
+recognize frmiedzya {q:emiendzy} {a:d1-31} {i:eia} {b:d1-31} {m:cfrmona}
+sayas frmiedzya {q} {a:dmn} {i} {b:dmn} {m:cfrmona}
+
+recognize frmiedzyb {q:emiendzy} {a:d1-31} {n:cfrmona} {i:eia} {b:d1-31} {m:cfrmona}
+sayas frmiedzyb {q} {a:dmn} {n:cfrmona} {i} {b:dmn} {m:cfrmona}
+
+recognize frdmnx {e:eprzedpo} {d:d1-31} {m:cfrmona}
+recognize frdmny {e:ebyljest} {d:d1-31} {m:cfrmona}
+sayas frdmnx {e} {d:dmn} {m:cfrmona}
+sayas frdmny {e} {d:dmm} {m:cfrmona}
+
+//////
+
+
+recognize wieczny {w:r1-30}-{f:ewieczny}
+recognize wieczny {w:d1-30}-{f:ewieczny}
+expr wieczny wieczn(a|ych|ymi|ym|y|ego|emu|ej|e|i|±)
+sayas wieczny {w:dap}{f}
+
+
+
+recognize letni {w:d}-{f:eletni}
+expr letni letni(ego|emu|ej|e|ch|mi|m|a|±|)
+expr letni leci(em|e|a|u)
+expr letni lat(ek|kach|kami|ka|kê|k±|kowi|kiem|ku|ki|kowi|ce|kom|ków)
+expr letni osobow(ych|ymi|ym|y|emu|ego|ej|e|a|±)
+sayas letni {w:dac}{f}
+
+// przyk³ad - Ramzes n-ty z odmian±
+
+recognize krol {f:ekrol} {r:r1-39}
+sayas krol {f} {r:dmm}
+
+recognize krola {f:ekrola} {r:r1-39}
+sayas krola {f} {r:dmd}
+
+recognize krolo {f:ekrolo} {r:r1-39}
+sayas krolo {f} {r:dmc}
+
+recognize krolu {f:ekrolu} {r:r1-39}
+sayas krolu {f} {r:dmn}
+
+//
+
+expr krol (ramzes|maciu¶|henryk|edward|ludwik|roger)
+expr krola (ramzesa|maciusia|henryka|edwarda|ludwika|rogera)
+expr krolo (ramzesowi|maciusiowi|henrykowi|edwardowi|ludwikowi|rogerowi)
+expr krolu (ramzesie|maciusiu|henryku|edwardzie|ludwiku|rogerze)
+expr krolu (ramzesem|maciusiem|henrykiem|edwardem|ludwikiem|rogerem)
+
+expr krol (jan|haakon|murad|abdullah|abdullach|abdulhamid|chefret)
+expr krola (jana|haakona|murada|abdullaha|abdullacha|abdulhamida|chefreta)
+expr krolo (janowi|haakonowi|muradowi|abdullahowi|abdullachowi|abdulhamidowi|chefretowi)
+expr krolu (janie|haakonie|muradzie|abdullahu|abdullachu|abdulhamidzie|chefrecie)
+expr krolu (janem|haakonem|muradem|abdullahem|abdullachem|abdulhamidem|chefretem)
+
+expr krol (cleon|ptolemeusz)
+expr krola (cleona|ptolemeusza)
+expr krolo (cleonowi|ptolemeuszowi)
+expr krolu (cleonie|ptolemeuszu)
+expr krolu (cleonem|ptolemeuszem)
+
+
+recognize krolowa {f:ekrolowa} {r:r1-39}
+sayas krolowa {f} {r:dfm}
+recognize krolowej {f:ekrolowej} {r:r1-39}
+sayas krolowej {f} {r:dfd}
+recognize krolowo {f:ekrolowo} {r:r1-39}
+sayas krolowo {f} {r:dfb}
+
+expr krolowa (el¿bieta|katarzyna)
+expr krolowej (el¿biety|katarzyny)
+expr krolowej (el¿biecie|katarzynie)
+expr krolowo (el¿bietê|katarzynê)
+
+
+recognize ^krolu {f:eimiemwo} {r:r1-39}
+recognize ^krola {f:eimiemdo} {r:r1-39}
+recognize ^krolo {f:eimiemce} {r:r1-39}
+recognize ^krola {f:eimiembi} {r:r1-39}
+recognize ^krolu {f:eimiemna} {r:r1-39}
+recognize ^krolu {f:eimiemmc} {r:r1-39}
+recognize ^krol {f:eimiemmi} {r:r1-39}
+
+recognize ^krolowej {f:eimiefdo} {r:r1-39}
+recognize ^krolowej {f:eimiefce} {r:r1-39}
+recognize ^krolowej {f:eimiefna} {r:r1-39}
+recognize ^krolowej {f:eimiefmc} {r:r1-39}
+recognize ^krolowo {f:eimiefbi} {r:r1-39}
+recognize ^krolowa {f:eimiefmi} {r:r1-39}
+recognize ^krolowa {f:eimiefwo} {r:r1-39}
+
+// dynastie
+
+recognize dynastia {d:r1-39} dynastia
+sayas dynastia {d:dfm} dynastia
+
+expr dynastiome (dynasti±|dynastiê)
+recognize dynastiom {d:r1-39} {e:edynastiome}
+sayas dynastiom {d:dfb} {e}
+
+recognize dynastii {d:r1-39} dynastii
+sayas dynastii {d:dfd} dynastii
+
+// n-ty wiek
+
+recognize .wiek {w:r1-39} w.
+recognize wiek {w:r1-39} wiek
+sayas wiek {w:dmm} wiek
+
+// n-tego czy n-tym?
+
+recognize slecia {w:r1-39} stulecia
+sayas slecia {w:dmd} stulecia
+
+recognize slecie {w:r1-39} stulecie
+sayas slecie {w:dnm} stulecie
+
+recognize tlecie {w:r1-19} tysi±clecie
+sayas tlecie {w:dnm} tysi±clecie
+
+recognize tlecia {w:r1-19} tysi±clecia
+sayas tlecia {w:dmd} tysi±clecia
+
+recognize tleciu {w:r1-19} tysi±cleciu
+sayas tleciu {w:dmn} tysi±cleciu
+
+recognize tleciem {w:r1-19} tysi±cleciem
+sayas tleciem {w:dmn} tysi±cleciem
+
+recognize wiektym {w:r1-39} {s:cwtym}
+sayas wiektym {w:dmn} {s}
+
+choice wtym 1 wieku
+choice wtym 2 stuleciu
+choice wtym 3 stuleciem
+choiceval wtym 1 wieku
+choiceval wtym 2 stuleciu
+choiceval wtym 3 stuleciem
+
+recognize wwiekux w wieku {w:r1-39}
+sayas wwiekux w wieku {w:dmn}
+
+
+expr doodw (od|do|w)
+recognize wwiekulat {e:edoodw} wieku {w:d2-300} lat
+sayas wwiekulat {e} wieku {w:dxn} lat
+
+recognize wwiekuxix w wieku {w:r1-39} i {v:r1-39}
+sayas wwiekuxix w wieku {w:dmn} i {v:dmn}
+
+recognize .wwieku w {w:r1-39} w.
+sayas wwieku w {w:dmn} wieku
+
+recognize .wiektego {f:ewtego} {w:r1-39} {s:cwieku}
+sayas wiektego {f} {w:dmd} {s}
+
+recognize .wiektegox ok. {w:r1-39} {s:cwieku}
+sayas wiektegox oko³o {w:dmd} {s}
+
+
+expr wtego (z|od|do|sprzed|koñca|koñcu|koniec|koñcem|siêgaj±|siêga³y|oko³o)
+expr wtego pocz±t(ek|ku|kiem|ków|kach|ki)
+expr wtego po³ow(a|±|ê|ie|y)
+expr wtego (dwudziestych|trzydziestych|czterdziestych|piêædziesi±tych|sze¶ædziesi±tych|siedemdziesi±tych|osiemdziesi±tych|dziewiêædziesi±tych)
+
+expr styslecia (stuclecia|tysi±clecia)
+
+recognize polstu {p:r1-2} po³. {w:r1-39} {s:estyslecia}
+recognize polstu {p:r1-2} po³owa {w:r1-39} {s:estyslecia}
+sayas przedpolstu {f:dfb} po³owa {w:dmd} {s}
+
+recognize polwiex {p:r1-2} po³owa {w:r1-39} wieku
+recognize polwiex {p:r1-2} po³. {w:r1-39} wieku
+recognize .polwiex {p:r1-2} po³owa {w:r1-39} w.
+recognize .polwiex {p:r1-2} po³. {w:r1-39} w.
+sayas przedpolwiex {p:dfb} po³owa {w:dmd} wieku
+
+
+recognize .przedpol przed {p:r1-2} po³.
+recognize przedpol przed {p:r1-2} po³owie
+sayas przedpol przed {p:dfb} po³ow±
+
+recognize przedpolstu przed {p:r1-2} po³. {w:r1-39} {s:estyslecia}
+recognize przedpolstu przed {p:r1-2} po³owie {w:r1-39} {s:estyslecia}
+sayas przedpolstu przed {p:dfb} po³ow± {w:dmd} {s}
+
+recognize przedpolwiex przed {p:r1-2} po³ow± {w:r1-39} wieku
+recognize przedpolwiex przed {p:r1-2} po³. {w:r1-39} wieku
+recognize .przedpolwiex przed {p:r1-2} po³ow± {w:r1-39} w.
+recognize .przedpolwiex przed {p:r1-2} po³. {w:r1-39} w.
+sayas przedpolwiex przed {p:dfb} po³ow± {w:dmd} wieku
+
+recognize .wpolowie w {p:r1-2} po³.
+recognize wpolowie w {p:r1-2} po³owie
+sayas wpolowie w {p:dfd} po³owie
+
+recognize wpolstu w {p:r1-2} po³. {w:r1-39} {s:estyslecia}
+recognize wpolstu w {p:r1-2} po³owie {w:r1-39} {s:estyslecia}
+sayas wpolstu {f} w {p:dfd} po³owie {w:dmd} {s}
+
+recognize .wpolowiex w {p:r1-2} po³owie {w:r1-39} w.
+recognize wpolowiex w {p:r1-2} po³owie {w:r1-39} wieku
+recognize .wpolowiex w {p:r1-2} po³. {w:r1-39} w.
+recognize wpolowiex w {p:r1-2} po³. {w:r1-39} wieku
+sayas wpolowiex w {p:dfd} po³owie {w:dmd} wieku
+
+recognize okpolowy oko³o {p:r1-2} po³owy
+recognize .okpolowy oko³o {p:r1-2} po³.
+sayas okpolowy oko³o {p:dfd} po³owy
+
+recognize odpolowy {f:ewtego} {p:r1-2} po³owy
+recognize .odpolowy {f:ewtego} {p:r1-2} po³.
+sayas odpolowy {f} {p:dfd} po³owy
+
+recognize okpolstu {f:ewtego} {p:r1-2} po³. {w:r1-39} {s:estyslecia}
+recognize okpolstu {f:ewtego} {p:r1-2} po³owy {w:r1-39} {s:estyslecia}
+sayas okpolstu oko³o {p:dfd} po³owy {w:dmd} {s}
+
+recognize odpolstu {f:ewtego} {p:r1-2} po³. {w:r1-39} {s:estyslecia}
+recognize odpolstu {f:ewtego} {p:r1-2} po³owy {w:r1-39} {s:estyslecia}
+sayas odpolstu {f} {p:dfd} po³owy {w:dmd} {s}
+
+recognize .okpolwiekux ok. {p:r1-2} po³. {w:r1-39} w.
+recognize okpolwiekux ok. {p:r1-2} po³. {w:r1-39} wieku
+recognize okpolwiekux ok. {p:r1-2} po³owy {w:r1-39} wieku
+recognize .okpolwiekux ok. {p:r1-2} po³owy {w:r1-39} w.
+sayas okpolwiekux oko³o {p:dfd} po³owy {w:dmd} wieku
+
+recognize .odpolwiekux {f:ewtego} {p:r1-2} po³. {w:r1-39} w.
+recognize odpolwiekux {f:ewtego} {p:r1-2} po³. {w:r1-39} wieku
+recognize odpolwiekux {f:ewtego} {p:r1-2} po³owy {w:r1-39} wieku
+recognize .odpolwiekux {f:ewtego} {p:r1-2} po³owy {w:r1-39} w.
+sayas odpolwiekux {f} {p:dfd} po³owy {w:dmd} wieku
+
+
+
+
+recognize odwiekux {f:ewtego} wieku {w:r1-39}
+sayas odwiekux {f} wieku {w:dmd}
+recognize odwiekuxa oko³o wieku {w:r1-39}
+sayas odwiekuxa oko³o wieku {w:dmd}
+
+recognize wiekiem {w:r1-39} wiekiem
+sayas wiekiem {w:dmn} wiekiem
+
+recognize miedzywiekiem {e:emiendzy} {v:r1-39} a {w:r1-39} wiekiem
+recognize .miedzywiekiem {e:emiendzy} {v:r1-39} a {w:r1-39} w.
+sayas miedzywiekiem {e} {v:dmn} a {w:dmn} wiekiem
+
+recognize miedzysleciem {e:emiendzy} {v:r1-39} a {w:r1-39} stuleciem
+sayas miedzysleciem {e} {v:dmn} a {w:dmn} stuleciem
+
+recognize miedzytleciem {e:emiendzy} {v:r1-19} a {w:r1-19} tysi±cleciem
+sayas miedzytleciem {e} {v:dmn} a {w:dmn} tysi±cleciem
+
+
+recognize .oddowieka od {v:r1-39} do {w:r1-39} w.
+recognize oddowieka od {v:r1-39} do {w:r1-39} wieku
+sayas oddowieka od {v:dmd} do {w:dmd} wieku
+recognize oddowiekb od {v:r1-39} do {w:r1-39} stulecia
+sayas oddowiekb od {v:dmd} do {w:dmd} stulecia
+
+
+choice wieku 1 w.
+choice wieku 1 wieku
+choice wieku 2 stulecia
+choiceval wieku 1 wieku
+choiceval wieku 2 stulecia
+
+// n-ty rok
+
+recognize .rok {w:d10-9999} r.
+recognize rok {w:d10-9999} rok
+sayas rok {w:dmm} rok
+
+recognize roktym {w:d} roku
+sayas roktym {w:dmn} roku
+
+recognize rokiem {w:d10-9999} rokiem
+sayas rokiem {w:dmn} rokiem
+
+recognize .przedrdot przed {w:d10-9999} r.
+sayas przedrdot przed {w:dmn} rokiem
+
+recognize .wroku w {w:d} r.
+recognize .wroku w '{w:d} r.
+sayas wroku w {w:dmn} roku
+
+recognize .poroku po {w:d10-9999} r.
+sayas poroku po {w:dmn} roku
+
+expr ponipowy (poni¿ej|powy¿ej)
+recognize .roktego {f:ewtego} {w:d} {s:eroku}
+recognize .roktego {f:eponipowy} {w:d} {s:eroku}
+recognize .roktego {f:ewtego} '{w:d} {s:eroku}
+sayas roktego {f} {w:dmd} roku
+
+recognize .roktegoy {f:ewtego} {w:d} r.n.e.
+recognize .roktegoy {f:ewtego} {w:d} r. n.e.
+sayas roktegoy {f} {w:dmd} roku naszej ery
+
+recognize .roktegox ok. {w:d} {s:eroku}
+recognize .roktegox ok. '{w:d} {s:eroku}
+sayas roktegox oko³o {w:dmd} roku
+
+recognize .roktegoxy ok. {w:d} r.n.e.
+recognize .roktegoxy ok. {w:d} r. n.e.
+sayas roktegoxy oko³o {w:dmd} roku naszej ery
+
+expr oddorokbeg (od|oko³o)
+recognize oddoroku {e:eoddorokbeg} {v:d1-9999} do {w:d1-9999} roku
+recognize .oddoroku {e:eoddorokbeg} {v:d1-9999} do {w:d1-9999} r.
+sayas oddoroku {e} {v:dmd} do {w:dmd} roku
+
+recognize miedzyrok {e:emiendzy} {p:d1-9999} a {r:d1-9999} rokiem
+recognize .miedzyrok {e:emiendzy} {p:d1-9999} a {r:d1-9999} r.
+sayas miedzyrok {e} {p:dmn} a {r:dmn} rokiem
+
+expr roku (r.|roku)
+
+recognize chap rozdzia³ {r:d}
+recognize $chap rozdzia³ {r:r}
+sayas chap rozdzia³ {r:dmm}
+
+recognize $part czê¶æ {r:r1-9}
+recognize $part czê¶æ {r:d1-9}
+sayas part czê¶æ {r:dfm}
+
+recognize tombuk tom {r:r1-9}
+sayas tombuk tom {r:dmm}
+recognize tombukd tomu {r:r1-9}
+sayas tombukd tomu {r:dmd}
+recognize tombuktc tomowi {r:r1-9}
+sayas tombukc tomowi {r:dmc}
+recognize tombukn tomie {r:r1-9}
+sayas tombukn tomie {r:dmn}
+
+
+recognize stagem scena {r:r1-9}
+sayas stagem scena {r:dfm}
+expr stagera (scen±|scenê)
+expr stagerb scen(y|ie)
+recognize stageb {e:estagera} {r:r1-9}
+sayas stageb {e} {r:dfb}
+recognize staged {e:estagerb} {r:r1-9}
+sayas staged {e} {r:dfd}
+
+recognize actpart akt {r:r1-9}
+sayas actpart akt {r:dmm}
+recognize actpartd aktu {r:r1-9}
+sayas actpartd aktu {r:dmd}
+recognize actpartc aktowi {r:r1-9}
+sayas actpartc aktowi {r:dmc}
+recognize actpartn akcie {r:r1-9}
+sayas actpartn akcie {r:dmn}
+
+recognize +roman {r:r2-4}
+recognize +roman {r:r6-9}
+recognize +roman {r:r11-19}
+sayas roman {r}
+
+expr trzesza (rzesza|rzeczpospolita)
+recognize trzesza {r:r2-4} {e:etrzesza}
+sayas trzesza {r:dfm} {e}
+
+expr trzeszad (rzeszy|rzeczpospolitej|rzeczypospolitej)
+recognize trzeszad {r:r2-4} {e:etrzeszad}
+sayas trzeszad {r:dfd} {e}
+
+expr trzeszab (rzesz±|rzeczpospolit±|rzeczypospolit±|rzeszê)
+recognize trzeszab {r:r2-4} {e:etrzeszab}
+sayas trzeszab {r:dfb} {e}
+
+
+recognize wrokud w roku {r:d10-9999}
+sayas wrokud w roku {r:dmn}
+
+recognize odrokud {f:ewtego} roku {r:d10-9999}
+sayas odrokud {f} roku {r:dmd}
+
+recognize odrokudx ok. roku {r:d10-9999}
+sayas odrokudx oko³o roku {r:dmd}
+
+recognize wojna {r:r1-3}\. wojna
+sayas wojna {r:dfm} wojna
+
+recognize wojny {r:r1-3}\. {w:ewojny}
+expr wojny (wojny|wojnie)
+sayas wojny {r:dfd} {w}
+
+recognize wojne {r:r1-3}\. {w:ewojne}
+expr wojne (wojn±|wojnê)
+sayas wojne {r:dfb} {w}
+
+recognize rokzal rok za³. {r:d10-9999}
+sayas rokzal rok za³o¿enia {r:dmm}
+
+recognize stkpral st. {k:ekapral}
+expr kapral (szeregowy|kapral|plutonowy|sier¿ant|chor±¿y|kapitan)
+sayas stkpral starszy {k}
+
+recognize stkprala st. {k:ekaprala}
+expr kaprala (szeregowego|kaprala|plutonowego|sier¿anta|chor±¿ego|kapitana)
+sayas stkprala starszego {k}
+
+recognize stkprali st. {k:ekaprali}
+expr kaprali (szeregowemu|kapralowi|plutonowemu|sier¿antowi|chor±¿emu|kapitanowi)
+sayas stkprali starszemu {k}
+
+recognize stkpralu st. {k:ekapralu}
+expr kapralu (szeregowym|kapralu|plutonowym|sier¿ancie|chor±¿ym|kapitanie)
+expr kapralu (kapralem|sier¿antem|kapitanem)
+sayas stkpralu starszym {k}
+
+
+recognize swieta ¶w. {k:eswieta}
+recognize swietom ¶w. {k:eswietom}
+recognize swietej ¶w. {k:eswietej}
+
+recognize swieta ¶w. {k:eimiefmi}
+recognize swieta ¶w. {k:eimiefwo}
+recognize swietej ¶w. {k:eimiefdo}
+recognize swietom ¶w. {k:eimiefbi}
+recognize swietej ¶w. {k:eimiefce}
+recognize swietom ¶w. {k:eimiefna}
+recognize swietej ¶w. {k:eimiefmc}
+
+sayas swieta ¶wiêta {k}
+sayas swietom ¶wiêt± {k}
+sayas swietej ¶wiêtej {k}
+
+expr swieta (anna|barbara|maria|maryja|kunegunda)
+expr swietej (annie|barbarze|marii|maryi|kunegundy)
+expr swietom (annê|barbarê|mariê|maryjê|kunegundê)
+expr swietom (ann±|barbar±|mari±|maryj±|kunegund±)
+expr swietej (anny|barbary|kunegundzie)
+
+recognize swiety ¶w. {k:eswiety}
+recognize swietego ¶w. {k:eswietego}
+recognize swietemu ¶w. {k:eswietemu}
+recognize swietym ¶w. {k:eswietym}
+
+
+recognize swiety ¶w. {k:eimiemmi}
+recognize swiety ¶w. {k:eimiemwo}
+recognize swietego ¶w. {k:eimiemdo}
+recognize swietego ¶w. {k:eimiembi}
+recognize swietemu ¶w. {k:eimiemce}
+recognize swietym ¶w. {k:eimiemna}
+recognize swietym ¶w. {k:eimiemmc}
+
+sayas swiety ¶wiêty {k}
+sayas swietego ¶wiêtego {k}
+sayas swietemu ¶wiêtemu {k}
+sayas swietym ¶wiêtym {k}
+
+expr swiety (jan|jerzy|wawrzyniec|piotr|pawe³|mateusz|juda)
+expr swietego (jana|jerzego|wawrzyñca|piotra|paw³a|mateusza|judy)
+expr swietemu (janowi|jerzemu|wawrzyñcowi|piotrowi|paw³owi|mateuszowi|judzie)
+expr swietym (janem|janie|jerzym|wawrzyñcu|wawrzyñcem|wawrzyñcze|piotrze|piotrem|pawle|paw³em|mateuszu|mateuszem|jud±)
+
+choice entka 2 20
+choiceval entka 2 dwudzies
+choice entka 3 30
+choiceval entka 3 trzydzies
+choice entka 4 40
+choiceval entka 4 czterdzies
+choice entka 5 50
+choiceval entka 5 piêædziesi±
+choice entka 6 60
+choiceval entka 6 sze¶ædziesi±
+choice entka 7 70
+choiceval entka 7 siedemdziesi±
+choice entka 8 80
+choiceval entka 8 osiemdziesi±
+choice entka 9 90
+choiceval entka 9 dziewiêædziesi±
+
+
+frest powlatach:_?*$
+frest powlatach:_?*@
+
+recognize wlatach latach {c:centka}.{:powlatach}
+sayas wlatach latach {c}tych
+
+recognize wlata lata {c:centka}.{:powlatach}
+sayas wlata lata {c}te
+
+expr tetych (te|tych|tym)
+
+recognize entych {s:centka}-{y:etetych}
+sayas entych {s}{y}
+
+recognize entychw {s:centka}-{y:etetych} {r:r1-31} wieku
+recognize .entychw {s:centka}-{y:etetych} {r:r1-31} w.
+sayas entychw {s}{y} {r:dmd} wieku
+
+recognize .wlatachw latach {c:centka}\. {w:r1-30} w.
+recognize wlatachw latach {c:centka}\. {w:r1-30} wieku
+sayas wlatachw latach {c}tych {w:dmd} wieku
+
+recognize wlatachs latach {c:centka}\. {w:r1-30} stulecia
+sayas wlatachs latach {c}tych {w:dmd} stulecia
+
+recognize .wlataw lata {c:centka}\. {w:r1-30} w.
+recognize wlataw lata {c:centka}\. {w:r1-30} wieku
+sayas wlataw lata {c}te {w:dmd} wieku
+
+recognize wlatas lata {c:cclata}\. {w:r1-30} stulecia
+recognize wlatas lata {c:cclata}-te {w:r1-30} stulecia
+sayas wlatas lata {c} {w:dmd} stulecia
+
+
+// jeden do zera?
+recognize jedendodwuh {a:d}:{b:d2-999}
+sayas jedendodwuh {a:dmx} do {b:dxn}
+
+choice zerojeden 0 0
+choiceval zerojeden 0 zera
+choice zerojeden 1 1
+choiceval zerojeden 1 jednego
+
+
+recognize jedendozera {a:d}:{b:czerojeden}
+sayas jedendozera {a:dmx} do {b:czerojeden}
+
+// wojo
+
+choice wojstop 0 szer
+choice wojstopd 0 szer
+choice wojstopc 0 szer
+choice wojstopb 0 szer
+choice wojstopn 0 szer
+choice wojstopm 0 szer
+choiceval wojstop 0 szeregowy
+choiceval wojstopd 0 szeregowego
+choiceval wojstopc 0 szeregowemu
+choiceval wojstopb 0 szeregowego
+choiceval wojstopn 0 szeregowym
+choiceval wojstopm 0 szeregowym
+
+choice wojstop 1 kpr
+choice wojstopd 1 kpr
+choice wojstopc 1 kpr
+choice wojstopb 1 kpr
+choice wojstopn 1 kpr
+choice wojstopm 1 kpr
+choiceval wojstop 1 kapral
+choiceval wojstopd 1 kaprala
+choiceval wojstopc 1 kapralowi
+choiceval wojstopb 1 kaprala
+choiceval wojstopn 1 kapralem
+choiceval wojstopm 1 kapralu
+
+choice wojstop 2 plut
+choice wojstopd 2 plut
+choice wojstopc 2 plut
+choice wojstopb 2 plut
+choice wojstopn 2 plut
+choice wojstopm 2 plut
+choiceval wojstop 2 plutonowy
+choiceval wojstopd 2 plutonowego
+choiceval wojstopc 2 plutonowemu
+choiceval wojstopb 2 plutonowego
+choiceval wojstopn 2 plutonowym
+choiceval wojstopm 2 plutonowym
+
+choice wojstop 3 sier¿
+choice wojstopd 3 sier¿
+choice wojstopc 3 sier¿
+choice wojstopb 3 sier¿
+choice wojstopn 3 sier¿
+choice wojstopm 3 sier¿
+choiceval wojstop 3 sier¿ant
+choiceval wojstopd 3 sier¿anta
+choiceval wojstopc 3 sier¿antowi
+choiceval wojstopb 3 sier¿anta
+choiceval wojstopn 3 sier¿antem
+choiceval wojstopm 3 sier¿ancie
+
+choice wojstop 4 chor
+choice wojstopd 4 chor
+choice wojstopc 4 chor
+choice wojstopb 4 chor
+choice wojstopn 4 chor
+choice wojstopm 4 chor
+choiceval wojstop 4 chor±¿y
+choiceval wojstopd 4 chor±¿ego
+choiceval wojstopc 4 chor±¿emu
+choiceval wojstopb 4 chor±¿ego
+choiceval wojstopn 4 chor±¿ym
+choiceval wojstopm 4 chor±¿ym
+
+
+
+recognize kapralik {s:cwojstop}.
+sayas kapralik {s}
+recognize kapralikd {s:cwojstopd}. {i:eimiemdo}
+sayas kapralikd {s} {i}
+recognize kapralikc {s:cwojstopc}. {i:eimiemce}
+sayas kapralikc {s} {i}
+recognize kapralikb {s:cwojstopb}. {i:eimiembi}
+sayas kapralikb {s} {i}
+recognize kapralikn {s:cwojstopn}. {i:eimiemna}
+sayas kapralikn {s} {i}
+recognize kapralikm {s:cwojstopm}. {i:eimiemmc}
+sayas kapralikm {s} {i}
+
+frest nazwiskomd:_^*(ego|[cs]zka|@ka|[cs]zenki|[iy]cza|aua)
+frest nazwiskomc:_^*(emu|owi|ce|[iy]czowi|auowi)
+frest nazwiskomn:_^*(kim|em|[cs]zenk±|[iy]czem|auem|ym|±)
+frest nazwiskomm:_^*(kim|zku|@ku|[cs]zence|[iy]czu|auie|ym|e)
+frest nazwiskomd:_^*era
+
+recognize kapralikxd {s:cwojstopd}.{:nazwiskomd}
+sayas kapralikxd {s}
+recognize kapralikxc {s:cwojstopc}.{:nazwiskomc}
+sayas kapralikxc {s}
+recognize kapralikxn {s:cwojstopn}.{:nazwiskomn}
+sayas kapralikxn {s}
+
+expr ozolniezu (o|po|na)
+recognize kapralikxm {e:eozolniezu} {s:cwojstopm}.{:nazwiskomm}
+sayas kapralikxm {e} {s}
+
+
+frest femaleany:_({e:imiefmi}|{e:imiefdo}|{e:imiefce}|{e:imiefbi})
+frest femaleany:_({e:imiefna}|{e:imiefmc}|{e:imiefwo})
+frest femaleany:_^*[sc]k(a|iej|iej|±)
+
+recognize kapralikowa {s:cwojstop}.{:femaleany}
+sayas kapralikowa {s}
+
+recognize stkapralik st.\ {s:cwojstop}.
+sayas     stkapralik starszy {s}
+recognize stkapralikd st.\ {s:cwojstopd}. {i:eimiemdo}
+sayas stkapralikd starszego {s} {i}
+recognize stkapralikc st.\ {s:cwojstopc}. {i:eimiemce}
+sayas stkapralikc starszemu {s} {i}
+recognize stkapralikb st.\ {s:cwojstopb}. {i:eimiembi}
+sayas stkapralikb starszego {s} {i}
+recognize stkapralikn st.\ {s:cwojstopn}. {i:eimiemna}
+sayas stkapralikn starszym {s} {i}
+recognize stkapralikm st.\ {s:cwojstopm}. {i:eimiemmc}
+sayas stkapralikm starszym {s} {i}
+
+
+recognize stkapralikxd st.\ {s:cwojstopd}.{:nazwiskomd}
+sayas stkapralikxd starszego {s}
+recognize stkapralikxc st.\ {s:cwojstopc}.{:nazwiskomc}
+sayas stkapralikxc starszemu {s}
+recognize stkapralikxn st.\ {s:cwojstopn}.{:nazwiskomn}
+sayas stkapralikxn starszym {s}
+
+recognize stkapralikxm {e:eozolniezu} st.\ {s:cwojstopm}.{:nazwiskomm}
+sayas stkapralikxm {e} starszym {s}
+
+recognize stkapralikowa st.\ {s:cwojstop}.{:femaleany}
+sayas stkapralikowa starszy {s}
+
+
+recognize sierszta sier¿.\ sztab.
+sayas sierszta sier¿ant sztabowy
+
+recognize chorszta chor.\ sztab.
+sayas chorszta chor±¿y sztabowy
+
+
+
+recognize stsierszta st.\ sier¿.\ sztab.
+sayas stsierszta starszy sier¿ant sztabowy
+
+recognize stchorszta st.\ chor.\ sztab.
+sayas stchorszta starszy chor±¿y sztabowy
+
+recognize mlchor m³.\ chor.
+sayas mlchor m³odszy chor±¿y
+
+recognize mlchorszta m³.\ chor.\ sztab.
+sayas mlchorszta m³odszy chor±¿y sztabowy
+
+choice wojsta 0 ppor
+choice wojstad 0 ppor
+choice wojstab 0 ppor
+choice wojstac 0 ppor
+choice wojstam 0 ppor
+choice wojstan 0 ppor
+choiceval wojsta 0 podporucznik
+choiceval wojstad 0 podporucznika
+choiceval wojstac 0 podporucznikowi
+choiceval wojstab 0 podporucznika
+choiceval wojstan 0 podporucznikiem
+choiceval wojstam 0 podporuczniku
+choice wojsta 1 kpt
+choice wojstad 1 kpt
+choice wojstab 1 kpt
+choice wojstac 1 kpt
+choice wojstam 1 kpt
+choice wojstan 1 kpt
+choiceval wojsta 1 kapitan
+choiceval wojstad 1 kapitana
+choiceval wojstac 1 kapitanowi
+choiceval wojstab 1 kapitana
+choiceval wojstan 1 kapitanem
+choiceval wojstam 1 kapitanie
+choice wojsta  2 pp³k
+choice wojstad  2 pp³k
+choice wojstab  2 pp³k
+choice wojstac  2 pp³k
+choice wojstam  2 pp³k
+choice wojstan  2 pp³k
+choiceval wojsta 2 podpu³kownik
+choiceval wojstad 2 podpu³kownika
+choiceval wojstac 2 podpu³kownikowi
+choiceval wojstab 2 podpu³kownika
+choiceval wojstan 2 podpu³kownikiem
+choiceval wojstam 2 podpu³kowniku
+choice wojsta 3 p³k
+choice wojstad 3 p³k
+choice wojstab 3 p³k
+choice wojstac 3 p³k
+choice wojstam 3 p³k
+choice wojstan 3 p³k
+choiceval wojsta 3 pu³kownik
+choiceval wojstad 3 pu³kownika
+choiceval wojstac 3 pu³kownikowi
+choiceval wojstab 3 pu³kownika
+choiceval wojstan 3 pu³kownikiem
+choiceval wojstam 3 pu³kowniku
+// cztery i piêæ to porucznik i genera³
+
+choice wojsta 6 ks
+choice wojstad 6 ks
+choice wojstab 6 ks
+choice wojstac 6 ks
+choice wojstam 6 ks
+choice wojstan 6 ks
+choiceval wojsta 6 ksi±dz
+choiceval wojstad 6 ksiêdza
+choiceval wojstac 6 ksiêdzu
+choiceval wojstab 6 ksiêdza
+choiceval wojstan 6 ksiêdzem
+choiceval wojstam 6 ksiê¿e
+
+choice wojsta 7 tow
+choice wojstad 7 tow
+choice wojstab 7 tow
+choice wojstac 7 tow
+choice wojstam 7 tow
+choice wojstan 7 tow
+choiceval wojsta 7 towarzysz
+choiceval wojstad 7 towarzysza
+choiceval wojstac 7 towarzyszowi
+choiceval wojstab 7 towarzysza
+choiceval wojstan 7 towarzyszem
+choiceval wojstam 7 towarzyszu
+
+recognize kapitanek {s:cwojsta}.
+sayas kapitanek {s}
+
+
+recognize kapitanekn {s:cwojstad}.{:nazwiskomd}
+recognize kapitanekn {s:cwojstac}.{:nazwiskomc}
+recognize kapitanekn {s:cwojstan}.{:nazwiskomn}
+sayas kapitanekn {s}
+
+expr ozolniezu (o|po|na)
+recognize kapitanekm {e:eozolniezu} {s:cwojstam}.{:nazwiskomm}
+sayas kapitanekm {e} {s}
+
+
+recognize kapitanek {s:cwojstad}. {i:eimiemdo}
+sayas kapitanek {s} {i}
+recognize kapitanek {s:cwojstac}. {i:eimiemce}
+sayas kapitanek {s} {i}
+recognize kapitanek {s:cwojstab}. {i:eimiembi}
+sayas kapitanek {s} {i}
+recognize kapitanek {s:cwojstan}. {i:eimiemna}
+sayas kapitanek {s} {i}
+recognize kapitanek {s:cwojstam}. {i:eimiemmc}
+sayas kapitanek {s} {i}
+
+recognize kapralikowa {s:cwojsta}.{:femaleany}
+
+choice wojstb 0 kmdr
+choiceval wojstb 0 komandor
+choice wojstb 1 mjr
+choiceval wojstb 1 major
+
+recognize majorek {s:cwojstb}\.
+sayas majorek {s}
+
+// szeroko¶æ geograficzna koliduje z szeregowym
+
+choice pnpd 1 pn
+choice pnpd 2 pd
+choiceval pnpd 1 pó³nocnej
+choiceval pnpd 2 po³udniowej
+recognize szergeo szer.\ {k:cpnpd}.
+sayas szergeo szeroko¶ci {k}
+
+choice wshzah 1 wsch
+choice wshzah 2 zach
+choiceval wshzah 1 wschodniej
+choiceval wshzah 2 zachodniej
+recognize dlugeo d³.\ {k:cwshzah}.
+recognize dlugeo d³ug.\ {k:cwshzah}.
+sayas dlugeo d³ugo¶ci {k}
+
+recognize goktorej godzinie {h:d0-24} minut {m:d1-59}
+sayas goktorej godzinie {h:dfd} minut {m:df0}
+
+recognize godzimini godzina {h:d0-24} minut {m:d1-59}
+sayas godzimini godzina {h:dfm} minut {m:df0}
+
+
+recognize macadres {a:2x}:{b:2x}:{c:2x}:{d:2x}:{e:2x}:{f:2x}
+sayas macadres {a:x2} [b]{b:x2} [b]{c:x2} [b]{d:x2} [b]{e:x2} [b]{f:x2}
+
+recognize macmacadres mac {a:2x}:{b:2x}:{c:2x}:{d:2x}:{e:2x}:{f:2x}
+sayas macmacadres mak {a:x2} [b]{b:x2} [b]{c:x2} [b]{d:x2} [b]{e:x2} [b]{f:x2}
+
+
+expr naoddo (na|od|do)
+recognize amerodalei {e:enaoddo} {u:d1-99} alei
+sayas amerodalei {e} {u:dfd} alei
+
+expr alejomjom (alejê|alej±)
+expr przezza (przez|za|przed)
+recognize amerzaalejem {e:eprzezza} {a:d1-99} {f:ealejomjom}
+sayas amerzaalejem {e} {a:dfd} {f}
+
+// prowizorycznie na razie
+
+expr precalib (kaliber|kalibrem|kalibru|kalibrze)
+expr precalib (colt|colta|coltem|colcie|colty|coltów|coltami|express)
+expr precalib (magnum|special|wesson|amunicja|amunicjê|amunicji|amunicj±)
+expr precalib (llama|llam±|llamê|llamy)
+expr precalib (karabin|karabinu|karabinem|karabinie|karabiny|karabinów|karabinom|karabinach|karabinami)
+expr precalib (marlin|marlina|marlinem|marlinie|marliny|marlinów|marlinom|marlinach|marlinami)
+
+recognize kaliber {a:eprecalib} .{d:d10-999}
+sayas kaliber {a} {d:dmx}
+
+choice doktor 1 dr
+choice doktord 1 dr
+choice doktorc 1 dr
+choice doktorb 1 dr
+choice doktorn 1 dr
+choice doktorm 1 dr
+
+choiceval doktor 1 doktor
+choiceval doktord 1 doktora
+choiceval doktorc 1 dokotorowi
+choiceval doktorb 1 doktora
+choiceval doktorn 1 doktorem
+choiceval doktorm 1 doktorze
+
+choice doktor 2 mgr
+choice doktord 2 mgr
+choice doktorc 2 mgr
+choice doktorb 2 mgr
+choice doktorn 2 mgr
+choice doktorm 2 mgr
+
+choiceval doktor 2 magister
+choiceval doktord 2 magistra
+choiceval doktorc 2 magistrowi
+choiceval doktorb 2 magistra
+choiceval doktorn 2 magistrem
+choiceval doktorm 2 magistrze
+
+choice doktor 3 prof
+choice doktord 3 prof
+choice doktorc 3 prof
+choice doktorb 3 prof
+choice doktorn 3 prof
+choice doktorm 3 prof
+
+choiceval doktor 3 profesor
+choiceval doktord 3 profesora
+choiceval doktorc 3 profesorowi
+choiceval doktorb 3 profesora
+choiceval doktorn 3 profesorem
+choiceval doktorm 3 profesorze
+
+
+recognize doktor {s:cdoktord}\. {i:eimiemdo}
+recognize doktor {s:cdoktorb}\. {i:eimiembi}
+recognize doktor {s:cdoktorc}\. {i:eimiemce}
+recognize doktor {s:cdoktorn}\. {i:eimiemna}
+recognize doktor {s:cdoktorm}\. {i:eimiemmc}
+sayas doktor {s} {i}
+
+recognize doktorxd {s:cdoktord}\.{:nazwiskomd}
+sayas doktorxd {s}
+recognize doktorxc {s:cdoktorc}\.{:nazwiskomc}
+sayas doktorxc {s}
+recognize doktorxn {s:cdoktorn}\.{:nazwiskomn}
+sayas doktorxm {s}
+recognize doktorxm {s:cdoktorm}\.{:nazwiskomm}
+sayas doktorxn {s}
+
+recognize naudrhabd dr\. hab. {i:eimiemdo}
+sayas naudrhabd doktora habilitowanego {i}
+recognize naudrhabc dr\. hab. {i:eimiemce}
+sayas naudrhabc doktorowi habilitowanemu {i}
+recognize naudrhabb dr\. hab. {i:eimiembi}
+sayas naudrhabb doktora habilitowanego {i}
+recognize naudrhabn dr\. hab. {i:eimiemna}
+sayas naudrhabm doktorem habilitowanym {i}
+recognize naudrhabm dr\. hab. {i:eimiemmc}
+sayas naudrhabn doktorze habilitowanym {i}
+
+recognize nauxdhd dr\. hab.{:nazwiskomd}
+sayas nauxdhd doktora habilitowanego
+recognize nauxdhc dr\. hab.{:nazwiskomc}
+sayas nauxdhc doktorowi habilitowanemu
+recognize nauxdhn dr\. hab.{:nazwiskomn}
+sayas nauxdhn doktorem habilitowanym
+recognize nauxdhm dr\. hab.{:nazwiskomm}
+sayas nauxdhm doktorze habilitowanym
+
+
+
+recognize nauddrhabd doc. dr\. hab. {i:eimiemdo}
+sayas nauddrhabd docenta doktora habilitowanego {i}
+recognize nauddrhabc doc. dr\. hab. {i:eimiemce}
+sayas nauddrhabc docentowi doktorowi habilitowanemu {i}
+recognize nauddrhabb doc. dr\. hab. {i:eimiembi}
+sayas nauddrhabb docenta doktora habilitowanego {i}
+recognize nauddrhabn doc. dr\. hab. {i:eimiemna}
+sayas nauddrhabm docentem doktorem habilitowanym {i}
+recognize nauddrhabm doc. dr\. hab. {i:eimiemmc}
+sayas nauddrhabn docencie doktorze habilitowanym {i}
+
+recognize nauxddhd doc. dr\. hab.{:nazwiskomd}
+sayas nauxddhd docenta doktora habilitowanego
+recognize nauxddhc doc. dr\. hab.{:nazwiskomc}
+sayas nauxddhc docentowi doktorowi habilitowanemu
+recognize nauxddhn doc. dr\. hab.{:nazwiskomn}
+sayas nauxddhn docentem doktorem habilitowanym
+recognize nauxddhm doc. dr\. hab.{:nazwiskomm}
+sayas nauxddhm docencie doktorze habilitowanym
+
+
+recognize naupdrd prof. dr\.{i:eimiemdo}
+sayas naupdrd profesora doktora {i}
+recognize naupdrc prof. dr\.{i:eimiemce}
+sayas naupdrc profesorowi doktorowi {i}
+recognize naupdrb prof. dr\.{i:eimiembi}
+sayas naupdrb profesora doktora {i}
+recognize nauddrn prof. dr\.{i:eimiemna}
+sayas naupdrm profesorem doktorem {i}
+recognize naupdrm prof. dr\.{i:eimiemmc}
+sayas naupdrn profesorze doktorze {i}
+
+recognize nauxpdrd prof. dr\.{:nazwiskomd}
+sayas nauxpdrd profesora doktora
+recognize nauxpdrc prof. dr\.{:nazwiskomc}
+sayas nauxpdrc profesorowi doktorowi
+recognize nauxpdrn prof. dr\.{:nazwiskomn}
+sayas nauxpdrn profesorem doktorem
+recognize nauxpdrm prof. dr\.{:nazwiskomm}
+sayas nauxpdrm profesorze doktorze
+
+recognize naupdrhabd prof. dr\. hab. {i:eimiemdo}
+sayas naupdrhabd profesora doktora habilitowanego {i}
+recognize naupdrhabc prof. dr\. hab. {i:eimiemce}
+sayas naupdrhabc profesorowi doktorowi habilitowanemu {i}
+recognize naupdrhabb prof. dr\. hab. {i:eimiembi}
+sayas naupdrhabb profesora doktora habilitowanego {i}
+recognize nauddrhabn prof. dr\. hab. {i:eimiemna}
+sayas naupdrhabm profesorem doktorem habilitowanym {i}
+recognize naupdrhabm prof. dr\. hab. {i:eimiemmc}
+sayas naupdrhabn profesorze doktorze habilitowanym {i}
+
+recognize nauxpdhd prof. dr\. hab.{:nazwiskomd}
+sayas nauxpdhd profesora doktora habilitowanego
+recognize nauxpdhc prof. dr\. hab.{:nazwiskomc}
+sayas nauxpdhc profesorowi doktorowi habilitowanemu
+recognize nauxpdhn prof. dr\. hab.{:nazwiskomn}
+sayas nauxpdhn profesorem doktorem habilitowanym
+recognize nauxpdhm prof. dr\. hab.{:nazwiskomm}
+sayas nauxpdhm profesorze doktorze habilitowanym
+expr imiefmist (aleksandra|bogumi³a|bogus³awa|dominika|franciszka|gabriela|henryka|huberta|ludwika|s³awomira|wac³awa|w³adys³awa)
+expr imiefmi (ada|adela|agata|agnieszka|aldona|alicja|alina|anastazja)
+expr imiefmi (aneta|angelika|aniela|anita|anna|antonina|apolonia|balbina|barbara)
+expr imiefmi (beata|berenika|bernadeta|bernadetta|berta|blanka|bo¿ena)
+expr imiefmi (brygida|cecylia|celina|czes³awa|dagmara|daniela|danuta|daria|diana)
+expr imiefmi (dorota|edyta|elena|eleonora|eliza|elwira|el¿bieta|emilia)
+expr imiefmi (eugenia|ewa|ewelina|felicja|genowefa|gertruda|gra¿yna)
+expr imiefmi (halina|helena|honorata|ida|irena|irmina|iwona)
+expr imiefmi (iza|izabela|izabella|jadwiga|janina|joanna|jolanta|judyta|julia)
+expr imiefmi (justyna|kalina|kamila|karolina|katarzyna|kinga|klara|klaudia|klementyna)
+expr imiefmi (kornelia|krystyna|laura|lidia|liliana|lucyna|ludmi³a|magda)
+expr imiefmi (magdalena|maja|malwina|marcelina|maria|marianna|marlena|marta|martyna)
+expr imiefmi (marzena|matylda|ma³gorzata|milena|monika|natalia|natasza|nina|olga)
+expr imiefmi (oliwia|otylia|patrycja|paulina|regina|renata|roksana|rozalia|ró¿a)
+expr imiefmi (sabina|salomea|sandra|stefania|sylwia|tekla|teresa|urszula)
+expr imiefmi (violetta|wanda|weronika|wiktoria|wioleta|wioletta|zofia)
+expr imiefmi (zuzanna|³ucja|¿aklina|¿aneta)
+expr imiefdo (adeli|ady|agaty|agnieszki|aldony|aleksandry|alicji|aliny|anastazji)
+expr imiefdo (anety|angeliki|anieli|anity|anny|antoniny|apolonii|balbiny|barbary)
+expr imiefdo (beaty|bereniki|bernadetty|bernadety|berty|blanki|bogumi³y|bogus³awy|bo¿eny)
+expr imiefdo (brygidy|cecylii|celiny|czes³awy|dagmary|danieli|danuty|darii|diany)
+expr imiefdo (dominiki|doroty|edyty|eleny|eleonory|elizy|elwiry|el¿biety|emilii)
+expr imiefdo (eugenii|eweliny|ewy|felicji|franciszki|gabrieli|genowefy|gertrudy|gra¿yny)
+expr imiefdo (haliny|heleny|henryki|honoraty|huberty|idy|ireny|irminy|iwony)
+expr imiefdo (izabeli|izabelli|izy|jadwigi|janiny|joanny|jolanty|judyty|julii)
+expr imiefdo (justyny|kaliny|kamili|karoliny|katarzyny|kingi|klary|klaudii|klementyny)
+expr imiefdo (kornelii|krystyny|laury|lidii|liliany|lucyny|ludmi³y|ludwiki|magdaleny)
+expr imiefdo (magdy|mai|malwiny|marceliny|marianny|marii|marleny|marty|martyny)
+expr imiefdo (marzeny|matyldy|ma³gorzaty|mileny|moniki|natalii|nataszy|niny|olgi)
+expr imiefdo (oliwii|otylii|patrycji|pauliny|reginy|renaty|roksany|rozalii|ró¿y)
+expr imiefdo (sabiny|salomei|sandry|stefanii|sylwii|s³awomiry|tekli|teresy|urszuli)
+expr imiefdo (violetty|wac³awy|wandy|weroniki|wiktorii|wioletty|wiolety|w³adys³awy|zofii)
+expr imiefdo (zuzanny|³ucji|¿akliny|¿anety)
+expr imiefce (adeli|ady|adzie|agacie|agnieszce|agnieszki|aldonie|aldony|aleksandry)
+expr imiefce (aleksandrze|alicji|alinie|aliny|anastazji|anecie|angelice|angeliki|anicie)
+expr imiefce (anieli|annie|anny|antoninie|antoniny|apolonii|balbinie|balbiny|barbary)
+expr imiefce (barbarze|beacie|bercie|berenice|bereniki|bernadecie|bernadetcie|blance|blanki)
+expr imiefce (bogumile|bogumi³y|bogus³awie|bogus³awy|bo¿enie|bo¿eny|brygidy|brygidzie|cecylii)
+expr imiefce (celinie|celiny|czes³awie|czes³awy|dagmary|dagmarze|danieli|danucie|darii)
+expr imiefce (dianie|diany|dominice|dominiki|dorocie|edycie|elenie|eleny|eleonory)
+expr imiefce (eleonorze|elizie|elizy|elwiry|elwirze|el¿biecie|emilii|eugenii|ewelinie)
+expr imiefce (eweliny|ewie|ewy|felicji|franciszce|franciszki|gabrieli|genowefie|genowefy)
+expr imiefce (gertrudy|gertrudzie|gra¿ynie|gra¿yny|halinie|haliny|helenie|heleny|henryce)
+expr imiefce (henryki|honoracie|hubercie|idy|idzie|irenie|ireny|irminie|irminy)
+expr imiefce (iwonie|iwony|izabeli|izabelli|izie|izy|jadwidze|jadwigi|janinie)
+expr imiefce (janiny|joannie|joanny|jolancie|judycie|julii|justynie|justyny|kalinie)
+expr imiefce (kaliny|kamili|karolinie|karoliny|katarzynie|katarzyny|kindze|kingi|klary)
+expr imiefce (klarze|klaudii|klementynie|klementyny|kornelii|krystynie|krystyny|laury|laurze)
+expr imiefce (lidii|lilianie|liliany|lucynie|lucyny|ludmile|ludmi³y|ludwice|ludwiki)
+expr imiefce (magdalenie|magdaleny|magdy|magdzie|mai|malwinie|malwiny|marcelinie|marceliny)
+expr imiefce (marcie|mariannie|marianny|marii|marlenie|marleny|martynie|martyny|marzenie)
+expr imiefce (marzeny|matyldy|matyldzie|ma³gorzacie|milenie|mileny|monice|moniki|natalii)
+expr imiefce (nataszy|ninie|niny|oldze|olgi|oliwii|otylii|patrycji|paulinie)
+expr imiefce (pauliny|reginie|reginy|renacie|roksanie|roksany|rozalii|ró¿y|sabinie)
+expr imiefce (sabiny|salomei|sandry|sandrze|stefanii|sylwii|s³awomiry|s³awomirze|tekli)
+expr imiefce (teresie|teresy|urszuli|violetcie|wac³awie|wac³awy|wandy|wandzie|weronice)
+expr imiefce (weroniki|wiktorii|wiolecie|wioletcie|w³adys³awie|w³adys³awy|zofii|zuzannie|zuzanny)
+expr imiefce (³ucji|¿aklinie|¿akliny|¿anecie)
+expr imiefbi (adelê|adê|agatê|agnieszkê|aldonê|aleksandrê|alicjê|alinê|anastazjê)
+expr imiefbi (anetê|angelikê|anielê|anitê|annê|antoninê|apoloniê|balbinê|barbarê)
+expr imiefbi (beatê|berenikê|bernadettê|bernadetê|bertê|blankê|bogumi³ê|bogus³awê|bo¿enê)
+expr imiefbi (brygidê|cecyliê|celinê|czes³awê|dagmarê|danielê|danutê|dariê|dianê)
+expr imiefbi (dominikê|dorotê|edytê|elenê|eleonorê|elizê|elwirê|el¿bietê|emiliê)
+expr imiefbi (eugeniê|ewelinê|ewê|felicjê|franciszkê|gabrielê|genowefê|gertrudê|gra¿ynê)
+expr imiefbi (halinê|helenê|henrykê|honoratê|hubertê|idê|irenê|irminê|iwonê)
+expr imiefbi (izabellê|izabelê|izê|jadwigê|janinê|joannê|jolantê|judytê|juliê)
+expr imiefbi (justynê|kalinê|kamilê|karolinê|katarzynê|kingê|klarê|klaudiê|klementynê)
+expr imiefbi (korneliê|krystynê|laurê|lidiê|lilianê|lucynê|ludmi³ê|ludwikê|magdalenê)
+expr imiefbi (magdê|majê|malwinê|marcelinê|mariannê|mariê|marlenê|martynê|martê)
+expr imiefbi (marzenê|matyldê|ma³gorzatê|milenê|monikê|nataliê|nataszê|ninê|olgê)
+expr imiefbi (oliwiê|otyliê|patrycjê|paulinê|reginê|renatê|roksanê|rozaliê|ró¿ê)
+expr imiefbi (sabinê|salomeê|sandrê|stefaniê|sylwiê|s³awomirê|teklê|teresê|urszulê)
+expr imiefbi (violettê|wac³awê|wandê|weronikê|wiktoriê|wiolettê|wioletê|w³adys³awê|zofiê)
+expr imiefbi (zuzannê|³ucjê|¿aklinê|¿anetê)
+expr imiefna (adel±|ad±|agat±|agnieszk±|aldon±|aleksandr±|alicj±|alin±|anastazj±)
+expr imiefna (anet±|angelik±|aniel±|anit±|ann±|antonin±|apoloni±|balbin±|barbar±)
+expr imiefna (beat±|berenik±|bernadett±|bernadet±|bert±|blank±|bogumi³±|bogus³aw±|bo¿en±)
+expr imiefna (brygid±|cecyli±|celin±|czes³aw±|dagmar±|daniel±|danut±|dari±|dian±)
+expr imiefna (dominik±|dorot±|edyt±|elen±|eleonor±|eliz±|elwir±|el¿biet±|emili±)
+expr imiefna (eugeni±|ewelin±|ew±|felicj±|franciszk±|gabriel±|genowef±|gertrud±|gra¿yn±)
+expr imiefna (halin±|helen±|henryk±|honorat±|hubert±|id±|iren±|irmin±|iwon±)
+expr imiefna (izabell±|izabel±|iz±|jadwig±|janin±|joann±|jolant±|judyt±|juli±)
+expr imiefna (justyn±|kalin±|kamil±|karolin±|katarzyn±|king±|klar±|klaudi±|klementyn±)
+expr imiefna (korneli±|krystyn±|laur±|lidi±|lilian±|lucyn±|ludmi³±|ludwik±|magdalen±)
+expr imiefna (magd±|maj±|malwin±|marcelin±|mariann±|mari±|marlen±|martyn±|mart±)
+expr imiefna (marzen±|matyld±|ma³gorzat±|milen±|monik±|natali±|natasz±|nin±|olg±)
+expr imiefna (oliwi±|otyli±|patrycj±|paulin±|regin±|renat±|roksan±|rozali±|ró¿±)
+expr imiefna (sabin±|salome±|sandr±|stefani±|sylwi±|s³awomir±|tekl±|teres±|urszul±)
+expr imiefna (violett±|wac³aw±|wand±|weronik±|wiktori±|wiolett±|wiolet±|w³adys³aw±|zofi±)
+expr imiefna (zuzann±|³ucj±|¿aklin±|¿anet±)
+expr imiefmc (adeli|ady|adzie|agacie|agnieszce|agnieszki|aldonie|aldony|aleksandry)
+expr imiefmc (aleksandrze|alicji|alinie|aliny|anastazji|anecie|angelice|angeliki|anicie)
+expr imiefmc (anieli|annie|anny|antoninie|antoniny|apolonii|balbinie|balbiny|barbary)
+expr imiefmc (barbarze|beacie|bercie|berenice|bereniki|bernadecie|bernadetcie|blance|blanki)
+expr imiefmc (bogumile|bogumi³y|bogus³awie|bogus³awy|bo¿enie|bo¿eny|brygidy|brygidzie|cecylii)
+expr imiefmc (celinie|celiny|czes³awie|czes³awy|dagmary|dagmarze|danieli|danucie|darii)
+expr imiefmc (dianie|diany|dominice|dominiki|dorocie|edycie|elenie|eleny|eleonory)
+expr imiefmc (eleonorze|elizie|elizy|elwiry|elwirze|el¿biecie|emilii|eugenii|ewelinie)
+expr imiefmc (eweliny|ewie|ewy|felicji|franciszce|franciszki|gabrieli|genowefie|genowefy)
+expr imiefmc (gertrudy|gertrudzie|gra¿ynie|gra¿yny|halinie|haliny|helenie|heleny|henryce)
+expr imiefmc (henryki|honoracie|hubercie|idy|idzie|irenie|ireny|irminie|irminy)
+expr imiefmc (iwonie|iwony|izabeli|izabelli|izie|izy|jadwidze|jadwigi|janinie)
+expr imiefmc (janiny|joannie|joanny|jolancie|judycie|julii|justynie|justyny|kalinie)
+expr imiefmc (kaliny|kamili|karolinie|karoliny|katarzynie|katarzyny|kindze|kingi|klary)
+expr imiefmc (klarze|klaudii|klementynie|klementyny|kornelii|krystynie|krystyny|laury|laurze)
+expr imiefmc (lidii|lilianie|liliany|lucynie|lucyny|ludmile|ludmi³y|ludwice|ludwiki)
+expr imiefmc (magdalenie|magdaleny|magdy|magdzie|mai|malwinie|malwiny|marcelinie|marceliny)
+expr imiefmc (marcie|mariannie|marianny|marii|marlenie|marleny|martynie|martyny|marzenie)
+expr imiefmc (marzeny|matyldy|matyldzie|ma³gorzacie|milenie|mileny|monice|moniki|natalii)
+expr imiefmc (nataszy|ninie|niny|oldze|olgi|oliwii|otylii|patrycji|paulinie)
+expr imiefmc (pauliny|reginie|reginy|renacie|roksanie|roksany|rozalii|ró¿y|sabinie)
+expr imiefmc (sabiny|salomei|sandry|sandrze|stefanii|sylwii|s³awomiry|s³awomirze|tekli)
+expr imiefmc (teresie|teresy|urszuli|violetcie|wac³awie|wac³awy|wandy|wandzie|weronice)
+expr imiefmc (weroniki|wiktorii|wiolecie|wioletcie|w³adys³awie|w³adys³awy|zofii|zuzannie|zuzanny)
+expr imiefmc (³ucji|¿aklinie|¿akliny|¿anecie)
+expr imiefwo (adelo|ado|agato|agnieszko|aldono|aleksandro|alicjo|alino|anastazjo)
+expr imiefwo (aneto|angeliko|anielo|anito|anno|antonino|apolonio|balbino|barbaro)
+expr imiefwo (beato|bereniko|bernadeto|bernadetto|berto|blanko|bogumi³o|bogus³awo|bo¿eno)
+expr imiefwo (brygido|cecylio|celino|czes³awo|dagmaro|danielo|danuto|dario|diano)
+expr imiefwo (dominiko|doroto|edyto|eleno|eleonoro|elizo|elwiro|el¿bieto|emilio)
+expr imiefwo (eugenio|ewelino|ewo|felicjo|franciszko|gabrielo|genowefo|gertrudo|gra¿yno)
+expr imiefwo (halino|heleno|henryko|honorato|huberto|ido|ireno|irmino|iwono)
+expr imiefwo (izabello|izabelo|izo|jadwigo|janino|joanno|jolanto|judyto|julio)
+expr imiefwo (justyno|kalino|kamilo|karolino|katarzyno|kingo|klaro|klaudio|klementyno)
+expr imiefwo (kornelio|krystyno|lauro|lidio|liliano|lucyno|ludmi³o|ludwiko|magdaleno)
+expr imiefwo (magdo|majo|malwino|marcelino|marianno|mario|marleno|marto|martyno)
+expr imiefwo (marzeno|matyldo|ma³gorzato|mileno|moniko|natalio|nataszo|nino|olgo)
+expr imiefwo (oliwio|otylio|patrycjo|paulino|regino|renato|roksano|rozalio|ró¿o)
+expr imiefwo (sabino|salomeo|sandro|stefanio|sylwio|s³awomiro|teklo|tereso|urszulo)
+expr imiefwo (violetto|wac³awo|wando|weroniko|wiktorio|wioleto|wioletto|w³adys³awo|zofio)
+expr imiefwo (zuzanno|³ucjo|¿aklino|¿aneto)
+expr imiemmi (adam|adolf|adrian|albert|albin|aleksander|aleksy|alfons|alfred)
+expr imiemmi (alojzy|ambro¿y|anastazy|anatol|andrzej|antoni|anzelm|apolinary|arkadiusz)
+expr imiemmi (artur|atanazy|augustyn|aureliusz|barnaba|bartosz|bart³omiej|benedykt|bogdan)
+expr imiemmi (bogumi³|bogus³aw|bohdan|boles³aw|bonawentura|cezary|cyprian|czes³aw|damazy)
+expr imiemmi (damian|daniel|dariusz|dawid|dezydery|dionizy|dominik|edward|emil)
+expr imiemmi (ernest|eryk|feliks|filip|franciszek|fryderyk|gabriel|gerwazy|grzegorz)
+expr imiemmi (gwidon|henryk|herbert|hilary|hubert|ildefons|ireneusz|jacek|jakub|jan)
+expr imiemmi (january|jarek|jerzy|juliusz|józef|kacper|kajetan|kamil|karol|kazimierz)
+expr imiemmi (klemens|konrad|korneliusz|krystian|krzysztof|ksawery)
+expr imiemmi (laurenty|lech|leon|leonard|leopold|leszek)
+expr imiemmi (lucjan|ludwik|maciej|makary|maksymilian|marcin|marek|marian|mariusz)
+expr imiemmi (mateusz|micha³|miko³aj|miros³aw|napoleon|norbert|olgierd|onufry|oskar|patryk)
+expr imiemmi (pawe³|piotr|pius|protazy|przemys³aw|rados³aw|rafa³|remigiusz|robert|roman|ryszard)
+expr imiemmi (sebastian|stanis³aw|stefan|sylwek|sylwester|szymon|s³awomir|tadeusz|tomasz)
+expr imiemmi (wac³aw|waldemar|walery|wawrzyniec|wiktor|wincenty|wit|witold|wojciech)
+expr imiemmi (w³adys³aw|w³odzimierz|xawery|zbigniew|zbyszek|zdzis³aw|zenobiusz|zenon|zygmunt|³ukasz)
+expr imiemdo (adama|adolfa|adriana|alberta|albina|aleksandra|aleksego|alfonsa|alfreda)
+expr imiemdo (alojzego|ambro¿ego|anastazego|anatola|andrzeja|antoniego|anzelma|apolinarego|arkadiusza)
+expr imiemdo (artura|atanazego|augustyna|aureliusza|bartosza|bart³omieja|benedykta|bogdana|bogumi³a)
+expr imiemdo (bogus³awa|bohdana|boles³awa|bonawentury|cezarego|cypriana|czes³awa|damazego|damiana)
+expr imiemdo (daniela|dariusza|dawida|dezyderego|dionizego|dominika|edwarda|emila|ernesta)
+expr imiemdo (eryka|feliksa|filipa|franciszka|fryderyka|gabriela|gerwazego|grzegorza|gwidona)
+expr imiemdo (henryka|herberta|hilarego|huberta|ildefonsa|ireneusza|jacka|jacku|jakuba|jana)
+expr imiemdo (januarego|jarka|jarku|jerzego|juliusza|józefa|kacpra|kajetana|kamila|karola)
+expr imiemdo (kazimierza|klemensa|konrada|korneliusza|krystiana|krzysztofa|ksawerego)
+expr imiemdo (laurentego|lecha|leona|leonarda|leopolda)
+expr imiemdo (leszka|lucjana|ludwika|macieja|makarego|maksymiliana|marcina|mariana)
+expr imiemdo (mariusza|marka|marku|mateusza|micha³a|miko³aja|miros³awa|napoleona|norberta|olgierda)
+expr imiemdo (onufrego|oskara|patryka|paw³a|piotra|piusa|protazego|przemys³awa|rados³awa|rafa³a)
+expr imiemdo (remigiusza|roberta|romana|ryszarda|sebastiana|stanis³awa|stefana|sylwestra|sylwka|szymona)
+expr imiemdo (s³awomira|tadeusza|tomasza|wac³awa|waldemara|walerego|wawrzyñca|wiktora|wincentego)
+expr imiemdo (wita|witolda|wojciecha|w³adys³awa|w³odzimierza|xawerego|zbigniewa|zbyszka|zbyszku)
+expr imiemdo (zdzis³awa|zenobiusza|zenona|zygmunta|³ukasza)
+expr imiemce (adamowi|adolfowi|adrianowi|albertowi|albinowi|aleksandrowi|aleksemu|alfonsowi|alfredowi)
+expr imiemce (alojzemu|ambro¿emu|anastazemu|anatolowi|andrzejowi|antoniemu|anzelmowi|apolinaremu|arkadiuszowi)
+expr imiemce (arturowi|atanazemu|augustynowi|aureliuszowi|barnabie|barnaby|bartoszowi|bart³omiejowi|benedyktowi)
+expr imiemce (bogdanowi|bogumi³owi|bogus³awowi|bohdanowi|boles³awowi|bonawenturze|cezaremu|cyprianowi|czes³awowi)
+expr imiemce (damazemu|damianowi|danielowi|dariuszowi|dawidowi|dezyderemu|dionizemu|dominikowi|edwardowi)
+expr imiemce (emilowi|ernestowi|erykowi|feliksowi|filipowi|franciszkowi|fryderykowi|gabrielowi|gerwazemu)
+expr imiemce (grzegorzowi|gwidonowi|henrykowi|herbertowi|hilaremu|hubertowi|ildefonsowi|ireneuszowi|jackowi|jakubowi)
+expr imiemce (janowi|januaremu|jarkowi|jerzemu|juliuszowi|józefowi|kacprowi|kajetanowi|kamilowi|karolowi)
+expr imiemce (kazimierzowi|klemensowi|konradowi|korneliuszowi|krystianowi|krzysztofowi|ksaweremu)
+expr imiemce (laurentemu|lechowi|leonowi|leonardowi|leopoldowi)
+expr imiemce (leszkowi|lucjanowi|ludwikowi|maciejowi|makaremu|maksymilianowi|marcinowi|marianowi|mariuszowi)
+expr imiemce (markowi|mateuszowi|micha³owi|miko³ajowi|miros³awowi|napoleonowi|norbertowi|olgierdowi|onufremu|oskarowi)
+expr imiemce (patrykowi|paw³owi|piotrowi|piusowi|protazemu|przemys³awowi|rados³awowi|rafa³owi|remigiuszowi|robertowi)
+expr imiemce (romanowi|ryszardowi|sebastianowi|stanis³awowi|stefanowi|sylwestrowi|sylwkowi|szymonowi|s³awomirowi|tadeuszowi)
+expr imiemce (tomaszowi|wac³awowi|waldemarowi|waleremu|wawrzyñcowi|wiktorowi|wincentemu|witoldowi|witowi)
+expr imiemce (wojciechowi|w³adys³awowi|w³odzimierzowi|xaweremu|zbigniewowi|zbyszkowi|zdzis³awowi|zenobiuszowi|zenonowi)
+expr imiemce (zygmuntowi|³ukaszowi)
+expr imiembi (adama|adriana|aleksandra|aleksego|alojzego|ambro¿ego|anastazego|anatola|andrzeja)
+expr imiembi (antoniego|apolinarego|arkadiusza|atanazego|aureliusza|barnabê|bartosza|bart³omieja|benedykta)
+expr imiembi (bogdana|bogumi³a|bogus³awa|bohdana|boles³awa|bonawenturê|cezarego|cypriana|czes³awa)
+expr imiembi (damazego|daniela|dariusza|dawida|dezyderego|dionizego|edwarda|emila|feliksa)
+expr imiembi (filipa|franciszka|fryderyka|gabriela|gerwazego|grzegorza|henryka|hilarego|ildefonsa|ireneusza)
+expr imiembi (jacka|jakuba|jana|januarego|jarka|jerzego|juliusza|józefa|kacpra|kamila)
+expr imiembi (karola|kazimierz|kazimierza|klemensa|konrada|korneliusza|krzysztofa|ksawerego)
+expr imiembi (laurentego|lecha|leona|leonarda)
+expr imiembi (leopolda|leszka|lucjana|ludwika|macieja|makarego|maksymiliana|marcina|marka)
+expr imiembi (mateusza|micha³a|miko³aja|miros³awa|napoleona|norberta|olgierda|onufrego|patryka|paw³a)
+expr imiembi (piusa|protazego|przemys³awa|rados³awa|romana|ryszarda|stanis³awa|stefana|sylwestra|sylwka|szymona)
+expr imiembi (s³awomira|tadeusza|tomasza|wac³awa|waldemara|walerego|wawrzyñca|wiktora|wincentego)
+expr imiembi (witolda|wojciecha|w³adys³awa|w³odzimierz|w³odzimierza|xawerego|zbigniewa|zbyszka|zdzis³awa|zygmunta)
+expr imiemna (adamem|adolfem|adrianem|albertem|albinem|aleksandrem|aleksym|alfonsem|alfredem)
+expr imiemna (alojzym|ambro¿ym|anastazym|anatolem|andrzejem|antonim|anzelmem|apolinarym|arkadiuszem)
+expr imiemna (arturem|atanazym|augustynem|aureliuszem|barnab±|bartoszem|bart³omiejem|benedyktem|bogdanem)
+expr imiemna (bogumi³em|bogus³awem|bohdanem|boles³awem|bonawentur±|cezarym|cyprianem|czes³awem|damazym)
+expr imiemna (damianem|danielem|dariuszem|dawidem|dezyderym|dionizym|dominikiem|edwardem|emilem)
+expr imiemna (ernestem|erykiem|feliksem|filipem|franciszkiem|fryderykiem|gabrielem|gerwazym|grzegorzem)
+expr imiemna (gwidonem|henrykiem|herbertem|hilarym|hubertem|ildefonsem|ireneuszem|jackiem|jakubem|janem)
+expr imiemna (januarym|jarkiem|jerzym|juliuszem|józefem|kacprem|kajetanem|kamilem|karolem|kazimierzem)
+expr imiemna (klemensem|konradem|korneliuszem|krystianem|krzysztofem|ksawerym)
+expr imiemna (laurentym|lechem|leonem|leonardem|leopoldem|leszkiem)
+expr imiemna (lucjanem|ludwikiem|maciejem|makarym|maksymilianem|marcinem|marianem|mariuszem|markiem)
+expr imiemna (mateuszem|micha³em|miko³ajem|miros³awem|napoleonem|norbertem|olgierdem|onufrym|oskarem|patrykiem)
+expr imiemna (paw³em|piotrem|piusem|protazym|przemys³awem|rados³awem|rafa³em|remigiuszem|robertem|romanem|ryszardem)
+expr imiemna (sebastianem|stanis³awem|stefanem|sylwestrem|sylwkiem|szymonem|s³awomirem|tadeuszem|tomaszem)
+expr imiemna (wac³awem|waldemarem|walerym|wawrzyñcem|wiktorem|wincentym|witem|witoldem|wojciechem)
+expr imiemna (w³adys³awem|w³odzimierzem|xawerym|zbigniewem|zbyszkiem|zdzis³awem|zenobiuszem|zenonem|zygmuntem|³ukaszem)
+expr imiemmc (adamie|adolfie|adrianie|albercie|albinie|aleksandrze|aleksym|alfonsie|alfredzie)
+expr imiemmc (alojzym|ambro¿ym|anastazym|anatolu|andrzeju|antonim|anzelmie|apolinarym|arkadiuszu)
+expr imiemmc (arturze|atanazym|augustynie|aureliuszu|barnabie|barnaby|bartoszu|bart³omieju|benedykcie)
+expr imiemmc (bogdanie|bogumile|bogus³awie|bohdanie|boles³awie|bonawenturze|cezarym|cyprianie|czes³awie)
+expr imiemmc (damazym|damianie|danielu|dariuszu|dawidzie|dezyderym|dionizym|dominiku|edwardzie)
+expr imiemmc (emilu|erne¶cie|eryku|feliksie|filipie|franciszku|fryderyku|gabrielu|gerwazym)
+expr imiemmc (grzegorzu|gwidonie|henryku|herbercie|hilarym|hubercie|ildefonsie|ireneuszu|jacku|jakubie)
+expr imiemmc (janie|januarym|jarku|jerzym|juliuszu|józefie|kacprze|kajetanie|kamilu|karolu)
+expr imiemmc (kazimierzu|klemensie|konradzie|korneliuszu|krystianie|krzysztofie|ksawerym)
+expr imiemmc (laurentym|lechu|leonie|leonardzie|leopoldzie)
+expr imiemmc (leszku|lucjanie|ludwiku|macieju|makarym|maksymilianie|marcinie|marianie|mariuszu)
+expr imiemmc (marku|mateuszu|michale|miko³aju|miros³awie|napoleonie|norbercie|olgierdzie|onufrym|oskarze)
+expr imiemmc (patryku|pawle|piotrze|piusie|protazym|przemys³awie|rados³awie|rafale|remigiuszu|robercie)
+expr imiemmc (romanie|ryszardzie|sebastianie|stanis³awie|stefanie|sylwestrze|sylwku|szymonie|s³awomirze|tadeuszu)
+expr imiemmc (tomaszu|wac³awie|waldemarze|walerym|wawrzyñcu|wicie|wiktorze|wincentym|witoldzie)
+expr imiemmc (wojciechu|w³adys³awie|w³odzimierzu|xawerym|zbigniewie|zbyszku|zdzis³awie|zenobiuszu|zenonie)
+expr imiemmc (zygmuncie|³ukaszu)
+expr imiemwo (adamie|adolfie|adrianie|albercie|albinie|aleksandrze|alfonsie|alfredzie|alojzy)
+expr imiemwo (anastazy|anatolu|andrzeju|anzelmie|arkadiuszu|arturze|atanazy|augustynie|aureliuszu)
+expr imiemwo (barnabo|bartoszu|bart³omieju|benedykcie|bogdanie|bogumile|bohdanie|bonawenturo|cyprianie)
+expr imiemwo (damazy|damianie|danielu|dariuszu|dawidzie|dezydery|dominiku|edwardzie|emilu)
+expr imiemwo (erne¶cie|eryku|feliksie|filipie|franciszku|fryderyku|gabrielu|gerwazy|grzegorzu)
+expr imiemwo (gwidonie|henryku|herbercie|hilary|hubercie|ildefonsie|ireneuszu|jacku|jakubie|janie)
+expr imiemwo (january|jarku|juliuszu|józefie|kajetanie|kamilu|karolu|kazimierzu|klemensie|konradzie)
+expr imiemwo (korneliuszu|krystianie|krzysztofie|ksawery|lechu|leopoldzie|leszku|lucjanie|ludwiku)
+expr imiemwo (macieju|makary|maksymilianie|marcinie|marianie|mariuszu|marku|mateuszu|michale)
+expr imiemwo (miko³aju|napoleonie|norbercie|olgierdzie|onufry|oskarze|patryku|pawle|piotrze|piusie|protazy)
+expr imiemwo (rafale|remigiuszu|robercie|romanie|sebastianie|stefanie|sylwestrze|sylwku|szymonie)
+expr imiemwo (s³awomirze|tadeuszu|tomaszu|waldemarze|walery|wawrzyñcze|wicie|wiktorze|witoldzie)
+expr imiemwo (wojciechu|w³odzimierzu|xawery|zbyszku|zenobiuszu|zenonie|zygmuncie|³ukaszu)
