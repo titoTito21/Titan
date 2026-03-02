@@ -206,10 +206,10 @@ msgid "Connection Timeout"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:902
-#: src/titan_core/tce_system_net.py:1280
-#, fuzzy, python-brace-format
+#: src/titan_core/tce_system_net.py:1280 src/system/system_monitor.py:608
+#, python-brace-format
 msgid "Connected to {}"
-msgstr "Already connected to {}"
+msgstr "Connected to {}"
 
 #: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:662
 msgid "Success"
@@ -403,6 +403,11 @@ msgstr "Battery is fully charged"
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr "Volume: {}%"
+
+#: src/system/system_monitor.py:612
+#, python-brace-format
+msgid "Disconnected from {}"
+msgstr "Disconnected from {}"
 
 #: src/system/updater.py:13
 msgid "Program Update Available"

@@ -739,8 +739,19 @@ class TelegramClient:
                         break
             
             if not entity:
+                # Notify callbacks with empty history so UI doesn't stay stuck on "Loading"
+                history_data = {
+                    'type': 'chat_history',
+                    'with_user': with_user,
+                    'messages': []
+                }
+                for callback in self.message_callbacks:
+                    try:
+                        wx.CallAfter(callback, history_data)
+                    except:
+                        pass
                 return
-            
+
             # Get message history
             messages = []
             async for message in self.client.iter_messages(entity, limit=50):
@@ -752,25 +763,36 @@ class TelegramClient:
                     'timestamp': message.date.isoformat()
                 }
                 messages.append(msg_data)
-            
+
             # Reverse to get chronological order
             messages.reverse()
-            
+
             # Notify callbacks
             history_data = {
                 'type': 'chat_history',
                 'with_user': with_user,
                 'messages': messages
             }
-            
+
             for callback in self.message_callbacks:
                 try:
                     wx.CallAfter(callback, history_data)
                 except:
                     pass
-                    
+
         except Exception as e:
             print(f"Error getting chat history: {e}")
+            # Notify callbacks with empty history so UI doesn't stay stuck on "Loading"
+            history_data = {
+                'type': 'chat_history',
+                'with_user': with_user,
+                'messages': []
+            }
+            for callback in self.message_callbacks:
+                try:
+                    wx.CallAfter(callback, history_data)
+                except:
+                    pass
     
     def get_online_users(self):
         """Legacy method - redirects to get_contacts for backward compatibility"""
@@ -883,8 +905,19 @@ class TelegramClient:
                     break
             
             if not group_entity:
+                # Notify callbacks with empty history so UI doesn't stay stuck on "Loading"
+                history_data = {
+                    'type': 'group_chat_history',
+                    'group_name': group_name,
+                    'messages': []
+                }
+                for callback in self.message_callbacks:
+                    try:
+                        wx.CallAfter(callback, history_data)
+                    except:
+                        pass
                 return
-            
+
             # Get message history
             messages = []
             async for message in self.client.iter_messages(group_entity, limit=50):
@@ -895,25 +928,36 @@ class TelegramClient:
                     'timestamp': message.date.isoformat()
                 }
                 messages.append(msg_data)
-            
+
             # Sort messages chronologically
             messages.reverse()
-            
+
             # Send to callbacks
             history_data = {
                 'type': 'group_chat_history',
                 'group_name': group_name,
                 'messages': messages
             }
-            
+
             for callback in self.message_callbacks:
                 try:
                     wx.CallAfter(callback, history_data)
                 except:
                     pass
-                    
+
         except Exception as e:
             print(f"Error getting group chat history: {e}")
+            # Notify callbacks with empty history so UI doesn't stay stuck on "Loading"
+            history_data = {
+                'type': 'group_chat_history',
+                'group_name': group_name,
+                'messages': []
+            }
+            for callback in self.message_callbacks:
+                try:
+                    wx.CallAfter(callback, history_data)
+                except:
+                    pass
     
     def disconnect(self):
         """Disconnect from Telegram safely"""

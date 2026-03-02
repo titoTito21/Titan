@@ -22,6 +22,9 @@ msgstr ""
 msgid "Kategoria ustawień"
 msgstr ""
 
+msgid "Settings category"
+msgstr "Settings category"
+
 #: src/ui/settingsgui.py:230
 msgid "Save"
 msgstr ""

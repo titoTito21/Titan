@@ -556,6 +556,12 @@ msgstr ""
 msgid "Menu Start"
 msgstr ""
 
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "Refreshing messages..."
+msgstr "Refreshing messages..."
+
 #~ msgid "You are already logged in to Titan-Network"
 #~ msgstr ""
 
