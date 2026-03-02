@@ -77,7 +77,17 @@ class TitanTTSEngine(abc.ABC):
         ...
 
     def set_rate(self, rate):
-        """Set speech rate (-10 to +10). Override per engine."""
+        """Set speech rate. Called by StereoSpeech with TCE standard range.
+
+        Args:
+            rate (int): Rate from -10 (slowest) to +10 (fastest), 0 = default.
+
+        The engine must convert this to its native rate format internally.
+        Examples:
+            - milena4w: map to 0.5..1.0 (lower = faster)
+            - eSpeak:   map to 80..450 WPM (higher = faster)
+            - API-based: apply as speed multiplier or post-process audio
+        """
         pass
 
     def set_volume(self, volume):

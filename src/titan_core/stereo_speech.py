@@ -7,6 +7,7 @@ import sys
 import io
 import subprocess
 import platform
+import queue as _queue
 import importlib.util as _importlib_util
 import accessible_output3.outputs.auto
 from src.settings.settings import get_setting
@@ -752,6 +753,679 @@ def trim_silence(sound, silence_threshold=-50.0, chunk_size=50):
         return sound
 
 
+class _SAPIWorker:
+    """Dedicated thread for SAPI5 COM operations.
+
+    All SAPI5 calls run on a single thread to avoid cross-thread COM apartment
+    issues.  The worker owns its own SpVoice COM object created with proper
+    CoInitializeEx, and processes commands from a queue.
+
+    If direct COM fails (e.g. bitness mismatch between Python and voice
+    engines), automatically falls back to a subprocess bridge using
+    the opposite-bitness cscript.exe with a VBScript helper.
+    """
+
+    # Persistent VBScript helper: reads tab-delimited commands from stdin.
+    # Commands: SPEAK, STOP, VOICE, RATE, VOLUME, GENFILE, QUIT
+    # GENFILE responds with "DONE" on stdout when WAV is written.
+    _VBS_PERSISTENT = r'''On Error Resume Next
+Set voice = CreateObject("SAPI.SpVoice")
+If Err.Number <> 0 Then
+    WScript.StdOut.WriteLine "INIT_FAIL"
+    WScript.Quit 1
+End If
+Err.Clear
+WScript.StdOut.WriteLine "READY"
+Do While Not WScript.StdIn.AtEndOfStream
+    line = WScript.StdIn.ReadLine
+    If Len(line) = 0 Then
+        ' skip empty lines
+    Else
+        tabPos = InStr(line, vbTab)
+        If tabPos > 0 Then
+            cmd = Left(line, tabPos - 1)
+            arg = Mid(line, tabPos + 1)
+        Else
+            cmd = line
+            arg = ""
+        End If
+        Select Case cmd
+            Case "SPEAK"
+                voice.Speak arg, 3
+            Case "STOP"
+                voice.Speak "", 3
+            Case "VOICE"
+                Err.Clear
+                Set token = CreateObject("SAPI.SpObjectToken")
+                token.SetId arg
+                Set voice.Voice = token
+                If Err.Number <> 0 Then
+                    WScript.StdOut.WriteLine "VOICE_ERR"
+                    Err.Clear
+                Else
+                    WScript.StdOut.WriteLine "VOICE_OK"
+                End If
+            Case "RATE"
+                voice.Rate = CInt(arg)
+            Case "VOLUME"
+                voice.Volume = CInt(arg)
+            Case "GENFILE"
+                ' arg format: text<TAB>filepath<TAB>pitch_offset
+                parts = Split(arg, vbTab)
+                gText = parts(0)
+                gPath = parts(1)
+                gPitch = 0
+                If UBound(parts) >= 2 Then
+                    If parts(2) <> "" And parts(2) <> "0" Then gPitch = CInt(parts(2))
+                End If
+                If gPitch <> 0 Then
+                    gText = "<pitch absmiddle=""" & gPitch & """>" & gText & "</pitch>"
+                End If
+                Err.Clear
+                Set stream = CreateObject("SAPI.SpFileStream")
+                stream.Format.Type = 22
+                stream.Open gPath, 3
+                Set voice.AudioOutputStream = stream
+                voice.Speak gText, 0
+                stream.Close
+                Set voice.AudioOutputStream = Nothing
+                If Err.Number <> 0 Then
+                    WScript.StdOut.WriteLine "GENFILE_ERR"
+                    Err.Clear
+                Else
+                    WScript.StdOut.WriteLine "GENFILE_DONE"
+                End If
+            Case "QUIT"
+                Exit Do
+        End Select
+    End If
+Loop
+'''
+
+    # One-shot VBScript for bridge testing (used by _find_subprocess_bridge)
+    _VBS_TEST = (
+        'On Error Resume Next\n'
+        'Set v = CreateObject("SAPI.SpVoice")\n'
+        'If Err.Number = 0 Then\n'
+        '  Set ms = CreateObject("SAPI.SpMemoryStream")\n'
+        '  If Err.Number = 0 Then\n'
+        '    Set v.AudioOutputStream = ms\n'
+        '    v.Speak "test", 0\n'
+        '    If Err.Number = 0 Then\n'
+        '      WScript.Echo "OK"\n'
+        '    Else\n'
+        '      WScript.Echo "SPEAK_FAIL"\n'
+        '    End If\n'
+        '  Else\n'
+        '    WScript.Echo "STREAM_FAIL"\n'
+        '  End If\n'
+        'Else\n'
+        '  WScript.Echo "CREATE_FAIL"\n'
+        'End If\n'
+    )
+
+    def __init__(self):
+        self._cmd_queue = _queue.Queue()
+        self._sapi = None
+        self._ready = threading.Event()
+        self._cancel = threading.Event()
+        self._voice_id = None
+        self._rate = 0
+        self._volume = 100
+        self._error_count = 0
+        self._max_errors = 3
+        # Subprocess bridge state
+        self._use_subprocess = False
+        self._subprocess_cscript = None
+        self._subprocess_process = None
+        self._vbs_path = None
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="SAPIWorker")
+        self._thread.start()
+        self._ready.wait(5.0)
+
+    @property
+    def available(self):
+        return self._sapi is not None or self._use_subprocess
+
+    # ---- voice validation ----
+
+    def _test_voice(self, voice=None):
+        """Test if a SAPI voice works by speaking to a memory stream.
+
+        Args:
+            voice: SAPI voice token to test, or None to test current voice.
+
+        Returns:
+            True if the voice can speak without errors.
+        """
+        original_output = None
+        try:
+            if voice is not None:
+                self._sapi.Voice = voice
+            mem_stream = win32com.client.Dispatch("SAPI.SpMemoryStream")
+            original_output = self._sapi.AudioOutputStream
+            self._sapi.AudioOutputStream = mem_stream
+            self._sapi.Speak("test", 0)  # Synchronous speak to memory
+            return True
+        except Exception:
+            return False
+        finally:
+            if original_output is not None:
+                try:
+                    self._sapi.AudioOutputStream = original_output
+                except Exception:
+                    pass
+
+    def _find_working_voice(self):
+        """Try the default voice first, then iterate all voices to find one that works.
+
+        Returns:
+            True if a working voice was found, False otherwise.
+        """
+        # Test current default voice first
+        if self._test_voice():
+            return True
+
+        # Default voice failed - try all available voices
+        try:
+            voices = self._sapi.GetVoices()
+            count = voices.Count
+            print(f"[SAPIWorker] Default voice failed, trying {count} available voices...")
+            for i in range(count):
+                voice = voices.Item(i)
+                try:
+                    name = voice.GetDescription()
+                except Exception:
+                    name = f"voice {i}"
+                if self._test_voice(voice):
+                    print(f"[SAPIWorker] Found working voice: {name}")
+                    self._voice_id = voice.Id
+                    return True
+                else:
+                    print(f"[SAPIWorker] Voice not compatible: {name}")
+        except Exception as e:
+            print(f"[SAPIWorker] Error enumerating voices: {e}")
+
+        return False
+
+    # ---- subprocess bridge setup ----
+
+    def _find_subprocess_bridge(self):
+        """Find a working cscript.exe for cross-bitness SAPI subprocess bridge.
+
+        Tries opposite-bitness cscript first (to reach voices invisible to
+        the current Python process), then same-bitness as last resort.
+
+        Returns:
+            Path to working cscript.exe, or None.
+        """
+        import struct
+        windir = os.environ.get('WINDIR', r'C:\Windows')
+        python_bits = struct.calcsize('P') * 8
+
+        if python_bits == 64:
+            candidates = [
+                os.path.join(windir, 'SysWOW64', 'cscript.exe'),   # 32-bit
+                os.path.join(windir, 'System32', 'cscript.exe'),    # 64-bit
+            ]
+        else:
+            candidates = [
+                os.path.join(windir, 'Sysnative', 'cscript.exe'),  # 64-bit from WOW64
+                os.path.join(windir, 'System32', 'cscript.exe'),   # native
+            ]
+
+        vbs_test = os.path.join(tempfile.gettempdir(), 'tce_sapi_test.vbs')
+        try:
+            with open(vbs_test, 'w', encoding='ascii', errors='replace') as f:
+                f.write(self._VBS_TEST)
+        except Exception as e:
+            print(f"[SAPIWorker] Failed to create test VBS: {e}")
+            return None
+
+        for cscript in candidates:
+            if not os.path.exists(cscript):
+                continue
+            try:
+                result = subprocess.run(
+                    [cscript, '//nologo', '//T:10', vbs_test],
+                    capture_output=True, timeout=15,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                )
+                stdout = result.stdout.decode('utf-8', errors='replace')
+                if 'OK' in stdout:
+                    print(f"[SAPIWorker] Subprocess bridge works: {cscript}")
+                    try:
+                        os.remove(vbs_test)
+                    except Exception:
+                        pass
+                    return cscript
+                else:
+                    print(f"[SAPIWorker] Subprocess bridge test failed ({cscript}): {stdout.strip()}")
+            except Exception as e:
+                print(f"[SAPIWorker] Subprocess bridge error ({cscript}): {e}")
+
+        try:
+            os.remove(vbs_test)
+        except Exception:
+            pass
+        return None
+
+    def _start_persistent_bridge(self):
+        """Start the persistent cscript subprocess and wait for READY signal.
+
+        Returns:
+            True if the subprocess started and is ready, False otherwise.
+        """
+        import locale
+        encoding = locale.getpreferredencoding() or 'cp1250'
+        vbs_path = os.path.join(tempfile.gettempdir(), 'tce_sapi_bridge.vbs')
+        with open(vbs_path, 'w', encoding=encoding, errors='replace') as f:
+            f.write(self._VBS_PERSISTENT)
+        self._vbs_path = vbs_path
+
+        try:
+            self._subprocess_process = subprocess.Popen(
+                [self._subprocess_cscript, '//nologo', vbs_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+            )
+            # Wait for READY signal
+            ready_line = self._subprocess_process.stdout.readline()
+            ready_str = ready_line.decode('utf-8', errors='replace').strip()
+            if ready_str == 'READY':
+                print("[SAPIWorker] Persistent subprocess bridge ready")
+                return True
+            else:
+                print(f"[SAPIWorker] Bridge init failed: {ready_str}")
+                self._subprocess_stop()
+                return False
+        except Exception as e:
+            print(f"[SAPIWorker] Failed to start persistent bridge: {e}")
+            return False
+
+    def _bridge_send(self, cmd):
+        """Send a command to the persistent subprocess bridge.
+
+        Uses the system's ANSI code page (e.g. cp1250 for Polish) for encoding,
+        since VBScript's StdIn reads in the default ANSI encoding.
+        """
+        proc = self._subprocess_process
+        if not proc or proc.poll() is not None:
+            return
+        try:
+            import locale
+            encoding = locale.getpreferredencoding() or 'cp1250'
+            proc.stdin.write((cmd + '\n').encode(encoding, errors='replace'))
+            proc.stdin.flush()
+        except Exception as e:
+            print(f"[SAPIWorker] Bridge send error: {e}")
+
+    def _bridge_read_response(self, timeout=15.0):
+        """Read a response line from the persistent subprocess bridge."""
+        proc = self._subprocess_process
+        if not proc or proc.poll() is not None:
+            return None
+        import locale
+        encoding = locale.getpreferredencoding() or 'cp1250'
+        # Use a thread to read with timeout
+        result = [None]
+        def _read():
+            try:
+                result[0] = proc.stdout.readline().decode(encoding, errors='replace').strip()
+            except Exception:
+                pass
+        t = threading.Thread(target=_read, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        return result[0]
+
+    # ---- worker loop ----
+
+    def _run(self):
+        import pythoncom
+        try:
+            pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+        except Exception:
+            pass
+
+        try:
+            self._sapi = win32com.client.Dispatch("SAPI.SpVoice")
+        except Exception as e:
+            print(f"[SAPIWorker] Failed to create SpVoice: {e}")
+            # Direct COM failed entirely — try subprocess bridge
+            if self._setup_subprocess_bridge():
+                self._run_subprocess_loop()
+            else:
+                self._ready.set()
+            return
+
+        # Validate that SAPI can actually speak (catches bitness mismatches)
+        if not self._find_working_voice():
+            print("[SAPIWorker] No compatible voice via direct COM, trying subprocess bridge...")
+            self._sapi = None
+            if self._setup_subprocess_bridge():
+                self._run_subprocess_loop()
+            else:
+                print("[SAPIWorker] No SAPI5 bridge available - SAPI disabled")
+                self._ready.set()
+            return
+
+        self._ready.set()
+
+        while True:
+            try:
+                cmd = self._cmd_queue.get()
+                if cmd is None:
+                    break
+                self._process_cmd(cmd)
+                self._error_count = 0
+            except Exception as e:
+                self._error_count += 1
+                if self._error_count <= self._max_errors:
+                    print(f"[SAPIWorker] Error ({self._error_count}/{self._max_errors}): {e}")
+                if self._error_count >= self._max_errors:
+                    print(f"[SAPIWorker] SAPI5 disabled after {self._error_count} consecutive errors")
+                    self._sapi = None
+                    break
+
+    def _setup_subprocess_bridge(self):
+        """Try to set up the subprocess bridge. Returns True on success."""
+        cscript = self._find_subprocess_bridge()
+        if not cscript:
+            return False
+        self._subprocess_cscript = cscript
+        if not self._start_persistent_bridge():
+            return False
+        self._use_subprocess = True
+        # Apply current voice/rate/volume to the bridge
+        if self._voice_id:
+            self._bridge_send(f"VOICE\t{self._voice_id}")
+            self._bridge_read_response(timeout=5.0)
+        if self._rate != 0:
+            self._bridge_send(f"RATE\t{self._rate}")
+        if self._volume != 100:
+            self._bridge_send(f"VOLUME\t{self._volume}")
+        print(f"[SAPIWorker] Using subprocess bridge: {cscript}")
+        return True
+
+    def _run_subprocess_loop(self):
+        """Command loop for subprocess bridge mode."""
+        self._ready.set()
+        while True:
+            try:
+                cmd = self._cmd_queue.get()
+                if cmd is None:
+                    self._subprocess_stop()
+                    break
+                self._process_cmd_subprocess(cmd)
+            except Exception as e:
+                print(f"[SAPIWorker] Subprocess error: {e}")
+
+    # ---- direct COM commands ----
+
+    def _process_cmd(self, cmd):
+        cmd_type = cmd[0]
+        if cmd_type == 'speak':
+            self._sapi.Speak(cmd[1], cmd[2])
+        elif cmd_type == 'stop':
+            self._sapi.Speak("", 3)  # SVSFlagsAsync | SVSFPurgeBeforeSpeak
+        elif cmd_type == 'set_voice':
+            try:
+                token = win32com.client.Dispatch("SAPI.SpObjectToken")
+                token.SetId(cmd[1])
+                # Save previous voice in case the new one is incompatible
+                prev_voice = self._sapi.Voice
+                prev_id = self._voice_id
+                self._sapi.Voice = token
+                # Validate: test-speak to memory stream
+                if self._test_voice():
+                    self._voice_id = cmd[1]
+                else:
+                    # Voice engine incompatible (e.g. x86 voice on x64 Python)
+                    # Try subprocess bridge for this voice
+                    print(f"[SAPIWorker] Voice incompatible via direct COM, trying subprocess bridge...")
+                    self._sapi.Voice = prev_voice
+                    self._voice_id = prev_id
+                    if not self._use_subprocess:
+                        if self._setup_subprocess_bridge():
+                            # Set the voice in the bridge subprocess
+                            self._voice_id = cmd[1]
+                            self._bridge_send(f"VOICE\t{cmd[1]}")
+                            resp = self._bridge_read_response(timeout=5.0)
+                            if resp != 'VOICE_OK':
+                                print(f"[SAPIWorker] Bridge voice set response: {resp}")
+                            self._switch_to_subprocess()
+                            return
+                        else:
+                            print(f"[SAPIWorker] set_voice failed: no bridge available, keeping previous voice")
+                    else:
+                        self._voice_id = cmd[1]
+            except Exception as e:
+                print(f"[SAPIWorker] set_voice error: {e}")
+        elif cmd_type == 'set_rate':
+            self._sapi.Rate = cmd[1]
+            self._rate = cmd[1]
+        elif cmd_type == 'set_volume':
+            self._sapi.Volume = cmd[1]
+            self._volume = cmd[1]
+        elif cmd_type == 'sync':
+            func, event, result = cmd[1], cmd[2], cmd[3]
+            try:
+                result['value'] = func(self._sapi)
+            except Exception as e:
+                result['error'] = e
+            event.set()
+        elif cmd_type == 'generate_file':
+            text, temp_path, pitch_offset, event, result = (
+                cmd[1], cmd[2], cmd[3], cmd[4], cmd[5])
+            try:
+                result['value'] = self._do_generate_file(
+                    text, temp_path, pitch_offset)
+            except Exception as e:
+                result['error'] = e
+            event.set()
+
+    def _switch_to_subprocess(self):
+        """Switch from direct COM to subprocess bridge mid-operation.
+
+        Called from the command loop when a voice change requires
+        cross-bitness support. Drains remaining commands through the
+        subprocess loop.
+        """
+        self._sapi = None
+        print("[SAPIWorker] Switched to subprocess bridge for cross-bitness voice")
+        self._run_subprocess_loop()
+
+    # ---- subprocess bridge commands ----
+
+    def _process_cmd_subprocess(self, cmd):
+        """Process commands using the persistent cscript subprocess bridge.
+
+        The subprocess stays running, receiving commands via stdin.
+        This eliminates process-creation latency.
+        """
+        cmd_type = cmd[0]
+        if cmd_type == 'speak':
+            # Replace tabs/newlines in text to avoid protocol issues
+            text = cmd[1].replace('\t', ' ').replace('\n', ' ').replace('\r', '')
+            self._bridge_send(f"SPEAK\t{text}")
+        elif cmd_type == 'stop':
+            self._bridge_send("STOP")
+        elif cmd_type == 'set_voice':
+            self._bridge_send(f"VOICE\t{cmd[1]}")
+            resp = self._bridge_read_response(timeout=5.0)
+            if resp == 'VOICE_OK':
+                self._voice_id = cmd[1]
+            else:
+                print(f"[SAPIWorker] Subprocess set_voice failed: {resp}")
+        elif cmd_type == 'set_rate':
+            self._rate = cmd[1]
+            self._bridge_send(f"RATE\t{cmd[1]}")
+        elif cmd_type == 'set_volume':
+            self._volume = cmd[1]
+            self._bridge_send(f"VOLUME\t{cmd[1]}")
+        elif cmd_type == 'sync':
+            # sync not supported in subprocess mode
+            _, event, result = cmd[1], cmd[2], cmd[3]
+            result['error'] = RuntimeError("sync not supported in subprocess mode")
+            event.set()
+        elif cmd_type == 'generate_file':
+            text, temp_path, pitch_offset, event, result = (
+                cmd[1], cmd[2], cmd[3], cmd[4], cmd[5])
+            try:
+                result['value'] = self._do_generate_file_subprocess(
+                    text, temp_path, pitch_offset)
+            except Exception as e:
+                result['error'] = e
+            event.set()
+
+    def _subprocess_stop(self):
+        """Gracefully shut down the persistent cscript subprocess."""
+        proc = self._subprocess_process
+        if proc and proc.poll() is None:
+            try:
+                proc.stdin.write(b"QUIT\n")
+                proc.stdin.flush()
+                proc.wait(timeout=3)
+            except Exception:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+        self._subprocess_process = None
+
+    def _do_generate_file_subprocess(self, text, temp_path, pitch_offset):
+        """Generate speech to WAV file via persistent subprocess bridge.
+
+        Sends GENFILE command and waits for GENFILE_DONE response.
+        Supports pitch offset for tone control via SSML.
+        """
+        text_clean = text.replace('\t', ' ').replace('\n', ' ').replace('\r', '')
+        self._bridge_send(f"GENFILE\t{text_clean}\t{temp_path}\t{pitch_offset}")
+        resp = self._bridge_read_response(timeout=15.0)
+        if resp == 'GENFILE_DONE' and os.path.exists(temp_path) and os.path.getsize(temp_path) > 100:
+            return temp_path
+        if resp and resp != 'GENFILE_DONE':
+            print(f"[SAPIWorker] generate_file subprocess response: {resp}")
+        return None
+
+    # ---- file generation (runs on worker thread) ----
+
+    def _do_generate_file(self, text, temp_path, pitch_offset):
+        """Generate SAPI5 speech to WAV file with cancellation support."""
+        if pitch_offset != 0:
+            pitch_value = max(-10, min(10, pitch_offset))
+            ssml_text = f'<pitch absmiddle="{pitch_value}">{text}</pitch>'
+        else:
+            ssml_text = text
+
+        file_stream = win32com.client.Dispatch("SAPI.SpFileStream")
+        try:
+            file_stream.Format.Type = 22  # SAFT22kHz16BitMono
+        except Exception:
+            pass
+
+        file_stream.Open(temp_path, 3)  # SSFMCreateForWrite
+        original_output = self._sapi.AudioOutputStream
+        self._sapi.AudioOutputStream = file_stream
+
+        try:
+            self._cancel.clear()
+            self._sapi.Speak(ssml_text, 1)  # SVSFlagsAsync
+            # Poll for completion, checking cancel flag
+            while not self._sapi.WaitUntilDone(50):
+                if self._cancel.is_set():
+                    self._sapi.Speak("", 3)  # purge
+                    return None
+        finally:
+            try:
+                file_stream.Close()
+            except Exception:
+                pass
+            try:
+                self._sapi.AudioOutputStream = original_output
+            except Exception:
+                pass
+
+        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 100:
+            return temp_path
+        return None
+
+    # ---- public API (called from any thread) ----
+
+    def speak(self, text, flags=3):
+        """Non-blocking async speak.  Clears pending speak commands first."""
+        if not self.available:
+            return
+        self._clear_pending()
+        self._cancel.clear()
+        self._cmd_queue.put(('speak', text, flags))
+
+    def stop(self):
+        """Stop current and pending speech immediately."""
+        if not self.available:
+            return
+        self._cancel.set()
+        self._clear_pending()
+        self._cmd_queue.put(('stop',))
+
+    def set_voice(self, voice_id):
+        self._cmd_queue.put(('set_voice', voice_id))
+
+    def set_rate(self, rate):
+        self._cmd_queue.put(('set_rate', rate))
+
+    def set_volume(self, volume):
+        self._cmd_queue.put(('set_volume', volume))
+
+    def generate_to_file(self, text, temp_path, pitch_offset=0, timeout=15.0):
+        """Generate speech to WAV file (blocking).  Returns path or None."""
+        if not self.available:
+            return None
+        event = threading.Event()
+        result = {}
+        self._cmd_queue.put((
+            'generate_file', text, temp_path, pitch_offset, event, result))
+        if not event.wait(timeout):
+            self._cancel.set()
+            return None
+        if 'error' in result:
+            print(f"[SAPIWorker] File generation error: {result['error']}")
+            return None
+        return result.get('value')
+
+    def call_sync(self, func, timeout=10.0):
+        """Run func(sapi) on the worker thread and wait for result."""
+        event = threading.Event()
+        result = {}
+        self._cmd_queue.put(('sync', func, event, result))
+        if not event.wait(timeout):
+            return None
+        if 'error' in result:
+            raise result['error']
+        return result.get('value')
+
+    def _clear_pending(self):
+        """Remove pending speak/stop commands from queue (keep others)."""
+        keep = []
+        while True:
+            try:
+                cmd = self._cmd_queue.get_nowait()
+                if cmd[0] not in ('speak', 'stop'):
+                    keep.append(cmd)
+            except _queue.Empty:
+                break
+        for cmd in keep:
+            self._cmd_queue.put(cmd)
+
+
 class StereoSpeech:
     """
     Klasa do stereo pozycjonowania mowy SAPI5 z kontrolą wysokości głosu.
@@ -769,6 +1443,7 @@ class StereoSpeech:
     def __init__(self):
         self.sapi = None
         self.current_voice = None
+        self._sapi_voice_cache = None
         self.default_rate = 0
         self.default_volume = 100
         self.default_pitch = 0
@@ -841,12 +1516,25 @@ class StereoSpeech:
             self.engine = 'none'
 
         # Initialize SAPI5 on Windows
+        self._sapi_worker = None
         if IS_WINDOWS:
             try:
                 self._init_sapi()
             except Exception as e:
                 print(f"[StereoSpeech] SAPI5 init error: {e}")
                 self.sapi = None
+            # Create dedicated SAPI worker thread (avoids COM apartment issues)
+            if SAPI_AVAILABLE:
+                try:
+                    self._sapi_worker = _SAPIWorker()
+                    if self._sapi_worker.available:
+                        print("[StereoSpeech] SAPI5 worker thread ready")
+                    else:
+                        print("[StereoSpeech] SAPI5 worker failed to init")
+                        self._sapi_worker = None
+                except Exception as e:
+                    print(f"[StereoSpeech] SAPI5 worker error: {e}")
+                    self._sapi_worker = None
 
         # Register platform engines in registry
         if self._registry:
@@ -861,6 +1549,61 @@ class StereoSpeech:
             if IS_LINUX:
                 self._registry.register_platform_engine('spd', 'Speech Dispatcher',
                                                          SPD_AVAILABLE)
+
+        # Load saved user settings (engine, rate, volume, engine configs)
+        self._load_saved_settings()
+
+    def _load_saved_settings(self):
+        """Load saved stereo speech settings from bg5settings.ini at startup."""
+        try:
+            from src.settings.settings import load_settings
+            settings = load_settings()
+            stereo_settings = settings.get('stereo_speech', {})
+
+            # 1. Engine
+            engine = stereo_settings.get('engine', '')
+            if engine:
+                self.set_engine(engine)
+
+            # 2. Engine-specific configs (API keys, model, etc.)
+            for key, value in stereo_settings.items():
+                if key.startswith('engine.'):
+                    parts = key.split('.', 2)
+                    if len(parts) == 3:
+                        self.set_engine_config(parts[1], parts[2], value)
+
+            # 3. Rate (-10 to +10)
+            try:
+                rate = int(stereo_settings.get('rate', '0'))
+                if rate != 0:
+                    self.set_rate(rate)
+            except (ValueError, TypeError):
+                pass
+
+            # 4. Volume (0-100)
+            try:
+                volume = int(stereo_settings.get('volume', '100'))
+                if volume != 100:
+                    self.set_volume(volume)
+            except (ValueError, TypeError):
+                pass
+
+            # 5. Voice
+            voice_id = stereo_settings.get('voice', '')
+            if voice_id:
+                try:
+                    voices = self.get_available_voices()
+                    for i, v in enumerate(voices):
+                        vid = v.get('id', v) if isinstance(v, dict) else v
+                        if vid == voice_id or str(v) == voice_id:
+                            self.set_voice(i)
+                            break
+                except Exception:
+                    pass
+
+            print(f"[StereoSpeech] Loaded saved settings: engine={self.engine}, rate={stereo_settings.get('rate', '0')}")
+        except Exception as e:
+            print(f"[StereoSpeech] Could not load saved settings: {e}")
 
     def __del__(self):
         """Cleanup COM objects on destruction safely."""
@@ -1484,6 +2227,12 @@ class StereoSpeech:
                     elif self.engine == 'spd':
                         if self._speak_native_spd(text):
                             return
+                    elif self.engine == 'sapi5' and self._sapi_worker:
+                        try:
+                            self._sapi_worker.speak(text, 3)
+                            return
+                        except Exception as e:
+                            print(f"[StereoSpeech] SAPI5 direct error: {e}")
 
                 # Check if pydub is available for audio processing (needed for stereo/trim)
                 if not PYDUB_AVAILABLE:
@@ -1550,13 +2299,69 @@ class StereoSpeech:
                     # use direct speech with pitch support (no stereo possible)
                     self._speak_native_spd(text, pitch_offset)
                     return
-                elif self.engine == 'sapi5' and self.sapi:
-                    temp_file = self._generate_tts_to_file(text, pitch_offset)
-                    if not self.is_speaking:
-                        return  # Interrupted during generation
+                elif self.engine == 'sapi5' and self._sapi_worker:
+                    # Release lock during SAPI5 generation (can take 200-500ms)
+                    if lock_acquired:
+                        self.speech_lock.release()
+                        lock_acquired = False
+
+                    # Generate via worker thread (proper COM apartment)
+                    temp_wav = tempfile.NamedTemporaryFile(
+                        suffix='.wav', delete=False)
+                    temp_wav_path = os.path.abspath(temp_wav.name)
+                    temp_wav.close()
+                    temp_file = self._sapi_worker.generate_to_file(
+                        text, temp_wav_path, pitch_offset)
+                    if not temp_file and os.path.exists(temp_wav_path):
+                        try:
+                            os.unlink(temp_wav_path)
+                        except Exception:
+                            pass
+
+                    # Check if a newer message arrived during generation
+                    if _seq is not None and _seq != self._speak_seq:
+                        if temp_file:
+                            try:
+                                os.unlink(temp_file)
+                            except Exception:
+                                pass
+                        return
+
+                    # Re-acquire lock for playback
+                    lock_acquired = self.speech_lock.acquire(timeout=2.0)
+                    if not lock_acquired:
+                        if temp_file:
+                            try:
+                                os.unlink(temp_file)
+                            except Exception:
+                                pass
+                        # Try direct SAPI5 before ao3 fallback (prevents double speech)
+                        try:
+                            self._sapi_worker.speak(text, 3)
+                        except Exception:
+                            if use_fallback:
+                                self.fallback_speaker.speak(text)
+                        return
+
+                    # Check freshness again after lock acquisition
+                    if _seq is not None and _seq != self._speak_seq:
+                        if temp_file:
+                            try:
+                                os.unlink(temp_file)
+                            except Exception:
+                                pass
+                        return
+
+                    self.stop()
+                    self.is_speaking = True
+
                     if not temp_file:
-                        if use_fallback:
-                            self.fallback_speaker.speak(text)
+                        # Generation failed - use direct SAPI5 (not ao3 - prevents double speech)
+                        try:
+                            self._sapi_worker.speak(text, 3)
+                        except Exception:
+                            if use_fallback:
+                                self.fallback_speaker.speak(text)
                         return
                     audio = AudioSegment.from_wav(temp_file)
                 elif self.engine == 'say':
@@ -1763,11 +2568,11 @@ class StereoSpeech:
                 finally:
                     self.current_tts_channel = None
 
-            # Stop SAPI5 (Windows)
-            if IS_WINDOWS and hasattr(self, 'sapi') and self.sapi:
+            # Stop SAPI5 via worker thread (proper COM apartment)
+            if IS_WINDOWS and hasattr(self, '_sapi_worker') and self._sapi_worker:
                 try:
-                    self.sapi.Speak("", 1)  # 1 = async, empty = stop current
-                except (AttributeError, OSError) as e:
+                    self._sapi_worker.stop()
+                except Exception as e:
                     print(f"[StereoSpeech] Error stopping SAPI: {e}")
 
             # Stop eSpeak EXE generation subprocess (if running)
@@ -1889,7 +2694,10 @@ class StereoSpeech:
         """
         try:
             if self.engine == 'sapi5' and self.sapi:
-                self.sapi.Rate = max(-10, min(10, rate))
+                clamped_rate = max(-10, min(10, rate))
+                self.sapi.Rate = clamped_rate
+                if self._sapi_worker:
+                    self._sapi_worker.set_rate(clamped_rate)
             elif self.engine in ('espeak', 'espeak_dll'):
                 # Map -10..10 to 80..450 wpm
                 self.espeak_rate = int(175 + (rate * 27.5))
@@ -1923,8 +2731,11 @@ class StereoSpeech:
         """
         try:
             if self.engine == 'sapi5' and self.sapi:
-                self.sapi.Volume = max(0, min(100, volume))
+                clamped_vol = max(0, min(100, volume))
+                self.sapi.Volume = clamped_vol
                 self.default_volume = self.sapi.Volume
+                if self._sapi_worker:
+                    self._sapi_worker.set_volume(clamped_vol)
             elif self.engine in ('espeak', 'espeak_dll'):
                 # Map 0-100 to 0-200 for eSpeak
                 self.espeak_volume = int((volume / 100.0) * 200)
@@ -2179,6 +2990,61 @@ class StereoSpeech:
             print(f"[StereoSpeech] Error getting spd-say voices: {e}")
             return []
 
+    def _get_all_sapi_voices(self):
+        """Get ALL SAPI5 voices including 32-bit voices on 64-bit Windows.
+
+        Uses SpObjectTokenCategory to enumerate voices from both:
+        - HKLM\\SOFTWARE\\Microsoft\\Speech\\Voices (native bitness)
+        - HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Speech\\Voices (32-bit on 64-bit)
+
+        Returns:
+            list: List of dicts with 'token', 'name', 'id', and optional 'is_32bit'
+        """
+        voices = []
+        seen_ids = set()
+
+        # Native voices (already returned by GetVoices)
+        try:
+            tokens = self.sapi.GetVoices()
+            for i in range(tokens.Count):
+                token = tokens.Item(i)
+                voice_id = token.Id
+                voices.append({'token': token, 'name': token.GetDescription(), 'id': voice_id})
+                seen_ids.add(voice_id)
+        except Exception as e:
+            print(f"[StereoSpeech] Error enumerating native SAPI voices: {e}")
+
+        # 32-bit voices via registry (WOW6432Node) - only on 64-bit Python
+        if sys.maxsize > 2**32:
+            try:
+                import winreg
+                wow_path = r"SOFTWARE\WOW6432Node\Microsoft\Speech\Voices\Tokens"
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, wow_path) as key:
+                    i = 0
+                    while True:
+                        try:
+                            subkey_name = winreg.EnumKey(key, i)
+                            token_path = f"HKEY_LOCAL_MACHINE\\{wow_path}\\{subkey_name}"
+
+                            # Create SpObjectToken pointing to WOW6432Node voice
+                            token = win32com.client.Dispatch("SAPI.SpObjectToken")
+                            token.SetId(token_path)
+                            voice_id = token.Id
+
+                            if voice_id not in seen_ids:
+                                name = token.GetDescription()
+                                voices.append({'token': token, 'name': name, 'id': voice_id, 'is_32bit': True})
+                                seen_ids.add(voice_id)
+                            i += 1
+                        except OSError:
+                            break
+            except Exception as e:
+                print(f"[StereoSpeech] Note: Could not enumerate 32-bit voices: {e}")
+
+        # Cache for set_voice()
+        self._sapi_voice_cache = voices
+        return voices
+
     def get_available_voices(self):
         """
         Returns list of available voices for the current engine.
@@ -2188,12 +3054,14 @@ class StereoSpeech:
         """
         try:
             if self.engine == 'sapi5' and self.sapi:
-                voices = []
-                voice_tokens = self.sapi.GetVoices()
-                for i in range(voice_tokens.Count):
-                    voice = voice_tokens.Item(i)
-                    voices.append(voice.GetDescription())
-                return voices
+                all_voices = self._get_all_sapi_voices()
+                result = []
+                for v in all_voices:
+                    name = v['name']
+                    if v.get('is_32bit'):
+                        name += " (32-bit)"
+                    result.append(name)
+                return result
             elif self.engine in ('espeak', 'espeak_dll'):
                 return self.get_espeak_voices()
             elif self.engine == 'say':
@@ -2221,10 +3089,18 @@ class StereoSpeech:
         """
         try:
             if self.engine == 'sapi5' and self.sapi:
-                voice_tokens = self.sapi.GetVoices()
-                if 0 <= voice_index < voice_tokens.Count:
-                    self.sapi.Voice = voice_tokens.Item(voice_index)
+                # Use cached voice list from _get_all_sapi_voices (includes 32-bit)
+                voices = getattr(self, '_sapi_voice_cache', None)
+                if not voices:
+                    voices = self._get_all_sapi_voices()
+                if 0 <= voice_index < len(voices):
+                    voice_entry = voices[voice_index]
+                    self.sapi.Voice = voice_entry['token']
                     self.current_voice = self.sapi.Voice
+                    # Sync voice to worker thread by token ID
+                    if self._sapi_worker:
+                        self._sapi_worker.set_voice(voice_entry['id'])
+                    print(f"[StereoSpeech] SAPI5 voice set to: {voice_entry['name']}")
             elif self.engine in ('espeak', 'espeak_dll'):
                 voices = self.get_espeak_voices()
                 if 0 <= voice_index < len(voices):

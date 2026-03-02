@@ -203,7 +203,7 @@ class SettingsFrame(wx.Frame):
         left_panel = wx.Panel(panel)
         left_vbox = wx.BoxSizer(wx.VERTICAL)
 
-        category_list_label = wx.StaticText(left_panel, label=_("Kategoria ustawień"))
+        category_list_label = wx.StaticText(left_panel, label=_("Settings category"))
         left_vbox.Add(category_list_label, flag=wx.ALL, border=5)
 
         self.category_list = wx.ListBox(left_panel)
@@ -417,8 +417,8 @@ class SettingsFrame(wx.Frame):
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.theme_volume_slider = wx.Slider(panel, value=100, minValue=0, maxValue=100,
-                                              style=wx.SL_HORIZONTAL | wx.SL_LABELS)
-        self.theme_volume_slider.SetName(volume_label_text)
+                                              style=wx.SL_HORIZONTAL)
+        self.theme_volume_slider.SetLabel(volume_label_text)
         self.theme_volume_slider.Bind(wx.EVT_SLIDER, self.OnThemeVolumeChange)
         self.theme_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.theme_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
@@ -593,8 +593,8 @@ class SettingsFrame(wx.Frame):
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.volume_slider = wx.Slider(panel, value=50, minValue=0, maxValue=100,
-                                       style=wx.SL_HORIZONTAL | wx.SL_LABELS)
-        self.volume_slider.SetName(volume_label_text)
+                                       style=wx.SL_HORIZONTAL)
+        self.volume_slider.SetLabel(volume_label_text)
         self.volume_slider.Bind(wx.EVT_SLIDER, self.OnVolumeChange)
         self.volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
@@ -660,8 +660,8 @@ class SettingsFrame(wx.Frame):
         vbox.Add(rate_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.rate_slider = wx.Slider(panel, value=0, minValue=-10, maxValue=10,
-                                     style=wx.SL_HORIZONTAL | wx.SL_LABELS)
-        self.rate_slider.SetName(_("Speech rate"))
+                                     style=wx.SL_HORIZONTAL)
+        self.rate_slider.SetLabel(_("Speech rate"))
         self.rate_slider.Bind(wx.EVT_SLIDER, self.OnRateChanged)
         self.rate_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.rate_slider, flag=wx.LEFT | wx.EXPAND, border=10)
@@ -671,8 +671,8 @@ class SettingsFrame(wx.Frame):
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.speech_volume_slider = wx.Slider(panel, value=100, minValue=0, maxValue=100,
-                                              style=wx.SL_HORIZONTAL | wx.SL_LABELS)
-        self.speech_volume_slider.SetName(_("Speech volume"))
+                                              style=wx.SL_HORIZONTAL)
+        self.speech_volume_slider.SetLabel(_("Speech volume"))
         self.speech_volume_slider.Bind(wx.EVT_SLIDER, self.OnSpeechVolumeChanged)
         self.speech_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.speech_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
@@ -1189,7 +1189,8 @@ class SettingsFrame(wx.Frame):
                     max_val = field.get('max', 100)
                     ctrl = wx.Slider(panel, value=int(field_default or min_val),
                                      minValue=min_val, maxValue=max_val,
-                                     style=wx.SL_HORIZONTAL | wx.SL_LABELS)
+                                     style=wx.SL_HORIZONTAL)
+                    ctrl.SetLabel(field_label)
                     ctrl.Bind(wx.EVT_SLIDER, self._on_engine_config_changed)
                 elif field_type == 'checkbox':
                     ctrl = wx.CheckBox(panel, label='')

@@ -215,7 +215,11 @@ class GlobalHotKeys(threading.Thread):
     # ------------------------------------------------------------------
 
     def stop(self):
-        """Stop the hotkey listener safely"""
+        """Stop the hotkey listener safely.
+
+        Only sets the stop event - actual cleanup happens in run()'s finally block.
+        Use join() after stop() to wait for cleanup to complete.
+        """
         try:
             self._stop_event.set()
             if self._pynput_listener:
@@ -225,8 +229,6 @@ class GlobalHotKeys(threading.Thread):
                     pass
         except Exception as e:
             print(f"Error in GlobalHotKeys.stop(): {e}")
-        finally:
-            self._cleanup()
 
     def _cleanup(self):
         """Clean up resources"""
@@ -237,11 +239,112 @@ class GlobalHotKeys(threading.Thread):
             for kb_hotkey, handle in self.registered_hotkeys:
                 try:
                     keyboard.remove_hotkey(handle)
-                except Exception as e:
-                    print(f"Error removing hotkey {kb_hotkey}: {e}")
+                except Exception:
+                    pass
             self.registered_hotkeys.clear()
         except Exception as e:
             print(f"Error in GlobalHotKeys._cleanup: {e}")
+
+class PersistentTildeHotkey:
+    """Register backtick/tilde as a system hotkey using Windows RegisterHotKey API.
+
+    Unlike keyboard hooks (used by the keyboard library), RegisterHotKey is
+    processed at the system level BEFORE the hook chain. Screen readers like
+    JAWS cannot interfere with it, even if they reinstall their own hooks.
+
+    Falls back to the keyboard library on non-Windows platforms.
+    """
+
+    VK_OEM_3 = 0xC0    # Backtick/tilde key
+    HOTKEY_ID_TILDE = 0x7001
+    WM_HOTKEY = 0x0312
+    WM_QUIT = 0x0012
+
+    def __init__(self, on_tilde):
+        self.on_tilde = on_tilde
+        self._thread = None
+        self._thread_id = None
+        self._stop_event = threading.Event()
+        self._fallback_hotkeys = None  # For non-Windows platforms
+
+    def start(self):
+        self._stop_event.clear()
+        if IS_WINDOWS:
+            self._thread = threading.Thread(target=self._run_windows, daemon=True)
+            self._thread.start()
+        else:
+            # Fallback to GlobalHotKeys on macOS/Linux
+            self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
+            self._fallback_hotkeys.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if IS_WINDOWS:
+            if self._thread_id:
+                try:
+                    import ctypes
+                    ctypes.windll.user32.PostThreadMessageW(
+                        self._thread_id, self.WM_QUIT, 0, 0
+                    )
+                except Exception as e:
+                    print(f"Error posting quit message to tilde thread: {e}")
+            if self._thread:
+                self._thread.join(timeout=2.0)
+                self._thread = None
+        else:
+            if self._fallback_hotkeys:
+                self._fallback_hotkeys.stop()
+                self._fallback_hotkeys.join(timeout=2.0)
+                self._fallback_hotkeys = None
+
+    def _run_windows(self):
+        """Windows implementation using RegisterHotKey."""
+        import ctypes
+        from ctypes import wintypes
+
+        try:
+            self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+
+            if not ctypes.windll.user32.RegisterHotKey(
+                None, self.HOTKEY_ID_TILDE, 0, self.VK_OEM_3
+            ):
+                err = ctypes.GetLastError()
+                print(f"RegisterHotKey failed for tilde (error {err}), falling back to keyboard library")
+                self._run_fallback()
+                return
+
+            print("Tilde registered via RegisterHotKey (system-level, JAWS-safe)")
+            msg = wintypes.MSG()
+
+            while ctypes.windll.user32.GetMessageW(
+                ctypes.byref(msg), None, 0, 0
+            ) > 0:
+                if msg.message == self.WM_HOTKEY and msg.wParam == self.HOTKEY_ID_TILDE:
+                    threading.Thread(target=self.on_tilde, daemon=True).start()
+                if self._stop_event.is_set():
+                    break
+
+        except Exception as e:
+            print(f"Error in PersistentTildeHotkey: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            try:
+                import ctypes
+                ctypes.windll.user32.UnregisterHotKey(None, self.HOTKEY_ID_TILDE)
+            except Exception:
+                pass
+            self._thread_id = None
+
+    def _run_fallback(self):
+        """Fallback to keyboard library if RegisterHotKey fails."""
+        self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
+        self._fallback_hotkeys.start()
+        self._stop_event.wait()
+        self._fallback_hotkeys.stop()
+        self._fallback_hotkeys.join(timeout=2.0)
+        self._fallback_hotkeys = None
+
 
 class BaseWidget:
     def __init__(self, speak_func):
@@ -589,7 +692,7 @@ class VolumePanel(BaseWidget):
             return False
     
     def get_current_element(self):
-        from settings import get_setting
+        from src.settings.settings import get_setting
         announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
         
         if self.current_index == 0:
@@ -616,26 +719,37 @@ class VolumePanel(BaseWidget):
                 self.current_index = 0
                 return (True, 0, 2)
         elif direction == "right":
-            # Move to mute button  
+            # Move to mute button
             if self.current_index != 1:
                 self.current_index = 1
                 return (True, 1, 2)
         elif direction == "up":
-            if self.current_index == 0:  # Only work on volume slider
-                # Volume slider - increase by 5%
+            # Volume slider - increase by 5%
+            if self.current_index == 1:
+                # Switch to slider first when on mute button
+                self.current_index = 0
+            if self.volume_level < 100:
                 new_volume = min(100, self.volume_level + 5)
                 if self.set_volume(new_volume):
-                    return (True, 0, 1)
+                    return (True, 0, 2)
         elif direction == "down":
-            if self.current_index == 0:  # Only work on volume slider
-                # Volume slider - decrease by 5%
+            # Volume slider - decrease by 5%
+            if self.current_index == 1:
+                # Switch to slider first when on mute button
+                self.current_index = 0
+            if self.volume_level > 0:
                 new_volume = max(0, self.volume_level - 5)
                 if self.set_volume(new_volume):
-                    return (True, 0, 1)
-        
+                    return (True, 0, 2)
+
         return (False, self.current_index, 2)
     
     def activate_current_element(self):
+        if self.current_index == 0:
+            # On slider - announce current volume
+            self.volume_level = self.get_current_volume()
+            self.speak(_("Volume: {}%").format(self.volume_level))
+            return
         if self.current_index == 1:
             # Toggle mute
             if self.toggle_mute():
@@ -658,7 +772,9 @@ class InvisibleUI:
         self.lock = threading.RLock()  # Use RLock to prevent deadlocks
         self.refresh_thread = None
         self.stop_event = threading.Event()
-        self.hotkey_thread = None  # For keyboard library (Titan UI simple keys)
+        self.hotkey_thread = None  # For navigation keys (dynamic, toggled with Titan UI)
+        self._tilde_hotkeys = None  # For tilde key (persistent, lives entire IUI session)
+        self._hotkey_lock = threading.Lock()  # Prevent concurrent hotkey updates
         self.in_widget_mode = False
         self.active_widget = None
         self.active_widget_name = None
@@ -2336,7 +2452,7 @@ class InvisibleUI:
     def show_chat_history_view(self, chat_name, is_group=False):
         """Show chat history interface"""
         # Create history elements - will be populated by callback
-        history_elements = [_("Loading messages..."), _("Send message"), _("Back")]
+        history_elements = [_("Loading messages..."), _("Refresh"), _("Send message"), _("Back")]
         
         chat_type = _("Group") if is_group else _("Contact")
         platform_name = _("Telegram") if self.titan_im_mode == 'telegram' else _("Messenger")
@@ -2369,6 +2485,20 @@ class InvisibleUI:
             return
         elif item_name == _("Loading messages..."):
             self.speak(_("Messages are loading, please wait"))
+            return
+        elif item_name == _("Refresh"):
+            # Reload chat history
+            category = self.categories[self.current_category_index]
+            chat_name = category.get('chat_name', '')
+            is_group = category.get('is_group', False)
+            if chat_name:
+                self.speak(_("Refreshing messages..."))
+                category['elements'] = [_("Loading messages..."), _("Refresh"), _("Send message"), _("Back")]
+                self.current_element_index = 0
+                if is_group:
+                    self.load_group_chat_history(chat_name)
+                else:
+                    self.load_chat_history(chat_name)
             return
         
         # Store current selected message
@@ -2578,9 +2708,9 @@ class InvisibleUI:
             category = self.categories[self.current_category_index]
             
             # Replace loading message with actual history
-            new_elements = formatted_messages + [_("Send message"), _("Back")]
+            new_elements = formatted_messages + [_("Refresh"), _("Send message"), _("Back")]
             category['elements'] = new_elements
-            
+
             # Announce update
             if formatted_messages:
                 self.speak(_("Chat history loaded, {} messages").format(len(formatted_messages)))
@@ -2595,6 +2725,16 @@ class InvisibleUI:
 
             # Reset shutdown flag when starting - this allows restart after stop_listening
             self._shutdown_in_progress = False
+
+            # Wait for any old refresh thread to fully stop before clearing stop_event
+            try:
+                if self.refresh_thread and self.refresh_thread.is_alive():
+                    self.stop_event.set()
+                    self.refresh_thread.join(timeout=2.0)
+                    self.refresh_thread = None
+            except Exception as e:
+                print(f"Error waiting for old refresh thread: {e}")
+
             self.active = True
 
             try:
@@ -2606,7 +2746,7 @@ class InvisibleUI:
                 self.speak(_("Invisible interface active"))
             except Exception as e:
                 print(f"Error speaking activation message: {e}")
-            
+
             if rebuild:
                 try:
                     self.build_structure()
@@ -2614,16 +2754,18 @@ class InvisibleUI:
                     print(f"Error building structure: {e}")
                     import traceback
                     traceback.print_exc()
-            
-            # Register callbacks for message history updates
+
+            # Register callbacks for message history updates (only if not already registered)
             try:
                 if telegram_client and hasattr(telegram_client, 'add_message_callback'):
-                    telegram_client.add_message_callback(self._handle_im_message_callback)
+                    if hasattr(telegram_client, 'message_callbacks') and self._handle_im_message_callback not in telegram_client.message_callbacks:
+                        telegram_client.add_message_callback(self._handle_im_message_callback)
                 if messenger_client and hasattr(messenger_client, 'add_message_callback'):
-                    messenger_client.add_message_callback(self._handle_im_message_callback)
+                    if hasattr(messenger_client, 'message_callbacks') and self._handle_im_message_callback not in messenger_client.message_callbacks:
+                        messenger_client.add_message_callback(self._handle_im_message_callback)
             except Exception as e:
                 print(f"Error registering IM callbacks: {e}")
-            
+
             # Start refresh thread
             try:
                 if not self.refresh_thread or not self.refresh_thread.is_alive():
@@ -2632,14 +2774,22 @@ class InvisibleUI:
             except Exception as e:
                 print(f"Error starting refresh thread: {e}")
 
-            # Update hotkeys last
+            # Register persistent tilde hotkey (survives Titan UI toggles)
+            # Uses RegisterHotKey on Windows - immune to JAWS hook interference
             try:
-                self._update_hotkeys()
+                if not self._tilde_hotkeys:
+                    self._tilde_hotkeys = PersistentTildeHotkey(self._safe_toggle_titan_ui)
+                    self._tilde_hotkeys.start()
+            except Exception as e:
+                print(f"Error registering tilde hotkey: {e}")
+
+            # Update navigation hotkeys last (only if Titan UI is on)
+            try:
+                if self.titan_ui_mode:
+                    self._update_hotkeys()
             except Exception as e:
                 print(f"Error updating hotkeys: {e}")
-                
-            # F6 program switching removed - using only pynput hotkeys
-                
+
         except Exception as e:
             print(f"Critical error in start_listening: {e}")
             import traceback
@@ -2688,24 +2838,49 @@ class InvisibleUI:
                     self.stop_event.set()
             except Exception as e:
                 print(f"Error setting stop event: {e}")
-            
-            # Stop hotkey thread first (can block)
+
+            # Stop persistent tilde hotkey
+            try:
+                if hasattr(self, '_tilde_hotkeys') and self._tilde_hotkeys:
+                    old_tilde = self._tilde_hotkeys
+                    self._tilde_hotkeys = None
+                    old_tilde.stop()
+            except Exception as e:
+                print(f"Error stopping tilde hotkey: {e}")
+
+            # Stop navigation hotkey thread
             try:
                 if hasattr(self, 'hotkey_thread') and self.hotkey_thread:
-                    self.hotkey_thread.stop()
-                    time.sleep(0.1)  # Reduced sleep time
+                    old_thread = self.hotkey_thread
                     self.hotkey_thread = None
+                    old_thread.stop()
+                    old_thread.join(timeout=2.0)
             except Exception as e:
                 print(f"Error stopping keyboard hotkey thread: {e}")
 
-            # Clean up refresh thread (don't block on join - daemon thread will stop on exit)
+            # Wait for refresh thread to fully stop
             try:
                 if hasattr(self, 'refresh_thread') and self.refresh_thread:
                     if self.refresh_thread.is_alive():
-                        print("INFO: Refresh thread still running (will stop automatically as daemon)")
+                        self.refresh_thread.join(timeout=2.0)
                     self.refresh_thread = None
             except Exception as e:
                 print(f"Error cleaning up refresh thread: {e}")
+
+            # Remove IM callbacks to prevent accumulation on restart
+            try:
+                if telegram_client and hasattr(telegram_client, 'message_callbacks'):
+                    try:
+                        telegram_client.message_callbacks.remove(self._handle_im_message_callback)
+                    except ValueError:
+                        pass
+                if messenger_client and hasattr(messenger_client, 'message_callbacks'):
+                    try:
+                        messenger_client.message_callbacks.remove(self._handle_im_message_callback)
+                    except ValueError:
+                        pass
+            except Exception as e:
+                print(f"Error removing IM callbacks: {e}")
 
             # Clean up active widget
             try:
@@ -2734,41 +2909,36 @@ class InvisibleUI:
             # Don't set _shutdown_in_progress here - it prevents restart
 
     def _update_hotkeys(self):
-        """Update hotkeys for Titan UI - simple keys only"""
-        # Run the entire hotkey update in a background thread to prevent freezing
-        def _update_hotkeys_async():
-            try:
-                if self._shutdown_in_progress:
-                    return
+        """Update navigation hotkeys for Titan UI.
 
-                # Stop existing hotkey thread safely
-                if self.hotkey_thread:
-                    try:
-                        self.hotkey_thread.stop()
-                        time.sleep(0.1)
-                    except Exception as e:
-                        print(f"Error stopping keyboard hotkey thread: {e}")
-                    finally:
-                        self.hotkey_thread = None
-
-                # Titan UI hotkeys - simple keys without modifiers
-                keyboard_hotkeys = {}
-
+        Tilde hotkeys are persistent (managed by start/stop_listening).
+        This method only manages navigation keys (arrows, enter, space, etc.).
+        """
+        def _update_hotkeys_impl():
+            with self._hotkey_lock:
                 try:
-                    # The tilde key is always available to toggle TUI mode
-                    keyboard_hotkeys['`'] = self._safe_toggle_titan_ui
-                    # Titan+Enter for voice message playback
-                    keyboard_hotkeys['`+<enter>'] = self._safe_handle_titan_enter
-                except Exception as e:
-                    print(f"Error setting titan UI hotkeys: {e}")
+                    if self._shutdown_in_progress:
+                        return
 
-                # Navigation hotkeys - simple arrows in Titan UI mode
-                # Only register navigation keys when Titan UI is enabled
-                if self.titan_ui_mode:
-                    if self.in_widget_mode:
-                        # Simple arrows for widget navigation
-                        if not self.titan_ui_temporarily_disabled:
-                            keyboard_hotkeys.update({
+                    # Stop existing navigation hotkey thread
+                    old_thread = self.hotkey_thread
+                    self.hotkey_thread = None
+                    if old_thread:
+                        try:
+                            old_thread.stop()
+                            old_thread.join(timeout=2.0)
+                        except Exception as e:
+                            print(f"Error stopping navigation hotkey thread: {e}")
+
+                    # Navigation hotkeys - only when Titan UI is on
+                    nav_hotkeys = {}
+
+                    if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
+                        # Titan+Enter for voice message playback (needs Titan UI on)
+                        nav_hotkeys['`+<enter>'] = self._safe_handle_titan_enter
+
+                        if self.in_widget_mode:
+                            nav_hotkeys.update({
                                 '<up>': lambda: self.navigate_widget('up'),
                                 '<down>': lambda: self.navigate_widget('down'),
                                 '<left>': lambda: self.navigate_widget('left'),
@@ -2778,10 +2948,8 @@ class InvisibleUI:
                                 '<backspace>': self.exit_widget_mode,
                                 '<esc>': self.exit_widget_mode,
                             })
-                    else:
-                        # Simple arrows for main view navigation
-                        if not self.titan_ui_temporarily_disabled:
-                            keyboard_hotkeys.update({
+                        else:
+                            nav_hotkeys.update({
                                 '<up>': lambda: self.navigate_category(-1),
                                 '<down>': lambda: self.navigate_category(1),
                                 '<left>': lambda: self.navigate_element(-1),
@@ -2790,30 +2958,26 @@ class InvisibleUI:
                                 '<space>': self.activate_element,
                             })
 
-                # Create keyboard hotkey thread for Titan UI
-                if keyboard_hotkeys and not self._shutdown_in_progress:
-                    try:
-                        start_time = time.time()
-                        new_keyboard_thread = GlobalHotKeys(keyboard_hotkeys)
-                        new_keyboard_thread.start()
-                        self.hotkey_thread = new_keyboard_thread
+                    # Create navigation hotkey thread (only if there are keys to register)
+                    if nav_hotkeys and not self._shutdown_in_progress:
+                        try:
+                            new_thread = GlobalHotKeys(nav_hotkeys)
+                            new_thread.start()
+                            self.hotkey_thread = new_thread
+                            print(f"Navigation hotkeys registered: {list(nav_hotkeys.keys())}")
+                        except Exception as e:
+                            print(f"Error creating navigation hotkey thread: {e}")
+                            self.hotkey_thread = None
+                    else:
+                        print("Navigation hotkeys cleared (Titan UI off)")
 
-                        elapsed = time.time() - start_time
-                        if elapsed > 1.0:
-                            print(f"Warning: Keyboard hotkey thread creation took {elapsed:.2f} seconds")
-                        print(f"Keyboard hotkeys registered: {list(keyboard_hotkeys.keys())}")
-                    except Exception as e:
-                        print(f"Error creating/starting keyboard hotkey thread: {e}")
-                        self.hotkey_thread = None
+                except Exception as e:
+                    print(f"Critical error in _update_hotkeys: {e}")
+                    import traceback
+                    traceback.print_exc()
 
-            except Exception as e:
-                print(f"Critical error in _update_hotkeys_async: {e}")
-                import traceback
-                traceback.print_exc()
-
-        # Start the async update in a background thread to prevent freezing
         try:
-            update_thread = threading.Thread(target=_update_hotkeys_async, daemon=True)
+            update_thread = threading.Thread(target=_update_hotkeys_impl, daemon=True)
             update_thread.start()
         except Exception as e:
             print(f"Error starting hotkey update thread: {e}")

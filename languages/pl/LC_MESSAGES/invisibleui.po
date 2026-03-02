@@ -567,6 +567,12 @@ msgstr "Titan-Net niedostępny"
 msgid "Menu Start"
 msgstr "Menu Start"
 
+msgid "Refresh"
+msgstr "Odśwież"
+
+msgid "Refreshing messages..."
+msgstr "Odświeżanie wiadomości..."
+
 #~ msgid "You are already logged in to Titan-Network"
 #~ msgstr "Jesteś już zalogowany do Titan-Network"
 

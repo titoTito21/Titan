@@ -608,6 +608,7 @@ class NetworkMonitor(threading.Thread):
         _speak_positional(_("Connected to {}").format(name), position=0.8)
 
     def on_disconnected(self, name):
+        play_sound('system/network_disconnect.ogg')
         _speak_positional(_("Disconnected from {}").format(name), position=-0.8, pitch_offset=-10)
 
     def stop(self):
