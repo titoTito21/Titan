@@ -39,6 +39,17 @@ _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
 
 
+def _apply_skin_recursive(window):
+    """Apply current skin to a window and all descendants."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_recursive(child)
+
+
 def is_running_from_source():
     """
     Check if running from source code or compiled executable.
@@ -237,7 +248,7 @@ class LoginDialog(wx.Dialog):
     def apply_skin(self):
         """Apply current skin to dialog"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to login dialog: {e}")
 
@@ -601,7 +612,7 @@ class CreateAccountDialog(wx.Dialog):
     def apply_skin(self):
         """Apply current skin to dialog"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to create account dialog: {e}")
 
@@ -789,7 +800,7 @@ class ForumTopicWindow(wx.Frame):
     def apply_skin(self):
         """Apply current skin to window"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to forum topic window: {e}")
 
@@ -1512,7 +1523,7 @@ class TitanNetMainWindow(wx.Frame):
     def apply_skin(self):
         """Apply current skin to window"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to Titan-Net window: {e}")
 
@@ -7004,7 +7015,7 @@ class TitanNetMainWindow(wx.Frame):
         content = response.get('content', '')
         editor = BroadcastFileEditDialog(self, self.titan_client, filename, content)
         try:
-            apply_skin_to_window(editor)
+            _apply_skin_recursive(editor)
         except Exception:
             pass
         editor.ShowModal()
@@ -7457,7 +7468,7 @@ class MOTDDialog(wx.Dialog):
 
         # Apply skin
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception:
             pass
 
