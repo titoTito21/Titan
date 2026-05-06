@@ -55,6 +55,25 @@ def _apply_skin_to_tree(window):
         _apply_skin_to_tree(child)
 
 
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    _apply_skin_to_tree(dlg)
+    return dlg
+
+
+def _new_message_dialog(*args, **kwargs):
+    dlg = wx.MessageDialog(*args, **kwargs)
+    _apply_skin_to_tree(dlg)
+    return dlg
+
+
+def _show_skinned_message(message, title, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = _new_message_dialog(parent, message, title, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 def speak_elten(text, position=0.0, pitch_offset=0, interrupt=True):
     """Speak text using stereo speech (same as TitanNet)."""
     if not text:
@@ -302,7 +321,7 @@ class EltenLoginDialog(wx.Dialog):
         prompt = _("Enter the code from SMS:") if method_idx == 0 else _("Enter backup code:")
 
         for attempt in range(1, 4):
-            code_dlg = wx.TextEntryDialog(self, prompt, _("Two-Factor Authentication"))
+            code_dlg = _new_text_entry_dialog(self, prompt, _("Two-Factor Authentication"))
 
             if code_dlg.ShowModal() != wx.ID_OK:
                 speak_notification(_("Login cancelled"), 'info')
@@ -1408,7 +1427,7 @@ class EltenMainWindow(wx.Frame):
 
         info = f"{user} ({date}):\n\n{message}\n\n{likes} {_('likes')}"
         speak_elten(f"{user}: {message}")
-        wx.MessageBox(info, _("Feed Post"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info, _("Feed Post"), wx.OK | wx.ICON_INFORMATION)
 
     def _show_feed_context_menu(self):
         """Show context menu for feed tree items (Elten tablica)."""
@@ -1495,7 +1514,7 @@ class EltenMainWindow(wx.Frame):
 
     def _reply_to_feed(self, parent_id):
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Reply (max 300 characters):"), _("Reply to Post"))
+        dlg = _new_text_entry_dialog(self, _("Reply (max 300 characters):"), _("Reply to Post"))
         if dlg.ShowModal() == wx.ID_OK:
             text = dlg.GetValue().strip()
             if text:
@@ -1514,7 +1533,7 @@ class EltenMainWindow(wx.Frame):
 
     def _new_feed_post(self):
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("New post (max 300 characters):"), _("New Feed Post"))
+        dlg = _new_text_entry_dialog(self, _("New post (max 300 characters):"), _("New Feed Post"))
         if dlg.ShowModal() == wx.ID_OK:
             text = dlg.GetValue().strip()
             if text:
@@ -1533,7 +1552,7 @@ class EltenMainWindow(wx.Frame):
         dlg.Destroy()
 
     def _delete_feed_post(self, feed_id):
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self, _("Delete this post?"), _("Delete Post"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION
         )
@@ -1596,7 +1615,7 @@ class EltenMainWindow(wx.Frame):
 
         info = "\n".join(parts)
         speak_elten(_("{count} posts").format(count=len(posts)))
-        wx.MessageBox(info, _("Feed: {user}").format(user=username), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info, _("Feed: {user}").format(user=username), wx.OK | wx.ICON_INFORMATION)
 
     # ---- Contacts ----
 
@@ -2755,7 +2774,7 @@ class EltenMainWindow(wx.Frame):
     def _add_new_contact_dialog(self):
         """Dialog to add a new contact by username."""
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Enter username:"), _("New Contact"))
+        dlg = _new_text_entry_dialog(self, _("Enter username:"), _("New Contact"))
         if dlg.ShowModal() == wx.ID_OK:
             username = dlg.GetValue().strip()
             if username:
@@ -2765,7 +2784,7 @@ class EltenMainWindow(wx.Frame):
         dlg.Destroy()
 
     def _remove_contact(self, username):
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self,
             _("Remove {user} from contacts?").format(user=username),
             _("Remove Contact"),
@@ -2874,7 +2893,7 @@ class EltenMainWindow(wx.Frame):
 
     def _delete_conversation(self, conv):
         user = conv['user']
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self,
             _("Delete all conversations with {user}?").format(user=user),
             _("Delete Conversation"),
@@ -2912,7 +2931,7 @@ class EltenMainWindow(wx.Frame):
     def _search_conversations(self):
         """Search conversations by username."""
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Enter username to search:"), _("Search Conversations"))
+        dlg = _new_text_entry_dialog(self, _("Enter username to search:"), _("Search Conversations"))
         if dlg.ShowModal() == wx.ID_OK:
             query = dlg.GetValue().strip()
             if query:
@@ -2943,7 +2962,7 @@ class EltenMainWindow(wx.Frame):
             info += f"\n{_('Description')}:\n{desc}"
 
         speak_elten(info)
-        wx.MessageBox(info, name, wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info, name, wx.OK | wx.ICON_INFORMATION)
 
     def _show_group_members(self, group):
         def fetch():
@@ -2961,12 +2980,12 @@ class EltenMainWindow(wx.Frame):
         play_sound('ui/dialog.ogg')
         info = f"{group_name} - {_("{count} members").format(count=len(members))}:\n" + "\n".join(members)
         speak_elten(_("{count} members").format(count=len(members)))
-        wx.MessageBox(info, group_name, wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info, group_name, wx.OK | wx.ICON_INFORMATION)
 
     def _search_forum(self):
         """Search forum threads."""
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Enter search query:"), _("Search Forum"))
+        dlg = _new_text_entry_dialog(self, _("Enter search query:"), _("Search Forum"))
         if dlg.ShowModal() == wx.ID_OK:
             query = dlg.GetValue().strip()
             if query:
@@ -2991,7 +3010,7 @@ class EltenMainWindow(wx.Frame):
             info_parts.append(_("Thread #{thread_id} ({post_count} posts)").format(thread_id=r.get('thread_id', 0), post_count=r.get('post_count', 0)))
         info = "\n".join(info_parts)
         speak_elten(_("{count} results").format(count=len(results)))
-        wx.MessageBox(info, _("Search Results"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info, _("Search Results"), wx.OK | wx.ICON_INFORMATION)
 
     def _mark_group_read(self, group):
         def do_mark():
@@ -3050,7 +3069,7 @@ class EltenMainWindow(wx.Frame):
 
         # Thread title
         play_sound('ui/dialog.ogg')
-        title_dlg = wx.TextEntryDialog(self, _("Thread name:"), _("New Thread"))
+        title_dlg = _new_text_entry_dialog(self, _("Thread name:"), _("New Thread"))
         if title_dlg.ShowModal() != wx.ID_OK:
             title_dlg.Destroy()
             return
@@ -3062,7 +3081,7 @@ class EltenMainWindow(wx.Frame):
 
         if post_type == 0:
             # Text post
-            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            dlg2 = _new_text_entry_dialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
             if dlg2.ShowModal() != wx.ID_OK:
                 dlg2.Destroy()
                 return
@@ -3127,7 +3146,7 @@ class EltenMainWindow(wx.Frame):
 
         # Thread title
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Thread name:"), _("New Thread"))
+        dlg = _new_text_entry_dialog(self, _("Thread name:"), _("New Thread"))
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -3139,7 +3158,7 @@ class EltenMainWindow(wx.Frame):
 
         if post_type == 0:
             # Text post
-            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            dlg2 = _new_text_entry_dialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
             if dlg2.ShowModal() != wx.ID_OK:
                 dlg2.Destroy()
                 return
@@ -3201,7 +3220,7 @@ class EltenMainWindow(wx.Frame):
 
         # Title
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Post title:"), _("New Blog Post"))
+        dlg = _new_text_entry_dialog(self, _("Post title:"), _("New Blog Post"))
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -3213,7 +3232,7 @@ class EltenMainWindow(wx.Frame):
 
         if post_type == 0:
             # Text post
-            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Blog Post"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            dlg2 = _new_text_entry_dialog(self, _("Post content:"), _("New Blog Post"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
             if dlg2.ShowModal() != wx.ID_OK:
                 dlg2.Destroy()
                 return
@@ -3263,7 +3282,7 @@ class EltenMainWindow(wx.Frame):
     def _create_blog_category(self):
         """Create a new blog category."""
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Category name:"), _("New Category"))
+        dlg = _new_text_entry_dialog(self, _("Category name:"), _("New Category"))
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -3331,7 +3350,7 @@ class EltenMainWindow(wx.Frame):
         action_dlg.Destroy()
 
         if action_idx == 0:  # Rename
-            rename_dlg = wx.TextEntryDialog(
+            rename_dlg = _new_text_entry_dialog(
                 self, _("New name:"), _("Rename Category"), cat['name']
             )
             if rename_dlg.ShowModal() == wx.ID_OK:
@@ -3350,7 +3369,7 @@ class EltenMainWindow(wx.Frame):
             rename_dlg.Destroy()
 
         elif action_idx == 1:  # Delete
-            confirm = wx.MessageDialog(
+            confirm = _new_message_dialog(
                 self, _("Delete category '{name}'?").format(name=cat['name']),
                 _("Delete Category"), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION
             )
@@ -3625,7 +3644,7 @@ class EltenMainWindow(wx.Frame):
 
     def _search_user_blog(self):
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Enter username:"), _("Search user's blog"))
+        dlg = _new_text_entry_dialog(self, _("Enter username:"), _("Search user's blog"))
         if dlg.ShowModal() == wx.ID_OK:
             username = dlg.GetValue().strip()
             if username:
@@ -3691,7 +3710,7 @@ class EltenMainWindow(wx.Frame):
 
         info_text = "\n".join(parts)
         speak_elten(info_text)
-        wx.MessageBox(info_text, _("Account Information"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info_text, _("Account Information"), wx.OK | wx.ICON_INFORMATION)
 
     # ---- Audio Record Dialog ----
 
@@ -4084,7 +4103,7 @@ class EltenMainWindow(wx.Frame):
 
     def OnAbout(self, event):
         play_sound('ui/dialog.ogg')
-        wx.MessageBox(
+        _show_skinned_message(
             "EltenLink (Beta)\n\n"
             "Elten social network client for TCE Launcher.\n"
             "Copyright (C) Dawid Pieper (Elten)\n"
@@ -4226,7 +4245,7 @@ class EltenMainWindow(wx.Frame):
             wx.CallLater(1500, self._announce_next_bg)
 
     def OnDisconnect(self, event):
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self,
             _("Are you sure you want to disconnect?"),
             _("Disconnect"),
@@ -4778,3 +4797,4 @@ def show_elten_login(parent):
     else:
         dlg.Destroy()
         return None
+
