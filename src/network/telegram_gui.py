@@ -43,6 +43,30 @@ def _apply_skin_to_tree(window):
         _apply_skin_to_tree(child)
 
 
+def _show_skinned_info_dialog(parent, title, message):
+    """Show a simple skinned information dialog."""
+    dlg = wx.Dialog(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
+    panel = wx.Panel(dlg)
+    sizer = wx.BoxSizer(wx.VERTICAL)
+
+    msg = wx.StaticText(panel, label=message)
+    sizer.Add(msg, 0, wx.ALL | wx.EXPAND, 12)
+
+    ok_btn = wx.Button(panel, wx.ID_OK, _("OK"))
+    ok_btn.SetDefault()
+    sizer.Add(ok_btn, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+    panel.SetSizer(sizer)
+    dlg_sizer = wx.BoxSizer(wx.VERTICAL)
+    dlg_sizer.Add(panel, 1, wx.EXPAND)
+    dlg.SetSizerAndFit(dlg_sizer)
+    dlg.CentreOnParent()
+
+    _apply_skin_to_tree(dlg)
+    dlg.ShowModal()
+    dlg.Destroy()
+
+
 def speak_telegram(text, position=0.0, pitch_offset=0, interrupt=True):
     """Speak text using stereo speech / ao3 for Telegram notifications."""
     if not text:
@@ -408,7 +432,7 @@ class TelegramChatWindow(wx.Frame):
             elif selected_text == _("Groups"):
                 self.show_groups_view()
             elif selected_text == _("Settings"):
-                wx.MessageBox(_("Settings - coming soon"), _("Information"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_info_dialog(self, _("Information"), _("Settings - coming soon"))
             elif selected_text == _("Disconnect"):
                 self.on_disconnect(None)
 
