@@ -29,6 +29,10 @@ class ForumTopicsWindow(wx.Frame):
 
         play_sound('ui/window_open.ogg')
 
+        # Register in window switcher
+        from src.ui.window_switcher import register_window
+        register_window("Titan-Net Forum", window=self, category='messenger')
+
         # Load initial topics
         wx.CallAfter(self.load_topics)
 
@@ -174,6 +178,10 @@ class ForumTopicsWindow(wx.Frame):
         topic_window = ForumTopicWindow(self, self.titan_client, topic_id)
         topic_window.Show()
 
+        from src.ui.window_switcher import register_window
+        topic_title = self.topics_list.GetItemText(selected)
+        register_window(f"Forum: {topic_title}", window=topic_window, category='messenger')
+
     def OnNewTopic(self, event):
         """Create new topic"""
         play_sound('core/SELECT.ogg')
@@ -210,14 +218,18 @@ class ForumTopicsWindow(wx.Frame):
 class ForumTopicWindow(wx.Frame):
     """Window showing single topic with replies"""
 
-    def __init__(self, parent, titan_client: TitanNetClient, topic_id: int):
+    def __init__(self, parent, titan_client: TitanNetClient, topic_id: int, last_known_reply_count: int = 0):
         super().__init__(parent, title=_("Forum Topic"), size=(750, 650))
         self.titan_client = titan_client
         self.topic_id = topic_id
         self.topic_data = None
+        self.last_known_reply_count = last_known_reply_count
+        self._reply_positions = []  # Character positions of each reply in replies_display
+        self._first_new_reply_pos = -1  # Position of first new reply
         self.InitUI()
         self.Centre()
 
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
         play_sound('ui/window_open.ogg')
 
         # Load topic data
@@ -266,6 +278,7 @@ class ForumTopicWindow(wx.Frame):
             size=(-1, 100)
         )
         self.reply_input.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.reply_input.Bind(wx.EVT_KEY_DOWN, self.OnReplyKeyDown)
         vbox.Add(self.reply_input, flag=wx.EXPAND | wx.ALL, border=5)
 
         # Buttons
@@ -289,6 +302,69 @@ class ForumTopicWindow(wx.Frame):
         """Handle focus events with sound"""
         play_sound('core/FOCUS.ogg', position=0.5)
         event.Skip()
+
+    def OnKeyPress(self, event):
+        """Handle keyboard shortcuts for post navigation"""
+        keycode = event.GetKeyCode()
+        focused = self.FindFocus()
+
+        if event.ControlDown() and focused != self.reply_input:
+            if keycode == ord('U'):
+                # Ctrl+U -> jump to first new/unread reply
+                self._jump_to_first_new_reply()
+                return
+            elif keycode == ord('.'):
+                # Ctrl+. -> jump to last reply
+                self._jump_to_reply(-1)
+                return
+            elif keycode == ord(','):
+                # Ctrl+, -> jump to first reply (topic post)
+                self._jump_to_reply(0)
+                return
+
+        event.Skip()
+
+    def OnReplyKeyDown(self, event):
+        """Handle Ctrl+Enter to send reply"""
+        if event.ControlDown() and event.GetKeyCode() == wx.WXK_RETURN:
+            self.OnSendReply(None)
+            return
+        event.Skip()
+
+    def _jump_to_first_new_reply(self):
+        """Jump to the first new/unread reply"""
+        if self._first_new_reply_pos >= 0:
+            self.replies_display.SetFocus()
+            self.replies_display.SetInsertionPoint(self._first_new_reply_pos)
+            self.replies_display.ShowPosition(self._first_new_reply_pos)
+            play_sound('core/FOCUS.ogg')
+            speaker.output(_("First new reply"))
+        else:
+            # No new replies, go to last
+            speaker.output(_("No new replies"))
+            self._jump_to_reply(-1)
+
+    def _jump_to_reply(self, index):
+        """Jump to a specific reply by index. -1 = last reply, 0 = first (topic post)."""
+        if index == 0:
+            # Jump to first post
+            self.first_post.SetFocus()
+            self.first_post.SetInsertionPoint(0)
+            play_sound('core/FOCUS.ogg')
+            return
+
+        if not self._reply_positions:
+            return
+
+        if index < 0:
+            index = len(self._reply_positions) + index
+
+        if 0 <= index < len(self._reply_positions):
+            pos = self._reply_positions[index]
+            self.replies_display.SetFocus()
+            self.replies_display.SetInsertionPoint(pos)
+            self.replies_display.ShowPosition(pos)
+            play_sound('core/FOCUS.ogg')
 
     def load_topic(self):
         """Load topic and replies"""
@@ -325,13 +401,23 @@ class ForumTopicWindow(wx.Frame):
         first_post_text += topic['content']
         self.first_post.SetValue(first_post_text)
 
-        # Display replies
+        # Display replies with position tracking
+        self._reply_positions = []
+        self._first_new_reply_pos = -1
+
         if replies_result.get('success'):
             replies = replies_result.get('replies', [])
             replies_text = ""
 
             if replies:
                 for i, reply in enumerate(replies, 1):
+                    # Track position of this reply
+                    self._reply_positions.append(len(replies_text))
+
+                    # Track first new reply (replies after last_known_reply_count are new)
+                    if i > self.last_known_reply_count and self._first_new_reply_pos < 0:
+                        self._first_new_reply_pos = len(replies_text)
+
                     replies_text += f"--- {_('Reply')} #{i} ---\n"
                     replies_text += f"{_('Author')}: {reply['author_username']} (#{reply['author_titan_number']})\n"
                     replies_text += f"{_('Posted')}: {reply['created_at']}\n\n"

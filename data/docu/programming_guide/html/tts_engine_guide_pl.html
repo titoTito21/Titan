@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia silników TTS (TitanTTS) - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html" class="active">Silniki TTS (TitanTTS)</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia silników TTS (TitanTTS)</h1>
+            </div>
+            <h1>Przewodnik tworzenia silników TTS (TitanTTS)</h1>
+
+<h2>Wprowadzenie</h2>
+
+<p><strong>Silniki TitanTTS</strong> to wtyczki dostarczające syntezę mowy dla TCE. Każdy silnik to katalog w <code>data/titantts engines/</code> zawierający plik konfiguracyjny <code>__engine__.TCE</code> i moduł Pythona <code>__engine__.py</code> z fabryką <code>get_engine()</code> zwracającą instancję dziedziczącą po <code>TitanTTSEngine</code>.</p>
+
+<p>System silników jest zarządzany przez <code>EngineRegistry</code> (<code>src/tts/engine_registry.py</code>), który skanuje katalog silników przy starcie i udostępnia je modułowi <code>StereoSpeech</code>.</p>
+
+<h3>Kategorie silników</h3>
+
+<li><strong><code>titantts</code></strong> — natywne silniki TitanTTS (wtyczki, ElevenLabs, Milena, BeSTspeech). Generują <code>pydub.AudioSegment</code> przekazywany do StereoSpeech, który stosuje panoramę i pitch.</li>
+<li><strong><code>platform</code></strong> — silniki systemowe (eSpeak-NG, SAPI5, macOS Speech, Linux Speech Dispatcher). Implementowane wewnątrz <code>stereo_speech.py</code>, w rejestrze widoczne jako <code>PlatformEngineProxy</code>.</li>
+
+<p>Wtyczka, którą napiszesz, to praktycznie zawsze silnik kategorii <strong><code>titantts</code></strong>.</p>
+
+<h2>Struktura katalogu silnika</h2>
+
+<pre><code>data/titantts engines/moj_silnik/
+├── __engine__.TCE       # Konfiguracja (WYMAGANE, .TCE wielkimi literami)
+├── __engine__.py        # Moduł silnika z get_engine() (WYMAGANE)
+├── languages/           # Tłumaczenia własne (opcjonalne)
+│   └── pl/LC_MESSAGES/engine.po/.mo
+└── lib/                 # Biblioteki dołączone (opcjonalne)</code></pre>
+
+<h2>Plik <code>__engine__.TCE</code></h2>
+
+<p>Format INI z sekcją <code>[engine]</code>:</p>
+
+<pre><code class="language-ini">[engine]
+name = Mój silnik TTS
+status = 0
+libs = lib, vendor</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Pole</th>
+<th>Wymagane</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td>name</td>
+<td>nie</td>
+<td>Nazwa wyświetlana (domyślnie nazwa folderu)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>tak</td>
+<td><strong><code>0</code> = włączony, <code>1</code> = wyłączony</strong></td>
+</tr>
+<tr>
+<td>libs</td>
+<td>nie</td>
+<td>Lista podkatalogów z bibliotekami (domyślnie <code>lib</code>)</td>
+</tr>
+</tbody></table>
+
+<h2>Klasa bazowa <code>TitanTTSEngine</code></h2>
+
+<p>Plik: <code>src/tts/base_engine.py</code>. Każdy silnik MUSI dziedziczyć po tej klasie.</p>
+
+<h3>Atrybuty klasy</h3>
+
+<table class="doc-table">
+<thead><tr>
+<th>Atrybut</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td><code>engine_id</code> (str)</td>
+<td><strong>Unikalny</strong> identyfikator (np. <code>&#x27;elevenlabs&#x27;</code>, <code>&#x27;milena&#x27;</code>) — używany w ustawieniach</td>
+</tr>
+<tr>
+<td><code>engine_name</code> (str)</td>
+<td>Nazwa wyświetlana (np. <code>&#x27;ElevenLabs TTS&#x27;</code>)</td>
+</tr>
+<tr>
+<td><code>engine_category</code> (str)</td>
+<td>Zawsze <code>&#x27;titantts&#x27;</code> dla wtyczek</td>
+</tr>
+<tr>
+<td><code>needs_lock_release</code> (bool)</td>
+<td><code>True</code> jeśli <code>generate()</code> jest powolny (API/subprocess) — pozwala StereoSpeech zwolnić blokadę podczas syntezy</td>
+</tr>
+</tbody></table>
+
+<h3>Metody abstrakcyjne (MUSISZ zaimplementować)</h3>
+
+<pre><code class="language-python">def is_available(self) -&gt; bool:
+    &quot;&quot;&quot;Czy silnik może działać na tej platformie?
+    Sprawdź zależności (importy), klucz API, obecność plików, ...&quot;&quot;&quot;
+
+def generate(self, text: str, pitch_offset: int = 0) -&gt; AudioSegment | None:
+    &quot;&quot;&quot;Syntezuj tekst do pydub.AudioSegment lub None.
+    pitch_offset: przesunięcie półtonów -10..+10 (zwykle stosowane przez set_frame_rate).&quot;&quot;&quot;
+
+def get_voices(self) -&gt; list[dict]:
+    &quot;&quot;&quot;Lista dostępnych głosów: [{&#x27;id&#x27;: str, &#x27;display_name&#x27;: str}, ...]
+    Pusta lista jeśli silnik ma jeden głos wbudowany.&quot;&quot;&quot;
+
+def set_voice(self, voice_id: str):
+    &quot;&quot;&quot;Ustaw aktywny głos po ID.&quot;&quot;&quot;</code></pre>
+
+<h3>Metody opcjonalne (nadpisuj jeśli silnik to wspiera)</h3>
+
+<pre><code class="language-python">def set_rate(self, rate: int):
+    &quot;&quot;&quot;Tempo mowy z zakresu TCE -10..+10 (0 = domyślne).
+    Skonwertuj na natywny format silnika.&quot;&quot;&quot;
+
+def set_pitch(self, pitch: int):
+    &quot;&quot;&quot;Domyślny pitch z zakresu TCE -10..+10.&quot;&quot;&quot;
+
+def set_volume(self, volume: int):
+    &quot;&quot;&quot;Głośność 0..100.&quot;&quot;&quot;
+
+def stop(self):
+    &quot;&quot;&quot;Przerwij trwającą generację (np. zabij subprocess).&quot;&quot;&quot;
+
+def clear_cache(self):
+    &quot;&quot;&quot;Wyczyść cache audio jeśli silnik go używa.&quot;&quot;&quot;</code></pre>
+
+<h3>Metody konfiguracji (system pól dynamicznych)</h3>
+
+<pre><code class="language-python">@classmethod
+def get_config_fields(cls) -&gt; list[dict]:
+    &quot;&quot;&quot;Pola konfiguracyjne wyświetlane w GUI ustawień TCE.&quot;&quot;&quot;
+    return [...]
+
+def configure(self, key: str, value):
+    &quot;&quot;&quot;Zastosuj wartość pola konfiguracyjnego.&quot;&quot;&quot;
+
+def get_config(self, key: str, default=None):
+    &quot;&quot;&quot;Odczytaj aktualną wartość pola.&quot;&quot;&quot;</code></pre>
+
+<h2>System pól konfiguracji</h2>
+
+<p><code>get_config_fields()</code> zwraca listę dyktów opisujących pola wyświetlane dynamicznie w sekcji ustawień silnika. Każde pole ma:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Klucz</th>
+<th>Wymagany</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td><code>key</code></td>
+<td>tak</td>
+<td>Klucz konfiguracyjny (zapisywany jako <code>engine.{id}.{key}</code> w <code>[stereo_speech]</code>)</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>tak</td>
+<td>Etykieta wyświetlana w UI</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>tak</td>
+<td><code>&#x27;text&#x27;</code>, <code>&#x27;password&#x27;</code>, <code>&#x27;choice&#x27;</code>, <code>&#x27;slider&#x27;</code>, <code>&#x27;checkbox&#x27;</code></td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>tak</td>
+<td>Wartość domyślna</td>
+</tr>
+<tr>
+<td><code>tooltip</code></td>
+<td>nie</td>
+<td>Pomocniczy opis</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td>tylko <code>choice</code></td>
+<td>Lista <code>(wartość, etykieta)</code></td>
+</tr>
+<tr>
+<td><code>min</code> / <code>max</code></td>
+<td>tylko <code>slider</code></td>
+<td>Zakres</td>
+</tr>
+</tbody></table>
+
+<h3>Przykłady pól</h3>
+
+<pre><code class="language-python"># Pole tekstowe / hasło
+{&#x27;key&#x27;: &#x27;api_key&#x27;, &#x27;label&#x27;: &#x27;Klucz API:&#x27;, &#x27;type&#x27;: &#x27;password&#x27;, &#x27;default&#x27;: &#x27;&#x27;,
+ &#x27;tooltip&#x27;: &#x27;Klucz z elevenlabs.io&#x27;}
+
+# Pole wyboru
+{&#x27;key&#x27;: &#x27;model_id&#x27;, &#x27;label&#x27;: &#x27;Model:&#x27;, &#x27;type&#x27;: &#x27;choice&#x27;, &#x27;default&#x27;: &#x27;turbo_v2_5&#x27;,
+ &#x27;options&#x27;: [(&#x27;turbo_v2_5&#x27;, &#x27;Turbo v2.5 (najszybszy)&#x27;),
+             (&#x27;multilingual_v2&#x27;, &#x27;Multilingual v2 (najwyższa jakość)&#x27;)]}
+
+# Suwak
+{&#x27;key&#x27;: &#x27;speed&#x27;, &#x27;label&#x27;: &#x27;Prędkość:&#x27;, &#x27;type&#x27;: &#x27;slider&#x27;, &#x27;default&#x27;: 50,
+ &#x27;min&#x27;: 0, &#x27;max&#x27;: 100}
+
+# Checkbox
+{&#x27;key&#x27;: &#x27;use_ssml&#x27;, &#x27;label&#x27;: &#x27;Użyj SSML&#x27;, &#x27;type&#x27;: &#x27;checkbox&#x27;, &#x27;default&#x27;: False}</code></pre>
+
+<h3>Persystencja konfiguracji</h3>
+
+<p>TCE zapisuje wartości pól w pliku ustawień jako klucze <code>engine.{engine_id}.{key}</code> w sekcji <code>[stereo_speech]</code>. Programowo:</p>
+
+<pre><code class="language-python">from src.titan_core import tce_speech
+
+tce_speech.set_engine_config(&#x27;moj_silnik&#x27;, &#x27;api_key&#x27;, &#x27;sekretna_wartosc&#x27;)
+api_key = tce_speech.get_engine_config(&#x27;moj_silnik&#x27;, &#x27;api_key&#x27;)</code></pre>
+
+<p><code>StereoSpeech</code> wywołuje <code>engine.configure(key, value)</code> przy ładowaniu ustawień i przy każdej zmianie wartości w GUI.</p>
+
+<h2>Punkt wejścia <code>get_engine()</code></h2>
+
+<p><code>__engine__.py</code> MUSI definiować funkcję modułu <code>get_engine()</code> (lub atrybut wskazujący na tę funkcję), która zwraca instancję <code>TitanTTSEngine</code>. Zwykle używa się singletona, żeby cache i połączenia HTTP były współdzielone:</p>
+
+<pre><code class="language-python">import threading
+
+_instance = None
+_instance_lock = threading.Lock()
+
+
+def _get_engine():
+    global _instance
+    with _instance_lock:
+        if _instance is None:
+            _instance = MojSilnikEngine()
+    return _instance
+
+
+# Punkt wejścia rejestru
+get_engine = _get_engine</code></pre>
+
+<h2>Wstrzykiwanie tłumaczeń</h2>
+
+<p>Jeśli silnik ma katalog <code>languages/</code>, <code>EngineRegistry</code> automatycznie wstrzyknie funkcję <code>_()</code> do modułu <strong>przed wykonaniem <code>exec_module</code></strong>:</p>
+
+<pre><code class="language-python"># W __engine__.py — _ jest dostępne jako globalna funkcja modułu:
+print(_(&quot;Hello&quot;))   # tłumaczone</code></pre>
+
+<p>Domena gettext to <code>engine</code>. Pliki <code>.po</code> muszą znaleźć się w <code>languages/&lt;lang&gt;/LC_MESSAGES/engine.mo</code>.</p>
+
+<h2>Pełny przykład — silnik z cachem dyskowym</h2>
+
+<pre><code class="language-python">&quot;&quot;&quot;
+__engine__.py — Mój silnik TTS
+&quot;&quot;&quot;
+import os
+import sys
+import hashlib
+import threading
+
+try:
+    from src.tts.base_engine import TitanTTSEngine
+except ImportError:
+    # Fallback dla testów standalone — minimalna deklaracja
+    import abc
+    class TitanTTSEngine(abc.ABC):
+        engine_id = &#x27;&#x27;
+        engine_name = &#x27;&#x27;
+        engine_category = &#x27;platform&#x27;
+        needs_lock_release = False
+        @abc.abstractmethod
+        def is_available(self): ...
+        @abc.abstractmethod
+        def generate(self, text, pitch_offset=0): ...
+        @abc.abstractmethod
+        def get_voices(self): ...
+        @abc.abstractmethod
+        def set_voice(self, voice_id): ...
+        def set_rate(self, rate): pass
+        def set_volume(self, volume): pass
+        def stop(self): pass
+        def clear_cache(self): pass
+        @classmethod
+        def get_config_fields(cls): return []
+        def configure(self, key, value): pass
+        def get_config(self, key, default=None): return default
+
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    print(&quot;[MojSilnik] &#x27;pydub&#x27; nie jest zainstalowany — pip install pydub&quot;)
+
+
+def _get_cache_dir():
+    &quot;&quot;&quot;Wieloplatformowy katalog cache.&quot;&quot;&quot;
+    if sys.platform == &#x27;win32&#x27;:
+        base = os.environ.get(&#x27;APPDATA&#x27;) or os.path.expanduser(&#x27;~&#x27;)
+    elif sys.platform == &#x27;darwin&#x27;:
+        base = os.path.join(os.path.expanduser(&#x27;~&#x27;), &#x27;Library&#x27;, &#x27;Application Support&#x27;)
+    else:
+        base = os.environ.get(&#x27;XDG_CACHE_HOME&#x27;) or os.path.join(
+            os.path.expanduser(&#x27;~&#x27;), &#x27;.cache&#x27;)
+    cache_dir = os.path.join(base, &#x27;Titosoft&#x27;, &#x27;Titan&#x27;, &#x27;tts_cache&#x27;, &#x27;moj_silnik&#x27;)
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def _cache_key(text, voice_id):
+    &quot;&quot;&quot;Klucz cache MD5 z (tekst, voice_id).&quot;&quot;&quot;
+    return hashlib.md5(f&quot;{text}\x00{voice_id}&quot;.encode(&#x27;utf-8&#x27;)).hexdigest()
+
+
+class MojSilnikEngine(TitanTTSEngine):
+    engine_id = &#x27;moj_silnik&#x27;
+    engine_name = &#x27;Mój Silnik TTS&#x27;
+    engine_category = &#x27;titantts&#x27;
+    needs_lock_release = True   # generate() wywołuje API/subprocess
+
+    def __init__(self):
+        self._api_key = &#x27;&#x27;
+        self._voice_id = &#x27;default&#x27;
+        self._lock = threading.Lock()
+
+    # --- Konfiguracja ---
+
+    @classmethod
+    def get_config_fields(cls):
+        return [
+            {&#x27;key&#x27;: &#x27;api_key&#x27;, &#x27;label&#x27;: &#x27;Klucz API:&#x27;, &#x27;type&#x27;: &#x27;password&#x27;,
+             &#x27;default&#x27;: &#x27;&#x27;, &#x27;tooltip&#x27;: &#x27;Pobierz na example.com/api&#x27;},
+            {&#x27;key&#x27;: &#x27;voice&#x27;, &#x27;label&#x27;: &#x27;Głos:&#x27;, &#x27;type&#x27;: &#x27;choice&#x27;,
+             &#x27;default&#x27;: &#x27;default&#x27;,
+             &#x27;options&#x27;: [(&#x27;default&#x27;, &#x27;Domyślny&#x27;), (&#x27;male&#x27;, &#x27;Męski&#x27;),
+                         (&#x27;female&#x27;, &#x27;Żeński&#x27;)]},
+        ]
+
+    def configure(self, key, value):
+        if key == &#x27;api_key&#x27;:
+            self._api_key = str(value).strip()
+        elif key == &#x27;voice&#x27;:
+            self._voice_id = str(value)
+
+    def get_config(self, key, default=None):
+        if key == &#x27;api_key&#x27;:
+            return self._api_key
+        elif key == &#x27;voice&#x27;:
+            return self._voice_id
+        return default
+
+    # --- Wymagane metody ---
+
+    def is_available(self):
+        return PYDUB_AVAILABLE and bool(self._api_key)
+
+    def get_voices(self):
+        return [
+            {&#x27;id&#x27;: &#x27;default&#x27;, &#x27;display_name&#x27;: &#x27;Domyślny&#x27;},
+            {&#x27;id&#x27;: &#x27;male&#x27;, &#x27;display_name&#x27;: &#x27;Męski&#x27;},
+            {&#x27;id&#x27;: &#x27;female&#x27;, &#x27;display_name&#x27;: &#x27;Żeński&#x27;},
+        ]
+
+    def set_voice(self, voice_id):
+        self._voice_id = voice_id
+
+    def generate(self, text, pitch_offset=0):
+        if not self.is_available():
+            return None
+        text = text.strip()
+        if not text:
+            return None
+
+        # 1. Sprawdź cache
+        key = _cache_key(text, self._voice_id)
+        cache_path = os.path.join(_get_cache_dir(), key + &#x27;.wav&#x27;)
+        if os.path.exists(cache_path):
+            audio = AudioSegment.from_wav(cache_path)
+        else:
+            # 2. Wygeneruj audio (API, subprocess, biblioteka, ...)
+            audio = self._call_synthesizer(text)
+            if audio is None:
+                return None
+            # 3. Zapisz do cache jako WAV
+            try:
+                audio.export(cache_path, format=&#x27;wav&#x27;)
+            except Exception as e:
+                print(f&quot;[MojSilnik] Cache save error: {e}&quot;)
+
+        # 4. Zastosuj pitch (sztuczka frame-rate, bez ponownego cachowania)
+        if pitch_offset != 0:
+            audio = self._apply_pitch(audio, pitch_offset)
+
+        return audio
+
+    # --- Pomocnicze ---
+
+    def _call_synthesizer(self, text):
+        &quot;&quot;&quot;TODO: tu wywołaj prawdziwy synthesizer (API, subprocess, biblioteka).&quot;&quot;&quot;
+        # Przykład: cisza 1 s jako placeholder
+        return AudioSegment.silent(duration=1000, frame_rate=22050)
+
+    def _apply_pitch(self, audio, pitch_offset):
+        &quot;&quot;&quot;Zmień pitch przez manipulację frame-rate (sztuczka magnetofonowa).&quot;&quot;&quot;
+        try:
+            pitch_offset = max(-4, min(4, pitch_offset))
+            if pitch_offset == 0:
+                return audio
+            factor = 2.0 ** (pitch_offset / 12.0)
+            new_rate = int(audio.frame_rate * factor)
+            if new_rate &lt;= 0:
+                return audio
+            shifted = audio._spawn(
+                audio.raw_data, overrides={&#x27;frame_rate&#x27;: new_rate})
+            return shifted.set_frame_rate(audio.frame_rate)
+        except Exception as e:
+            print(f&quot;[MojSilnik] Pitch error: {e}&quot;)
+            return audio
+
+    def clear_cache(self):
+        try:
+            cache_dir = _get_cache_dir()
+            for fname in os.listdir(cache_dir):
+                if fname.endswith(&#x27;.wav&#x27;):
+                    os.remove(os.path.join(cache_dir, fname))
+        except Exception as e:
+            print(f&quot;[MojSilnik] Clear cache error: {e}&quot;)
+
+
+# --- Singleton + entry point ---
+
+_instance = None
+_instance_lock = threading.Lock()
+
+
+def _get_engine():
+    global _instance
+    with _instance_lock:
+        if _instance is None:
+            _instance = MojSilnikEngine()
+    return _instance
+
+
+get_engine = _get_engine</code></pre>
+
+<h2>Standardy audio TCE</h2>
+
+<p>Wszystkie silniki TCE oczekują, że <code>generate()</code> zwróci <code>AudioSegment</code> znormalizowany do:</p>
+
+<li><strong>22 050 Hz</strong>, <strong>stereo (2 kanały)</strong> — <code>audio.set_frame_rate(22050).set_channels(2)</code></li>
+
+<p>Jeśli twój silnik produkuje audio w innym formacie, zrób konwersję na końcu <code>generate()</code>. Pomoże StereoSpeech bezproblemowo nakładać panoramę i mikser.</p>
+
+<h2>Mapowanie tempa (<code>set_rate</code>)</h2>
+
+<p>TCE używa standardowego zakresu <strong>-10..+10</strong> (0 = domyślne). Każdy silnik konwertuje na natywny format:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Silnik</th>
+<th>Mapowanie</th>
+</tr></thead><tbody>
+<tr>
+<td>Milena (<code>milena4w.exe</code>)</td>
+<td>-10 → 1.0, 0 → 0.75, +10 → 0.5 (mnożnik czasu trwania, niższy = szybszy)</td>
+</tr>
+<tr>
+<td>eSpeak-NG</td>
+<td>80..450 słów/min (wyższe = szybsze)</td>
+</tr>
+<tr>
+<td>ElevenLabs</td>
+<td>mnożnik prędkości lub post-procesing audio</td>
+</tr>
+</tbody></table>
+
+<p>Implementacja przykładowa (Milena):</p>
+
+<pre><code class="language-python">def set_rate(self, rate):
+    rate = max(-10, min(10, float(rate)))
+    self._rate = round(0.75 - (rate * 0.025), 3)
+    self._rate = max(0.5, min(1.0, self._rate))</code></pre>
+
+<h2>Mapowanie pitch</h2>
+
+<p><code>pitch_offset</code> w <code>generate(text, pitch_offset=0)</code> to półton z zakresu <strong>-10..+10</strong>. Najprostsza implementacja to sztuczka frame-rate (zmienia tempo i pitch jednocześnie, jak na taśmie magnetofonowej):</p>
+
+<pre><code class="language-python">factor = 2.0 ** (pitch_offset / 12.0)
+new_rate = int(audio.frame_rate * factor)
+shifted = audio._spawn(audio.raw_data, overrides={&#x27;frame_rate&#x27;: new_rate})
+return shifted.set_frame_rate(audio.frame_rate)</code></pre>
+
+<p>Dla głosów chmurowych zalecane jest ograniczenie do <strong>-4..+4</strong> półtonów — większe wartości dają robotyczne artefakty.</p>
+
+<h2>Strategia cachowania</h2>
+
+<p>Dla silników wywołujących API lub powolny subprocess, cache dyskowy jest <strong>kluczowy</strong> (TCE odczytuje powtarzające się komunikaty — fokus listy, błędy, ...).</p>
+
+<strong>Rekomendowany schemat:</strong>
+
+<li>Klucz cache = MD5 z <code>(tekst, voice_id, model_id, format_audio)</code>.</li>
+<li>Pliki WAV w katalogu wieloplatformowym:</li>
+   - Windows: <code>%APPDATA%/Titosoft/Titan/tts_cache/&lt;engine_id&gt;/</code>
+   - macOS: <code>~/Library/Application Support/Titosoft/Titan/tts_cache/&lt;engine_id&gt;/</code>
+   - Linux: <code>$XDG_CACHE_HOME/Titosoft/Titan/tts_cache/&lt;engine_id&gt;/</code> (lub <code>~/.cache/...</code>)
+<li><strong>Pitch NIE jest składnikiem klucza</strong> — stosuj go po załadowaniu z cache.</li>
+<li>Zaimplementuj <code>clear_cache()</code> żeby użytkownik mógł wyczyścić z poziomu ustawień.</li>
+
+<h2>Wieloplatformowość</h2>
+
+<li><code>pydub</code> wymaga FFmpeg na każdej platformie. Zaznacz to w opisie silnika.</li>
+<li>Subprocess: użyj <code>subprocess.Popen</code> z <code>creationflags=getattr(subprocess, &#x27;CREATE_NO_WINDOW&#x27;, 0)</code> na Windowsie żeby nie wyskakiwało okno konsoli.</li>
+<li>Pliki binarne (DLL, .exe, dane słowników) trzymaj w podkatalogu silnika i znajdź je przez <code>os.path.dirname(os.path.abspath(__file__))</code>.</li>
+<li>Sprawdzaj <code>sys.platform</code> w <code>is_available()</code> — jeśli silnik jest tylko na Windowsie, zwracaj <code>False</code> na innych systemach.</li>
+
+<h2>Testowanie silnika</h2>
+
+<li>Skopiuj katalog do <code>data/titantts engines/</code>.</li>
+<li>Uruchom TCE — w konsoli powinno pojawić się:</li>
+   <code>[EngineRegistry] Loaded engine: NAZWA (engine_id) from folder/</code>
+<li>Otwórz Ustawienia TCE → Mowa stereo (Stereo Speech) → wybierz swój silnik.</li>
+<li>Pola konfiguracji powinny pojawić się dynamicznie pod listą silników.</li>
+<li>Wpisz wartości pól (np. klucz API), naciśnij Zapisz.</li>
+<li>Wybierz głos z listy (jeśli silnik ma <code>get_voices()</code>).</li>
+<li>Naciśnij Test — powinieneś usłyszeć próbkę.</li>
+<li>Sprawdź <code>engine_registry_debug.log</code> w katalogu głównym jeśli silnik się nie ładuje.</li>
+
+<h2>Najczęstsze błędy</h2>
+
+<li><strong><code>engine_id</code> koliduje z istniejącym</strong> — drugie wystąpienie jest pomijane. Wybierz unikalne ID.</li>
+<li><strong>Brak <code>get_engine</code> jako atrybutu modułu</strong> — <code>EngineRegistry</code> szuka dokładnie <code>get_engine</code>, nie <code>get_my_engine</code>.</li>
+<li><strong>Klasa nie dziedziczy po <code>TitanTTSEngine</code></strong> — fallback z <code>try/except ImportError</code> jest WYMAGANY jeśli silnik ma działać też standalone.</li>
+<li><strong><code>is_available()</code> zwraca <code>True</code> przy braku zależności</strong> — TCE pokaże silnik na liście, ale <code>generate()</code> rzuci wyjątek.</li>
+<li><strong>Format audio inny niż 22050 Hz stereo</strong> — StereoSpeech zacznie chrupać przy łączeniu z innymi dźwiękami.</li>
+<li><strong>Brak <code>needs_lock_release = True</code></strong> dla wolnego silnika — blokuje cały StereoSpeech podczas API call.</li>
+<li><strong>Cache klucz zawiera pitch</strong> — niepotrzebne mnożenie plików, każda wartość pitch ma osobny WAV.</li>
+
+<h2>Najważniejsze wskazówki</h2>
+
+<li><strong>Unikalny <code>engine_id</code></strong> — sprawdź <code>data/titantts engines/*/</code> zanim wybierzesz nazwę.</li>
+<li><strong><code>status = 0</code> w <code>__engine__.TCE</code></strong> — inaczej silnik będzie wyłączony.</li>
+<li><strong>Singleton w <code>get_engine()</code></strong> — cache, sesje HTTP, subprocesy współdzielone.</li>
+<li><strong>Cache dyskowy</strong> dla silników z opóźnieniem (API, subprocess).</li>
+<li><strong>Normalizacja audio</strong> do 22050 Hz stereo na końcu <code>generate()</code>.</li>
+<li><strong><code>clear_cache()</code> zaimplementowane</strong> — użytkownik musi mieć jak posprzątać.</li>
+<li><strong>Try/except przy imporcie zależności</strong> — silnik nie powinien wywalić TCE.</li>
+<li><strong>Przykłady wbudowane</strong>: <code>data/titantts engines/elevenlabs/</code>, <code>milena/</code>, <code>bestspeech/</code>.</li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

@@ -253,6 +253,8 @@
 <li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
 <li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
 <li><a href="game_creation_guide_pl.html" class="active">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
                 </ul>
             </nav>
         </aside>
@@ -261,35 +263,31 @@
             <div class="header-banner">
                 <h1>Przewodnik tworzenia gier Titan</h1>
             </div>
-            <h1 id="przewodnik-tworzenia-gier-titan">Przewodnik tworzenia gier Titan</h1>
+            <h1>Przewodnik tworzenia gier Titan</h1>
 
-<h2 id="wprowadzenie">Wprowadzenie</h2>
+<h2>Wprowadzenie</h2>
 
 <p>Gry Titan to specjalna kategoria aplikacji przeznaczona dla rozrywki. System gier jest podobny do systemu aplikacji, ale gry są wyświetlane w osobnej kategorii "Gry" w niewidzialnym interfejsie. Mogą to być gry w Pythonie, skompilowane pliki wykonywalne lub inne typy programów.</p>
 
-<h2 id="architektura-systemu-gier">Architektura systemu gier</h2>
+<h2>Architektura systemu gier</h2>
 
-<h3 id="lokalizacja-gier">Lokalizacja gier</h3>
+<h3>Lokalizacja gier</h3>
+Wszystkie gry znajdują się w katalogu <code>data/games/</code>. Każda gra to osobny katalog zawierający:
+<li><code>__game.tce</code> - plik konfiguracyjny gry (wymagany)</li>
+<li><code>main.py</code> - główny plik gry (lub inny plik określony w openfile)</li>
+<li>dodatkowe pliki gry, zasoby, grafiki, dźwięki itp.</li>
 
-<p>Wszystkie gry znajdują się w katalogu <code>data/games/</code>. Każda gra to osobny katalog zawierający:
-- <code>__game.tce</code> - plik konfiguracyjny gry (wymagany)
-- <code>main.py</code> - główny plik gry (lub inny plik określony w openfile)
-- dodatkowe pliki gry, zasoby, grafiki, dźwięki itp.</p>
+<h3>Proces uruchamiania gier</h3>
 
-<h3 id="proces-uruchamiania-gier">Proces uruchamiania gier</h3>
-
-<ol>
 <li><strong>Kompilacja</strong> - pliki .py są automatycznie kompilowane do .pyc</li>
 <li><strong>Uruchomienie</strong> - gra uruchamiana w osobnym procesie</li>
 <li><strong>Katalog roboczy</strong> - gra działa w swoim katalogu (dostęp do zasobów)</li>
 <li><strong>Izolacja</strong> - każda gra działa niezależnie</li>
-</ol>
 
-<h2 id="struktura-pliku-konfiguracyjnego">Struktura pliku konfiguracyjnego</h2>
+<h2>Struktura pliku konfiguracyjnego</h2>
 
-<h3 id="__gametce">__game.tce</h3>
-
-<p>Plik w formacie klucz=wartość:</p>
+<h3>__game.tce</h3>
+Plik w formacie klucz=wartość:
 
 <pre><code>name_pl=Nazwa gry po polsku
 name_en=Game name in English
@@ -298,27 +296,26 @@ author=Autor gry
 version=1.0
 genre=Arcade
 description_pl=Opis gry po polsku
-description_en=Game description in English
-</code></pre>
+description_en=Game description in English</code></pre>
 
-<p><strong>Wymagane parametry:</strong>
-- <code>openfile</code> - nazwa pliku do uruchomienia</p>
+<strong>Wymagane parametry:</strong>
+<li><code>openfile</code> - nazwa pliku do uruchomienia</li>
 
-<p><strong>Opcjonalne parametry:</strong>
-- <code>name_pl</code> - nazwa po polsku
-- <code>name_en</code> - nazwa po angielsku<br />
-- <code>name</code> - nazwa domyślna (jeśli brak tłumaczeń)
-- <code>author</code> - autor gry
-- <code>version</code> - wersja gry
-- <code>genre</code> - gatunek gry (Arcade, RPG, Strategy, etc.)
-- <code>description_pl</code> - opis po polsku
-- <code>description_en</code> - opis po angielsku</p>
+<strong>Opcjonalne parametry:</strong>
+<li><code>name_pl</code> - nazwa po polsku</li>
+<li><code>name_en</code> - nazwa po angielsku  </li>
+<li><code>name</code> - nazwa domyślna (jeśli brak tłumaczeń)</li>
+<li><code>author</code> - autor gry</li>
+<li><code>version</code> - wersja gry</li>
+<li><code>genre</code> - gatunek gry (Arcade, RPG, Strategy, etc.)</li>
+<li><code>description_pl</code> - opis po polsku</li>
+<li><code>description_en</code> - opis po angielsku</li>
 
-<h2 id="implementacja-gier-python">Implementacja gier Python</h2>
+<h2>Implementacja gier Python</h2>
 
-<h3 id="podstawowa-struktura-mainpy-dla-gry">Podstawowa struktura main.py dla gry</h3>
+<h3>Podstawowa struktura main.py dla gry</h3>
 
-<pre><code>#!/usr/bin/env python3
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import pygame
@@ -334,37 +331,37 @@ class SimpleGame:
         self.width = 800
         self.height = 600
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Moja gra")
-
+        pygame.display.set_caption(&quot;Moja gra&quot;)
+        
         # Kolory
         self.BLACK = (0, 0, 0)
         self.WHITE = (255, 255, 255)
         self.RED = (255, 0, 0)
         self.GREEN = (0, 255, 0)
         self.BLUE = (0, 0, 255)
-
+        
         # Zegar gry
         self.clock = pygame.time.Clock()
         self.running = True
-
+        
         # Stan gry
         self.player_x = self.width // 2
         self.player_y = self.height // 2
         self.player_speed = 5
-
+        
     def handle_events(self):
-        """Obsługa zdarzeń"""
+        &quot;&quot;&quot;Obsługa zdarzeń&quot;&quot;&quot;
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-
+                    
     def update(self):
-        """Aktualizacja logiki gry"""
+        &quot;&quot;&quot;Aktualizacja logiki gry&quot;&quot;&quot;
         keys = pygame.key.get_pressed()
-
+        
         # Sterowanie graczem
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.player_x -= self.player_speed
@@ -374,46 +371,45 @@ class SimpleGame:
             self.player_y -= self.player_speed
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.player_y += self.player_speed
-
+            
         # Utrzymuj gracza w granicach ekranu
         self.player_x = max(25, min(self.width - 25, self.player_x))
         self.player_y = max(25, min(self.height - 25, self.player_y))
-
+        
     def draw(self):
-        """Rysowanie gry"""
+        &quot;&quot;&quot;Rysowanie gry&quot;&quot;&quot;
         self.screen.fill(self.BLACK)
-
+        
         # Narysuj gracza
         pygame.draw.circle(self.screen, self.BLUE, (self.player_x, self.player_y), 25)
-
+        
         # Instrukcje
         font = pygame.font.Font(None, 36)
-        text = font.render("Użyj strzałek lub WASD do poruszania", True, self.WHITE)
+        text = font.render(&quot;Użyj strzałek lub WASD do poruszania&quot;, True, self.WHITE)
         self.screen.blit(text, (10, 10))
-
-        text2 = font.render("ESC - wyjście", True, self.WHITE)
+        
+        text2 = font.render(&quot;ESC - wyjście&quot;, True, self.WHITE)
         self.screen.blit(text2, (10, 50))
-
+        
         pygame.display.flip()
-
+        
     def run(self):
-        """Główna pętla gry"""
+        &quot;&quot;&quot;Główna pętla gry&quot;&quot;&quot;
         while self.running:
             self.handle_events()
             self.update()
             self.draw()
             self.clock.tick(60)  # 60 FPS
-
+            
         pygame.quit()
 
-if __name__ == '__main__':
+if __name__ == &#x27;__main__&#x27;:
     game = SimpleGame()
-    game.run()
-</code></pre>
+    game.run()</code></pre>
 
-<h3 id="gra-z-dzwiekami-i-grafikami">Gra z dźwiękami i grafikami</h3>
+<h3>Gra z dźwiękami i grafikami</h3>
 
-<pre><code>#!/usr/bin/env python3
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import pygame
@@ -428,50 +424,50 @@ class SpaceShooter:
         self.width = 800
         self.height = 600
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Space Shooter")
-
+        pygame.display.set_caption(&quot;Space Shooter&quot;)
+        
         # Kolory
         self.BLACK = (0, 0, 0)
         self.WHITE = (255, 255, 255)
         self.RED = (255, 0, 0)
         self.YELLOW = (255, 255, 0)
-
+        
         self.clock = pygame.time.Clock()
         self.running = True
-
+        
         # Ładowanie zasobów
         self.load_resources()
-
+        
         # Inicjalizacja obiektów gry
         self.player = {
-            'x': self.width // 2,
-            'y': self.height - 50,
-            'speed': 7
+            &#x27;x&#x27;: self.width // 2,
+            &#x27;y&#x27;: self.height - 50,
+            &#x27;speed&#x27;: 7
         }
-
+        
         self.bullets = []
         self.enemies = []
         self.enemy_spawn_timer = 0
-
+        
         self.score = 0
         self.font = pygame.font.Font(None, 36)
-
+        
     def load_resources(self):
-        """Ładowanie grafik i dźwięków"""
+        &quot;&quot;&quot;Ładowanie grafik i dźwięków&quot;&quot;&quot;
         try:
             # Sprawdź czy istnieją pliki zasobów
             self.player_image = None
             self.enemy_image = None
             self.bullet_sound = None
             self.explosion_sound = None
-
+            
             # Możesz dodać ładowanie rzeczywistych plików:
-            # self.player_image = pygame.image.load("resources/player.png")
-            # self.bullet_sound = pygame.mixer.Sound("resources/shot.wav")
-
+            # self.player_image = pygame.image.load(&quot;resources/player.png&quot;)
+            # self.bullet_sound = pygame.mixer.Sound(&quot;resources/shot.wav&quot;)
+            
         except Exception as e:
-            print(f"Błąd ładowania zasobów: {e}")
-
+            print(f&quot;Błąd ładowania zasobów: {e}&quot;)
+            
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -481,129 +477,129 @@ class SpaceShooter:
                     self.running = False
                 elif event.key == pygame.K_SPACE:
                     self.shoot()
-
+                    
     def shoot(self):
-        """Strzał gracza"""
+        &quot;&quot;&quot;Strzał gracza&quot;&quot;&quot;
         bullet = {
-            'x': self.player['x'],
-            'y': self.player['y'] - 10,
-            'speed': 10
+            &#x27;x&#x27;: self.player[&#x27;x&#x27;],
+            &#x27;y&#x27;: self.player[&#x27;y&#x27;] - 10,
+            &#x27;speed&#x27;: 10
         }
         self.bullets.append(bullet)
-
+        
         # Odtwórz dźwięk strzału (jeśli załadowany)
         if self.bullet_sound:
             self.bullet_sound.play()
-
+            
     def spawn_enemy(self):
-        """Stwórz przeciwnika"""
+        &quot;&quot;&quot;Stwórz przeciwnika&quot;&quot;&quot;
         enemy = {
-            'x': random.randint(20, self.width - 20),
-            'y': -20,
-            'speed': random.randint(2, 5)
+            &#x27;x&#x27;: random.randint(20, self.width - 20),
+            &#x27;y&#x27;: -20,
+            &#x27;speed&#x27;: random.randint(2, 5)
         }
         self.enemies.append(enemy)
-
+        
     def update(self):
         keys = pygame.key.get_pressed()
-
+        
         # Sterowanie graczem
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            self.player['x'] -= self.player['speed']
+            self.player[&#x27;x&#x27;] -= self.player[&#x27;speed&#x27;]
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            self.player['x'] += self.player['speed']
-
+            self.player[&#x27;x&#x27;] += self.player[&#x27;speed&#x27;]
+            
         # Utrzymaj gracza w granicach
-        self.player['x'] = max(20, min(self.width - 20, self.player['x']))
-
+        self.player[&#x27;x&#x27;] = max(20, min(self.width - 20, self.player[&#x27;x&#x27;]))
+        
         # Aktualizuj pociski
         for bullet in self.bullets[:]:
-            bullet['y'] -= bullet['speed']
-            if bullet['y'] &lt; 0:
+            bullet[&#x27;y&#x27;] -= bullet[&#x27;speed&#x27;]
+            if bullet[&#x27;y&#x27;] &lt; 0:
                 self.bullets.remove(bullet)
-
+                
         # Aktualizuj przeciwników
         for enemy in self.enemies[:]:
-            enemy['y'] += enemy['speed']
-            if enemy['y'] &gt; self.height:
+            enemy[&#x27;y&#x27;] += enemy[&#x27;speed&#x27;]
+            if enemy[&#x27;y&#x27;] &gt; self.height:
                 self.enemies.remove(enemy)
-
+                
         # Sprawdź kolizje pocisk-przeciwnik
         for bullet in self.bullets[:]:
             for enemy in self.enemies[:]:
-                if (abs(bullet['x'] - enemy['x']) &lt; 20 and 
-                    abs(bullet['y'] - enemy['y']) &lt; 20):
+                if (abs(bullet[&#x27;x&#x27;] - enemy[&#x27;x&#x27;]) &lt; 20 and 
+                    abs(bullet[&#x27;y&#x27;] - enemy[&#x27;y&#x27;]) &lt; 20):
                     self.bullets.remove(bullet)
                     self.enemies.remove(enemy)
                     self.score += 10
                     break
-
+                    
         # Sprawdź kolizje gracz-przeciwnik
         for enemy in self.enemies:
-            if (abs(self.player['x'] - enemy['x']) &lt; 30 and 
-                abs(self.player['y'] - enemy['y']) &lt; 30):
+            if (abs(self.player[&#x27;x&#x27;] - enemy[&#x27;x&#x27;]) &lt; 30 and 
+                abs(self.player[&#x27;y&#x27;] - enemy[&#x27;y&#x27;]) &lt; 30):
                 self.game_over()
-
+                
         # Spawn przeciwników
         self.enemy_spawn_timer += 1
         if self.enemy_spawn_timer &gt; 60:  # Co sekundę
             self.spawn_enemy()
             self.enemy_spawn_timer = 0
-
+            
     def draw(self):
         self.screen.fill(self.BLACK)
-
+        
         # Narysuj gracza
         pygame.draw.rect(self.screen, self.WHITE, 
-                        (self.player['x'] - 15, self.player['y'] - 10, 30, 20))
-
+                        (self.player[&#x27;x&#x27;] - 15, self.player[&#x27;y&#x27;] - 10, 30, 20))
+        
         # Narysuj pociski
         for bullet in self.bullets:
             pygame.draw.circle(self.screen, self.YELLOW, 
-                             (bullet['x'], bullet['y']), 3)
-
+                             (bullet[&#x27;x&#x27;], bullet[&#x27;y&#x27;]), 3)
+            
         # Narysuj przeciwników
         for enemy in self.enemies:
             pygame.draw.rect(self.screen, self.RED, 
-                           (enemy['x'] - 10, enemy['y'] - 10, 20, 20))
-
+                           (enemy[&#x27;x&#x27;] - 10, enemy[&#x27;y&#x27;] - 10, 20, 20))
+            
         # Wyświetl wynik
-        score_text = self.font.render(f"Wynik: {self.score}", True, self.WHITE)
+        score_text = self.font.render(f&quot;Wynik: {self.score}&quot;, True, self.WHITE)
         self.screen.blit(score_text, (10, 10))
-
+        
         # Instrukcje
         instructions = [
-            "Strzałki/WASD - ruch",
-            "SPACJA - strzał",
-            "ESC - wyjście"
+            &quot;Strzałki/WASD - ruch&quot;,
+            &quot;SPACJA - strzał&quot;,
+            &quot;ESC - wyjście&quot;
         ]
-
+        
         font_small = pygame.font.Font(None, 24)
         for i, instruction in enumerate(instructions):
             text = font_small.render(instruction, True, self.WHITE)
             self.screen.blit(text, (10, self.height - 80 + i * 25))
-
+        
         pygame.display.flip()
-
+        
     def game_over(self):
-        """Koniec gry"""
+        &quot;&quot;&quot;Koniec gry&quot;&quot;&quot;
         self.screen.fill(self.BLACK)
-
-        game_over_text = pygame.font.Font(None, 72).render("GAME OVER", True, self.RED)
-        score_text = self.font.render(f"Końcowy wynik: {self.score}", True, self.WHITE)
-        restart_text = pygame.font.Font(None, 24).render("Naciśnij ESC aby wyjść", True, self.WHITE)
-
+        
+        game_over_text = pygame.font.Font(None, 72).render(&quot;GAME OVER&quot;, True, self.RED)
+        score_text = self.font.render(f&quot;Końcowy wynik: {self.score}&quot;, True, self.WHITE)
+        restart_text = pygame.font.Font(None, 24).render(&quot;Naciśnij ESC aby wyjść&quot;, True, self.WHITE)
+        
         # Wyśrodkuj teksty
         game_over_rect = game_over_text.get_rect(center=(self.width//2, self.height//2 - 50))
         score_rect = score_text.get_rect(center=(self.width//2, self.height//2))
         restart_rect = restart_text.get_rect(center=(self.width//2, self.height//2 + 50))
-
+        
         self.screen.blit(game_over_text, game_over_rect)
         self.screen.blit(score_text, score_rect)
         self.screen.blit(restart_text, restart_rect)
-
+        
         pygame.display.flip()
-
+        
         # Czekaj na ESC
         waiting = True
         while waiting:
@@ -611,26 +607,25 @@ class SpaceShooter:
                 if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                     waiting = False
                     self.running = False
-
+                    
     def run(self):
         while self.running:
             self.handle_events()
             self.update()
             self.draw()
             self.clock.tick(60)
-
+            
         pygame.quit()
 
-if __name__ == '__main__':
+if __name__ == &#x27;__main__&#x27;:
     game = SpaceShooter()
-    game.run()
-</code></pre>
+    game.run()</code></pre>
 
-<h2 id="gry-tekstowe">Gry tekstowe</h2>
+<h2>Gry tekstowe</h2>
 
 <p>Możesz też tworzyć gry tekstowe/konsolowe:</p>
 
-<pre><code>#!/usr/bin/env python3
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import random
@@ -641,69 +636,69 @@ class GuessTheNumber:
         self.number = random.randint(1, 100)
         self.attempts = 0
         self.max_attempts = 10
-
+        
     def clear_screen(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
-
+        os.system(&#x27;cls&#x27; if os.name == &#x27;nt&#x27; else &#x27;clear&#x27;)
+        
     def play(self):
         self.clear_screen()
-        print("=== ZGADNIJ LICZBĘ ===")
-        print(f"Pomyślałem liczbę od 1 do 100.")
-        print(f"Masz {self.max_attempts} prób na odgadnięcie!")
+        print(&quot;=== ZGADNIJ LICZBĘ ===&quot;)
+        print(f&quot;Pomyślałem liczbę od 1 do 100.&quot;)
+        print(f&quot;Masz {self.max_attempts} prób na odgadnięcie!&quot;)
         print()
-
+        
         while self.attempts &lt; self.max_attempts:
             try:
-                guess = int(input(f"Próba {self.attempts + 1}: Twoja liczba: "))
+                guess = int(input(f&quot;Próba {self.attempts + 1}: Twoja liczba: &quot;))
                 self.attempts += 1
-
+                
                 if guess == self.number:
-                    print(f"🎉 Brawo! Odgadłeś w {self.attempts} próbach!")
+                    print(f&quot;🎉 Brawo! Odgadłeś w {self.attempts} próbach!&quot;)
                     break
                 elif guess &lt; self.number:
-                    print("Za mało!")
+                    print(&quot;Za mało!&quot;)
                 else:
-                    print("Za dużo!")
-
+                    print(&quot;Za dużo!&quot;)
+                    
                 remaining = self.max_attempts - self.attempts
                 if remaining &gt; 0:
-                    print(f"Pozostało prób: {remaining}")
+                    print(f&quot;Pozostało prób: {remaining}&quot;)
                 print()
-
+                
             except ValueError:
-                print("Proszę wpisać liczbę całkowitą!")
+                print(&quot;Proszę wpisać liczbę całkowitą!&quot;)
                 continue
-
+                
         if self.attempts &gt;= self.max_attempts and guess != self.number:
-            print(f"💀 Przegrałeś! Liczba to: {self.number}")
-
-        print("\nNaciśnij Enter aby zakończyć...")
+            print(f&quot;💀 Przegrałeś! Liczba to: {self.number}&quot;)
+            
+        print(&quot;\nNaciśnij Enter aby zakończyć...&quot;)
         input()
 
 class TicTacToe:
     def __init__(self):
-        self.board = [' '] * 9
-        self.current_player = 'X'
-
+        self.board = [&#x27; &#x27;] * 9
+        self.current_player = &#x27;X&#x27;
+        
     def clear_screen(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
-
+        os.system(&#x27;cls&#x27; if os.name == &#x27;nt&#x27; else &#x27;clear&#x27;)
+        
     def draw_board(self):
-        print("\n=== KÓŁKO I KRZYŻYK ===")
+        print(&quot;\n=== KÓŁKO I KRZYŻYK ===&quot;)
         print()
-        print(" 1 | 2 | 3     {} | {} | {} ".format(self.board[0], self.board[1], self.board[2]))
-        print("-----------   -----------")
-        print(" 4 | 5 | 6     {} | {} | {} ".format(self.board[3], self.board[4], self.board[5]))
-        print("-----------   -----------")
-        print(" 7 | 8 | 9     {} | {} | {} ".format(self.board[6], self.board[7], self.board[8]))
+        print(&quot; 1 | 2 | 3     {} | {} | {} &quot;.format(self.board[0], self.board[1], self.board[2]))
+        print(&quot;-----------   -----------&quot;)
+        print(&quot; 4 | 5 | 6     {} | {} | {} &quot;.format(self.board[3], self.board[4], self.board[5]))
+        print(&quot;-----------   -----------&quot;)
+        print(&quot; 7 | 8 | 9     {} | {} | {} &quot;.format(self.board[6], self.board[7], self.board[8]))
         print()
-
+        
     def make_move(self, position):
-        if self.board[position - 1] == ' ':
+        if self.board[position - 1] == &#x27; &#x27;:
             self.board[position - 1] = self.current_player
             return True
         return False
-
+        
     def check_winner(self):
         # Sprawdź wiersze, kolumny i przekątne
         winning_combinations = [
@@ -711,76 +706,75 @@ class TicTacToe:
             [0, 3, 6], [1, 4, 7], [2, 5, 8],  # kolumny
             [0, 4, 8], [2, 4, 6]              # przekątne
         ]
-
+        
         for combo in winning_combinations:
-            if (self.board[combo[0]] == self.board[combo[1]] == self.board[combo[2]] != ' '):
+            if (self.board[combo[0]] == self.board[combo[1]] == self.board[combo[2]] != &#x27; &#x27;):
                 return self.board[combo[0]]
         return None
-
+        
     def is_board_full(self):
-        return ' ' not in self.board
-
+        return &#x27; &#x27; not in self.board
+        
     def switch_player(self):
-        self.current_player = 'O' if self.current_player == 'X' else 'X'
-
+        self.current_player = &#x27;O&#x27; if self.current_player == &#x27;X&#x27; else &#x27;X&#x27;
+        
     def play(self):
         while True:
             self.clear_screen()
             self.draw_board()
-
+            
             winner = self.check_winner()
             if winner:
-                print(f"🎉 Gracz {winner} wygrał!")
+                print(f&quot;🎉 Gracz {winner} wygrał!&quot;)
                 break
-
+                
             if self.is_board_full():
-                print("🤝 Remis!")
+                print(&quot;🤝 Remis!&quot;)
                 break
-
+                
             try:
-                position = int(input(f"Gracz {self.current_player}, wybierz pozycję (1-9): "))
+                position = int(input(f&quot;Gracz {self.current_player}, wybierz pozycję (1-9): &quot;))
                 if 1 &lt;= position &lt;= 9:
                     if self.make_move(position):
                         self.switch_player()
                     else:
-                        print("Ta pozycja jest już zajęta!")
-                        input("Naciśnij Enter aby kontynuować...")
+                        print(&quot;Ta pozycja jest już zajęta!&quot;)
+                        input(&quot;Naciśnij Enter aby kontynuować...&quot;)
                 else:
-                    print("Wybierz pozycję od 1 do 9!")
-                    input("Naciśnij Enter aby kontynuować...")
+                    print(&quot;Wybierz pozycję od 1 do 9!&quot;)
+                    input(&quot;Naciśnij Enter aby kontynuować...&quot;)
             except ValueError:
-                print("Proszę wpisać liczbę!")
-                input("Naciśnij Enter aby kontynuować...")
-
-        print("\nNaciśnij Enter aby zakończyć...")
+                print(&quot;Proszę wpisać liczbę!&quot;)
+                input(&quot;Naciśnij Enter aby kontynuować...&quot;)
+                
+        print(&quot;\nNaciśnij Enter aby zakończyć...&quot;)
         input()
 
 def main():
-    print("Wybierz grę:")
-    print("1. Zgadnij liczbę")
-    print("2. Kółko i krzyżyk")
-    print("0. Wyjście")
-
-    choice = input("Twój wybór: ")
-
-    if choice == '1':
+    print(&quot;Wybierz grę:&quot;)
+    print(&quot;1. Zgadnij liczbę&quot;)
+    print(&quot;2. Kółko i krzyżyk&quot;)
+    print(&quot;0. Wyjście&quot;)
+    
+    choice = input(&quot;Twój wybór: &quot;)
+    
+    if choice == &#x27;1&#x27;:
         game = GuessTheNumber()
         game.play()
-    elif choice == '2':
+    elif choice == &#x27;2&#x27;:
         game = TicTacToe()
         game.play()
-    elif choice == '0':
-        print("Do widzenia!")
+    elif choice == &#x27;0&#x27;:
+        print(&quot;Do widzenia!&quot;)
     else:
-        print("Nieprawidłowy wybór!")
+        print(&quot;Nieprawidłowy wybór!&quot;)
 
-if __name__ == '__main__':
-    main()
-</code></pre>
+if __name__ == &#x27;__main__&#x27;:
+    main()</code></pre>
 
-<h2 id="zasoby-gier">Zasoby gier</h2>
+<h2>Zasoby gier</h2>
 
-<h3 id="struktura-katalogow-dla-gier-z-zasobami">Struktura katalogów dla gier z zasobami</h3>
+<h3>Struktura katalogów dla gier z zasobami</h3>
 
 <pre><code>data/games/moja_gra/
 ├── __game.tce          # Konfiguracja gry (wymagane)
@@ -804,124 +798,118 @@ if __name__ == '__main__':
 │   ├── enemy.py
 │   └── game_state.py
 └── config/             # Konfiguracja
-    └── settings.ini
-</code></pre>
+    └── settings.ini</code></pre>
 
-<h3 id="ładowanie-zasobow-z-katalogu-gry">Ładowanie zasobów z katalogu gry</h3>
+<h3>Ładowanie zasobów z katalogu gry</h3>
 
-<pre><code>import os
+<pre><code class="language-python">import os
 import pygame
 
 def load_game_resources():
-    """Funkcja do ładowania zasobów z katalogu gry"""
+    &quot;&quot;&quot;Funkcja do ładowania zasobów z katalogu gry&quot;&quot;&quot;
     game_dir = os.path.dirname(__file__)
-    resources_dir = os.path.join(game_dir, 'resources')
-
+    resources_dir = os.path.join(game_dir, &#x27;resources&#x27;)
+    
     resources = {}
-
+    
     # Ładowanie obrazków
-    images_dir = os.path.join(resources_dir, 'images')
+    images_dir = os.path.join(resources_dir, &#x27;images&#x27;)
     if os.path.exists(images_dir):
         for file in os.listdir(images_dir):
-            if file.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            if file.endswith((&#x27;.png&#x27;, &#x27;.jpg&#x27;, &#x27;.jpeg&#x27;, &#x27;.gif&#x27;)):
                 name = os.path.splitext(file)[0]
-                resources[f'image_{name}'] = pygame.image.load(
+                resources[f&#x27;image_{name}&#x27;] = pygame.image.load(
                     os.path.join(images_dir, file)
                 )
-
+    
     # Ładowanie dźwięków
-    sounds_dir = os.path.join(resources_dir, 'sounds')
+    sounds_dir = os.path.join(resources_dir, &#x27;sounds&#x27;)
     if os.path.exists(sounds_dir):
         for file in os.listdir(sounds_dir):
-            if file.endswith(('.wav', '.ogg', '.mp3')):
+            if file.endswith((&#x27;.wav&#x27;, &#x27;.ogg&#x27;, &#x27;.mp3&#x27;)):
                 name = os.path.splitext(file)[0]
-                resources[f'sound_{name}'] = pygame.mixer.Sound(
+                resources[f&#x27;sound_{name}&#x27;] = pygame.mixer.Sound(
                     os.path.join(sounds_dir, file)
                 )
-
+    
     return resources
 
 # Użycie w grze
 resources = load_game_resources()
-player_image = resources.get('image_player')
-shoot_sound = resources.get('sound_shoot')
-</code></pre>
+player_image = resources.get(&#x27;image_player&#x27;)
+shoot_sound = resources.get(&#x27;sound_shoot&#x27;)</code></pre>
 
-<h2 id="zapisywanie-stanu-gry">Zapisywanie stanu gry</h2>
+<h2>Zapisywanie stanu gry</h2>
 
-<pre><code>import json
+<pre><code class="language-python">import json
 import os
 
 class GameSave:
     def __init__(self, game_name):
         self.game_dir = os.path.dirname(__file__)
-        self.save_file = os.path.join(self.game_dir, f"{game_name}_save.json")
-
+        self.save_file = os.path.join(self.game_dir, f&quot;{game_name}_save.json&quot;)
+        
     def save_game(self, game_data):
-        """Zapisz stan gry"""
+        &quot;&quot;&quot;Zapisz stan gry&quot;&quot;&quot;
         try:
-            with open(self.save_file, 'w', encoding='utf-8') as f:
+            with open(self.save_file, &#x27;w&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                 json.dump(game_data, f, indent=2)
             return True
         except Exception as e:
-            print(f"Błąd zapisywania: {e}")
+            print(f&quot;Błąd zapisywania: {e}&quot;)
             return False
-
+            
     def load_game(self):
-        """Wczytaj stan gry"""
+        &quot;&quot;&quot;Wczytaj stan gry&quot;&quot;&quot;
         try:
             if os.path.exists(self.save_file):
-                with open(self.save_file, 'r', encoding='utf-8') as f:
+                with open(self.save_file, &#x27;r&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                     return json.load(f)
         except Exception as e:
-            print(f"Błąd wczytywania: {e}")
+            print(f&quot;Błąd wczytywania: {e}&quot;)
         return None
-
+        
     def save_exists(self):
-        """Sprawdź czy istnieje zapis"""
+        &quot;&quot;&quot;Sprawdź czy istnieje zapis&quot;&quot;&quot;
         return os.path.exists(self.save_file)
 
 # Użycie w grze
 class RPGGame:
     def __init__(self):
-        self.save_manager = GameSave("my_rpg")
+        self.save_manager = GameSave(&quot;my_rpg&quot;)
         self.player_data = {
-            'name': 'Gracz',
-            'level': 1,
-            'hp': 100,
-            'exp': 0,
-            'inventory': [],
-            'position': {'x': 0, 'y': 0}
+            &#x27;name&#x27;: &#x27;Gracz&#x27;,
+            &#x27;level&#x27;: 1,
+            &#x27;hp&#x27;: 100,
+            &#x27;exp&#x27;: 0,
+            &#x27;inventory&#x27;: [],
+            &#x27;position&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 0}
         }
-
+        
     def save_game(self):
         game_state = {
-            'player': self.player_data,
-            'timestamp': time.time()
+            &#x27;player&#x27;: self.player_data,
+            &#x27;timestamp&#x27;: time.time()
         }
         return self.save_manager.save_game(game_state)
-
+        
     def load_game(self):
         data = self.save_manager.load_game()
         if data:
-            self.player_data = data.get('player', self.player_data)
+            self.player_data = data.get(&#x27;player&#x27;, self.player_data)
             return True
-        return False
-</code></pre>
+        return False</code></pre>
 
-<h2 id="testowanie-gier">Testowanie gier</h2>
+<h2>Testowanie gier</h2>
 
-<ol>
 <li>Utwórz katalog w <code>data/games/nazwa_gry/</code></li>
 <li>Dodaj <code>__game.tce</code> i główny plik gry</li>
 <li>Uruchom Titan</li>
 <li>Sprawdź czy gra pojawia się w kategorii "Gry"</li>
 <li>Przetestuj uruchamianie i gameplay</li>
-</ol>
 
-<h2 id="najwazniejsze-wskazowki-dla-gier">Najważniejsze wskazówki dla gier</h2>
+<h2>Najważniejsze wskazówki dla gier</h2>
 
-<ol>
 <li><strong>Zawsze dodaj plik __game.tce</strong> - bez niego gra nie będzie widoczna</li>
 <li><strong>Optymalizuj wydajność</strong> - gry powinny działać płynnie (60 FPS)</li>
 <li><strong>Dodaj instrukcje</strong> - wyjaśnij sterowanie i zasady</li>
@@ -932,20 +920,17 @@ class RPGGame:
 <li><strong>Dodaj menu</strong> - ekran startowy, opcje, high scores</li>
 <li><strong>Obsługuj błędy</strong> - gra nie powinna crashować</li>
 <li><strong>Dokumentuj</strong> - opisz grę w pliku konfiguracyjnym</li>
-</ol>
 
-<h2 id="popularne-biblioteki-dla-gier-python">Popularne biblioteki dla gier Python</h2>
+<h2>Popularne biblioteki dla gier Python</h2>
 
-<ul>
 <li><strong>pygame</strong> - 2D gry, sprite'y, dźwięk</li>
 <li><strong>pyglet</strong> - OpenGL, 3D grafika</li>
 <li><strong>arcade</strong> - nowoczesne 2D gry</li>
 <li><strong>kivy</strong> - gry mobilne, touch interface</li>
 <li><strong>panda3d</strong> - gry 3D</li>
 <li><strong>tkinter</strong> - proste gry tekstowe/puzzle</li>
-</ul>
 
-<h2 id="struktura-katalogow">Struktura katalogów</h2>
+<h2>Struktura katalogów</h2>
 
 <pre><code>data/games/my_game/
 ├── __game.tce          # Konfiguracja gry (wymagane)
@@ -954,11 +939,9 @@ class RPGGame:
 ├── modules/            # Moduły gry (opcjonalnie)
 ├── saves/              # Zapisy gry (opcjonalnie)
 ├── config/             # Ustawienia (opcjonalnie)
-└── docs/               # Dokumentacja (opcjonalnie)
-</code></pre>
+└── docs/               # Dokumentacja (opcjonalnie)</code></pre>
 
 <p>Gry Titan oferują platformę do tworzenia różnorodnych gier - od prostych gier tekstowych po zaawansowane gry 2D/3D z grafiką i dźwiękiem. System automatycznie zarządza uruchamianiem i izolacją gier.</p>
-
             <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
         </main>
     </div>

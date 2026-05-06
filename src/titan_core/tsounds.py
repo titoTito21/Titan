@@ -52,6 +52,13 @@ class SystemAudioFeedback(threading.Thread):
         self.daemon = True
         self._stop_event = threading.Event()
 
+        # PID of the main TCE process — all TCE windows (Telegram, Titan-Net,
+        # Settings, etc.) live in this process and should be ignored.
+        # TCE *apps* (from data/applications/) run as child processes with
+        # different PIDs, so they will still get sounds.
+        import os
+        self._tce_pid = os.getpid()
+
         # Słownik informacji o monitorowanych procesach
         # { pid: {"exe_name": str, "is_system": bool, "had_window": bool } }
         self.process_info = {}
@@ -120,6 +127,9 @@ class SystemAudioFeedback(threading.Thread):
     def _on_new_process(self, pid):
         """Rejestrujemy nowy proces. Nie odtwarzamy jeszcze dźwięku,
         dopóki nie potwierdzimy, że proces ma okno."""
+        # Skip the main TCE process — its windows are handled by TCE itself
+        if pid == self._tce_pid:
+            return
         try:
             proc = psutil.Process(pid)
             exe_name = (proc.name() or "").lower()
@@ -283,15 +293,16 @@ class SystemAudioFeedback(threading.Thread):
             pass
 
     def _monitor_active_window_crossplatform(self):
-        """macOS/Linux: monitor active window name changes."""
+        """macOS/Linux: monitor active window name/PID changes."""
         global play_sound
         try:
             current_name = self._get_active_window_name()
             if not current_name:
                 return
 
-            # Skip Titan windows
-            if "titan" in current_name.lower():
+            # Skip TCE windows (same process)
+            active_pid = self._get_active_window_pid()
+            if active_pid == self._tce_pid:
                 self.prev_window_name = current_name
                 return
 
@@ -337,37 +348,51 @@ class SystemAudioFeedback(threading.Thread):
             pass
         return None
 
+    def _get_active_window_pid(self):
+        """Get the PID of the currently active window (cross-platform)."""
+        try:
+            if IS_LINUX:
+                try:
+                    result = subprocess.run(
+                        ['xdotool', 'getactivewindow', 'getwindowpid'],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    if result.returncode == 0 and result.stdout.strip().isdigit():
+                        return int(result.stdout.strip())
+                except FileNotFoundError:
+                    pass
+            elif IS_MACOS:
+                try:
+                    result = subprocess.run(
+                        ['osascript', '-e',
+                         'tell application "System Events" to get unix id of first application process whose frontmost is true'],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    if result.returncode == 0 and result.stdout.strip().isdigit():
+                        return int(result.stdout.strip())
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return None
+
     # --------------------------------------------------------------------------
     #         WINDOWS-SPECIFIC HELPERS (only called when IS_WINDOWS)
     # --------------------------------------------------------------------------
     def _is_titan_window_win32(self, hwnd) -> bool:
-        """Sprawdza czy okno należy do aplikacji Titan"""
+        """Check if a window belongs to the main TCE process.
+
+        Windows in the same process (Telegram, Titan-Net, Settings, etc.)
+        are TCE windows and should be ignored.  TCE *apps* run as child
+        processes with different PIDs and are NOT considered TCE windows.
+        """
         try:
             if not win32gui.IsWindow(hwnd):
                 return False
-
-            window_title = win32gui.GetWindowText(hwnd)
-
-            if "Titan" in window_title:
-                return True
-
-            try:
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                process = psutil.Process(pid)
-                exe_name = process.name().lower()
-
-                if "titan" in exe_name or exe_name == "main.exe" or exe_name == "python.exe":
-                    if exe_name == "python.exe" and "Titan" in window_title:
-                        return True
-                    elif exe_name != "python.exe":
-                        return True
-            except Exception:
-                pass
-
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            return pid == self._tce_pid
         except Exception:
-            pass
-
-        return False
+            return False
 
     def _is_menu(self, hwnd) -> bool:
         """Sprawdza czy okno to menu (kontekstowe, systemowe, etc.)"""

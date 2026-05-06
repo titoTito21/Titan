@@ -59,7 +59,8 @@ _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API - automatycznie wstrzykiwane przez menedżer modułów
+# Sound API and _() are auto-injected by the IM module manager
+# (_: gettext from {module_path}/languages/, sounds: unified Sound API)
 # Zapewnia ujednolicone dźwięki TitanNet/Titan IM (takie same jak Telegram, EltenLink, Titan-Net)
 _module = sys.modules[__name__]
 
@@ -298,7 +299,8 @@ _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API - automatycznie wstrzykiwane przez menedżer modułów
+# Sound API and _() are auto-injected by the IM module manager
+# (_: gettext from {module_path}/languages/, sounds: unified Sound API)
 _module = sys.modules[__name__]
 
 # Stan połączenia dla tekstu statusu
@@ -562,7 +564,8 @@ _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API - automatycznie wstrzykiwane przez menedżer modułów
+# Sound API and _() are auto-injected by the IM module manager
+# (_: gettext from {module_path}/languages/, sounds: unified Sound API)
 _module = sys.modules[__name__]
 
 # Stan dla tekstu statusu

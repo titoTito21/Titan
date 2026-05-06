@@ -90,6 +90,19 @@ class TitanTTSEngine(abc.ABC):
         """
         pass
 
+    def set_pitch(self, pitch):
+        """Set default speech pitch. Called by StereoSpeech with TCE standard range.
+
+        Args:
+            pitch (int): Pitch from -10 (lowest) to +10 (highest), 0 = default.
+
+        Engines that generate audio typically handle pitch via the pitch_offset
+        parameter in generate(). This method stores a default pitch offset
+        that StereoSpeech adds to per-call pitch_offset values.
+        Override if the engine needs to apply pitch internally.
+        """
+        pass
+
     def set_volume(self, volume):
         """Set speech volume (0-100). Override per engine."""
         pass

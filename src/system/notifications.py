@@ -6,7 +6,7 @@ import os
 import glob
 import re
 
-from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_subprocess_kwargs
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -37,13 +37,18 @@ def get_battery_status():
         if not GetSystemPowerStatus(ctypes.byref(status)):
             return "Unknown"
 
-        return f"{status.BatteryLifePercent}%"
+        percent = status.BatteryLifePercent
+        # 255 (0xFF) means no battery present (desktop PC)
+        if percent == 255 or percent < 0:
+            return None
+
+        return f"{percent}%"
     elif IS_LINUX:
         try:
             # Try to find battery information in /sys/class/power_supply/
             battery_paths = glob.glob("/sys/class/power_supply/BAT*")
             if not battery_paths:
-                return "No battery"
+                return None
             
             # Use the first battery found
             battery_path = battery_paths[0]
@@ -131,7 +136,7 @@ def get_volume_level():
 def get_network_status():
     if IS_WINDOWS:
         try:
-            output = subprocess.check_output("netsh wlan show interfaces", shell=True).decode()
+            output = subprocess.check_output("netsh wlan show interfaces", shell=True, **get_subprocess_kwargs()).decode()
             if "There is no wireless interface" in output:
                 return "nie połączono, nie ma dostępnych sieci WiFi"
             elif "State" in output:

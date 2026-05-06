@@ -586,7 +586,8 @@ if os.path.exists(bundled_espeak_exe):
         # Test bundled eSpeak
         result = subprocess.run([bundled_espeak_exe, '--version'],
                               capture_output=True,
-                              timeout=2)
+                              timeout=2,
+                              creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if result.returncode == 0:
             ESPEAK_AVAILABLE = True
             ESPEAK_PATH = bundled_espeak_exe
@@ -602,7 +603,8 @@ if not ESPEAK_AVAILABLE:
         try:
             result = subprocess.run([espeak_cmd, '--version'],
                                   capture_output=True,
-                                  timeout=2)
+                                  timeout=2,
+                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             if result.returncode == 0:
                 ESPEAK_AVAILABLE = True
                 ESPEAK_PATH = espeak_cmd
@@ -1580,7 +1582,15 @@ class StereoSpeech:
             except (ValueError, TypeError):
                 pass
 
-            # 4. Volume (0-100)
+            # 4. Pitch (-10 to +10)
+            try:
+                pitch = int(stereo_settings.get('pitch', '0'))
+                if pitch != 0:
+                    self.set_pitch(pitch)
+            except (ValueError, TypeError):
+                pass
+
+            # 5. Volume (0-100)
             try:
                 volume = int(stereo_settings.get('volume', '100'))
                 if volume != 100:
@@ -1588,7 +1598,7 @@ class StereoSpeech:
             except (ValueError, TypeError):
                 pass
 
-            # 5. Voice
+            # 6. Voice
             voice_id = stereo_settings.get('voice', '')
             if voice_id:
                 try:
@@ -1601,7 +1611,7 @@ class StereoSpeech:
                 except Exception:
                     pass
 
-            print(f"[StereoSpeech] Loaded saved settings: engine={self.engine}, rate={stereo_settings.get('rate', '0')}")
+            print(f"[StereoSpeech] Loaded saved settings: engine={self.engine}, rate={stereo_settings.get('rate', '0')}, pitch={stereo_settings.get('pitch', '0')}")
         except Exception as e:
             print(f"[StereoSpeech] Could not load saved settings: {e}")
 
@@ -1735,6 +1745,7 @@ class StereoSpeech:
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
                 )
                 self._espeak_process = proc
 
@@ -1814,7 +1825,8 @@ class StereoSpeech:
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
-                    encoding=None  # Binary mode for stdout
+                    encoding=None,  # Binary mode for stdout
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
                 )
                 self._espeak_process = process
 
@@ -2311,7 +2323,7 @@ class StereoSpeech:
                     temp_wav_path = os.path.abspath(temp_wav.name)
                     temp_wav.close()
                     temp_file = self._sapi_worker.generate_to_file(
-                        text, temp_wav_path, pitch_offset)
+                        text, temp_wav_path, pitch_offset + self.default_pitch)
                     if not temp_file and os.path.exists(temp_wav_path):
                         try:
                             os.unlink(temp_wav_path)
@@ -2383,7 +2395,8 @@ class StereoSpeech:
                                 lock_acquired = False
 
                         try:
-                            audio = tts_engine.generate(text, pitch_offset)
+                            effective_pitch = pitch_offset + self.default_pitch
+                            audio = tts_engine.generate(text, effective_pitch)
                         except Exception as e:
                             print(f"[StereoSpeech] {tts_engine.engine_name} generation error: {e}")
                             audio = None
@@ -2764,6 +2777,7 @@ class StereoSpeech:
             pitch (int): Pitch from -10 to 10
         """
         try:
+            self.default_pitch = max(-10, min(10, int(pitch)))
             if self.engine in ('espeak', 'espeak_dll'):
                 # Map -10..10 to 0..99
                 self.espeak_pitch = int(50 + (pitch * 5))
@@ -2771,6 +2785,13 @@ class StereoSpeech:
                 # Sync to DLL instance
                 if self.espeak_dll:
                     self.espeak_dll.set_pitch(pitch)
+            else:
+                # Delegate to TitanTTS engine via registry
+                registry = _get_engine_registry()
+                if registry:
+                    tts_engine = registry.get_titantts_engine(self.engine)
+                    if tts_engine and hasattr(tts_engine, 'set_pitch'):
+                        tts_engine.set_pitch(pitch)
         except Exception as e:
             print(f"[StereoSpeech] Error setting pitch: {e}")
 
@@ -2814,7 +2835,8 @@ class StereoSpeech:
                 text=True,
                 encoding='utf-8',
                 errors='ignore',
-                timeout=5
+                timeout=5,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
             )
 
             if result.returncode != 0:
@@ -2997,11 +3019,26 @@ class StereoSpeech:
         - HKLM\\SOFTWARE\\Microsoft\\Speech\\Voices (native bitness)
         - HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Speech\\Voices (32-bit on 64-bit)
 
+        The Titan TTS voice (if registered) is filtered out to prevent an
+        infinite recursion trap where Titan TTS would try to use itself as
+        its SAPI5 backend.
+
         Returns:
             list: List of dicts with 'token', 'name', 'id', and optional 'is_32bit'
         """
         voices = []
         seen_ids = set()
+
+        def _is_titan_tts_voice(voice_id, name):
+            try:
+                from src.tts.sapi_registration import TITAN_TTS_VOICE_TOKEN_NAME, TITAN_TTS_VOICE_DISPLAY_NAME
+            except Exception:
+                TITAN_TTS_VOICE_TOKEN_NAME = 'TitanTTS'
+                TITAN_TTS_VOICE_DISPLAY_NAME = 'Titan TTS'
+            vid = (voice_id or '').lower()
+            vname = (name or '').strip().lower()
+            return (TITAN_TTS_VOICE_TOKEN_NAME.lower() in vid or
+                    vname == TITAN_TTS_VOICE_DISPLAY_NAME.lower())
 
         # Native voices (already returned by GetVoices)
         try:
@@ -3009,7 +3046,10 @@ class StereoSpeech:
             for i in range(tokens.Count):
                 token = tokens.Item(i)
                 voice_id = token.Id
-                voices.append({'token': token, 'name': token.GetDescription(), 'id': voice_id})
+                name = token.GetDescription()
+                if _is_titan_tts_voice(voice_id, name):
+                    continue
+                voices.append({'token': token, 'name': name, 'id': voice_id})
                 seen_ids.add(voice_id)
         except Exception as e:
             print(f"[StereoSpeech] Error enumerating native SAPI voices: {e}")
@@ -3033,6 +3073,9 @@ class StereoSpeech:
 
                             if voice_id not in seen_ids:
                                 name = token.GetDescription()
+                                if _is_titan_tts_voice(voice_id, name):
+                                    i += 1
+                                    continue
                                 voices.append({'token': token, 'name': name, 'id': voice_id, 'is_32bit': True})
                                 seen_ids.add(voice_id)
                             i += 1

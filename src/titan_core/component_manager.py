@@ -224,6 +224,25 @@ class ComponentManager:
                 if component_dir not in sys.path:
                     sys.path.insert(0, component_dir)
 
+                # Add component's library paths for bundled dependencies
+                # Config: libs = lib, vendor (comma-separated, relative to component dir)
+                # Default: lib/ if exists
+                config_path = os.path.join(component_dir, '__component__.TCE')
+                _lib_dirs = ["lib"]
+                if os.path.isfile(config_path):
+                    _cfg = configparser.ConfigParser()
+                    try:
+                        _cfg.read(config_path, encoding='utf-8')
+                        _libs_str = _cfg.get('component', 'libs', fallback='')
+                        if _libs_str.strip():
+                            _lib_dirs = [d.strip() for d in _libs_str.split(',') if d.strip()]
+                    except Exception:
+                        pass
+                for _ld in _lib_dirs:
+                    _full_lib = os.path.join(component_dir, _ld)
+                    if os.path.isdir(_full_lib) and _full_lib not in sys.path:
+                        sys.path.insert(0, _full_lib)
+
                 if init_path.endswith('.py'):
                     # Load .py file via exec()
                     print(f"[ComponentManager] Loading component via exec(): {component_name}")
@@ -475,6 +494,21 @@ class ComponentManager:
             self.gui_app.register_view(view_id, label, control, on_show, on_activate, position)
         else:
             print(f"[ComponentManager] Cannot register view '{view_id}': GUI app not available")
+
+    def sync_view_tab_bar(self, view_id_or_control):
+        """Re-inject the virtual tab bar row into a registered view's list/tree.
+
+        Components should call this after any ``Clear()`` +
+        ``Append()``/``InsertItems()`` cycle (or ``tree.DeleteAllItems()`` +
+        rebuild) so the tab bar row isn't left dangling — without it the
+        user loses the left/right view switcher until the next focus change.
+
+        Args:
+            view_id_or_control: the ``view_id`` string passed to
+                ``register_view``, or the raw wx control instance.
+        """
+        if self.gui_app and hasattr(self.gui_app, 'sync_view_tab_bar'):
+            self.gui_app.sync_view_tab_bar(view_id_or_control)
 
     def get_gui_hooks(self):
         """Get all GUI hooks from components."""

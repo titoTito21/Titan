@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-07 10:57+0100\n"
+"POT-Creation-Date: 2026-05-05 13:38+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -24,7 +24,7 @@ msgid "Connect to WiFi Network"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:287
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Network: {}"
 msgstr "Sieć: {}"
 
@@ -37,12 +37,11 @@ msgid "Connect automatically"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:304 src/titan_core/tce_system_net.py:386
-#, fuzzy
 msgid "Connect"
 msgstr "Połącz"
 
-#: src/system/updater.py:70 src/system/updater.py:144
-#: src/titan_core/tce_system_net.py:305 src/ui/shutdown_question.py:30
+#: src/system/updater.py:73 src/system/updater.py:147
+#: src/titan_core/tce_system_net.py:305
 msgid "Cancel"
 msgstr "Anuluj"
 
@@ -52,19 +51,17 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:327 src/titan_core/tce_system_net.py:567
 #: src/titan_core/tce_system_net.py:657 src/titan_core/tce_system_net.py:665
-#: src/titan_core/tce_system_net.py:1366 src/titan_core/tce_system_net.py:1425
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1370 src/titan_core/tce_system_net.py:1429
 msgid "Error"
-msgstr "Błąd logowania"
+msgstr "Błąd"
 
 #: src/titan_core/tce_system_net.py:342
 msgid "Click 'Refresh' to scan for WiFi networks"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:344
-#, fuzzy
 msgid "Ready"
-msgstr "Nieprzeczytane"
+msgstr "Gotowe"
 
 #: src/titan_core/tce_system_net.py:352
 msgid "Scanning WiFi networks..."
@@ -76,15 +73,14 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:368 src/titan_core/tce_system_net.py:773
 #: src/titan_core/tce_system_net.py:775 src/titan_core/tce_system_net.py:866
-#: src/titan_core/tce_system_net.py:868 src/titan_core/tce_system_net.py:1335
-#: src/titan_core/tce_system_net.py:1337
+#: src/titan_core/tce_system_net.py:868 src/titan_core/tce_system_net.py:1339
+#: src/titan_core/tce_system_net.py:1341
 msgid "WiFi"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:375
-#, fuzzy
 msgid "Network Name"
-msgstr "Sieć: {}"
+msgstr "Nazwa sieci"
 
 #: src/titan_core/tce_system_net.py:376
 msgid "Signal"
@@ -95,7 +91,6 @@ msgid "Security"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:378
-#, fuzzy
 msgid "Status"
 msgstr "Status"
 
@@ -108,9 +103,8 @@ msgid "Disconnect"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:437
-#, fuzzy
 msgid "WiFi Scanner"
-msgstr "Błąd logowania"
+msgstr "Skaner WiFi"
 
 #: src/titan_core/tce_system_net.py:438 src/titan_core/tce_system_net.py:871
 msgid "Scanning for networks..."
@@ -121,9 +115,8 @@ msgid "Processing results..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:464
-#, fuzzy
 msgid "Complete!"
-msgstr "Aktualizacja zakończona"
+msgstr "Gotowe!"
 
 #: src/titan_core/tce_system_net.py:512
 msgid ""
@@ -141,25 +134,23 @@ msgid "WiFi scan failed: {}"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:521
-#, fuzzy
 msgid "Scan Error"
-msgstr "Błąd aktualizacji"
+msgstr "Błąd skanowania"
 
 #: src/titan_core/tce_system_net.py:532 src/titan_core/tce_system_net.py:780
-#: src/titan_core/tce_system_net.py:1236 src/titan_core/tce_system_net.py:1341
+#: src/titan_core/tce_system_net.py:1240 src/titan_core/tce_system_net.py:1345
 msgid "Secured"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:532 src/titan_core/tce_system_net.py:780
-#: src/titan_core/tce_system_net.py:1236 src/titan_core/tce_system_net.py:1341
+#: src/titan_core/tce_system_net.py:1240 src/titan_core/tce_system_net.py:1345
 msgid "Open"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:533 src/titan_core/tce_system_net.py:779
-#: src/titan_core/tce_system_net.py:1235 src/titan_core/tce_system_net.py:1340
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1239 src/titan_core/tce_system_net.py:1344
 msgid "Connected"
-msgstr "Połączono z {}"
+msgstr "Połączono"
 
 #: src/titan_core/tce_system_net.py:547
 msgid "No WiFi networks found"
@@ -174,15 +165,14 @@ msgid "Please select a network"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:586
-#, fuzzy
 msgid "WiFi Connection"
-msgstr "Połączenie"
+msgstr "Połączenie WiFi"
 
 #: src/titan_core/tce_system_net.py:587 src/titan_core/tce_system_net.py:895
-#: src/titan_core/tce_system_net.py:1276
-#, fuzzy, python-brace-format
+#: src/titan_core/tce_system_net.py:1280
+#, python-brace-format
 msgid "Connecting to {}..."
-msgstr "Połączono z {}"
+msgstr "Łączenie z {}..."
 
 #: src/titan_core/tce_system_net.py:597
 msgid "Authenticating..."
@@ -193,9 +183,8 @@ msgid "Establishing connection..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:613
-#, fuzzy
 msgid "Connected!"
-msgstr "Połączono z {}"
+msgstr "Połączono!"
 
 #: src/titan_core/tce_system_net.py:613
 msgid "Failed!"
@@ -210,22 +199,21 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:902
-#: src/titan_core/tce_system_net.py:1280 src/system/system_monitor.py:608
+#: src/system/system_monitor.py:610 src/titan_core/tce_system_net.py:653
+#: src/titan_core/tce_system_net.py:902 src/titan_core/tce_system_net.py:1284
 #, python-brace-format
 msgid "Connected to {}"
 msgstr "Połączono z {}"
 
 #: src/titan_core/tce_system_net.py:653 src/titan_core/tce_system_net.py:662
-#, fuzzy
 msgid "Success"
 msgstr "Sukces"
 
 #: src/titan_core/tce_system_net.py:657 src/titan_core/tce_system_net.py:906
-#: src/titan_core/tce_system_net.py:1285
-#, fuzzy, python-brace-format
+#: src/titan_core/tce_system_net.py:1289
+#, python-brace-format
 msgid "Failed to connect to {}"
-msgstr "Połączono z {}"
+msgstr "Nie udało się połączyć z {}"
 
 #: src/titan_core/tce_system_net.py:662
 msgid "Disconnected from network"
@@ -236,50 +224,46 @@ msgid "Failed to disconnect"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:678 src/titan_core/tce_system_net.py:773
-#: src/titan_core/tce_system_net.py:866 src/titan_core/tce_system_net.py:1335
+#: src/titan_core/tce_system_net.py:866 src/titan_core/tce_system_net.py:1339
 msgid "checkbox"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:679 src/titan_core/tce_system_net.py:782
-#: src/titan_core/tce_system_net.py:1240 src/titan_core/tce_system_net.py:1343
+#: src/titan_core/tce_system_net.py:1244 src/titan_core/tce_system_net.py:1347
 msgid "list item"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:736
-#, fuzzy
 msgid "Networks updated"
-msgstr "Nazwa sieci"
+msgstr "Sieci zaktualizowane"
 
 #: src/titan_core/tce_system_net.py:747
 msgid "Scanning networks in background..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:771 src/titan_core/tce_system_net.py:864
-#: src/titan_core/tce_system_net.py:1333
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1337
 msgid "Checked"
-msgstr "Ekran zablokowany"
+msgstr "Sprawdzono"
 
 #: src/titan_core/tce_system_net.py:771 src/titan_core/tce_system_net.py:864
-#: src/titan_core/tce_system_net.py:1333
+#: src/titan_core/tce_system_net.py:1337
 msgid "Unchecked"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:786 src/titan_core/tce_system_net.py:1347
-#, fuzzy
+#: src/titan_core/tce_system_net.py:786 src/titan_core/tce_system_net.py:1351
 msgid "No WiFi networks available"
 msgstr "Brak dostępnych sieci WiFi"
 
 #: src/titan_core/tce_system_net.py:788 src/titan_core/tce_system_net.py:968
-#: src/titan_core/tce_system_net.py:1371 src/titan_core/tce_system_net.py:1408
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1375 src/titan_core/tce_system_net.py:1412
 msgid "WiFi Manager"
-msgstr "Błąd logowania"
+msgstr "Menedżer WiFi"
 
-#: src/titan_core/tce_system_net.py:887 src/titan_core/tce_system_net.py:1258
-#, fuzzy, python-brace-format
+#: src/titan_core/tce_system_net.py:887 src/titan_core/tce_system_net.py:1262
+#, python-brace-format
 msgid "Already connected to {}"
-msgstr "Połączono z {}"
+msgstr "Już połączono z {}"
 
 #: src/titan_core/tce_system_net.py:891
 #, python-brace-format
@@ -298,226 +282,215 @@ msgstr ""
 msgid "WiFi Manager: Widget"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1263
+#: src/titan_core/tce_system_net.py:1267
 #, python-brace-format
 msgid "Enter WiFi network password for {}:"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1265
+#: src/titan_core/tce_system_net.py:1269
 msgid "Password: "
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1267
+#: src/titan_core/tce_system_net.py:1271
 msgid "Connecting to network..."
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1270
+#: src/titan_core/tce_system_net.py:1274
 msgid "Password required"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1273
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1277
 msgid ""
 "\n"
 "Connection cancelled"
 msgstr "Łączenie anulowane"
 
-#: src/titan_core/tce_system_net.py:1306
+#: src/titan_core/tce_system_net.py:1310
 msgid "WiFi manager closed"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1352
+#: src/titan_core/tce_system_net.py:1356
 msgid "Refreshing WiFi networks..."
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1355
+#: src/titan_core/tce_system_net.py:1359
 msgid "Networks refreshed"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1365
+#: src/titan_core/tce_system_net.py:1369
 msgid ""
 "WiFi functionality requires pywifi library.\n"
 "Install with: pip install pywifi"
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1372
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1376
 msgid "Initializing WiFi interface..."
-msgstr "Błąd podczas otwierania interfejsu WiFi"
+msgstr "Inicjalizacja interfejsu WiFi..."
 
-#: src/titan_core/tce_system_net.py:1379
+#: src/titan_core/tce_system_net.py:1383
 msgid "Creating network manager..."
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1393
+#: src/titan_core/tce_system_net.py:1397
 msgid "WiFi initialization timed out. Please try again."
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1394
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1398
 msgid "Timeout Error"
-msgstr "Błąd aktualizacji"
-
-#: src/titan_core/tce_system_net.py:1397
-#, fuzzy
-msgid "Checking WiFi interfaces..."
-msgstr "Błąd podczas otwierania interfejsu WiFi"
+msgstr "Błąd przekroczenia czasu"
 
 #: src/titan_core/tce_system_net.py:1401
+msgid "Checking WiFi interfaces..."
+msgstr "Sprawdzanie interfejsów WiFi..."
+
+#: src/titan_core/tce_system_net.py:1405
 msgid "No WiFi interfaces available or WiFi initialization failed."
 msgstr ""
 
-#: src/titan_core/tce_system_net.py:1402
+#: src/titan_core/tce_system_net.py:1406
 msgid "WiFi Error"
 msgstr "Błąd logowania"
 
-#: src/titan_core/tce_system_net.py:1405
-#, fuzzy
+#: src/titan_core/tce_system_net.py:1409
 msgid "Creating GUI interface..."
-msgstr "Błąd podczas otwierania interfejsu WiFi"
+msgstr "Tworzenie interfejsu GUI..."
 
-#: src/titan_core/tce_system_net.py:1411
+#: src/titan_core/tce_system_net.py:1415
 msgid "Ready!"
 msgstr "Nieprzeczytane"
 
-#: src/titan_core/tce_system_net.py:1424
-#, fuzzy, python-brace-format
+#: src/titan_core/tce_system_net.py:1428
+#, python-brace-format
 msgid ""
 "Error creating WiFi interface:\n"
 "{}"
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: src/system/system_monitor.py:195
+#: src/system/system_monitor.py:267
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr "Podłączono do zasilacza, poziom baterii wynosi {}%"
 
-#: src/system/system_monitor.py:202
+#: src/system/system_monitor.py:272
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr "Odłączono zasilacz, poziom baterii wynosi {}%"
 
-#: src/system/system_monitor.py:207
+#: src/system/system_monitor.py:275
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr "Ładowanie baterii, poziom baterii {}%"
 
-#: src/system/system_monitor.py:212
+#: src/system/system_monitor.py:278
 msgid "Battery is fully charged"
 msgstr "Bateria jest naładowana"
 
-#: src/system/system_monitor.py:309
+#: src/system/system_monitor.py:373
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr "Głośność: {}%"
 
-#: src/system/system_monitor.py:612
+#: src/system/system_monitor.py:614
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr "Rozłączono z {}"
 
-#: src/system/updater.py:13
+#: src/system/updater.py:16
 msgid "Program Update Available"
 msgstr "Dostępna aktualizacja programu"
 
-#: src/system/updater.py:31
+#: src/system/updater.py:34
 msgid "Program update is available"
 msgstr "Dostępna jest aktualizacja programu"
 
-#: src/system/updater.py:42
+#: src/system/updater.py:45
 msgid "Current version:"
 msgstr "Bieżąca wersja:"
 
-#: src/system/updater.py:49
+#: src/system/updater.py:52
 msgid "Update to version:"
 msgstr "Aktualizacja do wersji:"
 
-#: src/system/updater.py:58
+#: src/system/updater.py:61
 msgid "What's new:"
 msgstr "Nowości:"
 
-#: src/system/updater.py:69
+#: src/system/updater.py:72
 msgid "Update"
 msgstr "Zaktualizuj"
 
-#: src/system/updater.py:122
+#: src/system/updater.py:125
 msgid "Downloading Update"
 msgstr "Pobieranie aktualizacji"
 
-#: src/system/updater.py:135
+#: src/system/updater.py:138
 msgid "Downloading update..."
 msgstr "Pobieranie aktualizacji..."
 
-#: src/system/updater.py:224
+#: src/system/updater.py:246
 msgid "Unable to retrieve changelog."
 msgstr "Nie można pobrać listy zmian."
 
-#: src/system/updater.py:257
+#: src/system/updater.py:279
 msgid "Download failed"
 msgstr "Pobieranie nieudane"
 
-#: src/system/updater.py:263 src/system/updater.py:277
+#: src/system/updater.py:351
+#, fuzzy, python-brace-format
+msgid "Extracting files... {}%"
+msgstr "Rozpakowywanie aktualizacji..."
+
+#: src/system/updater.py:358
+#, fuzzy
+msgid "Extraction complete"
+msgstr "Rozpakowywanie aktualizacji..."
+
+#: src/system/updater.py:378
 msgid "Extracting update..."
 msgstr "Rozpakowywanie aktualizacji..."
 
-#: src/system/updater.py:283
-msgid "Update extracted successfully"
-msgstr "Aktualizacja rozpakowana pomyślnie"
-
-#: src/system/updater.py:303 src/system/updater.py:320
-#, fuzzy
+#: src/system/updater.py:384 src/system/updater.py:401
 msgid "Downloading Python interpreter..."
-msgstr "Pobieranie aktualizacji..."
+msgstr "Pobieranie interpretera Python..."
 
-#: src/system/updater.py:327
-#, fuzzy
+#: src/system/updater.py:408
 msgid "Interpreter download failed"
-msgstr "Pobieranie nieudane"
+msgstr "Pobieranie interpretera nieudane"
 
-#: src/system/updater.py:333 src/system/updater.py:347
-#, fuzzy
+#: src/system/updater.py:421
 msgid "Extracting Python interpreter..."
-msgstr "Rozpakowywanie aktualizacji..."
+msgstr "Rozpakowywanie interpretera Python..."
 
-#: src/system/updater.py:353
-#, fuzzy
-msgid "Interpreter extracted successfully"
-msgstr "Aktualizacja rozpakowana pomyślnie"
-
-#: src/system/updater.py:420
+#: src/system/updater.py:472
 msgid "Update completed successfully! Please restart the application."
 msgstr "Aktualizacja zakończona pomyślnie! Proszę uruchomić ponownie aplikację."
 
-#: src/system/updater.py:421
+#: src/system/updater.py:473
 msgid "Update Complete"
 msgstr "Aktualizacja zakończona"
 
-#: src/system/updater.py:430
+#: src/system/updater.py:482
 msgid "Update failed. Please try again later."
 msgstr "Aktualizacja nieudana. Spróbuj ponownie później."
 
-#: src/system/updater.py:431
+#: src/system/updater.py:483
 msgid "Update Error"
 msgstr "Błąd aktualizacji"
 
-#: src/system/lockscreen_monitor_improved.py:185
+#: src/system/lockscreen_monitor_improved.py:238
 msgid "Screen locked"
 msgstr "Ekran zablokowany"
 
-#: src/system/lockscreen_monitor_improved.py:191
+#: src/system/lockscreen_monitor_improved.py:244
 msgid "Screen unlocked"
 msgstr "Ekran odblokowany"
 
-#: src/ui/shutdown_question.py:15
-msgid "Confirm Exit"
-msgstr ""
-
-#: src/ui/shutdown_question.py:22
+#: src/ui/shutdown_question.py:13
 msgid "Are you sure you want to exit Titan?"
 msgstr ""
 
-#: src/ui/shutdown_question.py:26
-msgid "OK"
+#: src/ui/shutdown_question.py:14
+msgid "Confirm Exit"
 msgstr ""
 
 #~ msgid "Connect to WiFi Network"
@@ -721,7 +694,7 @@ msgstr ""
 #~ msgstr "Czy na pewno chcesz wyjść z Titan?"
 
 #~ msgid "OK"
-#~ msgstr "OK"
+#~ msgstr ""
 
 #~ msgid "Applications"
 #~ msgstr ""
@@ -1037,4 +1010,10 @@ msgstr ""
 
 #~ msgid "Network Settings"
 #~ msgstr "Nazwa sieci"
+
+#~ msgid "Update extracted successfully"
+#~ msgstr "Aktualizacja rozpakowana pomyślnie"
+
+#~ msgid "Interpreter extracted successfully"
+#~ msgstr "Interpreter rozpakowany pomyślnie"
 

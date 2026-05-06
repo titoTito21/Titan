@@ -3,6 +3,7 @@ import wx
 import zipfile
 import shutil
 import os
+import sys
 import subprocess
 from threading import Thread
 from wx import ProgressDialog
@@ -99,35 +100,11 @@ class MenuBar(wx.MenuBar):
 
         self.Append(program_menu, _("Program"))
 
-        # Add switch menu
+        # Add switch menu — dynamically built from registered_views
         switch_menu = wx.Menu()
-
-        # Applications with icon
-        switch_apps_item = switch_menu.Append(wx.ID_ANY, _("Applications"))
-        try:
-            switch_apps_item.SetBitmap(self.skin.get_icon('app_list_icon', (16, 16)))
-        except:
-            pass
-
-        # Games with icon
-        switch_games_item = switch_menu.Append(wx.ID_ANY, _("Games"))
-        try:
-            switch_games_item.SetBitmap(self.skin.get_icon('game_list_icon', (16, 16)))
-        except:
-            pass
-
-        # Titan IM with icon
-        switch_titanim_item = switch_menu.Append(wx.ID_ANY, _("Titan IM"))
-        try:
-            switch_titanim_item.SetBitmap(self.skin.get_icon('network_icon', (16, 16)))
-        except:
-            pass
-
-        self.Bind(wx.EVT_MENU, self.on_switch_to_apps, switch_apps_item)
-        self.Bind(wx.EVT_MENU, self.on_switch_to_games, switch_games_item)
-        self.Bind(wx.EVT_MENU, self.on_switch_to_titanim, switch_titanim_item)
-
+        self._build_switch_menu(switch_menu)
         self.Append(switch_menu, _("Switch to"))
+        self._switch_menu = switch_menu
 
         # Add components menu - show only components with menu functions
         if self.component_manager:
@@ -145,7 +122,7 @@ class MenuBar(wx.MenuBar):
 
 
     def on_install_data_package(self, event):
-        with wx.FileDialog(self.parent, _("Select data package"), wildcard=_("Data packages (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"), style=wx.FD_OPEN) as dlg:
+        with wx.FileDialog(self.parent, _("Select data package"), wildcard=_("Data packages (*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"), style=wx.FD_OPEN) as dlg:
             if dlg.ShowModal() == wx.ID_CANCEL:
                 return
             file_path = dlg.GetPath()
@@ -231,30 +208,45 @@ class MenuBar(wx.MenuBar):
 
 
     def extract_package(self, file_path, progress):
-        dest_dir = os.getcwd()
-        result = None
+        # Resolve destination dir to the application root, not the caller's cwd.
+        # In compiled mode (PyInstaller --onedir) data/, sfx/, etc. live next to the .exe.
+        if getattr(sys, 'frozen', False):
+            dest_dir = os.path.dirname(sys.executable)
+        else:
+            dest_dir = os.getcwd()
+
+        success = False
+        extension = os.path.splitext(file_path)[1].lower()
 
         try:
-            if file_path.endswith(".zip"):
-                wx.CallAfter(self.update_progress_dialog, 0, _("Unpacking ZIP package..."))
+            if extension == ".zip" or extension == ".tcepackage":
+                # .tcepackage is a ZIP archive with a renamed extension.
+                if extension == ".tcepackage":
+                    wx.CallAfter(self.update_progress_dialog, 0, _("Unpacking .tcepackage package..."))
+                else:
+                    wx.CallAfter(self.update_progress_dialog, 0, _("Unpacking ZIP package..."))
                 with zipfile.ZipFile(file_path, 'r') as zip_ref:
                     total_files = len(zip_ref.namelist())
                     wx.CallAfter(progress.SetRange, total_files)
                     for i, file in enumerate(zip_ref.namelist(), 1):
                         zip_ref.extract(file, dest_dir)
                         wx.CallAfter(self.update_progress_dialog, i)
+                success = True
 
-            elif file_path.endswith(".7z"):
-                # Find 7z executable: bundled path on Windows, system PATH on macOS/Linux
-                if os.name == 'nt':
-                    sevenzip_executable = os.path.join("data", "bin", "7z.exe")
-                    if not os.path.exists(sevenzip_executable):
-                        sevenzip_executable = os.path.join("data", "bin", "7z")
+            elif extension == ".7z":
+                # Locate 7z: prefer bundled binary in data/bin/ (resolved from app root,
+                # not cwd), then fall back to system PATH.
+                bundled_name = "7z.exe" if os.name == 'nt' else "7z"
+                bundled_path = os.path.join(dest_dir, "data", "bin", bundled_name)
+
+                if os.path.isfile(bundled_path):
+                    sevenzip_executable = bundled_path
                 else:
-                    sevenzip_executable = shutil.which("7z") or "7z"
-                if not os.path.exists(sevenzip_executable) and not shutil.which(sevenzip_executable):
-                     wx.CallAfter(self.show_message_box, _("Error: 7z executable not found. Make sure it is installed or in the 'data/bin/' directory."), _("Executable file error"), wx.OK | wx.ICON_ERROR)
-                     return
+                    sevenzip_executable = shutil.which("7z") or shutil.which("7za")
+
+                if not sevenzip_executable:
+                    wx.CallAfter(self.show_message_box, _("Error: 7z executable not found. Make sure it is installed or in the 'data/bin/' directory."), _("Executable file error"), wx.OK | wx.ICON_ERROR)
+                    return
 
                 command = [sevenzip_executable, 'x', file_path, f'-o{dest_dir}', '-aoa']
 
@@ -270,26 +262,20 @@ class MenuBar(wx.MenuBar):
                     return
 
                 wx.CallAfter(self.update_progress_dialog, 100, _("Finished unpacking 7z."))
+                success = True
 
-
-            elif file_path.endswith(".tcepackage"):
-                wx.CallAfter(self.update_progress_dialog, 0, _("Unpacking .tcepackage package..."))
-                wx.CallAfter(progress.SetRange, 100)
-                wx.CallAfter(self.update_progress_dialog, 10, _("Unpacking archive..."))
-                shutil.unpack_archive(file_path, dest_dir)
-                wx.CallAfter(self.update_progress_dialog, 100, _("Finished unpacking .tcepackage."))
-
+            else:
+                wx.CallAfter(self.show_message_box, _("Unsupported file format: {}").format(extension or _("(no extension)")), _("Error"), wx.OK | wx.ICON_ERROR)
+                return
 
         except Exception as e:
             error_details = traceback.format_exc()
             wx.CallAfter(self.show_message_box, _("Error during package installation: {}\n\nDetails:\n{}").format(str(e), error_details), _("Error"), wx.OK | wx.ICON_ERROR)
         finally:
-            if 'progress' in locals() and progress:
-                 wx.CallAfter(self.destroy_progress_dialog)
+            wx.CallAfter(self.destroy_progress_dialog)
 
-
-        if 'e' not in locals() and not (file_path.endswith(".7z") and result and result.returncode != 0):
-             wx.CallAfter(self.show_message_box, _("Data package has been installed!"), _("Success"), wx.OK | wx.ICON_INFORMATION)
+        if success:
+            wx.CallAfter(self.show_message_box, _("Data package has been installed!"), _("Success"), wx.OK | wx.ICON_INFORMATION)
 
 
     def on_open_settings(self, event):
@@ -309,17 +295,51 @@ class MenuBar(wx.MenuBar):
     def on_exit(self, event):
         self.parent.Close()
 
-    def on_switch_to_apps(self, event):
-        """Switch to Applications list"""
-        if hasattr(self.parent, 'show_app_list'):
+    # --- Switch to menu (dynamic) ---
+
+    # Map of built-in view IDs to skin icon names
+    _VIEW_ICONS = {
+        'apps': 'app_list_icon',
+        'games': 'game_list_icon',
+        'network': 'network_icon',
+    }
+
+    def _build_switch_menu(self, menu):
+        """Populate the Switch-to menu from parent.registered_views."""
+        registered_views = getattr(self.parent, 'registered_views', [])
+
+        for view in registered_views:
+            view_id = view['id']
+            label = view['label'].rstrip(':')
+            item = menu.Append(wx.ID_ANY, label)
+
+            # Try to set an icon
+            icon_name = self._VIEW_ICONS.get(view_id, 'components_icon')
+            try:
+                item.SetBitmap(self.skin.get_icon(icon_name, (16, 16)))
+            except Exception:
+                pass
+
+            # Bind to switch handler
+            self.Bind(wx.EVT_MENU, lambda evt, vid=view_id: self._on_switch_view(evt, vid), item)
+
+    def rebuild_switch_menu(self):
+        """Rebuild the Switch-to menu (call after register_view)."""
+        if not hasattr(self, '_switch_menu'):
+            return
+        # Clear existing items
+        for item in list(self._switch_menu.GetMenuItems()):
+            self._switch_menu.DestroyItem(item)
+        # Re-populate
+        self._build_switch_menu(self._switch_menu)
+
+    def _on_switch_view(self, event, view_id):
+        """Switch to a view by its registered id."""
+        if hasattr(self.parent, '_show_registered_view'):
+            self.parent._show_registered_view(view_id)
+        elif view_id == 'apps' and hasattr(self.parent, 'show_app_list'):
             self.parent.show_app_list()
-
-    def on_switch_to_games(self, event):
-        """Switch to Games list"""
-        if hasattr(self.parent, 'show_game_list'):
+        elif view_id == 'games' and hasattr(self.parent, 'show_game_list'):
             self.parent.show_game_list()
-
-    def on_switch_to_titanim(self, event):
-        """Switch to Titan IM"""
-        if hasattr(self.parent, 'show_network_list'):
+        elif view_id == 'network' and hasattr(self.parent, 'show_network_list'):
             self.parent.show_network_list()

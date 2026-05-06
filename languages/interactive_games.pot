@@ -1,0 +1,594 @@
+# Translations template for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: src/network/interactive_games.py:153
+msgid "All games"
+msgstr ""
+
+#: src/network/interactive_games.py:154
+msgid "My games"
+msgstr ""
+
+#: src/network/interactive_games.py:155
+msgid "Active sessions"
+msgstr ""
+
+#: src/network/interactive_games.py:215
+msgid "New interactive game"
+msgstr ""
+
+#: src/network/interactive_games.py:232 src/network/interactive_games.py:538
+msgid "Name:"
+msgstr ""
+
+#: src/network/interactive_games.py:237 src/network/interactive_games.py:547
+msgid "Description:"
+msgstr ""
+
+#: src/network/interactive_games.py:243
+msgid "AI provider:"
+msgstr ""
+
+#: src/network/interactive_games.py:249
+msgid "API key (kept encrypted on the server):"
+msgstr ""
+
+#: src/network/interactive_games.py:255
+msgid "Per-session limits (cap to keep your bill safe):"
+msgstr ""
+
+#: src/network/interactive_games.py:258
+msgid "Max tokens:"
+msgstr ""
+
+#: src/network/interactive_games.py:262
+msgid "Max minutes:"
+msgstr ""
+
+#: src/network/interactive_games.py:266
+msgid "Max players:"
+msgstr ""
+
+#: src/network/interactive_games.py:272
+msgid "Rules text for the AI game master:"
+msgstr ""
+
+#: src/network/interactive_games.py:279
+msgid "Add attachment (zip / txt / sound)..."
+msgstr ""
+
+#: src/network/interactive_games.py:282
+msgid "Add folder..."
+msgstr ""
+
+#: src/network/interactive_games.py:285
+msgid "Remove last"
+msgstr ""
+
+#: src/network/interactive_games.py:296
+msgid "Publish game"
+msgstr ""
+
+#: src/network/interactive_games.py:299
+msgid "Cancel"
+msgstr ""
+
+#: src/network/interactive_games.py:321
+msgid "Game rules (*.zip)"
+msgstr ""
+
+#: src/network/interactive_games.py:322
+msgid "Prompt / rules text (*.txt;*.md;*.json)"
+msgstr ""
+
+#: src/network/interactive_games.py:323
+msgid "Sound effects (*.ogg;*.wav;*.mp3;*.flac;*.opus)"
+msgstr ""
+
+#: src/network/interactive_games.py:324
+msgid "All files"
+msgstr ""
+
+#: src/network/interactive_games.py:326
+msgid "Select attachment"
+msgstr ""
+
+#: src/network/interactive_games.py:336 src/network/interactive_games.py:355
+#, python-brace-format
+msgid "Cannot read file: {error}"
+msgstr ""
+
+#: src/network/interactive_games.py:337 src/network/interactive_games.py:341
+#: src/network/interactive_games.py:348 src/network/interactive_games.py:356
+#: src/network/interactive_games.py:364 src/network/interactive_games.py:423
+msgid "Attachment"
+msgstr ""
+
+#: src/network/interactive_games.py:340
+msgid "Attachment is too large. Maximum size is 25 MB."
+msgstr ""
+
+#: src/network/interactive_games.py:346
+#, python-brace-format
+msgid "Total attachments exceed {limit} MB."
+msgstr ""
+
+#: src/network/interactive_games.py:363
+msgid ""
+"Unsupported file type. Use .zip (rules), .txt/.md/.json (prompts) or "
+".ogg/.wav/.mp3/.flac/.opus (sounds)."
+msgstr ""
+
+#: src/network/interactive_games.py:374 src/network/interactive_games.py:442
+#: src/network/interactive_games.py:620
+#, python-brace-format
+msgid "[{type}] {name} ({size} KB)"
+msgstr ""
+
+#: src/network/interactive_games.py:377
+#, python-brace-format
+msgid "Attachment added: {name}"
+msgstr ""
+
+#: src/network/interactive_games.py:392
+msgid "Select folder to add"
+msgstr ""
+
+#: src/network/interactive_games.py:419
+#, python-brace-format
+msgid "Total attachments would exceed {limit} MB. Stopping at {added} files."
+msgstr ""
+
+#: src/network/interactive_games.py:453
+#, python-brace-format
+msgid "Added {n} files from folder"
+msgstr ""
+
+#: src/network/interactive_games.py:455
+msgid "No supported files found in folder"
+msgstr ""
+
+#: src/network/interactive_games.py:468
+#, python-brace-format
+msgid "Removed: {name}"
+msgstr ""
+
+#: src/network/interactive_games.py:474
+msgid "Name is required"
+msgstr ""
+
+#: src/network/interactive_games.py:478
+msgid "API key is required"
+msgstr ""
+
+#: src/network/interactive_games.py:508
+msgid "Game details"
+msgstr ""
+
+#: src/network/interactive_games.py:542
+msgid "Creator / provider / limits:"
+msgstr ""
+
+#: src/network/interactive_games.py:553
+msgid "Attachments:"
+msgstr ""
+
+#: src/network/interactive_games.py:561
+msgid "Start session"
+msgstr ""
+
+#: src/network/interactive_games.py:565
+msgid "Download attachment"
+msgstr ""
+
+#: src/network/interactive_games.py:569 src/network/interactive_games.py:707
+#: src/network/interactive_games.py:1167
+msgid "Delete game"
+msgstr ""
+
+#: src/network/interactive_games.py:574 src/network/interactive_games.py:779
+msgid "Close"
+msgstr ""
+
+#: src/network/interactive_games.py:597
+msgid "Failed to load game"
+msgstr ""
+
+#: src/network/interactive_games.py:604
+#, python-brace-format
+msgid "Creator: {name}"
+msgstr ""
+
+#: src/network/interactive_games.py:605
+#, python-brace-format
+msgid "Provider: {provider}"
+msgstr ""
+
+#: src/network/interactive_games.py:606
+#, python-brace-format
+msgid "Tokens cap: {n}"
+msgstr ""
+
+#: src/network/interactive_games.py:607
+#, python-brace-format
+msgid "Minutes cap: {n}"
+msgstr ""
+
+#: src/network/interactive_games.py:608
+#, python-brace-format
+msgid "Max players: {n}"
+msgstr ""
+
+#: src/network/interactive_games.py:616
+msgid "(no attachments)"
+msgstr ""
+
+#: src/network/interactive_games.py:643
+msgid "Opening session..."
+msgstr ""
+
+#: src/network/interactive_games.py:652
+msgid "Failed to start session"
+msgstr ""
+
+#: src/network/interactive_games.py:655
+msgid "Session opened"
+msgstr ""
+
+#: src/network/interactive_games.py:668
+#, python-brace-format
+msgid "Downloading {name}..."
+msgstr ""
+
+#: src/network/interactive_games.py:677
+msgid "Failed to download"
+msgstr ""
+
+#: src/network/interactive_games.py:687
+#, python-brace-format
+msgid "Cannot save attachment: {error}"
+msgstr ""
+
+#: src/network/interactive_games.py:699
+#, python-brace-format
+msgid "Cannot open attachment: {error}"
+msgstr ""
+
+#: src/network/interactive_games.py:705
+#, python-brace-format
+msgid "Delete '{name}' and all its sessions? This cannot be undone."
+msgstr ""
+
+#: src/network/interactive_games.py:720 src/network/interactive_games.py:1181
+msgid "Failed to delete"
+msgstr ""
+
+#: src/network/interactive_games.py:722
+msgid "Game deleted"
+msgstr ""
+
+#: src/network/interactive_games.py:747
+msgid "Interactive Games"
+msgstr ""
+
+#: src/network/interactive_games.py:769
+msgid "Interactive Games (Entertainment)"
+msgstr ""
+
+#: src/network/interactive_games.py:773
+msgid "New game"
+msgstr ""
+
+#: src/network/interactive_game_session.py:606
+#: src/network/interactive_games.py:776
+msgid "Refresh"
+msgstr ""
+
+#: src/network/interactive_games.py:784
+msgid "Catalog:"
+msgstr ""
+
+#: src/network/interactive_games.py:857
+#, python-brace-format
+msgid "New game: {name} by {user}"
+msgstr ""
+
+#: src/network/interactive_games.py:874
+#, python-brace-format
+msgid "New session for {name}: hosted by {user}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1040
+#: src/network/interactive_games.py:895
+#, python-brace-format
+msgid "{}, {} of {}"
+msgstr ""
+
+#: src/network/interactive_games.py:907
+#, python-brace-format
+msgid "{name} by {user} ({provider}), {n} active session(s)"
+msgstr ""
+
+#: src/network/interactive_games.py:915
+#, python-brace-format
+msgid "{game} hosted by {user}, {n} player(s), status: {status}"
+msgstr ""
+
+#: src/network/interactive_games.py:938
+msgid "Failed to load games"
+msgstr ""
+
+#: src/network/interactive_games.py:949
+msgid "(no games yet)"
+msgstr ""
+
+#: src/network/interactive_games.py:962
+msgid "Failed to load sessions"
+msgstr ""
+
+#: src/network/interactive_games.py:970
+msgid "(no active sessions)"
+msgstr ""
+
+#: src/network/interactive_games.py:985
+#, python-brace-format
+msgid "{tab}: {n} entries"
+msgstr ""
+
+#: src/network/interactive_games.py:1124
+msgid "Joining session..."
+msgstr ""
+
+#: src/network/interactive_games.py:1133
+msgid "Failed to join"
+msgstr ""
+
+#: src/network/interactive_games.py:1146
+msgid "Failed to open session window"
+msgstr ""
+
+#: src/network/interactive_games.py:1163
+msgid "You can only delete your own games"
+msgstr ""
+
+#: src/network/interactive_games.py:1166
+#, python-brace-format
+msgid "Delete '{name}'? This cannot be undone."
+msgstr ""
+
+#: src/network/interactive_games.py:1183
+#, python-brace-format
+msgid "Deleted: {name}"
+msgstr ""
+
+#: src/network/interactive_games.py:1196
+msgid "Publishing game..."
+msgstr ""
+
+#: src/network/interactive_games.py:1215
+msgid "Failed to publish"
+msgstr ""
+
+#: src/network/interactive_games.py:1217
+msgid "Game published"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1353
+#: src/network/interactive_games.py:1236
+msgid "You must be connected to Titan-Net"
+msgstr ""
+
+#: src/network/interactive_games.py:1242
+msgid "Titan-Net: Interactive Games"
+msgstr ""
+
+#: src/network/interactive_game_session.py:114
+msgid "Game log"
+msgstr ""
+
+#: src/network/interactive_game_session.py:115
+msgid "Players"
+msgstr ""
+
+#: src/network/interactive_game_session.py:116
+msgid "Character sheet"
+msgstr ""
+
+#: src/network/interactive_game_session.py:117
+msgid "Sound effects"
+msgstr ""
+
+#: src/network/interactive_game_session.py:541
+#: src/network/interactive_game_session.py:580
+msgid "Interactive game session"
+msgstr ""
+
+#: src/network/interactive_game_session.py:585
+msgid "Send action"
+msgstr ""
+
+#: src/network/interactive_game_session.py:592
+#: src/network/interactive_game_session.py:1278
+msgid "Talk (mic OFF)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:596
+#: src/network/interactive_game_session.py:1297
+msgid "Leave"
+msgstr ""
+
+#: src/network/interactive_game_session.py:600
+#: src/network/interactive_game_session.py:1311
+msgid "End session"
+msgstr ""
+
+#: src/network/interactive_game_session.py:613
+msgid "Session view:"
+msgstr ""
+
+#: src/network/interactive_game_session.py:622
+msgid "Type your action:"
+msgstr ""
+
+#: src/network/interactive_game_session.py:697
+#, python-brace-format
+msgid "Session ended: {reason}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:697
+msgid "done"
+msgstr ""
+
+#: src/network/interactive_game_session.py:699
+#, python-brace-format
+msgid "Session ended ({reason})"
+msgstr ""
+
+#: src/network/interactive_game_session.py:710
+#, python-brace-format
+msgid "{user} joined"
+msgstr ""
+
+#: src/network/interactive_game_session.py:721
+#, python-brace-format
+msgid "{user} left"
+msgstr ""
+
+#: src/network/interactive_game_session.py:753
+#, python-brace-format
+msgid "Spotlight on you (slot {n})"
+msgstr ""
+
+#: src/network/interactive_game_session.py:755
+#, python-brace-format
+msgid "Spotlight on {user} (slot {n})"
+msgstr ""
+
+#: src/network/interactive_game_session.py:841
+#, python-brace-format
+msgid "stop {layer}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:862
+#, python-brace-format
+msgid "volume {layer}={volume:.2f}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:881
+#, python-brace-format
+msgid "[{layer}] {label} (cached)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:908
+#, python-brace-format
+msgid "[{layer}] {label}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:922
+#, python-brace-format
+msgid "Token budget warning: {used}/{cap}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:949
+msgid "Choose:"
+msgstr ""
+
+#: src/network/interactive_game_session.py:972
+msgid "Choose"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1011
+msgid "Failed to load session"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1027
+#, python-brace-format
+msgid "Status: {status} | players: {n} | tokens: {used}/{cap}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1063
+msgid "(empty)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1069
+msgid "(no events yet)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1074
+#, python-brace-format
+msgid "[{actor}] {text}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1079
+msgid "(no players)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1088
+#, python-brace-format
+msgid "{mark}{user} (id {n}){left}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1090
+msgid " [left]"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1103
+msgid "(no character data yet — the AI will populate this)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1112
+#: src/network/interactive_game_session.py:1245
+#, python-brace-format
+msgid "{key}: {value}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1117
+msgid "(no sound events yet)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1120
+#, python-brace-format
+msgid "Played: {label} at {ts}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1254
+msgid "Type something first"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1269
+msgid "Action rejected"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1278
+msgid "Talk (mic ON)"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1297
+msgid "Leave this session?"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1310
+msgid "End the session for everyone?"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1360
+#, python-brace-format
+msgid "Titan-Net: Game Session #{sid}"
+msgstr ""
+

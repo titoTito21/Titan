@@ -18,6 +18,68 @@ from src.settings.settings import get_setting
 _ = set_language(get_setting('language', 'pl'))
 
 
+# ---------------------------------------------------------------------------
+# Shared active-client registry
+# ---------------------------------------------------------------------------
+# Titan-Net is reachable from every TCE frontend: the main TitanApp GUI,
+# the Invisible UI, Klango mode, and third-party launchers (LauncherAPI).
+# Historically each frontend stored its own TitanNetClient on its own frame
+# (e.g. TitanApp.titan_client, KlangoFrame.titan_client). The IUI reads
+# the client from `self.main_frame.titan_client`, which breaks when
+# main_frame isn't a TitanApp (launcher mode → hidden wx.Frame with no
+# titan_client attribute), so "open Titan-Net from IUI/Klango" silently
+# did nothing.
+#
+# The helpers below let whichever frontend instantiates the client publish
+# it so everyone else can resolve it without depending on the main GUI.
+_active_titan_net_client: Optional["TitanNetClient"] = None
+_active_titan_logged_in: bool = False
+
+
+def register_active_titan_net_client(client, logged_in=None):
+    """Publish a TitanNetClient as the current active instance.
+
+    Call this whenever a frontend creates or replaces its Titan-Net client
+    (TitanApp.__init__, Klango mode bootstrap, launcher-mode bootstrap).
+    Optional `logged_in` overrides the cached login flag; pass None to
+    leave the flag untouched.
+    """
+    global _active_titan_net_client, _active_titan_logged_in
+    _active_titan_net_client = client
+    if logged_in is not None:
+        _active_titan_logged_in = bool(logged_in)
+
+
+def get_active_titan_net_client():
+    """Return the currently registered TitanNetClient, or None."""
+    return _active_titan_net_client
+
+
+def set_active_titan_logged_in(logged_in: bool):
+    """Mark the active client as logged in / out."""
+    global _active_titan_logged_in
+    _active_titan_logged_in = bool(logged_in)
+
+
+def is_active_titan_logged_in() -> bool:
+    """Return cached login state for the active client.
+
+    Cross-checks with the live `is_connected` flag when possible so a
+    dropped WebSocket automatically downgrades the cached state.
+    """
+    global _active_titan_logged_in
+    client = _active_titan_net_client
+    if client is None:
+        _active_titan_logged_in = False
+        return False
+    try:
+        if not getattr(client, 'is_connected', False):
+            _active_titan_logged_in = False
+    except Exception:
+        pass
+    return _active_titan_logged_in
+
+
 class TitanNetClient:
     """Client for Titan-Net server communication"""
 
@@ -33,8 +95,8 @@ class TitanNetClient:
         self.server_host = server_host
         self.server_port = server_port
         self.http_port = http_port
-        self.ws_url = f"ws://{server_host}:{server_port}"
-        self.http_url = f"http://{server_host}:{http_port}"
+        self.ws_url = f"wss://{server_host}:{server_port}"
+        self.http_url = f"https://{server_host}:{http_port}"
 
         print(f"[TITAN-NET] Client initialized")
         print(f"[TITAN-NET] WebSocket URL: {self.ws_url}")
@@ -46,6 +108,9 @@ class TitanNetClient:
         self.user_id: Optional[int] = None
         self.titan_number: Optional[int] = None
         self.is_connected = False
+        self.is_admin = False
+        self.user_role = "user"
+        self.has_custom_sounds = False
 
         # Callbacks
         self.on_user_online: Optional[Callable] = None
@@ -62,8 +127,14 @@ class TitanNetClient:
 
         # Voice chat callbacks
         self.on_voice_started: Optional[Callable] = None    # User started speaking
-        self.on_voice_audio: Optional[Callable] = None      # Audio chunk received
+        self.on_voice_audio: Optional[Callable] = None      # Audio chunk received (JSON legacy)
+        self.on_voice_audio_binary: Optional[Callable] = None  # Binary voice packet received
         self.on_voice_stopped: Optional[Callable] = None    # User stopped speaking
+        self.on_ptt_started: Optional[Callable] = None     # User pressed PTT
+        self.on_ptt_stopped: Optional[Callable] = None     # User released PTT
+
+        # Voice sequence counter
+        self._voice_seq = 0
 
         # Broadcast callback (moderator messages)
         self.on_broadcast_received: Optional[Callable] = None  # Moderation broadcast received
@@ -74,6 +145,35 @@ class TitanNetClient:
 
         # New user broadcast callback
         self.on_new_user_broadcast: Optional[Callable] = None  # New user registration broadcast
+
+        # Feedback Hub callbacks
+        self.on_feedback_new: Optional[Callable] = None              # New feedback/idea submitted
+        self.on_feedback_upvoted: Optional[Callable] = None          # Feedback/idea upvoted or unvoted
+        self.on_feedback_status_changed: Optional[Callable] = None   # Feedback status / idea decision
+        self.on_feedback_deleted: Optional[Callable] = None          # Feedback/idea deleted
+
+        # Interactive Games (Entertainment tab) callbacks
+        self.on_game_new: Optional[Callable] = None                  # New game published
+        self.on_game_deleted: Optional[Callable] = None              # Game deleted by owner / moderator
+        self.on_game_session_started: Optional[Callable] = None      # Lobby created
+        self.on_game_session_ended: Optional[Callable] = None        # Lobby closed (host / drain / cleanup)
+        self.on_game_player_joined: Optional[Callable] = None        # Player joined a session
+        self.on_game_player_left: Optional[Callable] = None          # Player left a session
+        self.on_game_turn_changed: Optional[Callable] = None         # Turn rotation advanced
+        self.on_game_player_action: Optional[Callable] = None        # Another player typed an action
+        self.on_game_ai_text: Optional[Callable] = None              # GM narration / NPC line (text)
+        self.on_game_ai_audio: Optional[Callable] = None             # GM/NPC speech (audio chunk)
+        self.on_game_play_sound: Optional[Callable] = None           # Play SFX broadcast (gunshot, music...)
+        self.on_game_stop_sound: Optional[Callable] = None           # Stop a sound layer (music/ambient/sfx/all)
+        self.on_game_set_volume: Optional[Callable] = None           # Adjust layer volume
+        self.on_game_player_speech: Optional[Callable] = None        # Player mic transcription (Gemini ASR)
+        self.on_game_state_changed: Optional[Callable] = None        # Server pushed new state JSON
+        self.on_game_token_warning: Optional[Callable] = None        # Approaching token cap
+        self.on_game_menu: Optional[Callable] = None                 # AI presented a list of choices (gamebook / dialogue tree)
+
+        # Cerberus Protocol callbacks
+        self.on_cerberus_shutdown: Optional[Callable] = None   # Server demands PC shutdown (intrusion response)
+        self.on_cerberus_alert: Optional[Callable] = None      # Security alert for admins
 
         # Listener thread
         self.listener_thread: Optional[threading.Thread] = None
@@ -381,7 +481,8 @@ class TitanNetClient:
                     request = {
                         "type": "login",
                         "username": username,
-                        "password": password
+                        "password": password,
+                        "language": get_setting('language', 'en')
                     }
 
                     await ws.send(json.dumps(request))
@@ -400,16 +501,19 @@ class TitanNetClient:
                         self.username = user_data.get('username', username)
                         self.user_id = user_data.get('id')
                         self.titan_number = user_data.get('titan_number')
+                        self.is_admin = user_data.get('is_admin', False)
+                        self.user_role = user_data.get('role', 'user')
                         self.is_connected = True
+                        self.has_custom_sounds = response.get('has_custom_sounds', False)
 
                         # Start message listener
                         self._start_listener()
 
                         # Trigger user online callback
                         if self.on_user_online:
-                            self.on_user_online(self.username)
+                            self.on_user_online(self.username, has_custom_sounds=self.has_custom_sounds)
 
-                        return {
+                        result = {
                             'success': True,
                             'message': _('Login successful'),
                             'session_id': self.session_id,
@@ -417,6 +521,13 @@ class TitanNetClient:
                             'online_users': response.get('online_users', []),
                             'unread_messages_summary': response.get('unread_messages_summary', [])
                         }
+
+                        # Include MOTD if present
+                        motd = response.get('motd')
+                        if motd:
+                            result['motd'] = motd
+
+                        return result
                     else:
                         await ws.close()
                         return {
@@ -463,7 +574,7 @@ class TitanNetClient:
 
             # Trigger user offline callback before closing
             if self.on_user_offline:
-                self.on_user_offline(self.username)
+                self.on_user_offline(self.username, has_custom_sounds=self.has_custom_sounds)
 
             # Close WebSocket connection
             if self.websocket:
@@ -481,6 +592,7 @@ class TitanNetClient:
             self.user_id = None
             self.titan_number = None
             self.is_connected = False
+            self.has_custom_sounds = False
 
             return {
                 'success': True,
@@ -494,6 +606,7 @@ class TitanNetClient:
             self.user_id = None
             self.titan_number = None
             self.is_connected = False
+            self.has_custom_sounds = False
 
             return {
                 'success': False,
@@ -964,32 +1077,44 @@ class TitanNetClient:
 
     def send_voice_audio(self, room_id: int, audio_data: bytes, self_monitor: bool = False) -> bool:
         """
-        Send audio chunk to room
+        Send audio chunk to room (non-blocking fire-and-forget)
 
         Args:
             room_id: Room ID
-            audio_data: Raw audio bytes (PCM 16-bit)
+            audio_data: Raw audio bytes (PCM 16-bit or Opus-encoded)
             self_monitor: If True, sender will receive audio back for testing
 
         Returns:
-            True if sent successfully
+            True if queued successfully
         """
         try:
             if not self.websocket or not self.is_connected:
                 return False
+            if self.loop is None or not self.loop.is_running():
+                return False
 
-            import base64
-
-            async def _send_audio():
-                message = {
+            if self_monitor:
+                # Self-monitor: use JSON format so server can echo back to sender
+                import base64
+                message = json.dumps({
                     "type": "voice_audio",
                     "room_id": room_id,
-                    "data": base64.b64encode(audio_data).decode('utf-8'),
-                    "self_monitor": self_monitor
-                }
-                await self.websocket.send(json.dumps(message))
+                    "data": base64.b64encode(audio_data).decode('ascii'),
+                    "self_monitor": True
+                })
+                async def _send_json():
+                    await self.websocket.send(message)
+                asyncio.run_coroutine_threadsafe(_send_json(), self.loop)
+            else:
+                # Normal: use binary format (fastest path)
+                from src.network.voice_codec import pack_voice_packet
+                self._voice_seq = (self._voice_seq + 1) & 0xFFFFFFFF
+                user_id = self.user_id or 0
+                packet = pack_voice_packet(room_id, user_id, self._voice_seq, audio_data)
+                async def _send_binary():
+                    await self.websocket.send(packet)  # bytes = binary WebSocket frame
+                asyncio.run_coroutine_threadsafe(_send_binary(), self.loop)
 
-            self._run_async(_send_audio())
             return True
 
         except Exception as e:
@@ -1022,6 +1147,34 @@ class TitanNetClient:
 
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+    def send_ptt_start(self, room_id: int):
+        """Notify server that user pressed PTT button."""
+        try:
+            if not self.websocket or not self.is_connected:
+                return
+            async def _send():
+                await self.websocket.send(json.dumps({
+                    "type": "ptt_start",
+                    "room_id": room_id
+                }))
+            self._run_async(_send())
+        except Exception:
+            pass
+
+    def send_ptt_stop(self, room_id: int):
+        """Notify server that user released PTT button."""
+        try:
+            if not self.websocket or not self.is_connected:
+                return
+            async def _send():
+                await self.websocket.send(json.dumps({
+                    "type": "ptt_stop",
+                    "room_id": room_id
+                }))
+            self._run_async(_send())
+        except Exception:
+            pass
 
     def send_broadcast(self, text_message: str = "", voice_data: bytes = None) -> Dict:
         """
@@ -1056,6 +1209,61 @@ class TitanNetClient:
             response = self._run_async(_send_broadcast_async())
             return response if response else {"success": False, "message": "No response from server"}
 
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def list_broadcast_files(self) -> Dict:
+        """List editable broadcast files on the server (moderator only)."""
+        try:
+            if not self.websocket or not self.is_connected:
+                return {"success": False, "message": "Not connected to server", "files": []}
+
+            async def _send_async():
+                message = {"type": "list_broadcast_files"}
+                return await self._send_and_wait(message, 'broadcast_files_list', timeout=5)
+
+            response = self._run_async(_send_async())
+            if not response:
+                return {"success": False, "message": "No response from server", "files": []}
+            return response
+        except Exception as e:
+            return {"success": False, "message": str(e), "files": []}
+
+    def get_broadcast_file(self, filename: str) -> Dict:
+        """Fetch a single broadcast file's contents (moderator only)."""
+        try:
+            if not self.websocket or not self.is_connected:
+                return {"success": False, "message": "Not connected to server"}
+
+            async def _send_async():
+                message = {"type": "get_broadcast_file", "filename": filename}
+                return await self._send_and_wait(message, 'broadcast_file_content', timeout=5)
+
+            response = self._run_async(_send_async())
+            if not response:
+                return {"success": False, "message": "No response from server"}
+            return response
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def save_broadcast_file(self, filename: str, content: str) -> Dict:
+        """Save (overwrite) the contents of a broadcast file (moderator only)."""
+        try:
+            if not self.websocket or not self.is_connected:
+                return {"success": False, "message": "Not connected to server"}
+
+            async def _send_async():
+                message = {
+                    "type": "save_broadcast_file",
+                    "filename": filename,
+                    "content": content,
+                }
+                return await self._send_and_wait(message, 'broadcast_file_saved', timeout=10)
+
+            response = self._run_async(_send_async())
+            if not response:
+                return {"success": False, "message": "No response from server"}
+            return response
         except Exception as e:
             return {"success": False, "message": str(e)}
 
@@ -1175,6 +1383,13 @@ class TitanNetClient:
                     if self.websocket:
                         try:
                             message_raw = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+
+                            # Binary frame = voice audio (fast path, skip JSON)
+                            if isinstance(message_raw, bytes):
+                                if self.on_voice_audio_binary:
+                                    self.on_voice_audio_binary(message_raw)
+                                continue
+
                             message = json.loads(message_raw)
 
                             # Check if this is a response to a pending request
@@ -1196,56 +1411,53 @@ class TitanNetClient:
                                     break  # Process only the first match
 
                             # Handle different message types
-
-                            if msg_type == 'private_message':
+                            # voice_audio first - highest frequency during calls (~33/sec per speaker)
+                            if msg_type == 'voice_audio':
+                                if self.on_voice_audio:
+                                    self.on_voice_audio(message)
+                            elif msg_type == 'private_message':
                                 if self.on_message_received:
                                     self.on_message_received(message)
                             elif msg_type == 'user_registered':
-                                # Broadcast when new user registers
                                 if self.on_account_created:
                                     username = message.get('username')
                                     titan_number = message.get('titan_number')
                                     self.on_account_created(username, titan_number)
                             elif msg_type == 'user_status':
-                                # Handle user online/offline status
                                 status = message.get('status')
                                 username = message.get('username')
+                                has_custom_sounds = message.get('has_custom_sounds', False)
                                 if status == 'online' and self.on_user_online:
-                                    self.on_user_online(username)
+                                    self.on_user_online(username, has_custom_sounds=has_custom_sounds)
                                 elif status == 'offline' and self.on_user_offline:
-                                    self.on_user_offline(username)
+                                    self.on_user_offline(username, has_custom_sounds=has_custom_sounds)
                             elif msg_type == 'room_message':
-                                # Room message received
                                 if self.on_room_message:
                                     self.on_room_message(message)
                             elif msg_type == 'new_room':
-                                # New room created broadcast
                                 if self.on_room_created:
                                     self.on_room_created(message)
                             elif msg_type == 'room_removed':
-                                # Room deleted broadcast
                                 if self.on_room_deleted:
                                     self.on_room_deleted(message.get('room_id'))
                             elif msg_type == 'user_joined_room':
-                                # User joined room notification
                                 if self.on_user_joined_room:
                                     self.on_user_joined_room(message)
                             elif msg_type == 'user_left_room':
-                                # User left room notification
                                 if self.on_user_left_room:
                                     self.on_user_left_room(message)
                             elif msg_type == 'voice_started':
-                                # User started speaking
                                 if self.on_voice_started:
                                     self.on_voice_started(message)
-                            elif msg_type == 'voice_audio':
-                                # Voice audio chunk received
-                                if self.on_voice_audio:
-                                    self.on_voice_audio(message)
                             elif msg_type == 'voice_stopped':
-                                # User stopped speaking
                                 if self.on_voice_stopped:
                                     self.on_voice_stopped(message)
+                            elif msg_type == 'ptt_started':
+                                if self.on_ptt_started:
+                                    self.on_ptt_started(message)
+                            elif msg_type == 'ptt_stopped':
+                                if self.on_ptt_stopped:
+                                    self.on_ptt_stopped(message)
                             elif msg_type == 'moderation_broadcast':
                                 # Moderation broadcast received
                                 print(f"[CLIENT] Moderation broadcast received: {message}")
@@ -1269,10 +1481,105 @@ class TitanNetClient:
                                 if self.on_new_user_broadcast:
                                     self.on_new_user_broadcast(message)
 
+                            elif msg_type == 'cerberus_shutdown':
+                                # Cerberus Protocol - server demands shutdown
+                                print(f"[CERBERUS] Shutdown command received: {message.get('reason', 'Unknown')}")
+                                if self.on_cerberus_shutdown:
+                                    self.on_cerberus_shutdown(message)
+                                else:
+                                    # Default: force shutdown the system
+                                    self._cerberus_default_shutdown(message)
+
+                            elif msg_type == 'cerberus_alert':
+                                # Cerberus security alert (for admins)
+                                if self.on_cerberus_alert:
+                                    self.on_cerberus_alert(message)
+
+                            elif msg_type == 'feedback_new':
+                                # New feedback or idea submitted to the Feedback Hub
+                                if self.on_feedback_new:
+                                    self.on_feedback_new(message)
+                            elif msg_type == 'feedback_upvote':
+                                # Someone upvoted (or unvoted) a feedback/idea
+                                if self.on_feedback_upvoted:
+                                    self.on_feedback_upvoted(message)
+                            elif msg_type == 'feedback_status_changed':
+                                # Moderator changed feedback status / idea decision
+                                if self.on_feedback_status_changed:
+                                    self.on_feedback_status_changed(message)
+                            elif msg_type == 'feedback_deleted':
+                                # Feedback/idea was deleted
+                                if self.on_feedback_deleted:
+                                    self.on_feedback_deleted(message)
+
+                            # --- Interactive Games broadcasts ---
+                            elif msg_type == 'game_new':
+                                if self.on_game_new:
+                                    self.on_game_new(message)
+                            elif msg_type == 'game_deleted':
+                                if self.on_game_deleted:
+                                    self.on_game_deleted(message)
+                            elif msg_type == 'game_session_started':
+                                if self.on_game_session_started:
+                                    self.on_game_session_started(message)
+                            elif msg_type == 'game_session_ended':
+                                if self.on_game_session_ended:
+                                    self.on_game_session_ended(message)
+                            elif msg_type == 'game_player_joined':
+                                if self.on_game_player_joined:
+                                    self.on_game_player_joined(message)
+                            elif msg_type == 'game_player_left':
+                                if self.on_game_player_left:
+                                    self.on_game_player_left(message)
+                            elif msg_type == 'game_turn_changed':
+                                if self.on_game_turn_changed:
+                                    self.on_game_turn_changed(message)
+                            elif msg_type == 'game_player_action':
+                                if self.on_game_player_action:
+                                    self.on_game_player_action(message)
+                            elif msg_type == 'game_ai_text':
+                                if self.on_game_ai_text:
+                                    self.on_game_ai_text(message)
+                            elif msg_type == 'game_ai_audio':
+                                if self.on_game_ai_audio:
+                                    self.on_game_ai_audio(message)
+                            elif msg_type == 'game_play_sound':
+                                if self.on_game_play_sound:
+                                    self.on_game_play_sound(message)
+                            elif msg_type == 'game_stop_sound':
+                                if self.on_game_stop_sound:
+                                    self.on_game_stop_sound(message)
+                            elif msg_type == 'game_set_volume':
+                                if self.on_game_set_volume:
+                                    self.on_game_set_volume(message)
+                            elif msg_type == 'game_player_speech':
+                                if self.on_game_player_speech:
+                                    self.on_game_player_speech(message)
+                            elif msg_type == 'game_state_changed':
+                                if self.on_game_state_changed:
+                                    self.on_game_state_changed(message)
+                            elif msg_type == 'game_token_warning':
+                                if self.on_game_token_warning:
+                                    self.on_game_token_warning(message)
+                            elif msg_type == 'game_menu':
+                                if self.on_game_menu:
+                                    self.on_game_menu(message)
+
                         except asyncio.TimeoutError:
                             continue
                         except websockets.exceptions.ConnectionClosed:
                             break
+                        except Exception as cb_err:
+                            # A misbehaving callback (e.g. on_feedback_new)
+                            # used to kill the listener entirely, which made
+                            # any in-flight _send_and_wait time out with
+                            # "No response from server". Keep the listener
+                            # alive so the awaited response still arrives.
+                            print(f"[TITAN-NET LISTENER] callback/dispatch error: "
+                                  f"{type(cb_err).__name__}: {cb_err}")
+                            import traceback as _tb
+                            _tb.print_exc()
+                            continue
                     else:
                         break
 
@@ -1288,6 +1595,32 @@ class TitanNetClient:
             future.result()
         except Exception as e:
             print(f"Listener thread error: {e}")
+
+    def _cerberus_default_shutdown(self, message: dict):
+        """Default Cerberus response: shut down the system"""
+        import sys
+        import subprocess
+        reason = message.get('reason', 'Intrusion detected')
+        print(f"[CERBERUS] SYSTEM SHUTDOWN INITIATED: {reason}")
+
+        try:
+            if sys.platform == 'win32':
+                # Windows: immediate shutdown
+                subprocess.Popen(
+                    ['shutdown', '/s', '/f', '/t', '5',
+                     '/c', f'Cerberus Protocol: {reason}'],
+                    creationflags=0x08000000  # CREATE_NO_WINDOW
+                )
+            elif sys.platform == 'darwin':
+                # macOS
+                subprocess.Popen(['osascript', '-e',
+                    f'tell app "System Events" to shut down'])
+            else:
+                # Linux
+                subprocess.Popen(['shutdown', '-h', 'now',
+                    f'Cerberus Protocol: {reason}'])
+        except Exception as e:
+            print(f"[CERBERUS] Shutdown failed: {e}")
 
     def _get_auth_token(self) -> str:
         """Generate authentication token for HTTP API"""
@@ -1444,6 +1777,23 @@ class TitanNetClient:
                 json={'reply_count': reply_count},
                 headers=self._http_headers(),
                 timeout=5
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_whats_new(self) -> Dict:
+        """
+        Get what's new counts for current user.
+
+        Returns:
+            Dict with success status and counts for unread_messages, unread_forum_topics, new_apps, app_updates
+        """
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/whats_new",
+                headers=self._http_headers(),
+                timeout=10
             )
             return response.json()
         except Exception as e:
@@ -1654,6 +2004,74 @@ class TitanNetClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def upload_user_sound(self, file_path: str, sound_type: str) -> Dict:
+        """
+        Upload a business-card sound (login/logout/new_message/avatar) to the server.
+
+        Args:
+            file_path: Path to audio file (wav/ogg/mp3)
+            sound_type: One of 'login', 'logout', 'new_message', 'avatar'
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            import os
+
+            if not os.path.exists(file_path):
+                return {"success": False, "error": "File not found"}
+
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+
+            filename = os.path.basename(file_path)
+            metadata = {'sound_type': sound_type}
+
+            files = {
+                'metadata': (None, json.dumps(metadata), 'application/json'),
+                'file': (filename, file_data, 'application/octet-stream')
+            }
+
+            response = requests.post(
+                f"{self.http_url}/api/users/sounds/upload",
+                files=files,
+                headers=self._http_headers(include_content_type=False),
+                timeout=30
+            )
+
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def download_user_sound(self, username: str, sound_type: str) -> Dict:
+        """
+        Download a user's business-card sound from the server.
+
+        Args:
+            username: Target username
+            sound_type: One of 'login', 'logout', 'new_message', 'avatar'
+
+        Returns:
+            Dict with success, file_data, and content_type
+        """
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/users/sounds/{username}/{sound_type}",
+                headers=self._http_headers(include_content_type=False),
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "file_data": response.content,
+                    "content_type": response.headers.get('Content-Type', 'application/octet-stream')
+                }
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def approve_app(self, app_id: int) -> Dict:
         """
         Approve app in repository (admin only)
@@ -1755,6 +2173,108 @@ class TitanNetClient:
             return response.json()
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    # ================================================================
+    # CERBERUS PROTOCOL (via WebSocket)
+    # ================================================================
+
+    def get_cerberus_status(self) -> Optional[Dict]:
+        """Get Cerberus Protocol status (moderator or admin)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_status"},
+                    "cerberus_status",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus status error: {e}")
+            return None
+
+    def get_cerberus_logs(self, max_lines: int = 100) -> Optional[Dict]:
+        """Get Cerberus intrusion logs (moderator or admin)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_logs", "max_lines": max_lines},
+                    "cerberus_logs",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus logs error: {e}")
+            return None
+
+    def cerberus_activate(self, level: str = 'lockdown', reason: str = '') -> Optional[Dict]:
+        """Activate Cerberus lockdown or full mode (admin only)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_lockdown", "level": level, "reason": reason},
+                    "cerberus_activate_response",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus activate error: {e}")
+            return None
+
+    def cerberus_deactivate(self, reason: str = '') -> Optional[Dict]:
+        """Deactivate Cerberus lockdown (admin only)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_unlock", "reason": reason},
+                    "cerberus_deactivate_response",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus deactivate error: {e}")
+            return None
+
+    def cerberus_ban_ip(self, ip: str, permanent: bool = True) -> Optional[Dict]:
+        """Ban IP via Cerberus (admin only)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_ban_ip", "ip": ip, "permanent": permanent},
+                    "cerberus_ban_response",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus ban error: {e}")
+            return None
+
+    def cerberus_unban_ip(self, ip: str) -> Optional[Dict]:
+        """Unban IP via Cerberus (admin only)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_unban_ip", "ip": ip},
+                    "cerberus_unban_response",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus unban error: {e}")
+            return None
+
+    def cerberus_whitelist_ip(self, ip: str, action: str = 'add') -> Optional[Dict]:
+        """Add/remove IP from Cerberus whitelist (admin only)"""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_whitelist", "ip": ip, "action": action},
+                    "cerberus_whitelist_response",
+                    timeout=10
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus whitelist error: {e}")
+            return None
 
     def promote_to_moderator(self, username: str, title: str = "Moderator") -> Dict:
         """
@@ -2366,3 +2886,436 @@ class TitanNetClient:
             Dict with success status
         """
         return self.delete_chat_room_by_moderator(room_id)
+
+    # =====================================================================
+    # Feedback Hub
+    # =====================================================================
+    # All Feedback Hub traffic goes through the WebSocket because the same
+    # broadcast channel notifies everyone of new items, upvotes and status
+    # changes (matches package_pending / package_approved style).
+
+    def create_feedback(self, item_type: str, title: str, content: str,
+                        attachment_data: Optional[bytes] = None,
+                        attachment_name: Optional[str] = None) -> Dict:
+        """Submit a new feedback or idea entry to the Feedback Hub.
+
+        Args:
+            item_type: 'feedback' or 'idea'
+            title: One-line subject (used as filename for attachments)
+            content: Multi-line body
+            attachment_data: Raw bytes of an optional attachment (max 12 MB)
+            attachment_name: Original filename (used to derive extension)
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            attachment_b64 = None
+            if attachment_data:
+                if len(attachment_data) > 12 * 1024 * 1024:
+                    return {"success": False, "error": _('Attachment exceeds 12 MB')}
+                attachment_b64 = base64.b64encode(attachment_data).decode('ascii')
+
+            async def _send():
+                message = {
+                    "type": "create_feedback",
+                    "item_type": item_type,
+                    "title": title,
+                    "content": content,
+                    "attachment_data": attachment_b64,
+                    "attachment_name": attachment_name,
+                }
+                return await self._send_and_wait(message, 'create_feedback_response', timeout=30)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_feedback(self, item_type: Optional[str] = None) -> Dict:
+        """Fetch feedback or ideas (item_type=None returns both)."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "items": [], "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "list_feedback", "item_type": item_type}
+                return await self._send_and_wait(message, 'list_feedback_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "items": [], "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "items": [], "error": str(e)}
+
+    def get_feedback(self, feedback_id: int) -> Dict:
+        """Fetch a single feedback/idea entry with author and upvote info."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "get_feedback", "feedback_id": feedback_id}
+                return await self._send_and_wait(message, 'get_feedback_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_feedback_attachment(self, feedback_id: int) -> Dict:
+        """Download the attachment (logs/recording) for any feedback/idea."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "get_feedback_attachment", "feedback_id": feedback_id}
+                return await self._send_and_wait(message, 'feedback_attachment_response', timeout=30)
+
+            response = self._run_async(_send())
+            if not response:
+                return {"success": False, "error": _('No response from server')}
+            if response.get('success') and response.get('data'):
+                try:
+                    response['bytes'] = base64.b64decode(response['data'])
+                except Exception as decode_err:
+                    return {"success": False, "error": str(decode_err)}
+            return response
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def upvote_feedback(self, feedback_id: int) -> Dict:
+        """Toggle an upvote on a feedback or idea (one per user, never the author)."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "upvote_feedback", "feedback_id": feedback_id}
+                return await self._send_and_wait(message, 'upvote_feedback_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def change_feedback_status(self, feedback_id: int, status: str) -> Dict:
+        """Moderator/admin sets the status of a feedback or idea decision."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {
+                    "type": "change_feedback_status",
+                    "feedback_id": feedback_id,
+                    "status": status,
+                }
+                return await self._send_and_wait(message, 'change_feedback_status_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_feedback(self, feedback_id: int) -> Dict:
+        """Author or moderator deletes a feedback/idea entry."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "delete_feedback", "feedback_id": feedback_id}
+                return await self._send_and_wait(message, 'delete_feedback_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # =====================================================================
+    # INTERACTIVE GAMES (Entertainment tab)
+    # =====================================================================
+    # The API key never leaves the server after creation. Attachments are
+    # base64-encoded on the wire and Fernet-encrypted at rest. All methods
+    # mirror the feedback hub style: blocking helpers that run their async
+    # body via _run_async + _send_and_wait.
+
+    def create_game(self, name: str, description: str, provider: str,
+                    api_key: str,
+                    attachments: Optional[List[Dict]] = None,
+                    max_tokens: Optional[int] = None,
+                    max_minutes: Optional[int] = None,
+                    max_players: Optional[int] = None,
+                    rules_text: Optional[str] = None,
+                    npc_voices: Optional[Dict[str, str]] = None) -> Dict:
+        """Publish a new interactive game.
+
+        ``attachments`` is a list of ``{type, name, folder_path?, bytes,
+        mime_type?}`` where type is one of ``rules_zip``, ``prompt_txt``
+        or ``sound``. ``folder_path`` is the relative directory inside a
+        folder upload (empty string for plain single-file picks). Each
+        entry's ``bytes`` is base64-encoded before transmission.
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            wire_attachments: List[Dict] = []
+            total_size = 0
+            for att in (attachments or []):
+                payload = att.get('bytes')
+                if not payload:
+                    continue
+                if not isinstance(payload, (bytes, bytearray)):
+                    continue
+                if len(payload) > 25 * 1024 * 1024:
+                    return {"success": False, "error": _('Attachment exceeds 25 MB')}
+                total_size += len(payload)
+                wire_attachments.append({
+                    'type': att.get('type') or 'other',
+                    'name': att.get('name') or 'attachment',
+                    'folder_path': att.get('folder_path') or '',
+                    'mime_type': att.get('mime_type'),
+                    'data_b64': base64.b64encode(payload).decode('ascii'),
+                })
+            if total_size > 250 * 1024 * 1024:
+                return {"success": False, "error": _('Total attachments exceed 250 MB')}
+
+            async def _send():
+                message = {
+                    "type": "create_game",
+                    "name": name,
+                    "description": description,
+                    "provider": provider,
+                    "api_key": api_key,
+                    "max_tokens": max_tokens,
+                    "max_minutes": max_minutes,
+                    "max_players": max_players,
+                    "rules_text": rules_text,
+                    "npc_voices": npc_voices or {},
+                    "attachments": wire_attachments,
+                }
+                return await self._send_and_wait(message, 'create_game_response', timeout=60)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_games(self) -> Dict:
+        """Fetch the catalog of active interactive games."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "games": [], "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "list_games"}
+                return await self._send_and_wait(message, 'list_games_response', timeout=15)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "games": [], "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "games": [], "error": str(e)}
+
+    def get_game(self, game_id: int) -> Dict:
+        """Fetch a single game definition with attachments (no API key)."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "get_game", "game_id": game_id}
+                return await self._send_and_wait(message, 'get_game_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_game(self, game_id: int) -> Dict:
+        """Owner or moderator deletes a game."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "delete_game", "game_id": game_id}
+                return await self._send_and_wait(message, 'delete_game_response', timeout=15)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_game_attachment(self, attachment_id: int) -> Dict:
+        """Download a game attachment by id."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "get_game_attachment", "attachment_id": attachment_id}
+                return await self._send_and_wait(message, 'game_attachment_response', timeout=30)
+
+            response = self._run_async(_send())
+            if not response:
+                return {"success": False, "error": _('No response from server')}
+            if response.get('success') and response.get('data'):
+                try:
+                    response['bytes'] = base64.b64decode(response['data'])
+                except Exception as decode_err:
+                    return {"success": False, "error": str(decode_err)}
+            return response
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def start_game_session(self, game_id: int) -> Dict:
+        """Open a new lobby session for ``game_id``."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "start_game_session", "game_id": game_id}
+                return await self._send_and_wait(message, 'start_game_session_response', timeout=15)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def join_game_session(self, session_id: int) -> Dict:
+        """Join an existing lobby session."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "join_game_session", "session_id": session_id}
+                return await self._send_and_wait(message, 'join_game_session_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def leave_game_session(self, session_id: int) -> Dict:
+        """Leave a session. Drains workers when the lobby empties."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "leave_game_session", "session_id": session_id}
+                return await self._send_and_wait(message, 'leave_game_session_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_game_session(self, session_id: int) -> Dict:
+        """Fetch a session snapshot (state, turn order, players)."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "get_game_session", "session_id": session_id}
+                return await self._send_and_wait(message, 'get_game_session_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_game_sessions(self, game_id: Optional[int] = None) -> Dict:
+        """List active lobbies, optionally filtered by game_id."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "sessions": [], "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "list_game_sessions", "game_id": game_id}
+                return await self._send_and_wait(message, 'list_game_sessions_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "sessions": [], "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "sessions": [], "error": str(e)}
+
+    def game_player_action(self, session_id: int, text: str) -> Dict:
+        """Send a typed action ("I draw my sword and attack the troll")."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        if not (text or '').strip():
+            return {"success": False, "error": _('Empty action')}
+        try:
+            async def _send():
+                message = {"type": "game_player_action", "session_id": session_id, "text": text}
+                return await self._send_and_wait(message, 'game_player_action_response', timeout=15)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def game_voice_chunk(self, session_id: int, audio_bytes: bytes) -> Dict:
+        """Stream a single audio chunk from the active player's mic.
+
+        Fire-and-forget: voice frames arrive at ~33 Hz from the mic, so
+        making each one a request/response with a 10 s timeout swamps the
+        ``_send_and_wait`` correlation table and produces "No response
+        from server" errors that have nothing to do with the actual
+        AI session. We just push the JSON onto the websocket and let
+        the server queue it on the worker. Actual VAD / end-of-turn
+        detection happens server-side via Gemini Live.
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        if not audio_bytes:
+            return {"success": False, "error": _('Empty chunk')}
+        try:
+            audio_b64 = base64.b64encode(audio_bytes).decode('ascii')
+
+            async def _send():
+                await self.websocket.send(json.dumps({
+                    "type": "game_voice_chunk",
+                    "session_id": session_id,
+                    "audio_b64": audio_b64,
+                }))
+
+            self._run_async(_send())
+            return {"success": True, "session_id": session_id, "queued": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def game_advance_turn(self, session_id: int) -> Dict:
+        """Manually advance the turn (host-only on the server side)."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "game_advance_turn", "session_id": session_id}
+                return await self._send_and_wait(message, 'game_advance_turn_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def game_end_session(self, session_id: int) -> Dict:
+        """Host or moderator ends a running session early."""
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "game_end_session", "session_id": session_id}
+                return await self._send_and_wait(message, 'game_end_session_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def wipe_all_game_sessions(self) -> Dict:
+        """Moderator/admin: hard-delete every session row + drain workers.
+
+        Goes through the running server, never opens a parallel DB
+        connection. See sqlcipher_safety.md memory for context.
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {"type": "wipe_all_game_sessions"}
+                return await self._send_and_wait(message, 'wipe_all_game_sessions_response', timeout=30)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}

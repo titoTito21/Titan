@@ -346,6 +346,187 @@ class PersistentTildeHotkey:
         self._fallback_hotkeys = None
 
 
+class PersistentNavigationHotkeys:
+    """Register navigation keys (arrows, enter, space, backspace, esc) via
+    Windows RegisterHotKey API.
+
+    Low-level keyboard hooks (WH_KEYBOARD_LL) used by the keyboard library
+    compete with screen readers like JAWS and NVDA that install their own
+    hooks. Hook chain ordering is nondeterministic, so arrow keys worked
+    like a lottery - sometimes TCE caught them first, sometimes JAWS.
+
+    RegisterHotKey is processed at the system level BEFORE the hook chain,
+    so it is immune to hook interference. Tilde+Enter is detected by
+    checking GetAsyncKeyState(VK_OEM_3) when Enter fires.
+
+    Falls back to GlobalHotKeys on non-Windows platforms.
+    """
+
+    VK_BACK = 0x08
+    VK_RETURN = 0x0D
+    VK_ESCAPE = 0x1B
+    VK_SPACE = 0x20
+    VK_LEFT = 0x25
+    VK_UP = 0x26
+    VK_RIGHT = 0x27
+    VK_DOWN = 0x28
+    VK_OEM_3 = 0xC0  # Backtick/tilde
+    WM_HOTKEY = 0x0312
+    WM_QUIT = 0x0012
+
+    HOTKEY_BASE_ID = 0x7100
+
+    KEY_MAP = [
+        ('up', VK_UP),
+        ('down', VK_DOWN),
+        ('left', VK_LEFT),
+        ('right', VK_RIGHT),
+        ('enter', VK_RETURN),
+        ('space', VK_SPACE),
+        ('backspace', VK_BACK),
+        ('esc', VK_ESCAPE),
+    ]
+
+    def __init__(self, on_key):
+        """on_key(name) is called on key press. Names:
+        'up', 'down', 'left', 'right', 'space', 'backspace', 'esc',
+        'enter' (plain Enter), 'titan_enter' (Enter while tilde held).
+        """
+        self.on_key = on_key
+        self._thread = None
+        self._thread_id = None
+        self._stop_event = threading.Event()
+        self._fallback_hotkeys = None
+        self._registered_ids = []
+
+    def start(self):
+        self._stop_event.clear()
+        if IS_WINDOWS:
+            self._thread = threading.Thread(target=self._run_windows, daemon=True)
+            self._thread.start()
+        else:
+            self._start_fallback()
+
+    def stop(self):
+        self._stop_event.set()
+        if IS_WINDOWS:
+            if self._thread_id:
+                try:
+                    import ctypes
+                    ctypes.windll.user32.PostThreadMessageW(
+                        self._thread_id, self.WM_QUIT, 0, 0
+                    )
+                except Exception as e:
+                    print(f"Error posting quit message to nav hotkey thread: {e}")
+            if self._thread:
+                self._thread.join(timeout=2.0)
+                self._thread = None
+        else:
+            self._stop_fallback()
+
+    def join(self, timeout=None):
+        if self._thread:
+            self._thread.join(timeout=timeout)
+
+    def _run_windows(self):
+        import ctypes
+        from ctypes import wintypes
+
+        try:
+            self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+
+            id_to_name = {}
+            for idx, (name, vk) in enumerate(self.KEY_MAP):
+                hk_id = self.HOTKEY_BASE_ID + idx
+                if ctypes.windll.user32.RegisterHotKey(None, hk_id, 0, vk):
+                    self._registered_ids.append(hk_id)
+                    id_to_name[hk_id] = name
+                else:
+                    err = ctypes.GetLastError()
+                    print(f"RegisterHotKey failed for nav key '{name}' (vk=0x{vk:02X}, error={err})")
+
+            if not self._registered_ids:
+                print("All navigation RegisterHotKey calls failed, falling back to keyboard library")
+                self._run_fallback()
+                return
+
+            print(f"Navigation hotkeys registered via RegisterHotKey (system-level, JAWS-safe): {[n for _, n in [(i, id_to_name[i]) for i in self._registered_ids]]}")
+            msg = wintypes.MSG()
+
+            while ctypes.windll.user32.GetMessageW(
+                ctypes.byref(msg), None, 0, 0
+            ) > 0:
+                if msg.message == self.WM_HOTKEY:
+                    name = id_to_name.get(msg.wParam)
+                    if name is not None:
+                        self._dispatch(name)
+                if self._stop_event.is_set():
+                    break
+
+        except Exception as e:
+            print(f"Error in PersistentNavigationHotkeys: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            try:
+                import ctypes
+                for hk_id in self._registered_ids:
+                    try:
+                        ctypes.windll.user32.UnregisterHotKey(None, hk_id)
+                    except Exception:
+                        pass
+                self._registered_ids.clear()
+            except Exception:
+                pass
+            self._thread_id = None
+
+    def _dispatch(self, name):
+        """Dispatch key to callback; distinguish tilde+enter from plain enter."""
+        try:
+            if name == 'enter' and IS_WINDOWS:
+                try:
+                    import ctypes
+                    state = ctypes.windll.user32.GetAsyncKeyState(self.VK_OEM_3)
+                    if state & 0x8000:
+                        name = 'titan_enter'
+                except Exception:
+                    pass
+            threading.Thread(target=self.on_key, args=(name,), daemon=True).start()
+        except Exception as e:
+            print(f"Error dispatching nav hotkey '{name}': {e}")
+
+    def _start_fallback(self):
+        """Fallback to keyboard library / pynput on non-Windows or when
+        RegisterHotKey fails. Handles tilde+enter chord via keyboard library."""
+        fallback_map = {
+            '<up>': lambda: self.on_key('up'),
+            '<down>': lambda: self.on_key('down'),
+            '<left>': lambda: self.on_key('left'),
+            '<right>': lambda: self.on_key('right'),
+            '<enter>': lambda: self.on_key('enter'),
+            '<space>': lambda: self.on_key('space'),
+            '<backspace>': lambda: self.on_key('backspace'),
+            '<esc>': lambda: self.on_key('esc'),
+            '`+<enter>': lambda: self.on_key('titan_enter'),
+        }
+        self._fallback_hotkeys = GlobalHotKeys(fallback_map)
+        self._fallback_hotkeys.start()
+
+    def _stop_fallback(self):
+        if self._fallback_hotkeys:
+            try:
+                self._fallback_hotkeys.stop()
+                self._fallback_hotkeys.join(timeout=2.0)
+            except Exception as e:
+                print(f"Error stopping nav fallback hotkeys: {e}")
+            self._fallback_hotkeys = None
+
+    def _run_fallback(self):
+        self._start_fallback()
+        self._stop_event.wait()
+        self._stop_fallback()
+
+
 class BaseWidget:
     def __init__(self, speak_func):
         # speak_func jest metodą z InvisibleUI która już obsługuje stereo
@@ -766,6 +947,7 @@ class InvisibleUI:
         self.main_frame = main_frame
         self.component_manager = component_manager
         self.categories = []
+        self._registered_views = []  # Component-registered views (converted to categories)
         self.current_category_index = 0
         self.current_element_index = 0
         self.active = False
@@ -964,6 +1146,9 @@ class InvisibleUI:
             # Bind close event to re-enable Titan UI if it was disabled
             settings_frame.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("settings", evt))
             settings_frame.Show()
+            # Pull the Settings window to the foreground so the user actually
+            # sees something happen after pressing Settings from IUI.
+            self._bring_window_forward(settings_frame)
 
         def safe_call_after(func):
             """Safely call wx.CallAfter only if main_frame exists"""
@@ -1034,16 +1219,17 @@ class InvisibleUI:
         if self.component_manager:
             component_menu_functions = self.component_manager.get_component_menu_functions()
             for name, func in component_menu_functions.items():
-                # Wrap component function to ensure main window is shown
+                # Wrap component function to run on wx main thread
                 def make_component_wrapper(component_func):
                     def wrapper(event):
-                        # Restore window from tray if hidden
-                        if self.main_frame and not self.main_frame.IsShown():
-                            self.main_frame.restore_from_tray()
-                            # Call component after a short delay to allow window to fully restore
-                            wx.CallLater(200, component_func, None)
-                        else:
-                            wx.CallAfter(component_func, None)
+                        def _on_main_thread():
+                            # Restore window from tray if hidden
+                            if self.main_frame and not self.main_frame.IsShown():
+                                self.main_frame.restore_from_tray()
+                                wx.CallLater(200, component_func, None)
+                            else:
+                                component_func(None)
+                        wx.CallAfter(_on_main_thread)
                     return wrapper
                 component_menu_actions[name] = make_component_wrapper(func)
 
@@ -1112,6 +1298,52 @@ class InvisibleUI:
         if component_menu_actions:
             self.categories.append({"name": _("Components"), "sound": "applist.ogg", "elements": list(component_menu_actions.keys()), "action": lambda name: component_menu_actions.get(name, lambda event: self.speak(_("Component not found")))(None)})
 
+        # Add component-registered views as categories
+        for view in self._registered_views:
+            self.categories.append(view)
+
+
+    def register_view(self, view_id, label, elements_func, action_func, sound="core/focus.ogg", position='after_network'):
+        """Register a component view as a navigable IUI category.
+
+        Args:
+            view_id: Unique string identifier (e.g., 'macros')
+            label: Display name for the category (e.g., 'Macros')
+            elements_func: Callable returning list of element names, or a static list
+            action_func: Callable(element_name) invoked when user activates an element
+            sound: Sound to play when entering category
+            position: Where to insert - 'after_apps', 'after_games', 'after_network' (default), or int index
+        """
+        category = {
+            "name": label,
+            "sound": sound,
+            "elements": elements_func if isinstance(elements_func, list) else elements_func(),
+            "action": action_func,
+            "_view_id": view_id,
+            "_elements_func": elements_func,
+        }
+        self._registered_views.append(category)
+
+        # If structure already built, add to live categories
+        if self.categories:
+            if isinstance(position, int):
+                idx = min(position, len(self.categories))
+            elif position == 'after_apps':
+                idx = next((i + 1 for i, c in enumerate(self.categories) if c.get("_view_id") == "apps" or _("Applications") in c.get("name", "")), len(self.categories))
+            elif position == 'after_games':
+                idx = next((i + 1 for i, c in enumerate(self.categories) if c.get("_view_id") == "games" or _("Games") in c.get("name", "")), len(self.categories))
+            else:
+                idx = len(self.categories)
+            self.categories.insert(idx, category)
+
+    def refresh_registered_view(self, view_id):
+        """Refresh elements of a registered view by re-calling its elements_func."""
+        for cat in self.categories:
+            if cat.get("_view_id") == view_id:
+                func = cat.get("_elements_func")
+                if callable(func):
+                    cat["elements"] = func()
+                break
 
     def load_widgets(self):
         widgets = []
@@ -1193,12 +1425,14 @@ class InvisibleUI:
         
         # Otherwise, generate status items directly (for minimized mode)
         try:
+            battery = get_battery_status()
             items = [
                 _("Clock: {}").format(get_current_time()),
-                _("Battery level: {}").format(get_battery_status()),
-                _("Volume: {}").format(get_volume_level()),
-                get_network_status()
             ]
+            if battery is not None:
+                items.append(_("Battery level: {}").format(battery))
+            items.append(_("Volume: {}").format(get_volume_level()))
+            items.append(get_network_status())
 
             # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
@@ -1841,7 +2075,7 @@ class InvisibleUI:
 
             # Special handling for WiFi panel
             try:
-                import tce_system_net
+                from src.titan_core import tce_system_net
                 if isinstance(self.active_widget, tce_system_net.WiFiPanel):
                     self.exit_wifi_panel_mode()
                     return
@@ -2190,11 +2424,14 @@ class InvisibleUI:
         self.in_widget_mode = True
         play_sound("ui/focus_expanded.ogg")
         # Update volume levels when entering
-        self.active_widget.volume_level = self.active_widget.get_current_volume()
-        self.active_widget.is_muted = self.active_widget.get_mute_status()
+        widget = self.active_widget
+        if not isinstance(widget, VolumePanel):
+            return
+        widget.volume_level = widget.get_current_volume()
+        widget.is_muted = widget.get_mute_status()
 
-        widget_info = self.active_widget.get_current_element()
-        self.last_widget_element = self.active_widget.get_current_element()
+        widget_info = widget.get_current_element()
+        self.last_widget_element = widget.get_current_element()
         self.speak(widget_info)
 
         # Update hotkeys in background to prevent blocking
@@ -2211,8 +2448,9 @@ class InvisibleUI:
         if not self.in_widget_mode: return
 
         # Cleanup volume panel resources
-        if hasattr(self.active_widget, 'cleanup'):
-            self.active_widget.cleanup()
+        cleanup_fn = getattr(self.active_widget, 'cleanup', None)
+        if callable(cleanup_fn):
+            cleanup_fn()
 
         self.in_widget_mode = False
         self.active_widget = None
@@ -2554,9 +2792,9 @@ class InvisibleUI:
             # Handle widget mode first
             if self.in_widget_mode and self.active_widget:
                 try:
-                    # Check if widget has handle_titan_enter method
-                    if hasattr(self.active_widget, 'handle_titan_enter'):
-                        self.active_widget.handle_titan_enter()
+                    handler = getattr(self.active_widget, 'handle_titan_enter', None)
+                    if callable(handler):
+                        handler()
                         return
                 except Exception as e:
                     print(f"Error in widget handle_titan_enter: {e}")
@@ -2750,19 +2988,31 @@ class InvisibleUI:
             if rebuild:
                 try:
                     self.build_structure()
+                    # Re-apply IUI hooks from components after rebuild
+                    if self.component_manager:
+                        try:
+                            self.component_manager.apply_iui_hooks(self)
+                        except Exception as e:
+                            print(f"Warning: Failed to re-apply IUI hooks after rebuild: {e}")
                 except Exception as e:
                     print(f"Error building structure: {e}")
                     import traceback
                     traceback.print_exc()
 
-            # Register callbacks for message history updates (only if not already registered)
+            # Register callbacks for message history updates (only if not
+            # already registered). message_callbacks lives on the singleton
+            # instance inside each module - access via getattr.
             try:
-                if telegram_client and hasattr(telegram_client, 'add_message_callback'):
-                    if hasattr(telegram_client, 'message_callbacks') and self._handle_im_message_callback not in telegram_client.message_callbacks:
-                        telegram_client.add_message_callback(self._handle_im_message_callback)
-                if messenger_client and hasattr(messenger_client, 'add_message_callback'):
-                    if hasattr(messenger_client, 'message_callbacks') and self._handle_im_message_callback not in messenger_client.message_callbacks:
-                        messenger_client.add_message_callback(self._handle_im_message_callback)
+                for client_module in (telegram_client, messenger_client):
+                    if not client_module:
+                        continue
+                    add_cb = getattr(client_module, 'add_message_callback', None)
+                    if not callable(add_cb):
+                        continue
+                    singleton = getattr(client_module, client_module.__name__.rsplit('.', 1)[-1], None)
+                    callbacks = getattr(singleton, 'message_callbacks', None)
+                    if isinstance(callbacks, list) and self._handle_im_message_callback not in callbacks:
+                        add_cb(self._handle_im_message_callback)
             except Exception as e:
                 print(f"Error registering IM callbacks: {e}")
 
@@ -2867,26 +3117,30 @@ class InvisibleUI:
             except Exception as e:
                 print(f"Error cleaning up refresh thread: {e}")
 
-            # Remove IM callbacks to prevent accumulation on restart
+            # Remove IM callbacks to prevent accumulation on restart.
+            # message_callbacks lives on the singleton instance inside the
+            # module (module.telegram_client / module.messenger_client), not
+            # on the module itself - access via getattr to stay robust.
             try:
-                if telegram_client and hasattr(telegram_client, 'message_callbacks'):
-                    try:
-                        telegram_client.message_callbacks.remove(self._handle_im_message_callback)
-                    except ValueError:
-                        pass
-                if messenger_client and hasattr(messenger_client, 'message_callbacks'):
-                    try:
-                        messenger_client.message_callbacks.remove(self._handle_im_message_callback)
-                    except ValueError:
-                        pass
+                for client_module in (telegram_client, messenger_client):
+                    if not client_module:
+                        continue
+                    singleton = getattr(client_module, client_module.__name__.rsplit('.', 1)[-1], None)
+                    callbacks = getattr(singleton, 'message_callbacks', None)
+                    if isinstance(callbacks, list):
+                        try:
+                            callbacks.remove(self._handle_im_message_callback)
+                        except ValueError:
+                            pass
             except Exception as e:
                 print(f"Error removing IM callbacks: {e}")
 
             # Clean up active widget
             try:
                 if hasattr(self, 'active_widget') and self.active_widget:
-                    if hasattr(self.active_widget, 'cleanup'):
-                        self.active_widget.cleanup()
+                    cleanup_fn = getattr(self.active_widget, 'cleanup', None)
+                    if callable(cleanup_fn):
+                        cleanup_fn()
                     self.active_widget = None
             except Exception as e:
                 print(f"Error cleaning up active widget: {e}")
@@ -2930,41 +3184,24 @@ class InvisibleUI:
                         except Exception as e:
                             print(f"Error stopping navigation hotkey thread: {e}")
 
-                    # Navigation hotkeys - only when Titan UI is on
-                    nav_hotkeys = {}
+                    # Navigation hotkeys - only when Titan UI is on.
+                    # We use PersistentNavigationHotkeys (RegisterHotKey) on
+                    # Windows so JAWS/NVDA hooks cannot intercept arrow keys.
+                    # A single dispatcher (_handle_nav_key) reads in_widget_mode
+                    # at press time, so widget-mode transitions do NOT need to
+                    # re-register hotkeys.
+                    should_register = (
+                        self.titan_ui_mode
+                        and not self.titan_ui_temporarily_disabled
+                        and not self._shutdown_in_progress
+                    )
 
-                    if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
-                        # Titan+Enter for voice message playback (needs Titan UI on)
-                        nav_hotkeys['`+<enter>'] = self._safe_handle_titan_enter
-
-                        if self.in_widget_mode:
-                            nav_hotkeys.update({
-                                '<up>': lambda: self.navigate_widget('up'),
-                                '<down>': lambda: self.navigate_widget('down'),
-                                '<left>': lambda: self.navigate_widget('left'),
-                                '<right>': lambda: self.navigate_widget('right'),
-                                '<enter>': self.activate_element,
-                                '<space>': self.activate_element,
-                                '<backspace>': self.exit_widget_mode,
-                                '<esc>': self.exit_widget_mode,
-                            })
-                        else:
-                            nav_hotkeys.update({
-                                '<up>': lambda: self.navigate_category(-1),
-                                '<down>': lambda: self.navigate_category(1),
-                                '<left>': lambda: self.navigate_element(-1),
-                                '<right>': lambda: self.navigate_element(1),
-                                '<enter>': self.activate_element,
-                                '<space>': self.activate_element,
-                            })
-
-                    # Create navigation hotkey thread (only if there are keys to register)
-                    if nav_hotkeys and not self._shutdown_in_progress:
+                    if should_register:
                         try:
-                            new_thread = GlobalHotKeys(nav_hotkeys)
+                            new_thread = PersistentNavigationHotkeys(self._handle_nav_key)
                             new_thread.start()
                             self.hotkey_thread = new_thread
-                            print(f"Navigation hotkeys registered: {list(nav_hotkeys.keys())}")
+                            print("Navigation hotkeys registered (RegisterHotKey, JAWS-safe)")
                         except Exception as e:
                             print(f"Error creating navigation hotkey thread: {e}")
                             self.hotkey_thread = None
@@ -2988,6 +3225,123 @@ class InvisibleUI:
             self.titan_ui_temporarily_disabled = True
             self.disabled_by_dialog = dialog_name
             print(f"Titan UI temporarily disabled by {dialog_name}")
+
+    def _bring_window_forward(self, window):
+        """Bring a TCE window to the foreground after launching it from IUI.
+
+        Show() alone does not raise non-modal frames over the currently
+        focused window on Windows, so IUI users would press Settings and see
+        nothing happen. This restores from minimised, raises, and moves
+        focus onto a real child control (not the frame itself) so screen
+        readers immediately announce something interactive — without that,
+        the user would have to mouse-click into the window to begin
+        navigating, which is impossible from a screen reader.
+        """
+        if not window:
+            return
+        try:
+            if window.IsBeingDeleted():
+                return
+        except Exception:
+            return
+        try:
+            if window.IsIconized():
+                window.Iconize(False)
+        except Exception:
+            pass
+        try:
+            if not window.IsShown():
+                window.Show()
+        except Exception:
+            pass
+        try:
+            window.Raise()
+        except Exception:
+            pass
+        try:
+            # Nudges the Windows taskbar entry; harmless on other platforms.
+            window.RequestUserAttention()
+        except Exception:
+            pass
+
+        # Focus a real interactive child after the window's layout settles.
+        # Calling SetFocus() on the frame is not enough on Windows: the
+        # frame itself isn't keyboard-navigable, so screen readers stay on
+        # whatever was focused before. Defer via CallAfter so wx finishes
+        # showing/realising children before we pick one.
+        def _focus_first_child():
+            try:
+                if not window or window.IsBeingDeleted():
+                    return
+                target = self._find_initial_focus_target(window)
+                if target is not None:
+                    target.SetFocus()
+                else:
+                    window.SetFocus()
+            except Exception as e:
+                print(f"_bring_window_forward focus error: {e}")
+
+        try:
+            wx.CallAfter(_focus_first_child)
+        except Exception:
+            try:
+                window.SetFocus()
+            except Exception:
+                pass
+
+        # Announce the "disable Titan UI" tip when launching from Titan UI
+        # mode. The temporary auto-disable handles input routing, but the
+        # spoken hint reminds the user they can fully turn it off if it
+        # interferes with the new window's own keyboard handling.
+        if self.titan_ui_mode:
+            try:
+                from src.accessibility.messages import show_disable_titan_ui_tip
+                show_disable_titan_ui_tip()
+            except Exception as e:
+                print(f"show_disable_titan_ui_tip error: {e}")
+
+    def _find_initial_focus_target(self, window):
+        """Return the first keyboard-focusable child of ``window``.
+
+        Walks the widget tree breadth-first and returns the first control
+        that accepts keyboard focus. Falls back to the window's default
+        item / first child if none qualifies. Returns None if nothing
+        suitable is found so the caller can fall back to the frame.
+        """
+        try:
+            default_item = window.GetDefaultItem() if hasattr(window, 'GetDefaultItem') else None
+            if default_item is not None and default_item.IsShownOnScreen() and default_item.IsEnabled():
+                return default_item
+        except Exception:
+            pass
+
+        try:
+            queue = list(window.GetChildren())
+        except Exception:
+            return None
+
+        while queue:
+            child = queue.pop(0)
+            try:
+                if child is None:
+                    continue
+                if not child.IsShownOnScreen():
+                    pass  # Still walk into it; some panels host visible controls
+                else:
+                    accepts = False
+                    try:
+                        accepts = bool(child.AcceptsFocusFromKeyboard())
+                    except Exception:
+                        try:
+                            accepts = bool(child.AcceptsFocus())
+                        except Exception:
+                            accepts = False
+                    if accepts and child.IsEnabled():
+                        return child
+                queue.extend(child.GetChildren())
+            except Exception:
+                continue
+        return None
     
     def _on_dialog_close(self, dialog_name, event):
         """Handle dialog close event to re-enable Titan UI if needed"""
@@ -3039,6 +3393,47 @@ class InvisibleUI:
         except Exception as e:
             print(f"Error in _safe_handle_titan_enter: {e}")
 
+    def _handle_nav_key(self, name):
+        """Dispatch a navigation key from PersistentNavigationHotkeys.
+
+        Reads in_widget_mode at press time so mode switches do not require
+        hotkey re-registration. Called from a worker thread; UI-touching
+        handlers must defer to the main thread themselves (they already do).
+        """
+        try:
+            if self._shutdown_in_progress:
+                return
+            if not self.titan_ui_mode or self.titan_ui_temporarily_disabled:
+                return
+
+            if name == 'titan_enter':
+                self.handle_titan_enter()
+                return
+
+            if self.in_widget_mode:
+                if name in ('up', 'down', 'left', 'right'):
+                    self.navigate_widget(name)
+                elif name in ('enter', 'space'):
+                    self.activate_element()
+                elif name in ('backspace', 'esc'):
+                    self.exit_widget_mode()
+            else:
+                if name == 'up':
+                    self.navigate_category(-1)
+                elif name == 'down':
+                    self.navigate_category(1)
+                elif name == 'left':
+                    self.navigate_element(-1)
+                elif name == 'right':
+                    self.navigate_element(1)
+                elif name in ('enter', 'space'):
+                    self.activate_element()
+                # backspace/esc are no-ops outside widget mode
+        except Exception as e:
+            print(f"Error in _handle_nav_key('{name}'): {e}")
+            import traceback
+            traceback.print_exc()
+
     def toggle_titan_ui_mode(self):
         """Toggle Titan UI mode with crash protection"""
         try:
@@ -3082,8 +3477,8 @@ class InvisibleUI:
             if not self.main_frame or self._shutdown_in_progress:
                 self.speak(_("Cannot open Messenger - application not ready"))
                 return
-                
-            import messenger_webview
+
+            from src.network import messenger_webview
             
             # Auto-disable Titan UI when webview opens
             if self.titan_ui_mode:
@@ -3105,7 +3500,9 @@ class InvisibleUI:
                             messenger_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("messenger_webview", evt))
                         except Exception as bind_error:
                             print(f"Warning: Could not bind close event: {bind_error}")
-                            
+
+                        self._bring_window_forward(messenger_window)
+
                         # Speak announcement safely
                         try:
                             if announce_widget_type:
@@ -3153,11 +3550,13 @@ class InvisibleUI:
         try:
             # Interrupt speech for smooth operation
             try:
-                speaker.stop()
-            except (AttributeError, Exception):
+                stop_fn = getattr(speaker, 'stop', None)
+                if callable(stop_fn):
+                    stop_fn()
+            except Exception:
                 pass
-            
-            import tce_system_net
+
+            from src.titan_core import tce_system_net
             
             # Check if PyWiFi is available
             if not tce_system_net.PYWIFI_AVAILABLE:
@@ -3177,10 +3576,14 @@ class InvisibleUI:
         """Enter WiFi panel mode"""
         self.in_widget_mode = True
         play_sound("ui/focus_expanded.ogg")
-        
+
         # Initial announcement
-        widget_info = self.active_widget.get_current_element()
-        self.last_widget_element = self.active_widget.get_current_element()
+        widget = self.active_widget
+        get_current = getattr(widget, 'get_current_element', None)
+        if not callable(get_current):
+            return
+        widget_info = str(get_current())
+        self.last_widget_element = widget_info
         self.speak(_("WiFi Manager") + ", " + widget_info)
         
         # Update hotkeys to enable arrow keys immediately if Titan UI is enabled
@@ -3193,8 +3596,8 @@ class InvisibleUI:
             if not self.main_frame or self._shutdown_in_progress:
                 self.speak(_("Cannot open WhatsApp - application not ready"))
                 return
-                
-            import whatsapp_webview
+
+            from src.network import whatsapp_webview
             
             # Auto-disable Titan UI when webview opens
             if self.titan_ui_mode:
@@ -3216,7 +3619,9 @@ class InvisibleUI:
                             whatsapp_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("whatsapp_webview", evt))
                         except Exception as bind_error:
                             print(f"Warning: Could not bind close event: {bind_error}")
-                            
+
+                        self._bring_window_forward(whatsapp_window)
+
                         # Speak announcement safely
                         try:
                             if announce_widget_type:
@@ -3282,61 +3687,113 @@ class InvisibleUI:
             def launch_titannet():
                 try:
                     # Additional safety check in wx.CallAfter
-                    if self._shutdown_in_progress or not self.main_frame:
+                    if self._shutdown_in_progress:
                         return
 
-                    # Check if logged in
-                    if self.main_frame.titan_logged_in:
+                    # Resolve the active Titan-Net client. In the main GUI
+                    # it lives on TitanApp (self.main_frame); in launcher /
+                    # Klango / standalone IUI it is published to a shared
+                    # registry by whichever frontend instantiated it. We
+                    # accept either source so IUI works without the main
+                    # GUI.
+                    from src.network.titan_net import (
+                        get_active_titan_net_client,
+                        is_active_titan_logged_in,
+                        set_active_titan_logged_in,
+                    )
+                    titan_client = getattr(self.main_frame, 'titan_client', None)
+                    if titan_client is None:
+                        titan_client = get_active_titan_net_client()
+
+                    if titan_client is None:
+                        self.speak(_("Titan-Net client not available"))
+                        self._safe_on_dialog_close("titannet_window", None)
+                        return
+
+                    # Prefer the main-frame flag when available, fall back
+                    # to the shared registry so launcher/Klango modes still
+                    # skip the login dialog once authenticated.
+                    main_frame_logged_in = getattr(
+                        self.main_frame, 'titan_logged_in', None
+                    )
+                    if main_frame_logged_in is None:
+                        logged_in_flag = is_active_titan_logged_in()
+                    else:
+                        logged_in_flag = bool(main_frame_logged_in)
+
+                    parent = self.main_frame if self.main_frame else None
+
+                    # Helper to persist the "logged in" state in whichever
+                    # slots happen to exist.
+                    def _mark_logged_in():
+                        try:
+                            if hasattr(self.main_frame, 'titan_logged_in'):
+                                self.main_frame.titan_logged_in = True
+                            if hasattr(self.main_frame, 'titan_username'):
+                                self.main_frame.titan_username = getattr(
+                                    titan_client, 'username', None
+                                )
+                            set_active_titan_logged_in(True)
+                            setup_cb = getattr(
+                                self.main_frame, 'setup_titannet_callbacks', None
+                            )
+                            if callable(setup_cb):
+                                setup_cb()
+                        except Exception as mark_err:
+                            print(f"Warning: could not persist Titan-Net login state: {mark_err}")
+
+                    if logged_in_flag and getattr(titan_client, 'is_connected', False):
                         # Already logged in - open main window
                         from src.network.titan_net_gui import show_titan_net_window
+                        titannet_window = show_titan_net_window(parent, titan_client)
 
-                        if self.main_frame.titan_client.is_connected:
-                            titannet_window = show_titan_net_window(self.main_frame, self.main_frame.titan_client)
+                        if titannet_window and not titannet_window.IsBeingDeleted():
+                            # Safely bind close event to re-enable Titan UI
+                            try:
+                                titannet_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("titannet_window", evt))
+                            except Exception as bind_error:
+                                print(f"Warning: Could not bind close event: {bind_error}")
 
-                            if titannet_window and not titannet_window.IsBeingDeleted():
-                                # Safely bind close event to re-enable Titan UI
-                                try:
-                                    titannet_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("titannet_window", evt))
-                                except Exception as bind_error:
-                                    print(f"Warning: Could not bind close event: {bind_error}")
+                            self._bring_window_forward(titannet_window)
 
-                                # Speak announcement safely
-                                try:
-                                    if announce_widget_type:
-                                        self.speak(_("Titan-Net, application"))
-                                    else:
-                                        self.speak(_("Titan-Net"))
-                                except Exception as speak_error:
-                                    print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
-                            else:
-                                # Re-enable Titan UI if window creation failed
-                                self._safe_on_dialog_close("titannet_window", None)
+                            # Speak announcement safely
+                            try:
+                                if announce_widget_type:
+                                    self.speak(_("Titan-Net, application"))
+                                else:
+                                    self.speak(_("Titan-Net"))
+                            except Exception as speak_error:
+                                print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
                         else:
-                            self.speak(_("Not connected to Titan-Net server"))
+                            # Re-enable Titan UI if window creation failed
                             self._safe_on_dialog_close("titannet_window", None)
 
                     else:
-                        # Not logged in - show login dialog
-                        from src.network.titan_net_gui import show_login_dialog
+                        # Not logged in (or connection dropped) - show login dialog
+                        from src.network.titan_net_gui import show_login_dialog, show_titan_net_window
 
-                        logged_in, offline_mode = show_login_dialog(self.main_frame, self.main_frame.titan_client)
+                        result = show_login_dialog(parent, titan_client)
+                        # show_login_dialog returns (logged_in, offline_mode, motd)
+                        if isinstance(result, tuple) and len(result) >= 2:
+                            logged_in = bool(result[0])
+                            offline_mode = bool(result[1])
+                        else:
+                            logged_in = False
+                            offline_mode = False
 
                         if logged_in:
-                            self.main_frame.titan_logged_in = True
-                            self.main_frame.titan_username = self.main_frame.titan_client.username
-
-                            # Setup callbacks
-                            self.main_frame.setup_titannet_callbacks()
+                            _mark_logged_in()
 
                             # Open main window
-                            from src.network.titan_net_gui import show_titan_net_window
-                            titannet_window = show_titan_net_window(self.main_frame, self.main_frame.titan_client)
+                            titannet_window = show_titan_net_window(parent, titan_client)
 
                             if titannet_window and not titannet_window.IsBeingDeleted():
                                 try:
                                     titannet_window.Bind(wx.EVT_CLOSE, lambda evt: self._safe_on_dialog_close("titannet_window", evt))
                                 except Exception as bind_error:
                                     print(f"Warning: Could not bind close event: {bind_error}")
+
+                                self._bring_window_forward(titannet_window)
 
                                 # Speak announcement
                                 try:
@@ -3425,6 +3882,8 @@ class InvisibleUI:
                         except Exception as bind_error:
                             print(f"Warning: Could not bind close event: {bind_error}")
 
+                        self._bring_window_forward(eltenlink_window)
+
                         # Speak announcement safely
                         try:
                             if announce_widget_type:
@@ -3479,7 +3938,6 @@ class InvisibleUI:
         try:
             # Sprawdź czy aplikacja główna ma start menu
             if hasattr(self.main_frame, 'start_menu') and self.main_frame.start_menu:
-                import platform
                 if IS_WINDOWS:
                     # Pokaż menu Start
                     wx.CallAfter(self.main_frame.start_menu.show_menu)

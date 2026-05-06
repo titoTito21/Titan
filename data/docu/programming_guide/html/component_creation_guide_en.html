@@ -253,6 +253,8 @@
 <li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
 <li><a href="app_creation_guide_en.html">Creating Applications</a></li>
 <li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
                 </ul>
             </nav>
         </aside>
@@ -261,226 +263,229 @@
             <div class="header-banner">
                 <h1>Titan Component Creation Guide</h1>
             </div>
-            <h1 id="titan-component-creation-guide">Titan Component Creation Guide</h1>
+            <h1>Titan Component Creation Guide</h1>
 
-<h2 id="introduction">Introduction</h2>
+<h2>Introduction</h2>
 
 <p>Titan components are system extensions that run in the background and can add functionality to the main application. Components can be enabled/disabled by users, integrate with the system menu, add custom views to the main interface, and extend the invisible UI and Klango mode.</p>
 
-<h2 id="component-system-architecture">Component System Architecture</h2>
+<h2>Component System Architecture</h2>
 
-<h3 id="component-location">Component Location</h3>
+<h3>Component Location</h3>
+All components are located in the <code>data/components/</code> directory. Each component is a separate directory containing:
+<li><code>init.py</code> - main file with component code (NOT <code>__init__.py</code>!)</li>
+<li><code>__component__.TCE</code> - component configuration file (INI format)</li>
 
-<p>All components are located in the <code>data/components/</code> directory. Each component is a separate directory containing:
-- <code>init.py</code> - main file with component code (NOT <code>__init__.py</code>!)
-- <code>__component__.TCE</code> - component configuration file (INI format)</p>
+<h3>Component Lifecycle</h3>
 
-<h3 id="component-lifecycle">Component Lifecycle</h3>
-
-<ol>
 <li><strong>Loading</strong> - components are loaded at Titan startup</li>
 <li><strong>Initialization</strong> - <code>initialize(app)</code> method is called</li>
 <li><strong>Operation</strong> - component runs in the background</li>
 <li><strong>Shutdown</strong> - <code>shutdown()</code> method is called</li>
-</ol>
 
-<h2 id="configuration-file-structure">Configuration File Structure</h2>
+<h2>Configuration File Structure</h2>
 
-<h3 id="__component__tce"><strong>component</strong>.TCE</h3>
+<h3>__component__.TCE</h3>
+INI file with <code>[component]</code> section:
 
-<p>INI file with <code>[component]</code> section:</p>
-
-<pre><code>[component]
+<pre><code class="language-ini">[component]
 name = Component Name
 status = 1
-
 </code></pre>
 
-<p><strong>Parameters:</strong>
-- <code>name</code> - name displayed in component manager
-- <strong><code>status = 1</code> means DISABLED, <code>status = 0</code> means ENABLED</strong> (inverted!)
-- <strong>IMPORTANT</strong>: File name is <code>__component__.TCE</code> (uppercase .TCE)
-- <strong>IMPORTANT</strong>: Main file is <code>init.py</code> (lowercase, NOT <code>__init__.py</code>)
-- <strong>IMPORTANT</strong>: Add blank line at end of file</p>
+<strong>Parameters:</strong>
+<li><code>name</code> - name displayed in component manager</li>
+<li><strong><code>status = 1</code> means DISABLED, <code>status = 0</code> means ENABLED</strong> (inverted!)</li>
+<li><strong>IMPORTANT</strong>: File name is <code>__component__.TCE</code> (uppercase .TCE)</li>
+<li><strong>IMPORTANT</strong>: Main file is <code>init.py</code> (lowercase, NOT <code>__init__.py</code>)</li>
+<li><strong>IMPORTANT</strong>: Add blank line at end of file</li>
 
-<h2 id="component-interface">Component Interface</h2>
+<h2>Component Interface</h2>
 
-<h3 id="required-functions">Required Functions</h3>
+<h3>Required Functions</h3>
 
-<h4 id="initializeappnone">initialize(app=None)</h4>
+<h4>initialize(app=None)</h4>
+<strong>Required function</strong> called at Titan startup:
+<li><code>app</code> - wxPython main application instance (may be None)</li>
+<li>Use for initializing resources, starting threads</li>
 
-<p><strong>Required function</strong> called at Titan startup:
-- <code>app</code> - wxPython main application instance (may be None)
-- Use for initializing resources, starting threads</p>
+<h3>Optional Functions</h3>
 
-<h3 id="optional-functions">Optional Functions</h3>
+<h4>shutdown()</h4>
+Called at Titan shutdown:
+<li>Stop threads, free resources</li>
+<li>Save component state if needed</li>
 
-<h4 id="shutdown">shutdown()</h4>
+<h4>add_menu(component_manager)</h4>
+Adds items to component menu:
+<li><code>component_manager.register_menu_function(name, function)</code></li>
+<li>Menu available in invisible UI and GUI menu</li>
 
-<p>Called at Titan shutdown:
-- Stop threads, free resources
-- Save component state if needed</p>
-
-<h4 id="add_menucomponent_manager">add<em>menu(component</em>manager)</h4>
-
-<p>Adds items to component menu:
-- <code>component_manager.register_menu_function(name, function)</code>
-- Menu available in invisible UI and GUI menu</p>
-
-<h4 id="add_settings_categorycomponent_manager">add<em>settings</em>category(component_manager)</h4>
-
-<p><strong>Recommended</strong>: Registers settings category in modular settings system:</p>
-
-<pre><code>def add_settings_category(component_manager):
+<h4>add_settings_category(component_manager)</h4>
+<strong>Recommended</strong>: Registers settings category in modular settings system:
+<pre><code class="language-python">def add_settings_category(component_manager):
     def build_panel(parent):
         panel = wx.Panel(parent)
         # ... add controls ...
         return panel
 
     component_manager.register_settings_category(
-        "My Component",
+        &quot;My Component&quot;,
         build_panel,
         save_callback,
         load_callback
-    )
-</code></pre>
+    )</code></pre>
 
-<h2 id="hooks-system">Hooks System</h2>
+<h2>Hooks System</h2>
 
-<h3 id="gui-hooks-get_gui_hooks">GUI Hooks (get<em>gui</em>hooks)</h3>
+<h3>GUI Hooks (get_gui_hooks)</h3>
 
 <p>Component can register hooks to main GUI:</p>
 
-<pre><code>def get_gui_hooks():
-    """Return GUI hooks dict (optional)
+<pre><code class="language-python">def get_gui_hooks():
+    &quot;&quot;&quot;Return GUI hooks dict (optional)
 
     Available hooks:
-        'on_gui_init': called with gui_app (TitanApp wx.Frame) when GUI is initialized
-    """
+        &#x27;on_gui_init&#x27;: called with gui_app (TitanApp wx.Frame) when GUI is initialized
+    &quot;&quot;&quot;
     return {
-        'on_gui_init': on_gui_init
+        &#x27;on_gui_init&#x27;: on_gui_init
     }
 
 def on_gui_init(gui_app):
-    """Hook called when GUI is initialized"""
+    &quot;&quot;&quot;Hook called when GUI is initialized&quot;&quot;&quot;
     # Here you can register a view in the main panel
-    pass
-</code></pre>
+    pass</code></pre>
 
-<h3 id="invisible-ui-hooks-get_iui_hooks">Invisible UI Hooks (get<em>iui</em>hooks)</h3>
+<h3>Invisible UI Hooks (get_iui_hooks)</h3>
 
 <p>Component can add custom categories to invisible UI:</p>
 
-<pre><code>def get_iui_hooks():
-    """Return Invisible UI hooks dict (optional)
+<pre><code class="language-python">def get_iui_hooks():
+    &quot;&quot;&quot;Return Invisible UI hooks dict (optional)
 
     Available hooks:
-        'on_iui_init': called with iui (InvisibleUI) after build_structure()
-    """
+        &#x27;on_iui_init&#x27;: called with iui (InvisibleUI) after build_structure()
+    &quot;&quot;&quot;
     return {
-        'on_iui_init': on_iui_init
+        &#x27;on_iui_init&#x27;: on_iui_init
     }
 
 def on_iui_init(iui):
-    """Hook called when Invisible UI is initialized"""
+    &quot;&quot;&quot;Hook called when Invisible UI is initialized&quot;&quot;&quot;
     iui.categories.append({
-        "name": "My Component",
-        "sound": "core/focus.ogg",
-        "elements": ["Action 1", "Action 2"],
-        "action": lambda name: handle_action(name)
-    })
-</code></pre>
+        &quot;name&quot;: &quot;My Component&quot;,
+        &quot;sound&quot;: &quot;core/focus.ogg&quot;,
+        &quot;elements&quot;: [&quot;Action 1&quot;, &quot;Action 2&quot;],
+        &quot;action&quot;: lambda name: handle_action(name)
+    })</code></pre>
 
-<h3 id="klango-mode-hooks-get_klango_hooks">Klango Mode Hooks (get<em>klango</em>hooks)</h3>
+<h3>Klango Mode Hooks (get_klango_hooks)</h3>
 
 <p>Component can integrate with Klango mode:</p>
 
-<pre><code>def get_klango_hooks():
-    """Return Klango mode hooks dict (optional)
+<pre><code class="language-python">def get_klango_hooks():
+    &quot;&quot;&quot;Return Klango mode hooks dict (optional)
 
     Available hooks:
-        'on_klango_init': called with klango_mode (KlangoMode) when Klango mode starts
-    """
+        &#x27;on_klango_init&#x27;: called with klango_mode (KlangoMode) when Klango mode starts
+    &quot;&quot;&quot;
     return {
-        'on_klango_init': on_klango_init
-    }
-</code></pre>
+        &#x27;on_klango_init&#x27;: on_klango_init
+    }</code></pre>
 
-<h2 id="component-view-registration-api">Component View Registration API</h2>
+<h2>Component View Registration API</h2>
 
-<p><strong>NEW!</strong> Components can add custom tabs/views to the main GUI left panel. Registered views appear in Ctrl+Tab cycle alongside built-in views (Application List, Game List, Titan IM).</p>
+<p>Components can add custom tabs/views to the main GUI left panel. Registered views appear in the virtual tab bar (first row of the list) and Ctrl+Tab cycle alongside built-in views (Application List, Game List, Titan IM).</p>
 
-<h3 id="register_view-parameters">register_view() Parameters</h3>
+<h3>register_view() Parameters</h3>
 
-<table>
-<thead>
+<table class="doc-table">
+<thead><tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr></thead><tbody>
 <tr>
-  <th>Parameter</th>
-  <th>Type</th>
-  <th>Required</th>
-  <th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td><code>view_id</code></td>
-  <td>str</td>
-  <td>Yes</td>
-  <td>Unique identifier, e.g. <code>'my_notes'</code></td>
+<td><code>view_id</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>Unique identifier, e.g. <code>&#x27;my_notes&#x27;</code></td>
 </tr>
 <tr>
-  <td><code>label</code></td>
-  <td>str</td>
-  <td>Yes</td>
-  <td>Header text shown above control, e.g. <code>'My Notes:'</code></td>
+<td><code>label</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>Header text shown above control, e.g. <code>&#x27;My Notes:&#x27;</code></td>
 </tr>
 <tr>
-  <td><code>control</code></td>
-  <td>wx.Window</td>
-  <td>Yes</td>
-  <td>Any wx control (ListBox, TreeCtrl, etc.), parent: <code>gui_app.main_panel</code></td>
+<td><code>control</code></td>
+<td>wx.Window</td>
+<td>Yes</td>
+<td>Any wx control (ListBox, TreeCtrl, etc.), parent: <code>gui_app.main_panel</code></td>
 </tr>
 <tr>
-  <td><code>on_show</code></td>
-  <td>callable</td>
-  <td>No</td>
-  <td>Called every time view becomes visible (refresh data)</td>
+<td><code>on_show</code></td>
+<td>callable</td>
+<td>No</td>
+<td>Called every time view becomes visible (refresh data)</td>
 </tr>
 <tr>
-  <td><code>on_activate</code></td>
-  <td>callable</td>
-  <td>No</td>
-  <td>Called when user presses Enter on control</td>
+<td><code>on_activate</code></td>
+<td>callable</td>
+<td>No</td>
+<td>Called when user presses Enter on control</td>
 </tr>
 <tr>
-  <td><code>position</code></td>
-  <td>str/int</td>
-  <td>No</td>
-  <td>Position in cycle: <code>'after_apps'</code>, <code>'after_games'</code>, <code>'after_network'</code> (default), or integer index</td>
+<td><code>position</code></td>
+<td>str/int</td>
+<td>No</td>
+<td>Position in cycle: <code>&#x27;after_apps&#x27;</code>, <code>&#x27;after_games&#x27;</code>, <code>&#x27;after_network&#x27;</code> (default), or integer index</td>
 </tr>
-</tbody>
-</table>
+<tr>
+<td><code>short_name</code></td>
+<td>str</td>
+<td>No</td>
+<td>Short label used for the tab bar row and toolbar button (defaults to <code>label</code> with trailing colon stripped)</td>
+</tr>
+</tbody></table>
 
-<h3 id="how-it-works">How it works</h3>
+<h3>How it works</h3>
 
-<ul>
-<li>Registered control is added to left panel sizer (hidden by default)</li>
+<li>Registered control is added to the left panel sizer (hidden by default).</li>
+<li>The first row of the list (item 0) is a <strong>virtual tab bar</strong> auto-injected by <code>register_view()</code>. Text: <code>&quot;ViewName, N of M&quot;</code>. Left/Right arrows on item 0 cycle through views.</li>
 <li>User presses Ctrl+Tab to cycle views: Apps → Games → [your view] → Titan IM → ...</li>
-<li>Tab/Shift+Tab navigates between view control and status bar</li>
-<li>Enter on view control calls <code>on_activate</code> (if provided)</li>
-<li>TTS announces view label and position, e.g. "My Notes, 3 of 4"</li>
-</ul>
+<li>Tab/Shift+Tab navigates between view control and status bar.</li>
+<li>Enter on view control calls <code>on_activate</code> (if provided).</li>
+<li>TTS announces view label and position, e.g. "My Notes, 3 of 4".</li>
+<li>Each registered view also gets a toolbar button (label = <code>short_name</code>).</li>
 
-<h2 id="complete-examples">Complete Examples</h2>
+<h3>Tab bar auto-sync</h3>
 
-<h3 id="example-1-simple-list-view-bookmarks-manager">Example 1: Simple List View (Bookmarks Manager)</h3>
+<p>Components often call <code>control.Clear()</code> / <code>tree.DeleteAllItems()</code> to repopulate their lists. Clearing wipes out the injected tab bar row too. <code>register_view()</code> handles this automatically through:</p>
+
+<li><strong><code>EVT_SET_FOCUS</code></strong> — re-injects the tab bar row whenever focus enters the view.</li>
+<li><strong><code>EVT_LISTBOX</code></strong> (only <code>wx.ListBox</code>) — re-injects on selection change.</li>
+
+<p>If you repopulate from somewhere else and need an immediate refresh, call <strong><code>component_manager.sync_view_tab_bar(view_id_or_control)</code></strong> or <strong><code>gui_app.sync_view_tab_bar(view_id_or_control)</code></strong>:</p>
+
+<pre><code class="language-python">def refresh_my_data(self):
+    self._listbox.Clear()
+    for item in self._items:
+        self._listbox.Append(item)
+    # Force immediate tab bar row re-injection
+    self.component_manager.sync_view_tab_bar(&#x27;my_view_id&#x27;)</code></pre>
+
+<h2>Complete Examples</h2>
+
+<h3>Example 1: Simple List View (Bookmarks Manager)</h3>
 
 <p>Component adding a "Bookmarks" tab to left panel with saved bookmarks list.</p>
 
-<p><strong>File: <code>data/components/bookmarks/init.py</code></strong></p>
-
-<pre><code># -*- coding: utf-8 -*-
-"""Bookmarks component - adds bookmarks list to main panel."""
+<p><strong>File: <code>data/components/bookmarks/init.py</code></strong>
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+&quot;&quot;&quot;Bookmarks component - adds bookmarks list to main panel.&quot;&quot;&quot;
 
 import os
 import sys
@@ -488,7 +493,7 @@ import wx
 import json
 
 COMPONENT_DIR = os.path.dirname(__file__)
-TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, &#x27;..&#x27;, &#x27;..&#x27;, &#x27;..&#x27;))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
@@ -500,143 +505,139 @@ except ImportError:
 try:
     from src.settings.settings import get_setting
 except ImportError:
-    def get_setting(key, default='', section='general'): return default
+    def get_setting(key, default=&#x27;&#x27;, section=&#x27;general&#x27;): return default
 
 def _(text):
     return text
 
 # --- Bookmark Data ---
-BOOKMARKS_FILE = os.path.join(COMPONENT_DIR, 'bookmarks.json')
+BOOKMARKS_FILE = os.path.join(COMPONENT_DIR, &#x27;bookmarks.json&#x27;)
 _bookmarks = []
 _listbox = None
 
 
 def load_bookmarks():
-    """Load bookmarks from JSON file."""
+    &quot;&quot;&quot;Load bookmarks from JSON file.&quot;&quot;&quot;
     global _bookmarks
     try:
         if os.path.exists(BOOKMARKS_FILE):
-            with open(BOOKMARKS_FILE, 'r', encoding='utf-8') as f:
+            with open(BOOKMARKS_FILE, &#x27;r&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                 _bookmarks = json.load(f)
         else:
             _bookmarks = [
-                {"name": "Google", "url": "https://google.com"},
-                {"name": "YouTube", "url": "https://youtube.com"},
+                {&quot;name&quot;: &quot;Google&quot;, &quot;url&quot;: &quot;https://google.com&quot;},
+                {&quot;name&quot;: &quot;YouTube&quot;, &quot;url&quot;: &quot;https://youtube.com&quot;},
             ]
             save_bookmarks()
     except Exception as e:
-        print(f"[bookmarks] Error loading bookmarks: {e}")
+        print(f&quot;[bookmarks] Error loading bookmarks: {e}&quot;)
         _bookmarks = []
 
 
 def save_bookmarks():
-    """Save bookmarks to JSON file."""
+    &quot;&quot;&quot;Save bookmarks to JSON file.&quot;&quot;&quot;
     try:
-        with open(BOOKMARKS_FILE, 'w', encoding='utf-8') as f:
+        with open(BOOKMARKS_FILE, &#x27;w&#x27;, encoding=&#x27;utf-8&#x27;) as f:
             json.dump(_bookmarks, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print(f"[bookmarks] Error saving bookmarks: {e}")
+        print(f&quot;[bookmarks] Error saving bookmarks: {e}&quot;)
 
 
 def refresh_list():
-    """Refresh listbox with current bookmarks (called by on_show)."""
+    &quot;&quot;&quot;Refresh listbox with current bookmarks (called by on_show).&quot;&quot;&quot;
     if _listbox is None:
         return
     _listbox.Clear()
     for bm in _bookmarks:
-        _listbox.Append(bm['name'])
+        _listbox.Append(bm[&#x27;name&#x27;])
     if _listbox.GetCount() &gt; 0:
         _listbox.SetSelection(0)
 
 
 def on_bookmark_activate(event):
-    """Open selected bookmark in browser (called by Enter key)."""
+    &quot;&quot;&quot;Open selected bookmark in browser (called by Enter key).&quot;&quot;&quot;
     if _listbox is None:
         return
     sel = _listbox.GetSelection()
     if sel == wx.NOT_FOUND or sel &gt;= len(_bookmarks):
         return
-    url = _bookmarks[sel]['url']
-    play_sound('ui/dialog.ogg')
+    url = _bookmarks[sel][&#x27;url&#x27;]
+    play_sound(&#x27;ui/dialog.ogg&#x27;)
     import webbrowser
     webbrowser.open(url)
 
 
 def on_gui_init(gui_app):
-    """Register bookmarks view in main left panel."""
+    &quot;&quot;&quot;Register bookmarks view in main left panel.&quot;&quot;&quot;
     global _listbox
     _listbox = wx.ListBox(gui_app.main_panel)
 
     gui_app.register_view(
-        view_id='bookmarks',
-        label="Bookmarks:",
+        view_id=&#x27;bookmarks&#x27;,
+        label=&quot;Bookmarks:&quot;,
         control=_listbox,
         on_show=refresh_list,
         on_activate=on_bookmark_activate,
-        position='after_network'
+        position=&#x27;after_network&#x27;
     )
-    print("[bookmarks] View registered in main panel")
+    print(&quot;[bookmarks] View registered in main panel&quot;)
 
 
 # --- Component Interface ---
 
 def get_gui_hooks():
-    return {'on_gui_init': on_gui_init}
+    return {&#x27;on_gui_init&#x27;: on_gui_init}
 
 
 def add_menu(component_manager):
     def add_bookmark(event):
-        dlg = wx.TextEntryDialog(None, "Enter bookmark name:", "Add Bookmark")
+        dlg = wx.TextEntryDialog(None, &quot;Enter bookmark name:&quot;, &quot;Add Bookmark&quot;)
         if dlg.ShowModal() == wx.ID_OK:
             name = dlg.GetValue().strip()
             if name:
-                url_dlg = wx.TextEntryDialog(None, "Enter URL:", "Add Bookmark", "https://")
+                url_dlg = wx.TextEntryDialog(None, &quot;Enter URL:&quot;, &quot;Add Bookmark&quot;, &quot;https://&quot;)
                 if url_dlg.ShowModal() == wx.ID_OK:
                     url = url_dlg.GetValue().strip()
                     if url:
-                        _bookmarks.append({"name": name, "url": url})
+                        _bookmarks.append({&quot;name&quot;: name, &quot;url&quot;: url})
                         save_bookmarks()
                         refresh_list()
-                        play_sound('ui/dialog.ogg')
+                        play_sound(&#x27;ui/dialog.ogg&#x27;)
                 url_dlg.Destroy()
         dlg.Destroy()
 
-    component_manager.register_menu_function("Add Bookmark...", add_bookmark)
+    component_manager.register_menu_function(&quot;Add Bookmark...&quot;, add_bookmark)
 
 
 def initialize(app=None):
     load_bookmarks()
-    print("[bookmarks] Component initialized")
+    print(&quot;[bookmarks] Component initialized&quot;)
 
 
 def shutdown():
     save_bookmarks()
-    print("[bookmarks] Component shutdown")
-</code></pre>
+    print(&quot;[bookmarks] Component shutdown&quot;)</code></pre></p>
 
-<p><strong>File: <code>data/components/bookmarks/__component__.TCE</code></strong></p>
-
-<pre><code>[component]
+<p><strong>File: <code>data/components/bookmarks/__component__.TCE</code></strong>
+<pre><code class="language-ini">[component]
 name = Bookmarks
 status = 0
+</code></pre></p>
 
-</code></pre>
-
-<h3 id="example-2-treectrl-view-file-browser">Example 2: TreeCtrl View (File Browser)</h3>
+<h3>Example 2: TreeCtrl View (File Browser)</h3>
 
 <p>Component adding a tree view showing files from a directory.</p>
 
-<p><strong>File: <code>data/components/filebrowser/init.py</code></strong></p>
-
-<pre><code># -*- coding: utf-8 -*-
-"""File Browser component - adds file tree to main panel."""
+<p><strong>File: <code>data/components/filebrowser/init.py</code></strong>
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+&quot;&quot;&quot;File Browser component - adds file tree to main panel.&quot;&quot;&quot;
 
 import os
 import sys
 import wx
 
 COMPONENT_DIR = os.path.dirname(__file__)
-TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, &#x27;..&#x27;, &#x27;..&#x27;, &#x27;..&#x27;))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
@@ -649,11 +650,11 @@ def _(text):
     return text
 
 _tree = None
-_browse_path = os.path.expanduser("~\\Documents")
+_browse_path = os.path.expanduser(&quot;~\\Documents&quot;)
 
 
 def populate_tree():
-    """Populate tree with files from browse_path (called by on_show)."""
+    &quot;&quot;&quot;Populate tree with files from browse_path (called by on_show).&quot;&quot;&quot;
     if _tree is None:
         return
 
@@ -664,13 +665,13 @@ def populate_tree():
         for item_name in sorted(os.listdir(_browse_path)):
             full_path = os.path.join(_browse_path, item_name)
             if os.path.isdir(full_path):
-                _tree.AppendItem(root, f"[DIR] {item_name}")
+                _tree.AppendItem(root, f&quot;[DIR] {item_name}&quot;)
             else:
                 _tree.AppendItem(root, item_name)
     except PermissionError:
-        _tree.AppendItem(root, "Access denied")
+        _tree.AppendItem(root, &quot;Access denied&quot;)
     except Exception as e:
-        _tree.AppendItem(root, f"Error: {e}")
+        _tree.AppendItem(root, f&quot;Error: {e}&quot;)
 
     _tree.Expand(root)
 
@@ -681,32 +682,32 @@ def populate_tree():
 
 
 def on_file_activate(event):
-    """Open selected file (called by Enter key)."""
+    &quot;&quot;&quot;Open selected file (called by Enter key).&quot;&quot;&quot;
     if _tree is None:
         return
     item = _tree.GetSelection()
     if not item.IsOk():
         return
     text = _tree.GetItemText(item)
-    if text.startswith("[DIR] "):
+    if text.startswith(&quot;[DIR] &quot;):
         # Enter directory
         global _browse_path
-        dir_name = text[6:]  # Remove "[DIR] " prefix
+        dir_name = text[6:]  # Remove &quot;[DIR] &quot; prefix
         _browse_path = os.path.join(_browse_path, dir_name)
         populate_tree()
-        play_sound('core/focus.ogg')
-    elif text == "Access denied":
+        play_sound(&#x27;core/focus.ogg&#x27;)
+    elif text == &quot;Access denied&quot;:
         return
     else:
         # Open file
         file_path = os.path.join(_browse_path, text)
         if os.path.exists(file_path):
             os.startfile(file_path)
-            play_sound('ui/dialog.ogg')
+            play_sound(&#x27;ui/dialog.ogg&#x27;)
 
 
 def on_gui_init(gui_app):
-    """Register file browser view."""
+    &quot;&quot;&quot;Register file browser view.&quot;&quot;&quot;
     global _tree
     _tree = wx.TreeCtrl(
         gui_app.main_panel,
@@ -714,64 +715,56 @@ def on_gui_init(gui_app):
     )
 
     gui_app.register_view(
-        view_id='filebrowser',
-        label="File Browser:",
+        view_id=&#x27;filebrowser&#x27;,
+        label=&quot;File Browser:&quot;,
         control=_tree,
         on_show=populate_tree,
         on_activate=on_file_activate,
-        position='after_games'  # Between Games and Titan IM
+        position=&#x27;after_games&#x27;  # Between Games and Titan IM
     )
-    print("[filebrowser] View registered in main panel")
+    print(&quot;[filebrowser] View registered in main panel&quot;)
 
 
 # --- Component Interface ---
 
 def get_gui_hooks():
-    return {'on_gui_init': on_gui_init}
+    return {&#x27;on_gui_init&#x27;: on_gui_init}
 
 
 def initialize(app=None):
-    print("[filebrowser] Component initialized")
+    print(&quot;[filebrowser] Component initialized&quot;)
 
 
 def shutdown():
-    print("[filebrowser] Component shutdown")
-</code></pre>
+    print(&quot;[filebrowser] Component shutdown&quot;)</code></pre></p>
 
-<p><strong>File: <code>data/components/filebrowser/__component__.TCE</code></strong></p>
-
-<pre><code>[component]
+<p><strong>File: <code>data/components/filebrowser/__component__.TCE</code></strong>
+<pre><code class="language-ini">[component]
 name = File Browser
 status = 0
+</code></pre></p>
 
-</code></pre>
+<h2>Component Types</h2>
 
-<h2 id="component-types">Component Types</h2>
-
-<ul>
 <li><strong>Service</strong>: Background services (e.g., screen reader integration, system monitoring)</li>
 <li><strong>Integration</strong>: Third-party service integrations (e.g., dictionary, article viewer)</li>
 <li><strong>Feature</strong>: Additional features (e.g., terminal, tips system, launchers)</li>
 <li><strong>View</strong>: Components that add a tab/view to main left panel (use <code>register_view()</code>)</li>
-</ul>
 
-<h2 id="key-guidelines">Key Guidelines</h2>
+<h2>Key Guidelines</h2>
 
-<ol>
 <li><strong>Always use daemon threads</strong> - <code>threading.Thread(daemon=True)</code></li>
 <li><strong>Implement shutdown()</strong> - stop all threads</li>
 <li><strong>Use wx.CallAfter</strong> for GUI operations from threads</li>
 <li><strong>Test enable/disable</strong> functionality</li>
 <li><strong>Add error handling</strong> - components shouldn't crash Titan</li>
 <li><strong>Conserve resources</strong> - don't run heavy operations too frequently</li>
-<li><strong>Use get<em>gui</em>hooks()</strong> for views instead of direct GUI modification</li>
+<li><strong>Use get_gui_hooks()</strong> for views instead of direct GUI modification</li>
 <li><strong>Refresh data in on_show</strong> when view becomes visible (Ctrl+Tab)</li>
 <li><strong>Add context menus</strong> for better UX (right-click on ListBox/TreeCtrl)</li>
-</ol>
 
-<h2 id="testing-components">Testing Components</h2>
+<h2>Testing Components</h2>
 
-<ol>
 <li>Place component in <code>data/components/component_name/</code></li>
 <li>Ensure file is <code>init.py</code> not <code>__init__.py</code></li>
 <li>Check <code>__component__.TCE</code> format (INI, uppercase .TCE)</li>
@@ -779,10 +772,8 @@ status = 0
 <li>Check component manager if component is loaded</li>
 <li>Test functionality through component menu</li>
 <li>If component registers view, test Ctrl+Tab cycle</li>
-</ol>
 
 <p>Components enable extending Titan functionality in a modular and safe way. With the simple API, you can easily add new capabilities without modifying the main application code.</p>
-
             <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
         </main>
     </div>

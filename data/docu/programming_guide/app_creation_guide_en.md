@@ -96,21 +96,52 @@ if __name__ == '__main__':
 Applications have automatic access to Titan modules:
 
 ```python
-# Import Titan modules
-from sound import play_sound, play_error_sound
-from settings import get_setting, set_setting
-from translation import get_available_languages
+# Import Titan modules (full src.* paths)
+from src.titan_core.sound import play_sound, play_error_sound
+from src.settings.settings import get_setting, set_setting
+from src.titan_core.translation import get_available_languages
 
 # Use in application
 def on_action(self):
-    play_sound("focus.ogg")
-    
+    play_sound("ui/focus.ogg")
+
     # Save application setting
     set_setting('my_app_setting', 'value', section='my_app')
-    
+
     # Read setting
     value = get_setting('my_app_setting', 'default', section='my_app')
 ```
+
+### TCE Speech API (speech in apps and games)
+
+The module `src.titan_core.tce_speech` is a unified speech API. It honours the `[invisible_interface] stereo_speech` setting — uses StereoSpeech (panning + pitch) when enabled, or falls back to `accessible_output3` + platform engine.
+
+```python
+# Pattern compatible with compiled mode
+try:
+    from src.titan_core.tce_speech import speak as _tce_speak, stop as _tce_stop
+    _SPEECH_AVAILABLE = True
+except ImportError:
+    _SPEECH_AVAILABLE = False
+    def _tce_speak(text, **kw): pass
+    def _tce_stop(): pass
+
+# Usage
+_tce_speak("Hello", interrupt=True)
+_tce_speak("Right side", position=0.7, pitch_offset=2)
+_tce_stop()
+```
+
+**Core API:**
+- `speak(text, position=0.0, interrupt=True, pitch_offset=0)` — synchronous
+- `speak_async(text, ...)` — asynchronous
+- `stop()` — interrupt speech
+- `set_rate(rate)`, `set_volume(volume)`, `set_pitch(pitch)` — range -10..+10 / 0..100
+- `set_engine(engine_id)`, `set_voice(index)` — select engine and voice
+- `get_available_engines()`, `get_available_voices()` — lists
+- `is_stereo_available()` — whether StereoSpeech is active
+
+**Note:** in compiled mode `src/` is added via `--add-data` in `compiletorelease.py` and stays in `_internal/`. The `python3XX._pth` adds `.` (= `_internal/`) to `sys.path`, so `from src.titan_core.tce_speech import speak` works.
 
 ## Command Line Arguments Handling
 

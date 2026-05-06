@@ -1,0 +1,231 @@
+# English translations for Macro Manager component
+# Copyright (C) 2026 Titosoft
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TCE Macro Manager 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-07 00:00+0000\n"
+"PO-Revision-Date: 2026-03-07 00:00+0000\n"
+"Last-Translator: \n"
+"Language: en\n"
+"Language-Team: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Macro Manager"
+msgstr "Macro Manager"
+
+msgid "Macros"
+msgstr "Macros"
+
+msgid "Macros:"
+msgstr "Macros:"
+
+msgid "Run"
+msgstr "Run"
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Configure"
+msgstr "Configure"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Hotkey"
+msgstr "Hotkey"
+
+msgid "Hotkey for: {}"
+msgstr "Hotkey for: {}"
+
+msgid "Select a macro first to set hotkey"
+msgstr "Select a macro first to set hotkey"
+
+msgid "Press desired key combination:"
+msgstr "Press desired key combination:"
+
+msgid "Save Hotkey"
+msgstr "Save Hotkey"
+
+msgid "Clear Hotkey"
+msgstr "Clear Hotkey"
+
+msgid "Hotkey set to {}"
+msgstr "Hotkey set to {}"
+
+msgid "Hotkey cleared"
+msgstr "Hotkey cleared"
+
+msgid "Import Macro"
+msgstr "Import Macro"
+
+msgid "Import a macro from a folder or ZIP file"
+msgstr "Import a macro from a folder or ZIP file"
+
+msgid "Name (English):"
+msgstr "Name (English):"
+
+msgid "Name (Polish):"
+msgstr "Name (Polish):"
+
+msgid "Browse..."
+msgstr "Browse..."
+
+msgid "Script file:"
+msgstr "Script file:"
+
+msgid "Import"
+msgstr "Import"
+
+msgid "Macro imported successfully"
+msgstr "Macro imported successfully"
+
+msgid "New Macro"
+msgstr "New Macro"
+
+msgid "Macro type:"
+msgstr "Macro type:"
+
+msgid "TCE Macro (.macro)"
+msgstr "TCE Macro (.macro)"
+
+msgid "AutoHotKey Script (.ahk)"
+msgstr "AutoHotKey Script (.ahk)"
+
+msgid "AutoIt Script (.au3)"
+msgstr "AutoIt Script (.au3)"
+
+msgid "Script filename:"
+msgstr "Script filename:"
+
+msgid "Create"
+msgstr "Create"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "No macros found"
+msgstr "No macros found"
+
+msgid "No macro selected"
+msgstr "No macro selected"
+
+msgid "Macro is empty"
+msgstr "Macro is empty"
+
+msgid "Macro file not found"
+msgstr "Macro file not found"
+
+msgid "Error running macro: {}"
+msgstr "Error running macro: {}"
+
+msgid "Recording... Press Shift+Escape to stop"
+msgstr "Recording... Press Shift+Escape to stop"
+
+msgid "Macro created"
+msgstr "Macro created"
+
+msgid "No keyboard recording library available"
+msgstr "No keyboard recording library available"
+
+msgid "This macro requires {} interpreter"
+msgstr "This macro requires {} interpreter"
+
+msgid "Do you want to download and install {}?"
+msgstr "Do you want to download and install {}?"
+
+msgid "Install {}"
+msgstr "Install {}"
+
+msgid "License:"
+msgstr "License:"
+
+msgid "Loading license..."
+msgstr "Loading license..."
+
+msgid "Could not fetch license: {}"
+msgstr "Could not fetch license: {}"
+
+msgid "Install"
+msgstr "Install"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Downloading..."
+msgstr "Downloading..."
+
+msgid "Installing..."
+msgstr "Installing..."
+
+msgid "Installation failed: {}"
+msgstr "Installation failed: {}"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "AutoHotKey is only available on Windows"
+msgstr "AutoHotKey is only available on Windows"
+
+msgid "AutoIt is only available on Windows"
+msgstr "AutoIt is only available on Windows"
+
+msgid "This macro requires AutoHotKey interpreter"
+msgstr "This macro requires AutoHotKey interpreter"
+
+msgid "This macro requires AutoIt interpreter"
+msgstr "This macro requires AutoIt interpreter"
+
+msgid "Cannot edit executable macros"
+msgstr "Cannot edit executable macros"
+
+msgid "Are you sure you want to delete '{}'?"
+msgstr "Are you sure you want to delete '{}'?"
+
+msgid "Delete Macro"
+msgstr "Delete Macro"
+
+msgid "Macro deleted"
+msgstr "Macro deleted"
+
+msgid "Please enter a macro name"
+msgstr "Please enter a macro name"
+
+msgid "Please browse for a file first"
+msgstr "Please browse for a file first"
+
+msgid "Please select the script file"
+msgstr "Please select the script file"
+
+msgid "Please fill in all fields"
+msgstr "Please fill in all fields"
+
+msgid "Macro files"
+msgstr "Macro files"
+
+msgid "All files"
+msgstr "All files"
+
+msgid "Hotkey: {}"
+msgstr "Hotkey: {}"
+
+msgid "Hotkey: not set. Press a key combination."
+msgstr "Hotkey: not set. Press a key combination."
+
+msgid "Beginning of macro"
+msgstr "Beginning of macro"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Macro Manager"
+msgstr "Macro Manager"
+
+msgid "Announce macro actions with sound"
+msgstr "Announce macro actions with sound"
+
+msgid "Announce macro actions with speech"
+msgstr "Announce macro actions with speech"

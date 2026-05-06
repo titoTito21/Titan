@@ -31,6 +31,9 @@ TRANSLATION_DOMAINS = [
     'classicstartmenu', # Classic Start Menu (classic_start_menu.py)
     'exit_dialog',   # Exit confirmation dialog (shutdown_question.py)
     'launchers',     # Launcher manager (launcher_manager.py)
+    'macros',        # Macro Manager (data/components/macros/init.py)
+    'window_switcher', # Window Switcher (src/ui/window_switcher.py)
+    'interactive_games', # Interactive Games (network/interactive_games.py, interactive_game_session.py)
 ]
 
 # Store translation objects for each domain

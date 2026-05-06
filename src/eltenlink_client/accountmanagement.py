@@ -1,6 +1,7 @@
 """
 EltenLink Account Management - Separate dialog for managing Elten account.
 Based on Ruby Elten Scene_Account and related scenes.
+Uses settingsgui.py pattern: category list + Tab to settings panel, no "Open" button.
 """
 
 import wx
@@ -107,14 +108,30 @@ def speak_notification(text, notification_type='info'):
 
 
 class AccountManagementDialog(wx.Dialog):
-    """Full account management dialog - mirrors Ruby Scene_Account."""
+    """Full account management dialog - mirrors Ruby Scene_Account.
+    Uses settingsgui.py pattern: category list on left, settings panel on right.
+    """
 
     def __init__(self, parent, client):
-        super().__init__(parent, title=_("Manage my account"), size=(600, 500),
+        super().__init__(parent, title=_("Manage my account"), size=(750, 550),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.client = client
         self.config = {}
         self.config_loaded = False
+        self.is_initializing = True
+
+        # Category system (settingsgui.py pattern)
+        self.categories = {}  # {name: panel}
+        self.category_order = []  # List of category names in order
+        self.current_category_panel = None
+        self.current_category_name = None
+
+        # References to controls per category for saving
+        self._profile_controls = {}
+        self._visitingcard_controls = {}
+        self._privacy_controls = {}
+        self._status_controls = {}
+        self._whatsnew_controls = {}
 
         self._build_ui()
         self._load_config()
@@ -125,275 +142,320 @@ class AccountManagementDialog(wx.Dialog):
             except Exception:
                 pass
 
+        self.is_initializing = False
+
     def _build_ui(self):
         panel = wx.Panel(self)
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Category list
-        self.category_label = wx.StaticText(panel, label=_("Category:"))
-        main_sizer.Add(self.category_label, flag=wx.LEFT | wx.TOP, border=10)
+        # Main horizontal sizer: category list on left, content panel on right
+        main_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.category_list = wx.ListBox(panel)
-        categories = [
-            _("Profile"),
-            _("Visiting card"),
-            _("Privacy"),
-            _("Status and signature"),
-            _("What's new notifications"),
-            _("Account security"),
-            _("Others"),
-        ]
-        for cat in categories:
-            self.category_list.Append(cat)
-        main_sizer.Add(self.category_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+        # Left panel - category list
+        left_panel = wx.Panel(panel)
+        left_vbox = wx.BoxSizer(wx.VERTICAL)
 
-        # Buttons
+        category_label = wx.StaticText(left_panel, label=_("Category:"))
+        left_vbox.Add(category_label, flag=wx.ALL, border=5)
+
+        self.category_list = wx.ListBox(left_panel)
+        self.category_list.Bind(wx.EVT_LISTBOX, self.OnCategorySelected)
+        self.category_list.Bind(wx.EVT_SET_FOCUS, _on_focus)
+        left_vbox.Add(self.category_list, 1, wx.EXPAND | wx.ALL, 5)
+
+        left_panel.SetSizer(left_vbox)
+        main_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, 5)
+
+        # Right panel - settings content (scrollable)
+        self.content_panel = wx.ScrolledWindow(panel)
+        self.content_panel.SetScrollRate(5, 5)
+        self.content_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.content_panel.SetSizer(self.content_sizer)
+
+        main_sizer.Add(self.content_panel, 1, wx.EXPAND | wx.ALL, 5)
+
+        # Initialize all category panels
+        self._init_all_panels()
+
+        # Close button at bottom
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.open_btn = wx.Button(panel, label=_("Open"))
         self.close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
-        btn_sizer.Add(self.open_btn, flag=wx.RIGHT, border=10)
-        btn_sizer.Add(self.close_btn)
-        main_sizer.Add(btn_sizer, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+        self.close_btn.Bind(wx.EVT_SET_FOCUS, _on_focus)
+        btn_sizer.Add(self.close_btn, flag=wx.RIGHT, border=10)
 
-        panel.SetSizer(main_sizer)
+        # Main layout
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(main_sizer, 1, wx.EXPAND | wx.ALL, 5)
+        vbox.Add(btn_sizer, flag=wx.ALIGN_RIGHT | wx.ALL, border=10)
 
-        self.category_list.SetSelection(0)
+        panel.SetSizer(vbox)
+
+        # Rebuild category list and select first
+        self._rebuild_category_list()
+
         self.category_list.SetFocus()
 
-        # Sound bindings (like settingsgui.py)
-        self.category_list.Bind(wx.EVT_SET_FOCUS, _on_focus)
-        self.open_btn.Bind(wx.EVT_SET_FOCUS, _on_focus)
-        self.close_btn.Bind(wx.EVT_SET_FOCUS, _on_focus)
+        # Bind Escape
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
 
-        # Bindings
-        self.open_btn.Bind(wx.EVT_BUTTON, self.OnOpen)
-        self.category_list.Bind(wx.EVT_LISTBOX_DCLICK, self.OnOpen)
-        self.category_list.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
-
-    def OnKeyDown(self, event):
-        keycode = event.GetKeyCode()
-        if keycode == wx.WXK_RETURN or keycode == wx.WXK_NUMPAD_ENTER:
-            self.OnOpen(None)
-        elif keycode == wx.WXK_ESCAPE:
+    def _on_char_hook(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
             self.EndModal(wx.ID_CANCEL)
         else:
             event.Skip()
 
-    def _load_config(self):
-        """Load account config in background."""
-        def do_load():
-            try:
-                config = self.client.get_account_config()
-                wx.CallAfter(self._on_config_loaded, config)
-            except Exception:
-                wx.CallAfter(self._on_config_loaded, {})
-        threading.Thread(target=do_load, daemon=True).start()
+    def _register_category(self, name, panel):
+        """Register a category panel (settingsgui.py pattern)."""
+        if name not in self.categories:
+            self.categories[name] = panel
+            self.category_order.append(name)
+            panel.Hide()
 
-    def _on_config_loaded(self, config):
-        self.config = config or {}
-        self.config_loaded = True
+    def _rebuild_category_list(self):
+        """Rebuild the category list from category_order."""
+        self.category_list.Clear()
+        for name in self.category_order:
+            self.category_list.Append(name)
 
-    def _save_config(self):
-        """Save config to server."""
-        config = dict(self.config)
+        self.category_list.Refresh()
+        self.category_list.Update()
 
-        def do_save():
-            try:
-                result = self.client.save_account_config(config)
-                if result:
-                    wx.CallAfter(speak_notification, _("Settings saved"), 'success')
-                else:
-                    wx.CallAfter(speak_notification, _("Failed to save settings"), 'error')
-            except Exception as e:
-                wx.CallAfter(speak_notification, str(e), 'error')
-        threading.Thread(target=do_save, daemon=True).start()
+        if self.category_list.GetCount() > 0:
+            self.category_list.SetSelection(0)
+            self.ShowCategory(self.category_order[0])
 
-    def OnOpen(self, event):
-        sel = self.category_list.GetSelection()
-        if sel == wx.NOT_FOUND:
+    def ShowCategory(self, category_name):
+        """Show the selected category panel (settingsgui.py pattern)."""
+        if category_name not in self.categories:
             return
 
-        play_sound('ui/switch_category.ogg')
-        selected = self.category_list.GetString(sel)
+        # Hide current panel
+        if self.current_category_panel:
+            self.current_category_panel.Hide()
 
-        if not self.config_loaded:
-            speak_notification(_("Loading settings, please wait..."), 'info')
-            return
+        # Show new panel
+        panel = self.categories[category_name]
+        self.content_sizer.Clear()
+        self.content_sizer.Add(panel, 1, wx.EXPAND | wx.ALL, 10)
+        panel.Show()
 
-        if selected == _("Profile"):
-            self._open_profile()
-        elif selected == _("Visiting card"):
-            self._open_visitingcard()
-        elif selected == _("Privacy"):
-            self._open_privacy()
-        elif selected == _("Status and signature"):
-            self._open_status()
-        elif selected == _("What's new notifications"):
-            self._open_whatsnew()
-        elif selected == _("Account security"):
-            self._open_security()
-        elif selected == _("Others"):
-            self._open_others()
+        self.current_category_panel = panel
+        self.current_category_name = category_name
+
+        # Refresh layout
+        self.content_panel.Layout()
+        self.content_panel.FitInside()
+
+        # Play sound only if not initializing
+        if not self.is_initializing:
+            play_sound('ui/switch_category.ogg')
+
+    def OnCategorySelected(self, event):
+        """Handle category selection (settingsgui.py pattern)."""
+        selection = self.category_list.GetSelection()
+        if selection != wx.NOT_FOUND and selection < len(self.category_order):
+            category_name = self.category_order[selection]
+            self.ShowCategory(category_name)
+
+    # ---- Initialize all category panels ----
+
+    def _init_all_panels(self):
+        """Create and register all 7 category panels."""
+        self._init_profile_panel()
+        self._init_visitingcard_panel()
+        self._init_privacy_panel()
+        self._init_status_panel()
+        self._init_whatsnew_panel()
+        self._init_security_panel()
+        self._init_others_panel()
 
     # ---- Profile ----
 
-    def _open_profile(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Profile"), size=(400, 420))
-        panel = wx.Panel(dlg)
+    def _init_profile_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         vbox.Add(wx.StaticText(panel, label=_("Full name:")), flag=wx.LEFT | wx.TOP, border=10)
-        name_input = wx.TextCtrl(panel, value=self.config.get('fullname', ''))
+        name_input = wx.TextCtrl(panel)
         vbox.Add(name_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Gender:")), flag=wx.LEFT | wx.TOP, border=10)
         gender_choice = wx.Choice(panel, choices=[_("Female"), _("Male")])
-        try:
-            gender_choice.SetSelection(int(self.config.get('gender', 0)))
-        except (ValueError, TypeError):
-            gender_choice.SetSelection(0)
+        gender_choice.SetSelection(0)
         vbox.Add(gender_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Birth year:")), flag=wx.LEFT | wx.TOP, border=10)
         years = [_("Don't specify")] + [str(y) for y in range(1900, 2026)]
         year_choice = wx.Choice(panel, choices=years)
-        try:
-            cur_year = int(self.config.get('birthdateyear', 0))
-            year_choice.SetSelection(years.index(str(cur_year)) if cur_year > 0 and str(cur_year) in years else 0)
-        except (ValueError, TypeError):
-            year_choice.SetSelection(0)
+        year_choice.SetSelection(0)
         vbox.Add(year_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Birth month:")), flag=wx.LEFT | wx.TOP, border=10)
         months = [_("January"), _("February"), _("March"), _("April"), _("May"), _("June"),
                   _("July"), _("August"), _("September"), _("October"), _("November"), _("December")]
         month_choice = wx.Choice(panel, choices=months)
-        try:
-            cur_month = int(self.config.get('birthdatemonth', 1))
-            month_choice.SetSelection(max(0, min(11, cur_month - 1)))
-        except (ValueError, TypeError):
-            month_choice.SetSelection(0)
+        month_choice.SetSelection(0)
         vbox.Add(month_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Birth day:")), flag=wx.LEFT | wx.TOP, border=10)
         days = [str(d) for d in range(1, 32)]
         day_choice = wx.Choice(panel, choices=days)
-        try:
-            cur_day = int(self.config.get('birthdateday', 1))
-            day_choice.SetSelection(max(0, min(30, cur_day - 1)))
-        except (ValueError, TypeError):
-            day_choice.SetSelection(0)
+        day_choice.SetSelection(0)
         vbox.Add(day_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        save_btn = wx.Button(panel, wx.ID_OK, _("Save"))
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
-        btn_box.Add(save_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(cancel_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=15)
+        vbox.AddSpacer(15)
+        save_btn = wx.Button(panel, label=_("Save"))
+        save_btn.Bind(wx.EVT_BUTTON, self._on_save_profile)
+        vbox.Add(save_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
 
-        if dlg.ShowModal() == wx.ID_OK:
-            self.config['fullname'] = name_input.GetValue()
-            self.config['gender'] = str(gender_choice.GetSelection())
-            yr_sel = year_choice.GetSelection()
-            self.config['birthdateyear'] = str(0 if yr_sel == 0 else 1900 + yr_sel - 1)
-            self.config['birthdatemonth'] = str(month_choice.GetSelection() + 1)
-            self.config['birthdateday'] = str(day_choice.GetSelection() + 1)
-            self._save_config()
-        dlg.Destroy()
+        self._profile_controls = {
+            'name_input': name_input,
+            'gender_choice': gender_choice,
+            'year_choice': year_choice,
+            'month_choice': month_choice,
+            'day_choice': day_choice,
+            'years': years,
+        }
+
+        self._register_category(_("Profile"), panel)
+
+    def _populate_profile(self):
+        """Populate profile controls from config."""
+        c = self._profile_controls
+        if not c:
+            return
+        c['name_input'].SetValue(self.config.get('fullname', ''))
+        try:
+            c['gender_choice'].SetSelection(int(self.config.get('gender', 0)))
+        except (ValueError, TypeError):
+            c['gender_choice'].SetSelection(0)
+        try:
+            cur_year = int(self.config.get('birthdateyear', 0))
+            years = c['years']
+            c['year_choice'].SetSelection(years.index(str(cur_year)) if cur_year > 0 and str(cur_year) in years else 0)
+        except (ValueError, TypeError):
+            c['year_choice'].SetSelection(0)
+        try:
+            cur_month = int(self.config.get('birthdatemonth', 1))
+            c['month_choice'].SetSelection(max(0, min(11, cur_month - 1)))
+        except (ValueError, TypeError):
+            c['month_choice'].SetSelection(0)
+        try:
+            cur_day = int(self.config.get('birthdateday', 1))
+            c['day_choice'].SetSelection(max(0, min(30, cur_day - 1)))
+        except (ValueError, TypeError):
+            c['day_choice'].SetSelection(0)
+
+    def _on_save_profile(self, event):
+        c = self._profile_controls
+        if not c:
+            return
+        self.config['fullname'] = c['name_input'].GetValue()
+        self.config['gender'] = str(c['gender_choice'].GetSelection())
+        yr_sel = c['year_choice'].GetSelection()
+        self.config['birthdateyear'] = str(0 if yr_sel == 0 else 1900 + yr_sel - 1)
+        self.config['birthdatemonth'] = str(c['month_choice'].GetSelection() + 1)
+        self.config['birthdateday'] = str(c['day_choice'].GetSelection() + 1)
+        self._save_config()
 
     # ---- Visiting Card ----
 
-    def _open_visitingcard(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Visiting card"), size=(400, 300))
-        panel = wx.Panel(dlg)
+    def _init_visitingcard_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         vbox.Add(wx.StaticText(panel, label=_("Visiting card:")), flag=wx.LEFT | wx.TOP, border=10)
-        card_input = wx.TextCtrl(panel, value=self.config.get('visitingcard', ''), style=wx.TE_MULTILINE)
+        card_input = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
         vbox.Add(card_input, proportion=1, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        save_btn = wx.Button(panel, wx.ID_OK, _("Save"))
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
-        btn_box.Add(save_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(cancel_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=15)
+        vbox.AddSpacer(15)
+        save_btn = wx.Button(panel, label=_("Save"))
+        save_btn.Bind(wx.EVT_BUTTON, self._on_save_visitingcard)
+        vbox.Add(save_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
 
-        if dlg.ShowModal() == wx.ID_OK:
-            self.config['visitingcard'] = card_input.GetValue()
-            self._save_config()
-        dlg.Destroy()
+        self._visitingcard_controls = {
+            'card_input': card_input,
+        }
+
+        self._register_category(_("Visiting card"), panel)
+
+    def _populate_visitingcard(self):
+        """Populate visiting card controls from config."""
+        c = self._visitingcard_controls
+        if not c:
+            return
+        c['card_input'].SetValue(self.config.get('visitingcard', ''))
+
+    def _on_save_visitingcard(self, event):
+        c = self._visitingcard_controls
+        if not c:
+            return
+        self.config['visitingcard'] = c['card_input'].GetValue()
+        self._save_config()
 
     # ---- Privacy ----
 
-    def _open_privacy(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Privacy"), size=(500, 350))
-        panel = wx.Panel(dlg)
+    def _init_privacy_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         hide_cb = wx.CheckBox(panel, label=_("Hide my profile for strangers"))
-        hide_cb.SetValue(int(self.config.get('publicprofile', 0)) != 0)
         vbox.Add(hide_cb, flag=wx.LEFT | wx.TOP, border=10)
 
         prevent_cb = wx.CheckBox(panel, label=_("Prevent banned users from writing me private messages"))
-        prevent_cb.SetValue(int(self.config.get('preventbanned', 0)) != 0)
         vbox.Add(prevent_cb, flag=wx.LEFT | wx.TOP, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Accept incoming voice calls:")), flag=wx.LEFT | wx.TOP, border=10)
         calls_choice = wx.Choice(panel, choices=[_("Never"), _("Only from my friends"), _("From all users")])
-        try:
-            calls_choice.SetSelection(min(2, int(self.config.get('calls', 0))))
-        except (ValueError, TypeError):
-            calls_choice.SetSelection(0)
+        calls_choice.SetSelection(0)
         vbox.Add(calls_choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.AddSpacer(10)
         blacklist_btn = wx.Button(panel, label=_("Manage black list"))
+        blacklist_btn.Bind(wx.EVT_BUTTON, lambda e: self._open_blacklist(self))
         vbox.Add(blacklist_btn, flag=wx.LEFT, border=10)
 
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        save_btn = wx.Button(panel, wx.ID_OK, _("Save"))
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
-        btn_box.Add(save_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(cancel_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=15)
+        vbox.AddSpacer(15)
+        save_btn = wx.Button(panel, label=_("Save"))
+        save_btn.Bind(wx.EVT_BUTTON, self._on_save_privacy)
+        vbox.Add(save_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
 
-        blacklist_btn.Bind(wx.EVT_BUTTON, lambda e: self._open_blacklist(dlg))
+        self._privacy_controls = {
+            'hide_cb': hide_cb,
+            'prevent_cb': prevent_cb,
+            'calls_choice': calls_choice,
+        }
 
-        if dlg.ShowModal() == wx.ID_OK:
-            self.config['publicprofile'] = str(1 if hide_cb.GetValue() else 0)
-            self.config['preventbanned'] = str(1 if prevent_cb.GetValue() else 0)
-            self.config['calls'] = str(calls_choice.GetSelection())
-            self._save_config()
-        dlg.Destroy()
+        self._register_category(_("Privacy"), panel)
+
+    def _populate_privacy(self):
+        """Populate privacy controls from config."""
+        c = self._privacy_controls
+        if not c:
+            return
+        c['hide_cb'].SetValue(int(self.config.get('publicprofile', 0)) != 0)
+        c['prevent_cb'].SetValue(int(self.config.get('preventbanned', 0)) != 0)
+        try:
+            c['calls_choice'].SetSelection(min(2, int(self.config.get('calls', 0))))
+        except (ValueError, TypeError):
+            c['calls_choice'].SetSelection(0)
+
+    def _on_save_privacy(self, event):
+        c = self._privacy_controls
+        if not c:
+            return
+        self.config['publicprofile'] = str(1 if c['hide_cb'].GetValue() else 0)
+        self.config['preventbanned'] = str(1 if c['prevent_cb'].GetValue() else 0)
+        self.config['calls'] = str(c['calls_choice'].GetSelection())
+        self._save_config()
 
     def _open_blacklist(self, parent):
         """Open blacklist management dialog."""
@@ -404,60 +466,67 @@ class AccountManagementDialog(wx.Dialog):
 
     # ---- Status and Signature ----
 
-    def _open_status(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Status and signature"), size=(450, 350))
-        panel = wx.Panel(dlg)
+    def _init_status_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         vbox.Add(wx.StaticText(panel, label=_("Status displayed after your name on all lists of users:")),
                  flag=wx.LEFT | wx.TOP, border=10)
-        status_input = wx.TextCtrl(panel, value=self.config.get('status', ''))
+        status_input = wx.TextCtrl(panel)
         vbox.Add(status_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Signature placed below all your forum posts:")),
                  flag=wx.LEFT | wx.TOP, border=10)
-        sig_input = wx.TextCtrl(panel, value=self.config.get('signature', ''))
+        sig_input = wx.TextCtrl(panel)
         vbox.Add(sig_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         vbox.Add(wx.StaticText(panel, label=_("Greeting read after you log in to Elten:")),
                  flag=wx.LEFT | wx.TOP, border=10)
-        greet_input = wx.TextCtrl(panel, value=self.config.get('greeting', ''))
+        greet_input = wx.TextCtrl(panel)
         vbox.Add(greet_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        save_btn = wx.Button(panel, wx.ID_OK, _("Save"))
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
-        btn_box.Add(save_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(cancel_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=15)
+        vbox.AddSpacer(15)
+        save_btn = wx.Button(panel, label=_("Save"))
+        save_btn.Bind(wx.EVT_BUTTON, self._on_save_status)
+        vbox.Add(save_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
 
-        if dlg.ShowModal() == wx.ID_OK:
-            self.config['status'] = status_input.GetValue()
-            self.config['signature'] = sig_input.GetValue()
-            self.config['greeting'] = greet_input.GetValue()
-            self._save_config()
-        dlg.Destroy()
+        self._status_controls = {
+            'status_input': status_input,
+            'sig_input': sig_input,
+            'greet_input': greet_input,
+        }
+
+        self._register_category(_("Status and signature"), panel)
+
+    def _populate_status(self):
+        """Populate status controls from config."""
+        c = self._status_controls
+        if not c:
+            return
+        c['status_input'].SetValue(self.config.get('status', ''))
+        c['sig_input'].SetValue(self.config.get('signature', ''))
+        c['greet_input'].SetValue(self.config.get('greeting', ''))
+
+    def _on_save_status(self, event):
+        c = self._status_controls
+        if not c:
+            return
+        self.config['status'] = c['status_input'].GetValue()
+        self.config['signature'] = c['sig_input'].GetValue()
+        self.config['greeting'] = c['greet_input'].GetValue()
+        self._save_config()
 
     # ---- What's New Notifications ----
 
-    def _open_whatsnew(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("What's new notifications"), size=(550, 500),
-                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        panel = wx.Panel(dlg)
+    def _init_whatsnew_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         options = [_("Notice and show in what's new"), _("Notice only"), _("Ignore")]
-        categories = [
+        wn_categories = [
             (_("New messages"), "wn_messages"),
             (_("New posts in followed threads"), "wn_followedthreads"),
             (_("New posts on the followed blogs"), "wn_followedblogs"),
@@ -478,50 +547,60 @@ class AccountManagementDialog(wx.Dialog):
         scroll_sizer = wx.BoxSizer(wx.VERTICAL)
 
         choices_list = []
-        for label, key in categories:
+        for label, key in wn_categories:
             scroll_sizer.Add(wx.StaticText(scroll, label=label), flag=wx.LEFT | wx.TOP, border=5)
             choice = wx.Choice(scroll, choices=options)
-            try:
-                cur_val = int(self.config.get(key, 0))
-            except (ValueError, TypeError):
-                cur_val = 0
-            choice.SetSelection(min(2, cur_val))
+            choice.SetSelection(0)
             scroll_sizer.Add(choice, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=5)
             choices_list.append((key, choice))
 
         scroll.SetSizer(scroll_sizer)
         vbox.Add(scroll, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
 
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        save_btn = wx.Button(panel, wx.ID_OK, _("Save"))
-        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
-        btn_box.Add(save_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(cancel_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=10)
+        save_btn = wx.Button(panel, label=_("Save"))
+        save_btn.Bind(wx.EVT_BUTTON, self._on_save_whatsnew)
+        vbox.Add(save_btn, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
+        _bind_sounds_to_panel(scroll)
 
-        if dlg.ShowModal() == wx.ID_OK:
-            for key, choice in choices_list:
-                self.config[key] = str(choice.GetSelection())
-            self._save_config()
-        dlg.Destroy()
+        self._whatsnew_controls = {
+            'choices_list': choices_list,
+        }
+
+        self._register_category(_("What's new notifications"), panel)
+
+    def _populate_whatsnew(self):
+        """Populate what's new controls from config."""
+        c = self._whatsnew_controls
+        if not c:
+            return
+        for key, choice in c['choices_list']:
+            try:
+                cur_val = int(self.config.get(key, 0))
+            except (ValueError, TypeError):
+                cur_val = 0
+            choice.SetSelection(min(2, cur_val))
+
+    def _on_save_whatsnew(self, event):
+        c = self._whatsnew_controls
+        if not c:
+            return
+        for key, choice in c['choices_list']:
+            self.config[key] = str(choice.GetSelection())
+        self._save_config()
 
     # ---- Account Security ----
 
-    def _open_security(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Account security"), size=(450, 400))
-        panel = wx.Panel(dlg)
+    def _init_security_panel(self):
+        panel = wx.Panel(self.content_panel)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        self.security_list = wx.ListBox(panel)
+        vbox.Add(wx.StaticText(panel, label=_("Select a security option:")),
+                 flag=wx.LEFT | wx.TOP, border=10)
+
+        security_list = wx.ListBox(panel)
         items = [
             _("Change email"),
             _("Change password"),
@@ -531,52 +610,110 @@ class AccountManagementDialog(wx.Dialog):
             _("Show last logins"),
         ]
         for item in items:
-            self.security_list.Append(item)
-        vbox.Add(self.security_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
-
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        open_btn = wx.Button(panel, label=_("Open"))
-        close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
-        btn_box.Add(open_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(close_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+            security_list.Append(item)
+        vbox.Add(security_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
         panel.SetSizer(vbox)
         _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
 
-        self.security_list.SetSelection(0)
-        self.security_list.SetFocus()
+        security_list.SetSelection(0)
 
-        def on_security_open(evt):
-            sel = self.security_list.GetSelection()
+        # Enter or double-click opens the selected security action
+        def on_security_activate(evt):
+            sel = security_list.GetSelection()
             if sel == wx.NOT_FOUND:
                 return
             play_sound('core/SELECT.ogg')
-            text = self.security_list.GetString(sel)
+            text = security_list.GetString(sel)
             if text == _("Change email"):
-                self._change_email(dlg)
+                self._change_email(self)
             elif text == _("Change password"):
-                self._change_password(dlg)
+                self._change_password(self)
             elif text == _("Manage Two-Factor Authentication"):
-                self._manage_2fa(dlg)
+                self._manage_2fa(self)
             elif text == _("Manage mail events-reporting"):
-                self._manage_mail_events(dlg)
+                self._manage_mail_events(self)
             elif text == _("Manage auto-login tokens"):
-                self._manage_auto_logins(dlg)
+                self._manage_auto_logins(self)
             elif text == _("Show last logins"):
-                self._show_last_logins(dlg)
+                self._show_last_logins(self)
 
-        open_btn.Bind(wx.EVT_BUTTON, on_security_open)
-        self.security_list.Bind(wx.EVT_LISTBOX_DCLICK, on_security_open)
-        self.security_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_security_open(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
+        security_list.Bind(wx.EVT_LISTBOX_DCLICK, on_security_activate)
+        security_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_security_activate(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
 
-        dlg.ShowModal()
-        dlg.Destroy()
+        self._register_category(_("Account security"), panel)
+
+    # ---- Others ----
+
+    def _init_others_panel(self):
+        panel = wx.Panel(self.content_panel)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        vbox.Add(wx.StaticText(panel, label=_("Select an option:")),
+                 flag=wx.LEFT | wx.TOP, border=10)
+
+        others_list = wx.ListBox(panel)
+        others_list.Append(_("Archive this account"))
+        vbox.Add(others_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+
+        panel.SetSizer(vbox)
+        _bind_sounds_to_panel(panel)
+
+        others_list.SetSelection(0)
+
+        def on_others_activate(evt):
+            sel = others_list.GetSelection()
+            if sel == 0:
+                play_sound('core/SELECT.ogg')
+                self._archive_account(self)
+
+        others_list.Bind(wx.EVT_LISTBOX_DCLICK, on_others_activate)
+        others_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_others_activate(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
+
+        self._register_category(_("Others"), panel)
+
+    # ---- Config loading / saving ----
+
+    def _load_config(self):
+        """Load account config in background."""
+        def do_load():
+            try:
+                config = self.client.get_account_config()
+                wx.CallAfter(self._on_config_loaded, config)
+            except Exception:
+                wx.CallAfter(self._on_config_loaded, {})
+        threading.Thread(target=do_load, daemon=True).start()
+
+    def _on_config_loaded(self, config):
+        self.config = config or {}
+        self.config_loaded = True
+        # Populate all panels with loaded data
+        self._populate_profile()
+        self._populate_visitingcard()
+        self._populate_privacy()
+        self._populate_status()
+        self._populate_whatsnew()
+
+    def _save_config(self):
+        """Save config to server."""
+        if not self.config_loaded:
+            speak_notification(_("Loading settings, please wait..."), 'info')
+            return
+
+        config = dict(self.config)
+
+        def do_save():
+            try:
+                result = self.client.save_account_config(config)
+                if result:
+                    wx.CallAfter(speak_notification, _("Settings saved"), 'success')
+                else:
+                    wx.CallAfter(speak_notification, _("Failed to save settings"), 'error')
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+        threading.Thread(target=do_save, daemon=True).start()
+
+    # ---- Security sub-dialogs (these still open as separate dialogs) ----
 
     def _change_password(self, parent):
         play_sound('ui/switch_category.ogg')
@@ -715,12 +852,8 @@ class AccountManagementDialog(wx.Dialog):
             action_list.Append(_("Generate backup codes"))
             vbox.Add(action_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
-            btn_box = wx.BoxSizer(wx.HORIZONTAL)
-            open_btn = wx.Button(panel, label=_("Open"))
             close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
-            btn_box.Add(open_btn, flag=wx.RIGHT, border=10)
-            btn_box.Add(close_btn)
-            vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+            vbox.Add(close_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
             panel.SetSizer(vbox)
             _bind_sounds_to_panel(panel)
@@ -740,7 +873,6 @@ class AccountManagementDialog(wx.Dialog):
                 elif sel == 1:
                     self._generate_backup_codes(dlg)
 
-            open_btn.Bind(wx.EVT_BUTTON, on_action)
             action_list.Bind(wx.EVT_LISTBOX_DCLICK, on_action)
             action_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_action(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
 
@@ -920,12 +1052,8 @@ class AccountManagementDialog(wx.Dialog):
             action_list.Append(action)
             vbox.Add(action_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
-            btn_box = wx.BoxSizer(wx.HORIZONTAL)
-            open_btn = wx.Button(panel, label=_("Open"))
             close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
-            btn_box.Add(open_btn, flag=wx.RIGHT, border=10)
-            btn_box.Add(close_btn)
-            vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+            vbox.Add(close_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
 
             panel.SetSizer(vbox)
             _bind_sounds_to_panel(panel)
@@ -956,8 +1084,8 @@ class AccountManagementDialog(wx.Dialog):
                 threading.Thread(target=do_toggle, daemon=True).start()
                 dlg.EndModal(wx.ID_OK)
 
-            open_btn.Bind(wx.EVT_BUTTON, on_toggle)
             action_list.Bind(wx.EVT_LISTBOX_DCLICK, on_toggle)
+            action_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_toggle(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
 
             dlg.ShowModal()
             dlg.Destroy()
@@ -1105,47 +1233,7 @@ class AccountManagementDialog(wx.Dialog):
         dlg.ShowModal()
         dlg.Destroy()
 
-    # ---- Others ----
-
-    def _open_others(self):
-        play_sound('ui/switch_category.ogg')
-        dlg = wx.Dialog(self, title=_("Others"), size=(400, 200))
-        panel = wx.Panel(dlg)
-        vbox = wx.BoxSizer(wx.VERTICAL)
-
-        others_list = wx.ListBox(panel)
-        others_list.Append(_("Archive this account"))
-        vbox.Add(others_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
-
-        btn_box = wx.BoxSizer(wx.HORIZONTAL)
-        open_btn = wx.Button(panel, label=_("Open"))
-        close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
-        btn_box.Add(open_btn, flag=wx.RIGHT, border=10)
-        btn_box.Add(close_btn)
-        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
-
-        panel.SetSizer(vbox)
-        _bind_sounds_to_panel(panel)
-        if apply_skin_to_window:
-            try:
-                apply_skin_to_window(dlg)
-            except Exception:
-                pass
-
-        others_list.SetSelection(0)
-        others_list.SetFocus()
-
-        def on_open(evt):
-            sel = others_list.GetSelection()
-            if sel == 0:
-                self._archive_account(dlg)
-
-        open_btn.Bind(wx.EVT_BUTTON, on_open)
-        others_list.Bind(wx.EVT_LISTBOX_DCLICK, on_open)
-        others_list.Bind(wx.EVT_KEY_DOWN, lambda e: on_open(e) if e.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) else e.Skip())
-
-        dlg.ShowModal()
-        dlg.Destroy()
+    # ---- Archive Account ----
 
     def _archive_account(self, parent):
         """Archive account with warning."""

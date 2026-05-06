@@ -299,7 +299,7 @@ def on_klango_init(klango_mode):
 
 ## API rejestracji widoków (Component View Registration)
 
-**NOWOŚĆ!** Komponenty mogą dodawać własne zakładki/widoki do lewego panelu głównego GUI. Zarejestrowane widoki pojawiają się w cyklu Ctrl+Tab obok wbudowanych widoków (Lista aplikacji, Lista gier, Titan IM).
+Komponenty mogą dodawać własne zakładki/widoki do lewego panelu głównego GUI. Zarejestrowane widoki pojawiają się w wirtualnym pasku zakładek (pierwszy wiersz listy) i cyklu Ctrl+Tab obok wbudowanych widoków (Lista aplikacji, Lista gier, Titan IM).
 
 ### Parametry register_view()
 
@@ -311,14 +311,35 @@ def on_klango_init(klango_mode):
 | `on_show` | callable | Nie | Wywoływana za każdym razem gdy widok staje się widoczny (odświeżanie danych) |
 | `on_activate` | callable | Nie | Wywoływana gdy użytkownik naciśnie Enter na kontrolce |
 | `position` | str/int | Nie | Pozycja w cyklu: `'after_apps'`, `'after_games'`, `'after_network'` (domyślnie), lub indeks liczbowy |
+| `short_name` | str | Nie | Krótka nazwa do paska zakładek i przycisku w toolbarze (domyślnie: `label` bez końcowego dwukropka) |
 
 ### Jak to działa
 
-- Zarejestrowana kontrolka jest dodawana do sizer'a lewego panelu (domyślnie ukryta)
+- Zarejestrowana kontrolka jest dodawana do sizer'a lewego panelu (domyślnie ukryta).
+- Pierwszy wiersz listy (item 0) to **wirtualny pasek zakładek** automatycznie wstrzykiwany przez `register_view()`. Tekst: `"NazwaWidoku, N z M"`. Strzałki Lewo/Prawo na item 0 cyklicznie przełączają widoki.
 - Użytkownik naciska Ctrl+Tab aby przełączać widoki: Aplikacje → Gry → [twój widok] → Titan IM → ...
-- Tab/Shift+Tab nawiguje między kontrolką widoku a paskiem statusu
-- Enter na kontrolce widoku wywołuje `on_activate` (jeśli podano)
-- TTS ogłasza etykietę widoku i pozycję, np. "Moje notatki, 3 z 4"
+- Tab/Shift+Tab nawiguje między kontrolką widoku a paskiem statusu.
+- Enter na kontrolce widoku wywołuje `on_activate` (jeśli podano).
+- TTS ogłasza etykietę widoku i pozycję, np. "Moje notatki, 3 z 4".
+- Każdy zarejestrowany widok dostaje też przycisk w toolbarze (etykieta = `short_name`).
+
+### Auto-synchronizacja paska zakładek
+
+Komponenty często wywołują `control.Clear()` / `tree.DeleteAllItems()` aby przebudować swoje listy. Czyszczenie usuwa też wstrzyknięty wiersz zakładek. `register_view()` automatycznie obsługuje to przez:
+
+- **`EVT_SET_FOCUS`** — re-injekcja wiersza zakładek przy każdym wejściu fokusem do widoku.
+- **`EVT_LISTBOX`** (tylko `wx.ListBox`) — re-injekcja przy zmianie zaznaczenia.
+
+Jeśli wykonujesz `Clear()` + repopulację z innego miejsca i potrzebujesz natychmiastowej aktualizacji, wywołaj **`component_manager.sync_view_tab_bar(view_id_or_control)`** lub **`gui_app.sync_view_tab_bar(view_id_or_control)`**:
+
+```python
+def refresh_my_data(self):
+    self._listbox.Clear()
+    for item in self._items:
+        self._listbox.Append(item)
+    # Wymuś natychmiastową re-injekcję wiersza zakładek
+    self.component_manager.sync_view_tab_bar('my_view_id')
+```
 
 ### Dostępne atrybuty gui_app
 

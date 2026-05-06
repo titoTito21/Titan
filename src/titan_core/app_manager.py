@@ -234,7 +234,8 @@ def open_application(app_info, file_path=None):
 
             if file_type == 'exe':
                 # Standalone executable - run directly
-                _run_executable(exec_file, app_path)
+                console = app_info.get('console', 'false').lower() == 'true'
+                _run_executable(exec_file, app_path, console=console)
             elif file_type in ['py', 'pyc', 'cython']:
                 # Python files - run with python interpreter
                 _run_python_file(exec_file, app_path, file_type, file_path)
@@ -252,12 +253,12 @@ def open_application(app_info, file_path=None):
     app_thread.start()
 
 
-def _run_executable(exec_file, cwd):
+def _run_executable(exec_file, cwd, console=False):
     """Run a standalone executable."""
     startupinfo = None
     creationflags = 0
 
-    if sys.platform == 'win32':
+    if sys.platform == 'win32' and not console:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
@@ -290,6 +291,18 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
 
     # Build paths to add (ensure no trailing slashes)
     paths_to_add = [p.rstrip('\\/') for p in [app_path, launcher_path, SITEPACKAGES_DIR] if p]
+
+    # Add app's library paths for bundled dependencies
+    # Config: libs="lib,vendor" in __app.TCE (comma-separated, relative to app dir)
+    # Default: lib/ if exists
+    _app_info = read_app_info(app_path)
+    _libs_str = _app_info.get('libs', '') if _app_info else ''
+    _lib_dirs = [d.strip() for d in _libs_str.split(',') if d.strip()] if _libs_str.strip() else ['lib']
+    for _ld in _lib_dirs:
+        _full_lib = os.path.join(app_path, _ld)
+        if os.path.isdir(_full_lib):
+            paths_to_add.insert(0, _full_lib.rstrip('\\/'))
+
 
     if is_frozen():
         # Compiled mode - need special handling
@@ -332,10 +345,19 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
         _debug_log(f"PYTHONHOME: {env.get('PYTHONHOME', 'not set')}")
         _debug_log(f"PYTHONPATH: {env.get('PYTHONPATH', 'not set')}")
 
-        # pythonw.exe already runs without console, no need for special flags
+        # Hide console window when using python.exe (pythonw.exe is already windowless)
+        popen_kwargs = {}
+        if IS_WINDOWS and python_executable.lower().endswith('python.exe'):
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            popen_kwargs['startupinfo'] = si
+            popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
         try:
             proc = subprocess.Popen(command, cwd=app_path, env=env,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   **popen_kwargs)
             # Don't wait, but log if there's immediate error
             import threading
             def log_output():

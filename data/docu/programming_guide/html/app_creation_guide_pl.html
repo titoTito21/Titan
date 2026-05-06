@@ -253,6 +253,8 @@
 <li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
 <li><a href="app_creation_guide_pl.html" class="active">Tworzenie aplikacji</a></li>
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
                 </ul>
             </nav>
         </aside>
@@ -261,58 +263,53 @@
             <div class="header-banner">
                 <h1>Przewodnik tworzenia aplikacji Titan</h1>
             </div>
-            <h1 id="przewodnik-tworzenia-aplikacji-titan">Przewodnik tworzenia aplikacji Titan</h1>
+            <h1>Przewodnik tworzenia aplikacji Titan</h1>
 
-<h2 id="wprowadzenie">Wprowadzenie</h2>
+<h2>Wprowadzenie</h2>
 
 <p>Aplikacje Titan to samodzielne programy uruchamiane z poziomu launchera. Mogą to być aplikacje w Pythonie, skompilowane pliki wykonywalne (.exe) lub inne typy plików wykonywalnych. Aplikacje są wyświetlane w kategorii "Aplikacje" w niewidzialnym interfejsie.</p>
 
-<h2 id="architektura-systemu-aplikacji">Architektura systemu aplikacji</h2>
+<h2>Architektura systemu aplikacji</h2>
 
-<h3 id="lokalizacja-aplikacji">Lokalizacja aplikacji</h3>
+<h3>Lokalizacja aplikacji</h3>
+Wszystkie aplikacje znajdują się w katalogu <code>data/applications/</code>. Każda aplikacja to osobny katalog zawierający:
+<li><code>__app.tce</code> - plik konfiguracyjny aplikacji (wymagany)</li>
+<li><code>main.py</code> - główny plik aplikacji (lub inny plik określony w openfile)</li>
+<li>dodatkowe pliki i zasoby aplikacji</li>
 
-<p>Wszystkie aplikacje znajdują się w katalogu <code>data/applications/</code>. Każda aplikacja to osobny katalog zawierający:
-- <code>__app.tce</code> - plik konfiguracyjny aplikacji (wymagany)
-- <code>main.py</code> - główny plik aplikacji (lub inny plik określony w openfile)
-- dodatkowe pliki i zasoby aplikacji</p>
+<h3>Proces uruchamiania aplikacji</h3>
 
-<h3 id="proces-uruchamiania-aplikacji">Proces uruchamiania aplikacji</h3>
-
-<ol>
 <li><strong>Kompilacja</strong> - pliki .py są automatycznie kompilowane do .pyc</li>
 <li><strong>Środowisko</strong> - ustawiane są ścieżki PYTHONPATH i zmienne środowiskowe</li>
 <li><strong>Uruchomienie</strong> - aplikacja uruchamiana w osobnym procesie</li>
 <li><strong>Izolacja</strong> - każda aplikacja działa w swoim katalogu roboczym</li>
-</ol>
 
-<h2 id="struktura-pliku-konfiguracyjnego">Struktura pliku konfiguracyjnego</h2>
+<h2>Struktura pliku konfiguracyjnego</h2>
 
-<h3 id="__apptce">__app.tce</h3>
-
-<p>Plik w formacie klucz=wartość:</p>
+<h3>__app.tce</h3>
+Plik w formacie klucz=wartość:
 
 <pre><code>name_pl=Nazwa aplikacji po polsku
 name_en=Application name in English
 openfile=main.py
 shortname=myapp
-hidden=false
-</code></pre>
+hidden=false</code></pre>
 
-<p><strong>Wymagane parametry:</strong>
-- <code>openfile</code> - nazwa pliku do uruchomienia</p>
+<strong>Wymagane parametry:</strong>
+<li><code>openfile</code> - nazwa pliku do uruchomienia</li>
 
-<p><strong>Opcjonalne parametry:</strong>
-- <code>name_pl</code> - nazwa po polsku
-- <code>name_en</code> - nazwa po angielsku<br />
-- <code>name</code> - nazwa domyślna (jeśli brak tłumaczeń)
-- <code>shortname</code> - krótka nazwa dla wywołań programowych
-- <code>hidden</code> - czy ukryć aplikację w liście (true/false)</p>
+<strong>Opcjonalne parametry:</strong>
+<li><code>name_pl</code> - nazwa po polsku</li>
+<li><code>name_en</code> - nazwa po angielsku  </li>
+<li><code>name</code> - nazwa domyślna (jeśli brak tłumaczeń)</li>
+<li><code>shortname</code> - krótka nazwa dla wywołań programowych</li>
+<li><code>hidden</code> - czy ukryć aplikację w liście (true/false)</li>
 
-<h2 id="implementacja-aplikacji-python">Implementacja aplikacji Python</h2>
+<h2>Implementacja aplikacji Python</h2>
 
-<h3 id="podstawowa-struktura-mainpy">Podstawowa struktura main.py</h3>
+<h3>Podstawowa struktura main.py</h3>
 
-<pre><code>#!/usr/bin/env python3
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import wx
@@ -321,29 +318,29 @@ import os
 
 class MyAppFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="Moja aplikacja")
+        super().__init__(None, title=&quot;Moja aplikacja&quot;)
         self.InitUI()
         self.Center()
-
+        
     def InitUI(self):
-        """Inicjalizacja interfejsu użytkownika"""
+        &quot;&quot;&quot;Inicjalizacja interfejsu użytkownika&quot;&quot;&quot;
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
-
+        
         # Dodaj kontrolki
         self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
         vbox.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 5)
-
+        
         # Przycisk
-        btn = wx.Button(panel, label="Kliknij mnie")
+        btn = wx.Button(panel, label=&quot;Kliknij mnie&quot;)
         btn.Bind(wx.EVT_BUTTON, self.OnButtonClick)
         vbox.Add(btn, 0, wx.ALL | wx.CENTER, 5)
-
+        
         panel.SetSizer(vbox)
-
+        
     def OnButtonClick(self, event):
-        """Obsługa kliknięcia przycisku"""
-        self.text_ctrl.AppendText("Przycisk został kliknięty!\n")
+        &quot;&quot;&quot;Obsługa kliknięcia przycisku&quot;&quot;&quot;
+        self.text_ctrl.AppendText(&quot;Przycisk został kliknięty!\n&quot;)
 
 class MyApp(wx.App):
     def OnInit(self):
@@ -351,60 +348,83 @@ class MyApp(wx.App):
         frame.Show()
         return True
 
-if __name__ == '__main__':
+if __name__ == &#x27;__main__&#x27;:
     app = MyApp()
-    app.MainLoop()
-</code></pre>
+    app.MainLoop()</code></pre>
 
-<h3 id="dostep-do-modułow-titan">Dostęp do modułów Titan</h3>
+<h3>Dostęp do modułów Titan</h3>
 
 <p>Aplikacje mają automatyczny dostęp do modułów Titan:</p>
 
-<pre><code># Import modułów Titan
-from sound import play_sound, play_error_sound
-from settings import get_setting, set_setting
-from translation import get_available_languages
+<pre><code class="language-python"># Import modułów Titan (kompletne ścieżki src.*)
+from src.titan_core.sound import play_sound, play_error_sound
+from src.settings.settings import get_setting, set_setting
+from src.titan_core.translation import get_available_languages
 
 # Użycie w aplikacji
 def on_action(self):
-    play_sound("focus.ogg")
+    play_sound(&quot;ui/focus.ogg&quot;)
 
     # Zapisz ustawienie aplikacji
-    set_setting('my_app_setting', 'value', section='my_app')
+    set_setting(&#x27;my_app_setting&#x27;, &#x27;value&#x27;, section=&#x27;my_app&#x27;)
 
     # Odczytaj ustawienie
-    value = get_setting('my_app_setting', 'default', section='my_app')
-</code></pre>
+    value = get_setting(&#x27;my_app_setting&#x27;, &#x27;default&#x27;, section=&#x27;my_app&#x27;)</code></pre>
 
-<h2 id="obsługa-argumentow-wiersza-polecen">Obsługa argumentów wiersza poleceń</h2>
+<h3>TCE Speech API (mowa w aplikacjach i grach)</h3>
+
+<p>Moduł <code>src.titan_core.tce_speech</code> to ujednolicone API mowy. Honoruje ustawienie <code>[invisible_interface] stereo_speech</code> z TCE — używa StereoSpeech (panorama + pitch) jeśli włączone, albo fallback (<code>accessible_output3</code> + platforma).</p>
+
+<pre><code class="language-python"># Wzorzec kompatybilny z trybem skompilowanym
+try:
+    from src.titan_core.tce_speech import speak as _tce_speak, stop as _tce_stop
+    _SPEECH_AVAILABLE = True
+except ImportError:
+    _SPEECH_AVAILABLE = False
+    def _tce_speak(text, **kw): pass
+    def _tce_stop(): pass
+
+# Użycie
+_tce_speak(&quot;Cześć&quot;, interrupt=True)
+_tce_speak(&quot;Po prawej&quot;, position=0.7, pitch_offset=2)
+_tce_stop()</code></pre>
+
+<strong>Główne funkcje API:</strong>
+<li><code>speak(text, position=0.0, interrupt=True, pitch_offset=0)</code> — synchronicznie</li>
+<li><code>speak_async(text, ...)</code> — asynchronicznie</li>
+<li><code>stop()</code> — przerwij mowę</li>
+<li><code>set_rate(rate)</code>, <code>set_volume(volume)</code>, <code>set_pitch(pitch)</code> — zakres -10..+10 / 0..100</li>
+<li><code>set_engine(engine_id)</code>, <code>set_voice(index)</code> — wybór silnika i głosu</li>
+<li><code>get_available_engines()</code>, <code>get_available_voices()</code> — listy</li>
+<li><code>is_stereo_available()</code> — czy StereoSpeech jest aktywne</li>
+
+<p><strong>Ważne:</strong> w trybie skompilowanym <code>src/</code> jest dodawane jako <code>--add-data</code> w <code>compiletorelease.py</code> i pozostaje w <code>_internal/</code>. Plik <code>python3XX._pth</code> dodaje <code>.</code> (= <code>_internal/</code>) do <code>sys.path</code>, więc import <code>from src.titan_core.tce_speech import speak</code> działa.</p>
+
+<h2>Obsługa argumentów wiersza poleceń</h2>
 
 <p>Aplikacje mogą otrzymywać argumenty podczas uruchamiania:</p>
 
-<pre><code>import sys
+<pre><code class="language-python">import sys
 
 def main():
     if len(sys.argv) &gt; 1:
         file_path = sys.argv[1]
-        print(f"Otrzymano ścieżkę pliku: {file_path}")
+        print(f&quot;Otrzymano ścieżkę pliku: {file_path}&quot;)
         # Otwórz plik w aplikacji
         open_file(file_path)
     else:
         # Uruchom normalnie bez argumentów
         start_normal_mode()
 
-if __name__ == '__main__':
-    main()
-</code></pre>
+if __name__ == &#x27;__main__&#x27;:
+    main()</code></pre>
 
-<h2 id="internacjonalizacja-aplikacji">Internacjonalizacja aplikacji</h2>
+<h2>Internacjonalizacja aplikacji</h2>
 
-<h3 id="konfiguracja-babelcfg">Konfiguracja babel.cfg</h3>
+<h3>Konfiguracja babel.cfg</h3>
+<pre><code class="language-ini">[python: **.py]</code></pre>
 
-<pre><code>[python: **.py]
-</code></pre>
-
-<h3 id="struktura-tłumaczen">Struktura tłumaczeń</h3>
-
+<h3>Struktura tłumaczeń</h3>
 <pre><code>data/applications/moja_aplikacja/
 ├── main.py
 ├── __app.tce
@@ -419,41 +439,37 @@ if __name__ == '__main__':
 │       └── LC_MESSAGES/
 │           ├── messages.po
 │           └── messages.mo
-└── translation.py
-</code></pre>
+└── translation.py</code></pre>
 
-<h3 id="plik-translationpy">Plik translation.py</h3>
-
-<pre><code>import gettext
+<h3>Plik translation.py</h3>
+<pre><code class="language-python">import gettext
 import os
 
 def setup_translation():
-    """Konfiguruje tłumaczenia dla aplikacji"""
+    &quot;&quot;&quot;Konfiguruje tłumaczenia dla aplikacji&quot;&quot;&quot;
     # Pobierz język z zmiennej środowiskowej ustawionej przez Titan
-    lang = os.environ.get('LANG', 'pl')
-
-    domain = 'messages'
-    localedir = os.path.join(os.path.dirname(__file__), 'languages')
-
+    lang = os.environ.get(&#x27;LANG&#x27;, &#x27;pl&#x27;)
+    
+    domain = &#x27;messages&#x27;
+    localedir = os.path.join(os.path.dirname(__file__), &#x27;languages&#x27;)
+    
     try:
         translation = gettext.translation(domain, localedir, languages=[lang], fallback=True)
         translation.install()
         return translation.gettext
     except Exception as e:
-        print(f"Błąd konfiguracji tłumaczeń: {e}")
+        print(f&quot;Błąd konfiguracji tłumaczeń: {e}&quot;)
         return lambda x: x
 
 # Użycie w aplikacji
 _ = setup_translation()
 
 # W kodzie aplikacji
-title = _("My Application")
-message = _("Hello, world!")
-</code></pre>
+title = _(&quot;My Application&quot;)
+message = _(&quot;Hello, world!&quot;)</code></pre>
 
-<h3 id="polecenia-babel">Polecenia babel</h3>
-
-<pre><code># Wyciągnij teksty do tłumaczenia
+<h3>Polecenia babel</h3>
+<pre><code class="language-bash"># Wyciągnij teksty do tłumaczenia
 pybabel extract -o languages/messages.pot --input-dirs=.
 
 # Utwórz pliki tłumaczeń
@@ -465,14 +481,12 @@ pybabel update -l pl -d languages -i languages/messages.pot
 pybabel update -l en -d languages -i languages/messages.pot
 
 # Skompiluj tłumaczenia
-pybabel compile -d languages
-</code></pre>
+pybabel compile -d languages</code></pre>
 
-<h2 id="przykłady-aplikacji">Przykłady aplikacji</h2>
+<h2>Przykłady aplikacji</h2>
 
-<h3 id="przykład-1-prosty-edytor-tekstu">Przykład 1: Prosty edytor tekstu</h3>
-
-<pre><code>#!/usr/bin/env python3
+<h3>Przykład 1: Prosty edytor tekstu</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import wx
@@ -480,68 +494,68 @@ import os
 
 class TextEditorFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="Edytor tekstu", size=(600, 400))
+        super().__init__(None, title=&quot;Edytor tekstu&quot;, size=(600, 400))
         self.current_file = None
         self.InitUI()
         self.Center()
-
+        
     def InitUI(self):
         # Menu
         menubar = wx.MenuBar()
-
+        
         file_menu = wx.Menu()
-        file_menu.Append(wx.ID_NEW, "&amp;Nowy\tCtrl+N")
-        file_menu.Append(wx.ID_OPEN, "&amp;Otwórz\tCtrl+O")
-        file_menu.Append(wx.ID_SAVE, "&amp;Zapisz\tCtrl+S")
+        file_menu.Append(wx.ID_NEW, &quot;&amp;Nowy\tCtrl+N&quot;)
+        file_menu.Append(wx.ID_OPEN, &quot;&amp;Otwórz\tCtrl+O&quot;)
+        file_menu.Append(wx.ID_SAVE, &quot;&amp;Zapisz\tCtrl+S&quot;)
         file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_EXIT, "&amp;Wyjście\tCtrl+Q")
-
-        menubar.Append(file_menu, "&amp;Plik")
+        file_menu.Append(wx.ID_EXIT, &quot;&amp;Wyjście\tCtrl+Q&quot;)
+        
+        menubar.Append(file_menu, &quot;&amp;Plik&quot;)
         self.SetMenuBar(menubar)
-
+        
         # Obszar tekstu
         self.text_ctrl = wx.TextCtrl(self, style=wx.TE_MULTILINE)
-
+        
         # Pasek stanu
         self.statusbar = self.CreateStatusBar()
-        self.statusbar.SetStatusText("Gotowy")
-
+        self.statusbar.SetStatusText(&quot;Gotowy&quot;)
+        
         # Zdarzenia
         self.Bind(wx.EVT_MENU, self.OnNew, id=wx.ID_NEW)
         self.Bind(wx.EVT_MENU, self.OnOpen, id=wx.ID_OPEN)
         self.Bind(wx.EVT_MENU, self.OnSave, id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self.OnExit, id=wx.ID_EXIT)
-
+        
     def OnNew(self, event):
         self.text_ctrl.Clear()
         self.current_file = None
-        self.SetTitle("Edytor tekstu - Nowy dokument")
-
+        self.SetTitle(&quot;Edytor tekstu - Nowy dokument&quot;)
+        
     def OnOpen(self, event):
-        dlg = wx.FileDialog(self, "Otwórz plik", wildcard="Pliki tekstowe (*.txt)|*.txt")
+        dlg = wx.FileDialog(self, &quot;Otwórz plik&quot;, wildcard=&quot;Pliki tekstowe (*.txt)|*.txt&quot;)
         if dlg.ShowModal() == wx.ID_OK:
             self.current_file = dlg.GetPath()
-            with open(self.current_file, 'r', encoding='utf-8') as f:
+            with open(self.current_file, &#x27;r&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                 self.text_ctrl.SetValue(f.read())
-            self.SetTitle(f"Edytor tekstu - {os.path.basename(self.current_file)}")
+            self.SetTitle(f&quot;Edytor tekstu - {os.path.basename(self.current_file)}&quot;)
         dlg.Destroy()
-
+        
     def OnSave(self, event):
         if self.current_file:
-            with open(self.current_file, 'w', encoding='utf-8') as f:
+            with open(self.current_file, &#x27;w&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                 f.write(self.text_ctrl.GetValue())
-            self.statusbar.SetStatusText("Plik zapisany")
+            self.statusbar.SetStatusText(&quot;Plik zapisany&quot;)
         else:
             self.OnSaveAs(event)
-
+            
     def OnSaveAs(self, event):
-        dlg = wx.FileDialog(self, "Zapisz plik", wildcard="Pliki tekstowe (*.txt)|*.txt", 
+        dlg = wx.FileDialog(self, &quot;Zapisz plik&quot;, wildcard=&quot;Pliki tekstowe (*.txt)|*.txt&quot;, 
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
             self.current_file = dlg.GetPath()
             self.OnSave(event)
         dlg.Destroy()
-
+        
     def OnExit(self, event):
         self.Close()
 
@@ -549,26 +563,24 @@ class TextEditorApp(wx.App):
     def OnInit(self):
         frame = TextEditorFrame()
         frame.Show()
-
+        
         # Sprawdź czy przekazano plik do otwarcia
         if len(sys.argv) &gt; 1:
             file_path = sys.argv[1]
             if os.path.exists(file_path):
                 frame.current_file = file_path
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, &#x27;r&#x27;, encoding=&#x27;utf-8&#x27;) as f:
                     frame.text_ctrl.SetValue(f.read())
-                frame.SetTitle(f"Edytor tekstu - {os.path.basename(file_path)}")
-
+                frame.SetTitle(f&quot;Edytor tekstu - {os.path.basename(file_path)}&quot;)
+        
         return True
 
-if __name__ == '__main__':
+if __name__ == &#x27;__main__&#x27;:
     app = TextEditorApp()
-    app.MainLoop()
-</code></pre>
+    app.MainLoop()</code></pre>
 
-<h3 id="przykład-2-kalkulator">Przykład 2: Kalkulator</h3>
-
-<pre><code>#!/usr/bin/env python3
+<h3>Przykład 2: Kalkulator</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import wx
@@ -576,31 +588,31 @@ import math
 
 class CalculatorFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="Kalkulator", style=wx.DEFAULT_FRAME_STYLE &amp; ~wx.RESIZE_BORDER)
+        super().__init__(None, title=&quot;Kalkulator&quot;, style=wx.DEFAULT_FRAME_STYLE &amp; ~wx.RESIZE_BORDER)
         self.InitUI()
         self.Center()
-        self.current_value = "0"
+        self.current_value = &quot;0&quot;
         self.previous_value = None
         self.operation = None
-
+        
     def InitUI(self):
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
-
+        
         # Wyświetlacz
-        self.display = wx.TextCtrl(panel, value="0", style=wx.TE_RIGHT | wx.TE_READONLY)
+        self.display = wx.TextCtrl(panel, value=&quot;0&quot;, style=wx.TE_RIGHT | wx.TE_READONLY)
         self.display.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         vbox.Add(self.display, 0, wx.EXPAND | wx.ALL, 5)
-
+        
         # Przyciski
         button_data = [
-            ['C', 'CE', '←', '/'],
-            ['7', '8', '9', '*'],
-            ['4', '5', '6', '-'],
-            ['1', '2', '3', '+'],
-            ['±', '0', '.', '=']
+            [&#x27;C&#x27;, &#x27;CE&#x27;, &#x27;←&#x27;, &#x27;/&#x27;],
+            [&#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;, &#x27;*&#x27;],
+            [&#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;-&#x27;],
+            [&#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;+&#x27;],
+            [&#x27;±&#x27;, &#x27;0&#x27;, &#x27;.&#x27;, &#x27;=&#x27;]
         ]
-
+        
         for row in button_data:
             hbox = wx.BoxSizer(wx.HORIZONTAL)
             for label in row:
@@ -608,98 +620,98 @@ class CalculatorFrame(wx.Frame):
                 btn.Bind(wx.EVT_BUTTON, self.OnButtonClick)
                 hbox.Add(btn, 0, wx.ALL, 2)
             vbox.Add(hbox, 0, wx.CENTER)
-
+            
         panel.SetSizer(vbox)
         self.Fit()
-
+        
     def OnButtonClick(self, event):
         label = event.GetEventObject().GetLabel()
-
+        
         if label.isdigit():
             self.OnNumber(label)
-        elif label == '.':
+        elif label == &#x27;.&#x27;:
             self.OnDecimal()
-        elif label in ['+', '-', '*', '/']:
+        elif label in [&#x27;+&#x27;, &#x27;-&#x27;, &#x27;*&#x27;, &#x27;/&#x27;]:
             self.OnOperation(label)
-        elif label == '=':
+        elif label == &#x27;=&#x27;:
             self.OnEquals()
-        elif label == 'C':
+        elif label == &#x27;C&#x27;:
             self.OnClear()
-        elif label == 'CE':
+        elif label == &#x27;CE&#x27;:
             self.OnClearEntry()
-        elif label == '←':
+        elif label == &#x27;←&#x27;:
             self.OnBackspace()
-        elif label == '±':
+        elif label == &#x27;±&#x27;:
             self.OnPlusMinus()
-
+            
     def OnNumber(self, digit):
-        if self.current_value == "0":
+        if self.current_value == &quot;0&quot;:
             self.current_value = digit
         else:
             self.current_value += digit
         self.UpdateDisplay()
-
+        
     def OnDecimal(self):
-        if '.' not in self.current_value:
-            self.current_value += '.'
+        if &#x27;.&#x27; not in self.current_value:
+            self.current_value += &#x27;.&#x27;
         self.UpdateDisplay()
-
+        
     def OnOperation(self, op):
         if self.operation and self.previous_value:
             self.OnEquals()
         self.previous_value = float(self.current_value)
         self.operation = op
-        self.current_value = "0"
-
+        self.current_value = &quot;0&quot;
+        
     def OnEquals(self):
         if self.operation and self.previous_value is not None:
             current = float(self.current_value)
             try:
-                if self.operation == '+':
+                if self.operation == &#x27;+&#x27;:
                     result = self.previous_value + current
-                elif self.operation == '-':
+                elif self.operation == &#x27;-&#x27;:
                     result = self.previous_value - current
-                elif self.operation == '*':
+                elif self.operation == &#x27;*&#x27;:
                     result = self.previous_value * current
-                elif self.operation == '/':
+                elif self.operation == &#x27;/&#x27;:
                     if current != 0:
                         result = self.previous_value / current
                     else:
-                        wx.MessageBox("Nie można dzielić przez zero!", "Błąd", wx.OK | wx.ICON_ERROR)
+                        wx.MessageBox(&quot;Nie można dzielić przez zero!&quot;, &quot;Błąd&quot;, wx.OK | wx.ICON_ERROR)
                         return
-
+                        
                 self.current_value = str(result)
                 self.UpdateDisplay()
                 self.operation = None
                 self.previous_value = None
             except Exception as e:
-                wx.MessageBox(f"Błąd obliczeń: {e}", "Błąd", wx.OK | wx.ICON_ERROR)
-
+                wx.MessageBox(f&quot;Błąd obliczeń: {e}&quot;, &quot;Błąd&quot;, wx.OK | wx.ICON_ERROR)
+                
     def OnClear(self):
-        self.current_value = "0"
+        self.current_value = &quot;0&quot;
         self.previous_value = None
         self.operation = None
         self.UpdateDisplay()
-
+        
     def OnClearEntry(self):
-        self.current_value = "0"
+        self.current_value = &quot;0&quot;
         self.UpdateDisplay()
-
+        
     def OnBackspace(self):
         if len(self.current_value) &gt; 1:
             self.current_value = self.current_value[:-1]
         else:
-            self.current_value = "0"
+            self.current_value = &quot;0&quot;
         self.UpdateDisplay()
-
+        
     def OnPlusMinus(self):
-        if self.current_value != "0":
-            if self.current_value.startswith("-"):
+        if self.current_value != &quot;0&quot;:
+            if self.current_value.startswith(&quot;-&quot;):
                 self.current_value = self.current_value[1:]
             else:
-                self.current_value = "-" + self.current_value
+                self.current_value = &quot;-&quot; + self.current_value
         self.UpdateDisplay()
-
+        
     def UpdateDisplay(self):
         # Formatuj wyświetlanie liczb
         try:
@@ -710,7 +722,7 @@ class CalculatorFrame(wx.Frame):
                 display_text = self.current_value
         except:
             display_text = self.current_value
-
+            
         self.display.SetValue(display_text)
 
 class CalculatorApp(wx.App):
@@ -719,69 +731,62 @@ class CalculatorApp(wx.App):
         frame.Show()
         return True
 
-if __name__ == '__main__':
+if __name__ == &#x27;__main__&#x27;:
     app = CalculatorApp()
-    app.MainLoop()
-</code></pre>
+    app.MainLoop()</code></pre>
 
-<h2 id="aplikacje-konsolowe">Aplikacje konsolowe</h2>
+<h2>Aplikacje konsolowe</h2>
 
 <p>Możesz też tworzyć aplikacje konsolowe:</p>
 
-<pre><code>#!/usr/bin/env python3
+<pre><code class="language-python">#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import sys
 import os
 
 def main():
-    print("=== Moja aplikacja konsolowa ===")
-
+    print(&quot;=== Moja aplikacja konsolowa ===&quot;)
+    
     if len(sys.argv) &gt; 1:
-        print(f"Otrzymane argumenty: {sys.argv[1:]}")
-
+        print(f&quot;Otrzymane argumenty: {sys.argv[1:]}&quot;)
+    
     while True:
-        command = input("Wpisz polecenie (help/exit): ").strip().lower()
-
-        if command == "exit":
+        command = input(&quot;Wpisz polecenie (help/exit): &quot;).strip().lower()
+        
+        if command == &quot;exit&quot;:
             break
-        elif command == "help":
-            print("Dostępne polecenia:")
-            print("- help: pokazuje tę pomoc")
-            print("- exit: kończy program")
+        elif command == &quot;help&quot;:
+            print(&quot;Dostępne polecenia:&quot;)
+            print(&quot;- help: pokazuje tę pomoc&quot;)
+            print(&quot;- exit: kończy program&quot;)
         else:
-            print(f"Nieznane polecenie: {command}")
+            print(f&quot;Nieznane polecenie: {command}&quot;)
+    
+    print(&quot;Koniec programu&quot;)
 
-    print("Koniec programu")
+if __name__ == &#x27;__main__&#x27;:
+    main()</code></pre>
 
-if __name__ == '__main__':
-    main()
-</code></pre>
-
-<h2 id="aplikacje-wykonywalne-exe">Aplikacje wykonywalne (.exe)</h2>
+<h2>Aplikacje wykonywalne (.exe)</h2>
 
 <p>Możesz także używać skompilowanych aplikacji:</p>
 
-<p><strong>__app.tce:</strong></p>
-
+<p><strong>__app.tce:</strong>
 <pre><code>name_pl=Moja aplikacja
 name_en=My Application
-openfile=myapp.exe
-</code></pre>
+openfile=myapp.exe</code></pre></p>
 
-<h2 id="testowanie-aplikacji">Testowanie aplikacji</h2>
+<h2>Testowanie aplikacji</h2>
 
-<ol>
 <li>Utwórz katalog w <code>data/applications/nazwa_aplikacji/</code></li>
 <li>Dodaj <code>__app.tce</code> i główny plik aplikacji</li>
 <li>Uruchom Titan</li>
 <li>Sprawdź czy aplikacja pojawia się w kategorii "Aplikacje"</li>
 <li>Przetestuj uruchamianie i funkcjonalność</li>
-</ol>
 
-<h2 id="najwazniejsze-wskazowki">Najważniejsze wskazówki</h2>
+<h2>Najważniejsze wskazówki</h2>
 
-<ol>
 <li><strong>Zawsze dodaj plik __app.tce</strong> - bez niego aplikacja nie będzie widoczna</li>
 <li><strong>Testuj z argumentami</strong> - aplikacje mogą otrzymywać pliki do otwarcia</li>
 <li><strong>Używaj tłumaczeń</strong> - dodaj wielojęzyczność dla lepszej dostępności</li>
@@ -789,9 +794,8 @@ openfile=myapp.exe
 <li><strong>Optymalizuj rozmiar</strong> - usuń niepotrzebne pliki z katalogu aplikacji</li>
 <li><strong>Dokumentuj ustawienia</strong> - jeśli używasz settings, opisz opcje</li>
 <li><strong>Testuj kompilację</strong> - pliki .py są automatycznie kompilowane do .pyc</li>
-</ol>
 
-<h2 id="struktura-katalogow">Struktura katalogów</h2>
+<h2>Struktura katalogów</h2>
 
 <pre><code>data/applications/moja_aplikacja/
 ├── __app.tce           # Konfiguracja aplikacji (wymagane)
@@ -807,11 +811,9 @@ openfile=myapp.exe
 │   └── data/
 ├── modules/            # Dodatkowe moduły (opcjonalnie)
 │   └── helpers.py
-└── translation.py      # Obsługa tłumaczeń (opcjonalnie)
-</code></pre>
+└── translation.py      # Obsługa tłumaczeń (opcjonalnie)</code></pre>
 
 <p>Aplikacje Titan zapewniają prostą platformę do tworzenia niezależnych programów z dostępem do funkcjonalności launchera i pełnym wsparciem dla internacjonalizacji.</p>
-
             <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
         </main>
     </div>

@@ -9,9 +9,16 @@ from src.network.telegram_client import (
     get_group_chat_history, is_connected, get_user_data,
     start_voice_call, is_call_active, is_voice_calls_available
 )
-from src.titan_core.sound import play_sound
+from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
+
+# Guarantee the pygame mixer is initialized even when Telegram is opened
+# from a context where the main TCE GUI never ran (launcher mode, etc.).
+try:
+    initialize_sound()
+except Exception as _e:
+    print(f"[Telegram GUI] initialize_sound() failed at import: {_e}")
 
 try:
     from src.titan_core.stereo_speech import speak_stereo, get_stereo_speech
@@ -335,8 +342,23 @@ class TelegramChatWindow(wx.Frame):
             event.Skip()
 
     def play_focus_sound(self):
-        """Play focus sound when navigating"""
-        play_sound('core/focus.ogg')
+        """Play focus sound when navigating, with stereo pan matching main TCE GUI.
+
+        Pan is calculated from the current selection position (0.0 = far left,
+        1.0 = far right). When stereo is disabled in settings, play_sound
+        ignores the pan argument automatically.
+        """
+        try:
+            count = self.main_list.GetCount()
+            selection = self.main_list.GetSelection()
+        except Exception:
+            count = 0
+            selection = wx.NOT_FOUND
+
+        pan = 0.5
+        if count > 1 and selection != wx.NOT_FOUND:
+            pan = selection / (count - 1)
+        play_sound('core/FOCUS.ogg', pan=pan)
 
     def on_item_activated(self, event):
         """Handle item activation (double-click)"""
@@ -483,6 +505,10 @@ class TelegramChatWindow(wx.Frame):
         if msg_type != 'new_message':
             return
 
+        # Respect Telegram per-chat mute settings
+        if message_data.get('muted'):
+            return
+
         sender = message_data.get('sender_username', '')
         message = message_data.get('message', '')
         is_group = message_data.get('is_group', False)
@@ -508,7 +534,9 @@ class TelegramChatWindow(wx.Frame):
 
             if len(text) > 120:
                 text = text[:120] + "..."
-            speak_telegram(text, position=-0.3, pitch_offset=-2, interrupt=False)
+            # interrupt=True so Ctrl (screen reader silence key) can stop
+            # chained announcements instead of queueing them indefinitely.
+            speak_telegram(text, position=-0.3, pitch_offset=-2, interrupt=True)
 
         wx.CallAfter(do_notify)
 
@@ -567,6 +595,12 @@ class TelegramChatWindow(wx.Frame):
                 # Just hide the window (minimize to background)
                 print("[TELEGRAM GUI] Hiding window (staying connected)")
                 self.Hide()
+                # Unregister from window switcher while hidden
+                try:
+                    from src.ui.window_switcher import unregister_window
+                    unregister_window("Telegram")
+                except Exception:
+                    pass
                 # Veto the close event to prevent destruction
                 if event.CanVeto():
                     event.Veto()
@@ -577,7 +611,13 @@ class TelegramChatWindow(wx.Frame):
             event.Skip()
 
 def show_telegram_login(parent=None):
-    """Show Telegram login dialog"""
+    """Show Telegram login dialog and open the chat window on success.
+
+    Works with any parent (TitanApp main GUI, Klango's hidden frame,
+    Invisible UI host, launcher settings_frame, or None). The chat
+    window is explicitly Raised so it becomes visible even when the
+    caller's own window is hidden.
+    """
     login_dialog = TelegramLoginDialog(parent)
 
     if login_dialog.ShowModal() == wx.ID_OK:
@@ -588,9 +628,22 @@ def show_telegram_login(parent=None):
             print(f"[TELEGRAM GUI] Connecting with phone: {phone_number}")
             # Connect to Telegram
             if connect_to_server(phone_number, password):
-                # Wait for connection (up to 30 seconds for verification code input)
-                max_wait = 300  # 30 seconds
+                # Wait for connection. Telethon may need to prompt for an SMS
+                # verification code or 2FA password — those dialogs are
+                # scheduled via wx.CallAfter from the background thread, so
+                # the main thread MUST keep pumping events while waiting,
+                # otherwise the dialogs never show, the user can't enter the
+                # code, Windows declares "not responding", and after 30s
+                # the connect bails out with "failed to authenticate".
+                # Bumped to 120s so users on slow SMS delivery still finish.
+                max_wait = 1200  # 120 seconds, polled every 100ms
+                app = wx.GetApp()
                 while max_wait > 0 and not is_connected():
+                    if app is not None:
+                        try:
+                            app.Yield(onlyIfNeeded=True)
+                        except Exception:
+                            pass
                     time.sleep(0.1)
                     max_wait -= 1
 
@@ -605,8 +658,28 @@ def show_telegram_login(parent=None):
 
                     print(f"[TELEGRAM GUI] Connected as: {username}")
                     # Show chat window
-                    chat_window = TelegramChatWindow(parent, username)
-                    chat_window.Show()
+                    try:
+                        chat_window = TelegramChatWindow(parent, username)
+                    except Exception as e:
+                        print(f"[TELEGRAM GUI] Failed to create chat window: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        wx.MessageBox(
+                            _("Error opening Telegram chat window.\nError: {error}").format(error=str(e)),
+                            _("Error"), wx.OK | wx.ICON_ERROR,
+                        )
+                        return None
+                    try:
+                        chat_window.Show()
+                        chat_window.Raise()
+                    except Exception as e:
+                        print(f"[TELEGRAM GUI] Failed to show chat window: {e}")
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("Telegram", window=chat_window,
+                                        category='messenger')
+                    except Exception:
+                        pass
                     return chat_window
                 else:
                     wx.MessageBox(_("Failed to connect to Telegram. Check your phone number and try again."), _("Connection error"), wx.OK | wx.ICON_ERROR)

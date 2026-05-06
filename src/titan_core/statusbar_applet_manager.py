@@ -113,6 +113,19 @@ class StatusbarAppletManager:
             print(f"Error reading applet.json for '{applet_name}': {e}")
             return
 
+        # Add applet's library paths for bundled dependencies
+        # Config: "libs": ["lib", "vendor"] in applet.json
+        # Default: lib/ if exists, plus the applet directory itself
+        _lib_dirs = metadata.get("libs", ["lib"])
+        if isinstance(_lib_dirs, str):
+            _lib_dirs = [d.strip() for d in _lib_dirs.split(",") if d.strip()]
+        for _ld in _lib_dirs:
+            _full_lib = os.path.join(applet_dir, _ld)
+            if os.path.isdir(_full_lib) and _full_lib not in sys.path:
+                sys.path.insert(0, _full_lib)
+        if applet_dir not in sys.path:
+            sys.path.insert(0, applet_dir)
+
         # Load Python module
         try:
             spec = importlib.util.spec_from_file_location(

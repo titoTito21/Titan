@@ -14,6 +14,7 @@ from src.settings.settings import get_setting
 from src.titan_core.translation import set_language
 from src.system.com_fix import com_safe, init_com_safe
 from src.titan_core.stereo_speech import get_stereo_speech
+from src.platform_utils import get_subprocess_kwargs, IS_WINDOWS
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -532,7 +533,8 @@ class NetworkMonitor(threading.Thread):
             result = subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
                 capture_output=True, text=True,
-                encoding='utf-8', errors='replace', timeout=5
+                encoding='utf-8', errors='replace', timeout=5,
+                **get_subprocess_kwargs()
             )
             for line in result.stdout.splitlines():
                 line = line.strip()

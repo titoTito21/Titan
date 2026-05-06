@@ -28,6 +28,7 @@ from src.ui.shutdown_question import show_shutdown_dialog
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 from src.ui.classic_start_menu import create_classic_start_menu
 from src.ui.help import show_help
+from src.ui.window_switcher import show_window_switcher, register_window, unregister_window
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification
@@ -68,6 +69,29 @@ try:
 except Exception as _e:
     print(f"Warning: Could not initialize accessible_output3 in gui: {_e}")
     speaker = _SilentSpeaker()
+
+
+def _is_screen_reader_running():
+    """Return True only when a real screen reader (NVDA, JAWS, VoiceOver, Orca...) is active.
+
+    Platform TTS fallbacks (SAPI, NSSpeech, spd) don't count as a screen reader.
+    """
+    try:
+        auto_speaker = speaker
+        if isinstance(auto_speaker, _SilentSpeaker):
+            return False
+        output = auto_speaker.get_first_available_output()
+        if output is None:
+            return False
+        if output.is_system_output():
+            return False
+        is_active = getattr(output, 'is_active', None)
+        if callable(is_active):
+            return bool(is_active())
+        return True
+    except Exception:
+        return False
+
 
 class TaskBarIcon(wx.adv.TaskBarIcon):
     def __init__(self, frame, version, skin_data):
@@ -176,7 +200,7 @@ class TitanApp(wx.Frame):
             self.call_window = None
 
             # Titan-Net Client - hardcoded to titosofttitan.com
-            from src.network.titan_net import TitanNetClient
+            from src.network.titan_net import TitanNetClient, register_active_titan_net_client
             self.titan_client = TitanNetClient(
                 server_host='titosofttitan.com',
                 server_port=8001,
@@ -184,6 +208,9 @@ class TitanApp(wx.Frame):
             )
             self.titan_logged_in = False
             self.titan_username = None
+            # Publish this client so IUI / Klango / launcher frontends
+            # can find it without reaching through the main GUI.
+            register_active_titan_net_client(self.titan_client, logged_in=False)
             
             # Debouncing for mouse motion sounds
             self.last_statusbar_sound_time = 0
@@ -192,10 +219,18 @@ class TitanApp(wx.Frame):
             # Flag to skip focus sound during expand/collapse/endoflist
             self._skip_focus_sound = False
 
+            # Startup guard: suppress the very first focus/list-item sound that
+            # would otherwise fire while the UI is still being constructed.
+            # Cleared shortly after InitUI finishes (see end of InitUI).
+            self._startup_sound_guard = True
+
             # Status cache to prevent GUI blocking
+            # Check if battery is available (desktops return None)
+            _initial_battery = get_battery_status()
+            self.has_battery = _initial_battery is not None
             self.status_cache = {
                 'time': get_current_time(),
-                'battery': 'Loading...',
+                'battery': _initial_battery if self.has_battery else None,
                 'volume': 'Loading...',
                 'network': 'Loading...'
             }
@@ -257,6 +292,10 @@ class TitanApp(wx.Frame):
                     self.apply_selected_skin()
                     self.show_app_list()
                     print("[GUI] UI initialization complete")
+                    # Register main window in the window switcher
+                    register_window("Titan", window=self, callback=self._focus_current_view_control, category='main')
+                    # Register global F2 hotkey for window switcher (works from TCE apps)
+                    self._register_global_f2_hotkey()
                     # macOS: ensure the window is brought to the foreground so
                     # VoiceOver can detect it immediately after launch
                     if IS_MACOS:
@@ -380,16 +419,15 @@ class TitanApp(wx.Frame):
 
         empty_bitmap = wx.Bitmap(1, 1)
 
-        self.tool_apps = self.toolbar.AddTool(wx.ID_ANY, _("Application List"), empty_bitmap, shortHelp=_("Show application list"))
-        self.tool_games = self.toolbar.AddTool(wx.ID_ANY, _("Game List"), empty_bitmap, shortHelp=_("Show game list"))
-        self.tool_network = self.toolbar.AddTool(wx.ID_ANY, _("Titan IM"), empty_bitmap, shortHelp=_("Show Titan IM"))
+        # Toolbar buttons are built dynamically from registered_views below so
+        # component-registered views (e.g. macros) also appear as toolbar items.
+        self._view_tools = {}  # view_id -> wx.ToolBarToolBase
 
-        self.toolbar.Realize()
-
-        self.Bind(wx.EVT_TOOL, self.on_show_apps, self.tool_apps)
-        self.Bind(wx.EVT_TOOL, self.on_show_games, self.tool_games)
-        self.Bind(wx.EVT_TOOL, self.on_show_network, self.tool_network)
-
+        # Virtual tab bar is injected as the FIRST ITEM inside each list
+        # (app_listbox, game_tree, network_listbox, component listboxes).
+        # See _get_tab_bar_item_text / handle_navigation for the behaviour.
+        self.tab_bar = None  # legacy attribute, kept for back-compat
+        self._tab_bar_tip_active = False
 
         self.list_label = wx.StaticText(panel, label=_("Application List:"))
         main_vbox.Add(self.list_label, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
@@ -469,11 +507,30 @@ class TitanApp(wx.Frame):
         main_vbox.Add(list_sizer, proportion=1, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
 
         # View registry for Ctrl+Tab cycling (built-in views + component views)
-        self.registered_views = [
-            {'id': 'apps', 'label': _("Application List:"), 'control': self.app_listbox, 'show_method': self.show_app_list},
-            {'id': 'games', 'label': _("Game List:"), 'control': self.game_tree, 'show_method': self.show_game_list},
-            {'id': 'network', 'label': _("Titan IM:"), 'control': self.network_listbox, 'show_method': self.show_network_list},
+        all_views = [
+            {'id': 'apps', 'label': _("Application List:"), 'short_name': _("Applications"),
+             'control': self.app_listbox, 'show_method': self.show_app_list},
+            {'id': 'games', 'label': _("Game List:"), 'short_name': _("Games"),
+             'control': self.game_tree, 'show_method': self.show_game_list},
+            {'id': 'network', 'label': _("Titan IM:"), 'short_name': _("Titan IM"),
+             'control': self.network_listbox, 'show_method': self.show_network_list},
         ]
+
+        # Filter views by visible_categories setting
+        visible_cats_str = get_setting('visible_categories', 'apps,games,network')
+        visible_cats = [c.strip() for c in visible_cats_str.split(',')] if visible_cats_str else ['apps', 'games', 'network']
+        self.registered_views = [v for v in all_views if v['id'] in visible_cats]
+
+        # Hide controls for excluded views
+        for v in all_views:
+            if v['id'] not in visible_cats:
+                v['control'].Hide()
+
+        # Build toolbar entries for all visible views (no more "Switch To" button;
+        # component views get their own toolbar buttons via register_view()).
+        for view in self.registered_views:
+            self._add_toolbar_tool(view)
+        self.toolbar.Realize()
 
         main_vbox.Add(wx.StaticText(panel, label=_("Status Bar:")), flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
@@ -513,6 +570,13 @@ class TitanApp(wx.Frame):
         # macOS: configure VoiceOver accessibility names for all controls
         if IS_MACOS:
             self._setup_macos_voiceover()
+
+        # Release the startup sound guard shortly after initial paint so any
+        # subsequent user-driven focus/list-item sounds play normally.
+        wx.CallLater(800, self._end_startup_sound_guard)
+
+    def _end_startup_sound_guard(self):
+        self._startup_sound_guard = False
 
     def _activate_macos_window(self):
         """Bring the window to the foreground on macOS so VoiceOver detects it."""
@@ -790,6 +854,8 @@ class TitanApp(wx.Frame):
         self.app_listbox.Clear()
         for app in applications:
             self.app_listbox.Append(app.get("name", _("Unknown App")), clientData=app)
+        # Virtual tab bar row is always the first item
+        self._inject_tab_bar_into_listbox(self.app_listbox)
 
 
     def populate_game_list(self):
@@ -831,14 +897,18 @@ class TitanApp(wx.Frame):
         for platform_node in self.game_platform_nodes.values():
             self.game_tree.Expand(platform_node)
 
+        # Virtual tab bar row is always the first child of the invisible root
+        self._inject_tab_bar_into_tree(self.game_tree)
+
 
     def populate_statusbar(self):
         """Populate statusbar with cached data including applets to avoid blocking GUI."""
         self.statusbar_listbox.Clear()
         with self.status_cache_lock:
-            # Standard status items
+            # Standard status items (skip battery on desktops)
             self.statusbar_listbox.Append(_("Clock: {}").format(self.status_cache['time']))
-            self.statusbar_listbox.Append(_("Battery level: {}").format(self.status_cache['battery']))
+            if self.has_battery:
+                self.statusbar_listbox.Append(_("Battery level: {}").format(self.status_cache['battery']))
             self.statusbar_listbox.Append(_("Volume: {}").format(self.status_cache['volume']))
             self.statusbar_listbox.Append(self.status_cache['network'])
 
@@ -858,17 +928,24 @@ class TitanApp(wx.Frame):
         else:
             # Normal status bar update for GUI mode - read from cache
             with self.status_cache_lock:
-                # Update standard items
-                self.statusbar_listbox.SetString(0, _("Clock: {}").format(self.status_cache['time']))
-                self.statusbar_listbox.SetString(1, _("Battery level: {}").format(self.status_cache['battery']))
-                self.statusbar_listbox.SetString(2, _("Volume: {}").format(self.status_cache['volume']))
-                self.statusbar_listbox.SetString(3, self.status_cache['network'])
+                # Update standard items (indices depend on has_battery)
+                idx = 0
+                self.statusbar_listbox.SetString(idx, _("Clock: {}").format(self.status_cache['time']))
+                idx += 1
+                if self.has_battery:
+                    self.statusbar_listbox.SetString(idx, _("Battery level: {}").format(self.status_cache['battery']))
+                    idx += 1
+                self.statusbar_listbox.SetString(idx, _("Volume: {}").format(self.status_cache['volume']))
+                idx += 1
+                self.statusbar_listbox.SetString(idx, self.status_cache['network'])
+                idx += 1
+                standard_items_count = idx
 
                 # Update applet items
                 if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
                     applet_names = self.statusbar_applet_manager.get_applet_names()
                     for i, applet_name in enumerate(applet_names):
-                        index = 4 + i  # Applets start after 4 standard items
+                        index = standard_items_count + i
                         applet_text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
                         # Check if index exists (in case applets were added after initial populate)
                         if index < self.statusbar_listbox.GetCount():
@@ -882,8 +959,8 @@ class TitanApp(wx.Frame):
         if selection == wx.NOT_FOUND:
             return
 
-        # Indices of applets start after standard items (4: Clock, Battery, Volume, Network)
-        standard_items_count = 4
+        # Indices of applets start after standard items (3 or 4 depending on battery)
+        standard_items_count = 4 if self.has_battery else 3
         if selection >= standard_items_count:
             # This is an applet item
             applet_index = selection - standard_items_count
@@ -946,6 +1023,20 @@ class TitanApp(wx.Frame):
             self._skip_focus_sound = False
             return
 
+        # Tab bar row: play the characteristic ui/tapbar.ogg earcon and
+        # speak "Tab bar" (SR-only) — same affordance as the listbox views,
+        # routed through src.accessibility.messages so the string lives in
+        # the accessibility translation domain. Skip the regular text speech
+        # below: the tree itself already reads "Name, N of M" natively.
+        if isinstance(item_data, dict) and item_data.get('type') == 'tab_bar':
+            if not getattr(self, '_suppress_tab_bar_nav_speech', False):
+                self._announce_tab_bar()
+                self._schedule_tab_bar_tip()
+            return
+
+        # Selection moved off the tab bar row — cancel any pending tip.
+        self._cancel_tab_bar_tip()
+
         # Announce selection with type information for screen readers
         text = self.game_tree.GetItemText(item)
 
@@ -961,11 +1052,14 @@ class TitanApp(wx.Frame):
             elif item_type == 'game':
                 text = f"{text}, {_('game')}"
 
-        try:
-            from src.titan_core.sound import speaker
-            speaker.speak(text, interrupt=True)  # Interrupt previous announcements for smooth navigation
-        except:
-            pass
+        # Screen readers announce tree selection changes natively; only call
+        # speaker.speak() when no SR is active (e.g., SAPI fallback) so we
+        # don't stack two voices saying the same item name.
+        if not _is_screen_reader_running():
+            try:
+                speaker.speak(text, interrupt=True)
+            except Exception:
+                pass
 
     def on_game_tree_expanded(self, event):
         """Handle game tree node expansion"""
@@ -1230,10 +1324,39 @@ class TitanApp(wx.Frame):
                 self.start_menu.toggle_menu()
                 return
 
+        # Handle F4 (Switch To) - only bare F4, not Alt+F4/Ctrl+F4/etc.
+        if keycode == wx.WXK_F4 and modifiers == wx.MOD_NONE:
+            self.on_show_window_switcher(event)
+            return
+
         # Note: Ctrl+Shift+A (AI Voice Recognition) is now a global hotkey registered in __init__
 
+        # Ctrl alone — silence any ongoing Telegram / stereo TTS announcement
+        # (screen reader convention). Long Telegram messages can chain up on
+        # the pygame-backed stereo engine, which the screen reader can't
+        # interrupt on its own.
+        if keycode == wx.WXK_CONTROL:
+            try:
+                from src.titan_core.stereo_speech import stop_stereo_speech
+                stop_stereo_speech()
+            except Exception:
+                pass
+            try:
+                from src.network import telegram_gui as _tg_gui
+                _tg_speaker = getattr(_tg_gui, '_speaker', None)
+                if _tg_speaker is not None and hasattr(_tg_speaker, 'stop'):
+                    _tg_speaker.stop()
+            except Exception:
+                pass
+            event.Skip()
+            return
+
         if keycode == wx.WXK_TAB and modifiers == wx.MOD_CONTROL:
-            self.on_toggle_list()
+            # Ctrl+Tab cycles forward through registered views.
+            self._cycle_tab_bar(+1)
+            return
+        if keycode == wx.WXK_TAB and modifiers == (wx.MOD_CONTROL | wx.MOD_SHIFT):
+            self._cycle_tab_bar(-1)
             return
 
         # Handle ESC key - return from users/contacts/group_chats list to network list
@@ -1349,34 +1472,88 @@ class TitanApp(wx.Frame):
     def handle_navigation(self, event, keycode, current_focus):
         # Handle tree navigation separately (TreeCtrl has built-in navigation)
         if current_focus == self.game_tree and self.game_tree.IsShown():
-            # Let TreeCtrl handle its own navigation, just add audio feedback
-            play_focus_sound()
+            # Tab bar row for the tree lives as the first child of the
+            # invisible root; Left/Right on it cycles views (linear).
+            if keycode in (wx.WXK_LEFT, wx.WXK_RIGHT):
+                if self._is_tab_bar_selection(self.game_tree):
+                    self._cycle_tab_bar(-1 if keycode == wx.WXK_LEFT else +1)
+                    return
+                # Left/Right on regular tree items is reserved for the tab bar
+                # — fall through to native collapse/expand only when focus is
+                # not on the tab bar row
+            # Peek the next/prev item: if it's the tab bar row, suppress the
+            # regular focus sound so on_game_tree_selection_changed can play
+            # the dedicated ui/tapbar.ogg earcon without it being masked.
+            will_land_on_tab_bar = False
+            if keycode in (wx.WXK_UP, wx.WXK_DOWN):
+                current_item = self.game_tree.GetSelection()
+                if current_item.IsOk():
+                    if keycode == wx.WXK_DOWN:
+                        next_item = self.get_next_tree_item(current_item)
+                    else:
+                        next_item = self.get_prev_tree_item(current_item)
+                    if next_item and next_item.IsOk():
+                        ndata = self.game_tree.GetItemData(next_item)
+                        if isinstance(ndata, dict) and ndata.get('type') == 'tab_bar':
+                            will_land_on_tab_bar = True
+            # Default: let TreeCtrl handle its own navigation with audio feedback
+            if not will_land_on_tab_bar:
+                play_focus_sound()
             vibrate_cursor_move()
             event.Skip()
             return
 
         target_listbox = None
+        is_registered_view = False
         if current_focus == self.app_listbox and self.app_listbox.IsShown():
             target_listbox = self.app_listbox
+            is_registered_view = True
         elif current_focus == self.network_listbox and self.network_listbox.IsShown():
             target_listbox = self.network_listbox
+            is_registered_view = True
         elif current_focus == self.users_listbox and self.users_listbox.IsShown():
             target_listbox = self.users_listbox
         elif current_focus == self.statusbar_listbox:
             target_listbox = self.statusbar_listbox
         else:
-            event.Skip()
-            return
+            # Allow registered component listboxes to use the tab bar row too
+            for view in getattr(self, 'registered_views', []):
+                ctrl = view.get('control')
+                if current_focus == ctrl and isinstance(ctrl, wx.ListBox) and ctrl.IsShown():
+                    target_listbox = ctrl
+                    is_registered_view = True
+                    break
+            if target_listbox is None:
+                event.Skip()
+                return
 
         if target_listbox:
             current_selection = target_listbox.GetSelection()
             item_count = target_listbox.GetCount()
-            
+
+            # Tab bar row lives at index 0 of every registered view listbox.
+            # Left/Right on row 0 cycles between views (linear, edge sound).
+            # Left/Right elsewhere is reserved for the tab bar — ignore.
+            if is_registered_view:
+                if current_selection == 0 and keycode == wx.WXK_LEFT:
+                    self._cycle_tab_bar(-1)
+                    return
+                if current_selection == 0 and keycode == wx.WXK_RIGHT:
+                    self._cycle_tab_bar(+1)
+                    return
+                if keycode in (wx.WXK_LEFT, wx.WXK_RIGHT):
+                    # On regular items Left/Right does nothing
+                    return
+
             new_selection = current_selection
 
-            if keycode == wx.WXK_UP or keycode == wx.WXK_LEFT:
+            if keycode == wx.WXK_UP:
                 new_selection -= 1
-            elif keycode == wx.WXK_DOWN or keycode == wx.WXK_RIGHT:
+            elif keycode == wx.WXK_DOWN:
+                new_selection += 1
+            elif keycode == wx.WXK_LEFT:
+                new_selection -= 1
+            elif keycode == wx.WXK_RIGHT:
                 new_selection += 1
             elif keycode == wx.WXK_HOME:
                 new_selection = 0
@@ -1386,10 +1563,22 @@ class TitanApp(wx.Frame):
             if new_selection >= 0 and new_selection < item_count:
                 target_listbox.SetSelection(new_selection)
                 vibrate_cursor_move()  # Add vibration for cursor movement
-                pan = 0
-                if item_count > 1:
-                    pan = new_selection / (item_count - 1)
-                play_focus_sound(pan=pan)
+                if getattr(self, '_startup_sound_guard', False):
+                    # Suppress the very first focus/list-item sound during startup
+                    return
+                if is_registered_view and new_selection == 0:
+                    # Landed on the tab bar row — play the tab bar focus sound,
+                    # start the 4-second screen-reader tip, and speak "Tab bar"
+                    # when an actual screen reader is running.
+                    self._announce_tab_bar()
+                    self._schedule_tab_bar_tip()
+                else:
+                    if is_registered_view and current_selection == 0:
+                        self._cancel_tab_bar_tip()
+                    pan = 0
+                    if item_count > 1:
+                        pan = new_selection / (item_count - 1)
+                    play_focus_sound(pan=pan)
             else:
                 play_endoflist_sound()
 
@@ -1463,54 +1652,90 @@ class TitanApp(wx.Frame):
                 print(f"WARNING: Unknown statusbar item selected: {item}")
 
 
-    def show_app_list(self):
+    def _apply_list_label_for_sr(self, visible_text):
+        """Set the StaticText list label above the current list."""
+        try:
+            self.list_label.SetLabel(visible_text)
+        except Exception as e:
+            print(f"[GUI] _apply_list_label_for_sr error: {e}")
+
+    def _with_tab_bar_nav_speech_suppressed(self):
+        """Mark the next programmatic selection/focus of the tab bar row as
+        a show/cycle (not an arrow-nav) so the tree/listbox selection
+        handler won't speak "Tab bar". The flag auto-clears on the next
+        idle tick via ``wx.CallAfter``."""
+        self._suppress_tab_bar_nav_speech = True
+        try:
+            wx.CallAfter(self._clear_suppress_tab_bar_nav_speech)
+        except Exception:
+            self._suppress_tab_bar_nav_speech = False
+
+    def _clear_suppress_tab_bar_nav_speech(self):
+        self._suppress_tab_bar_nav_speech = False
+
+    def show_app_list(self, focus_list=True):
         self._hide_all_views()
         self.app_listbox.Show()
-        self.list_label.SetLabel(_("Application List:"))
+        self._apply_list_label_for_sr(_("Application List:"))
         self.current_list = "apps"
-        idx = self._get_view_index('apps')
-        total = len(self.registered_views)
-        speaker.speak(_("Application list, {} of {}").format(idx + 1, total))
-        vibrate_menu_open()
+        self._update_tab_bar_display()
         self.Layout()
-        if self.app_listbox.GetCount() > 0:
-             self.app_listbox.SetFocus()
+        self._with_tab_bar_nav_speech_suppressed()
+        # Focus the tab bar row so the screen reader reads ONLY the plain
+        # "Applications, N of M" announcement (from the row text). The user
+        # explicitly asked that view switches say only that phrase, not
+        # "Application list, list, Applications, 1 of 4". Arrow Up later
+        # from a real item to row 0 is a different context — it announces
+        # "Tab bar" via handle_navigation.
+        if focus_list and self.app_listbox.GetCount() > 0:
+            self.app_listbox.SetSelection(0)
+            self.app_listbox.SetFocus()
+        if focus_list:
+            vibrate_menu_open()
 
 
-    def show_game_list(self):
+    def show_game_list(self, focus_list=True):
         self._hide_all_views()
         self.game_tree.Show()
-        self.list_label.SetLabel(_("Game List:"))
+        self._apply_list_label_for_sr(_("Game List:"))
         self.current_list = "games"
-        idx = self._get_view_index('games')
-        total = len(self.registered_views)
-        speaker.speak(_("Game list, {} of {}").format(idx + 1, total))
-        vibrate_menu_open()
+        self._update_tab_bar_display()
+        if focus_list:
+            vibrate_menu_open()
         self.Layout()
 
-        # Focus on first element
-        root = self.game_tree.GetRootItem()
-        if root.IsOk():
-            child, cookie = self.game_tree.GetFirstChild(root)
-            if child.IsOk():
-                self.game_tree.SelectItem(child)
-                self.game_tree.SetFocus()
+        # Land on the tab bar row (first child of the invisible root) so the
+        # screen reader reads only "Games, N of M" and Left/Right immediately
+        # cycles views. The suppress flag stops on_game_tree_selection_changed
+        # from speaking "Tab bar" on this programmatic selection.
+        if focus_list:
+            self._with_tab_bar_nav_speech_suppressed()
+            root = self.game_tree.GetRootItem()
+            if root.IsOk():
+                first, cookie = self.game_tree.GetFirstChild(root)
+                if first.IsOk():
+                    self.game_tree.SelectItem(first)
+                    self.game_tree.SetFocus()
 
-    def show_network_list(self):
+    def show_network_list(self, focus_list=True):
         self._hide_all_views()
         self.network_listbox.Show()
-        self.list_label.SetLabel(_("Titan IM:"))
+        self._apply_list_label_for_sr(_("Titan IM:"))
         self.current_list = "network"
-        idx = self._get_view_index('network')
-        total = len(self.registered_views)
-        speaker.speak(_("Titan IM, {} of {}").format(idx + 1, total))
-        vibrate_menu_open()
+        self._update_tab_bar_display()
+        if focus_list:
+            vibrate_menu_open()
 
         # Always populate the network list based on login status
         self.populate_network_list()
 
         self.Layout()
-        if self.network_listbox.GetCount() > 0:
+        # Land on the tab bar row so the screen reader reads only the plain
+        # "Titan IM, N of M" row text (no doubled label or "tab bar" prefix)
+        # and the user can cycle views with Left/Right immediately.
+        if focus_list and self.network_listbox.GetCount() > 0:
+            self._with_tab_bar_nav_speech_suppressed()
+            self.network_listbox.SetSelection(0)
             self.network_listbox.SetFocus()
 
     def _hide_all_views(self):
@@ -1522,6 +1747,431 @@ class TitanApp(wx.Frame):
         self.chat_display.Hide()
         self.message_input.Hide()
         self.login_panel.Hide()
+
+    def _view_short_name(self, view):
+        """Get a short label for a view (for tab bar / toolbar)."""
+        short = view.get('short_name')
+        if short:
+            return short
+        label = view.get('label', view.get('id', ''))
+        return label.rstrip(':').strip()
+
+    def _get_tab_bar_announcement(self):
+        """Return (short_name, index, total) for the currently selected view."""
+        if not self.registered_views:
+            return ("", 0, 0)
+        idx = self._get_view_index(self.current_list)
+        if idx < 0:
+            idx = 0
+        view = self.registered_views[idx]
+        return (self._view_short_name(view), idx, len(self.registered_views))
+
+    def _get_tab_bar_item_text(self):
+        """Return the text used for the virtual tab bar first-item entry.
+
+        The row text is the clean view announcement ("Applications, 1 of 4")
+        with no "Tab bar:" prefix: that's what the user wants to hear when a
+        view is shown or when cycling. The "Tab bar" indicator is instead
+        spoken separately via ``speaker.speak`` when the user arrows up from
+        a real item to row 0, so the two cases don't stomp on each other.
+        """
+        short, idx, total = self._get_tab_bar_announcement()
+        if total <= 0:
+            return _("Tab bar")
+        return _("{}, {} of {}").format(short, idx + 1, total)
+
+    def _is_tab_bar_selection(self, control):
+        """Return True when the given list/tree control has the tab bar item selected."""
+        try:
+            if isinstance(control, wx.ListBox):
+                return control.GetSelection() == 0
+            if isinstance(control, wx.TreeCtrl):
+                sel = control.GetSelection()
+                if not sel.IsOk():
+                    return False
+                data = control.GetItemData(sel)
+                return isinstance(data, dict) and data.get('type') == 'tab_bar'
+        except Exception:
+            pass
+        return False
+
+    def _is_tab_bar_row_text(self, text):
+        """Heuristic: is `text` the tab bar first-item text for any currently
+        registered view? Used to detect whether row 0 of a listbox is already
+        the tab bar row (vs a regular item that happens to sit at index 0)."""
+        if not text:
+            return False
+        total = len(self.registered_views)
+        for i, view in enumerate(self.registered_views):
+            if text == _("{}, {} of {}").format(self._view_short_name(view), i + 1, total):
+                return True
+        # Legacy tab bar text from before the short-name refactor. Still
+        # counts as a tab bar row so we replace rather than insert duplicates.
+        if text == _("Tab bar") or text.startswith(_("Tab bar")):
+            return True
+        return False
+
+    def _cleanup_stale_tab_bar_rows_listbox(self, listbox, start=0):
+        """Remove every tab bar row from ``listbox`` at index >= ``start``.
+
+        Identified by either the ``{'type': 'tab_bar'}`` client-data marker
+        (primary) or by a text pattern matching any registered view's
+        short_name (fallback for rows created before the marker existed or
+        whose totals have since changed). Walks from end to ``start`` to
+        avoid index shifts.
+
+        Pass ``start=1`` to preserve a known-good tab bar row at index 0.
+        """
+        try:
+            import re
+            patterns = []
+            for view in getattr(self, 'registered_views', []):
+                short = self._view_short_name(view)
+                if short:
+                    patterns.append(re.compile(rf'^{re.escape(short)}, \d+ \S+ \d+$'))
+            for i in range(listbox.GetCount() - 1, start - 1, -1):
+                is_tab_bar = False
+                try:
+                    data = listbox.GetClientData(i)
+                    if isinstance(data, dict) and data.get('type') == 'tab_bar':
+                        is_tab_bar = True
+                except Exception:
+                    pass
+                if not is_tab_bar:
+                    try:
+                        text = listbox.GetString(i)
+                        if text and any(p.match(text) for p in patterns):
+                            is_tab_bar = True
+                        elif text and (text == _("Tab bar") or text.startswith(_("Tab bar"))):
+                            is_tab_bar = True
+                    except Exception:
+                        pass
+                if is_tab_bar:
+                    try:
+                        listbox.Delete(i)
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[GUI] cleanup stale tab bar rows error: {e}")
+
+    def _cleanup_stale_tab_bar_nodes_tree(self, tree):
+        """Remove every tab bar node from ``tree`` (top-level children).
+
+        Identified by the ``{'type': 'tab_bar'}`` client-data marker.
+        """
+        try:
+            root = tree.GetRootItem()
+            if not root.IsOk():
+                return
+            to_delete = []
+            child, cookie = tree.GetFirstChild(root)
+            while child.IsOk():
+                try:
+                    data = tree.GetItemData(child)
+                    if isinstance(data, dict) and data.get('type') == 'tab_bar':
+                        to_delete.append(child)
+                except Exception:
+                    pass
+                child, cookie = tree.GetNextChild(root, cookie)
+            for item in to_delete:
+                try:
+                    tree.Delete(item)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[GUI] cleanup stale tab bar tree nodes error: {e}")
+
+    def _inject_tab_bar_into_listbox(self, listbox):
+        """Ensure the virtual tab bar row sits at index 0 of ``listbox``.
+
+        Idempotent: if row 0 is already the correct tab bar row (right
+        marker and text), the row is left untouched and only stray
+        duplicates further down the list are removed. This preserves any
+        current selection on row 0 when ``SetFocus()`` triggers an
+        auto-sync inject (needed so switching to a component view lands
+        selection ON the tab bar row, not above or below it).
+
+        Otherwise the list is fully cleaned and a fresh tab bar row is
+        prepended and marked via client data ``{'type': 'tab_bar'}``.
+        """
+        try:
+            expected = self._get_tab_bar_item_text()
+
+            # Fast path: row 0 is already a correct tab bar row — keep it and
+            # only remove any stray duplicates below.
+            try:
+                if listbox.GetCount() > 0:
+                    data0 = listbox.GetClientData(0)
+                    if isinstance(data0, dict) and data0.get('type') == 'tab_bar':
+                        if listbox.GetString(0) != expected:
+                            listbox.SetString(0, expected)
+                        self._cleanup_stale_tab_bar_rows_listbox(listbox, start=1)
+                        return
+            except Exception:
+                pass
+
+            # Slow path: row 0 is not our tab bar row. Clean every tab bar
+            # row (including stale ones with outdated totals) and prepend a
+            # fresh one.
+            self._cleanup_stale_tab_bar_rows_listbox(listbox)
+            listbox.Insert(expected, 0)
+            try:
+                listbox.SetClientData(0, {'type': 'tab_bar'})
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[GUI] tab bar listbox inject error: {e}")
+
+    def _inject_tab_bar_into_tree(self, tree):
+        """Ensure the virtual tab bar node is the first child of the tree's
+        invisible root. Idempotent — if the first child is already a
+        correctly-marked tab bar node, only its text is refreshed (so
+        selection on that node is preserved across an auto-sync)."""
+        try:
+            root = tree.GetRootItem()
+            if not root.IsOk():
+                return
+            expected = self._get_tab_bar_item_text()
+
+            # Fast path: first child is already the tab bar node.
+            first, cookie = tree.GetFirstChild(root)
+            if first.IsOk():
+                try:
+                    data = tree.GetItemData(first)
+                    if isinstance(data, dict) and data.get('type') == 'tab_bar':
+                        if tree.GetItemText(first) != expected:
+                            tree.SetItemText(first, expected)
+                        # Remove any extra tab bar nodes past the first
+                        extras = []
+                        nxt, ncookie = tree.GetNextChild(root, cookie)
+                        while nxt.IsOk():
+                            ndata = tree.GetItemData(nxt)
+                            if isinstance(ndata, dict) and ndata.get('type') == 'tab_bar':
+                                extras.append(nxt)
+                            nxt, ncookie = tree.GetNextChild(root, ncookie)
+                        for e in extras:
+                            try:
+                                tree.Delete(e)
+                            except Exception:
+                                pass
+                        return
+                except Exception:
+                    pass
+
+            # Slow path: no leading tab bar node — clean + prepend fresh.
+            self._cleanup_stale_tab_bar_nodes_tree(tree)
+            new_item = tree.PrependItem(root, expected)
+            tree.SetItemData(new_item, {'type': 'tab_bar'})
+        except Exception as e:
+            print(f"[GUI] tab bar tree inject error: {e}")
+
+    def _refresh_all_tab_bar_items(self):
+        """Refresh the tab bar text in every registered view's control (totals may have changed).
+
+        Each control's tab bar row text is built against whichever view that
+        control belongs to — so view A's tab bar row says "Tab bar: A, N of M".
+        """
+        saved_current = getattr(self, 'current_list', None)
+        try:
+            for view in getattr(self, 'registered_views', []):
+                self.current_list = view['id']
+                ctrl = view.get('control')
+                if isinstance(ctrl, wx.ListBox):
+                    self._inject_tab_bar_into_listbox(ctrl)
+                elif isinstance(ctrl, wx.TreeCtrl):
+                    self._inject_tab_bar_into_tree(ctrl)
+        finally:
+            if saved_current is not None:
+                self.current_list = saved_current
+
+    def _update_tab_bar_display(self):
+        """Refresh only the current view's tab bar row."""
+        view_idx = self._get_view_index(self.current_list)
+        if view_idx < 0:
+            return
+        ctrl = self.registered_views[view_idx].get('control')
+        if isinstance(ctrl, wx.ListBox):
+            self._inject_tab_bar_into_listbox(ctrl)
+        elif isinstance(ctrl, wx.TreeCtrl):
+            self._inject_tab_bar_into_tree(ctrl)
+
+    def _announce_tab_bar(self):
+        """Play the tab bar focus sound and, when a real screen reader is
+        active, announce "Tab bar".
+
+        Delegates to ``src.accessibility.messages.announce_tab_bar`` so the
+        "Tab bar" string lives in the ``accessibility`` translation domain
+        rather than ``gui``.
+        """
+        try:
+            from src.accessibility.messages import announce_tab_bar
+            announce_tab_bar()
+        except Exception as e:
+            print(f"[GUI] announce_tab_bar error: {e}")
+
+    def _announce_view_switched(self, view, idx, total):
+        """Play the switch-list sound when cycling views via Left/Right.
+
+        Like ``_announce_tab_bar`` above, we intentionally do not speak here:
+        the new list's tab bar row already reads as "Name, N of M" when focus
+        lands on it, so speaking would produce the duplicate announcement
+        (e.g., "Titan IM, 3 of 4, Titan IM, 3 of 4") the user asked to fix.
+        """
+        try:
+            play_sound('ui/switch_list.ogg')
+        except Exception:
+            pass
+
+    def _schedule_tab_bar_tip(self):
+        """Start the 4-second accessibility tip when focus sits on the tab bar item."""
+        if self._tab_bar_tip_active:
+            return
+        if not _is_screen_reader_running():
+            return
+        try:
+            from src.accessibility.messages import show_tab_bar_tip
+            show_tab_bar_tip(delay=4.0)
+            self._tab_bar_tip_active = True
+        except Exception as e:
+            print(f"[GUI] tip schedule error: {e}")
+
+    def _cancel_tab_bar_tip(self):
+        """Cancel the pending accessibility tip (selection moved off the tab bar item)."""
+        try:
+            from src.accessibility.messages import cancel_tab_bar_tip
+            cancel_tab_bar_tip()
+        except Exception:
+            pass
+        self._tab_bar_tip_active = False
+
+    def _cycle_tab_bar(self, direction):
+        """Switch to the previous (-1) or next (+1) registered view from the tab bar item.
+
+        The tab bar is *linear* — navigating past the first/last view plays the
+        end-of-tabbar edge sound and stays put.
+        """
+        if not self.registered_views:
+            return
+        current_idx = self._get_view_index(self.current_list)
+        if current_idx < 0:
+            current_idx = 0
+        new_idx = current_idx + direction
+        if new_idx < 0 or new_idx >= len(self.registered_views):
+            # At an edge — play the edge sound and stay
+            try:
+                play_sound('ui/endoftapbar.ogg')
+            except Exception:
+                pass
+            return
+        new_view = self.registered_views[new_idx]
+
+        if new_view.get('show_method'):
+            new_view['show_method'](focus_list=False)
+        else:
+            self._show_registered_view(new_view['id'], focus_list=False)
+
+        # Place focus on the new list's tab bar row (item 0) so subsequent
+        # Up/Down/Left/Right keep working off the same virtual element. The
+        # suppress flag prevents the tree selection handler from speaking
+        # "Tab bar" on this programmatic move — the user wants only the
+        # view-name announcement on cycle (from the row text itself).
+        self._with_tab_bar_nav_speech_suppressed()
+        ctrl = new_view.get('control')
+        try:
+            if isinstance(ctrl, wx.ListBox):
+                if ctrl.GetCount() > 0:
+                    ctrl.SetSelection(0)
+                ctrl.SetFocus()
+            elif isinstance(ctrl, wx.TreeCtrl):
+                root = ctrl.GetRootItem()
+                if root.IsOk():
+                    first, cookie = ctrl.GetFirstChild(root)
+                    if first.IsOk():
+                        ctrl.SelectItem(first)
+                ctrl.SetFocus()
+        except Exception as e:
+            print(f"[GUI] tab bar cycle focus error: {e}")
+
+        self._announce_view_switched(new_view, new_idx, len(self.registered_views))
+        vibrate_focus_change()
+        # The tab bar row is still focused in the new list, so reset the tip timer.
+        self._cancel_tab_bar_tip()
+        self._schedule_tab_bar_tip()
+
+    def focus_tab_bar(self):
+        """Move focus to the current list and select its first item (the tab bar row)."""
+        current_idx = self._get_view_index(self.current_list)
+        if current_idx < 0 and self.registered_views:
+            current_idx = 0
+        if current_idx < 0:
+            return
+        view = self.registered_views[current_idx]
+        ctrl = view.get('control')
+        # Suppress the per-event "Tab bar" announcement from the tree
+        # selection handler — we speak it exactly once via
+        # _announce_tab_bar() below so Ctrl+Tab doesn't double-announce for
+        # TreeCtrl views.
+        self._with_tab_bar_nav_speech_suppressed()
+        try:
+            if isinstance(ctrl, wx.ListBox):
+                if ctrl.GetCount() > 0:
+                    ctrl.SetSelection(0)
+                ctrl.SetFocus()
+            elif isinstance(ctrl, wx.TreeCtrl):
+                root = ctrl.GetRootItem()
+                if root.IsOk():
+                    first, cookie = ctrl.GetFirstChild(root)
+                    if first.IsOk():
+                        ctrl.SelectItem(first)
+                ctrl.SetFocus()
+        except Exception as e:
+            print(f"[GUI] focus_tab_bar error: {e}")
+        self._announce_tab_bar()
+        self._cancel_tab_bar_tip()
+        self._schedule_tab_bar_tip()
+
+    def _add_toolbar_tool(self, view):
+        """Add a toolbar button for a registered view (built-in or component).
+
+        Clicking the tool activates the corresponding view. Component views
+        are rebuilt into the toolbar via register_view().
+        """
+        if not hasattr(self, 'toolbar') or self.toolbar is None:
+            return
+        if view['id'] in self._view_tools:
+            return  # Already added
+
+        empty_bitmap = wx.Bitmap(1, 1)
+        label = self._view_short_name(view)
+        help_text = _("Show {}").format(label)
+        tool = self.toolbar.AddTool(wx.ID_ANY, label, empty_bitmap, shortHelp=help_text)
+        self._view_tools[view['id']] = tool
+
+        view_id = view['id']
+
+        def _on_tool(evt, vid=view_id):
+            self._show_view_by_id(vid)
+            evt.Skip()
+
+        self.Bind(wx.EVT_TOOL, _on_tool, tool)
+
+        # Back-compat aliases for legacy skin-icon code paths
+        if view['id'] == 'apps':
+            self.tool_apps = tool
+        elif view['id'] == 'games':
+            self.tool_games = tool
+        elif view['id'] == 'network':
+            self.tool_network = tool
+
+    def _show_view_by_id(self, view_id):
+        """Activate a view (built-in or registered) by its id."""
+        for view in self.registered_views:
+            if view['id'] == view_id:
+                if view.get('show_method'):
+                    view['show_method']()
+                else:
+                    self._show_registered_view(view_id)
+                return
 
     def _get_view_index(self, view_id):
         """Get the index of a view in registered_views by its id."""
@@ -1553,8 +2203,9 @@ class TitanApp(wx.Frame):
             play_applist_sound()
             vibrate_focus_change()
 
-    def register_view(self, view_id, label, control, on_show=None, on_activate=None, position='after_network'):
-        """Register a new view for Ctrl+Tab cycling.
+    def register_view(self, view_id, label, control, on_show=None, on_activate=None,
+                      position='after_network', short_name=None):
+        """Register a new view for the tab bar (built-in views + component views).
 
         Args:
             view_id: Unique string identifier (e.g., 'my_component')
@@ -1563,6 +2214,8 @@ class TitanApp(wx.Frame):
             on_show: Optional callback called when view is shown
             on_activate: Optional callback for Enter key activation
             position: Where to insert - 'after_apps', 'after_games', 'after_network' (default), or int index
+            short_name: Optional short label used for the tab bar and toolbar button
+                (defaults to ``label`` with a trailing colon removed).
         """
         # Determine insertion index
         if isinstance(position, int):
@@ -1582,6 +2235,7 @@ class TitanApp(wx.Frame):
         view_entry = {
             'id': view_id,
             'label': label,
+            'short_name': short_name or label.rstrip(':').strip(),
             'control': control,
             'show_method': None,
             'on_show': on_show,
@@ -1594,9 +2248,106 @@ class TitanApp(wx.Frame):
         control.Hide()
         self.list_sizer.Insert(insert_idx, control, proportion=1, flag=wx.EXPAND | wx.ALL, border=0)
 
+        # Inject the virtual tab bar row into the new control if supported
+        if isinstance(control, wx.ListBox):
+            self._inject_tab_bar_into_listbox(control)
+        elif isinstance(control, wx.TreeCtrl):
+            self._inject_tab_bar_into_tree(control)
+
+        # Component code often calls ``control.Clear()`` / ``DeleteAllItems()``
+        # to repopulate its list (macros, playlists, contact lists, ...).
+        # Clearing wipes the virtual tab bar row together with the real data,
+        # which is exactly what the user means by "additional views don't
+        # behave like the normal ones" — built-in views always reinject the
+        # row at the end of their populate_*() helpers, component views
+        # usually don't. Bind EVT_SET_FOCUS (+ EVT_LISTBOX for list-box
+        # controls) so we automatically re-inject whenever focus returns to
+        # the view or selection changes, giving component code a "just works"
+        # experience without requiring a manual sync call.
+        try:
+            control.Bind(wx.EVT_SET_FOCUS, lambda evt, c=control: self._auto_sync_tab_bar_on_focus(evt, c))
+        except Exception as e:
+            print(f"[GUI] Could not bind focus handler for view '{view_id}': {e}")
+        if isinstance(control, wx.ListBox):
+            try:
+                control.Bind(wx.EVT_LISTBOX, lambda evt, c=control: self._auto_sync_tab_bar_on_select(evt, c))
+            except Exception as e:
+                print(f"[GUI] Could not bind listbox handler for view '{view_id}': {e}")
+
+        # Add a toolbar button for this component view
+        try:
+            self._add_toolbar_tool(view_entry)
+            self.toolbar.Realize()
+        except Exception as e:
+            print(f"[GUI] Error adding toolbar button for view '{view_id}': {e}")
+
+        # Rebuild the Switch-to menu so the new view appears
+        menubar = self.GetMenuBar()
+        if menubar and hasattr(menubar, 'rebuild_switch_menu'):
+            menubar.rebuild_switch_menu()
+
+        # Refresh tab bar text in every view (totals changed)
+        self._refresh_all_tab_bar_items()
+
         print(f"[GUI] Registered view '{view_id}' at position {insert_idx} (total views: {len(self.registered_views)})")
 
-    def _show_registered_view(self, view_id):
+    def _auto_sync_tab_bar_on_focus(self, event, control):
+        """Re-inject the virtual tab bar row whenever focus lands on a
+        registered view's control. This fixes the case where component code
+        cleared the list while the view was focused and never re-added the
+        tab bar row itself."""
+        try:
+            if isinstance(control, wx.ListBox):
+                self._inject_tab_bar_into_listbox(control)
+            elif isinstance(control, wx.TreeCtrl):
+                self._inject_tab_bar_into_tree(control)
+        except Exception as e:
+            print(f"[GUI] auto-sync tab bar on focus error: {e}")
+        event.Skip()
+
+    def _auto_sync_tab_bar_on_select(self, event, control):
+        """Same intent as ``_auto_sync_tab_bar_on_focus`` but triggered on
+        selection change for wx.ListBox controls, which also covers the case
+        where the component repopulates its list while the user is navigating
+        it."""
+        try:
+            if isinstance(control, wx.ListBox):
+                self._inject_tab_bar_into_listbox(control)
+        except Exception as e:
+            print(f"[GUI] auto-sync tab bar on select error: {e}")
+        event.Skip()
+
+    def sync_view_tab_bar(self, view_id_or_control):
+        """Public API for components: ensure the virtual tab bar row is
+        present on a registered view's control.
+
+        Components should call this after clearing and repopulating their
+        list/tree (``listbox.Clear()`` + ``Append()``, ``tree.DeleteAllItems()``
+        + rebuild). The call is safe to make at any time — it's a no-op if
+        the row is already there.
+
+        Args:
+            view_id_or_control: either the ``view_id`` passed to
+                ``register_view`` or the raw control instance.
+        """
+        try:
+            control = None
+            if isinstance(view_id_or_control, str):
+                idx = self._get_view_index(view_id_or_control)
+                if idx >= 0:
+                    control = self.registered_views[idx].get('control')
+            else:
+                control = view_id_or_control
+            if control is None:
+                return
+            if isinstance(control, wx.ListBox):
+                self._inject_tab_bar_into_listbox(control)
+            elif isinstance(control, wx.TreeCtrl):
+                self._inject_tab_bar_into_tree(control)
+        except Exception as e:
+            print(f"[GUI] sync_view_tab_bar error: {e}")
+
+    def _show_registered_view(self, view_id, focus_list=True):
         """Show a registered component view by its id."""
         view_idx = self._get_view_index(view_id)
         if view_idx < 0:
@@ -1605,12 +2356,21 @@ class TitanApp(wx.Frame):
         view = self.registered_views[view_idx]
         self._hide_all_views()
         view['control'].Show()
-        self.list_label.SetLabel(view['label'])
+        self._apply_list_label_for_sr(view['label'])
         self.current_list = view['id']
 
         total = len(self.registered_views)
-        speaker.speak(_("{}, {} of {}").format(view['label'].rstrip(':'), view_idx + 1, total))
-        vibrate_menu_open()
+
+        # Inject/refresh the tab bar row for this component's control if it's a
+        # supported type. Non-list controls are shown as-is.
+        ctrl = view['control']
+        if isinstance(ctrl, wx.ListBox):
+            self._inject_tab_bar_into_listbox(ctrl)
+        elif isinstance(ctrl, wx.TreeCtrl):
+            self._inject_tab_bar_into_tree(ctrl)
+
+        if focus_list:
+            vibrate_menu_open()
 
         # Call on_show callback if provided
         if view.get('on_show') and callable(view['on_show']):
@@ -1619,15 +2379,37 @@ class TitanApp(wx.Frame):
             except Exception as e:
                 print(f"[GUI] Error in on_show for view '{view_id}': {e}")
 
+        # Components commonly repopulate their list inside on_show — re-inject
+        # the tab bar row so it survives a Clear() inside that callback.
+        if isinstance(ctrl, wx.ListBox):
+            self._inject_tab_bar_into_listbox(ctrl)
+        elif isinstance(ctrl, wx.TreeCtrl):
+            self._inject_tab_bar_into_tree(ctrl)
+
         self.Layout()
 
-        # Set focus on the control
-        try:
-            if isinstance(view['control'], wx.ListBox) and view['control'].GetCount() > 0:
-                view['control'].SetSelection(0)
-            view['control'].SetFocus()
-        except Exception:
-            pass
+        # Land on the tab bar row so Left/Right immediately cycles views and
+        # the screen reader reads only the plain "Name, N of M" row text. The
+        # user explicitly asked that component views NOT auto-jump to the
+        # first real list item on switch, so they can keep switching views
+        # without first having to arrow back up to the tab bar.
+        if focus_list:
+            self._with_tab_bar_nav_speech_suppressed()
+            try:
+                if isinstance(ctrl, wx.ListBox) and ctrl.GetCount() > 0:
+                    ctrl.SetSelection(0)
+                    ctrl.SetFocus()
+                elif isinstance(ctrl, wx.TreeCtrl):
+                    root = ctrl.GetRootItem()
+                    if root.IsOk():
+                        first, _c = ctrl.GetFirstChild(root)
+                        if first.IsOk():
+                            ctrl.SelectItem(first)
+                    ctrl.SetFocus()
+                else:
+                    ctrl.SetFocus()
+            except Exception:
+                pass
 
     def populate_network_options(self):
         self.network_listbox.Clear()
@@ -1667,11 +2449,14 @@ class TitanApp(wx.Frame):
                 # Show WhatsApp WebView (like Messenger)
                 self.show_whatsapp_login()
             elif "Titan-Net" in selected_text:
-                if self.titan_logged_in:
-                    # Already logged in - show Titan-Net main window
+                if self.titan_logged_in and self.titan_client.is_connected:
+                    # Already logged in and connected - show Titan-Net main window
                     self.show_titannet_main()
                 else:
-                    # Not logged in - show login dialog
+                    # Not logged in or disconnected - show login dialog
+                    if self.titan_logged_in and not self.titan_client.is_connected:
+                        # Was logged in but disconnected - reset state
+                        self.titan_logged_in = False
                     self.show_titannet_login()
             elif "EltenLink" in selected_text:
                 # Check if already connected and window exists (may be hidden)
@@ -1681,6 +2466,7 @@ class TitanApp(wx.Frame):
                     if window and window.client and window.client.is_connected:
                         window.Show()
                         window.Raise()
+                        register_window("EltenLink", window=window, category='messenger')
                         return
                 # Not connected - show login dialog
                 self.show_elten_login()
@@ -1741,6 +2527,7 @@ class TitanApp(wx.Frame):
                 # Successfully logged in and opened chat window
                 speaker.speak(_("Logged in to Telegram"))
                 # Sound is played by telegram_gui.py window
+                register_window("Telegram", window=chat_window, category='messenger')
 
                 # Store in active services
                 self.active_services["telegram"] = {
@@ -1776,6 +2563,7 @@ class TitanApp(wx.Frame):
         try:
             messenger_window = messenger_webview.show_messenger_webview(self)
             if messenger_window:
+                register_window("Messenger", window=messenger_window, category='messenger')
                 # Add Messenger to active services when successfully connected
                 # This will be handled by callback from messenger_window
                 self.setup_messenger_callbacks(messenger_window)
@@ -1793,6 +2581,7 @@ class TitanApp(wx.Frame):
         try:
             whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
             if whatsapp_window:
+                register_window("WhatsApp", window=whatsapp_window, category='messenger')
                 # Add WhatsApp to active services when successfully connected
                 # This will be handled by callback from whatsapp_window
                 self.setup_whatsapp_callbacks(whatsapp_window)
@@ -1836,24 +2625,46 @@ class TitanApp(wx.Frame):
     def show_titannet_login(self):
         """Show Titan-Net login dialog"""
         try:
-            from src.network.titan_net_gui import show_login_dialog
+            from src.network.titan_net_gui import show_login_dialog, MOTDDialog
 
-            logged_in, offline_mode = show_login_dialog(self, self.titan_client)
+            logged_in, offline_mode, motd = show_login_dialog(self, self.titan_client)
 
             if logged_in:
                 self.titan_logged_in = True
                 self.titan_username = self.titan_client.username
 
+                # Keep the shared Titan-Net registry in sync so IUI /
+                # Klango / launcher frontends see the "logged in" state.
+                try:
+                    from src.network.titan_net import set_active_titan_logged_in
+                    set_active_titan_logged_in(True)
+                except Exception:
+                    pass
+
                 # Setup callbacks
                 self.setup_titannet_callbacks()
 
-                # Show main window
-                self.show_titannet_main()
-
+                # Play welcome sound first, then open window
+                play_sound('titannet/welcome to IM.ogg')
                 speaker.speak(_("Logged in to Titan-Net as {username}").format(
                     username=self.titan_username
                 ))
-                play_sound('titannet/welcome to IM.ogg')
+
+                # Show MOTD if new/updated (after 2s delay)
+                if motd and motd.get('text'):
+                    from src.settings.settings import get_setting, set_setting
+                    last_motd_hash = get_setting('motd_hash', '', section='titannet')
+                    current_hash = motd.get('hash', '')
+                    if current_hash != last_motd_hash:
+                        set_setting('motd_hash', current_hash, section='titannet')
+                        def _show_motd(text=motd['text']):
+                            dlg = MOTDDialog(self, text)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+                        wx.CallLater(5000, _show_motd)
+
+                # Show main window after welcome
+                self.show_titannet_main()
 
             elif offline_mode:
                 speaker.speak(_("Continuing in offline mode"))
@@ -1880,9 +2691,9 @@ class TitanApp(wx.Frame):
                 play_sound('core/error.ogg')
                 return
 
-            show_titan_net_window(self, self.titan_client)
-            speaker.speak(_("Opening Titan-Net"))
-            play_sound('ui/window_open.ogg')
+            titan_win = show_titan_net_window(self, self.titan_client)
+            if titan_win:
+                register_window("Titan-Net", window=titan_win, category='messenger')
 
         except Exception as e:
             print(f"Error opening Titan-Net window: {e}")
@@ -1896,18 +2707,105 @@ class TitanApp(wx.Frame):
 
     def setup_titannet_callbacks(self):
         """Setup callbacks for Titan-Net integration"""
-        def on_user_online(username):
-            wx.CallAfter(speaker.speak, _("{user} is now online").format(user=username))
-            wx.CallAfter(play_sound, 'system/user_online.ogg')
+        import tempfile, threading
+        from src.titan_core.sound import play_sound_file
 
-        def on_user_offline(username):
+        # Business card sound cache: {username: {sound_type: local_path}}
+        self._business_card_cache = {}
+        self._business_card_cache_dir = os.path.join(tempfile.gettempdir(), 'titan_business_cards')
+        os.makedirs(self._business_card_cache_dir, exist_ok=True)
+
+        def _download_and_cache_sound(username, sound_type):
+            """Download a user's business card sound and cache it locally."""
+            cached = self._business_card_cache.get(username, {}).get(sound_type)
+            if cached and os.path.exists(cached):
+                return cached
+            try:
+                result = self.titan_client.download_user_sound(username, sound_type)
+                if result.get('success') and result.get('file_data'):
+                    content_type = result.get('content_type', '')
+                    if 'ogg' in content_type:
+                        ext = '.ogg'
+                    elif 'mp3' in content_type:
+                        ext = '.mp3'
+                    else:
+                        ext = '.wav'
+                    user_cache_dir = os.path.join(self._business_card_cache_dir, username)
+                    os.makedirs(user_cache_dir, exist_ok=True)
+                    local_path = os.path.join(user_cache_dir, f"{sound_type}{ext}")
+                    with open(local_path, 'wb') as f:
+                        f.write(result['file_data'])
+                    if username not in self._business_card_cache:
+                        self._business_card_cache[username] = {}
+                    self._business_card_cache[username][sound_type] = local_path
+                    return local_path
+            except Exception as e:
+                print(f"[TITAN-NET] Failed to download business card sound {sound_type} for {username}: {e}")
+            return None
+
+        def _get_local_business_card_sound(sound_type):
+            """Get local business card sound path for the current user from settings."""
+            try:
+                from src.settings.titan_im_config import load_titan_im_config
+                config = load_titan_im_config()
+                tn = config.get('titannet_settings', {})
+                if not tn.get('business_card_enabled', False):
+                    return None
+                path_key = f"{sound_type}_sound_path"
+                path = tn.get(path_key, '')
+                if path and os.path.exists(path):
+                    return path
+            except Exception:
+                pass
+            return None
+
+        def _play_custom_or_default(username, sound_type, fallback, has_custom_sounds):
+            """Play custom business card sound if available, otherwise default."""
+            print(f"[BUSINESS-CARD] _play_custom_or_default: user={username}, type={sound_type}, has_custom={has_custom_sounds}")
+            if has_custom_sounds:
+                def download_and_play():
+                    local_path = _download_and_cache_sound(username, sound_type)
+                    print(f"[BUSINESS-CARD] Downloaded sound for {username}/{sound_type}: {local_path}")
+                    if local_path:
+                        play_sound_file(local_path)
+                    else:
+                        play_sound(fallback)
+                threading.Thread(target=download_and_play, daemon=True).start()
+            else:
+                play_sound(fallback)
+
+        def _play_self_or_default(sound_type, fallback):
+            """Play local business card sound for the current user, or default."""
+            local_path = _get_local_business_card_sound(sound_type)
+            print(f"[BUSINESS-CARD] _play_self_or_default: type={sound_type}, local_path={local_path}")
+            if local_path:
+                play_sound_file(local_path)
+            else:
+                play_sound(fallback)
+
+        def on_user_online(username, has_custom_sounds=False):
+            print(f"[BUSINESS-CARD] on_user_online: {username}, has_custom={has_custom_sounds}, self_user={self.titan_client.username}")
+            wx.CallAfter(speaker.speak, _("{user} is now online").format(user=username))
+            # For the current user, use local sound files from settings
+            if self.titan_client.username and username == self.titan_client.username:
+                wx.CallAfter(_play_self_or_default, 'login', 'titannet/online.ogg')
+            else:
+                wx.CallAfter(_play_custom_or_default, username, 'login', 'titannet/online.ogg', has_custom_sounds)
+
+        def on_user_offline(username, has_custom_sounds=False):
+            print(f"[BUSINESS-CARD] on_user_offline: {username}, has_custom={has_custom_sounds}, self_user={self.titan_client.username}")
             wx.CallAfter(speaker.speak, _("{user} went offline").format(user=username))
-            wx.CallAfter(play_sound, 'system/user_offline.ogg')
+            # For the current user, use local sound files from settings
+            if self.titan_client.username and username == self.titan_client.username:
+                wx.CallAfter(_play_self_or_default, 'logout', 'titannet/offline.ogg')
+            else:
+                wx.CallAfter(_play_custom_or_default, username, 'logout', 'titannet/offline.ogg', has_custom_sounds)
 
         def on_message_received(message):
             sender = message.get('sender_username')
+            has_custom = message.get('has_custom_sounds', False)
             wx.CallAfter(speaker.speak, _("New message from {user}").format(user=sender))
-            wx.CallAfter(play_sound, 'titannet/new_message.ogg')
+            wx.CallAfter(_play_custom_or_default, sender, 'new_message', 'titannet/new_message.ogg', has_custom)
 
         def on_new_user_broadcast(message):
             """Handle new user registration broadcast"""
@@ -1925,10 +2823,83 @@ class TitanApp(wx.Frame):
                 wx.CallAfter(speaker.speak, broadcast_text)
                 wx.CallAfter(play_sound, 'titannet/accountcreated.ogg')
 
+        def on_cerberus_shutdown(message):
+            """Cerberus Protocol - server detected intrusion from this client"""
+            reason = message.get('reason', 'Intrusion detected')
+            threat = message.get('threat_level', 'CERBERUS')
+            import sys
+            import subprocess
+
+            def _do_cerberus_shutdown():
+                # Play critical alarm sound
+                play_sound('titannet/cerberus/critical.ogg')
+                # Announce via TTS
+                speaker.speak(
+                    _("Cerberus Protocol activated. Security threat level: {level}. "
+                      "Reason: {reason}. Your system will shut down in 10 seconds.").format(
+                        level=threat, reason=reason
+                    )
+                )
+                # Show dialog
+                wx.MessageBox(
+                    _("Cerberus Protocol: {level}\n\n"
+                      "The server has detected a security violation from your connection.\n"
+                      "Reason: {reason}\n\n"
+                      "Your system will shut down.").format(level=threat, reason=reason),
+                    _("Cerberus Protocol"),
+                    wx.OK | wx.ICON_ERROR
+                )
+                # Shutdown the system
+                if sys.platform == 'win32':
+                    subprocess.Popen(
+                        ['shutdown', '/s', '/f', '/t', '10',
+                         '/c', f'Cerberus Protocol: {reason}'],
+                        creationflags=0x08000000
+                    )
+                elif sys.platform == 'darwin':
+                    subprocess.Popen(['osascript', '-e',
+                        'tell app "System Events" to shut down'])
+                else:
+                    subprocess.Popen(['shutdown', '-h', '+0',
+                        f'Cerberus Protocol: {reason}'])
+
+            wx.CallAfter(_do_cerberus_shutdown)
+
+        def on_cerberus_alert(message):
+            """Cerberus security alert for admin users"""
+            msg = message.get('message', '')
+            threat_name = message.get('threat_name', 'ALERT')
+
+            # Pick sound based on threat level
+            # alert.ogg = ALERT, lockdown.ogg = LOCKDOWN, critical.ogg = CERBERUS
+            # jail or ssh scam.ogg = honeypot triggered
+            cerberus_sounds = {
+                'ALERT': 'titannet/cerberus/alert.ogg',
+                'LOCKDOWN': 'titannet/cerberus/lockdown.ogg',
+                'CERBERUS': 'titannet/cerberus/critical.ogg',
+            }
+            sound = cerberus_sounds.get(threat_name, 'titannet/cerberus/alert.ogg')
+
+            # Check if it's a honeypot trigger
+            if 'honeypot' in msg.lower() or 'ssh' in msg.lower():
+                sound = 'titannet/cerberus/jail or ssh scam.ogg'
+
+            def _show_alert():
+                play_sound(sound)
+                speaker.speak(
+                    _("Cerberus security alert: {level}. {message}").format(
+                        level=threat_name, message=msg
+                    )
+                )
+
+            wx.CallAfter(_show_alert)
+
         self.titan_client.on_user_online = on_user_online
         self.titan_client.on_user_offline = on_user_offline
         self.titan_client.on_message_received = on_message_received
         self.titan_client.on_new_user_broadcast = on_new_user_broadcast
+        self.titan_client.on_cerberus_shutdown = on_cerberus_shutdown
+        self.titan_client.on_cerberus_alert = on_cerberus_alert
 
     def show_elten_login(self):
         """Show EltenLink login dialog"""
@@ -1945,6 +2916,7 @@ class TitanApp(wx.Frame):
                     "name": "EltenLink (Beta)",
                     "window": chat_window
                 }
+                register_window("EltenLink", window=chat_window, category='messenger')
 
                 # Setup callbacks
                 self.setup_elten_callbacks()
@@ -2003,6 +2975,7 @@ class TitanApp(wx.Frame):
             import messenger_webview
             messenger_window = messenger_webview.show_messenger_webview(self)
             if messenger_window:
+                register_window("Messenger", window=messenger_window, category='messenger')
                 self.setup_messenger_callbacks(messenger_window)
                 wx.MessageBox(
                     _("Messenger WebView opened.\nPlease log in to see your contacts in Titan IM."),
@@ -2144,6 +3117,7 @@ class TitanApp(wx.Frame):
                 if window and not window.IsBeingDeleted():
                     window.Show()
                     window.Raise()
+                    register_window("Telegram", window=window, category='messenger')
                     speaker.speak(_("Opening Telegram"))
                     play_sound('ui/window_open.ogg')
                     return
@@ -2157,6 +3131,7 @@ class TitanApp(wx.Frame):
 
             chat_window = TelegramChatWindow(self, username)
             chat_window.Show()
+            register_window("Telegram", window=chat_window, category='messenger')
 
             # Store window reference
             if "telegram" in self.active_services:
@@ -2482,25 +3457,12 @@ class TitanApp(wx.Frame):
             except Exception as _e:
                 print(f"[GUI] IM modules: {_e}")
 
+        # Virtual tab bar row is always the first item
+        self._inject_tab_bar_into_listbox(self.network_listbox)
+
     def on_toggle_list(self):
-        play_sound('ui/switch_list.ogg')
-        vibrate_menu_open()
-
-        # Find current view index in registered_views
-        current_idx = self._get_view_index(self.current_list)
-
-        # If current_list is a sub-view (users, messages, contacts, etc.), go to first view
-        if current_idx < 0:
-            current_idx = len(self.registered_views) - 1  # Will wrap to 0
-
-        # Advance to next view (wrap around)
-        next_idx = (current_idx + 1) % len(self.registered_views)
-        next_view = self.registered_views[next_idx]
-
-        if next_view.get('show_method'):
-            next_view['show_method']()
-        else:
-            self._show_registered_view(next_view['id'])
+        """Legacy entry point — now focuses the virtual tab bar."""
+        self.focus_tab_bar()
 
     def on_show_apps(self, event):
         if self.current_list != "apps":
@@ -2515,6 +3477,90 @@ class TitanApp(wx.Frame):
     def on_show_network(self, event):
         self.show_network_list()
 
+    def on_show_window_switcher(self, event):
+        show_window_switcher(self)
+
+    def _register_global_f2_hotkey(self):
+        """Register F4 as a global hotkey so it works from TCE app windows too."""
+        self._f4_hotkey_handle = None
+        try:
+            if IS_WINDOWS:
+                try:
+                    import keyboard as kb_module
+                    def _on_global_f4(event):
+                        # Only bare F4 - skip Alt+F4, Ctrl+F4, Shift+F4
+                        if event.event_type == 'down' and not any([
+                            kb_module.is_pressed('alt'),
+                            kb_module.is_pressed('ctrl'),
+                            kb_module.is_pressed('shift'),
+                        ]):
+                            wx.CallAfter(self._global_f4_handler)
+                    self._f4_hotkey_handle = kb_module.on_press_key('f4', _on_global_f4, suppress=False)
+                except ImportError:
+                    print("[GUI] keyboard module not available for global F4 hotkey")
+            else:
+                try:
+                    from pynput import keyboard as _pynput_kb
+                    from pynput.keyboard import Key
+                    def _on_pynput_f4(key):
+                        if key == Key.f4:
+                            wx.CallAfter(self._global_f4_handler)
+                    self._f4_pynput_listener = _pynput_kb.Listener(on_press=_on_pynput_f4)
+                    self._f4_pynput_listener.daemon = True
+                    self._f4_pynput_listener.start()
+                except ImportError:
+                    print("[GUI] pynput not available for global F4 hotkey")
+        except Exception as e:
+            print(f"[GUI] Error registering global F4 hotkey: {e}")
+
+    def _is_foreground_tce_process(self):
+        """Check if the current foreground window belongs to TCE (main or child process)."""
+        if IS_WINDOWS:
+            try:
+                import win32gui
+                import win32process
+                import psutil
+                hwnd = win32gui.GetForegroundWindow()
+                if not hwnd:
+                    return False
+                _, fg_pid = win32process.GetWindowThreadProcessId(hwnd)
+                main_pid = os.getpid()
+                if fg_pid == main_pid:
+                    return True
+                tce_pids = {main_pid}
+                try:
+                    for child in psutil.Process(main_pid).children(recursive=True):
+                        tce_pids.add(child.pid)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+                return fg_pid in tce_pids
+            except Exception as e:
+                print(f"[GUI] Error checking foreground process: {e}")
+                return False
+        # On non-Windows, allow — no reliable cross-platform foreground check
+        return True
+
+    def _global_f4_handler(self):
+        """Handle global F4 - show window switcher only when a TCE window is focused."""
+        try:
+            if not self._is_foreground_tce_process():
+                return
+            show_window_switcher(parent=None)
+        except Exception as e:
+            print(f"[GUI] Error in global F4 handler: {e}")
+
+    def _unregister_global_f2_hotkey(self):
+        """Cleanup global F4 hotkey on exit."""
+        try:
+            if IS_WINDOWS and self._f4_hotkey_handle is not None:
+                import keyboard as kb_module
+                kb_module.unhook(self._f4_hotkey_handle)
+                self._f4_hotkey_handle = None
+            if hasattr(self, '_f4_pynput_listener') and self._f4_pynput_listener:
+                self._f4_pynput_listener.stop()
+                self._f4_pynput_listener = None
+        except Exception as e:
+            print(f"[GUI] Error unregistering global F4 hotkey: {e}")
 
     def on_minimize(self, event):
         if self.IsIconized():
@@ -2845,6 +3891,9 @@ class TitanApp(wx.Frame):
 
         print("INFO: Shutting down application...")
 
+        # Cleanup global F2 hotkey
+        self._unregister_global_f2_hotkey()
+
         # Hide window immediately for user feedback
         self.Hide()
 
@@ -2874,6 +3923,44 @@ class TitanApp(wx.Frame):
                     print("INFO: System hooks stopped")
                 except Exception as e:
                     print(f"Warning: Error stopping system hooks: {e}")
+
+                # Tear down ALL keyboard hooks BEFORE os._exit. The keyboard
+                # module installs a low-level Windows hook (WH_KEYBOARD_LL).
+                # remove_hotkey only detaches individual callbacks; the LL hook
+                # itself stays installed until unhook_all(). If we exit
+                # abruptly with an LL hook still registered, Windows keeps
+                # dispatching keystrokes through a dead procedure pointer and
+                # the next hook in the chain (NVDA) crashes.
+                try:
+                    import keyboard as _kb_cleanup
+                    try:
+                        _kb_cleanup.remove_all_hotkeys()
+                    except Exception:
+                        pass
+                    try:
+                        _kb_cleanup.unhook_all()
+                    except Exception:
+                        pass
+                    print("INFO: keyboard hooks fully detached")
+                except Exception as e:
+                    print(f"Warning: Error detaching keyboard hooks: {e}")
+
+                # Silence and tear down accessible_output3 so NVDA isn't left
+                # mid-utterance against a dying process.
+                try:
+                    if hasattr(speaker, 'silence'):
+                        speaker.silence()
+                except Exception:
+                    pass
+
+                # Quit pygame mixer cleanly so audio device handles are
+                # released before the process dies.
+                try:
+                    import pygame as _pg_cleanup
+                    if _pg_cleanup.mixer.get_init():
+                        _pg_cleanup.mixer.quit()
+                except Exception as e:
+                    print(f"Warning: Error quitting pygame mixer: {e}")
 
                 # Final wait for daemon threads to wrap up
                 print("INFO: Waiting for background threads to complete...")

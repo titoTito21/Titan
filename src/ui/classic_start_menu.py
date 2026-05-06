@@ -1072,16 +1072,7 @@ class ClassicStartMenu(wx.Frame):
             # Dźwięk otwierania dialogu zamknięcia
             play_sound('ui/statusbar.ogg')
             
-            if self.is_windows:
-                # Try Windows native shutdown dialog first
-                try:
-                    subprocess.run(['rundll32', 'shell32.dll,SHExitWindowsEx', '0'], shell=True)
-                    self.Hide()
-                    return
-                except Exception:
-                    pass  # Fall back to custom dialog
-            
-            # Custom dialog for all systems (Windows fallback + non-Windows)
+            # Custom shutdown dialog for all systems
             dlg = wx.MessageDialog(self, 
                                   _("Do you want to shut down the system?"),
                                   _("Shut Down Windows"),

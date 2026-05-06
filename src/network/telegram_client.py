@@ -36,8 +36,68 @@ def get_api_credentials():
 
 API_ID, API_HASH = get_api_credentials()
 
-# Session file path
-SESSION_FILE = os.path.join(os.path.dirname(__file__), 'telegram_session')
+# Session file path - MUST use user data directory (AppData) to avoid bundling developer session
+def _get_session_file():
+    try:
+        from src.platform_utils import get_user_data_dir
+        session_dir = os.path.join(get_user_data_dir(), 'telegram')
+    except Exception:
+        # Fallback to user home directory, NEVER to module directory
+        # (module dir gets bundled into compiled builds, leaking the session)
+        if os.name == 'nt':
+            base = os.getenv('APPDATA', os.path.expanduser('~'))
+        elif os.uname().sysname == 'Darwin':
+            base = os.path.expanduser('~/Library/Application Support')
+        else:
+            base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+        session_dir = os.path.join(base, 'titosoft', 'Titan', 'telegram')
+    os.makedirs(session_dir, exist_ok=True)
+    return os.path.join(session_dir, 'telegram_session')
+
+
+def _is_session_file(name):
+    """Check if filename is a Telethon session or related SQLite file."""
+    # Telethon creates: .session, .session-journal, .session-wal, .session-shm
+    session_suffixes = ('.session', '.session-journal', '.session-wal', '.session-shm')
+    return any(name.endswith(s) for s in session_suffixes)
+
+
+def _cleanup_bundled_sessions():
+    """Remove any session files accidentally bundled in compiled builds.
+    Old versions stored session in src/network/ which got packaged into dist."""
+    try:
+        # Check for session files next to this module (bundled location)
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        for name in os.listdir(module_dir):
+            if _is_session_file(name):
+                stale_path = os.path.join(module_dir, name)
+                try:
+                    os.remove(stale_path)
+                    print(f"[TELEGRAM] Removed bundled session file: {stale_path}")
+                except Exception as e:
+                    print(f"[TELEGRAM] Warning: could not remove bundled session {stale_path}: {e}")
+
+        # Also check project root (one or two levels up from src/network/)
+        for levels_up in [2, 3]:
+            root_candidate = module_dir
+            for _ in range(levels_up):
+                root_candidate = os.path.dirname(root_candidate)
+            for name in os.listdir(root_candidate):
+                if _is_session_file(name):
+                    stale_path = os.path.join(root_candidate, name)
+                    try:
+                        os.remove(stale_path)
+                        print(f"[TELEGRAM] Removed stale session file: {stale_path}")
+                    except Exception as e:
+                        print(f"[TELEGRAM] Warning: could not remove stale session {stale_path}: {e}")
+    except Exception:
+        pass
+
+
+# Cleanup bundled sessions on import (before creating new session)
+_cleanup_bundled_sessions()
+
+SESSION_FILE = _get_session_file()
 
 class TelegramClient:
     def __init__(self):
@@ -51,6 +111,7 @@ class TelegramClient:
         self.user_data = None
         self.chat_users = {}  # Store chat participants
         self.dialogs = []  # Store all dialogs/chats
+        self.muted_chats = set()  # Normalized peer ids of muted chats/channels
         self.current_chat = None
         self.event_loop = None
         self.connection_thread = None
@@ -171,50 +232,54 @@ class TelegramClient:
     
     async def _get_verification_code(self):
         """Get verification code from user"""
-        code = None
-        
+        result = {'code': None, 'done': False}
+
         def get_code():
-            nonlocal code
-            dlg = wx.TextEntryDialog(None, 
-                _("Enter the verification code received by SMS or Telegram:"), 
+            dlg = wx.TextEntryDialog(None,
+                _("Enter the verification code received by SMS or Telegram:"),
                 _("Verification code"))
             if dlg.ShowModal() == wx.ID_OK:
-                code = dlg.GetValue()
+                result['code'] = dlg.GetValue()
             dlg.Destroy()
-        
+            result['done'] = True
+
         wx.CallAfter(get_code)
-        
-        # Wait for code
-        while code is None:
+
+        # Wait for the dialog to close (OK or Cancel) — using a separate
+        # 'done' flag so a Cancel (which leaves code as None) doesn't trap
+        # us in an infinite await loop.
+        while not result['done']:
             await asyncio.sleep(0.1)
-        
-        return code
-    
+
+        return result['code']
+
     async def _get_2fa_password(self):
         """Get 2FA password from user"""
-        password = None
-        
+        result = {'password': None, 'done': False}
+
         def get_password():
-            nonlocal password
             dlg = wx.PasswordEntryDialog(None,
                 _("Enter two-factor authentication password:"),
                 _("2FA Password"))
             if dlg.ShowModal() == wx.ID_OK:
-                password = dlg.GetValue()
+                result['password'] = dlg.GetValue()
             dlg.Destroy()
-        
+            result['done'] = True
+
         wx.CallAfter(get_password)
-        
-        # Wait for password
-        while password is None:
+
+        while not result['done']:
             await asyncio.sleep(0.1)
-        
-        return password
+
+        return result['password']
     
     async def _load_dialogs(self):
         """Load all dialogs/chats"""
         try:
+            import datetime as _dt
             dialogs = []
+            muted = set()
+            now_utc = _dt.datetime.now(_dt.timezone.utc)
             async for dialog in self.client.iter_dialogs():
                 dialog_info = {
                     'id': dialog.id,
@@ -226,12 +291,26 @@ class TelegramClient:
                     'entity': dialog.entity
                 }
                 dialogs.append(dialog_info)
-                
+
+                # Track muted chats by their normalized peer id
+                try:
+                    notify = getattr(dialog.dialog, 'notify_settings', None)
+                    mute_until = getattr(notify, 'mute_until', None) if notify else None
+                    if mute_until is not None:
+                        mu = mute_until
+                        if mu.tzinfo is None:
+                            mu = mu.replace(tzinfo=_dt.timezone.utc)
+                        if mu > now_utc:
+                            muted.add(dialog.id)
+                except Exception:
+                    pass
+
                 # Store users for easy access
                 if dialog.is_user and dialog.entity.username:
                     self.chat_users[dialog.entity.username] = dialog_info
-            
+
             self.dialogs = dialogs
+            self.muted_chats = muted
             
             # Notify about loaded dialogs
             for callback in self.status_callbacks:
@@ -301,6 +380,15 @@ class TelegramClient:
                     # Don't process call markers as regular messages
                     return
 
+            # Resolve normalized peer id so we can match against cached mute state
+            try:
+                from telethon import utils as _tg_utils
+                peer_norm_id = _tg_utils.get_peer_id(message.peer_id)
+            except Exception:
+                peer_norm_id = None
+
+            is_muted = peer_norm_id is not None and peer_norm_id in self.muted_chats
+
             # Create message data
             message_data = {
                 'type': 'new_message',
@@ -312,11 +400,9 @@ class TelegramClient:
                 'chat_id': message.peer_id,
                 'is_private': isinstance(message.peer_id, PeerUser),
                 'is_group': isinstance(message.peer_id, PeerChat),
-                'is_channel': isinstance(message.peer_id, PeerChannel)
+                'is_channel': isinstance(message.peer_id, PeerChannel),
+                'muted': is_muted
             }
-
-            # Play sound and announce message with TTS
-            play_sound('titannet/new_message.ogg')
 
             # Get group/chat information for group messages
             chat_name = None
@@ -330,58 +416,12 @@ class TelegramClient:
                 if not chat_name:
                     chat_name = "Unknown Group"
 
-            # Announce message with TTS (translatable)
-            # Check if stereo speech is enabled
-            try:
-                from src.titan_core.stereo_speech import get_stereo_speech
-                stereo_speech = get_stereo_speech()
-            except ImportError:
-                stereo_speech = None
-
-            if stereo_speech and stereo_speech.is_stereo_enabled():
-                # Use stereo speech with higher tone for notification and slower for message content
-                if message_data['is_group'] or message_data['is_channel']:
-                    notification_text = _("New group message from {}, {}").format(
-                        chat_name,
-                        message_data['sender_username']
-                    )
-                    message_content = message_data['message']
-                else:
-                    notification_text = _("New message from {}").format(
-                        message_data['sender_username']
-                    )
-                    message_content = message_data['message']
-
-                stereo_speech.speak(notification_text, position=0.0, pitch_offset=3, use_fallback=False)
-
-                import time
-                time.sleep(0.3)
-
-                if message_content:
-                    stereo_speech.speak(message_content, position=0.0, pitch_offset=-2, use_fallback=False)
-            else:
-                # Fallback to accessible_output3
-                import accessible_output3.outputs.auto
-                speaker = accessible_output3.outputs.auto.Auto()
-
-                if message_data['is_group'] or message_data['is_channel']:
-                    announcement = _("New group message from {}, {}, {}").format(
-                        chat_name,
-                        message_data['sender_username'],
-                        message_data['message']
-                    )
-                else:
-                    announcement = _("Message from: {}, {}").format(
-                        message_data['sender_username'],
-                        message_data['message']
-                    )
-
-                speaker.speak(announcement)
-
             # Add group name to message data for GUI display
             if message_data['is_group'] or message_data['is_channel']:
                 message_data['group_name'] = chat_name
 
+            # Sound + TTS is handled exclusively by the GUI callback
+            # (see telegram_gui.on_message_received) so we don't double up.
             for callback in self.message_callbacks:
                 try:
                     wx.CallAfter(callback, message_data)

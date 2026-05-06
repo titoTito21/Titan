@@ -1,13 +1,15 @@
 import wx
 import threading
+import time
 import requests
 import os
 import sys
 import subprocess
 import shutil
-import time
+import re
 from src.titan_core.sound import play_sound, play_focus_sound, play_select_sound
 from src.titan_core.translation import _
+from src.platform_utils import get_subprocess_kwargs, get_base_path, is_frozen, IS_WINDOWS
 
 class UpdateDialog(wx.Dialog):
     def __init__(self, parent, current_version, new_version, changes):
@@ -163,16 +165,32 @@ class ProgressDialog(wx.Dialog):
 class Updater:
     def __init__(self, parent=None):
         self.parent = parent
-        self.version_url = "http://titosofttitan.com/titan/titanchk/version.ver"
-        self.changes_url = "http://titosofttitan.com/titan/titanchk/changes.txt"
-        self.download_url = "http://titosofttitan.com/titan/titan.main.7z"
-        self.interpreter_url = "http://titosofttitan.com/titan/titan.interpreter.7z"
-        self.temp_file = "titan_update.7z"
-        self.temp_interpreter_file = "titan_interpreter.7z"
+        self.version_url = "https://titosofttitan.com/titan/titanchk/version.ver"
+        self.changes_url = "https://titosofttitan.com/titan/titanchk/changes.txt"
+        self.download_url = "https://titosofttitan.com/titan/titan.main.7z"
+        self.interpreter_url = "https://titosofttitan.com/titan/titan.interpreter.7z"
+
+        # Resolve install dir so the updater works regardless of cwd.
+        # In compiled mode this is the directory containing TCE Launcher.exe;
+        # in dev mode it is the project root.
+        self.install_dir = get_base_path()
+
+        # Absolute paths for downloaded archives and 7z so that a wrong cwd
+        # cannot break the update.
+        self.temp_file = os.path.join(self.install_dir, "titan_update.7z")
+        self.temp_interpreter_file = os.path.join(
+            self.install_dir, "titan_interpreter.7z"
+        )
+
         if sys.platform == 'win32':
-            self.seven_zip_path = os.path.join("data", "bin", "7z.exe")
+            bundled_7z = os.path.join(self.install_dir, "data", "bin", "7z.exe")
+            self.seven_zip_path = (
+                bundled_7z if os.path.exists(bundled_7z)
+                else (shutil.which("7z") or bundled_7z)
+            )
         else:
             self.seven_zip_path = shutil.which("7z") or "7z"
+
         self.needs_interpreter = False  # Will be set if version ends with 'i'
     
     def get_current_version(self):
@@ -261,45 +279,104 @@ class Updater:
             progress_dialog.update_progress(100, _("Download failed"))
             return False
     
-    def extract_update(self, progress_dialog):
-        """Extract update using 7zip."""
+    def _extract_archive(self, archive_path, progress_dialog, status_text):
+        """Extract a 7z archive with real progress reporting.
+
+        Reads 7z stdout to prevent pipe buffer deadlock and parses
+        progress percentage from -bsp1 output.
+        """
         try:
-            progress_dialog.update_progress(0, _("Extracting update..."))
+            progress_dialog.update_progress(0, status_text)
 
             if not os.path.exists(self.seven_zip_path):
                 print(f"7zip not found at {self.seven_zip_path}")
                 return False
 
-            # Extract to current directory
-            cmd = [self.seven_zip_path, 'x', self.temp_file, '-y', '-o.']
+            # -bsp1 outputs progress percentage to stdout
+            # Extract to the install dir explicitly so cwd cannot affect us.
+            cmd = [
+                self.seven_zip_path, 'x', archive_path, '-y',
+                f'-o{self.install_dir}', '-bsp1'
+            ]
 
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=self.install_dir,
+                **get_subprocess_kwargs()
+            )
 
-            # Monitor extraction progress (simplified)
-            while process.poll() is None:
-                progress_dialog.update_progress(50, _("Extracting update..."))
-                time.sleep(0.5)
+            # Drain stderr in background thread to prevent pipe buffer deadlock
+            stderr_chunks = []
+            def drain_stderr():
+                try:
+                    data = process.stderr.read()
+                    if data:
+                        stderr_chunks.append(data)
+                except Exception:
+                    pass
+            stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+            stderr_thread.start()
+
+            # Read stdout and parse progress (7z uses \r for progress lines)
+            buf = b''
+            last_percent = -1
+            while True:
+                chunk = process.stdout.read(512)
+                if not chunk:
+                    break
+                buf += chunk
+
+                # Split on \r or \n to find complete lines
+                while True:
+                    r_pos = buf.find(b'\r')
+                    n_pos = buf.find(b'\n')
+                    if r_pos == -1 and n_pos == -1:
+                        break
+                    if r_pos == -1:
+                        r_pos = len(buf) + 1
+                    if n_pos == -1:
+                        n_pos = len(buf) + 1
+                    pos = min(r_pos, n_pos)
+                    line = buf[:pos].decode('utf-8', errors='replace').strip()
+                    buf = buf[pos + 1:]
+
+                    if line:
+                        match = re.match(r'(\d+)%', line)
+                        if match:
+                            percent = int(match.group(1))
+                            if percent != last_percent:
+                                last_percent = percent
+                                progress_dialog.update_progress(
+                                    percent,
+                                    _("Extracting files... {}%").format(percent)
+                                )
 
             returncode = process.wait()
+            stderr_thread.join(timeout=5)
 
             if returncode == 0:
-                progress_dialog.update_progress(100, _("Update extracted successfully"))
+                progress_dialog.update_progress(100, _("Extraction complete"))
                 return True
             else:
-                print(f"7zip extraction failed with code {returncode}")
+                stderr_text = b''.join(stderr_chunks).decode('utf-8', errors='replace') if stderr_chunks else ''
+                print(f"7zip extraction failed with code {returncode}: {stderr_text}")
                 return False
 
         except Exception as e:
-            print(f"Error extracting update: {e}")
+            print(f"Error extracting archive {archive_path}: {e}")
             return False
         finally:
-            # Clean up temp file
             try:
-                if os.path.exists(self.temp_file):
-                    os.remove(self.temp_file)
-            except:
-                pass
+                if os.path.exists(archive_path):
+                    os.remove(archive_path)
+            except Exception as e:
+                print(f"Error cleaning up {archive_path}: {e}")
+
+    def extract_update(self, progress_dialog):
+        """Extract update using 7zip."""
+        return self._extract_archive(
+            self.temp_file, progress_dialog, _("Extracting update...")
+        )
 
     def download_interpreter(self, progress_dialog):
         """Download interpreter package with progress reporting."""
@@ -332,46 +409,17 @@ class Updater:
             return False
 
     def extract_interpreter(self, progress_dialog):
-        """Extract interpreter package using 7zip."""
-        try:
-            progress_dialog.update_progress(0, _("Extracting Python interpreter..."))
+        """Extract interpreter package using 7zip.
 
-            if not os.path.exists(self.seven_zip_path):
-                print(f"7zip not found at {self.seven_zip_path}")
-                return False
-
-            # Extract to current directory
-            cmd = [self.seven_zip_path, 'x', self.temp_interpreter_file, '-y', '-o.']
-
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, text=True)
-
-            # Monitor extraction progress (simplified)
-            while process.poll() is None:
-                progress_dialog.update_progress(50, _("Extracting Python interpreter..."))
-                time.sleep(0.5)
-
-            returncode = process.wait()
-
-            if returncode == 0:
-                progress_dialog.update_progress(100, _("Interpreter extracted successfully"))
-                print(f"[UPDATER] Interpreter extracted successfully")
-                return True
-            else:
-                print(f"7zip extraction of interpreter failed with code {returncode}")
-                return False
-
-        except Exception as e:
-            print(f"Error extracting interpreter: {e}")
-            return False
-        finally:
-            # Clean up temp file
-            try:
-                if os.path.exists(self.temp_interpreter_file):
-                    os.remove(self.temp_interpreter_file)
-                    print(f"[UPDATER] Cleaned up interpreter temp file")
-            except Exception as e:
-                print(f"Error cleaning up interpreter temp file: {e}")
+        Reuses _extract_archive so we get the same pipe draining and
+        progress parsing as the main update extraction. Without draining
+        the pipes the 7z subprocess can deadlock when its progress output
+        fills the OS pipe buffer.
+        """
+        return self._extract_archive(
+            self.temp_interpreter_file, progress_dialog,
+            _("Extracting Python interpreter...")
+        )
     
     def perform_update(self):
         """Perform the full update process."""

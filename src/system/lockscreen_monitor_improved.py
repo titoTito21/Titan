@@ -12,7 +12,7 @@ import queue
 import sys
 import subprocess
 from src.titan_core.stereo_speech import get_stereo_speech
-from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_subprocess_kwargs
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -116,7 +116,7 @@ class ThreadSafeEventMonitor:
         try:
             # Method 1: Check for LogonUI.exe process (most reliable)
             try:
-                output = subprocess.check_output('tasklist /fi "imagename eq LogonUI.exe"', shell=True, text=True)
+                output = subprocess.check_output('tasklist /fi "imagename eq LogonUI.exe"', shell=True, text=True, **get_subprocess_kwargs())
                 if 'LogonUI.exe' in output:
                     return True
             except:
