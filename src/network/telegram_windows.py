@@ -39,10 +39,7 @@ def _apply_skin_to_tree(window):
         return
 
     for child in window.GetChildren():
-        try:
-            apply_skin_to_window(child)
-        except Exception:
-            pass
+        _apply_skin_to_tree(child)
 
 
 def _speak_tg(text, position=0.0, pitch_offset=0, interrupt=False):

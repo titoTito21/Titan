@@ -33,6 +33,15 @@ def _apply_skin_to_new_top_windows(before_ids=None):
         return
 
     before_ids = before_ids or set()
+
+    def _apply_recursive(window):
+        try:
+            apply_skin_to_window(window)
+        except Exception:
+            return
+        for child in window.GetChildren():
+            _apply_recursive(child)
+
     try:
         for win in wx.GetTopLevelWindows():
             try:
@@ -40,7 +49,7 @@ def _apply_skin_to_new_top_windows(before_ids=None):
                     continue
                 if id(win) in before_ids:
                     continue
-                apply_skin_to_window(win)
+                _apply_recursive(win)
             except Exception:
                 continue
     except Exception:

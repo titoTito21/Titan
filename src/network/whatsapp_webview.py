@@ -32,10 +32,7 @@ def _apply_skin_to_tree(window):
         return
 
     for child in window.GetChildren():
-        try:
-            apply_skin_to_window(child)
-        except Exception:
-            pass
+        _apply_skin_to_tree(child)
 
 def get_whatsapp_cookies_dir():
     """Get the directory for storing WhatsApp cookies and user data - same as Titan config"""
