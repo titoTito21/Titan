@@ -12,6 +12,7 @@ from src.controller.controller_vibrations import vibrate_cursor_move, vibrate_se
 from src.titan_core.translation import _
 from src.settings.settings import get_setting
 from src.platform_utils import IS_WINDOWS
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -35,6 +36,15 @@ NIN_KEYSELECT = WM_USER + 1
 WM_LBUTTONUP = 0x0202
 WM_RBUTTONUP = 0x0205
 WM_CONTEXTMENU = 0x007B
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
 
 
 class TBBUTTON(ctypes.Structure):
@@ -264,6 +274,7 @@ class SystemTrayListDialog(wx.Dialog):
 
         self.icons = []
         self.init_ui()
+        _apply_skin_to_tree(self)
         self.load_icons()
 
         # Play sound when opening

@@ -44,6 +44,17 @@ _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
 
 
+def _apply_skin_to_tree(window):
+    """Apply current skin to a window and all descendants."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
+
 def speak_elten(text, position=0.0, pitch_offset=0, interrupt=True):
     """Speak text using stereo speech (same as TitanNet)."""
     if not text:
@@ -183,7 +194,7 @@ class EltenLoginDialog(wx.Dialog):
 
     def apply_skin(self):
         try:
-            apply_skin_to_window(self)
+            _apply_skin_to_tree(self)
         except Exception:
             pass
 
@@ -505,7 +516,7 @@ class EltenMainWindow(wx.Frame):
 
     def apply_skin(self):
         try:
-            apply_skin_to_window(self)
+            _apply_skin_to_tree(self)
         except Exception:
             pass
 
@@ -3461,7 +3472,7 @@ class EltenMainWindow(wx.Frame):
         dlg.CentreOnParent()
 
         try:
-            apply_skin_to_window(dlg)
+            _apply_skin_to_tree(dlg)
         except Exception:
             pass
 
@@ -3775,8 +3786,7 @@ class EltenMainWindow(wx.Frame):
         panel.SetSizer(sizer)
 
         try:
-            from src.titan_core.skin_manager import apply_skin_to_window
-            apply_skin_to_window(dlg)
+            _apply_skin_to_tree(dlg)
         except Exception:
             pass
 
@@ -4323,7 +4333,7 @@ class OutgoingCallDialog(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self._on_close)
 
         try:
-            apply_skin_to_window(self)
+            _apply_skin_to_tree(self)
         except Exception:
             pass
 
@@ -4547,7 +4557,7 @@ class IncomingCallDialog(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self._on_close)
 
         try:
-            apply_skin_to_window(self)
+            _apply_skin_to_tree(self)
         except Exception:
             pass
 
@@ -4657,7 +4667,7 @@ class InCallDialog(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self._on_close_event)
 
         try:
-            apply_skin_to_window(self)
+            _apply_skin_to_tree(self)
         except Exception:
             pass
 

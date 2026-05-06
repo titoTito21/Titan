@@ -10,6 +10,18 @@ import re
 from src.titan_core.sound import play_sound, play_focus_sound, play_select_sound
 from src.titan_core.translation import _
 from src.platform_utils import get_subprocess_kwargs, get_base_path, is_frozen, IS_WINDOWS
+from src.titan_core.skin_manager import apply_skin_to_window
+
+
+def _apply_skin_to_tree(window):
+    """Apply current skin to a window and all descendants."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
 
 class UpdateDialog(wx.Dialog):
     def __init__(self, parent, current_version, new_version, changes):
@@ -22,6 +34,7 @@ class UpdateDialog(wx.Dialog):
         
         self.init_ui()
         self.bind_events()
+        _apply_skin_to_tree(self)
         
         # Play newupdate sound 3 seconds before showing dialog
         wx.CallAfter(self.delayed_show)
@@ -126,6 +139,7 @@ class ProgressDialog(wx.Dialog):
                         style=wx.DEFAULT_DIALOG_STYLE)
         
         self.init_ui()
+        _apply_skin_to_tree(self)
 
         # Start playing installation sound in background
         play_sound('system/installingapps.ogg')
@@ -468,9 +482,15 @@ class Updater:
         progress_dialog.Destroy()
         
         if success:
-            # Show success message
-            wx.MessageBox(_("Update completed successfully! Please restart the application."),
-                         _("Update Complete"), wx.OK | wx.ICON_INFORMATION)
+            dlg = wx.MessageDialog(
+                self.parent,
+                _("Update completed successfully! Please restart the application."),
+                _("Update Complete"),
+                wx.OK | wx.ICON_INFORMATION,
+            )
+            _apply_skin_to_tree(dlg)
+            dlg.ShowModal()
+            dlg.Destroy()
             
             # Close application to allow restart
             if self.parent:
@@ -478,9 +498,15 @@ class Updater:
             else:
                 sys.exit(0)
         else:
-            # Show error message
-            wx.MessageBox(_("Update failed. Please try again later."),
-                         _("Update Error"), wx.OK | wx.ICON_ERROR)
+            dlg = wx.MessageDialog(
+                self.parent,
+                _("Update failed. Please try again later."),
+                _("Update Error"),
+                wx.OK | wx.ICON_ERROR,
+            )
+            _apply_skin_to_tree(dlg)
+            dlg.ShowModal()
+            dlg.Destroy()
     
     def check_and_update(self):
         """Main method to check for updates and show dialog if available."""
