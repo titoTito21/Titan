@@ -42,6 +42,14 @@ def _apply_skin_to_tree(window):
         _apply_skin_to_tree(child)
 
 
+def _show_skinned_message(parent, message, title, style=wx.OK | wx.ICON_INFORMATION):
+    dlg = wx.MessageDialog(parent, message, title, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 def _speak_tg(text, position=0.0, pitch_offset=0, interrupt=False):
     """Speak text via stereo speech / ao3 for Telegram chat notifications."""
     if not text or not _tg_speaker:
@@ -329,7 +337,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
             self.message_input.SetFocus()
         else:
             play_sound('error.ogg')
-            wx.MessageBox(_("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
     
     def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""
@@ -889,7 +897,7 @@ class TelegramGroupChatWindow(wx.Frame):
             self.message_input.SetFocus()
         else:
             play_sound('error.ogg')
-            wx.MessageBox(_("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
     
     def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""

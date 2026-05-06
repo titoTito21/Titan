@@ -32,6 +32,15 @@ def _apply_skin_to_tree(window):
     for child in window.GetChildren():
         _apply_skin_to_tree(child)
 
+
+def _show_skinned_message(parent, message, title, style=wx.OK | wx.ICON_INFORMATION):
+    """Show message dialogs that follow the active Titan skin."""
+    dlg = wx.MessageDialog(parent, message, title, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
 class TitanIMLoginDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title=_("Connect to Titan IM"), size=(450, 250))
@@ -416,7 +425,7 @@ class MessengerChatWindow(wx.Frame):
     def on_send_message(self, event):
         """Handle send message"""
         if not self.current_chat:
-            wx.MessageBox(_("Please select a conversation first"), _("No Chat Selected"), wx.OK | wx.ICON_WARNING)
+            _show_skinned_message(self, _("Please select a conversation first"), _("No Chat Selected"), wx.OK | wx.ICON_WARNING)
             return
         
         message = self.message_input.GetValue().strip()
@@ -436,7 +445,7 @@ class MessengerChatWindow(wx.Frame):
             # Refresh conversations to show updated last message
             self.refresh_conversations()
         else:
-            wx.MessageBox(_("Failed to send message"), _("Send Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Failed to send message"), _("Send Error"), wx.OK | wx.ICON_ERROR)
     
     def on_message_received(self, sender, message, conversation_id=None):
         """Handle received message"""
@@ -470,7 +479,7 @@ class MessengerChatWindow(wx.Frame):
     def on_connect(self, event):
         """Handle connect menu item"""
         if is_connected():
-            wx.MessageBox(_("Already connected to Messenger"), _("Connection Status"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(self, _("Already connected to Messenger"), _("Connection Status"), wx.OK | wx.ICON_INFORMATION)
             return
         
         # Show login dialog
@@ -482,20 +491,20 @@ class MessengerChatWindow(wx.Frame):
             success = connect_to_messenger(username)
             if success:
                 platform = messenger_client.user_data.get('platform', 'Unknown')
-                wx.MessageBox(_("Connected to {}").format(platform), _("Connected"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_message(self, _("Connected to {}").format(platform), _("Connected"), wx.OK | wx.ICON_INFORMATION)
             else:
-                wx.MessageBox(_("Failed to connect"), _("Connection Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(self, _("Failed to connect"), _("Connection Error"), wx.OK | wx.ICON_ERROR)
         
         dialog.Destroy()
     
     def on_disconnect(self, event):
         """Handle disconnect menu item"""
         if not is_connected():
-            wx.MessageBox(_("Not connected to Messenger"), _("Connection Status"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(self, _("Not connected to Messenger"), _("Connection Status"), wx.OK | wx.ICON_INFORMATION)
             return
         
         disconnect_from_messenger()
-        wx.MessageBox(_("Disconnected from Messenger"), _("Disconnected"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(self, _("Disconnected from Messenger"), _("Disconnected"), wx.OK | wx.ICON_INFORMATION)
     
     def on_open_web(self, event):
         """Handle open web menu item"""

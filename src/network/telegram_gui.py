@@ -67,6 +67,14 @@ def _show_skinned_info_dialog(parent, title, message):
     dlg.Destroy()
 
 
+def _show_skinned_message(parent, message, title, style=wx.OK | wx.ICON_INFORMATION):
+    dlg = wx.MessageDialog(parent, message, title, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 def speak_telegram(text, position=0.0, pitch_offset=0, interrupt=True):
     """Speak text using stereo speech / ao3 for Telegram notifications."""
     if not text:
@@ -494,7 +502,8 @@ class TelegramChatWindow(wx.Frame):
 
         if not is_voice_calls_available():
             speak_telegram(_("Voice calls not available - py-tgcalls required"), position=0.7, pitch_offset=5)
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Voice calls require py-tgcalls.\nInstall with: pip install py-tgcalls"),
                 _("Voice calls unavailable"),
                 wx.OK | wx.ICON_INFORMATION
@@ -519,7 +528,8 @@ class TelegramChatWindow(wx.Frame):
             # Sound is played in telegram_windows.TelegramPrivateMessageWindow.__init__
         except Exception as e:
             print(f"Error opening private message window: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Cannot open chat window.\nError: {error}").format(error=str(e)),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -533,7 +543,8 @@ class TelegramChatWindow(wx.Frame):
             # Sound is played in telegram_windows.TelegramGroupChatWindow.__init__
         except Exception as e:
             print(f"Error opening group chat window: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Cannot open chat window.\nError: {error}").format(error=str(e)),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -716,7 +727,8 @@ def show_telegram_login(parent=None):
                         print(f"[TELEGRAM GUI] Failed to create chat window: {e}")
                         import traceback
                         traceback.print_exc()
-                        wx.MessageBox(
+                        _show_skinned_message(
+                            parent,
                             _("Error opening Telegram chat window.\nError: {error}").format(error=str(e)),
                             _("Error"), wx.OK | wx.ICON_ERROR,
                         )
@@ -734,9 +746,9 @@ def show_telegram_login(parent=None):
                         pass
                     return chat_window
                 else:
-                    wx.MessageBox(_("Failed to connect to Telegram. Check your phone number and try again."), _("Connection error"), wx.OK | wx.ICON_ERROR)
+                    _show_skinned_message(parent, _("Failed to connect to Telegram. Check your phone number and try again."), _("Connection error"), wx.OK | wx.ICON_ERROR)
             else:
-                wx.MessageBox(_("Failed to start connection. Please try again."), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(parent, _("Failed to start connection. Please try again."), _("Error"), wx.OK | wx.ICON_ERROR)
     else:
         login_dialog.Destroy()
 
