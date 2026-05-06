@@ -20,7 +20,44 @@ _project_root = os.path.dirname(os.path.abspath(__file__))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, is_frozen
+
+
+# Remove old Telegram session files immediately on compiled builds
+# Older versions stored .session files in src/network/ or project root,
+# which got bundled into the executable - delete them before anything else runs
+def _early_telegram_session_cleanup():
+    """Remove stale Telegram session files from old version locations."""
+    session_suffixes = ('.session', '.session-journal', '.session-wal', '.session-shm')
+    try:
+        base_dir = os.path.dirname(os.path.abspath(sys.executable))
+        # Check executable directory and common subdirectories where old sessions may exist
+        search_dirs = [base_dir]
+        internal_network = os.path.join(base_dir, '_internal', 'src', 'network')
+        if os.path.isdir(internal_network):
+            search_dirs.append(internal_network)
+        internal_root = os.path.join(base_dir, '_internal')
+        if os.path.isdir(internal_root):
+            search_dirs.append(internal_root)
+
+        for search_dir in search_dirs:
+            try:
+                for name in os.listdir(search_dir):
+                    if any(name.endswith(s) for s in session_suffixes):
+                        stale = os.path.join(search_dir, name)
+                        try:
+                            os.remove(stale)
+                            print(f"[STARTUP] Removed old Telegram session: {stale}")
+                        except Exception as e:
+                            print(f"[STARTUP] Could not remove {stale}: {e}")
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+if is_frozen():
+    _early_telegram_session_cleanup()
+
 
 # Suppress COM errors BEFORE any imports (Windows only)
 if IS_WINDOWS:
@@ -156,12 +193,112 @@ from src.system.updater import check_for_updates_on_startup
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
 
-VERSION = "0.5"
+VERSION = "0.5.3"
 try:
     speaker = accessible_output3.outputs.auto.Auto()
 except Exception as _e:
     print(f"Warning: Could not initialize accessible_output3: {_e}")
     speaker = None
+
+
+def _kill_other_titan_instances():
+    """Detect any other running TCE instance, announce a restart via Titan TTS /
+    ao3, and terminate it so this new process can take over.
+
+    Returns True if at least one other instance was found and killed.
+    """
+    try:
+        import psutil
+    except ImportError:
+        return False
+
+    try:
+        current_pid = os.getpid()
+        try:
+            current_exe = os.path.realpath(sys.executable).lower()
+        except Exception:
+            current_exe = (sys.executable or '').lower()
+        try:
+            project_dir = os.path.dirname(os.path.abspath(__file__)).lower()
+        except Exception:
+            project_dir = ''
+        compiled = is_frozen()
+
+        targets = []
+        for proc in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+            try:
+                if proc.info['pid'] == current_pid:
+                    continue
+                exe = (proc.info.get('exe') or '').lower()
+                cmdline = proc.info.get('cmdline') or []
+                if compiled:
+                    # Match other instance of the same compiled executable.
+                    if exe and exe == current_exe:
+                        targets.append(proc)
+                else:
+                    # Source mode: another python interpreter running this main.py.
+                    if exe == current_exe:
+                        for arg in cmdline:
+                            try:
+                                if arg.lower().endswith('main.py'):
+                                    arg_dir = os.path.dirname(os.path.realpath(arg)).lower()
+                                    if arg_dir == project_dir:
+                                        targets.append(proc)
+                                        break
+                            except Exception:
+                                continue
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+            except Exception:
+                continue
+
+        if not targets:
+            return False
+
+        # Build the announcement in the active language.
+        try:
+            message = _("Restarting Titan...")
+        except Exception:
+            message = "Restarting Titan..."
+
+        # Speak via Titan TTS first, then ao3 as fallback. Either path is best-effort.
+        spoke = False
+        try:
+            from src.titan_core.tce_speech import speak as _tts_speak
+            _tts_speak(message)
+            spoke = True
+        except Exception:
+            spoke = False
+        if not spoke and speaker is not None:
+            try:
+                speaker.speak(message)
+            except Exception:
+                pass
+
+        # Give the announcement a moment to start before we kill anything.
+        time.sleep(0.6)
+
+        for proc in targets:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        try:
+            gone, alive = psutil.wait_procs(targets, timeout=5)
+            for p in alive:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Brief settle so the old process releases pygame mixer / file locks.
+        time.sleep(1.0)
+        return True
+    except Exception as e:
+        print(f"[STARTUP] Error checking for existing Titan instance: {e}")
+        return False
 
 # Global flag for graceful shutdown
 _shutdown_requested = False
@@ -208,6 +345,42 @@ def main(command_line_args=None):
             set_theme(theme)
         except Exception as e:
             print(f"Error initializing sound system: {e}")
+
+        # Apply Titan TTS SAPI5 registration state (Windows only). The named
+        # pipe server must run whenever the voice is actually registered in
+        # HKLM — otherwise SAPI clients (screen readers) load the DLL, which
+        # tries to connect to \\.\pipe\TitanTTS and fails silently. We check
+        # the real registry state rather than just the setting, because the
+        # voice may have been registered previously and the setting lost.
+        if IS_WINDOWS:
+            try:
+                from src.tts.sapi_registration import apply_sapi_registration, is_registered
+                env_settings = settings.get('environment', {})
+                register_sapi = str(env_settings.get('register_titan_tts_sapi', 'False')).lower() in ['true', '1']
+                apply_sapi_registration(register_sapi, interactive=False)
+                if register_sapi or is_registered():
+                    try:
+                        from src.tts import sapi_pipe_server
+                        sapi_pipe_server.start()
+                    except Exception as e:
+                        print(f"Error starting Titan TTS SAPI pipe server: {e}")
+            except Exception as e:
+                print(f"Error applying Titan TTS SAPI registration: {e}")
+
+            # Install Copilot key hook on the main thread (LL hook binds to it).
+            # Done here, before GUI/IUI startup, so the hook never blocks them.
+            try:
+                env_settings = settings.get('environment', {})
+                copilot_remap = str(env_settings.get('copilot_remap', 'False')).lower() in ['true', '1']
+                if copilot_remap:
+                    from src.system.copilot_key import install_hook
+                    copilot_vk = int(env_settings.get('copilot_replacement_vk', '163'))  # VK_RCONTROL
+                    if install_hook(copilot_vk):
+                        print(f"[Main] Copilot key hook installed (replacement VK=0x{copilot_vk:02X})")
+                    else:
+                        print("[Main] Copilot key hook install failed")
+            except Exception as e:
+                print(f"[Main] Copilot key hook error: {e}")
         
         # Handle quick start setting safely
         try:
@@ -291,6 +464,14 @@ def main(command_line_args=None):
                 else:
                     # Create wx.App for Klango mode
                     klango_app = wx.App(False)
+
+                # Check for updates (same as GUI mode)
+                try:
+                    update_result = check_for_updates_on_startup()
+                except Exception as e:
+                    print(f"Error checking for updates in Klango mode: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 # Create component manager first (without settings_frame initially)
                 try:
@@ -377,6 +558,13 @@ def main(command_line_args=None):
 
                     # Link client to Klango frame
                     klango_frame.titan_client = titan_client
+
+                    # Publish for IUI / LauncherAPI consumers.
+                    try:
+                        from src.network.titan_net import register_active_titan_net_client
+                        register_active_titan_net_client(titan_client, logged_in=False)
+                    except Exception:
+                        pass
 
                     print(f"[KLANGO] Titan-Net client initialized and linked to Klango frame")
 
@@ -473,6 +661,14 @@ def main(command_line_args=None):
                     else:
                         launcher_wx_app = wx.App(False)
 
+                    # Check for updates (same as GUI mode)
+                    try:
+                        update_result = check_for_updates_on_startup()
+                    except Exception as e:
+                        print(f"Error checking for updates in Launcher mode: {e}")
+                        import traceback
+                        traceback.print_exc()
+
                     # Create component manager
                     try:
                         component_manager = ComponentManager(settings_frame=None, gui_app=None)
@@ -529,12 +725,14 @@ def main(command_line_args=None):
                     # Create Titan-Net client
                     titan_client = None
                     try:
-                        from src.network.titan_net import TitanNetClient
+                        from src.network.titan_net import TitanNetClient, register_active_titan_net_client
                         titan_net_settings = settings.get('titan_net', {})
                         server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
                         server_port = int(titan_net_settings.get('server_port', 8001))
                         http_port = int(titan_net_settings.get('http_port', 8000))
                         titan_client = TitanNetClient(server_host=server_host, server_port=server_port, http_port=http_port)
+                        # Publish for IUI / LauncherAPI consumers.
+                        register_active_titan_net_client(titan_client, logged_in=False)
                         print(f"[LAUNCHER] Titan-Net client initialized: ws://{server_host}:{server_port}")
                     except Exception as e:
                         print(f"[LAUNCHER] Warning: Failed to initialize Titan-Net client: {e}")
@@ -719,7 +917,14 @@ if __name__ == "__main__":
     parser.add_argument('--launcher', default=None,
                        help='Launcher folder name to use (requires --startup-mode launcher)')
     args = parser.parse_args()
-    
+
+    # If another TCE instance is already running, announce the restart via
+    # Titan TTS / ao3 and kill the old one before continuing.
+    try:
+        _kill_other_titan_instances()
+    except Exception as _e:
+        print(f"[STARTUP] Single-instance check failed: {_e}")
+
     # Install signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

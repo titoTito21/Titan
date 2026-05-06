@@ -131,7 +131,7 @@ class EltenPlayer(wx.Panel):
     Supports keyboard controls matching the Ruby Elten Player class.
     """
 
-    def __init__(self, parent, file_or_url="", label="", autoplay=True, id=wx.ID_ANY):
+    def __init__(self, parent, file_or_url="", label="", autoplay=True, on_complete=None, id=wx.ID_ANY):
         super().__init__(parent, id, style=wx.TAB_TRAVERSAL | wx.WANTS_CHARS)
 
         self.label = label
@@ -147,6 +147,8 @@ class EltenPlayer(wx.Panel):
         self._play_offset = 0  # Track seek position
         self._original_file = None  # Source file for effects re-processing
         self._effects_timer = None  # Debounce timer for effect changes
+        self._on_complete = on_complete  # Callback when playback finishes
+        self._end_check_timer = None  # Timer for end-of-playback detection
 
         # Audio properties (matching Ruby Player defaults)
         self._volume = 0.8
@@ -220,12 +222,12 @@ class EltenPlayer(wx.Panel):
                 tmp.close()
                 filepath = tmp.name
 
-            # Convert if needed
+            # Convert if needed (to OGG Vorbis for seek support)
             ext = os.path.splitext(filepath)[1].lower()
             if ext in ('.opus',) or ext not in ('.ogg', '.mp3', '.wav'):
-                wav_path = self._convert_to_wav(filepath)
-                if wav_path:
-                    filepath = wav_path
+                ogg_path = self._convert_to_ogg(filepath)
+                if ogg_path:
+                    filepath = ogg_path
 
             # Get duration (ffprobe/pydub) - heavy, must be in pool
             duration = self._get_duration(filepath)
@@ -235,18 +237,18 @@ class EltenPlayer(wx.Panel):
         except Exception as e:
             wx.CallAfter(self._on_load_error, str(e))
 
-    def _convert_to_wav(self, filepath):
-        """Convert audio file to WAV using ffmpeg (for Opus and other unsupported formats)."""
-        wav_path = filepath + '.wav'
+    def _convert_to_ogg(self, filepath):
+        """Convert audio file to OGG Vorbis using ffmpeg (supports seeking via start offset)."""
+        ogg_path = filepath + '.ogg'
         try:
             result = subprocess.run(
-                [_FFMPEG, '-y', '-i', filepath, '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '2', wav_path],
+                [_FFMPEG, '-y', '-i', filepath, '-acodec', 'libvorbis', '-ar', '22050', '-ac', '2', ogg_path],
                 capture_output=True, timeout=30,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
-            if result.returncode == 0 and os.path.exists(wav_path):
-                print(f"[EltenPlayer] Converted to WAV: {wav_path}")
-                return wav_path
+            if result.returncode == 0 and os.path.exists(ogg_path):
+                print(f"[EltenPlayer] Converted to OGG: {ogg_path}")
+                return ogg_path
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -257,10 +259,10 @@ class EltenPlayer(wx.Panel):
             from pydub import AudioSegment
             audio = AudioSegment.from_file(filepath)
             audio = audio.set_frame_rate(22050).set_channels(2)
-            audio.export(wav_path, format='wav')
-            if os.path.exists(wav_path):
-                print(f"[EltenPlayer] Converted to WAV via pydub: {wav_path}")
-                return wav_path
+            audio.export(ogg_path, format='ogg', codec='libvorbis')
+            if os.path.exists(ogg_path):
+                print(f"[EltenPlayer] Converted to OGG via pydub: {ogg_path}")
+                return ogg_path
         except Exception as e:
             print(f"[EltenPlayer] pydub conversion failed: {e}")
 
@@ -329,39 +331,58 @@ class EltenPlayer(wx.Panel):
         """Start or resume playback."""
         global _active_player
         if not self._loaded:
+            print(f"[EltenPlayer] play() called but not loaded yet")
             return
         import pygame
         with _music_lock:
-            if self._paused and _active_player is self and pygame.mixer.music.get_pos() != -1:
-                pygame.mixer.music.unpause()
-            else:
+            try:
                 # Stop previous player and update its state
                 if _active_player is not None and _active_player is not self:
                     try:
                         _active_player._paused = True
+                        _active_player._stop_end_check()
                         _active_player._status_text.SetLabel(_("Paused"))
                     except Exception:
                         pass
-                # Always load file (not loaded in _load_pygame since it's lazy)
+                # Always load and play from _play_offset (never use unpause to avoid
+                # get_pos() double-counting bug)
+                print(f"[EltenPlayer] Loading file: {self._local_file}")
                 pygame.mixer.music.load(self._local_file)
                 pygame.mixer.music.set_volume(self._volume)
                 pygame.mixer.music.play(start=self._play_offset)
-                self._play_start_time = time.time() - self._play_offset
+                print(f"[EltenPlayer] Playing started, offset={self._play_offset}")
                 _active_player = self
+            except Exception as e:
+                print(f"[EltenPlayer] pygame.mixer.music error: {e}")
+                # Fallback: try pygame.mixer.Sound
+                try:
+                    print(f"[EltenPlayer] Trying fallback with pygame.mixer.Sound")
+                    self._fallback_sound = pygame.mixer.Sound(self._local_file)
+                    self._fallback_sound.set_volume(self._volume)
+                    self._fallback_channel = self._fallback_sound.play()
+                    _active_player = self
+                except Exception as e2:
+                    print(f"[EltenPlayer] Fallback also failed: {e2}")
+                    _speak(_("Failed to play audio"))
+                    self._status_text.SetLabel(_("Error"))
+                    return
         self._paused = False
         self._status_text.SetLabel(_("Playing"))
+        self._start_end_check()
 
     def pause(self):
         """Pause playback."""
         import pygame
         with _music_lock:
             if _active_player is self:
-                pygame.mixer.music.pause()
-                # Track current position
+                # Save current absolute position before stopping
                 pos_ms = pygame.mixer.music.get_pos()
                 if pos_ms > 0:
                     self._play_offset = self._play_offset + pos_ms / 1000.0
+                # Use stop() instead of pause() so get_pos() resets on next play()
+                pygame.mixer.music.stop()
         self._paused = True
+        self._stop_end_check()
         self._status_text.SetLabel(_("Paused"))
 
     def toggle_pause(self):
@@ -382,11 +403,13 @@ class EltenPlayer(wx.Panel):
                 pygame.mixer.music.stop()
         self._paused = True
         self._play_offset = 0
+        self._stop_end_check()
         self._status_text.SetLabel(_("Stopped"))
 
     def close(self):
         """Close and release resources."""
         global _active_player
+        self._stop_end_check()
         self.stop()
         self._closed = True
         with _music_lock:
@@ -398,6 +421,36 @@ class EltenPlayer(wx.Panel):
                 os.unlink(self._local_file)
             except Exception:
                 pass
+
+    def _start_end_check(self):
+        """Start a timer to detect when playback finishes naturally."""
+        self._stop_end_check()
+        if self._on_complete and not self._closed:
+            self._end_check_timer = wx.CallLater(500, self._check_playback_end)
+
+    def _stop_end_check(self):
+        """Stop the end-of-playback check timer."""
+        if self._end_check_timer:
+            try:
+                self._end_check_timer.Stop()
+            except Exception:
+                pass
+            self._end_check_timer = None
+
+    def _check_playback_end(self):
+        """Check if playback has ended naturally and fire on_complete callback."""
+        if self._closed or self._paused:
+            return
+        import pygame
+        if _active_player is self and not pygame.mixer.music.get_busy():
+            self._paused = True
+            self._status_text.SetLabel(_("Stopped"))
+            if self._on_complete:
+                wx.CallAfter(self._on_complete)
+            return
+        # Still playing, check again
+        if not self._closed:
+            self._end_check_timer = wx.CallLater(500, self._check_playback_end)
 
     def _get_position(self):
         """Get current playback position in seconds."""
@@ -552,11 +605,11 @@ class EltenPlayer(wx.Panel):
             target = self._original_file
         else:
             af = ','.join(filters)
-            out_file = self._original_file + '_fx.wav'
+            out_file = self._original_file + '_fx.ogg'
             try:
                 result = subprocess.run(
                     [_FFMPEG, '-y', '-i', self._original_file, '-af', af,
-                     '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '2', out_file],
+                     '-acodec', 'libvorbis', '-ar', '22050', '-ac', '2', out_file],
                     capture_output=True, timeout=60,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
@@ -813,3 +866,321 @@ class EltenPlayer(wx.Panel):
             self.close()
         except Exception:
             pass
+
+
+class EltenRecorder(wx.Panel):
+    """Audio recorder widget for EltenLink - records audio to OGG/Opus file.
+
+    Mirrors Ruby OpusRecordButton from elten/src/eapi/Controls.rb.
+    Uses sounddevice for recording and ffmpeg for Opus encoding.
+
+    Keyboard controls:
+        Space       - Start/Stop recording
+        P           - Play/Stop preview of recorded audio
+        Delete      - Delete recorded audio
+        D           - Announce duration of recording
+
+    The recorded audio is saved as OGG/Opus, ready for upload to Elten server.
+    """
+
+    def __init__(self, parent, label="", max_seconds=0):
+        """
+        Args:
+            parent: Parent wx window
+            label: Accessible label for the recorder
+            max_seconds: Max recording duration in seconds (0 = unlimited)
+        """
+        super().__init__(parent, style=wx.WANTS_CHARS)
+        self.label = label or _("Audio recorder")
+        self.max_seconds = max_seconds
+
+        self._recording = False
+        self._recorded = False
+        self._playing_preview = False
+        self._temp_wav = None
+        self._temp_opus = None
+        self._audio_data = None  # Final OGG/Opus bytes
+        self._record_thread = None
+        self._record_start_time = 0
+        self._record_duration = 0
+        self._frames = []
+
+        # Check for sounddevice
+        self._sd_available = False
+        try:
+            import sounddevice
+            self._sd_available = True
+        except ImportError:
+            pass
+
+        self._build_ui()
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+        self.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+
+    def _build_ui(self):
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.status_label = wx.StaticText(self, label=self.label)
+        sizer.Add(self.status_label, flag=wx.ALIGN_CENTER_VERTICAL | wx.ALL, border=5)
+        self.SetSizer(sizer)
+
+    def _update_status(self, text):
+        self.status_label.SetLabel(text)
+        _speak(text)
+
+    def OnFocus(self, event):
+        if self._recording:
+            elapsed = time.time() - self._record_start_time
+            _speak(_("Recording") + f" ({int(elapsed)}s)")
+        elif self._recorded:
+            _speak(self.label + " - " + _("Recorded") + f" ({int(self._record_duration)}s)")
+        else:
+            if self._sd_available:
+                _speak(self.label + " - " + _("Press Space to record"))
+            else:
+                _speak(self.label + " - " + _("Recording unavailable (sounddevice not installed)"))
+        event.Skip()
+
+    def OnKeyDown(self, event):
+        key = event.GetKeyCode()
+
+        if key == wx.WXK_SPACE:
+            if self._playing_preview:
+                self._stop_preview()
+            elif self._recording:
+                self._stop_recording()
+            else:
+                self._start_recording()
+            return
+
+        if key == ord('P') and self._recorded and not self._recording:
+            if self._playing_preview:
+                self._stop_preview()
+            else:
+                self._play_preview()
+            return
+
+        if key == wx.WXK_DELETE and self._recorded and not self._recording:
+            self._delete_recording()
+            return
+
+        if key == ord('D') and self._recorded:
+            _speak(f"{int(self._record_duration)} " + _("seconds"))
+            return
+
+        event.Skip()
+
+    def _start_recording(self):
+        if not self._sd_available:
+            _speak(_("Recording unavailable (sounddevice not installed)"))
+            return
+
+        if self._recorded:
+            self._delete_recording()
+
+        self._recording = True
+        self._frames = []
+        self._record_start_time = time.time()
+        self._update_status(_("Recording..."))
+
+        try:
+            from src.titan_core.sound import play_sound
+            play_sound('ui/record_start.ogg')
+        except Exception:
+            pass
+
+        def record_worker():
+            try:
+                import sounddevice as sd
+                import numpy as np
+
+                samplerate = 48000
+                channels = 1
+
+                def callback(indata, frames, time_info, status):
+                    self._frames.append(indata.copy())
+
+                with sd.InputStream(samplerate=samplerate, channels=channels,
+                                    dtype='int16', callback=callback, blocksize=4800):
+                    while self._recording:
+                        time.sleep(0.1)
+                        if self.max_seconds > 0:
+                            elapsed = time.time() - self._record_start_time
+                            if elapsed >= self.max_seconds:
+                                wx.CallAfter(self._stop_recording)
+                                return
+
+            except Exception as e:
+                wx.CallAfter(self._on_record_error, str(e))
+
+        self._record_thread = threading.Thread(target=record_worker, daemon=True)
+        self._record_thread.start()
+
+    def _stop_recording(self):
+        if not self._recording:
+            return
+
+        self._recording = False
+        self._record_duration = time.time() - self._record_start_time
+
+        try:
+            from src.titan_core.sound import play_sound
+            play_sound('ui/record_stop.ogg')
+        except Exception:
+            pass
+
+        # Convert frames to WAV then to Opus
+        def encode_worker():
+            try:
+                import numpy as np
+                import wave
+
+                if not self._frames:
+                    wx.CallAfter(self._on_record_error, _("No audio recorded"))
+                    return
+
+                # Concatenate all frames
+                audio_data = np.concatenate(self._frames, axis=0)
+
+                # Save as temporary WAV
+                self._temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                with wave.open(self._temp_wav.name, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)  # 16-bit
+                    wf.setframerate(48000)
+                    wf.writeframes(audio_data.tobytes())
+
+                # Convert to Opus using ffmpeg
+                self._temp_opus = tempfile.NamedTemporaryFile(suffix='.opus', delete=False)
+                self._temp_opus.close()
+
+                result = subprocess.run(
+                    [_FFMPEG, '-y', '-i', self._temp_wav.name,
+                     '-c:a', 'libopus', '-b:a', '96k', '-ar', '48000',
+                     self._temp_opus.name],
+                    capture_output=True, timeout=30,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+
+                if result.returncode == 0 and os.path.exists(self._temp_opus.name):
+                    with open(self._temp_opus.name, 'rb') as f:
+                        self._audio_data = f.read()
+                    self._recorded = True
+                    wx.CallAfter(self._update_status,
+                                 _("Recorded") + f" ({int(self._record_duration)}s) - " +
+                                 _("Space: re-record, P: play, Delete: delete"))
+                else:
+                    # Fallback: use raw WAV if Opus encoding fails
+                    with open(self._temp_wav.name, 'rb') as f:
+                        self._audio_data = f.read()
+                    self._recorded = True
+                    wx.CallAfter(self._update_status,
+                                 _("Recorded") + f" ({int(self._record_duration)}s)")
+
+            except Exception as e:
+                wx.CallAfter(self._on_record_error, str(e))
+
+        threading.Thread(target=encode_worker, daemon=True).start()
+
+    def _on_record_error(self, error_msg):
+        self._recording = False
+        self._recorded = False
+        self._update_status(_("Recording failed") + f": {error_msg}")
+
+    def _play_preview(self):
+        if not self._audio_data:
+            return
+
+        self._playing_preview = True
+        _speak(_("Playing..."))
+
+        def play_worker():
+            tmp_opus = None
+            tmp_wav = None
+            try:
+                import pygame
+
+                # Write Opus data to temp file
+                tmp_opus = tempfile.NamedTemporaryFile(suffix='.opus', delete=False)
+                tmp_opus.write(self._audio_data)
+                tmp_opus.close()
+
+                # Convert Opus to WAV using ffmpeg (pygame can't play Opus)
+                tmp_wav = tmp_opus.name + '.wav'
+                result = subprocess.run(
+                    [_FFMPEG, '-y', '-i', tmp_opus.name,
+                     '-acodec', 'pcm_s16le', '-ar', '22050', '-ac', '2',
+                     tmp_wav],
+                    capture_output=True, timeout=30,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                )
+
+                play_file = tmp_wav if result.returncode == 0 and os.path.exists(tmp_wav) else tmp_opus.name
+
+                pygame.mixer.music.load(play_file)
+                pygame.mixer.music.play()
+
+                while pygame.mixer.music.get_busy() and self._playing_preview:
+                    time.sleep(0.1)
+
+                pygame.mixer.music.stop()
+                self._playing_preview = False
+
+            except Exception as e:
+                self._playing_preview = False
+                wx.CallAfter(_speak, _("Playback failed") + f": {e}")
+            finally:
+                for f in [tmp_opus.name if tmp_opus else None, tmp_wav]:
+                    if f:
+                        try:
+                            os.unlink(f)
+                        except Exception:
+                            pass
+
+        threading.Thread(target=play_worker, daemon=True).start()
+
+    def _stop_preview(self):
+        self._playing_preview = False
+        try:
+            import pygame
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+        _speak(_("Stopped"))
+
+    def _delete_recording(self):
+        self._recorded = False
+        self._audio_data = None
+        self._frames = []
+        self._record_duration = 0
+
+        # Clean up temp files
+        for tmp in [self._temp_wav, self._temp_opus]:
+            if tmp:
+                try:
+                    os.unlink(tmp.name if hasattr(tmp, 'name') else tmp)
+                except Exception:
+                    pass
+        self._temp_wav = None
+        self._temp_opus = None
+
+        try:
+            from src.titan_core.sound import play_sound
+            play_sound('editbox_delete')
+        except Exception:
+            pass
+
+        self._update_status(self.label + " - " + _("Deleted"))
+
+    def get_audio_data(self):
+        """Return recorded audio data as bytes, or None if nothing recorded."""
+        return self._audio_data if self._recorded else None
+
+    def has_recording(self):
+        """Return True if audio has been recorded."""
+        return self._recorded
+
+    def close(self):
+        """Cleanup resources."""
+        self._recording = False
+        self._playing_preview = False
+        self._delete_recording()

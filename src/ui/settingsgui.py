@@ -80,6 +80,7 @@ class SettingsFrame(wx.Frame):
 
         # Debounce timers for sliders to prevent hangs
         self.rate_timer = None
+        self.pitch_timer = None
         self.speech_volume_timer = None
         self.theme_volume_timer = None
 
@@ -115,7 +116,7 @@ class SettingsFrame(wx.Frame):
             # Check if the frame and its widgets are still valid
             try:
                 # Try to access a basic window property to verify frame is alive
-                _ = self.GetTitle()
+                _title = self.GetTitle()
             except RuntimeError:
                 print("[SettingsFrame] WARNING: Frame has been destroyed, cannot show")
                 return False
@@ -136,6 +137,16 @@ class SettingsFrame(wx.Frame):
                 traceback.print_exc()
 
         result = super().Show(show)
+
+        # Register/unregister in window switcher
+        try:
+            from src.ui.window_switcher import register_window, unregister_window
+            if show and result:
+                register_window(_("Settings"), window=self, category='app')
+            elif not show:
+                unregister_window(_("Settings"))
+        except Exception:
+            pass
 
         # Set focus to category list when showing the window
         if show and result:
@@ -276,6 +287,18 @@ class SettingsFrame(wx.Frame):
             self.windows_panel = wx.Panel(self.content_panel)
             self.register_category(_("Windows"), self.windows_panel)
 
+        # Titan-Net category (only if credentials are configured)
+        self._titan_net_available = False
+        try:
+            from src.settings.titan_im_config import load_titan_im_config
+            im_config = load_titan_im_config()
+            if im_config.get('titannet_username') and im_config.get('titannet_autologin'):
+                self._titan_net_available = True
+                self.titan_net_panel = wx.Panel(self.content_panel)
+                self.register_category(_("Titan-Net"), self.titan_net_panel)
+        except Exception as e:
+            print(f"[SettingsFrame] Titan-Net category not available: {e}")
+
         # Initialize panels
         self.InitGeneralPanel()
         self.InitSoundPanel()
@@ -287,6 +310,9 @@ class SettingsFrame(wx.Frame):
 
         if sys.platform == 'win32':
             self.InitWindowsPanel()
+
+        if self._titan_net_available:
+            self.InitTitanNetPanel()
 
     def register_category(self, name, panel, save_callback=None, load_callback=None):
         """
@@ -449,12 +475,65 @@ class SettingsFrame(wx.Frame):
 
         self.startup_mode_choice = wx.Choice(self.general_panel)
         self.startup_mode_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        startup_modes = [_("Normal (Graphical interface)"), _("Minimized (Invisible interface)"), _("Classic Mode")]
+        self.startup_mode_choice.Bind(wx.EVT_CHOICE, self.OnStartupModeChanged)
+        startup_modes = [_("Normal (Graphical interface)"), _("Minimized (Invisible interface)"), _("Classic Mode"), _("Custom")]
         self.startup_mode_choice.AppendItems(startup_modes)
         vbox.Add(self.startup_mode_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
         # Add a small spacer
         vbox.AddSpacer(10)
+
+        # --- Launcher selection (visible when Custom mode is selected) ---
+        self.launcher_label = wx.StaticText(self.general_panel, label=_("Available launchers:"))
+        vbox.Add(self.launcher_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.launcher_listbox = wx.ListBox(self.general_panel)
+        self.launcher_listbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.launcher_listbox.Bind(wx.EVT_LISTBOX, self.OnLauncherSelected)
+        vbox.Add(self.launcher_listbox, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        self.launcher_desc_label = wx.StaticText(self.general_panel, label=_("Launcher description:"))
+        vbox.Add(self.launcher_desc_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.launcher_description = wx.TextCtrl(self.general_panel, style=wx.TE_MULTILINE | wx.TE_READONLY, size=(-1, 80))
+        self.launcher_description.SetLabel(_("Launcher description:"))
+        vbox.Add(self.launcher_description, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Populate launcher list
+        self._launcher_configs = []
+        try:
+            from src.titan_core.launcher_manager import LauncherManager
+            lm = LauncherManager()
+            self._launcher_configs = lm.get_available_launchers()
+            for lc in self._launcher_configs:
+                self.launcher_listbox.Append(lc.name)
+        except Exception as e:
+            print(f"[SettingsFrame] Error loading launchers: {e}")
+
+        # --- Categories checklist (visible when GUI/IUI/Klango is selected) ---
+        self.categories_label = wx.StaticText(self.general_panel, label=_("Categories:"))
+        vbox.Add(self.categories_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self._category_ids = ['apps', 'games', 'network']
+        category_names = [_("Applications"), _("Games"), _("Titan IM")]
+        self.categories_checklist = wx.CheckListBox(self.general_panel, choices=category_names)
+        self.categories_checklist.SetLabel(_("Categories:"))
+        self.categories_checklist.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.categories_checklist.Bind(wx.EVT_CHECKLISTBOX, self.OnCategoryChecklistToggle)
+        self.categories_checklist.Bind(wx.EVT_LISTBOX, self.OnCategoryChecklistSelect)
+        self._categories_last_announced_idx = -1
+        # Default: all checked
+        for i in range(len(category_names)):
+            self.categories_checklist.Check(i, True)
+        vbox.Add(self.categories_checklist, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        vbox.AddSpacer(10)
+
+        # Initially hide launcher controls (default mode is normal)
+        self.launcher_label.Hide()
+        self.launcher_listbox.Hide()
+        self.launcher_desc_label.Hide()
+        self.launcher_description.Hide()
 
         self.quick_start_cb = wx.CheckBox(self.general_panel, label=_("Quick start"))
         self.quick_start_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -539,6 +618,38 @@ class SettingsFrame(wx.Frame):
         self.enable_tce_sounds_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.enable_tce_sounds_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.enable_tce_sounds_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        if sys.platform == 'win32':
+            self.register_titan_tts_sapi_cb = wx.CheckBox(self.environment_panel, label=_("Register Titan TTS as SAPI5 voice"))
+            self.register_titan_tts_sapi_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+            self.register_titan_tts_sapi_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+            vbox.Add(self.register_titan_tts_sapi_cb, flag=wx.LEFT | wx.TOP, border=10)
+        else:
+            self.register_titan_tts_sapi_cb = None
+
+        # Copilot key remapping (Windows only, when Copilot key detected)
+        self.copilot_remap_cb = None
+        self.copilot_key_choice = None
+        if sys.platform == 'win32':
+            try:
+                from src.system.copilot_key import detect_copilot_key, REPLACEMENT_KEYS
+                if detect_copilot_key():
+                    self.copilot_remap_cb = wx.CheckBox(self.environment_panel, label=_("Replace Copilot key"))
+                    self.copilot_remap_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+                    self.copilot_remap_cb.Bind(wx.EVT_CHECKBOX, self.OnCopilotRemapChanged)
+                    vbox.Add(self.copilot_remap_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+                    self.copilot_key_choice = wx.Choice(self.environment_panel)
+                    self.copilot_key_choice.SetLabel(_("Replacement key"))
+                    for _vk, name in REPLACEMENT_KEYS:
+                        self.copilot_key_choice.Append(_(name))
+                    self.copilot_key_choice.SetSelection(0)
+                    self.copilot_key_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+                    self.copilot_key_choice.Bind(wx.EVT_CHOICE, self.OnCopilotKeyChoiceChanged)
+                    self.copilot_key_choice.Enable(False)
+                    vbox.Add(self.copilot_key_choice, flag=wx.LEFT | wx.EXPAND | wx.TOP, border=10)
+            except Exception as e:
+                print(f"[Settings] Copilot key detection error: {e}")
 
         self.environment_panel.SetSizer(vbox)
 
@@ -626,6 +737,140 @@ class SettingsFrame(wx.Frame):
         panel.SetSizer(vbox)
         panel.Layout()
 
+    def InitTitanNetPanel(self):
+        """Initialize Titan-Net settings panel with audio business card and notifications."""
+        panel = self.titan_net_panel
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Description
+        desc_text = _("Audio business card allows you to personalize sounds that other users hear when you log in, send a message, or view your profile.")
+        desc_label = wx.StaticText(panel, label=desc_text)
+        desc_label.Wrap(500)
+        vbox.Add(desc_label, flag=wx.LEFT | wx.TOP | wx.RIGHT, border=10)
+
+        vbox.AddSpacer(10)
+
+        # Business card enable checkbox
+        self.business_card_cb = wx.CheckBox(panel, label=_("Custom business card"))
+        self.business_card_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.business_card_cb.Bind(wx.EVT_CHECKBOX, self.OnBusinessCardToggle)
+        vbox.Add(self.business_card_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        vbox.AddSpacer(5)
+
+        # Sound file wildcards
+        self._audio_wildcard = _("Audio files") + " (*.wav;*.ogg;*.mp3)|*.wav;*.ogg;*.mp3"
+        self._avatar_wildcard = _("Audio files") + " (*.wav;*.ogg)|*.wav;*.ogg"
+
+        # Store selected paths
+        self._sound_paths = {
+            'login': '',
+            'logout': '',
+            'new_message': '',
+            'avatar': '',
+        }
+
+        # Login sound
+        self.login_sound_btn = wx.Button(panel, label=_("Login sound"))
+        self.login_sound_btn.Bind(wx.EVT_BUTTON, lambda e: self._browse_sound('login', self._audio_wildcard))
+        self.login_sound_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.login_sound_btn, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # Logout sound
+        self.logout_sound_btn = wx.Button(panel, label=_("Logout sound"))
+        self.logout_sound_btn.Bind(wx.EVT_BUTTON, lambda e: self._browse_sound('logout', self._audio_wildcard))
+        self.logout_sound_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.logout_sound_btn, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # New message sound
+        self.new_message_sound_btn = wx.Button(panel, label=_("New message sound"))
+        self.new_message_sound_btn.Bind(wx.EVT_BUTTON, lambda e: self._browse_sound('new_message', self._audio_wildcard))
+        self.new_message_sound_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.new_message_sound_btn, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # Avatar audio
+        self.avatar_sound_btn = wx.Button(panel, label=_("Avatar audio"))
+        self.avatar_sound_btn.Bind(wx.EVT_BUTTON, lambda e: self._browse_sound('avatar', self._avatar_wildcard))
+        self.avatar_sound_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.avatar_sound_btn, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # Store references for enable/disable
+        self._business_card_controls = [
+            self.login_sound_btn,
+            self.logout_sound_btn,
+            self.new_message_sound_btn,
+            self.avatar_sound_btn,
+        ]
+        # Initially disabled
+        for ctrl in self._business_card_controls:
+            ctrl.Enable(False)
+
+        vbox.AddSpacer(15)
+
+        # Notification checkboxes
+        self.notify_login_logout_cb = wx.CheckBox(panel, label=_("Notify on user login/logout"))
+        self.notify_login_logout_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.notify_login_logout_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.notify_login_logout_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.notify_new_apps_cb = wx.CheckBox(panel, label=_("Notify on new applications"))
+        self.notify_new_apps_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.notify_new_apps_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.notify_new_apps_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.notify_private_msg_cb = wx.CheckBox(panel, label=_("Notify on new private messages"))
+        self.notify_private_msg_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.notify_private_msg_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.notify_private_msg_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.notify_chat_msg_cb = wx.CheckBox(panel, label=_("Notify on new chat messages"))
+        self.notify_chat_msg_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.notify_chat_msg_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.notify_chat_msg_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        panel.SetSizer(vbox)
+        panel.Layout()
+
+    def OnBusinessCardToggle(self, event):
+        """Enable/disable business card controls."""
+        enabled = self.business_card_cb.GetValue()
+        for ctrl in self._business_card_controls:
+            ctrl.Enable(enabled)
+        if not self.is_initializing:
+            play_sound('ui/switch_category.ogg')
+
+    def _browse_sound(self, sound_type, wildcard):
+        """Open file dialog for selecting a business card sound."""
+        max_sec = 30 if sound_type == 'avatar' else 9
+        btn_labels = {
+            'login': _("Login sound"),
+            'logout': _("Logout sound"),
+            'new_message': _("New message sound"),
+            'avatar': _("Avatar audio"),
+        }
+        title = btn_labels.get(sound_type, sound_type) + f" (max {max_sec}s)"
+        dlg = wx.FileDialog(self, title, wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            if not self._validate_audio_duration(path, max_sec):
+                wx.MessageBox(
+                    _("The file '{}' exceeds the maximum duration of {} seconds.").format(
+                        os.path.basename(path), max_sec),
+                    _("Error"), wx.OK | wx.ICON_ERROR)
+                dlg.Destroy()
+                return
+            self._sound_paths[sound_type] = path
+            # Update button label to show selected filename
+            btn = {
+                'login': self.login_sound_btn,
+                'logout': self.logout_sound_btn,
+                'new_message': self.new_message_sound_btn,
+                'avatar': self.avatar_sound_btn,
+            }[sound_type]
+            btn.SetLabel(f"{btn_labels[sound_type]}: {os.path.basename(path)}")
+            play_sound('ui/switch_category.ogg')
+        dlg.Destroy()
+
     def InitStereoSpeechPanel(self):
         """Initialize the Titan TTS Settings panel"""
         panel = self.stereo_speech_panel
@@ -665,6 +910,17 @@ class SettingsFrame(wx.Frame):
         self.rate_slider.Bind(wx.EVT_SLIDER, self.OnRateChanged)
         self.rate_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.rate_slider, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Pitch slider
+        pitch_label = wx.StaticText(panel, label=_("Pitch:"))
+        vbox.Add(pitch_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.pitch_slider = wx.Slider(panel, value=0, minValue=-10, maxValue=10,
+                                      style=wx.SL_HORIZONTAL)
+        self.pitch_slider.SetLabel(_("Pitch"))
+        self.pitch_slider.Bind(wx.EVT_SLIDER, self.OnPitchChanged)
+        self.pitch_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.pitch_slider, flag=wx.LEFT | wx.EXPAND, border=10)
 
         # Volume slider
         volume_label = wx.StaticText(panel, label=_("Speech volume:"))
@@ -741,8 +997,35 @@ class SettingsFrame(wx.Frame):
             self.startup_mode_choice.SetSelection(1)
         elif startup_mode_value == 'klango':
             self.startup_mode_choice.SetSelection(2)
+        elif startup_mode_value == 'launcher':
+            self.startup_mode_choice.SetSelection(3)
         else:
             self.startup_mode_choice.SetSelection(0)
+
+        # Load launcher selection
+        saved_launcher = general_settings.get('launcher', '')
+        if saved_launcher:
+            for i, lc in enumerate(self._launcher_configs):
+                if lc.folder_name == saved_launcher:
+                    self.launcher_listbox.SetSelection(i)
+                    self.launcher_description.SetValue(lc.description or _("No description available."))
+                    break
+
+        # Load visible categories
+        visible_cats = general_settings.get('visible_categories', 'apps,games,network')
+        cat_list = [c.strip() for c in visible_cats.split(',')]
+        for i, cat_id in enumerate(self._category_ids):
+            self.categories_checklist.Check(i, cat_id in cat_list)
+
+        # Show/hide conditional UI based on startup mode
+        is_custom = (startup_mode_value == 'launcher')
+        self.launcher_label.Show(is_custom)
+        self.launcher_listbox.Show(is_custom)
+        self.launcher_desc_label.Show(is_custom)
+        self.launcher_description.Show(is_custom)
+        self.categories_label.Show(not is_custom)
+        self.categories_checklist.Show(not is_custom)
+        self.general_panel.Layout()
 
         interface_settings = self.settings.get('interface', {})
         current_skin = interface_settings.get('skin', 'Domyślna')
@@ -764,6 +1047,21 @@ class SettingsFrame(wx.Frame):
         if self.windows_e_hook_cb is not None:
             self.windows_e_hook_cb.SetValue(str(environment_settings.get('windows_e_hook', 'False')).lower() in ['true', '1'])
         self.enable_tce_sounds_cb.SetValue(str(environment_settings.get('enable_tce_sounds', 'False')).lower() in ['true', '1'])
+        if self.register_titan_tts_sapi_cb is not None:
+            self.register_titan_tts_sapi_cb.SetValue(str(environment_settings.get('register_titan_tts_sapi', 'False')).lower() in ['true', '1'])
+
+        # Copilot key settings
+        if self.copilot_remap_cb is not None:
+            enabled = str(environment_settings.get('copilot_remap', 'False')).lower() in ['true', '1']
+            self.copilot_remap_cb.SetValue(enabled)
+            self.copilot_key_choice.Enable(enabled)
+            copilot_key_vk = int(environment_settings.get('copilot_replacement_vk', '0'))
+            if copilot_key_vk and self.copilot_key_choice is not None:
+                from src.system.copilot_key import REPLACEMENT_KEYS
+                for idx, (vk, _name) in enumerate(REPLACEMENT_KEYS):
+                    if vk == copilot_key_vk:
+                        self.copilot_key_choice.SetSelection(idx)
+                        break
 
         # Load system monitor settings
         system_monitor_settings = self.settings.get('system_monitor', {})
@@ -790,6 +1088,174 @@ class SettingsFrame(wx.Frame):
             self.mute_checkbox.SetValue(str(mute_disabled).lower() in ['true', '1'])
             # Loading initial volume is now in InitWindowsPanel using pycaw
 
+        # Load Titan-Net settings
+        if self._titan_net_available:
+            self.load_titan_net_settings()
+
+    def load_titan_net_settings(self):
+        """Load Titan-Net settings from titan_im_config."""
+        try:
+            from src.settings.titan_im_config import load_titan_im_config
+            config = load_titan_im_config()
+            tn = config.get('titannet_settings', {})
+
+            self.business_card_cb.SetValue(tn.get('business_card_enabled', False))
+            # Enable/disable file pickers based on business card state
+            enabled = self.business_card_cb.GetValue()
+            for ctrl in self._business_card_controls:
+                ctrl.Enable(enabled)
+
+            # Load saved sound paths and update button labels
+            btn_labels = {
+                'login': (_("Login sound"), self.login_sound_btn),
+                'logout': (_("Logout sound"), self.logout_sound_btn),
+                'new_message': (_("New message sound"), self.new_message_sound_btn),
+                'avatar': (_("Avatar audio"), self.avatar_sound_btn),
+            }
+            for key, config_key in [('login', 'login_sound_path'), ('logout', 'logout_sound_path'),
+                                     ('new_message', 'new_message_sound_path'), ('avatar', 'avatar_sound_path')]:
+                path = tn.get(config_key, '')
+                if path:
+                    self._sound_paths[key] = path
+                    label, btn = btn_labels[key]
+                    btn.SetLabel(f"{label}: {os.path.basename(path)}")
+
+            # Notification checkboxes
+            self.notify_login_logout_cb.SetValue(tn.get('notify_login_logout', True))
+            self.notify_new_apps_cb.SetValue(tn.get('notify_new_apps', True))
+            self.notify_private_msg_cb.SetValue(tn.get('notify_private_messages', True))
+            self.notify_chat_msg_cb.SetValue(tn.get('notify_chat_messages', True))
+        except Exception as e:
+            print(f"[SettingsFrame] Error loading Titan-Net settings: {e}")
+
+    def save_titan_net_settings(self):
+        """Save Titan-Net settings to titan_im_config and upload sounds to server."""
+        try:
+            from src.settings.titan_im_config import load_titan_im_config, save_titan_im_config
+
+            config = load_titan_im_config()
+
+            tn_settings = {
+                'business_card_enabled': self.business_card_cb.GetValue(),
+                'login_sound_path': self._sound_paths.get('login', ''),
+                'logout_sound_path': self._sound_paths.get('logout', ''),
+                'new_message_sound_path': self._sound_paths.get('new_message', ''),
+                'avatar_sound_path': self._sound_paths.get('avatar', ''),
+                'notify_login_logout': self.notify_login_logout_cb.GetValue(),
+                'notify_new_apps': self.notify_new_apps_cb.GetValue(),
+                'notify_private_messages': self.notify_private_msg_cb.GetValue(),
+                'notify_chat_messages': self.notify_chat_msg_cb.GetValue(),
+            }
+
+            config['titannet_settings'] = tn_settings
+            save_titan_im_config(config)
+
+            # Upload sounds to server if business card is enabled
+            if self.business_card_cb.GetValue():
+                self._upload_business_card_sounds()
+
+            print("[SettingsFrame] Titan-Net settings saved.")
+        except Exception as e:
+            print(f"[SettingsFrame] Error saving Titan-Net settings: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _validate_audio_duration(self, file_path, max_seconds):
+        """Validate that an audio file does not exceed max_seconds duration."""
+        if not file_path or not os.path.exists(file_path):
+            return True  # No file selected = valid
+
+        try:
+            import wave
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == '.wav':
+                with wave.open(file_path, 'rb') as wf:
+                    frames = wf.getnframes()
+                    rate = wf.getframerate()
+                    duration = frames / float(rate)
+                    return duration <= max_seconds
+            # For ogg/mp3, try pygame
+            try:
+                import pygame
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+                snd = pygame.mixer.Sound(file_path)
+                duration = snd.get_length()
+                return duration <= max_seconds
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[SettingsFrame] Cannot validate audio duration: {e}")
+        return True  # If we can't check, allow it
+
+    def _upload_business_card_sounds(self):
+        """Upload business card sounds to Titan-Net server in background.
+        Uses the existing logged-in client if available."""
+        sound_map = {k: v for k, v in self._sound_paths.items() if v and os.path.exists(v)}
+        if not sound_map:
+            return
+
+        def upload_thread():
+            temp_client = None
+            try:
+                from src.network.titan_net import TitanNetClient
+                from src.settings.titan_im_config import load_titan_im_config
+
+                # Find existing connected client by searching all top-level windows
+                # (GetTopWindow() may return SettingsFrame instead of TitanApp)
+                client = None
+                try:
+                    app = wx.GetApp()
+                    if app:
+                        for window in app.GetTopLevelWindows():
+                            if hasattr(window, 'titan_client'):
+                                c = window.titan_client
+                                if c and c.is_connected and c.user_id and c.username:
+                                    client = c
+                                    break
+                except Exception:
+                    pass
+
+                if client:
+                    print("[SettingsFrame] Using existing Titan-Net connection for sound upload")
+                else:
+                    # No connected client - silently login with saved credentials
+                    config = load_titan_im_config()
+                    username = config.get('titannet_username', '')
+                    password = config.get('titannet_password', '')
+                    if not username or not password:
+                        print("[SettingsFrame] No saved Titan-Net credentials for sound upload")
+                        return
+
+                    temp_client = TitanNetClient()
+                    result = temp_client.login(username, password)
+                    if not result.get('success'):
+                        print(f"[SettingsFrame] Silent login failed: {result.get('message')}")
+                        return
+                    client = temp_client
+                    print("[SettingsFrame] Silent login successful for sound upload")
+
+                # Upload each sound
+                for sound_type, path in sound_map.items():
+                    result = client.upload_user_sound(path, sound_type)
+                    if result.get('success'):
+                        print(f"[SettingsFrame] Uploaded {sound_type} sound successfully")
+                    else:
+                        print(f"[SettingsFrame] Failed to upload {sound_type}: {result.get('error')}")
+            except Exception as e:
+                print(f"[SettingsFrame] Error uploading sounds: {e}")
+            finally:
+                # Disconnect temp client if we created one
+                # Server-side check ensures other sessions stay active
+                if temp_client:
+                    try:
+                        temp_client.logout()
+                    except Exception:
+                        pass
+
+        import threading
+        t = threading.Thread(target=upload_thread, daemon=True)
+        t.start()
 
     def OnSapiSettings(self, event):
         if sys.platform != 'win32':
@@ -895,6 +1361,30 @@ class SettingsFrame(wx.Frame):
 
         event.Skip()
 
+    def OnStartupModeChanged(self, event):
+        """Show/hide launcher or categories controls based on startup mode."""
+        sel = self.startup_mode_choice.GetSelection()
+        is_custom = (sel == 3)
+
+        # Launcher controls
+        self.launcher_label.Show(is_custom)
+        self.launcher_listbox.Show(is_custom)
+        self.launcher_desc_label.Show(is_custom)
+        self.launcher_description.Show(is_custom)
+
+        # Categories controls
+        self.categories_label.Show(not is_custom)
+        self.categories_checklist.Show(not is_custom)
+
+        self.general_panel.Layout()
+        self.content_panel.FitInside()
+
+    def OnLauncherSelected(self, event):
+        """Update launcher description when a launcher is selected."""
+        sel = self.launcher_listbox.GetSelection()
+        if sel != wx.NOT_FOUND and sel < len(self._launcher_configs):
+            config = self._launcher_configs[sel]
+            self.launcher_description.SetValue(config.description or _("No description available."))
 
     def OnThemeSelected(self, event):
         theme = self.theme_choice.GetStringSelection()
@@ -937,13 +1427,34 @@ class SettingsFrame(wx.Frame):
             startup_mode = 'minimized'
         elif startup_mode_selection == 2:
             startup_mode = 'klango'
+        elif startup_mode_selection == 3:
+            startup_mode = 'launcher'
         else:
             startup_mode = 'normal'
+
+        # Build visible categories from checklist
+        checked_cats = []
+        for i, cat_id in enumerate(self._category_ids):
+            if self.categories_checklist.IsChecked(i):
+                checked_cats.append(cat_id)
+        if not checked_cats:
+            # At least one category must be selected
+            checked_cats = ['apps']
+            self.categories_checklist.Check(0, True)
+
+        # Get selected launcher folder name
+        launcher_folder = ''
+        sel = self.launcher_listbox.GetSelection()
+        if sel != wx.NOT_FOUND and sel < len(self._launcher_configs):
+            launcher_folder = self._launcher_configs[sel].folder_name
+
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
             'confirm_exit': str(self.confirm_exit_cb.GetValue()),
             'startup_mode': startup_mode,
-            'language': selected_language
+            'language': selected_language,
+            'launcher': launcher_folder,
+            'visible_categories': ','.join(checked_cats)
         }
 
         if 'interface' not in self.settings:
@@ -963,7 +1474,38 @@ class SettingsFrame(wx.Frame):
         }
         if self.windows_e_hook_cb is not None:
             env_settings['windows_e_hook'] = str(self.windows_e_hook_cb.GetValue())
+        sapi_new_value = None
+        sapi_old_value = None
+        if self.register_titan_tts_sapi_cb is not None:
+            sapi_new_value = self.register_titan_tts_sapi_cb.GetValue()
+            sapi_old_value = str(self.settings.get('environment', {}).get(
+                'register_titan_tts_sapi', 'False')).lower() in ['true', '1']
+            env_settings['register_titan_tts_sapi'] = str(sapi_new_value)
+        if self.copilot_remap_cb is not None:
+            env_settings['copilot_remap'] = str(self.copilot_remap_cb.GetValue())
+            if self.copilot_key_choice is not None:
+                from src.system.copilot_key import REPLACEMENT_KEYS
+                idx = self.copilot_key_choice.GetSelection()
+                if 0 <= idx < len(REPLACEMENT_KEYS):
+                    env_settings['copilot_replacement_vk'] = str(REPLACEMENT_KEYS[idx][0])
         self.settings['environment'] = env_settings
+
+        # Apply SAPI5 registration only if the checkbox state actually changed.
+        # Elevation (UAC) is triggered interactively here; startup sync stays silent.
+        if self.register_titan_tts_sapi_cb is not None and sapi_new_value != sapi_old_value:
+            try:
+                from src.tts.sapi_registration import apply_sapi_registration
+                apply_sapi_registration(sapi_new_value, interactive=True)
+                try:
+                    from src.tts import sapi_pipe_server
+                    if sapi_new_value:
+                        sapi_pipe_server.start()
+                    else:
+                        sapi_pipe_server.stop()
+                except Exception as _e2:
+                    print(f"[Settings] SAPI pipe server toggle failed: {_e2}")
+            except Exception as _e:
+                print(f"[Settings] SAPI registration apply failed: {_e}")
 
         # Save system monitor settings
         volume_monitor_options = ['none', 'sound', 'speech', 'both']
@@ -998,6 +1540,7 @@ class SettingsFrame(wx.Frame):
                 'engine': engine,
                 'voice': voice_value,
                 'rate': str(self.rate_slider.GetValue()),
+                'pitch': str(self.pitch_slider.GetValue()),
                 'volume': str(self.speech_volume_slider.GetValue()),
             }
 
@@ -1028,6 +1571,10 @@ class SettingsFrame(wx.Frame):
             }
 
         save_settings(self.settings)
+
+        # Save Titan-Net settings
+        if self._titan_net_available:
+            self.save_titan_net_settings()
 
         # Call save callbacks for component categories
         for category_name, save_callback in self.category_save_callbacks.items():
@@ -1063,6 +1610,12 @@ class SettingsFrame(wx.Frame):
         """Handle window close event - hide instead of destroy"""
         print("INFO: Settings window closing - hiding instead of destroying.")
         self.Hide()
+        # Unregister from window switcher
+        try:
+            from src.ui.window_switcher import unregister_window
+            unregister_window(_("Settings"))
+        except Exception:
+            pass
         # Don't call event.Skip() or Destroy() - we want to keep the window alive
 
     def apply_skin_settings(self):
@@ -1110,6 +1663,78 @@ class SettingsFrame(wx.Frame):
         else:
             play_sound('core/FOCUS.ogg')
             vibrate_focus_change()  # Add vibration for checkbox unchecked
+        event.Skip()
+
+    def OnCategoryChecklistToggle(self, event):
+        """Handle check/uncheck on the categories CheckListBox.
+
+        wx.CheckListBox does not expose item check state to screen readers
+        on Windows, so we delegate to the accessibility helper which plays
+        ui/cb_listitem_checked.ogg and — 500 ms later, only when a real
+        screen reader is running — speaks just "checked" / "unchecked"
+        (the item name is already read by the SR on focus).
+        """
+        try:
+            idx = event.GetInt()
+        except Exception:
+            idx = event.GetSelection() if hasattr(event, 'GetSelection') else -1
+
+        if idx is None or idx < 0:
+            event.Skip()
+            return
+
+        try:
+            checked = self.categories_checklist.IsChecked(idx)
+        except Exception:
+            event.Skip()
+            return
+
+        self._categories_last_announced_idx = idx
+
+        try:
+            from src.accessibility.messages import announce_checklist_item_toggle
+            announce_checklist_item_toggle(checked)
+        except Exception as e:
+            print(f"[SettingsFrame] announce_checklist_item_toggle error: {e}")
+
+        event.Skip()
+
+    def OnCategoryChecklistSelect(self, event):
+        """Announce the check state while arrowing across CheckListBox rows.
+
+        Screen readers read the item name on focus but not its check state,
+        so for each navigation that lands on a new row we emit the same
+        sound + delayed "checked" / "unchecked" announcement as on toggle.
+        Re-selecting the already-announced row is a no-op so we don't spam
+        the audio when the event fires redundantly.
+        """
+        try:
+            idx = event.GetSelection()
+        except Exception:
+            idx = -1
+
+        if idx is None or idx < 0:
+            event.Skip()
+            return
+
+        if idx == getattr(self, '_categories_last_announced_idx', -1):
+            event.Skip()
+            return
+
+        try:
+            checked = self.categories_checklist.IsChecked(idx)
+        except Exception:
+            event.Skip()
+            return
+
+        self._categories_last_announced_idx = idx
+
+        try:
+            from src.accessibility.messages import announce_checklist_item_navigation
+            announce_checklist_item_navigation(checked)
+        except Exception as e:
+            print(f"[SettingsFrame] announce_checklist_item_navigation error: {e}")
+
         event.Skip()
 
     def _rebuild_engine_config_controls(self, engine_id):
@@ -1401,6 +2026,15 @@ class SettingsFrame(wx.Frame):
         except Exception as e:
             print(f"Error setting initial rate: {e}")
 
+        # Set pitch
+        pitch = int(stereo_settings.get('pitch', '0'))
+        self.pitch_slider.SetValue(pitch)
+        # Apply pitch to stereo speech
+        try:
+            stereo_speech.set_pitch(pitch)
+        except Exception as e:
+            print(f"Error setting initial pitch: {e}")
+
         # Set volume
         volume = int(stereo_settings.get('volume', '100'))
         self.speech_volume_slider.SetValue(volume)
@@ -1476,9 +2110,9 @@ class SettingsFrame(wx.Frame):
         # Debounce the stereo speech calls to prevent hangs
         if self.rate_timer:
             self.rate_timer.cancel()
-        
+
         rate = self.rate_slider.GetValue()
-        
+
         def update_rate():
             try:
                 stereo_speech = get_stereo_speech()
@@ -1486,10 +2120,30 @@ class SettingsFrame(wx.Frame):
                 play_sound('core/FOCUS.ogg')
             except Exception as e:
                 print(f"Error setting rate: {e}")
-        
+
         self.rate_timer = threading.Timer(0.2, update_rate)
         self.rate_timer.start()
-        
+
+        event.Skip()
+
+    def OnPitchChanged(self, event):
+        """Handle pitch slider change"""
+        if self.pitch_timer:
+            self.pitch_timer.cancel()
+
+        pitch = self.pitch_slider.GetValue()
+
+        def update_pitch():
+            try:
+                stereo_speech = get_stereo_speech()
+                stereo_speech.set_pitch(pitch)
+                play_sound('core/FOCUS.ogg')
+            except Exception as e:
+                print(f"Error setting pitch: {e}")
+
+        self.pitch_timer = threading.Timer(0.2, update_pitch)
+        self.pitch_timer.start()
+
         event.Skip()
 
     def OnSpeechVolumeChanged(self, event):
@@ -1510,7 +2164,38 @@ class SettingsFrame(wx.Frame):
         
         self.speech_volume_timer = threading.Timer(0.2, update_volume)
         self.speech_volume_timer.start()
-        
+
+        event.Skip()
+
+    def OnCopilotRemapChanged(self, event):
+        """Handle Copilot remap checkbox change"""
+        enabled = self.copilot_remap_cb.GetValue()
+        if self.copilot_key_choice is not None:
+            self.copilot_key_choice.Enable(enabled)
+        try:
+            from src.system.copilot_key import install_hook, uninstall_hook, REPLACEMENT_KEYS
+            if enabled:
+                idx = self.copilot_key_choice.GetSelection() if self.copilot_key_choice else 0
+                vk = REPLACEMENT_KEYS[idx][0] if 0 <= idx < len(REPLACEMENT_KEYS) else REPLACEMENT_KEYS[0][0]
+                install_hook(vk)
+            else:
+                uninstall_hook()
+        except Exception as e:
+            print(f"[Settings] Copilot hook toggle error: {e}")
+        event.Skip()
+
+    def OnCopilotKeyChoiceChanged(self, event):
+        """Handle Copilot replacement key choice change"""
+        if not self.copilot_remap_cb or not self.copilot_remap_cb.GetValue():
+            event.Skip()
+            return
+        try:
+            from src.system.copilot_key import set_replacement_key, REPLACEMENT_KEYS
+            idx = self.copilot_key_choice.GetSelection()
+            if 0 <= idx < len(REPLACEMENT_KEYS):
+                set_replacement_key(REPLACEMENT_KEYS[idx][0])
+        except Exception as e:
+            print(f"[Settings] Copilot key choice error: {e}")
         event.Skip()
 
 

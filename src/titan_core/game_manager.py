@@ -475,6 +475,18 @@ def _run_python_file(exec_file, game_path, file_type):
     # Build paths to add (ensure no trailing slashes to avoid syntax errors in raw strings)
     paths_to_add = [p.rstrip('\\/') for p in [game_path, PROJECT_ROOT] if p]
 
+    # Add game's library paths for bundled dependencies
+    # Config: libs="lib,vendor" in __game.TCE (comma-separated, relative to game dir)
+    # Default: lib/ if exists
+    _game_info = read_game_info(game_path)
+    _libs_str = _game_info.get('libs', '') if _game_info else ''
+    _lib_dirs = [d.strip() for d in _libs_str.split(',') if d.strip()] if _libs_str.strip() else ['lib']
+    for _ld in _lib_dirs:
+        _full_lib = os.path.join(game_path, _ld)
+        if os.path.isdir(_full_lib):
+            paths_to_add.insert(0, _full_lib.rstrip('\\/'))
+
+
     if is_frozen():
         # Compiled mode
         internal_dir = os.path.join(os.path.dirname(sys.executable), '_internal')
@@ -502,8 +514,16 @@ def _run_python_file(exec_file, game_path, file_type):
 
         command = [python_executable, '-c', code]
 
-        # pythonw.exe already runs without console, no need for special flags
-        subprocess.Popen(command, cwd=game_path, env=env)
+        # Hide console window when using python.exe (pythonw.exe is already windowless)
+        popen_kwargs = {}
+        if IS_WINDOWS and python_executable.lower().endswith('python.exe'):
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            popen_kwargs['startupinfo'] = si
+            popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
+        subprocess.Popen(command, cwd=game_path, env=env, **popen_kwargs)
     else:
         # Development mode - show console for debugging
         env['PYTHONPATH'] = os.pathsep.join(filter(None, [

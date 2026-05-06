@@ -983,20 +983,26 @@ class TelegramGroupChatWindow(wx.Frame):
 
 def open_private_message_window(parent, username):
     """Open private message window for user"""
+    from src.ui.window_switcher import register_window
     window = TelegramPrivateMessageWindow(parent, username)
     window.Show()
+    register_window(f"Telegram: {username}", window=window, category='messenger')
     return window
 
 def open_voice_call_window(parent, username, call_type='outgoing', call_data=None):
     """Open voice call window for user"""
+    from src.ui.window_switcher import register_window
     window = TelegramVoiceCallWindow(parent, username, call_type, call_data)
     window.Show()
+    register_window(f"Telegram {_('Voice call')}: {username}", window=window, category='messenger')
     return window
 
 def open_group_chat_window(parent, group_name):
     """Open group chat window"""
+    from src.ui.window_switcher import register_window
     window = TelegramGroupChatWindow(parent, group_name)
     window.Show()
+    register_window(f"Telegram: {group_name}", window=window, category='messenger')
     return window
 
 

@@ -20,6 +20,19 @@ import importlib.util as _importlib_util
 from src.tts.base_engine import TitanTTSEngine
 
 
+def _log(msg):
+    """Write debug message to engine_registry log file."""
+    try:
+        if getattr(sys, 'frozen', False):
+            log_path = os.path.join(os.path.dirname(sys.executable), 'engine_registry_debug.log')
+        else:
+            log_path = os.path.join(os.path.dirname(__file__), '..', '..', 'engine_registry_debug.log')
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(f"{msg}\n")
+    except Exception:
+        pass
+
+
 class PlatformEngineProxy(TitanTTSEngine):
     """
     Lightweight proxy for platform engines that still live inside StereoSpeech.
@@ -57,9 +70,13 @@ def _get_engines_dir():
     try:
         from src.platform_utils import get_base_path
         base = get_base_path()
-    except ImportError:
+        _log(f"[_get_engines_dir] get_base_path() = {base}")
+    except ImportError as e:
         base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    return os.path.join(base, 'data', 'titantts engines')
+        _log(f"[_get_engines_dir] ImportError fallback, base = {base}, error = {e}")
+    result = os.path.join(base, 'data', 'titantts engines')
+    _log(f"[_get_engines_dir] result = {result}, exists = {os.path.isdir(result)}")
+    return result
 
 
 class EngineRegistry:
@@ -86,12 +103,17 @@ class EngineRegistry:
 
     def _load_engines(self):
         """Scan data/titantts engines/ for folders with __engine__.TCE."""
+        _log(f"[_load_engines] Starting engine scan...")
         engines_dir = _get_engines_dir()
         if not os.path.isdir(engines_dir):
+            _log(f"[_load_engines] Directory NOT FOUND: {engines_dir}")
             print(f"[EngineRegistry] Engines directory not found: {engines_dir}")
             return
 
-        for folder in sorted(os.listdir(engines_dir)):
+        folders = sorted(os.listdir(engines_dir))
+        _log(f"[_load_engines] Found folders: {folders}")
+
+        for folder in folders:
             folder_path = os.path.join(engines_dir, folder)
             if not os.path.isdir(folder_path):
                 continue
@@ -101,10 +123,12 @@ class EngineRegistry:
 
             # Skip folders without __engine__.TCE (e.g. espeak/ which is just bundled binaries)
             if not os.path.exists(tce_config):
+                _log(f"[_load_engines] {folder}: no __engine__.TCE, skipping")
                 continue
 
             # Skip folders without __engine__.py
             if not os.path.exists(engine_py):
+                _log(f"[_load_engines] {folder}: no __engine__.py, skipping")
                 print(f"[EngineRegistry] '{folder}' has __engine__.TCE but no __engine__.py, skipping")
                 continue
 
@@ -121,6 +145,7 @@ class EngineRegistry:
                 print(f"[EngineRegistry] Engine '{engine_name}' ({folder}) is disabled, skipping")
                 continue
 
+            _log(f"[_load_engines] {folder}: loading engine '{engine_name}'...")
             self._load_engine(folder, engine_py, folder_path, engine_name)
 
     def _read_tce_config(self, tce_path):
@@ -140,6 +165,30 @@ class EngineRegistry:
     def _load_engine(self, folder_name, engine_py_path, folder_path, engine_name):
         """Load a single engine from __engine__.py."""
         try:
+            _log(f"[_load_engine] {folder_name}: engine_py = {engine_py_path}, exists = {os.path.isfile(engine_py_path)}")
+
+            # Add engine's directory and library paths to sys.path
+            if folder_path not in sys.path:
+                sys.path.insert(0, folder_path)
+
+            # Read libs from __engine__.TCE config (libs = lib, vendor)
+            # Default: lib/ if exists
+            _tce_path = os.path.join(folder_path, '__engine__.TCE')
+            _lib_dirs = ["lib"]
+            if os.path.isfile(_tce_path):
+                _cfg = configparser.ConfigParser()
+                try:
+                    _cfg.read(_tce_path, encoding='utf-8')
+                    _libs_str = _cfg.get('engine', 'libs', fallback='')
+                    if _libs_str.strip():
+                        _lib_dirs = [d.strip() for d in _libs_str.split(',') if d.strip()]
+                except Exception:
+                    pass
+            for _ld in _lib_dirs:
+                _full_lib = os.path.join(folder_path, _ld)
+                if os.path.isdir(_full_lib) and _full_lib not in sys.path:
+                    sys.path.insert(0, _full_lib)
+
             module_name = f"titantts_engine_{folder_name}"
             spec = _importlib_util.spec_from_file_location(module_name, engine_py_path)
             module = _importlib_util.module_from_spec(spec)
@@ -158,27 +207,35 @@ class EngineRegistry:
             else:
                 module._ = lambda s: s
 
+            _log(f"[_load_engine] {folder_name}: executing module...")
             spec.loader.exec_module(module)
+            _log(f"[_load_engine] {folder_name}: module executed OK")
 
             # Engine must define get_engine() returning a TitanTTSEngine instance
             get_engine_func = getattr(module, 'get_engine', None)
             if get_engine_func is None:
+                _log(f"[_load_engine] {folder_name}: no get_engine() function!")
                 print(f"[EngineRegistry] Engine '{folder_name}' has no get_engine() function")
                 return
 
             engine = get_engine_func()
+            _log(f"[_load_engine] {folder_name}: engine_id={engine.engine_id}, available={engine.is_available()}")
 
             if engine.engine_id in self._engines:
+                _log(f"[_load_engine] {folder_name}: CONFLICT with existing engine_id '{engine.engine_id}'")
                 print(f"[EngineRegistry] Engine '{folder_name}' engine_id '{engine.engine_id}' conflicts with existing engine, skipping")
                 return
 
             self._engines[engine.engine_id] = engine
+            _log(f"[_load_engine] {folder_name}: SUCCESS - registered as '{engine.engine_id}'")
             print(f"[EngineRegistry] Loaded engine: {engine.engine_name} ({engine.engine_id}) from {folder_name}/")
 
         except Exception as e:
+            _log(f"[_load_engine] {folder_name}: EXCEPTION: {e}")
             print(f"[EngineRegistry] Error loading engine '{folder_name}': {e}")
             import traceback
             traceback.print_exc()
+            _log(f"[_load_engine] {folder_name}: traceback: {traceback.format_exc()}")
 
     # ------------------------------------------------------------------
     # Platform engine proxies

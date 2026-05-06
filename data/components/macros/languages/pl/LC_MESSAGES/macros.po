@@ -1,0 +1,231 @@
+# Polish translations for Macro Manager component
+# Copyright (C) 2026 Titosoft
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TCE Macro Manager 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-07 00:00+0000\n"
+"PO-Revision-Date: 2026-03-07 00:00+0000\n"
+"Last-Translator: \n"
+"Language: pl\n"
+"Language-Team: Polish\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Macro Manager"
+msgstr "Menedżer makr"
+
+msgid "Macros"
+msgstr "Makra"
+
+msgid "Macros:"
+msgstr "Makra:"
+
+msgid "Run"
+msgstr "Uruchom"
+
+msgid "Edit"
+msgstr "Edytuj"
+
+msgid "Configure"
+msgstr "Konfiguruj"
+
+msgid "Delete"
+msgstr "Usuń"
+
+msgid "Hotkey"
+msgstr "Skrót klawiszowy"
+
+msgid "Hotkey for: {}"
+msgstr "Skrót klawiszowy dla: {}"
+
+msgid "Select a macro first to set hotkey"
+msgstr "Najpierw wybierz makro, aby ustawić skrót"
+
+msgid "Press desired key combination:"
+msgstr "Naciśnij wybrany skrót klawiszowy:"
+
+msgid "Save Hotkey"
+msgstr "Zapisz skrót"
+
+msgid "Clear Hotkey"
+msgstr "Wyczyść skrót"
+
+msgid "Hotkey set to {}"
+msgstr "Skrót ustawiony na {}"
+
+msgid "Hotkey cleared"
+msgstr "Skrót wyczyszczony"
+
+msgid "Import Macro"
+msgstr "Importuj makro"
+
+msgid "Import a macro from a folder or ZIP file"
+msgstr "Importuj makro z folderu lub pliku ZIP"
+
+msgid "Name (English):"
+msgstr "Nazwa (angielski):"
+
+msgid "Name (Polish):"
+msgstr "Nazwa (polski):"
+
+msgid "Browse..."
+msgstr "Przeglądaj..."
+
+msgid "Script file:"
+msgstr "Plik skryptu:"
+
+msgid "Import"
+msgstr "Importuj"
+
+msgid "Macro imported successfully"
+msgstr "Makro zaimportowane pomyślnie"
+
+msgid "New Macro"
+msgstr "Nowe makro"
+
+msgid "Macro type:"
+msgstr "Typ makra:"
+
+msgid "TCE Macro (.macro)"
+msgstr "Makro TCE (.macro)"
+
+msgid "AutoHotKey Script (.ahk)"
+msgstr "Skrypt AutoHotKey (.ahk)"
+
+msgid "AutoIt Script (.au3)"
+msgstr "Skrypt AutoIt (.au3)"
+
+msgid "Script filename:"
+msgstr "Nazwa pliku skryptu:"
+
+msgid "Create"
+msgstr "Utwórz"
+
+msgid "Close"
+msgstr "Zamknij"
+
+msgid "No macros found"
+msgstr "Nie znaleziono makr"
+
+msgid "No macro selected"
+msgstr "Nie wybrano makra"
+
+msgid "Macro is empty"
+msgstr "Makro jest puste"
+
+msgid "Macro file not found"
+msgstr "Nie znaleziono pliku makra"
+
+msgid "Error running macro: {}"
+msgstr "Błąd uruchamiania makra: {}"
+
+msgid "Recording... Press Shift+Escape to stop"
+msgstr "Nagrywanie... Naciśnij Shift+Escape aby zakończyć"
+
+msgid "Macro created"
+msgstr "Makro utworzone"
+
+msgid "No keyboard recording library available"
+msgstr "Brak dostępnej biblioteki do nagrywania klawiatury"
+
+msgid "This macro requires {} interpreter"
+msgstr "To makro wymaga interpretera {}"
+
+msgid "Do you want to download and install {}?"
+msgstr "Czy chcesz pobrać i zainstalować {}?"
+
+msgid "Install {}"
+msgstr "Zainstaluj {}"
+
+msgid "License:"
+msgstr "Licencja:"
+
+msgid "Loading license..."
+msgstr "Ładowanie licencji..."
+
+msgid "Could not fetch license: {}"
+msgstr "Nie udało się pobrać licencji: {}"
+
+msgid "Install"
+msgstr "Zainstaluj"
+
+msgid "Cancel"
+msgstr "Anuluj"
+
+msgid "Downloading..."
+msgstr "Pobieranie..."
+
+msgid "Installing..."
+msgstr "Instalowanie..."
+
+msgid "Installation failed: {}"
+msgstr "Instalacja nie powiodła się: {}"
+
+msgid "Error"
+msgstr "Błąd"
+
+msgid "AutoHotKey is only available on Windows"
+msgstr "AutoHotKey jest dostępny tylko na Windows"
+
+msgid "AutoIt is only available on Windows"
+msgstr "AutoIt jest dostępny tylko na Windows"
+
+msgid "This macro requires AutoHotKey interpreter"
+msgstr "To makro wymaga interpretera AutoHotKey"
+
+msgid "This macro requires AutoIt interpreter"
+msgstr "To makro wymaga interpretera AutoIt"
+
+msgid "Cannot edit executable macros"
+msgstr "Nie można edytować makr wykonywalnych"
+
+msgid "Are you sure you want to delete '{}'?"
+msgstr "Czy na pewno chcesz usunąć '{}'?"
+
+msgid "Delete Macro"
+msgstr "Usuń makro"
+
+msgid "Macro deleted"
+msgstr "Makro usunięte"
+
+msgid "Please enter a macro name"
+msgstr "Proszę wpisać nazwę makra"
+
+msgid "Please browse for a file first"
+msgstr "Najpierw wybierz plik"
+
+msgid "Please select the script file"
+msgstr "Proszę wybrać plik skryptu"
+
+msgid "Please fill in all fields"
+msgstr "Proszę wypełnić wszystkie pola"
+
+msgid "Macro files"
+msgstr "Pliki makr"
+
+msgid "All files"
+msgstr "Wszystkie pliki"
+
+msgid "Hotkey: {}"
+msgstr "Skrót: {}"
+
+msgid "Hotkey: not set. Press a key combination."
+msgstr "Skrót: nie ustawiony. Naciśnij kombinację klawiszy."
+
+msgid "Beginning of macro"
+msgstr "Początek makra"
+
+msgid "Back"
+msgstr "Wstecz"
+
+msgid "Macro Manager"
+msgstr "Menedżer makr"
+
+msgid "Announce macro actions with sound"
+msgstr "Oznajmiaj dźwiękiem czynności menedżera makr"
+
+msgid "Announce macro actions with speech"
+msgstr "Oznajmiaj mową czynności menedżera makr"

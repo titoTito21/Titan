@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-07 10:57+0100\n"
+"POT-Creation-Date: 2026-05-05 13:38+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -89,62 +89,62 @@ msgstr ""
 msgid "Controllers refreshed successfully"
 msgstr ""
 
-#: src/controller/controller_modes.py:164
-#: src/controller/controller_modes.py:167
+#: src/controller/controller_modes.py:166
+#: src/controller/controller_modes.py:169
 msgid "on"
 msgstr ""
 
-#: src/controller/controller_modes.py:164
-#: src/controller/controller_modes.py:167
+#: src/controller/controller_modes.py:166
+#: src/controller/controller_modes.py:169
 msgid "off"
 msgstr ""
 
-#: src/controller/controller_modes.py:165
+#: src/controller/controller_modes.py:167
 msgid "Caps Lock"
 msgstr ""
 
-#: src/controller/controller_modes.py:168
+#: src/controller/controller_modes.py:170
 msgid "Shift"
 msgstr ""
 
-#: src/controller/controller_modes.py:170
+#: src/controller/controller_modes.py:172
 msgid "Space"
 msgstr ""
 
-#: src/controller/controller_modes.py:172
+#: src/controller/controller_modes.py:174
 msgid "Enter"
 msgstr ""
 
-#: src/controller/controller_modes.py:277
+#: src/controller/controller_modes.py:279
 msgid "System mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:278
+#: src/controller/controller_modes.py:280
 msgid "Controller mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:279
+#: src/controller/controller_modes.py:281
 msgid "Screen reader mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:280
+#: src/controller/controller_modes.py:282
 msgid "Screen keyboard mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:283
+#: src/controller/controller_modes.py:285
 msgid "Unknown mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:519
+#: src/controller/controller_modes.py:524
 msgid "Exiting screen reader"
 msgstr ""
 
-#: src/controller/controller_modes.py:555
+#: src/controller/controller_modes.py:560
 #, python-brace-format
 msgid "Typed {}"
 msgstr ""
 
-#: src/controller/controller_modes.py:562
+#: src/controller/controller_modes.py:567
 msgid "Backspace"
 msgstr ""
 

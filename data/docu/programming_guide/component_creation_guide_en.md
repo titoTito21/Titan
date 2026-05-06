@@ -141,7 +141,7 @@ def get_klango_hooks():
 
 ## Component View Registration API
 
-**NEW!** Components can add custom tabs/views to the main GUI left panel. Registered views appear in Ctrl+Tab cycle alongside built-in views (Application List, Game List, Titan IM).
+Components can add custom tabs/views to the main GUI left panel. Registered views appear in the virtual tab bar (first row of the list) and Ctrl+Tab cycle alongside built-in views (Application List, Game List, Titan IM).
 
 ### register_view() Parameters
 
@@ -153,14 +153,35 @@ def get_klango_hooks():
 | `on_show` | callable | No | Called every time view becomes visible (refresh data) |
 | `on_activate` | callable | No | Called when user presses Enter on control |
 | `position` | str/int | No | Position in cycle: `'after_apps'`, `'after_games'`, `'after_network'` (default), or integer index |
+| `short_name` | str | No | Short label used for the tab bar row and toolbar button (defaults to `label` with trailing colon stripped) |
 
 ### How it works
 
-- Registered control is added to left panel sizer (hidden by default)
+- Registered control is added to the left panel sizer (hidden by default).
+- The first row of the list (item 0) is a **virtual tab bar** auto-injected by `register_view()`. Text: `"ViewName, N of M"`. Left/Right arrows on item 0 cycle through views.
 - User presses Ctrl+Tab to cycle views: Apps → Games → [your view] → Titan IM → ...
-- Tab/Shift+Tab navigates between view control and status bar
-- Enter on view control calls `on_activate` (if provided)
-- TTS announces view label and position, e.g. "My Notes, 3 of 4"
+- Tab/Shift+Tab navigates between view control and status bar.
+- Enter on view control calls `on_activate` (if provided).
+- TTS announces view label and position, e.g. "My Notes, 3 of 4".
+- Each registered view also gets a toolbar button (label = `short_name`).
+
+### Tab bar auto-sync
+
+Components often call `control.Clear()` / `tree.DeleteAllItems()` to repopulate their lists. Clearing wipes out the injected tab bar row too. `register_view()` handles this automatically through:
+
+- **`EVT_SET_FOCUS`** — re-injects the tab bar row whenever focus enters the view.
+- **`EVT_LISTBOX`** (only `wx.ListBox`) — re-injects on selection change.
+
+If you repopulate from somewhere else and need an immediate refresh, call **`component_manager.sync_view_tab_bar(view_id_or_control)`** or **`gui_app.sync_view_tab_bar(view_id_or_control)`**:
+
+```python
+def refresh_my_data(self):
+    self._listbox.Clear()
+    for item in self._items:
+        self._listbox.Append(item)
+    # Force immediate tab bar row re-injection
+    self.component_manager.sync_view_tab_bar('my_view_id')
+```
 
 ## Complete Examples
 

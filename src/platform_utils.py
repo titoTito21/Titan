@@ -36,6 +36,7 @@ def get_base_path():
 
     - Frozen (PyInstaller/Nuitka): directory containing the executable
     - macOS .app bundle: Contents/MacOS/ directory
+    - Subprocess in compiled distribution (_internal/python.exe): parent of _internal/
     - Development: project root (directory containing main.py)
 
     This is the primary path used to locate bundled resources and data.
@@ -43,6 +44,11 @@ def get_base_path():
     if is_frozen():
         return os.path.dirname(sys.executable)
     else:
+        # Check if running as subprocess inside a compiled distribution
+        # (e.g. apps/games launched via _internal/pythonw.exe)
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        if os.path.basename(exe_dir) == '_internal':
+            return os.path.dirname(exe_dir)
         # Development mode - project root
         # This file is at src/platform_utils.py, so go up one level
         return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))

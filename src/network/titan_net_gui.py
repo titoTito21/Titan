@@ -4,11 +4,22 @@ Follows TCE design patterns with skin support and automatic updates
 """
 import wx
 import sys
+import struct
 import threading
 import queue
 import accessible_output3.outputs.auto
 from src.network.titan_net import TitanNetClient
-from src.titan_core.sound import play_sound
+import os
+import tempfile
+from src.titan_core.sound import play_sound, play_sound_file, initialize_sound
+
+# Guarantee the pygame mixer is initialized even when Titan-Net is opened
+# from a context where the main TCE GUI never ran (launcher mode, direct
+# module launch). initialize_sound() is idempotent and self-healing.
+try:
+    initialize_sound()
+except Exception as _e:
+    print(f"[Titan-Net] initialize_sound() failed at import: {_e}")
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 from src.titan_core.skin_manager import get_skin_manager, apply_skin_to_window
@@ -164,6 +175,7 @@ class LoginDialog(wx.Dialog):
         self.titan_client = titan_client
         self.logged_in = False
         self.offline_mode = False  # No longer set by dialog, but kept for compatibility
+        self.motd = None  # Message of the Day data from server
 
         self.InitUI()
         self.Centre()
@@ -231,7 +243,7 @@ class LoginDialog(wx.Dialog):
 
     def OnFocus(self, event):
         """Handle focus events with sound"""
-        play_sound('core/FOCUS.ogg', position=0.5)
+        play_sound('core/FOCUS.ogg', pan=0.5)
         event.Skip()
 
     def OnKeyPress(self, event):
@@ -363,32 +375,26 @@ class LoginDialog(wx.Dialog):
             # Store unread messages summary for post-login notification
             unread_summary = result.get('unread_messages_summary', [])
 
+            # Store MOTD data for post-login display
+            self.motd = result.get('motd')
+
             # Close dialog immediately to avoid errors
             self.EndModal(wx.ID_OK)
             print("[TITAN-NET LOGIN] Dialog should be closed now")
 
-            # Speak after dialog is closed (sound plays in gui.py to avoid duplication)
+            # Notify about unread messages after dialog closes (login TTS handled by gui.py)
             def post_login_feedback():
                 try:
-                    speak_titannet(_("Login successful"))
-
-                    username = self.titan_client.username
-                    if username:
-                        login_message = _("Logged in as: {username}").format(username=username)
-                        speak_titannet(login_message)
-
-                    # Notify about unread messages
                     if unread_summary:
                         notification_msg = self._format_unread_notification(unread_summary)
                         if notification_msg:
-                            # Play notification sound and speak
                             play_sound('titannet/new_message.ogg')
                             speak_titannet(notification_msg)
                 except Exception as e:
                     print(f"Error in post-login feedback: {e}")
 
-            # Schedule feedback to run after dialog closes
-            wx.CallLater(100, post_login_feedback)
+            if unread_summary:
+                wx.CallLater(2000, post_login_feedback)
         else:
             error_message = result.get('message', _("Login failed"))
             speak_titannet(error_message)
@@ -601,7 +607,7 @@ class CreateAccountDialog(wx.Dialog):
 
     def OnFocus(self, event):
         """Handle focus events with sound"""
-        play_sound('core/FOCUS.ogg', position=0.5)
+        play_sound('core/FOCUS.ogg', pan=0.5)
         event.Skip()
 
     def OnKeyPress(self, event):
@@ -789,7 +795,7 @@ class ForumTopicWindow(wx.Frame):
 
     def OnFocus(self, event):
         """Handle focus events with sound"""
-        play_sound('core/FOCUS.ogg', position=0.5)
+        play_sound('core/FOCUS.ogg', pan=0.5)
         event.Skip()
 
     def OnKeyPress(self, event):
@@ -810,14 +816,16 @@ class ForumTopicWindow(wx.Frame):
             event.Skip()
 
     def load_topic_data(self):
-        """Load topic and replies data"""
+        """Load topic and replies data - parallel fetch"""
         speak_titannet(_("Loading topic..."))
 
         def load_thread():
-            # Get topic details
-            topic_result = self.titan_client.get_forum_topic(self.topic_id)
-            # Get replies
-            replies_result = self.titan_client.get_forum_replies(self.topic_id)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                topic_future = pool.submit(self.titan_client.get_forum_topic, self.topic_id)
+                replies_future = pool.submit(self.titan_client.get_forum_replies, self.topic_id)
+                topic_result = topic_future.result()
+                replies_result = replies_future.result()
             wx.CallAfter(self._display_topic_data, topic_result, replies_result)
 
         threading.Thread(target=load_thread, daemon=True).start()
@@ -850,8 +858,12 @@ class ForumTopicWindow(wx.Frame):
         )
         self.topic_info_label.SetLabel(info_text)
 
-        # Set topic content
-        self.topic_content.SetValue(topic.get('content', ''))
+        # Set topic content and auto-size height
+        content_value = topic.get('content', '')
+        self.topic_content.SetValue(content_value)
+        line_count = max(content_value.count('\n') + 1, 3)
+        topic_height = min(line_count * 20 + 10, 400)
+        self.topic_content.SetMinSize((-1, topic_height))
 
         # Display replies
         if replies_result.get('success'):
@@ -893,12 +905,15 @@ class ForumTopicWindow(wx.Frame):
                 header_label = wx.StaticText(self.scroll, label=header_text)
                 reply_box.Add(header_label, flag=wx.LEFT | wx.RIGHT | wx.TOP, border=5)
 
-                # Reply content
+                # Reply content - auto-size height based on line count
+                content_value = reply.get('content', '')
+                line_count = max(content_value.count('\n') + 1, 2)
+                reply_height = min(line_count * 20 + 10, 300)
                 reply_content = wx.TextCtrl(
                     self.scroll,
                     style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP,
-                    size=(-1, 60),
-                    value=reply.get('content', '')
+                    size=(-1, reply_height),
+                    value=content_value
                 )
                 reply_content.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
@@ -1098,6 +1113,10 @@ class TitanNetMainWindow(wx.Frame):
         self.selected_user_id = None
         self.force_close = False  # Flag to force window close (on disconnect)
 
+        # Last private message sender — used by Ctrl+O quick-reply shortcut
+        self._last_pm_sender_id = None
+        self._last_pm_sender_username = None
+
         # User role info
         self.user_role = "user"  # user, moderator, developer
         self.is_moderator = False
@@ -1120,6 +1139,11 @@ class TitanNetMainWindow(wx.Frame):
 
         # Message deduplication - store IDs of displayed messages
         self.displayed_message_ids = set()
+
+        # Business card sound cache: {username: {sound_type: local_path}}
+        self._business_card_cache = {}
+        self._business_card_cache_dir = os.path.join(tempfile.gettempdir(), 'titan_business_cards')
+        os.makedirs(self._business_card_cache_dir, exist_ok=True)
 
         # Load user role
         self.load_user_role()
@@ -1147,6 +1171,16 @@ class TitanNetMainWindow(wx.Frame):
 
         # Bind Escape key to close
         self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
+
+        # Hard-wired Escape accelerator. Fires regardless of which child control
+        # currently has focus, so the user can always leave a room even if a
+        # multiline TextCtrl swallows the key on Windows. This is the
+        # last-resort backup for the room-exit hang in text-only rooms.
+        self._force_back_id = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, self._on_force_back, id=self._force_back_id)
+        self.SetAcceleratorTable(wx.AcceleratorTable([
+            (wx.ACCEL_NORMAL, wx.WXK_ESCAPE, self._force_back_id),
+        ]))
 
         play_sound('ui/window_open.ogg')
 
@@ -1181,20 +1215,29 @@ class TitanNetMainWindow(wx.Frame):
         # Room users listbox (shown in room chat view before message history)
         self.room_users_listbox = wx.ListBox(self.panel)
         self.room_users_listbox.Bind(wx.EVT_LISTBOX, self.OnListSelection)
+        self.room_users_listbox.Bind(wx.EVT_KEY_DOWN, self.OnListKeyDown)
         self.room_users_listbox.Bind(wx.EVT_CONTEXT_MENU, self.OnRoomUserContextMenu)
         self.room_users_listbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.room_users_listbox.Hide()
         self.main_vbox.Add(self.room_users_listbox, proportion=0, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
 
-        # Message display (for chat - hidden by default)
-        self.message_display = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP)
+        # Message display: report-mode list with Nick / Message / Date columns.
+        # Enter on a row opens a read-only multiline dialog with the full message.
+        self.message_display = wx.ListCtrl(self.panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.message_display.AppendColumn(_("Nick"), width=140)
+        self.message_display.AppendColumn(_("Message"), width=420)
+        self.message_display.AppendColumn(_("Date"), width=140)
+        self.message_display.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.OnMessageActivated)
+        self.message_display.Bind(wx.EVT_KEY_DOWN, self.OnMessageDisplayKeyDown)
+        self.message_display.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.message_display.Hide()
+        self._message_records = []  # parallel list of full message data per row
         self.main_vbox.Add(self.message_display, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
-        # Message input (for chat - hidden by default)
+        # Message input (for chat - hidden by default, multiline with Ctrl+Enter to send)
         input_box = wx.BoxSizer(wx.HORIZONTAL)
-        self.message_input = wx.TextCtrl(self.panel, style=wx.TE_PROCESS_ENTER)
-        self.message_input.Bind(wx.EVT_TEXT_ENTER, self.OnSendMessage)
+        self.message_input = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_WORDWRAP, size=(-1, 80))
+        self.message_input.Bind(wx.EVT_KEY_DOWN, self.OnMessageInputKeyDown)
         self.message_input.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.message_input.Hide()
         input_box.Add(self.message_input, proportion=1, flag=wx.RIGHT, border=5)
@@ -1211,19 +1254,19 @@ class TitanNetMainWindow(wx.Frame):
         self.voice_panel = wx.Panel(self.panel)
         voice_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Voice controls row 1: Microphone and mode
+        # Voice controls row 1: Voice mode radio buttons + mute
         voice_row1 = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.mic_button = wx.Button(self.voice_panel, label=_("Enable Microphone"))
-        self.mic_button.Bind(wx.EVT_BUTTON, self.OnMicToggle)
-        self.mic_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        voice_row1.Add(self.mic_button, flag=wx.RIGHT, border=5)
+        self.voice_mode_vad = wx.RadioButton(self.voice_panel, label=_("Voice Activation"), style=wx.RB_GROUP)
+        self.voice_mode_vad.SetValue(True)
+        self.voice_mode_vad.Bind(wx.EVT_RADIOBUTTON, self.OnVoiceModeChange)
+        self.voice_mode_vad.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        voice_row1.Add(self.voice_mode_vad, flag=wx.RIGHT, border=10)
 
-        self.vad_mode_button = wx.ToggleButton(self.voice_panel, label=_("VAD Mode (Auto-detect speech)"))
-        self.vad_mode_button.SetValue(False)  # Default to manual mode
-        self.vad_mode_button.Bind(wx.EVT_TOGGLEBUTTON, self.OnVADModeToggle)
-        self.vad_mode_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        voice_row1.Add(self.vad_mode_button, flag=wx.RIGHT, border=5)
+        self.voice_mode_ptt = wx.RadioButton(self.voice_panel, label=_("Push to Talk"))
+        self.voice_mode_ptt.Bind(wx.EVT_RADIOBUTTON, self.OnVoiceModeChange)
+        self.voice_mode_ptt.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        voice_row1.Add(self.voice_mode_ptt, flag=wx.RIGHT, border=10)
 
         self.self_monitor_button = wx.ToggleButton(self.voice_panel, label=_("Self-Monitor (Test)"))
         self.self_monitor_button.SetValue(False)
@@ -1234,10 +1277,15 @@ class TitanNetMainWindow(wx.Frame):
         self.mute_button = wx.Button(self.voice_panel, label=_("Mute"))
         self.mute_button.Bind(wx.EVT_BUTTON, self.OnMuteToggle)
         self.mute_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        self.mute_button.Enable(False)
         voice_row1.Add(self.mute_button)
 
         voice_sizer.Add(voice_row1, flag=wx.EXPAND | wx.BOTTOM, border=5)
+
+        # PTT button (visible only in Push to Talk mode)
+        self.ptt_button = wx.Button(self.voice_panel, label=_("Push to Talk (hold Space)"))
+        self.ptt_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ptt_button.Hide()
+        voice_sizer.Add(self.ptt_button, flag=wx.EXPAND | wx.BOTTOM, border=5)
 
         # Voice controls row 2: Volume and status
         voice_row2 = wx.BoxSizer(wx.HORIZONTAL)
@@ -1327,10 +1375,17 @@ class TitanNetMainWindow(wx.Frame):
         self.current_room_type = 'text'
         self.is_mic_enabled = False
         self.is_muted = False
-        self.is_vad_mode = False  # Default to manual/no auto-transmission
+        self.is_vad_mode = True   # Default to Voice Activation mode
+        self.is_ptt_mode = False  # Push to Talk mode
+        self.is_ptt_active = False  # True while Enter is held in PTT mode
         self.is_self_monitoring = False  # Ctrl+' for testing own stream
         self.active_speakers = {}  # {user_id: username}
         self.playback_queue = None  # Queue for audio playback
+        self._user_channel_map = {}  # user_id -> pygame channel index
+        self._next_voice_channel = 0
+        self._voice_channel_base = 6
+        self._voice_channel_count = 40
+        self._cached_volume = 1.0
         self.original_mixer_settings = None  # Save original pygame mixer settings
 
         # Buttons box (for back and leave room buttons)
@@ -1354,9 +1409,9 @@ class TitanNetMainWindow(wx.Frame):
 
         self.panel.SetSizer(self.main_vbox)
 
-        # Bind keyboard events for self-monitoring (Ctrl+')
-        # Use CHAR_HOOK to catch keys before child controls process them
+        # Bind keyboard events - CHAR_HOOK for key down, KEY_UP for PTT release
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.Bind(wx.EVT_KEY_UP, self._on_key_up)
 
     def create_menu_bar(self):
         """Create menu bar with context-aware moderation and administration options"""
@@ -1462,29 +1517,46 @@ class TitanNetMainWindow(wx.Frame):
             print(f"Error applying skin to Titan-Net window: {e}")
 
     def load_user_role(self):
-        """Load user role from server"""
-        try:
-            result = self.titan_client.get_user_role()
-            if result and result.get('success'):
-                self.user_role = result.get('role', 'user')
-                self.is_moderator = self.user_role in ('moderator', 'developer')
-                self.is_developer = self.user_role == 'developer'
-                print(f"User role loaded: {self.user_role}")
-            else:
-                # If request failed, use default values
-                self.user_role = "user"
-                self.is_moderator = False
-                self.is_developer = False
-                print(f"Failed to load user role: {result}")
-        except Exception as e:
-            print(f"Error loading user role: {e}")
-            self.user_role = "user"
-            self.is_moderator = False
-            self.is_developer = False
+        """Load user role - use cached role from login response first, then fetch from server"""
+        # Check if role was already set from login response
+        cached_role = getattr(self.titan_client, 'user_role', None)
+        if cached_role and cached_role != 'user':
+            self._apply_user_role(cached_role)
+            return
+
+        # Check is_admin flag from login response
+        if getattr(self.titan_client, 'is_admin', False):
+            self._apply_user_role('developer')
+            return
+
+        # Fallback: fetch from server (for role changes during session)
+        self.user_role = "user"
+        self.is_moderator = False
+        self.is_developer = False
+
+        def fetch_role():
+            try:
+                result = self.titan_client.get_user_role()
+                if result and result.get('success'):
+                    role = result.get('role', 'user')
+                    wx.CallAfter(self._apply_user_role, role)
+                else:
+                    print(f"Failed to load user role: {result}")
+            except Exception as e:
+                print(f"Error loading user role: {e}")
+
+        threading.Thread(target=fetch_role, daemon=True).start()
+
+    def _apply_user_role(self, role):
+        """Apply user role after background fetch"""
+        self.user_role = role
+        self.is_moderator = role in ('moderator', 'developer')
+        self.is_developer = role == 'developer'
+        print(f"User role loaded: {role}")
 
     def OnFocus(self, event):
         """Handle focus events with sound"""
-        play_sound('core/FOCUS.ogg', position=0.5)
+        play_sound('core/FOCUS.ogg', pan=0.5)
         event.Skip()
 
     def OnKeyPress(self, event):
@@ -1497,16 +1569,18 @@ class TitanNetMainWindow(wx.Frame):
             if focused == self.main_listbox:
                 self.OnListActivate(None)
                 return  # Don't skip the event
+            event.Skip()
         elif keycode == wx.WXK_ESCAPE:
-            # If in menu, hide window (stay connected in background)
+            # Defer the back/hide action so the EVT_CHAR_HOOK chain can unwind
+            # before we change focus or tear down voice resources. Doing it
+            # synchronously inside the hook caused intermittent UI hangs in
+            # text-only rooms when the multiline message_input had focus.
             if self.current_view == "menu":
-                self.Hide()
-            # If in chat or forum view, go back to menu
+                wx.CallAfter(self.Hide)
             elif self.current_view in ["room_chat", "private_chat"]:
-                self.OnBack(None)
-            # Otherwise go back to menu
+                wx.CallAfter(self.OnBack, None)
             else:
-                self.show_menu()
+                wx.CallAfter(self.show_menu)
         else:
             event.Skip()
 
@@ -1520,7 +1594,10 @@ class TitanNetMainWindow(wx.Frame):
         # Voice chat callbacks
         self.titan_client.on_voice_started = self.on_voice_started
         self.titan_client.on_voice_audio = self.on_voice_audio
+        self.titan_client.on_voice_audio_binary = self.on_voice_audio_binary
         self.titan_client.on_voice_stopped = self.on_voice_stopped
+        self.titan_client.on_ptt_started = self.on_ptt_started
+        self.titan_client.on_ptt_stopped = self.on_ptt_stopped
 
         # Broadcast callback
         self.titan_client.on_broadcast_received = self._on_broadcast_received
@@ -1528,6 +1605,11 @@ class TitanNetMainWindow(wx.Frame):
         # Package/App repository callbacks
         self.titan_client.on_package_pending = self.on_package_pending
         self.titan_client.on_package_approved = self.on_package_approved
+
+        # Feedback Hub callbacks (also re-bound while the Feedback Hub window
+        # is open; the window restores these on close).
+        self.titan_client.on_feedback_new = self._on_feedback_new_global
+        self.titan_client.on_feedback_status_changed = self._on_feedback_status_global
 
         # New user broadcast callback
         self.titan_client.on_new_user_broadcast = self.on_new_user_broadcast
@@ -1553,12 +1635,23 @@ class TitanNetMainWindow(wx.Frame):
         # Populate menu
         self.main_listbox.Clear()
         menu_items = [
+            _("What's New"),
             _("Chat Rooms"),
             _("Online Users"),
             _("Private Messages"),
             _("Forum"),
-            _("App Repository")
+            _("App Repository"),
         ]
+
+        # Feedback Hub sits between the regular features and the moderation /
+        # disconnect entries (see feetback hub.txt - "przedostatnia opcja dla
+        # zwyklych uzytkownikow, przed moderacja lub opcja rozlaczania sie").
+        menu_items.append(_("Feedback Hub"))
+
+        # Entertainment / Interactive Games — second tab under titan-net.
+        # AI game master with voice room, turn-based mechanics, schemaless
+        # state and BYOK encrypted API key per-game.
+        menu_items.append(_("Interactive Games"))
 
         # Add Moderation menu for moderators/developers
         if self.is_moderator:
@@ -1574,6 +1667,177 @@ class TitanNetMainWindow(wx.Frame):
         self.panel.Layout()
 
         play_sound('core/SELECT.ogg')
+
+    def show_whats_new_view(self):
+        """Show What's New - unread messages, forum posts, new apps, updates"""
+        self.current_view = "whats_new"
+        self.view_label.SetLabel(_("Titan-Net - What's New"))
+
+        # Hide chat elements
+        self.room_users_listbox.Hide()
+        self.message_display.Hide()
+        self.message_input.Hide()
+        self.send_button.Hide()
+        self.voice_panel.Hide()
+        self.broadcast_panel.Hide()
+        self.leave_room_button.Hide()
+
+        # Show main list and back button
+        self.main_listbox.Show()
+        self.back_button.Show()
+
+        self.main_listbox.Clear()
+        self.main_listbox.Append(_("Loading..."))
+        self.panel.Layout()
+
+        play_sound('titannet/titannet-notification.ogg')
+
+        def fetch_whats_new():
+            result = self.titan_client.get_whats_new()
+            wx.CallAfter(self._on_whats_new_loaded, result)
+
+        threading.Thread(target=fetch_whats_new, daemon=True).start()
+
+    def _on_whats_new_loaded(self, result):
+        """Update What's New view with detailed items per category."""
+        if not self or self.current_view != "whats_new":
+            return
+
+        self.main_listbox.Clear()
+
+        if not result.get('success'):
+            speak_notification(_("Failed to load"), 'error')
+            self.main_listbox.Append(_("Failed to load"))
+            return
+
+        # Build flat list of actionable items with metadata
+        # Each entry: (display_text, action_type, action_data, sound)
+        self._whats_new_items = []
+
+        # Unread messages - one entry per sender
+        for msg in result.get('unread_messages_items', []):
+            count = msg.get('count', 0)
+            sender = msg.get('sender', '?')
+            sender_id = msg.get('sender_id', 0)
+            text = _("New messages from {sender} ({count})").format(sender=sender, count=count)
+            self._whats_new_items.append((text, 'message', {'user_id': sender_id, 'username': sender}, 'titannet/new_message.ogg'))
+
+        # Forum topics with new replies - one entry per topic
+        for topic in result.get('unread_forum_topics_items', []):
+            new_replies = topic.get('new_replies', 0)
+            title = topic.get('title', '?')
+            topic_id = topic.get('id', 0)
+            text = _("{title} ({count} new replies)").format(title=title, count=new_replies)
+            self._whats_new_items.append((text, 'forum_topic', {'topic_id': topic_id, 'title': title}, 'titannet/new_feedpost.ogg'))
+
+        # New apps
+        for app in result.get('new_apps_items', []):
+            name = app.get('name', '?')
+            author = app.get('author', '?')
+            app_id = app.get('id', 0)
+            text = _("New app: {name} by {author}").format(name=name, author=author)
+            self._whats_new_items.append((text, 'app', {'id': app_id, 'name': name}, 'titannet/titannet-notification.ogg'))
+
+        # App updates
+        for app in result.get('app_updates_items', []):
+            name = app.get('name', '?')
+            version = app.get('version', '?')
+            app_id = app.get('id', 0)
+            text = _("Updated: {name} v{version}").format(name=name, version=version)
+            self._whats_new_items.append((text, 'app', {'id': app_id, 'name': name}, 'titannet/titannet-notification.ogg'))
+
+        if not self._whats_new_items:
+            self.main_listbox.Append(_("Nothing new"))
+            speak_titannet(_("Nothing new"))
+            return
+
+        # NOTE: unpacking with `_` would shadow the gettext translator, so use
+        # indexed access instead. Each entry is (text, action_type, data, sound).
+        for entry in self._whats_new_items:
+            self.main_listbox.Append(entry[0])
+
+        self.main_listbox.SetSelection(0)
+        self.main_listbox.SetFocus()
+
+        # Announce summary with sounds (like Elten)
+        self._announce_whats_new(result)
+
+    def _announce_whats_new(self, data):
+        """Announce What's New summary via TTS with per-category sounds."""
+        categories = [
+            ('unread_messages', _("New private messages"), 'titannet/new_message.ogg'),
+            ('unread_forum_topics', _("Forum topics with new replies"), 'titannet/new_feedpost.ogg'),
+            ('new_apps', _("New applications"), 'titannet/titannet-notification.ogg'),
+            ('app_updates', _("Application updates"), 'titannet/titannet-notification.ogg'),
+        ]
+        announcements = []
+        for key, label, sound in categories:
+            count = data.get(key, 0) or 0
+            if count > 0:
+                announcements.append((label, count, sound))
+
+        if not announcements:
+            return
+
+        self._wn_announcements = announcements
+        self._wn_announce_idx = 0
+        speak_titannet(_("What's new"))
+        wx.CallLater(800, self._announce_next_wn)
+
+    def _announce_next_wn(self):
+        """Announce next What's New category with sound."""
+        if self._wn_announce_idx >= len(self._wn_announcements):
+            return
+
+        label, count, sound = self._wn_announcements[self._wn_announce_idx]
+        self._wn_announce_idx += 1
+
+        try:
+            play_sound(sound)
+        except Exception:
+            pass
+
+        speak_titannet(f"{label}: {count}", interrupt=False)
+
+        if self._wn_announce_idx < len(self._wn_announcements):
+            wx.CallLater(1500, self._announce_next_wn)
+
+    def _on_whats_new_activate(self, selection):
+        """Handle activation of a What's New item - navigate to the specific item."""
+        if not hasattr(self, '_whats_new_items'):
+            return
+        if selection < 0 or selection >= len(self._whats_new_items):
+            return
+
+        # Entry: (display_text, action_type, action_data, sound)
+        entry = self._whats_new_items[selection]
+        action_type = entry[1]
+        action_data = entry[2]
+
+        try:
+            play_sound(entry[3])
+        except Exception:
+            pass
+
+        try:
+            if action_type == 'message':
+                user_id = action_data.get('user_id', 0)
+                username = action_data.get('username', '?')
+                if user_id:
+                    self.show_private_chat(user_id, username)
+            elif action_type == 'forum_topic':
+                topic_id = action_data.get('topic_id', 0)
+                title = action_data.get('title', '?')
+                if topic_id:
+                    self.show_forum_topic(topic_id, title)
+            elif action_type == 'app':
+                app_id = action_data.get('id', 0)
+                if app_id:
+                    # show_app_details expects an app dict with at least an 'id'
+                    self.show_app_details({'id': app_id, 'name': action_data.get('name', '?')})
+        except Exception as e:
+            print(f"[TITAN-NET] What's New activation failed: {e}")
+            speak_notification(_("Failed to open item"), 'error')
 
     def show_rooms_view(self):
         """Show chat rooms list"""
@@ -1651,29 +1915,29 @@ class TitanNetMainWindow(wx.Frame):
 
     def show_forum_view(self):
         """Show forum topics list"""
-        # Check if user is banned from forum
-        try:
-            if hasattr(self, 'titan_client') and self.titan_client.user_id:
-                ban_status = self.titan_client.check_ban_status(self.titan_client.user_id)
-                if ban_status.get('success'):
-                    forum_ban = ban_status.get('forum_ban', {})
-                    if forum_ban.get('banned'):
-                        reason = forum_ban.get('reason', _('No reason provided'))
-                        expires_at = forum_ban.get('expires_at')
-
-                        if expires_at:
-                            ban_msg = _("You are banned from forum\nReason: {reason}\nExpires: {expires}").format(
-                                reason=reason, expires=expires_at)
-                        else:
-                            ban_msg = _("You are banned from forum\nReason: {reason}\nThis ban is permanent").format(reason=reason)
-
-                        speak_titannet(_("You are banned from forum"))
-                        speak_notification(ban_msg, 'banned')
-                        return
-        except Exception as e:
-            print(f"Error checking forum ban: {e}")
-
+        # Show forum immediately, check ban in background
         self.current_view = "forum"
+
+        # Check ban status in background (non-blocking)
+        def check_forum_ban():
+            try:
+                if hasattr(self, 'titan_client') and self.titan_client.user_id:
+                    ban_status = self.titan_client.check_ban_status(self.titan_client.user_id)
+                    if ban_status.get('success'):
+                        forum_ban = ban_status.get('forum_ban', {})
+                        if forum_ban.get('banned'):
+                            reason = forum_ban.get('reason', _('No reason provided'))
+                            expires_at = forum_ban.get('expires_at')
+                            if expires_at:
+                                ban_msg = _("You are banned from forum\nReason: {reason}\nExpires: {expires}").format(
+                                    reason=reason, expires=expires_at)
+                            else:
+                                ban_msg = _("You are banned from forum\nReason: {reason}\nThis ban is permanent").format(reason=reason)
+                            wx.CallAfter(self._on_forum_ban_detected, ban_msg)
+            except Exception as e:
+                print(f"Error checking forum ban: {e}")
+
+        threading.Thread(target=check_forum_ban, daemon=True).start()
         self.view_label.SetLabel(_("Titan-Net - Forum"))
 
         # Hide chat elements
@@ -1695,6 +1959,13 @@ class TitanNetMainWindow(wx.Frame):
         self.panel.Layout()
         self.update_menu_bar()  # Update menu for forum context
         play_sound('core/SELECT.ogg')
+
+    def _on_forum_ban_detected(self, ban_msg):
+        """Handle forum ban detected in background — navigate back"""
+        if self.current_view == "forum":
+            speak_titannet(_("You are banned from forum"))
+            speak_notification(ban_msg, 'banned')
+            self.show_menu()
 
     def show_repository_view(self):
         """Show app repository menu"""
@@ -1758,6 +2029,35 @@ class TitanNetMainWindow(wx.Frame):
         self.panel.Layout()
         play_sound('core/SELECT.ogg')
 
+    def open_feedback_hub(self):
+        """Open the standalone Feedback Hub window (own GUI, styled like the
+        main TitanApp - tab bar, list-driven navigation, focus management).
+        """
+        play_sound('core/SELECT.ogg')
+        try:
+            from src.network.feedback_hub import open_feedback_hub
+            open_feedback_hub(self, self.titan_client)
+        except Exception as e:
+            print(f"[Titan-Net GUI] open_feedback_hub failed: {e}")
+            speak_notification(_("Failed to open Feedback Hub"), 'error')
+
+    def open_interactive_games(self):
+        """Open the Interactive Games (Entertainment) catalog window.
+
+        Same architectural shape as Feedback Hub: own GUI styled like
+        TitanApp main GUI (row-0 tab bar, listbox navigation, focus sounds),
+        but with its own broadcast subscriptions and session lifecycle.
+        """
+        play_sound('core/SELECT.ogg')
+        try:
+            from src.network.interactive_games import open_interactive_games
+            open_interactive_games(self, self.titan_client)
+        except Exception as e:
+            print(f"[Titan-Net GUI] open_interactive_games failed: {e}")
+            import traceback
+            traceback.print_exc()
+            speak_notification(_("Failed to open Interactive Games"), 'error')
+
     def show_moderation_menu(self):
         """Show moderation submenu"""
         self.current_view = "moderation"
@@ -1785,7 +2085,9 @@ class TitanNetMainWindow(wx.Frame):
 
         # Add moderation options for all moderators and developers
         mod_items.extend([
+            _("Cerberus Protocol"),  # View security status and logs
             _("Send Broadcast"),  # Send message to all users
+            _("Edit Broadcast Files"),  # Edit motd_*.txt and other broadcast templates
             _("Pending Packages"),  # Approve/reject packages
             _("Moderate Forum"),  # Lock/pin/delete topics
             _("Moderate Rooms"),  # Ban users, delete messages
@@ -1856,6 +2158,7 @@ class TitanNetMainWindow(wx.Frame):
         # Populate administration menu
         self.main_listbox.Clear()
         admin_items = [
+            _("Cerberus Protocol"),
             _("Promote User to Moderator"),
             _("Demote Moderator"),
             _("List All Moderators"),
@@ -1913,7 +2216,16 @@ class TitanNetMainWindow(wx.Frame):
             if self.voice_capture:
                 self.voice_capture.stop_capture()
                 self.voice_capture = None
-            self.voice_playback_channels = []
+            # Stop mixer/stream
+            self._mixer_running = False
+            if hasattr(self, '_voice_output_stream') and self._voice_output_stream:
+                try:
+                    self._voice_output_stream.stop()
+                    self._voice_output_stream.close()
+                except Exception:
+                    pass
+                self._voice_output_stream = None
+            self._user_channel_map = {}
             self.playback_queue = None
 
             # Restore original pygame mixer settings
@@ -1954,12 +2266,27 @@ class TitanNetMainWindow(wx.Frame):
         play_sound('titannet/new_chat.ogg')
 
     def OnListSelection(self, event):
-        """Handle list selection with sound and new replies notification"""
-        play_sound('core/FOCUS.ogg')
+        """Handle list selection with sound and new replies notification.
+
+        Plays the focus sound with a stereo pan reflecting the selection's
+        position in the list, matching the main TCE GUI. play_sound honours
+        the global stereo_sound setting so mono users hear a plain click.
+        """
+        listbox = event.GetEventObject() if event else self.main_listbox
+        try:
+            count = listbox.GetCount()
+            selection = listbox.GetSelection()
+        except Exception:
+            count = 0
+            selection = wx.NOT_FOUND
+
+        pan = 0.5
+        if count > 1 and selection != wx.NOT_FOUND:
+            pan = selection / (count - 1)
+        play_sound('core/FOCUS.ogg', pan=pan)
 
         # Check if current view is forum and if selected topic has new replies
-        if self.current_view == "forum":
-            selection = self.main_listbox.GetSelection()
+        if listbox is self.main_listbox and self.current_view == "forum":
             if selection != wx.NOT_FOUND and 0 <= selection < len(self.forum_topics_cache):
                 topic = self.forum_topics_cache[selection]
                 if topic.get('has_new_replies', False):
@@ -1969,18 +2296,44 @@ class TitanNetMainWindow(wx.Frame):
         event.Skip()
 
     def OnListKeyDown(self, event):
-        """Handle key press in listbox"""
+        """Handle key press in listbox.
+
+        Matches the main TCE GUI navigation contract: all four arrow keys
+        (Up/Down/Left/Right) play the end-of-list sound when the selection
+        is at the corresponding edge, and movement away from the edge
+        falls through to wxPython so EVT_LISTBOX fires and plays the
+        panned focus sound.
+        """
         keycode = event.GetKeyCode()
+        listbox = event.GetEventObject() if event else self.main_listbox
 
         # Enter key - only actual Enter, not Alt
         if (keycode == wx.WXK_RETURN or keycode == wx.WXK_NUMPAD_ENTER) and not event.AltDown():
-            # Enter key activates selected item
-            self.OnListActivate(None)
-            return  # Don't skip
+            # Enter key activates selected item (main listbox only)
+            if listbox is self.main_listbox:
+                self.OnListActivate(None)
+                return  # Don't skip
+            event.Skip()
+            return
+        elif keycode == wx.WXK_ESCAPE:
+            # Backup Escape route from any list (room users, etc.). Routes the
+            # same as the Frame-level OnKeyPress handler so users can always
+            # leave a room even if the Frame's EVT_CHAR_HOOK is bypassed.
+            if self.current_view in ["room_chat", "private_chat"]:
+                wx.CallAfter(self.OnBack, None)
+            elif self.current_view == "menu":
+                wx.CallAfter(self.Hide)
+            else:
+                wx.CallAfter(self.show_menu)
+            return
         elif keycode in (wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT):
             # Navigation keys - check for edge
-            selection = self.main_listbox.GetSelection()
-            count = self.main_listbox.GetCount()
+            try:
+                selection = listbox.GetSelection()
+                count = listbox.GetCount()
+            except Exception:
+                selection = wx.NOT_FOUND
+                count = 0
 
             # Check if at edge
             at_top = (selection == 0 or selection == wx.NOT_FOUND) and keycode in (wx.WXK_UP, wx.WXK_LEFT)
@@ -2008,7 +2361,9 @@ class TitanNetMainWindow(wx.Frame):
             # Main menu selection - use item text instead of index
             item_text = self.main_listbox.GetString(selection)
 
-            if item_text == _("Chat Rooms"):
+            if item_text == _("What's New"):
+                self.show_whats_new_view()
+            elif item_text == _("Chat Rooms"):
                 self.show_rooms_view()
             elif item_text == _("Online Users"):
                 self.show_users_view()
@@ -2020,8 +2375,15 @@ class TitanNetMainWindow(wx.Frame):
                 self.show_repository_view()
             elif item_text == _("Moderation"):
                 self.show_moderation_menu()
+            elif item_text == _("Feedback Hub"):
+                self.open_feedback_hub()
+            elif item_text == _("Interactive Games"):
+                self.open_interactive_games()
             elif item_text == _("Disconnect"):
                 self.OnDisconnectAndClose()
+
+        elif self.current_view == "whats_new":
+            self._on_whats_new_activate(selection)
 
         elif self.current_view == "rooms":
             # Join selected room
@@ -2045,12 +2407,11 @@ class TitanNetMainWindow(wx.Frame):
             # Open selected forum topic
             if 0 <= selection < len(self.forum_topics_cache):
                 topic = self.forum_topics_cache[selection]
-                # Mark topic as read with current reply count
-                try:
-                    self.titan_client.mark_topic_as_read(topic['id'], topic['reply_count'])
-                except Exception as e:
-                    print(f"Failed to mark topic as read: {e}")
-                self.show_forum_topic(topic['id'], topic['title'])
+                # Mark topic as read in background (non-blocking)
+                topic_id = topic['id']
+                reply_count = topic['reply_count']
+                threading.Thread(target=lambda: self.titan_client.mark_topic_as_read(topic_id, reply_count), daemon=True).start()
+                self.show_forum_topic(topic['id'], topic['title'], topic.get('last_known_reply_count', 0))
 
         elif self.current_view == "all_users":
             # Show context menu for selected user
@@ -2085,8 +2446,12 @@ class TitanNetMainWindow(wx.Frame):
 
             if item_text == _("Administration"):
                 self.show_administration_menu()
+            elif item_text == _("Cerberus Protocol"):
+                self.show_cerberus_protocol()
             elif item_text == _("Send Broadcast"):
                 self.show_broadcast_view()
+            elif item_text == _("Edit Broadcast Files"):
+                self.show_edit_broadcast_files()
             elif item_text == _("Pending Packages"):
                 self.show_pending_apps()
             elif item_text == _("Moderate Forum"):
@@ -2098,45 +2463,281 @@ class TitanNetMainWindow(wx.Frame):
             # Administration submenu (developer only)
             item_text = self.main_listbox.GetString(selection)
 
-            if item_text == _("Promote User to Moderator"):
+            if item_text == _("Cerberus Protocol"):
+                self.show_cerberus_protocol()
+            elif item_text == _("Promote User to Moderator"):
                 self._promote_user_dialog()
             elif item_text == _("Demote Moderator"):
                 self._demote_moderator_dialog()
             elif item_text == _("List All Moderators"):
                 self.show_manage_moderators()
 
+        elif self.current_view == "cerberus":
+            # Cerberus Protocol submenu
+            item_text = self.main_listbox.GetString(selection)
+
+            if item_text == _("Refresh Status"):
+                self.show_cerberus_protocol()
+            elif item_text == _("View Intrusion Logs"):
+                self._cerberus_show_logs()
+            elif item_text == _("View Honeypot Logs"):
+                self._cerberus_show_honeypot_logs()
+            elif item_text == _("Banned IPs"):
+                self._cerberus_show_banned_ips()
+            elif item_text == _("Tracked Attackers"):
+                self._cerberus_show_attackers()
+            # Developer-only actions
+            elif item_text == _("Activate Lockdown"):
+                self._cerberus_activate_lockdown()
+            elif item_text == _("Activate CERBERUS Mode"):
+                self._cerberus_activate_cerberus()
+            elif item_text == _("Deactivate Lockdown"):
+                self._cerberus_deactivate()
+            elif item_text == _("Ban IP"):
+                self._cerberus_ban_ip_dialog()
+            elif item_text == _("Unban IP"):
+                self._cerberus_unban_ip_dialog()
+            elif item_text == _("Whitelist IP"):
+                self._cerberus_whitelist_ip_dialog()
+
     def OnLeaveRoom(self, event):
-        """Handle leave room button"""
-        play_sound('core/SELECT.ogg')
+        """Handle leave room button - returns to menu immediately, then
+        cleans up in the background. The user reported being stuck in
+        text-only rooms after hearing "Leaving room..." TTS - that meant
+        OnLeaveRoom started but something downstream blocked or silently
+        failed before show_menu took effect. Now show_menu runs FIRST and
+        all room teardown happens off the UI thread.
+        """
+        try:
+            play_sound('core/SELECT.ogg')
+        except Exception:
+            pass
 
-        if self.current_room:
-            speak_titannet(_("Leaving room..."))
+        room_id = getattr(self, 'current_room', None)
 
-            # Cleanup voice resources before leaving
-            if self.voice_capture:
-                self.voice_capture.stop_capture()
-                self.voice_capture = None
-            self._restore_mixer_settings()
+        if room_id is not None:
+            try:
+                speak_titannet(_("Leaving room..."))
+            except Exception:
+                pass
 
-            self.leave_current_room()
-            self.current_room = None
+        # Drop view state up front so any racing callbacks see "menu".
+        self.current_room = None
+        self.current_private_user = None
+        if hasattr(self, 'current_room_type'):
+            self.current_room_type = None
 
-        # Go back to menu
-        self.show_menu()
+        # Show the menu first - this is what the user is waiting for.
+        try:
+            self.show_menu()
+        except Exception as e:
+            print(f"OnLeaveRoom: show_menu failed: {e}")
+
+        # Now run the teardown off the UI thread so a stuck voice resource
+        # or slow network call can never block the user inside the room view.
+        def _background_teardown():
+            try:
+                if getattr(self, 'voice_capture', None):
+                    try:
+                        self.voice_capture.stop_capture()
+                    except Exception:
+                        pass
+                    self.voice_capture = None
+            except Exception:
+                pass
+            try:
+                self._restore_mixer_settings()
+            except Exception:
+                pass
+            try:
+                self._teardown_room_state(room_id)
+            except Exception as teardown_err:
+                print(f"OnLeaveRoom: teardown failed: {teardown_err}")
+
+        threading.Thread(target=_background_teardown, daemon=True).start()
 
     def OnBack(self, event):
-        """Handle back button"""
-        play_sound('core/SELECT.ogg')
+        """Handle back button - returns to menu immediately, runs teardown
+        off the UI thread.
 
-        if self.current_view in ["room_chat", "private_chat"]:
-            # Leave chat and go back to previous view
-            if self.current_room:
-                self.leave_current_room()
-            self.current_room = None
-            self.current_private_user = None
+        Same pattern as OnLeaveRoom: the user reported being stuck in
+        text-only rooms even after pressing back, so view changes happen
+        FIRST and any voice/room cleanup that could throw or block runs
+        in the background.
+        """
+        try:
+            play_sound('core/SELECT.ogg')
+        except Exception:
+            pass
 
-        # Go back to menu
-        self.show_menu()
+        room_id = getattr(self, 'current_room', None)
+
+        # Drop view state up front so racing callbacks see "menu".
+        self.current_room = None
+        self.current_private_user = None
+        if hasattr(self, 'current_room_type'):
+            self.current_room_type = None
+
+        try:
+            self.show_menu()
+        except Exception as e:
+            print(f"OnBack: show_menu failed: {e}")
+            # Last-resort recovery so the user is never trapped in chat view.
+            try:
+                self.current_view = "menu"
+                if hasattr(self, 'message_display'):
+                    self.message_display.Hide()
+                if hasattr(self, 'message_input'):
+                    self.message_input.Hide()
+                if hasattr(self, 'send_button'):
+                    self.send_button.Hide()
+                if hasattr(self, 'back_button'):
+                    self.back_button.Hide()
+                if hasattr(self, 'leave_room_button'):
+                    self.leave_room_button.Hide()
+                if hasattr(self, 'voice_panel'):
+                    self.voice_panel.Hide()
+                if hasattr(self, 'main_listbox'):
+                    self.main_listbox.Show()
+                    self.main_listbox.SetFocus()
+                if hasattr(self, 'panel'):
+                    self.panel.Layout()
+            except Exception as recovery_err:
+                print(f"OnBack: emergency recovery failed: {recovery_err}")
+
+        # Background teardown - if there was a room, leave it server-side
+        # and clean up voice resources without blocking the UI.
+        if room_id is not None:
+            def _background_teardown():
+                try:
+                    self._teardown_room_state(room_id)
+                except Exception as teardown_err:
+                    print(f"OnBack: teardown failed: {teardown_err}")
+            threading.Thread(target=_background_teardown, daemon=True).start()
+
+    def _teardown_room_state(self, room_id):
+        """Tear down voice + network state for a room. Safe to call from
+        any thread; everything is wrapped so a stray exception never
+        traps the user inside the chat view.
+
+        ``room_id`` may be None (no-op) or the previously-active room.
+        """
+        if room_id is None:
+            return
+        try:
+            if getattr(self, 'voice_capture', None):
+                try:
+                    self.voice_capture.stop_capture()
+                except Exception:
+                    pass
+                self.voice_capture = None
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'voice_send_batch'):
+                self.voice_send_batch.clear()
+        except Exception:
+            pass
+        try:
+            self._mixer_running = False
+        except Exception:
+            pass
+        try:
+            for user_id in list(getattr(self, 'voice_buffer_stopping', {}).keys()):
+                self.voice_buffer_stopping[user_id] = True
+        except Exception:
+            pass
+        try:
+            mixer_thread = getattr(self, '_mixer_thread', None)
+            if mixer_thread is not None:
+                try:
+                    mixer_thread.join(timeout=1.0)
+                except Exception:
+                    pass
+                self._mixer_thread = None
+        except Exception:
+            pass
+        try:
+            stream = getattr(self, '_voice_output_stream', None)
+            if stream is not None:
+                try:
+                    stream.stop()
+                except Exception:
+                    pass
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+                self._voice_output_stream = None
+        except Exception:
+            pass
+        for attr in ('voice_jitter_buffers', 'voice_buffer_threads',
+                     'voice_buffer_stopping', '_user_channel_map',
+                     '_opus_decoders'):
+            try:
+                container = getattr(self, attr, None)
+                if container is not None and hasattr(container, 'clear'):
+                    container.clear()
+            except Exception:
+                pass
+        try:
+            self._user_started = {}
+        except Exception:
+            pass
+        try:
+            self._restore_mixer_settings()
+        except Exception:
+            pass
+        try:
+            wx.CallAfter(self._hide_voice_controls)
+        except Exception:
+            pass
+        # Server-side leave - already its own background call
+        try:
+            self.titan_client.stop_voice_transmission(room_id)
+        except Exception:
+            pass
+        try:
+            self.titan_client.leave_room(room_id)
+        except Exception as leave_err:
+            print(f"_teardown_room_state: leave_room failed: {leave_err}")
+
+    def _on_force_back(self, event):
+        """Hard-wired Escape route via AcceleratorTable.
+
+        Fires regardless of which child control currently has focus, so the
+        user can always leave a room. Routes the same way OnKeyPress does.
+        """
+        try:
+            current_view = getattr(self, 'current_view', None)
+            if current_view == "menu":
+                self.Hide()
+            elif current_view in ["room_chat", "private_chat"]:
+                self.OnBack(None)
+            else:
+                # Any other view (rooms list, forum, etc.) - back to menu.
+                try:
+                    self.show_menu()
+                except Exception as e:
+                    print(f"_on_force_back: show_menu failed: {e}")
+        except Exception as e:
+            print(f"_on_force_back error: {e}")
+
+    def OnMessageInputKeyDown(self, event):
+        """Handle key press in message input - Ctrl+Enter to send, Enter for new line"""
+        keycode = event.GetKeyCode()
+        if (keycode == wx.WXK_RETURN or keycode == wx.WXK_NUMPAD_ENTER) and event.ControlDown():
+            self.OnSendMessage(None)
+        elif keycode == wx.WXK_ESCAPE:
+            # Belt-and-suspenders: if EVT_CHAR_HOOK on the Frame somehow misses
+            # this Escape (focus-stealing edge cases on Windows), the multiline
+            # TextCtrl handles it directly so the user can always leave the room.
+            if self.current_view in ["room_chat", "private_chat"]:
+                wx.CallAfter(self.OnBack, None)
+            else:
+                wx.CallAfter(self.show_menu)
+        else:
+            event.Skip()
 
     def OnSendMessage(self, event):
         """Handle send message"""
@@ -2146,6 +2747,8 @@ class TitanNetMainWindow(wx.Frame):
 
         play_sound('core/SELECT.ogg')
 
+        local_now = wx.DateTime.Now().Format("%Y-%m-%dT%H:%M:%S")
+
         if self.current_view == "room_chat" and self.current_room:
             # Send room message
             def send_thread():
@@ -2153,10 +2756,8 @@ class TitanNetMainWindow(wx.Frame):
 
             threading.Thread(target=send_thread, daemon=True).start()
 
-            # Add to display immediately
-            timestamp = wx.DateTime.Now().Format("%H:%M")
-            text = f"[{timestamp}] {self.titan_client.username}: {message}\n"
-            self.message_display.AppendText(text)
+            # Echo to display immediately
+            self._add_message_row(self.titan_client.username, message, local_now)
 
         elif self.current_view == "private_chat" and self.current_private_user:
             # Send private message
@@ -2165,10 +2766,8 @@ class TitanNetMainWindow(wx.Frame):
 
             threading.Thread(target=send_thread, daemon=True).start()
 
-            # Add to display immediately
-            timestamp = wx.DateTime.Now().Format("%H:%M")
-            text = f"[{timestamp}] {self.titan_client.username}: {message}\n"
-            self.message_display.AppendText(text)
+            # Echo to display immediately
+            self._add_message_row(self.titan_client.username, message, local_now)
 
         self.message_input.Clear()
 
@@ -2190,17 +2789,21 @@ class TitanNetMainWindow(wx.Frame):
             if hasattr(self, 'is_mic_enabled'):
                 self.is_mic_enabled = False
             if hasattr(self, 'is_vad_mode'):
-                self.is_vad_mode = False
+                self.is_vad_mode = True
+            if hasattr(self, 'is_ptt_mode'):
+                self.is_ptt_mode = False
+            if hasattr(self, 'is_ptt_active'):
+                self.is_ptt_active = False
             if hasattr(self, 'is_muted'):
                 self.is_muted = False
 
             # Reset button labels and states
-            if hasattr(self, 'mic_button'):
-                self.mic_button.SetLabel(_("Enable Microphone"))
+            if hasattr(self, 'voice_mode_vad'):
+                self.voice_mode_vad.SetValue(True)
+            if hasattr(self, 'ptt_button'):
+                self.ptt_button.Hide()
             if hasattr(self, 'voice_status_label'):
                 self.voice_status_label.SetLabel(_("Microphone: Off"))
-            if hasattr(self, 'vad_mode_button'):
-                self.vad_mode_button.SetValue(False)
             if hasattr(self, 'self_monitor_button'):
                 self.self_monitor_button.SetValue(False)
             if hasattr(self, 'mute_button'):
@@ -2224,8 +2827,23 @@ class TitanNetMainWindow(wx.Frame):
             from src.network.voice_capture import VoiceCaptureManager
 
             # Create voice capture instance in CONTINUOUS mode (use_vad=False for no cutting)
-            # Continuous mode = always transmit, no VAD detection, prevents robotic/choppy audio
-            self.voice_capture = VoiceCaptureManager(sample_rate=16000, chunk_duration_ms=30, use_vad=False)
+            # Use 20ms chunks (standard VoIP frame size, optimal for Opus)
+            self.voice_capture = VoiceCaptureManager(sample_rate=16000, chunk_duration_ms=20, use_vad=False)
+
+            # Initialize Opus codec if available
+            try:
+                from src.network.voice_codec import OpusVoiceCodec, OPUS_AVAILABLE
+                if OPUS_AVAILABLE:
+                    self._opus_encoder = OpusVoiceCodec(sample_rate=16000, channels=1, bitrate=24000, frame_duration_ms=20)
+                    self._opus_decoders = {}  # user_id -> OpusVoiceCodec (one decoder per sender)
+                    self._use_opus = True
+                    print("[VOICE] Opus codec enabled (24kbps)")
+                else:
+                    self._use_opus = False
+                    print("[VOICE] Opus not available, using raw PCM")
+            except Exception as e:
+                self._use_opus = False
+                print(f"[VOICE] Opus init failed: {e}, using raw PCM")
 
             # Setup callbacks
             self.voice_capture.on_speech_start = lambda: self._on_vad_speech_start(room_id)
@@ -2233,58 +2851,80 @@ class TitanNetMainWindow(wx.Frame):
             self.voice_capture.on_speech_stop = lambda: self._on_vad_speech_stop(room_id)
             self.voice_capture.on_error = lambda error: wx.CallAfter(speak_notification, f"Voice error: {error}", 'error')
 
-            # Don't reinitialize pygame mixer - keep it at default 22050 Hz
-            # Voice audio at 16kHz will be resampled to 22050 Hz during playback
-            print(f"[VOICE DEBUG] Keeping pygame mixer at default frequency (no resampling needed)")
-            current_mixer = pygame.mixer.get_init()
-            print(f"[VOICE DEBUG] Current mixer settings: {current_mixer}")
+            import sounddevice as sd
 
             # State for fast AGC
             self.last_gain = 1.0
             self._agc_log_counter = 0
 
-            # Setup pygame-based playback (simpler and more reliable)
-            self.playback_queue = queue.Queue()
-            self.voice_playback_channels = []  # Reserve channels 4-7 for voice
-
-            for i in range(4, 8):
-                try:
-                    ch = pygame.mixer.Channel(i)
-                    self.voice_playback_channels.append(ch)
-                except:
-                    pass
-
-            print(f"[VOICE DEBUG] Reserved {len(self.voice_playback_channels)} pygame channels for voice playback")
-
-            # Jitter buffer for smooth voice playback (prevents choppy audio from network delays)
-            self.voice_jitter_buffers = {}  # user_id -> queue.Queue of audio chunks
-            self.voice_buffer_threads = {}  # user_id -> playback thread
+            # Jitter buffer for smooth voice playback
+            self.voice_jitter_buffers = {}  # user_id -> queue.Queue of raw audio chunks
+            self.voice_buffer_threads = {}  # unused, kept for compat
             self.voice_buffer_stopping = {}  # user_id -> stop flag
-            self.jitter_buffer_size = 5  # Buffer 5 chunks (150ms at 30ms/chunk) - minimal latency for smooth playback
-            print(f"[VOICE DEBUG] Jitter buffer initialized (size: {self.jitter_buffer_size} chunks = {self.jitter_buffer_size * 30}ms)")
+            self.jitter_buffer_size = 3  # Buffer 3 chunks (60ms) before mixing user in — good balance of latency vs smoothness
+
+            # Continuous voice output stream (sounddevice) — truly gapless, no pygame
+            # Match input rate (16kHz) to eliminate resampling entirely
+            self._voice_output_rate = 16000
+            self._voice_output_stream = sd.OutputStream(
+                samplerate=self._voice_output_rate,
+                channels=1,
+                dtype='int16',
+                blocksize=320,  # 20ms blocks at 16000Hz (matches input exactly)
+                latency='low',
+            )
+            self._voice_output_stream.start()
+
+            # Start single mixer thread (replaces per-user playback threads)
+            self._mixer_running = True
+            self._user_started = {}  # user_id -> True when jitter buffer filled
+            self._mixer_thread = threading.Thread(target=self._voice_mixer_thread, daemon=True)
+            self._mixer_thread.start()
 
             # Clear active speakers
             self.active_speakers.clear()
             self.speakers_listbox.Clear()
 
             # Reset voice state
-            self.is_mic_enabled = False
             self.is_muted = False
-            self.is_vad_mode = False
             self.is_self_monitoring = False
+            self.is_ptt_active = False
 
             # Initialize playback optimization caches
-            self._resample_cache = {}  # Cache linspace arrays for resampling
-            self._cached_volume = 1.0  # Cache volume slider value
-            self._last_volume_update = 0  # Track when volume was last read
+            self._resample_cache = {}
+            self._cached_volume = 1.0
+            self._last_volume_update = 0
 
-            print(f"[VOICE DEBUG] Voice setup complete for room {room_id} (type: {room_type})")
+            # Auto-enable microphone (like TeamTalk - no manual click needed)
+            self.voice_capture.start_capture()
+            self.is_mic_enabled = True
+            self.voice_status_label.SetLabel(_("Microphone: On"))
+
+            # Default to Voice Activation mode
+            self.is_vad_mode = True
+            self.is_ptt_mode = False
+            self.voice_mode_vad.SetValue(True)
+            self.ptt_button.Hide()
+
+            # Enable VAD in voice capture
+            self.voice_capture.use_vad = True
+
+            # Register in server voice channel (non-blocking — don't freeze GUI)
+            threading.Thread(
+                target=self.titan_client.start_voice_transmission,
+                args=(room_id,),
+                daemon=True
+            ).start()
+
+            speak_notification(_("Microphone enabled"), 'success')
+            play_sound('titannet/callsuccess.ogg')
+            print(f"[VOICE DEBUG] Voice setup complete for room {room_id} (type: {room_type}), mic auto-enabled, output stream at {self._voice_output_rate}Hz")
 
         except Exception as e:
             print(f"[VOICE DEBUG] Failed to setup voice: {e}")
             import traceback
             traceback.print_exc()
-            speak_notification(f"Failed to setup voice: {e}", 'error')
+            speak_notification(_("Failed to setup voice: {error}").format(error=e), 'error')
             self.voice_capture = None
             self.voice_playback_stream = None
 
@@ -2301,18 +2941,20 @@ class TitanNetMainWindow(wx.Frame):
             return
 
         self.voice_status_label.SetLabel(_("Microphone: Speaking..."))
-
-        # Start voice transmission (no sound notification - silent)
-        self.titan_client.start_voice_transmission(room_id)
+        # No server call needed — we stay registered in voice channel the whole time
+        # Audio chunks are sent/not sent based on VAD state in _on_vad_audio_chunk
 
     def _on_vad_audio_chunk(self, room_id, audio_data):
         """Called when VAD provides audio chunk"""
         if self.is_muted or self.current_room != room_id:
             return
 
+        # PTT mode: skip all processing if not transmitting (save CPU)
+        if self.is_ptt_mode and not self.is_ptt_active and not self.is_self_monitoring:
+            return
+
         # Apply fast automatic gain control (AGC) to boost audio
         import numpy as np
-        import time
         audio_array = np.frombuffer(audio_data, dtype=np.int16).copy()
 
         # Calculate current level (RMS for better quality)
@@ -2336,29 +2978,30 @@ class TitanNetMainWindow(wx.Frame):
 
             self.last_gain = gain  # Remember for next chunk
 
-            # Increment log counter
-            self._agc_log_counter += 1
-
-            # Log every 10th chunk to reduce spam
-            if self._agc_log_counter % 10 == 0:
-                print(f"[VOICE DEBUG] AGC: rms={int(rms_level)}, gain={gain:.2f}x, new_rms={int(np.sqrt(np.mean(audio_array.astype(np.float32) ** 2)))}")
-        # Note: Quiet chunks (rms_level <= 10) are still sent to maintain stream continuity
+        # Encode with Opus if available (massive bandwidth reduction)
+        if hasattr(self, '_use_opus') and self._use_opus:
+            try:
+                audio_data = self._opus_encoder.encode(audio_data)
+            except Exception:
+                pass  # Fallback to raw PCM on encode failure
 
         # Self-monitoring test mode - send to server with self_monitor flag
         if self.is_self_monitoring:
-            print(f"[VOICE DEBUG] Sending audio chunk: {len(audio_data)} bytes, self_monitor=True")
             self.titan_client.send_voice_audio(room_id, audio_data, self_monitor=True)
             return
 
-        # Send audio immediately in continuous mode (no batching for lowest latency)
-        # Always send in continuous mode (not VAD mode) or when VAD detects speech
-        should_send = (not self.is_vad_mode) or (self.voice_capture and self.voice_capture.is_speaking)
+        # Send audio immediately (non-blocking fire-and-forget)
+        if self.is_ptt_mode:
+            # PTT mode: only send while Enter is held
+            should_send = self.is_ptt_active
+        elif self.is_vad_mode:
+            # VAD mode: send when speech detected
+            should_send = self.voice_capture and self.voice_capture.is_speaking
+        else:
+            # Continuous mode fallback
+            should_send = True
 
         if should_send:
-            # Send immediately - no batching, no delays
-            if self._agc_log_counter % 10 == 0:  # Log occasionally
-                print(f"[VOICE DEBUG] Sending audio chunk: {len(audio_data)} bytes (immediate send, no batching)")
-
             self.titan_client.send_voice_audio(room_id, audio_data, self_monitor=False)
 
     def _on_vad_speech_stop(self, room_id):
@@ -2378,59 +3021,73 @@ class TitanNetMainWindow(wx.Frame):
         # Clear any pending batched chunks
         if hasattr(self, 'voice_send_batch'):
             self.voice_send_batch.clear()
-
-        # Stop voice transmission
-        self.titan_client.stop_voice_transmission(room_id)
+        # No server call — we stay registered in voice channel for instant resume
 
     # ==================== Voice Control Handlers ====================
 
-    def OnMicToggle(self, event):
-        """Toggle microphone on/off"""
-        if not self.voice_capture:
-            speak_notification(_("Voice not available in this room"), 'error')
+    def OnVoiceModeChange(self, event):
+        """Handle switching between Voice Activation and Push to Talk modes."""
+        if self.voice_mode_vad.GetValue():
+            # Voice Activation mode
+            self.is_vad_mode = True
+            self.is_ptt_mode = False
+            self.is_ptt_active = False
+            self.ptt_button.Hide()
+            if self.voice_capture:
+                self.voice_capture.use_vad = True
+            # No server call needed — voice channel stays registered
+            self.voice_status_label.SetLabel(_("Microphone: On"))
+            print("[VOICE] Switched to Voice Activation mode")
+        else:
+            # Push to Talk mode
+            self.is_vad_mode = False
+            self.is_ptt_mode = True
+            self.is_ptt_active = False
+            self.ptt_button.Show()
+            if self.voice_capture:
+                self.voice_capture.use_vad = False
+            # No server call — voice channel stays registered, client controls send
+            self.voice_status_label.SetLabel(_("Microphone: Push to Talk"))
+            print("[VOICE] Switched to Push to Talk mode")
+        self.voice_panel.Layout()
+
+    def _ptt_key_down(self):
+        """Handle PTT key pressed (Space held down)."""
+        if not self.is_ptt_mode or self.is_ptt_active or not self.is_mic_enabled:
+            return
+        if self.is_muted or not self.current_room:
             return
 
-        if not self.is_mic_enabled:
-            # Enable microphone
-            try:
-                self.voice_capture.start_capture()
-                self.is_mic_enabled = True
-                self.mic_button.SetLabel(_("Disable Microphone"))
-                self.mute_button.Enable(True)
-                self.voice_status_label.SetLabel(_("Microphone: On"))
-                speak_notification(_("Microphone enabled"), 'success')
-                play_sound('titannet/callsuccess.ogg')
-                print(f"[VOICE DEBUG] Microphone enabled")
-            except Exception as e:
-                print(f"[VOICE DEBUG] Failed to enable microphone: {e}")
-                import traceback
-                traceback.print_exc()
-                speak_notification(f"Failed to enable microphone: {e}", 'error')
-                play_sound('core/error.ogg')
-        else:
-            # Disable microphone
-            print(f"[VOICE DEBUG] Disabling microphone")
-            self.voice_capture.stop_capture()
-            self.is_mic_enabled = False
-            self.mic_button.SetLabel(_("Enable Microphone"))
-            self.mute_button.Enable(False)
-            self.voice_status_label.SetLabel(_("Microphone: Off"))
-            speak_notification(_("Microphone disabled"), 'info')
+        self.is_ptt_active = True
+        # Auto self-monitor in PTT: hear what others hear when transmitting
+        self._ptt_self_monitor_was_on = self.is_self_monitoring
+        self.is_self_monitoring = True
+        self.voice_status_label.SetLabel(_("Microphone: Transmitting..."))
+        play_sound('titannet/walkietalkie.ogg')
 
-            # Stop self-monitoring if active
-            if self.is_self_monitoring:
-                self.is_self_monitoring = False
-                self.self_monitor_button.SetValue(False)
-                self.self_monitor_button.SetLabel(_("Self-Monitor (Test)"))
+        # No start_voice_transmission — we stay registered for instant audio relay
+        # Notify other users (they hear the walkie-talkie sound)
+        self.titan_client.send_ptt_start(self.current_room)
+        # Start timer to detect Space release (safety net since EVT_KEY_UP is unreliable)
+        self._start_ptt_timer()
+        print("[VOICE] PTT: transmitting (self-monitor on)")
 
-    def OnVADModeToggle(self, event):
-        """Toggle Voice Activity Detection mode"""
-        self.is_vad_mode = self.vad_mode_button.GetValue()
+    def _ptt_key_up(self):
+        """Handle PTT key released."""
+        if not self.is_ptt_mode or not self.is_ptt_active:
+            return
 
-        if self.is_vad_mode:
-            self.vad_mode_button.SetLabel(_("VAD Mode: ON"))
-        else:
-            self.vad_mode_button.SetLabel(_("VAD Mode (Auto-detect speech)"))
+        self.is_ptt_active = False
+        # Restore self-monitor state
+        self.is_self_monitoring = getattr(self, '_ptt_self_monitor_was_on', False)
+        self.voice_status_label.SetLabel(_("Microphone: Push to Talk"))
+        play_sound('titannet/walkietalkieend.ogg')
+
+        # No stop_voice_transmission — stay registered for instant resume
+        if self.current_room:
+            # Notify other users
+            self.titan_client.send_ptt_stop(self.current_room)
+        print("[VOICE] PTT: stopped")
 
     def OnSelfMonitorToggle(self, event):
         """Toggle self-monitoring test mode"""
@@ -2462,28 +3119,100 @@ class TitanNetMainWindow(wx.Frame):
             self.voice_status_label.SetLabel(_("Microphone: Muted"))
         else:
             self.mute_button.SetLabel(_("Mute"))
-            self.voice_status_label.SetLabel(_("Microphone: On"))
+            if self.is_ptt_mode:
+                self.voice_status_label.SetLabel(_("Microphone: Push to Talk"))
+            else:
+                self.voice_status_label.SetLabel(_("Microphone: On"))
 
     def OnVoiceVolumeChange(self, event):
         """Handle voice volume slider change"""
         volume = self.voice_volume_slider.GetValue()
-        # Volume will be applied during playback
-        # Update pygame mixer volume for voice channels
-        import pygame
-        if pygame.mixer.get_init():
-            # Channels 4+ are reserved for voice
-            for i in range(4, 8):
-                try:
-                    channel = pygame.mixer.Channel(i)
-                    channel.set_volume(volume / 100.0)
-                except:
-                    pass
+        self._cached_volume = volume / 100.0
+        import time
+        self._last_volume_update = time.time()
 
     def OnCharHook(self, event):
-        """Handle keyboard events globally"""
-        # Currently not used for self-monitoring (use GUI toggle button instead)
-        # Can add other keyboard shortcuts here if needed
-        event.Skip()  # Let other handlers process the event
+        """Handle keyboard events globally - PTT Space key handling + shortcuts."""
+        keycode = event.GetKeyCode()
+
+        # PTT: Space key down in Push to Talk mode
+        if keycode == wx.WXK_SPACE and self.is_ptt_mode and self.current_room:
+            # Only trigger PTT if focus is NOT in a text input or interactive control
+            focused = self.FindFocus()
+            if not isinstance(focused, (wx.TextCtrl, wx.Button, wx.RadioButton, wx.ToggleButton, wx.CheckBox)):
+                if not self.is_ptt_active:
+                    self._ptt_key_down()
+                return  # Don't skip - consume the event
+
+        # Ctrl+N - context-dependent new item creation
+        if keycode == ord('N') and event.ControlDown() and not event.AltDown() and not event.ShiftDown():
+            if self.current_view == "rooms":
+                self._user_create_room()
+                return
+            elif self.current_view == "forum":
+                self._user_create_topic()
+                return
+
+        # Ctrl+O - open / reply to the last incoming private message
+        if keycode == ord('O') and event.ControlDown() and not event.AltDown() and not event.ShiftDown():
+            if self._last_pm_sender_id is not None:
+                self.show_private_chat(self._last_pm_sender_id, self._last_pm_sender_username or _("user"))
+            else:
+                speak_titannet(_("No new private messages to reply to"))
+            return
+
+        event.Skip()
+
+    def _on_key_up(self, event):
+        """Handle key release - PTT Space key release."""
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_SPACE and self.is_ptt_active:
+            self._ptt_key_up()
+            return
+        event.Skip()
+
+    def _start_ptt_timer(self):
+        """Start a timer that checks if Enter is still held (safety net for PTT)."""
+        if hasattr(self, '_ptt_timer') and self._ptt_timer and self._ptt_timer.IsRunning():
+            return
+        self._ptt_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_ptt_timer_check, self._ptt_timer)
+        self._ptt_timer.Start(50)  # Check every 50ms
+
+    def _stop_ptt_timer(self):
+        """Stop the PTT check timer."""
+        if hasattr(self, '_ptt_timer') and self._ptt_timer:
+            self._ptt_timer.Stop()
+            self._ptt_timer = None
+
+    def _on_ptt_timer_check(self, event):
+        """Check if Space key is still held - release PTT if not."""
+        if not self.is_ptt_active:
+            self._stop_ptt_timer()
+            return
+        if not wx.GetKeyState(wx.WXK_SPACE):
+            self._ptt_key_up()
+            self._stop_ptt_timer()
+
+    def on_ptt_started(self, message):
+        """Another user pressed PTT - play walkie-talkie start sound."""
+        try:
+            room_id = message.get('room_id')
+            if room_id != self.current_room:
+                return
+            wx.CallAfter(play_sound, 'titannet/walkietalkie.ogg')
+        except Exception as e:
+            print(f"[VOICE] Error handling ptt_started: {e}")
+
+    def on_ptt_stopped(self, message):
+        """Another user released PTT - play walkie-talkie end sound."""
+        try:
+            room_id = message.get('room_id')
+            if room_id != self.current_room:
+                return
+            wx.CallAfter(play_sound, 'titannet/walkietalkieend.ogg')
+        except Exception as e:
+            print(f"[VOICE] Error handling ptt_stopped: {e}")
 
     def start_self_monitoring(self):
         """Start self-monitoring test (Ctrl+' pressed) - send to server and hear back"""
@@ -2499,9 +3228,7 @@ class TitanNetMainWindow(wx.Frame):
         self.is_self_monitoring = True
         self.voice_status_label.SetLabel(_("Microphone: Self-Monitoring Test..."))
 
-        # Start voice transmission to server
-        result = self.titan_client.start_voice_transmission(self.current_room)
-        print(f"[VOICE DEBUG] start_voice_transmission result: {result}")
+        # No start_voice_transmission needed — already registered in voice channel
 
         # Enable capture in speaking mode
         if self.voice_capture:
@@ -2518,8 +3245,7 @@ class TitanNetMainWindow(wx.Frame):
         self.is_self_monitoring = False
         self.voice_status_label.SetLabel(_("Microphone: On"))
 
-        # Stop voice transmission
-        self.titan_client.stop_voice_transmission(self.current_room)
+        # No stop_voice_transmission — stay registered in voice channel
 
         # Disable capture speaking mode
         if self.voice_capture:
@@ -2563,7 +3289,7 @@ class TitanNetMainWindow(wx.Frame):
 
         except Exception as e:
             print(f"Error starting broadcast recording: {e}")
-            speak_notification(f"Failed to start recording: {e}", 'error')
+            speak_notification(_("Failed to start recording: {error}").format(error=e), 'error')
 
     def OnBroadcastStopRecording(self, event):
         """Stop recording voice for broadcast"""
@@ -2597,7 +3323,7 @@ class TitanNetMainWindow(wx.Frame):
 
         except Exception as e:
             print(f"Error stopping broadcast recording: {e}")
-            speak_notification(f"Failed to stop recording: {e}", 'error')
+            speak_notification(_("Failed to stop recording: {error}").format(error=e), 'error')
 
     def OnBroadcastPlayRecording(self, event):
         """Play recorded broadcast audio"""
@@ -2655,7 +3381,7 @@ class TitanNetMainWindow(wx.Frame):
             print(f"Error playing broadcast recording: {e}")
             import traceback
             traceback.print_exc()
-            speak_notification(f"Failed to play recording: {e}", 'error')
+            speak_notification(_("Failed to play recording: {error}").format(error=e), 'error')
 
     def OnBroadcastSend(self, event):
         """Send broadcast message"""
@@ -2753,6 +3479,39 @@ class TitanNetMainWindow(wx.Frame):
         self.titan_client.logout()
         self.Close()
 
+    def _save_main_listbox_selection(self):
+        """Capture current main_listbox selection as (index, text) for refresh-preservation."""
+        try:
+            sel = self.main_listbox.GetSelection()
+            if sel == wx.NOT_FOUND or sel >= self.main_listbox.GetCount():
+                return None
+            return (sel, self.main_listbox.GetString(sel))
+        except Exception:
+            return None
+
+    def _restore_main_listbox_selection(self, saved, default_index=0):
+        """Restore selection captured by _save_main_listbox_selection.
+
+        Returns True when the previous selection was restored (refresh path),
+        False when falling back to default_index (fresh load).
+        """
+        count = self.main_listbox.GetCount()
+        if count == 0:
+            return False
+        if saved is not None:
+            saved_idx, saved_text = saved
+            for i in range(count):
+                if self.main_listbox.GetString(i) == saved_text:
+                    self.main_listbox.SetSelection(i)
+                    return True
+            new_idx = min(saved_idx, count - 1)
+            if 0 <= new_idx < count:
+                self.main_listbox.SetSelection(new_idx)
+                return True
+        if 0 <= default_index < count:
+            self.main_listbox.SetSelection(default_index)
+        return False
+
     def refresh_rooms(self):
         """Refresh rooms list"""
         def refresh_thread():
@@ -2769,6 +3528,7 @@ class TitanNetMainWindow(wx.Frame):
         try:
             if result.get('success'):
                 self.rooms_cache = result.get('rooms', [])
+                saved = self._save_main_listbox_selection()
                 self.main_listbox.Clear()
 
                 for room in self.rooms_cache:
@@ -2783,7 +3543,7 @@ class TitanNetMainWindow(wx.Frame):
                     self.main_listbox.Append(display_text)
 
                 if self.main_listbox.GetCount() > 0:
-                    self.main_listbox.SetSelection(0)
+                    self._restore_main_listbox_selection(saved)
 
         except Exception as e:
             print(f"Error updating rooms list: {e}")
@@ -2809,6 +3569,7 @@ class TitanNetMainWindow(wx.Frame):
                 # Don't filter out self - allow sending messages to yourself
                 self.users_cache = users
 
+                saved = self._save_main_listbox_selection()
                 self.main_listbox.Clear()
 
                 for user in self.users_cache:
@@ -2818,11 +3579,14 @@ class TitanNetMainWindow(wx.Frame):
                     self.main_listbox.Append(display_text)
 
                 if self.main_listbox.GetCount() > 0:
-                    self.main_listbox.SetSelection(0)
-                    self.main_listbox.SetFocus()
+                    restored = self._restore_main_listbox_selection(saved)
+                    if not restored:
+                        # Only steal focus on the initial load, not on every auto-refresh tick
+                        self.main_listbox.SetFocus()
                 else:
                     print("Warning: No users in list")
-                    speak_titannet(_("No users online"))
+                    if saved is None:
+                        speak_titannet(_("No users online"))
             else:
                 error_msg = result.get('message', 'Unknown error')
                 print(f"Failed to load users: {error_msg}")
@@ -2850,6 +3614,7 @@ class TitanNetMainWindow(wx.Frame):
         try:
             if result.get('success'):
                 self.forum_topics_cache = result.get('topics', [])
+                saved = self._save_main_listbox_selection()
                 self.main_listbox.Clear()
 
                 for topic in self.forum_topics_cache:
@@ -2857,7 +3622,7 @@ class TitanNetMainWindow(wx.Frame):
                     self.main_listbox.Append(display_text)
 
                 if self.main_listbox.GetCount() > 0:
-                    self.main_listbox.SetSelection(0)
+                    self._restore_main_listbox_selection(saved)
 
         except Exception as e:
             print(f"Error updating forum topics list: {e}")
@@ -2878,6 +3643,7 @@ class TitanNetMainWindow(wx.Frame):
         try:
             if result.get('success'):
                 self.repository_apps_cache = result.get('apps', [])
+                saved = self._save_main_listbox_selection()
                 self.main_listbox.Clear()
 
                 for app in self.repository_apps_cache:
@@ -2885,18 +3651,21 @@ class TitanNetMainWindow(wx.Frame):
                     self.main_listbox.Append(display_text)
 
                 if self.main_listbox.GetCount() > 0:
-                    self.main_listbox.SetSelection(0)
+                    self._restore_main_listbox_selection(saved)
 
         except Exception as e:
             print(f"Error updating repository list: {e}")
 
-    def show_forum_topic(self, topic_id, topic_title):
+    def show_forum_topic(self, topic_id, topic_title, last_known_reply_count=0):
         """Show forum topic with replies"""
         play_sound('core/SELECT.ogg')
 
         # Create forum topic window
         topic_window = ForumTopicWindow(self, self.titan_client, topic_id, topic_title)
         topic_window.Show()
+
+        from src.ui.window_switcher import register_window
+        register_window(f"Titan-Net: {topic_title}", window=topic_window, category='messenger')
 
     def show_app_details(self, app):
         """Show app details and download option"""
@@ -3073,6 +3842,10 @@ class TitanNetMainWindow(wx.Frame):
     def leave_current_room(self):
         """Leave current room"""
         if self.current_room:
+            # Capture room_id before any state changes (prevents race condition
+            # where self.current_room is set to None before the thread runs)
+            room_id = self.current_room
+
             # Cleanup voice resources if active
             if self.voice_capture:
                 self.voice_capture.stop_capture()
@@ -3082,25 +3855,41 @@ class TitanNetMainWindow(wx.Frame):
             if hasattr(self, 'voice_send_batch'):
                 self.voice_send_batch.clear()
 
-            # Stop all jitter buffer playback threads
+            # Stop mixer thread and voice output stream
+            self._mixer_running = False
             for user_id in list(self.voice_buffer_stopping.keys()):
                 self.voice_buffer_stopping[user_id] = True
-            # Wait briefly for threads to stop
-            import time
-            time.sleep(0.1)
-            # Clear buffers
+            if hasattr(self, '_mixer_thread') and self._mixer_thread:
+                self._mixer_thread.join(timeout=1.0)
+                self._mixer_thread = None
+            if hasattr(self, '_voice_output_stream') and self._voice_output_stream:
+                try:
+                    self._voice_output_stream.stop()
+                    self._voice_output_stream.close()
+                except Exception:
+                    pass
+                self._voice_output_stream = None
+            # Clear buffers and Opus decoders
             self.voice_jitter_buffers.clear()
             self.voice_buffer_threads.clear()
             self.voice_buffer_stopping.clear()
-            print("[VOICE DEBUG] Cleared all jitter buffers")
+            self._user_started = {}
+            self._user_channel_map.clear()
+            if hasattr(self, '_opus_decoders'):
+                self._opus_decoders.clear()
 
             self._restore_mixer_settings()
 
             # Hide voice controls panel
             self._hide_voice_controls()
 
+            # Send voice_stop before leaving (if voice was active)
             def leave_thread():
-                self.titan_client.leave_room(self.current_room)
+                try:
+                    self.titan_client.stop_voice_transmission(room_id)
+                except Exception:
+                    pass
+                self.titan_client.leave_room(room_id)
 
             threading.Thread(target=leave_thread, daemon=True).start()
 
@@ -3113,19 +3902,25 @@ class TitanNetMainWindow(wx.Frame):
         threading.Thread(target=load_thread, daemon=True).start()
 
     def _display_room_messages(self, result):
-        """Display room messages"""
+        """Display room messages in the conversation list."""
         if result.get('success'):
             messages = result.get('messages', [])
-            self.message_display.Clear()
-            self.displayed_message_ids.clear()  # Clear message ID tracking
+            self._clear_message_list()
+            self.displayed_message_ids.clear()
 
-            for msg in reversed(messages):
-                msg_id = msg.get('id')
-                if msg_id:
-                    self.displayed_message_ids.add(msg_id)
-                timestamp = msg['sent_at'].split('T')[1][:5]
-                text = f"[{timestamp}] {msg['username']}: {msg['message']}\n"
-                self.message_display.AppendText(text)
+            self.message_display.Freeze()
+            try:
+                for msg in reversed(messages):
+                    msg_id = msg.get('id')
+                    if msg_id:
+                        self.displayed_message_ids.add(msg_id)
+                    self._add_message_row(
+                        msg.get('username', ''),
+                        msg.get('message', ''),
+                        msg.get('sent_at', ''),
+                    )
+            finally:
+                self.message_display.Thaw()
 
     def load_private_messages(self, user_id):
         """Load private messages with user"""
@@ -3136,20 +3931,25 @@ class TitanNetMainWindow(wx.Frame):
         threading.Thread(target=load_thread, daemon=True).start()
 
     def _display_private_messages(self, result):
-        """Display private messages"""
+        """Display private messages in the conversation list."""
         if result.get('success'):
             messages = result.get('messages', [])
-            self.message_display.Clear()
-            self.displayed_message_ids.clear()  # Clear message ID tracking
+            self._clear_message_list()
+            self.displayed_message_ids.clear()
 
-            for msg in reversed(messages):
-                msg_id = msg.get('id')
-                if msg_id:
-                    self.displayed_message_ids.add(msg_id)
-                timestamp = msg['sent_at'].split('T')[1][:5]
-                sender = msg['sender_username']
-                text = f"[{timestamp}] {sender}: {msg['message']}\n"
-                self.message_display.AppendText(text)
+            self.message_display.Freeze()
+            try:
+                for msg in reversed(messages):
+                    msg_id = msg.get('id')
+                    if msg_id:
+                        self.displayed_message_ids.add(msg_id)
+                    self._add_message_row(
+                        msg.get('sender_username', ''),
+                        msg.get('message', ''),
+                        msg.get('sent_at', ''),
+                    )
+            finally:
+                self.message_display.Thaw()
 
             # Automatically mark all messages from this user as read
             if self.current_private_user and messages:
@@ -3198,8 +3998,11 @@ class TitanNetMainWindow(wx.Frame):
         # Show context menu with options
         menu = wx.Menu()
 
-        send_pm_item = menu.Append(wx.ID_ANY, _("Send Private Message"))
+        send_pm_item = menu.Append(wx.ID_ANY, _("Send private message"))
         self.Bind(wx.EVT_MENU, lambda e: self.show_private_chat(user['id'], user['username']), send_pm_item)
+
+        avatar_item = menu.Append(wx.ID_ANY, _("Play avatar"))
+        self.Bind(wx.EVT_MENU, lambda e: self._play_user_avatar(user['username']), avatar_item)
 
         # Add moderation options for room owner/moderators
         if self.is_moderator or self.is_developer:
@@ -3215,48 +4018,34 @@ class TitanNetMainWindow(wx.Frame):
         menu.Destroy()
 
     def show_all_users_context_menu(self, user):
-        """Show context menu for all users list (with ban/unban options)"""
+        """Show context menu for all users list (instant — no server calls)"""
         menu = wx.Menu()
 
         # Send Private Message option for everyone
-        send_msg_item = menu.Append(wx.ID_ANY, _("Send Private Message"))
+        send_msg_item = menu.Append(wx.ID_ANY, _("Send private message"))
         self.Bind(wx.EVT_MENU, lambda e: self.show_private_chat(user['id'], user['username']), send_msg_item)
 
+        avatar_item = menu.Append(wx.ID_ANY, _("Play avatar"))
+        self.Bind(wx.EVT_MENU, lambda e: self._play_user_avatar(user['username']), avatar_item)
+
         # Moderation options for moderators/developers
+        # No blocking server call — show all options, server validates on action
         if self.is_moderator or self.is_developer:
             menu.AppendSeparator()
 
-            # Check user's ban status to show contextual options
-            ban_status_result = None
-            is_globally_banned = False
-            is_forum_banned = False
+            # Global ban/unban - show both, server handles state
+            ban_global_item = menu.Append(wx.ID_ANY, _("Ban from TCE Community"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_ban_globally(user), ban_global_item)
 
-            try:
-                ban_status_result = self.titan_client.check_ban_status(user['id'])
-                if ban_status_result and ban_status_result.get('success'):
-                    global_ban = ban_status_result.get('global_ban', {})
-                    forum_ban = ban_status_result.get('forum_ban', {})
-
-                    is_globally_banned = global_ban.get('banned', False)
-                    is_forum_banned = forum_ban.get('banned', False)
-            except Exception as e:
-                print(f"Error checking ban status: {e}")
-
-            # Global ban/unban
-            if is_globally_banned:
-                unban_global_item = menu.Append(wx.ID_ANY, _("Unban from TCE Community"))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_unban_globally(user), unban_global_item)
-            else:
-                ban_global_item = menu.Append(wx.ID_ANY, _("Ban from TCE Community"))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_ban_globally(user), ban_global_item)
+            unban_global_item = menu.Append(wx.ID_ANY, _("Unban from TCE Community"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_unban_globally(user), unban_global_item)
 
             # Forum ban/unban
-            if is_forum_banned:
-                unban_forum_item = menu.Append(wx.ID_ANY, _("Unban from Forum"))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_forum(user), unban_forum_item)
-            else:
-                ban_forum_item = menu.Append(wx.ID_ANY, _("Ban from Forum"))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_forum(user), ban_forum_item)
+            ban_forum_item = menu.Append(wx.ID_ANY, _("Ban from Forum"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_forum(user), ban_forum_item)
+
+            unban_forum_item = menu.Append(wx.ID_ANY, _("Unban from Forum"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_forum(user), unban_forum_item)
 
             # Hard ban and Delete (only for moderators/developers)
             menu.AppendSeparator()
@@ -3272,39 +4061,18 @@ class TitanNetMainWindow(wx.Frame):
         menu.Destroy()
 
     def show_user_actions(self, user):
-        """Show context menu for user actions"""
+        """Show context menu for user actions (instant — no server calls)"""
         menu = wx.Menu()
 
-        send_msg_item = menu.Append(wx.ID_ANY, _("Send Private Message"))
+        send_msg_item = menu.Append(wx.ID_ANY, _("Send private message"))
         self.Bind(wx.EVT_MENU, lambda e: self.show_private_chat(user['id'], user['username']), send_msg_item)
 
+        avatar_item = menu.Append(wx.ID_ANY, _("Play avatar"))
+        self.Bind(wx.EVT_MENU, lambda e: self._play_user_avatar(user['username']), avatar_item)
+
         # Add moderation options if user is moderator or developer
+        # No blocking server call — show all options, server validates on action
         if self.is_moderator or self.is_developer:
-            # Check user's ban status to show contextual options
-            ban_status_result = None
-            is_globally_banned = False
-            is_forum_banned = False
-            is_room_banned = False
-
-            try:
-                ban_status_result = self.titan_client.check_ban_status(user['id'])
-                if ban_status_result and ban_status_result.get('success'):
-                    global_ban = ban_status_result.get('global_ban', {})
-                    forum_ban = ban_status_result.get('forum_ban', {})
-                    room_bans = ban_status_result.get('room_bans', [])
-
-                    is_globally_banned = global_ban.get('banned', False)
-                    is_forum_banned = forum_ban.get('banned', False)
-
-                    # Check if user is banned from current room
-                    if hasattr(self, 'current_room') and self.current_room:
-                        for room_ban in room_bans:
-                            if room_ban.get('room_id') == self.current_room and room_ban.get('banned'):
-                                is_room_banned = True
-                                break
-            except Exception as e:
-                print(f"Error checking ban status: {e}")
-
             menu.AppendSeparator()
             moderation_menu = wx.Menu()
 
@@ -3313,37 +4081,32 @@ class TitanNetMainWindow(wx.Frame):
                 kick_item = moderation_menu.Append(wx.ID_ANY, _("Kick from Room"))
                 self.Bind(wx.EVT_MENU, lambda e: self._moderate_kick_user(user['username']), kick_item)
 
-                # Show Ban or Unban based on current status
-                if is_room_banned:
-                    unban_room_item = moderation_menu.Append(wx.ID_ANY, _("Unban from Room"))
-                    self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_room(user), unban_room_item)
-                else:
-                    ban_room_item = moderation_menu.Append(wx.ID_ANY, _("Ban from Room..."))
-                    self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_room(user), ban_room_item)
+                ban_room_item = moderation_menu.Append(wx.ID_ANY, _("Ban from Room..."))
+                self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_room(user), ban_room_item)
 
-            # Forum ban (if in forum context)
+                unban_room_item = moderation_menu.Append(wx.ID_ANY, _("Unban from Room"))
+                self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_room(user), unban_room_item)
+
+            # Forum options (if in forum context)
             if self.current_view == "forum":
-                # Show Ban or Unban based on current status
-                if is_forum_banned:
-                    unban_forum_item = moderation_menu.Append(wx.ID_ANY, _("Unban from Forum"))
-                    self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_forum(user), unban_forum_item)
-                else:
-                    ban_forum_item = moderation_menu.Append(wx.ID_ANY, _("Ban from Forum..."))
-                    self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_forum(user), ban_forum_item)
+                ban_forum_item = moderation_menu.Append(wx.ID_ANY, _("Ban from Forum..."))
+                self.Bind(wx.EVT_MENU, lambda e: self._context_ban_from_forum(user), ban_forum_item)
 
-            # Global ban/unban - Show Ban or Unban based on current status
+                unban_forum_item = moderation_menu.Append(wx.ID_ANY, _("Unban from Forum"))
+                self.Bind(wx.EVT_MENU, lambda e: self._context_unban_from_forum(user), unban_forum_item)
+
+            # Global ban/unban
             if moderation_menu.GetMenuItemCount() > 0:
                 moderation_menu.AppendSeparator()
 
-            if is_globally_banned:
-                unban_global_item = moderation_menu.Append(wx.ID_ANY, _("Unban Globally"))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_unban_globally(user), unban_global_item)
-            else:
-                ban_global_item = moderation_menu.Append(wx.ID_ANY, _("Ban Globally..."))
-                self.Bind(wx.EVT_MENU, lambda e: self._context_ban_globally(user), ban_global_item)
+            ban_global_item = moderation_menu.Append(wx.ID_ANY, _("Ban Globally..."))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_ban_globally(user), ban_global_item)
 
-            # Hard ban (developer only) - only show if not already globally banned
-            if self.is_developer and not is_globally_banned:
+            unban_global_item = moderation_menu.Append(wx.ID_ANY, _("Unban Globally"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_unban_globally(user), unban_global_item)
+
+            # Hard ban (developer only)
+            if self.is_developer:
                 moderation_menu.AppendSeparator()
                 hard_ban_item = moderation_menu.Append(wx.ID_ANY, _("HARD BAN"))
                 self.Bind(wx.EVT_MENU, lambda e: self._context_hard_ban(user), hard_ban_item)
@@ -3425,6 +4188,12 @@ class TitanNetMainWindow(wx.Frame):
                 # Just hide the window (minimize to background)
                 print("[TITAN-NET GUI] Hiding window (staying connected)")
                 self.Hide()
+                # Unregister from window switcher while hidden
+                try:
+                    from src.ui.window_switcher import unregister_window
+                    unregister_window("Titan-Net")
+                except Exception:
+                    pass
                 # Veto the close event to prevent destruction
                 if event.CanVeto():
                     event.Veto()
@@ -3433,6 +4202,87 @@ class TitanNetMainWindow(wx.Frame):
             print(f"Error during window close: {e}")
             # Allow close to proceed if there's an error
             event.Skip()
+
+    # ----- Message-list helpers (Nick / Message / Date list view) -----
+    def _format_message_timestamp(self, sent_at):
+        """Format an ISO-ish timestamp for display in the Date column."""
+        if not sent_at:
+            return ""
+        if 'T' in sent_at:
+            date_part, _, time_part = sent_at.partition('T')
+        else:
+            date_part, time_part = sent_at, ""
+        time_short = time_part[:5] if time_part else ""
+        if date_part and time_short:
+            return f"{date_part} {time_short}"
+        return date_part or time_short
+
+    def _message_preview(self, msg_text):
+        """Single-line preview shown in the Message column."""
+        if not msg_text:
+            return ""
+        preview = msg_text.replace('\r', ' ').replace('\n', ' ').strip()
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        return preview
+
+    def _add_message_row(self, username, msg_text, sent_at):
+        """Append a single message to the conversation ListCtrl."""
+        idx = self.message_display.GetItemCount()
+        self.message_display.InsertItem(idx, username or "")
+        self.message_display.SetItem(idx, 1, self._message_preview(msg_text))
+        self.message_display.SetItem(idx, 2, self._format_message_timestamp(sent_at))
+        self._message_records.append({
+            'username': username or "",
+            'message': msg_text or "",
+            'sent_at': sent_at or "",
+        })
+        # Keep the most recent message visible.
+        self.message_display.EnsureVisible(idx)
+
+    def _clear_message_list(self):
+        self.message_display.DeleteAllItems()
+        self._message_records = []
+
+    def OnMessageDisplayKeyDown(self, event):
+        """Escape on the message list also exits the room/chat."""
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE:
+            if self.current_view in ["room_chat", "private_chat"]:
+                wx.CallAfter(self.OnBack, None)
+            else:
+                wx.CallAfter(self.show_menu)
+            return
+        event.Skip()
+
+    def OnMessageActivated(self, event):
+        """Open a read-only dialog with the full message text."""
+        idx = event.GetIndex()
+        if 0 <= idx < len(self._message_records):
+            rec = self._message_records[idx]
+            self._show_full_message_dialog(rec['username'], rec['message'], rec['sent_at'])
+
+    def _show_full_message_dialog(self, username, message, sent_at):
+        """Modal dialog showing the full message in a read-only multiline field."""
+        date_label = self._format_message_timestamp(sent_at) or _("(no date)")
+        title = _("Message from {nick} ({date})").format(nick=username or "", date=date_label)
+        dlg = wx.Dialog(
+            self, title=title, size=(560, 360),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+        )
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        txt = wx.TextCtrl(
+            dlg, value=message or "",
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP
+        )
+        sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 10)
+        btn_close = wx.Button(dlg, wx.ID_OK, _("Close"))
+        sizer.Add(btn_close, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        dlg.SetSizer(sizer)
+        dlg.SetEscapeId(wx.ID_OK)
+        txt.SetFocus()
+        dlg.ShowModal()
+        dlg.Destroy()
 
     # Callbacks from TitanNetClient for real-time updates
     def on_room_message(self, message):
@@ -3453,16 +4303,15 @@ class TitanNetMainWindow(wx.Frame):
         if msg_id:
             self.displayed_message_ids.add(msg_id)
 
-        timestamp = message['sent_at'].split('T')[1][:5]
-        text = f"[{timestamp}] {message['username']}: {message['message']}\n"
-        self.message_display.AppendText(text)
+        msg_text = message.get('message', '')
+        self._add_message_row(message.get('username', ''), msg_text, message.get('sent_at', ''))
 
         play_sound('titannet/new_message.ogg')
 
         # Announce message
         announcement = _("{user}: {message}").format(
-            user=message['username'],
-            message=message['message']
+            user=message.get('username', ''),
+            message=msg_text
         )
         speak_titannet(announcement)
 
@@ -3489,16 +4338,16 @@ class TitanNetMainWindow(wx.Frame):
         if msg_id:
             self.displayed_message_ids.add(msg_id)
 
-        timestamp = message['sent_at'].split('T')[1][:5]
-        text = f"[{timestamp}] {message['sender_username']}: {message['message']}\n"
-        self.message_display.AppendText(text)
-
-        play_sound('titannet/new_message.ogg')
+        msg_text = message.get('message', '')
+        sender = message.get('sender_username', '')
+        self._add_message_row(sender, msg_text, message.get('sent_at', ''))
+        has_custom = message.get('has_custom_sounds', False)
+        self._play_business_card_sound(sender, 'new_message', 'titannet/new_message.ogg', has_custom)
 
         # Announce message
         announcement = _("{user}: {message}").format(
-            user=message['sender_username'],
-            message=message['message']
+            user=sender,
+            message=msg_text
         )
         speak_titannet(announcement)
 
@@ -3508,44 +4357,206 @@ class TitanNetMainWindow(wx.Frame):
                 self.titan_client.mark_private_messages_as_read(self.current_private_user)
             threading.Thread(target=mark_read_thread, daemon=True).start()
 
+    def _get_cached_business_card_sound(self, username, sound_type):
+        """Get cached business card sound path, or None if not cached."""
+        return self._business_card_cache.get(username, {}).get(sound_type)
+
+    def _download_and_cache_sound(self, username, sound_type):
+        """Download a user's business card sound and cache it locally. Returns local path or None."""
+        cached = self._get_cached_business_card_sound(username, sound_type)
+        if cached and os.path.exists(cached):
+            return cached
+
+        try:
+            result = self.titan_client.download_user_sound(username, sound_type)
+            if result.get('success') and result.get('file_data'):
+                content_type = result.get('content_type', '')
+                if 'ogg' in content_type:
+                    ext = '.ogg'
+                elif 'mp3' in content_type:
+                    ext = '.mp3'
+                else:
+                    ext = '.wav'
+
+                user_cache_dir = os.path.join(self._business_card_cache_dir, username)
+                os.makedirs(user_cache_dir, exist_ok=True)
+                local_path = os.path.join(user_cache_dir, f"{sound_type}{ext}")
+
+                with open(local_path, 'wb') as f:
+                    f.write(result['file_data'])
+
+                if username not in self._business_card_cache:
+                    self._business_card_cache[username] = {}
+                self._business_card_cache[username][sound_type] = local_path
+                return local_path
+        except Exception as e:
+            print(f"[TITAN-NET] Failed to download business card sound {sound_type} for {username}: {e}")
+
+        return None
+
+    def _play_business_card_sound(self, username, sound_type, fallback_sound, has_custom_sounds=False):
+        """Play business card sound if available, otherwise fall back to default."""
+        if has_custom_sounds:
+            def download_and_play():
+                local_path = self._download_and_cache_sound(username, sound_type)
+                if local_path:
+                    play_sound_file(local_path)
+                else:
+                    play_sound(fallback_sound)
+            threading.Thread(target=download_and_play, daemon=True).start()
+        else:
+            play_sound(fallback_sound)
+
+    def _play_user_avatar(self, username):
+        """Download and open avatar audio in an EltenPlayer dialog."""
+        speak_titannet(_("Loading avatar..."))
+        def download_and_open():
+            local_path = self._download_and_cache_sound(username, 'avatar')
+            if local_path:
+                wx.CallAfter(self._show_avatar_player, username, local_path)
+            else:
+                speak_titannet(_("No avatar available for {user}").format(user=username))
+        threading.Thread(target=download_and_open, daemon=True).start()
+
+    def _show_avatar_player(self, username, file_path):
+        """Show avatar audio player dialog with EltenPlayer. Auto-closes when done."""
+        from src.eltenlink_client.elten_player import EltenPlayer
+
+        dlg = wx.Dialog(self, title=_("Avatar - {user}").format(user=username),
+                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        def on_playback_complete():
+            if dlg:
+                dlg.Close()
+
+        player = EltenPlayer(dlg, file_or_url=file_path,
+                             label=_("Avatar - {user}").format(user=username),
+                             autoplay=True, on_complete=on_playback_complete)
+        sizer.Add(player, 1, wx.EXPAND | wx.ALL, 5)
+
+        close_btn = wx.Button(dlg, wx.ID_CLOSE, _("Close"))
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        sizer.Add(close_btn, 0, wx.ALIGN_CENTER | wx.ALL, 5)
+
+        dlg.SetSizer(sizer)
+        dlg.SetSize(wx.Size(400, 150))
+
+        def on_close(event):
+            player.close()
+            dlg.Destroy()
+        dlg.Bind(wx.EVT_CLOSE, on_close)
+
+        dlg.Show()
+
     def _notify_new_pm(self, message):
         """Notify about new PM"""
-        play_sound('titannet/new_message.ogg')
-        speak_titannet(_("New message from {user}").format(user=message['sender_username']))
+        sender = message.get('sender_username', '')
+        sender_id = message.get('sender_id')
+        if sender_id is not None:
+            self._last_pm_sender_id = sender_id
+            self._last_pm_sender_username = sender
+        has_custom = message.get('has_custom_sounds', False)
+        self._play_business_card_sound(sender, 'new_message', 'titannet/new_message.ogg', has_custom)
+        speak_titannet(_("New message from {user}. Press Ctrl+O to reply.").format(user=sender))
 
-    def on_user_online(self, username):
+    def on_user_online(self, username, has_custom_sounds=False):
         """User came online"""
         if self.current_view in ["users", "private_messages_select"]:
             wx.CallAfter(self.refresh_users)
-        play_sound('titannet/online.ogg')
+        self._play_business_card_sound(username, 'login', 'titannet/online.ogg', has_custom_sounds)
         speak_titannet(_("{user} is now online").format(user=username))
 
-    def on_user_offline(self, username):
+    def on_user_offline(self, username, has_custom_sounds=False):
         """User went offline"""
         if self.current_view in ["users", "private_messages_select"]:
             wx.CallAfter(self.refresh_users)
-        play_sound('titannet/offline.ogg')
+        self._play_business_card_sound(username, 'logout', 'titannet/offline.ogg', has_custom_sounds)
         speak_titannet(_("{user} is now offline").format(user=username))
 
+    def _on_feedback_new_global(self, message):
+        """Notify whenever a new feedback / idea lands in the Feedback Hub.
+
+        Plays the new-feedback earcon and announces:
+            "Feedback Hub: 1 new idea from <user>: <title>"
+        Wired even when the Feedback Hub window is closed so users still
+        hear about activity (matches the spec: "do centrum opinii wpadl
+        1 pomysl/1 opinia").
+        """
+        item_type = message.get('item_type', 'feedback')
+        author = message.get('author_username', '?')
+        title = message.get('title', '?')
+        try:
+            play_sound('titannet/feedback hub/new feedback.ogg')
+        except Exception:
+            pass
+        if item_type == 'idea':
+            text = _("Feedback Hub: 1 new idea from {user}: {title}").format(user=author, title=title)
+        else:
+            text = _("Feedback Hub: 1 new feedback from {user}: {title}").format(user=author, title=title)
+        speak_titannet(text)
+        print(f"[TITAN-NET] Feedback Hub: new {item_type} '{title}' by {author}")
+
+    def _on_feedback_status_global(self, message):
+        """Announce status changes / idea decisions globally."""
+        item_type = message.get('item_type', 'feedback')
+        title = message.get('title', '?')
+        new_status = message.get('status', 'pending')
+
+        if item_type == 'idea' and new_status == 'accepted':
+            try:
+                play_sound('titannet/feedback hub/idea accepted.ogg')
+            except Exception:
+                pass
+            text = _("Idea {title} accepted").format(title=title)
+        elif item_type == 'idea' and new_status == 'rejected':
+            try:
+                play_sound('titannet/feedback hub/idea denied.ogg')
+            except Exception:
+                pass
+            text = _("Idea {title} rejected").format(title=title)
+        else:
+            try:
+                play_sound('titannet/feedback hub/new feedback status.ogg')
+            except Exception:
+                pass
+            text = _("Feedback {title}: status changed").format(title=title)
+        speak_titannet(text)
+        print(f"[TITAN-NET] Feedback Hub: {item_type} '{title}' status -> {new_status}")
+
     def on_package_pending(self, message):
-        """New package submitted to waiting room"""
+        """New package submitted to waiting room.
+
+        Plays the apprepo earcon and speaks a panoramic notification so the
+        announcement is audible even when the user is not looking at the
+        repository view.
+        """
         app_name = message.get('app_name', 'Unknown')
         author_username = message.get('author_username', 'Unknown')
 
-        play_sound('apprepo/appupdate.ogg')
-        notification_text = _("New package from {user}! Waiting room").format(user=author_username)
-        speak_titannet(notification_text)
+        try:
+            play_sound('apprepo/appupdate.ogg')
+        except Exception as e:
+            print(f"[TITAN-NET] Failed to play apprepo sound: {e}")
+        notification_text = _("App Repository: new package {app} from {user}, waiting for moderation").format(
+            app=app_name, user=author_username)
+        # play_sound_effect=False because we already played the apprepo earcon.
+        speak_notification(notification_text, 'info', play_sound_effect=False)
         print(f"[TITAN-NET] New package: {app_name} by {author_username} (pending approval)")
 
     def on_package_approved(self, message):
-        """Package approved by moderation"""
+        """Package approved by moderation."""
         app_name = message.get('app_name', 'Unknown')
         author_username = message.get('author_username', 'Unknown')
         approved_by = message.get('approved_by', 'Moderator')
 
-        play_sound('apprepo/appupdate.ogg')
-        notification_text = _("New package from {user}! Approved by moderation").format(user=author_username)
-        speak_titannet(notification_text)
+        try:
+            play_sound('apprepo/appupdate.ogg')
+        except Exception as e:
+            print(f"[TITAN-NET] Failed to play apprepo sound: {e}")
+        notification_text = _("App Repository: {app} from {user} approved by {moderator}").format(
+            app=app_name, user=author_username, moderator=approved_by)
+        speak_notification(notification_text, 'success', play_sound_effect=False)
         print(f"[TITAN-NET] Package approved: {app_name} by {author_username} (approved by {approved_by})")
 
     def on_new_user_broadcast(self, message):
@@ -3563,7 +4574,7 @@ class TitanNetMainWindow(wx.Frame):
 
         # Only show broadcast if it matches user's language
         if broadcast_lang == current_lang and broadcast_text:
-            play_sound('titannet/accountcreated.ogg')
+            play_sound('titannet/account_created.ogg')
             speak_titannet(broadcast_text)
             print(f"[TITAN-NET] New user broadcast: {broadcast_text}")
 
@@ -3587,30 +4598,59 @@ class TitanNetMainWindow(wx.Frame):
         except Exception as e:
             print(f"Error handling voice_started: {e}")
 
-    def on_voice_audio(self, message):
-        """Received audio chunk from user"""
+    def on_voice_audio_binary(self, raw_data: bytes):
+        """Received binary voice packet (fast path, no JSON parsing)"""
         try:
-            user_id = message.get('user_id')
-            room_id = message.get('room_id')
-            audio_data_b64 = message.get('data')
-
-            print(f"[VOICE DEBUG] Received audio from user {user_id}, room {room_id}")
+            # Fast header parse: [1B type][4B room][4B user][4B seq] = 13 bytes
+            if len(raw_data) < 13:
+                return
+            room_id, user_id = struct.unpack_from('>xII', raw_data)  # skip 1-byte type
 
             # Only process if we're in the same room
             if room_id != self.current_room:
-                print(f"[VOICE DEBUG] Ignoring - not in same room (current: {self.current_room})")
                 return
 
-            # Decode audio data
-            import base64
-            audio_data = base64.b64decode(audio_data_b64)
-            print(f"[VOICE DEBUG] Decoded audio: {len(audio_data)} bytes")
+            # Extract audio payload (after 13-byte header)
+            audio_data = raw_data[13:]
 
-            # Play audio chunk
-            wx.CallAfter(self._play_voice_audio, audio_data, user_id)
+            # Add directly to jitter buffer
+            self._add_to_jitter_buffer(audio_data, user_id)
 
         except Exception as e:
-            print(f"[VOICE DEBUG] Error handling voice_audio: {e}")
+            print(f"[VOICE] Error handling binary voice: {e}")
+
+    def on_voice_audio(self, message):
+        """Received audio chunk from user (JSON legacy fallback)"""
+        try:
+            user_id = message.get('user_id')
+            room_id = message.get('room_id')
+
+            # Only process if we're in the same room
+            if room_id != self.current_room:
+                return
+
+            # Decode base64 on listener thread (not GUI thread) to reduce GUI load
+            import base64
+            audio_data = base64.b64decode(message.get('data'))
+
+            # Add directly to jitter buffer without going through GUI thread
+            self._add_to_jitter_buffer(audio_data, user_id)
+
+        except Exception as e:
+            print(f"[VOICE] Error handling voice_audio: {e}")
+
+    def _add_to_jitter_buffer(self, audio_data: bytes, user_id: int):
+        """Add audio chunk directly to jitter buffer (thread-safe).
+        The single mixer thread reads from all buffers — no per-user threads needed."""
+        try:
+            if user_id not in self.voice_jitter_buffers:
+                self.voice_jitter_buffers[user_id] = queue.Queue()
+                self.voice_buffer_stopping[user_id] = False
+
+            self.voice_jitter_buffers[user_id].put(audio_data)
+
+        except Exception as e:
+            print(f"[VOICE] Error adding to jitter buffer: {e}")
 
     def on_voice_stopped(self, message):
         """User stopped speaking in room"""
@@ -3627,18 +4667,17 @@ class TitanNetMainWindow(wx.Frame):
                 del self.active_speakers[user_id]
                 wx.CallAfter(self._update_speakers_list)
 
-            # Stop jitter buffer playback thread for this user
+            # Mark user as stopped and clear buffer so mixer skips them
             if user_id in self.voice_buffer_stopping:
                 self.voice_buffer_stopping[user_id] = True
-                # Clean up after thread stops (will happen in thread)
-                if user_id in self.voice_jitter_buffers:
-                    # Clear remaining chunks
-                    while not self.voice_jitter_buffers[user_id].empty():
-                        try:
-                            self.voice_jitter_buffers[user_id].get_nowait()
-                        except:
-                            break
-                print(f"[VOICE DEBUG] Stopping jitter buffer for user {user_id}")
+            if user_id in self._user_started:
+                del self._user_started[user_id]
+            if user_id in self.voice_jitter_buffers:
+                while not self.voice_jitter_buffers[user_id].empty():
+                    try:
+                        self.voice_jitter_buffers[user_id].get_nowait()
+                    except:
+                        break
 
         except Exception as e:
             print(f"Error handling voice_stopped: {e}")
@@ -3782,149 +4821,627 @@ class TitanNetMainWindow(wx.Frame):
             print(f"[VOICE DEBUG] Error updating speakers list: {e}")
 
     def _play_voice_audio(self, audio_data: bytes, user_id: int):
-        """Add received voice audio chunk to jitter buffer for smooth playback"""
-        try:
-            # Initialize jitter buffer for this user if not exists
-            if user_id not in self.voice_jitter_buffers:
-                self.voice_jitter_buffers[user_id] = queue.Queue()
-                self.voice_buffer_stopping[user_id] = False
-                print(f"[VOICE DEBUG] Created jitter buffer for user {user_id}")
+        """Add received voice audio chunk to jitter buffer (mixer thread handles playback)"""
+        self._add_to_jitter_buffer(audio_data, user_id)
 
-            # Add chunk to buffer
-            self.voice_jitter_buffers[user_id].put(audio_data)
-            buffer_size = self.voice_jitter_buffers[user_id].qsize()
-            print(f"[VOICE DEBUG] Added chunk to buffer for user {user_id}, buffer size: {buffer_size}")
-
-            # Start playback thread if not already running
-            if user_id not in self.voice_buffer_threads or not self.voice_buffer_threads[user_id].is_alive():
-                thread = threading.Thread(
-                    target=self._voice_playback_thread,
-                    args=(user_id,),
-                    daemon=True
-                )
-                self.voice_buffer_threads[user_id] = thread
-                thread.start()
-                print(f"[VOICE DEBUG] Started playback thread for user {user_id}")
-
-        except Exception as e:
-            print(f"[VOICE DEBUG] Error adding to jitter buffer: {e}")
-
-    def _voice_playback_thread(self, user_id: int):
-        """Background thread that continuously plays audio from jitter buffer"""
+    def _voice_mixer_thread(self):
+        """Single mixer thread: reads from all users' jitter buffers, mixes, writes to
+        sounddevice OutputStream.  Truly gapless — the audio hardware pulls samples at a
+        fixed rate, so there are zero gaps between chunks.
+        Uses Opus PLC on buffer underrun to conceal packet loss instead of silence."""
         import numpy as np
-        import pygame
         import time
 
-        print(f"[VOICE PLAYBACK] Thread started for user {user_id}")
+        CHUNK_SAMPLES = 320  # 20ms at 16000Hz (matches input — no resampling needed)
+
+        # Track consecutive underruns per user for PLC
+        user_underruns = {}  # user_id -> consecutive underrun count
+        MAX_PLC_FRAMES = 5  # Max consecutive PLC frames before giving up (100ms)
 
         try:
-            buffer = self.voice_jitter_buffers[user_id]
+            while self._mixer_running:
+                mixed = np.zeros(CHUNK_SAMPLES, dtype=np.float32)
+                has_audio = False
 
-            # Wait until buffer has enough chunks (jitter buffer size)
-            print(f"[VOICE PLAYBACK] Waiting for buffer to fill (need {self.jitter_buffer_size} chunks)...")
-            while buffer.qsize() < self.jitter_buffer_size and not self.voice_buffer_stopping.get(user_id, False):
-                time.sleep(0.01)  # 10ms
+                for user_id in list(self.voice_jitter_buffers.keys()):
+                    if self.voice_buffer_stopping.get(user_id, False):
+                        continue
 
-            if self.voice_buffer_stopping.get(user_id, False):
-                print(f"[VOICE PLAYBACK] Thread stopped before starting for user {user_id}")
-                return
+                    buf = self.voice_jitter_buffers[user_id]
 
-            print(f"[VOICE PLAYBACK] Buffer filled ({buffer.qsize()} chunks), starting playback for user {user_id}")
+                    # Wait for initial jitter buffer fill before reading this user
+                    if user_id not in self._user_started:
+                        if buf.qsize() >= self.jitter_buffer_size:
+                            self._user_started[user_id] = True
+                        else:
+                            continue
 
-            # Find a dedicated channel for this user
-            channel = None
-            for ch in self.voice_playback_channels:
-                if not ch.get_busy():
-                    channel = ch
-                    break
+                    try:
+                        raw_chunk = buf.get_nowait()
+                        user_underruns[user_id] = 0  # Reset underrun counter
+                        resampled = self._decode_and_resample_chunk(raw_chunk, user_id=user_id)
+                        if resampled is not None:
+                            n = min(len(resampled), CHUNK_SAMPLES)
+                            mixed[:n] += resampled[:n].astype(np.float32)
+                            has_audio = True
+                    except queue.Empty:
+                        # Buffer underrun — use Opus PLC if available
+                        underruns = user_underruns.get(user_id, 0) + 1
+                        user_underruns[user_id] = underruns
+                        if underruns <= MAX_PLC_FRAMES and hasattr(self, '_use_opus') and self._use_opus:
+                            plc_audio = self._opus_plc(user_id)
+                            if plc_audio is not None:
+                                n = min(len(plc_audio), CHUNK_SAMPLES)
+                                mixed[:n] += plc_audio[:n].astype(np.float32)
+                                has_audio = True
 
-            if not channel:
-                channel = self.voice_playback_channels[0]
+                # Apply volume
+                volume = self._cached_volume
+                if volume < 1.0:
+                    mixed *= volume
 
-            # Continuous playback loop with adaptive buffering
-            consecutive_empty = 0
-            underrun_count = 0
+                # Clip to int16 range
+                np.clip(mixed, -32768, 32767, out=mixed)
 
-            while not self.voice_buffer_stopping.get(user_id, False):
+                # Write to output stream — blocks until hardware consumes (~20ms)
+                # This provides natural pacing with zero gaps
                 try:
-                    # Get chunk from buffer (non-blocking)
-                    audio_data = buffer.get(timeout=0.3)  # 300ms timeout (extreme tolerance for remote servers with high latency/packet loss)
-                    consecutive_empty = 0
-
-                    # Process and play chunk
-                    self._process_and_play_chunk(audio_data, channel)
-
-                except queue.Empty:
-                    # Buffer underrun - insert silence to maintain continuity
-                    consecutive_empty += 1
-                    underrun_count += 1
-
-                    if consecutive_empty > 100:  # 5 seconds of silence (extreme tolerance for remote servers)
-                        print(f"[VOICE PLAYBACK] Extended silence ({consecutive_empty} chunks), stopping thread for user {user_id}")
+                    self._voice_output_stream.write(mixed.astype(np.int16).reshape(-1, 1))
+                except Exception:
+                    if not self._mixer_running:
                         break
-
-                    # Insert 30ms of silence
-                    silence = np.zeros(int(16000 * 0.03), dtype=np.int16)
-                    self._process_and_play_chunk(silence.tobytes(), channel)
-
-                    if underrun_count % 5 == 0:  # Log every 5th underrun to avoid spam
-                        print(f"[VOICE PLAYBACK] Buffer underrun #{underrun_count} (buffer size: {buffer.qsize()} chunks), inserted silence")
+                    time.sleep(0.02)
 
         except Exception as e:
-            print(f"[VOICE PLAYBACK] Error in playback thread: {e}")
-        finally:
-            print(f"[VOICE PLAYBACK] Thread stopped for user {user_id}")
+            print(f"[VOICE] Error in mixer thread: {e}")
+            import traceback
+            traceback.print_exc()
 
-    def _process_and_play_chunk(self, audio_data: bytes, channel):
-        """Process audio chunk (resample, AGC) and play on given channel - OPTIMIZED for speed"""
+    def _opus_plc(self, user_id):
+        """Generate Opus Packet Loss Concealment audio for a missing chunk.
+        Opus decoder generates a plausible continuation of the previous audio."""
         import numpy as np
-        import pygame
-        import time
+        try:
+            decoder = self._opus_decoders.get(user_id)
+            if decoder:
+                # Opus PLC: decode with None input — decoder extrapolates from previous state
+                plc_pcm = decoder.decode(None)
+                return np.frombuffer(plc_pcm, dtype=np.int16)
+        except Exception:
+            pass
+        return None
+
+    def _decode_and_resample_chunk(self, audio_data: bytes, user_id=None):
+        """Decode Opus chunk. Returns mono int16 numpy array at 16kHz (no resampling needed)."""
+        import numpy as np
 
         try:
-            # Convert raw PCM 16-bit bytes to numpy array
+            # Decode Opus if enabled
+            if hasattr(self, '_use_opus') and self._use_opus and len(audio_data) < 500:
+                try:
+                    from src.network.voice_codec import OpusVoiceCodec
+                    if user_id not in self._opus_decoders:
+                        self._opus_decoders[user_id] = OpusVoiceCodec(
+                            sample_rate=16000, channels=1, bitrate=24000, frame_duration_ms=20
+                        )
+                    audio_data = self._opus_decoders[user_id].decode(audio_data)
+                except Exception:
+                    pass  # Fallback: treat as raw PCM
+
             audio_array = np.frombuffer(audio_data, dtype=np.int16)
+            if len(audio_array) == 0:
+                return None
 
-            # Fast resampling from 16kHz to 22050 Hz using simple linear interpolation (fastest method)
-            original_rate = 16000
-            target_rate = 22050
-
-            # Use simple linear interpolation (much faster than scipy)
-            num_samples = int(len(audio_array) * target_rate / original_rate)
-            duration = len(audio_array) / original_rate
-
-            # Cache linspace arrays for common chunk sizes to avoid recalculation
-            if not hasattr(self, '_resample_cache'):
-                self._resample_cache = {}
-
-            cache_key = len(audio_array)
-            if cache_key not in self._resample_cache:
-                x_old = np.linspace(0, duration, len(audio_array))
-                x_new = np.linspace(0, duration, num_samples)
-                self._resample_cache[cache_key] = (x_old, x_new)
-            else:
-                x_old, x_new = self._resample_cache[cache_key]
-
-            audio_array = np.interp(x_new, x_old, audio_array).astype(np.int16)
-
-            # Apply volume from slider (cached to avoid repeated GUI calls)
-            if not hasattr(self, '_last_volume_update') or time.time() - self._last_volume_update > 0.1:
-                self._cached_volume = self.voice_volume_slider.GetValue() / 100.0
-                self._last_volume_update = time.time()
-            volume = self._cached_volume
-
-            # Pygame expects stereo - use fast array stacking
-            stereo_array = np.column_stack((audio_array, audio_array))
-
-            # Create and play sound
-            sound = pygame.sndarray.make_sound(stereo_array)
-            channel.set_volume(volume)
-            channel.queue(sound)  # Queue instead of play for seamless playback
+            # Output stream runs at 16kHz — same as input, no resampling needed
+            return audio_array
 
         except Exception as e:
             print(f"[VOICE PLAYBACK] Error processing chunk: {e}")
-            import traceback
-            traceback.print_exc()
+            return None
+
+    def _update_voice_volume_cache(self):
+        """Update cached voice volume from GUI slider (must be called from GUI thread)"""
+        import time
+        try:
+            self._cached_volume = self.voice_volume_slider.GetValue() / 100.0
+            self._last_volume_update = time.time()
+        except Exception:
+            pass
+
+    # ================================================================
+    # CERBERUS PROTOCOL
+    # ================================================================
+
+    def show_cerberus_protocol(self):
+        """Show Cerberus Protocol status and menu"""
+        self.current_view = "cerberus"
+        self.view_label.SetLabel(_("Cerberus Protocol"))
+
+        # Hide chat elements
+        self.message_display.Hide()
+        self.message_input.Hide()
+        self.send_button.Hide()
+        self.leave_room_button.Hide()
+        self.voice_panel.Hide()
+        self.broadcast_panel.Hide()
+
+        # Show main list and back button
+        self.main_listbox.Show()
+        self.back_button.Show()
+
+        self.main_listbox.Clear()
+
+        # Load status in background
+        speak_titannet(_("Loading Cerberus Protocol status..."))
+
+        def load_thread():
+            try:
+                status = self.titan_client.get_cerberus_status()
+                wx.CallAfter(self._display_cerberus_status, status)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=load_thread, daemon=True).start()
+
+    def _display_cerberus_status(self, status):
+        """Display Cerberus Protocol status in main list"""
+        if not status or status.get('type') == 'error':
+            error_msg = status.get('error', 'Unknown error') if status else 'No response'
+            speak_notification(_("Could not load Cerberus status: {error}").format(error=error_msg), 'error')
+            return
+
+        self.main_listbox.Clear()
+        self._cerberus_cached_status = status
+
+        threat_level = status.get('threat_level', 0)
+        threat_name = status.get('threat_name', 'UNKNOWN')
+        lockdown = status.get('lockdown_active', False)
+        banned_count = len(status.get('banned_ips', []))
+        perma_banned_count = len(status.get('permanent_banned_ips', []))
+        whitelisted_count = len(status.get('whitelisted_ips', []))
+        attackers_count = len(status.get('tracked_attackers', {}))
+        per_ip_count = len(status.get('per_ip_threats', {}))
+        stats = status.get('stats', {})
+        intrusions_blocked = stats.get('intrusions_blocked', 0)
+        ddos_blocked = stats.get('ddos_blocked', 0)
+
+        # Status header
+        if lockdown:
+            lockdown_reason = status.get('lockdown_reason', '')
+            lockdown_duration = int(status.get('lockdown_duration', 0))
+            mins = lockdown_duration // 60
+            secs = lockdown_duration % 60
+            self.main_listbox.Append(
+                _("STATUS: {level} - LOCKDOWN ACTIVE ({mins}m {secs}s) - {reason}").format(
+                    level=threat_name, mins=mins, secs=secs, reason=lockdown_reason
+                )
+            )
+        else:
+            self.main_listbox.Append(
+                _("STATUS: {level}").format(level=threat_name)
+            )
+
+        # Stats summary
+        self.main_listbox.Append(
+            _("Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: {threats}").format(
+                count=intrusions_blocked, ddos=ddos_blocked, threats=per_ip_count
+            )
+        )
+        self.main_listbox.Append(
+            _("Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers tracked: {attackers}").format(
+                banned=banned_count, perma=perma_banned_count, white=whitelisted_count, attackers=attackers_count
+            )
+        )
+
+        # Separator
+        self.main_listbox.Append("---")
+
+        # Actions (read-only for moderators)
+        self.main_listbox.Append(_("Refresh Status"))
+        self.main_listbox.Append(_("View Intrusion Logs"))
+        self.main_listbox.Append(_("View Honeypot Logs"))
+        self.main_listbox.Append(_("Banned IPs"))
+        self.main_listbox.Append(_("Tracked Attackers"))
+
+        # Developer-only actions
+        if self.is_developer:
+            self.main_listbox.Append("---")
+            if lockdown:
+                self.main_listbox.Append(_("Deactivate Lockdown"))
+            else:
+                self.main_listbox.Append(_("Activate Lockdown"))
+                self.main_listbox.Append(_("Activate CERBERUS Mode"))
+            self.main_listbox.Append(_("Ban IP"))
+            self.main_listbox.Append(_("Unban IP"))
+            self.main_listbox.Append(_("Whitelist IP"))
+
+        self.main_listbox.SetSelection(0)
+        self.main_listbox.SetFocus()
+        self.panel.Layout()
+        play_sound('core/SELECT.ogg')
+
+        # Announce status via TTS
+        speak_titannet(
+            _("Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs banned.").format(
+                level=threat_name, blocked=intrusions_blocked, banned=banned_count
+            )
+        )
+
+    def _cerberus_show_logs(self):
+        """Show Cerberus intrusion logs in a dialog"""
+        speak_titannet(_("Loading intrusion logs..."))
+
+        def load_thread():
+            try:
+                result = self.titan_client.get_cerberus_logs(max_lines=100)
+                wx.CallAfter(self._display_cerberus_logs, result)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=load_thread, daemon=True).start()
+
+    def _display_cerberus_logs(self, result):
+        """Display intrusion logs in a dialog"""
+        if not result or result.get('type') == 'error':
+            error_msg = result.get('error', 'Unknown error') if result else 'No response'
+            speak_notification(_("Could not load logs: {error}").format(error=error_msg), 'error')
+            return
+
+        logs = result.get('logs', [])
+        if not logs:
+            speak_notification(_("No intrusion logs found"), 'info')
+            return
+
+        # Build log text (most recent at top)
+        log_lines = []
+        for entry in reversed(logs):
+            ts = entry.get('timestamp', '')
+            sev = entry.get('severity', '')
+            msg = entry.get('message', '')
+            log_lines.append(f"[{ts}] {sev}: {msg}")
+
+        log_text = '\n'.join(log_lines)
+
+        dlg = wx.Dialog(self, title=_("Cerberus Intrusion Logs"), size=wx.Size(700, 500))
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        info_label = wx.StaticText(panel, label=_("Showing {count} log entries (most recent first)").format(
+            count=len(logs)
+        ))
+        sizer.Add(info_label, flag=wx.ALL, border=5)
+
+        text_ctrl = wx.TextCtrl(panel, value=log_text, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP)
+        sizer.Add(text_ctrl, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+
+        close_btn = wx.Button(panel, wx.ID_CLOSE, _("Close"))
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        sizer.Add(close_btn, flag=wx.ALL | wx.ALIGN_CENTER, border=5)
+
+        panel.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def _cerberus_show_honeypot_logs(self):
+        """Show honeypot session logs in a dialog"""
+        speak_titannet(_("Loading honeypot logs..."))
+
+        def load_thread():
+            try:
+                result = self.titan_client.get_cerberus_logs(max_lines=100)
+                wx.CallAfter(self._display_honeypot_logs, result)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=load_thread, daemon=True).start()
+
+    def _display_honeypot_logs(self, result):
+        """Display honeypot logs in a dialog"""
+        if not result or result.get('type') == 'error':
+            error_msg = result.get('error', 'Unknown error') if result else 'No response'
+            speak_notification(_("Could not load honeypot logs: {error}").format(error=error_msg), 'error')
+            return
+
+        honeypot = result.get('honeypot')
+        if not honeypot or not honeypot.get('log_file_exists'):
+            speak_notification(_("No honeypot logs found. SSH honeypot may not be active."), 'info')
+            return
+
+        entries = honeypot.get('log_entries', [])
+        if not entries:
+            speak_notification(_("Honeypot log is empty - no SSH intrusion attempts detected"), 'info')
+            return
+
+        # Most recent at top
+        log_text = '\n'.join(reversed(entries))
+
+        dlg = wx.Dialog(self, title=_("SSH Honeypot Logs"), size=wx.Size(700, 500))
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        info_label = wx.StaticText(panel, label=_("SSH Honeypot session logs ({count} entries, most recent first)").format(
+            count=len(entries)
+        ))
+        sizer.Add(info_label, flag=wx.ALL, border=5)
+
+        text_ctrl = wx.TextCtrl(panel, value=log_text, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP)
+        sizer.Add(text_ctrl, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+
+        close_btn = wx.Button(panel, wx.ID_CLOSE, _("Close"))
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        sizer.Add(close_btn, flag=wx.ALL | wx.ALIGN_CENTER, border=5)
+
+        panel.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def _cerberus_show_banned_ips(self):
+        """Show banned IPs list"""
+        status = getattr(self, '_cerberus_cached_status', None)
+        if not status:
+            speak_notification(_("No cached status. Refresh first."), 'warning')
+            return
+
+        banned = status.get('banned_ips', [])
+        perma = status.get('permanent_banned_ips', [])
+        whitelisted = status.get('whitelisted_ips', [])
+
+        items = []
+        for ip in perma:
+            items.append(_("{ip} (permanent ban)").format(ip=ip))
+        for ip in banned:
+            if ip not in perma:
+                items.append(_("{ip} (temporary ban)").format(ip=ip))
+
+        if whitelisted:
+            items.append("---")
+            for ip in whitelisted:
+                items.append(_("{ip} (whitelisted)").format(ip=ip))
+
+        if not items:
+            speak_notification(_("No banned or whitelisted IPs"), 'info')
+            return
+
+        dlg = wx.SingleChoiceDialog(self, _("Banned and whitelisted IPs"), _("Cerberus IP List"), items)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def _cerberus_show_attackers(self):
+        """Show tracked attackers list"""
+        status = getattr(self, '_cerberus_cached_status', None)
+        if not status:
+            speak_notification(_("No cached status. Refresh first."), 'warning')
+            return
+
+        attackers = status.get('tracked_attackers', {})
+        per_ip = status.get('per_ip_threats', {})
+
+        items = []
+        for ip, data in attackers.items():
+            threat_score = data.get('threat_score', 0)
+            attack_type = data.get('type', 'unknown')
+            first_seen = data.get('first_seen', '')
+            ip_level = per_ip.get(ip, {}).get('level', 'NORMAL')
+            ip_reason = per_ip.get(ip, {}).get('reason', '')
+            line = _("{ip} | Score: {score} | Type: {type} | Level: {level} | Since: {since}").format(
+                ip=ip, score=threat_score, type=attack_type, level=ip_level, since=first_seen
+            )
+            if ip_reason:
+                line += f" | {ip_reason}"
+            items.append(line)
+
+        if not items:
+            speak_notification(_("No tracked attackers"), 'info')
+            return
+
+        dlg = wx.SingleChoiceDialog(self, _("Tracked attackers"), _("Cerberus Attackers"), items)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def _cerberus_activate_lockdown(self):
+        """Activate global lockdown (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can activate lockdown"), 'warning')
+            return
+
+        dlg = wx.TextEntryDialog(self, _("Enter reason for lockdown:"), _("Activate Lockdown"))
+        if dlg.ShowModal() == wx.ID_OK:
+            reason = dlg.GetValue().strip() or "Manual lockdown"
+            dlg.Destroy()
+
+            speak_titannet(_("Activating lockdown..."))
+
+            def activate_thread():
+                try:
+                    result = self.titan_client.cerberus_activate(level='lockdown', reason=reason)
+                    if result and result.get('success'):
+                        wx.CallAfter(speak_notification, _("Lockdown activated"), 'warning')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=activate_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
+
+    def _cerberus_activate_cerberus(self):
+        """Activate full CERBERUS mode (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can activate CERBERUS mode"), 'warning')
+            return
+
+        confirm = wx.MessageDialog(
+            self,
+            _("CERBERUS mode is the maximum threat level. All new connections will be blocked. "
+              "Are you sure you want to activate CERBERUS mode?"),
+            _("Activate CERBERUS Mode"),
+            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING
+        )
+        if confirm.ShowModal() != wx.ID_YES:
+            confirm.Destroy()
+            return
+        confirm.Destroy()
+
+        dlg = wx.TextEntryDialog(self, _("Enter reason:"), _("Activate CERBERUS"))
+        if dlg.ShowModal() == wx.ID_OK:
+            reason = dlg.GetValue().strip() or "Manual CERBERUS activation"
+            dlg.Destroy()
+
+            speak_titannet(_("Activating CERBERUS mode..."))
+
+            def activate_thread():
+                try:
+                    result = self.titan_client.cerberus_activate(level='cerberus', reason=reason)
+                    if result and result.get('success'):
+                        wx.CallAfter(speak_notification, _("CERBERUS mode activated"), 'error')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=activate_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
+
+    def _cerberus_deactivate(self):
+        """Deactivate lockdown (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can deactivate lockdown"), 'warning')
+            return
+
+        dlg = wx.TextEntryDialog(self, _("Enter reason for deactivation:"), _("Deactivate Lockdown"))
+        if dlg.ShowModal() == wx.ID_OK:
+            reason = dlg.GetValue().strip() or "Manual deactivation"
+            dlg.Destroy()
+
+            def deactivate_thread():
+                try:
+                    result = self.titan_client.cerberus_deactivate(reason=reason)
+                    if result and result.get('success'):
+                        wx.CallAfter(speak_notification, _("Lockdown deactivated"), 'success')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=deactivate_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
+
+    def _cerberus_ban_ip_dialog(self):
+        """Ban IP dialog (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can ban IPs"), 'warning')
+            return
+
+        dlg = wx.TextEntryDialog(self, _("Enter IP address to ban:"), _("Ban IP"))
+        if dlg.ShowModal() == wx.ID_OK:
+            ip = dlg.GetValue().strip()
+            dlg.Destroy()
+            if not ip:
+                return
+
+            def ban_thread():
+                try:
+                    result = self.titan_client.cerberus_ban_ip(ip, permanent=True)
+                    if result and result.get('success'):
+                        wx.CallAfter(speak_notification, _("IP {ip} banned").format(ip=ip), 'success')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=ban_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
+
+    def _cerberus_unban_ip_dialog(self):
+        """Unban IP dialog (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can unban IPs"), 'warning')
+            return
+
+        # Show list of banned IPs to choose from
+        status = getattr(self, '_cerberus_cached_status', None)
+        banned = []
+        if status:
+            banned = list(set(status.get('banned_ips', []) + status.get('permanent_banned_ips', [])))
+
+        if banned:
+            dlg = wx.SingleChoiceDialog(self, _("Select IP to unban:"), _("Unban IP"), banned)
+        else:
+            dlg = wx.TextEntryDialog(self, _("Enter IP address to unban:"), _("Unban IP"))
+
+        if dlg.ShowModal() == wx.ID_OK:
+            ip = dlg.GetStringSelection() if isinstance(dlg, wx.SingleChoiceDialog) else dlg.GetValue().strip()
+            dlg.Destroy()
+            if not ip:
+                return
+
+            def unban_thread():
+                try:
+                    result = self.titan_client.cerberus_unban_ip(ip)
+                    if result and result.get('success'):
+                        wx.CallAfter(speak_notification, _("IP {ip} unbanned").format(ip=ip), 'success')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=unban_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
+
+    def _cerberus_whitelist_ip_dialog(self):
+        """Whitelist IP dialog (developer only)"""
+        if not self.is_developer:
+            speak_notification(_("Only developers can manage whitelist"), 'warning')
+            return
+
+        choices = [_("Add IP to whitelist"), _("Remove IP from whitelist")]
+        action_dlg = wx.SingleChoiceDialog(self, _("Whitelist action:"), _("Whitelist IP"), choices)
+        if action_dlg.ShowModal() != wx.ID_OK:
+            action_dlg.Destroy()
+            return
+
+        action = 'add' if action_dlg.GetSelection() == 0 else 'remove'
+        action_dlg.Destroy()
+
+        dlg = wx.TextEntryDialog(self, _("Enter IP address:"), _("Whitelist IP"))
+        if dlg.ShowModal() == wx.ID_OK:
+            ip = dlg.GetValue().strip()
+            dlg.Destroy()
+            if not ip:
+                return
+
+            def whitelist_thread():
+                try:
+                    result = self.titan_client.cerberus_whitelist_ip(ip, action=action)
+                    if result and result.get('success'):
+                        action_name = _("added to") if action == 'add' else _("removed from")
+                        wx.CallAfter(speak_notification,
+                                     _("IP {ip} {action} whitelist").format(ip=ip, action=action_name), 'success')
+                        wx.CallAfter(self.show_cerberus_protocol)
+                    else:
+                        error = result.get('error', 'Unknown error') if result else 'No response'
+                        wx.CallAfter(speak_notification, _("Failed: {error}").format(error=error), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=whitelist_thread, daemon=True).start()
+        else:
+            dlg.Destroy()
 
     # Moderation Methods
 
@@ -4101,11 +5618,30 @@ class TitanNetMainWindow(wx.Frame):
                 title_dlg.Destroy()
                 return
 
-            # Topic content
-            content_dlg = wx.TextEntryDialog(self, _("Enter topic content:"), _("Topic Content"))
+            # Topic content - multiline dialog
+            content_dlg = wx.Dialog(self, title=_("Topic Content"), size=(500, 300))
+            content_panel = wx.Panel(content_dlg)
+            content_sizer = wx.BoxSizer(wx.VERTICAL)
+
+            content_label = wx.StaticText(content_panel, label=_("Enter topic content:"))
+            content_sizer.Add(content_label, flag=wx.ALL, border=5)
+
+            content_text = wx.TextCtrl(content_panel, style=wx.TE_MULTILINE | wx.TE_WORDWRAP)
+            content_sizer.Add(content_text, proportion=1, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=5)
+
+            content_btn_sizer = wx.StdDialogButtonSizer()
+            ok_btn = wx.Button(content_panel, wx.ID_OK)
+            cancel_btn = wx.Button(content_panel, wx.ID_CANCEL)
+            content_btn_sizer.AddButton(ok_btn)
+            content_btn_sizer.AddButton(cancel_btn)
+            content_btn_sizer.Realize()
+            content_sizer.Add(content_btn_sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+            content_panel.SetSizer(content_sizer)
+            content_text.SetFocus()
 
             if content_dlg.ShowModal() == wx.ID_OK:
-                topic_content = content_dlg.GetValue().strip()
+                topic_content = content_text.GetValue().strip()
 
                 if not topic_content:
                     speak_notification(_("Topic content cannot be empty"), 'error')
@@ -4197,13 +5733,13 @@ class TitanNetMainWindow(wx.Frame):
                 except:
                     date_str = created_at[:10] if created_at else ''
 
-                self.main_listbox.Append(f"{username} (#{titan_number}) - Registered: {date_str}")
+                self.main_listbox.Append(f"{username} (#{titan_number}) - {_('Registered')}: {date_str}")
 
             if self.main_listbox.GetCount() > 0:
                 self.main_listbox.SetSelection(0)
                 self.main_listbox.SetFocus()
 
-            speak_titannet(f"{len(users)} users total")
+            speak_titannet(_("{count} users total").format(count=len(users)))
         else:
             speak_notification(result.get('error', _("Failed to load users")), 'error')
 
@@ -5393,6 +6929,87 @@ class TitanNetMainWindow(wx.Frame):
 
         threading.Thread(target=move_thread, daemon=True).start()
 
+    def show_edit_broadcast_files(self):
+        """Open the broadcast file editor (motd_*.txt, newuser_*.txt, ...)."""
+        if not getattr(self, 'is_moderator', False):
+            speak_notification(_("Only moderators can edit broadcast files"), 'warning')
+            return
+
+        speak_titannet(_("Loading broadcast files..."))
+
+        def fetch_files():
+            try:
+                response = self.titan_client.list_broadcast_files()
+                wx.CallAfter(self._show_broadcast_files_chooser, response)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=fetch_files, daemon=True).start()
+
+    def _show_broadcast_files_chooser(self, response):
+        """Show a list of editable broadcast files."""
+        if not response or not response.get('success'):
+            speak_notification(response.get('error') or response.get('message')
+                               or _("Failed to load broadcast files"), 'error')
+            return
+
+        files = response.get('files') or []
+        if not files:
+            speak_notification(_("No broadcast files found"), 'info')
+            return
+
+        labels = []
+        names = []
+        for entry in files:
+            name = entry.get('filename', '')
+            size = entry.get('size', 0)
+            if not name:
+                continue
+            labels.append(_("{name} ({size} bytes)").format(name=name, size=size))
+            names.append(name)
+
+        if not labels:
+            speak_notification(_("No broadcast files found"), 'info')
+            return
+
+        dlg = wx.SingleChoiceDialog(self, _("Select a file to edit:"),
+                                    _("Edit Broadcast Files"), labels)
+        try:
+            if dlg.ShowModal() == wx.ID_OK:
+                selection = dlg.GetSelection()
+                filename = names[selection]
+                self._open_broadcast_file_editor(filename)
+        finally:
+            dlg.Destroy()
+
+    def _open_broadcast_file_editor(self, filename):
+        """Fetch the file content from the server and show the editor dialog."""
+        speak_titannet(_("Loading {name}...").format(name=filename))
+
+        def fetch_content():
+            try:
+                response = self.titan_client.get_broadcast_file(filename)
+                wx.CallAfter(self._show_broadcast_file_editor, filename, response)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=fetch_content, daemon=True).start()
+
+    def _show_broadcast_file_editor(self, filename, response):
+        if not response or not response.get('success'):
+            speak_notification(response.get('error') or response.get('message')
+                               or _("Failed to load file"), 'error')
+            return
+
+        content = response.get('content', '')
+        editor = BroadcastFileEditDialog(self, self.titan_client, filename, content)
+        try:
+            apply_skin_to_window(editor)
+        except Exception:
+            pass
+        editor.ShowModal()
+        editor.Destroy()
+
     def show_moderate_rooms(self):
         """Show room moderation options"""
         choices = [
@@ -5805,6 +7422,184 @@ class TitanNetMainWindow(wx.Frame):
         speak_titannet(_("Found {count} packages").format(count=len(apps)))
 
 
+class MOTDDialog(wx.Dialog):
+    """Message of the Day dialog - read-only text with OK button"""
+
+    def __init__(self, parent, motd_text):
+        super().__init__(parent, title=_("Message of the Day"))
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Read-only multiline text field
+        self.text_ctrl = wx.TextCtrl(
+            panel,
+            value=motd_text,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP
+        )
+        sizer.Add(self.text_ctrl, 1, wx.ALL | wx.EXPAND, 10)
+
+        # OK button
+        ok_button = wx.Button(panel, wx.ID_OK, _("OK"))
+        ok_button.SetDefault()
+        sizer.Add(ok_button, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+        panel.SetSizer(sizer)
+        self.SetSize(wx.Size(450, 300))
+        self.Centre()
+
+        # Play MOTD sound
+        play_sound('titannet/motd.ogg')
+
+        # Bind Escape and Enter to close
+        ok_button.Bind(wx.EVT_BUTTON, lambda e: self.EndModal(wx.ID_OK))
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+
+        # Apply skin
+        try:
+            apply_skin_to_window(self)
+        except Exception:
+            pass
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.EndModal(wx.ID_OK)
+        else:
+            event.Skip()
+
+
+class BroadcastFileEditDialog(wx.Dialog):
+    """Editor for broadcast files (motd_*.txt, newuser_*.txt, ...).
+
+    - Multiline text area where Enter inserts a new line.
+    - Ctrl+S saves the file via the Titan-Net websocket.
+    - Escape closes (asks for confirmation if there are unsaved changes).
+    """
+
+    def __init__(self, parent, titan_client, filename, content):
+        super().__init__(
+            parent,
+            title=_("Edit: {name}").format(name=filename),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+        )
+
+        self.titan_client = titan_client
+        self.filename = filename
+        self._original_content = content or ''
+        self._saving = False
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        info_label = wx.StaticText(
+            panel,
+            label=_("Press Ctrl+S to save. Enter inserts a new line.")
+        )
+        sizer.Add(info_label, 0, wx.ALL, 10)
+
+        self.text_ctrl = wx.TextCtrl(
+            panel,
+            value=self._original_content,
+            style=wx.TE_MULTILINE | wx.TE_WORDWRAP | wx.TE_PROCESS_ENTER
+        )
+        # Use a monospaced font for predictable line layout in motd-style files.
+        try:
+            mono = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            self.text_ctrl.SetFont(mono)
+        except Exception:
+            pass
+        sizer.Add(self.text_ctrl, 1, wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.save_button = wx.Button(panel, label=_("Save (Ctrl+S)"))
+        self.save_button.Bind(wx.EVT_BUTTON, lambda e: self._save())
+        button_row.Add(self.save_button, 0, wx.RIGHT, 5)
+
+        self.close_button = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        button_row.Add(self.close_button, 0)
+
+        sizer.Add(button_row, 0, wx.ALL | wx.ALIGN_RIGHT, 10)
+
+        panel.SetSizer(sizer)
+        self.SetSize(wx.Size(700, 500))
+        self.Centre()
+
+        # Ctrl+S to save / Escape to close. EVT_CHAR_HOOK fires before the
+        # multiline TextCtrl swallows Enter, so plain Enter still inserts a
+        # newline naturally.
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+        wx.CallAfter(self.text_ctrl.SetFocus)
+
+    def _on_key(self, event):
+        keycode = event.GetKeyCode()
+        modifiers = event.GetModifiers()
+        ctrl = bool(modifiers & wx.MOD_CONTROL)
+
+        if ctrl and keycode in (ord('S'), ord('s')):
+            self._save()
+            return
+        if keycode == wx.WXK_ESCAPE:
+            self._on_close(event)
+            return
+        event.Skip()
+
+    def _has_unsaved_changes(self):
+        return self.text_ctrl.GetValue() != self._original_content
+
+    def _on_close(self, event):
+        if self._has_unsaved_changes():
+            dlg = wx.MessageDialog(
+                self,
+                _("You have unsaved changes. Discard them?"),
+                _("Unsaved changes"),
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING
+            )
+            try:
+                if dlg.ShowModal() != wx.ID_YES:
+                    if hasattr(event, 'Veto'):
+                        try:
+                            event.Veto()
+                        except Exception:
+                            pass
+                    return
+            finally:
+                dlg.Destroy()
+        self.EndModal(wx.ID_CANCEL)
+
+    def _save(self):
+        if self._saving:
+            return
+        content = self.text_ctrl.GetValue()
+        self._saving = True
+        self.save_button.Enable(False)
+        speak_titannet(_("Saving {name}...").format(name=self.filename))
+
+        def save_thread():
+            try:
+                response = self.titan_client.save_broadcast_file(self.filename, content)
+                wx.CallAfter(self._on_save_response, response, content)
+            except Exception as e:
+                wx.CallAfter(self._on_save_response, {"success": False, "message": str(e)}, content)
+
+        threading.Thread(target=save_thread, daemon=True).start()
+
+    def _on_save_response(self, response, saved_content):
+        self._saving = False
+        try:
+            self.save_button.Enable(True)
+        except Exception:
+            pass
+        if response and response.get('success'):
+            self._original_content = saved_content
+            speak_notification(_("Broadcast file saved"), 'success')
+        else:
+            err = (response or {}).get('error') or (response or {}).get('message') \
+                or _("Failed to save broadcast file")
+            speak_notification(err, 'error')
+
+
 def show_login_dialog(parent, titan_client: TitanNetClient):
     """
     Show login dialog
@@ -5814,7 +7609,7 @@ def show_login_dialog(parent, titan_client: TitanNetClient):
         titan_client: Titan-Net client instance
 
     Returns:
-        Tuple of (success: bool, offline_mode: bool)
+        Tuple of (success: bool, offline_mode: bool, motd: dict or None)
     """
     # Check server availability (silently - no announcement)
     server_available = titan_client.check_server()
@@ -5834,9 +7629,9 @@ def show_login_dialog(parent, titan_client: TitanNetClient):
         dlg.Destroy()
 
         if result == wx.ID_YES:
-            return (False, True)
+            return (False, True, None)
         else:
-            return (False, False)
+            return (False, False, None)
 
     # Server available - show login dialog directly (no announcement)
 
@@ -5845,15 +7640,16 @@ def show_login_dialog(parent, titan_client: TitanNetClient):
 
     logged_in = dialog.logged_in
     offline_mode = dialog.offline_mode
+    motd = dialog.motd
 
     dialog.Destroy()
 
     if logged_in:
-        return (True, False)
+        return (True, False, motd)
     elif offline_mode:
-        return (False, True)
+        return (False, True, None)
     else:
-        return (False, False)
+        return (False, False, None)
 
 
 _titan_net_window = None
@@ -5863,26 +7659,74 @@ def show_titan_net_window(parent, titan_client: TitanNetClient):
     Show main Titan-Net window. Reuses existing hidden window if available.
 
     Args:
-        parent: Parent window
-        titan_client: Titan-Net client instance (must be logged in)
+        parent: Parent window (may be None - a top-level Frame is fine
+            without a parent, which lets IUI / Klango / launcher-mode
+            open the window without a main TCE GUI).
+        titan_client: Titan-Net client instance (must be logged in).
+
+    Returns:
+        The TitanNetMainWindow instance, or None on failure.
     """
     global _titan_net_window
 
     if not titan_client.is_connected:
         speak_notification(_("Not connected to Titan-Net"), 'error')
-        return
+        return None
 
-    # Reuse existing hidden window if it still exists
+    # Reuse existing hidden window if it still exists. A cached window
+    # from a previous open in the same process is kept alive (OnClose
+    # hides instead of destroys), so we just re-show it.
     if _titan_net_window is not None:
         try:
-            _titan_net_window.Show()
-            _titan_net_window.Raise()
-            return
+            # Prove the wx C++ object is alive before touching it -
+            # IsBeingDeleted raises RuntimeError on dead objects.
+            alive = not _titan_net_window.IsBeingDeleted()
         except Exception:
+            alive = False
+        if alive:
+            try:
+                _titan_net_window.Show()
+                _titan_net_window.Raise()
+                try:
+                    _titan_net_window.Iconize(False)
+                except Exception:
+                    pass
+                try:
+                    from src.ui.window_switcher import register_window
+                    register_window("Titan-Net", window=_titan_net_window,
+                                    category='messenger')
+                except Exception:
+                    pass
+                return _titan_net_window
+            except Exception as e:
+                print(f"[TITAN-NET] Cached window show failed, recreating: {e}")
+                _titan_net_window = None
+        else:
             _titan_net_window = None
 
-    _titan_net_window = TitanNetMainWindow(parent, titan_client)
-    _titan_net_window.Show()
+    try:
+        _titan_net_window = TitanNetMainWindow(parent, titan_client)
+    except Exception as e:
+        print(f"[TITAN-NET] Failed to create main window: {e}")
+        import traceback
+        traceback.print_exc()
+        _titan_net_window = None
+        speak_notification(_("Error opening Titan-Net"), 'error')
+        return None
+
+    try:
+        _titan_net_window.Show()
+        _titan_net_window.Raise()
+    except Exception as e:
+        print(f"[TITAN-NET] Failed to show main window: {e}")
+
+    try:
+        from src.ui.window_switcher import register_window
+        register_window("Titan-Net", window=_titan_net_window, category='messenger')
+    except Exception:
+        pass
+
+    return _titan_net_window
 
 
 if __name__ == "__main__":

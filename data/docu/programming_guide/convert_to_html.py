@@ -422,6 +422,8 @@ def generate_navigation(files, current_file, language='pl'):
         'titanim_module_guide_pl.md': 'Moduły Titan IM',
         'app_creation_guide_pl.md': 'Tworzenie aplikacji',
         'game_creation_guide_pl.md': 'Tworzenie gier',
+        'launcher_creation_guide_pl.md': 'Tworzenie launcherów',
+        'tts_engine_guide_pl.md': 'Silniki TTS (TitanTTS)',
     }
 
     guides_en = {
@@ -431,6 +433,8 @@ def generate_navigation(files, current_file, language='pl'):
         'titanim_module_guide_en.md': 'Titan IM Modules',
         'app_creation_guide_en.md': 'Creating Applications',
         'game_creation_guide_en.md': 'Creating Games',
+        'launcher_creation_guide_en.md': 'Creating Launchers',
+        'tts_engine_guide_en.md': 'TitanTTS Engines',
     }
 
     guides = guides_pl if language == 'pl' else guides_en
@@ -496,6 +500,8 @@ def create_index_page(output_dir, all_files, language='pl'):
         'titanim_module_guide_pl.md': ('Moduły Titan IM', 'Rozszerz Titan IM o własne komunikatory'),
         'app_creation_guide_pl.md': ('Tworzenie aplikacji', 'Twórz aplikacje dla TCE Launcher'),
         'game_creation_guide_pl.md': ('Tworzenie gier', 'Dodaj własne gry do TCE Launcher'),
+        'launcher_creation_guide_pl.md': ('Tworzenie launcherów', 'Zbuduj alternatywny interfejs TCE w wxPython, PyQt5, tkinter lub pygame'),
+        'tts_engine_guide_pl.md': ('Silniki TTS (TitanTTS)', 'Zaimplementuj własny silnik syntezy mowy dla TCE'),
     }
 
     guides_en = {
@@ -505,6 +511,8 @@ def create_index_page(output_dir, all_files, language='pl'):
         'titanim_module_guide_en.md': ('Titan IM Modules', 'Extend Titan IM with custom communicators'),
         'app_creation_guide_en.md': ('Creating Applications', 'Create applications for TCE Launcher'),
         'game_creation_guide_en.md': ('Creating Games', 'Add custom games to TCE Launcher'),
+        'launcher_creation_guide_en.md': ('Creating Launchers', 'Build alternative TCE interfaces in wxPython, PyQt5, tkinter, or pygame'),
+        'tts_engine_guide_en.md': ('TitanTTS Engines', 'Implement custom text-to-speech engines for TCE'),
     }
 
     guides = guides_pl if language == 'pl' else guides_en

@@ -66,11 +66,9 @@ TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
-from src.titan_core.translation import set_language
-from src.settings.settings import get_setting
-
-# Inicjalizacja tłumaczeń
-_ = set_language(get_setting('language', 'pl'))
+# The _() function is auto-injected by StatusbarAppletManager from
+# {applet_dir}/languages/ (gettext domain = applet folder name).
+# No need to import or configure gettext manually.
 
 
 def get_statusbar_item_info():
@@ -242,11 +240,9 @@ TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
-from src.titan_core.translation import set_language
-from src.settings.settings import get_setting
-
-# Inicjalizacja tłumaczeń
-_ = set_language(get_setting('language', 'pl'))
+# The _() function is auto-injected by StatusbarAppletManager from
+# {applet_dir}/languages/ (gettext domain = applet folder name).
+# No need to import or configure gettext manually.
 
 
 def get_statusbar_item_info():
@@ -362,11 +358,9 @@ TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
-from src.titan_core.translation import set_language
-from src.settings.settings import get_setting
-
-# Inicjalizacja tłumaczeń
-_ = set_language(get_setting('language', 'pl'))
+# The _() function is auto-injected by StatusbarAppletManager from
+# {applet_dir}/languages/ (gettext domain = applet folder name).
+# No need to import or configure gettext manually.
 
 try:
     import psutil
@@ -525,11 +519,9 @@ TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
     sys.path.insert(0, TCE_ROOT)
 
-from src.titan_core.translation import set_language
-from src.settings.settings import get_setting
-
-# Inicjalizacja tłumaczeń
-_ = set_language(get_setting('language', 'pl'))
+# The _() function is auto-injected by StatusbarAppletManager from
+# {applet_dir}/languages/ (gettext domain = applet folder name).
+# No need to import or configure gettext manually.
 
 try:
     import psutil

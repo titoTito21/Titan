@@ -182,7 +182,7 @@ class BrowserFrame(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
         self.settings = config
-        self.home_url = 'http://titosofttitan.com/titan'
+        self.home_url = 'https://titosofttitan.com/titan'
 
         # Lista pobranych plików (póki co pusta).
         self.downloads = []
@@ -277,6 +277,29 @@ class BrowserFrame(wx.Frame):
         if isinstance(self.browser, wx.TextCtrl):
             self.browser.Bind(wx.EVT_LEFT_DOWN, self.OnTextCtrlClick)
             self.browser.Bind(wx.EVT_KEY_DOWN, self.OnTextCtrlKeyDown)
+
+        # Accelerator table so shortcuts work even when WebView (Edge) has focus
+        self._accel_id_address = wx.NewIdRef()
+        self._accel_id_address_alt = wx.NewIdRef()
+        self._accel_id_refresh = wx.NewIdRef()
+        self._accel_id_downloads = wx.NewIdRef()
+        accel_entries = [
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('L'), self._accel_id_address),
+            wx.AcceleratorEntry(wx.ACCEL_ALT, ord('D'), self._accel_id_address_alt),
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F6, self._accel_id_address),
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, self._accel_id_refresh),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('J'), self._accel_id_downloads),
+        ]
+        self.SetAcceleratorTable(wx.AcceleratorTable(accel_entries))
+        self.Bind(wx.EVT_MENU, self._OnAccelFocusAddress, id=self._accel_id_address)
+        self.Bind(wx.EVT_MENU, self._OnAccelFocusAddress, id=self._accel_id_address_alt)
+        self.Bind(wx.EVT_MENU, lambda e: self.OnRefresh(e), id=self._accel_id_refresh)
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowDownloads(), id=self._accel_id_downloads)
+
+    def _OnAccelFocusAddress(self, event):
+        """Focus address bar via accelerator (works even when WebView has focus)."""
+        self.address.SetFocus()
+        self.address.SelectAll()
 
     def CreateMenuBar(self):
         menubar = wx.MenuBar()

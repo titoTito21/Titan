@@ -727,7 +727,15 @@ class MessengerWebViewFrame(wx.Frame):
         """Handle keyboard events in WebView"""
         keycode = event.GetKeyCode()
         ctrl_down = event.ControlDown()
-        
+        alt_down = event.AltDown()
+        shift_down = event.ShiftDown()
+
+        # Eat bare Alt key — propagating it to the frame triggers MenuBar
+        # mnemonic mode, and WebView2 fails to relinquish focus cleanly,
+        # which appears to the user as a freeze.
+        if keycode == wx.WXK_ALT and not ctrl_down and not shift_down:
+            return
+
         # Handle custom shortcuts
         if keycode == wx.WXK_F5:
             self.on_refresh(event)
@@ -997,30 +1005,41 @@ class MessengerWebViewFrame(wx.Frame):
                 }
                 
                 // Method 1: Check for typing indicators (multiple selectors)
+                // Scope to the ACTIVE conversation pane only — Messenger renders
+                // typing dots next to chat-list items in the sidebar too, and we
+                // don't want to announce typing for chats the user isn't viewing.
+                var convoRoot = document.querySelector('[role="main"]');
                 var typingSelectors = [
                     '[aria-label*="typing"]',
-                    '[data-testid*="typing"]', 
+                    '[data-testid*="typing"]',
                     '[aria-label*="is typing"]',
                     '[aria-label*="pisze"]',
                     '.typing-indicator',
                     '[role="status"]'
                 ];
-                
+
                 var typingIndicators = [];
-                typingSelectors.forEach(selector => {
-                    var elements = document.querySelectorAll(selector);
-                    typingIndicators = typingIndicators.concat(Array.from(elements));
+                if (convoRoot) {
+                    typingSelectors.forEach(selector => {
+                        var elements = convoRoot.querySelectorAll(selector);
+                        typingIndicators = typingIndicators.concat(Array.from(elements));
+                    });
+                }
+
+                // Only count typing indicators that are actually visible
+                typingIndicators = typingIndicators.filter(function(elem) {
+                    return elem.offsetWidth > 0 && elem.offsetHeight > 0;
                 });
-                
+
                 if (typingIndicators.length > 0) {
-                    result.typing = true;
                     for (var i = 0; i < typingIndicators.length; i++) {
                         var elem = typingIndicators[i];
                         var text = elem.textContent || elem.getAttribute('aria-label') || '';
                         if (text.toLowerCase().includes('typing') || text.toLowerCase().includes('pisze')) {
+                            result.typing = true;
                             result.typingUser = text.replace(/is typing|pisze/gi, '').trim();
                             if (state.debugMode) {
-                                console.log('TYPING detected:', text);
+                                console.log('TYPING detected (active chat):', text);
                             }
                             break;
                         }

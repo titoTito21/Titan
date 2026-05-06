@@ -253,6 +253,8 @@
 <li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
 <li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
                 </ul>
             </nav>
         </aside>
@@ -261,228 +263,205 @@
             <div class="header-banner">
                 <h1>Przewodnik tworzenia widgetów Titan</h1>
             </div>
-            <h1 id="przewodnik-tworzenia-widgetow-titan">Przewodnik tworzenia widgetów Titan</h1>
+            <h1>Przewodnik tworzenia widgetów Titan</h1>
 
-<h2 id="wprowadzenie">Wprowadzenie</h2>
+<h2>Wprowadzenie</h2>
 
 <p>Widgety Titan to interaktywne komponenty dostępne w niewidzialnym interfejsie, które umożliwiają programistom tworzenie własnych funkcjonalności. System obsługuje dwa typy widgetów: <strong>button</strong> (przycisk) i <strong>grid</strong> (siatka).</p>
 
-<h2 id="architektura-systemu-widgetow">Architektura systemu widgetów</h2>
+<h2>Architektura systemu widgetów</h2>
 
-<h3 id="lokalizacja-widgetow">Lokalizacja widgetów</h3>
+<h3>Lokalizacja widgetów</h3>
+Wszystkie widgety znajdują się w katalogu <code>data/applets/</code>. Każdy widget to osobny katalog zawierający:
+<li><code>main.py</code> lub <code>init.py</code> - główny plik z kodem widgetu</li>
+<li><code>applet.json</code> (opcjonalnie) - metadane widgetu w nowym systemie</li>
 
-<p>Wszystkie widgety znajdują się w katalogu <code>data/applets/</code>. Każdy widget to osobny katalog zawierający:
-- <code>main.py</code> lub <code>init.py</code> - główny plik z kodem widgetu
-- <code>applet.json</code> (opcjonalnie) - metadane widgetu w nowym systemie</p>
-
-<h3 id="klasa-bazowa-basewidget">Klasa bazowa BaseWidget</h3>
+<h3>Klasa bazowa BaseWidget</h3>
 
 <p>Titan udostępnia klasę bazową <code>BaseWidget</code> w <code>invisibleui.py</code>:</p>
 
-<pre><code>class BaseWidget:
+<pre><code class="language-python">class BaseWidget:
     def __init__(self, speak_func):
         self.speak = speak_func
         self.view = None
-
+    
     def speak_with_position(self, text, position=0.0, pitch_offset=0):
-        """Wypowiada tekst z pozycjonowaniem stereo"""
+        &quot;&quot;&quot;Wypowiada tekst z pozycjonowaniem stereo&quot;&quot;&quot;
         self.speak(text, position=position, pitch_offset=pitch_offset)
-
+    
     def set_border(self):
-        """Ustawia obramowanie widgetu (dla GUI)"""
+        &quot;&quot;&quot;Ustawia obramowanie widgetu (dla GUI)&quot;&quot;&quot;
         pass
-
+    
     def get_current_element(self):
-        """Zwraca opis aktualnego elementu - WYMAGANE"""
+        &quot;&quot;&quot;Zwraca opis aktualnego elementu - WYMAGANE&quot;&quot;&quot;
         raise NotImplementedError
-
+    
     def navigate(self, direction):
-        """Nawigacja w widgecie - WYMAGANE dla typu 'grid'"""
+        &quot;&quot;&quot;Nawigacja w widgecie - WYMAGANE dla typu &#x27;grid&#x27;&quot;&quot;&quot;
         raise NotImplementedError
-
+    
     def activate_current_element(self):
-        """Aktywuje aktualny element - WYMAGANE"""
-        raise NotImplementedError
-</code></pre>
+        &quot;&quot;&quot;Aktywuje aktualny element - WYMAGANE&quot;&quot;&quot;
+        raise NotImplementedError</code></pre>
 
-<h2 id="typy-widgetow">Typy widgetów</h2>
+<h2>Typy widgetów</h2>
 
-<h3 id="1-widget-typu-button">1. Widget typu "button"</h3>
+<h3>1. Widget typu "button"</h3>
 
 <p>Prosty widget jednokrotnego użycia, który wykonuje akcję po aktywacji.</p>
 
-<p><strong>Przykład implementacji:</strong></p>
-
-<pre><code>class WidgetButton:
+<p><strong>Przykład implementacji:</strong>
+<pre><code class="language-python">class WidgetButton:
     def __init__(self, speak_func, view=None):
         self.speak = speak_func
         self.view = view
 
     def activate_current_element(self):
-        """Aktywuje widget"""
-        self.speak("Przykładowy przycisk aktywowany!")
+        &quot;&quot;&quot;Aktywuje widget&quot;&quot;&quot;
+        self.speak(&quot;Przykładowy przycisk aktywowany!&quot;)
         # Wykonaj akcję
-
+        
     def get_current_element(self):
-        """Zwraca nazwę przycisku"""
-        return "Przykładowy przycisk"
+        &quot;&quot;&quot;Zwraca nazwę przycisku&quot;&quot;&quot;
+        return &quot;Przykładowy przycisk&quot;
 
 def get_widget_info():
     return {
-        "name": "Mój przycisk",
-        "type": "button",
+        &quot;name&quot;: &quot;Mój przycisk&quot;,
+        &quot;type&quot;: &quot;button&quot;,
     }
 
 def get_widget_instance(speak_func, view=None):
-    return WidgetButton(speak_func, view)
-</code></pre>
+    return WidgetButton(speak_func, view)</code></pre></p>
 
-<h3 id="2-widget-typu-grid">2. Widget typu "grid"</h3>
+<h3>2. Widget typu "grid"</h3>
 
 <p>Interaktywny widget umożliwiający nawigację w różnych kierunkach.</p>
 
-<p><strong>Przykład implementacji:</strong></p>
-
-<pre><code>from invisibleui import BaseWidget
+<p><strong>Przykład implementacji:</strong>
+<pre><code class="language-python">from invisibleui import BaseWidget
 
 class WidgetGrid(BaseWidget):
     def __init__(self, speak_func, view=None):
         super().__init__(speak_func)
         self.view = view
         self.grid = [
-            ["Góra-Lewo", "Góra-Prawo"],
-            ["Dół-Lewo", "Dół-Prawo"]
+            [&quot;Góra-Lewo&quot;, &quot;Góra-Prawo&quot;],
+            [&quot;Dół-Lewo&quot;, &quot;Dół-Prawo&quot;]
         ]
         self.current_pos = [0, 0]  # [wiersz, kolumna]
 
     def navigate(self, direction):
-        """Nawigacja po siatce"""
+        &quot;&quot;&quot;Nawigacja po siatce&quot;&quot;&quot;
         rows = len(self.grid)
         cols = len(self.grid[0]) if self.grid else 1
         old_pos = self.current_pos[:]
-
-        if direction == 'up' and self.current_pos[0] &gt; 0:
+        
+        if direction == &#x27;up&#x27; and self.current_pos[0] &gt; 0:
             self.current_pos[0] -= 1
-        elif direction == 'down' and self.current_pos[0] &lt; rows - 1:
+        elif direction == &#x27;down&#x27; and self.current_pos[0] &lt; rows - 1:
             self.current_pos[0] += 1
-        elif direction == 'left' and self.current_pos[1] &gt; 0:
+        elif direction == &#x27;left&#x27; and self.current_pos[1] &gt; 0:
             self.current_pos[1] -= 1
-        elif direction == 'right' and self.current_pos[1] &lt; cols - 1:
+        elif direction == &#x27;right&#x27; and self.current_pos[1] &lt; cols - 1:
             self.current_pos[1] += 1
         else:
             return False, self.current_pos[1], cols  # Osiągnięto krawędź
-
+        
         # Zwróć sukces i pozycję dla stereo pozycjonowania
         return True, self.current_pos[1], cols
 
     def activate_current_element(self):
-        """Aktywuje aktualny element"""
+        &quot;&quot;&quot;Aktywuje aktualny element&quot;&quot;&quot;
         element = self.get_current_element()
-
+        
         # Użyj pozycjonowania stereo
         cols = len(self.grid[0]) if self.grid else 1
         position = (self.current_pos[1] / (cols - 1) * 2.0) - 1.0 if cols &gt; 1 else 0.0
-
-        self.speak_with_position(f"Aktywowano: {element}", position=position)
-
+        
+        self.speak_with_position(f&quot;Aktywowano: {element}&quot;, position=position)
+        
     def get_current_element(self):
-        """Zwraca aktualny element"""
+        &quot;&quot;&quot;Zwraca aktualny element&quot;&quot;&quot;
         return self.grid[self.current_pos[0]][self.current_pos[1]]
 
 def get_widget_info():
     return {
-        "name": "Przykładowa siatka",
-        "type": "grid",
+        &quot;name&quot;: &quot;Przykładowa siatka&quot;,
+        &quot;type&quot;: &quot;grid&quot;,
     }
 
 def get_widget_instance(speak_func, view=None):
-    return WidgetGrid(speak_func, view)
-</code></pre>
+    return WidgetGrid(speak_func, view)</code></pre></p>
 
-<h2 id="metadane-widgetu-appletjson">Metadane widgetu (applet.json)</h2>
+<h2>Metadane widgetu (applet.json)</h2>
 
 <p>Nowy system pozwala na definiowanie metadanych w pliku <code>applet.json</code>:</p>
 
-<pre><code>{
-    "name_pl": "Mój widget",
-    "name_en": "My Widget", 
-    "description_pl": "Opis widgetu po polsku",
-    "description_en": "Widget description in English",
-    "version": "1.0.0",
-    "author": "Twoje imię",
-    "type": "grid"
-}
-</code></pre>
+<pre><code class="language-json">{
+    &quot;name_pl&quot;: &quot;Mój widget&quot;,
+    &quot;name_en&quot;: &quot;My Widget&quot;, 
+    &quot;description_pl&quot;: &quot;Opis widgetu po polsku&quot;,
+    &quot;description_en&quot;: &quot;Widget description in English&quot;,
+    &quot;version&quot;: &quot;1.0.0&quot;,
+    &quot;author&quot;: &quot;Twoje imię&quot;,
+    &quot;type&quot;: &quot;grid&quot;
+}</code></pre>
 
-<h2 id="funkcje-stereo-pozycjonowania">Funkcje stereo pozycjonowania</h2>
+<h2>Funkcje stereo pozycjonowania</h2>
 
-<h3 id="speak_with_position">speak<em>with</em>position()</h3>
+<h3>speak_with_position()</h3>
+Dziedzicząc z <code>BaseWidget</code>, masz dostęp do metody <code>speak_with_position()</code>:
 
-<p>Dziedzicząc z <code>BaseWidget</code>, masz dostęp do metody <code>speak_with_position()</code>:</p>
+<pre><code class="language-python">self.speak_with_position(text, position=0.0, pitch_offset=0)</code></pre>
 
-<pre><code>self.speak_with_position(text, position=0.0, pitch_offset=0)
-</code></pre>
+<strong>Parametry:</strong>
+<li><code>text</code> - tekst do wypowiedzenia</li>
+<li><code>position</code> - pozycja stereo: -1.0 (lewo) do 1.0 (prawo), 0.0 = środek  </li>
+<li><code>pitch_offset</code> - zmiana wysokości głosu: -10 do +10</li>
 
-<p><strong>Parametry:</strong>
-- <code>text</code> - tekst do wypowiedzenia
-- <code>position</code> - pozycja stereo: -1.0 (lewo) do 1.0 (prawo), 0.0 = środek<br />
-- <code>pitch_offset</code> - zmiana wysokości głosu: -10 do +10</p>
+<h3>Automatyczne pozycjonowanie</h3>
 
-<h3 id="automatyczne-pozycjonowanie">Automatyczne pozycjonowanie</h3>
+System automatycznie pozycjonuje mowę na podstawie zwracanych wartości z <code>navigate()</code>:
+<li>Nawigacja lewo/prawo używa pozycjonowania stereo</li>
+<li>Nawigacja góra/dół używa zmiany wysokości głosu</li>
 
-<p>System automatycznie pozycjonuje mowę na podstawie zwracanych wartości z <code>navigate()</code>:
-- Nawigacja lewo/prawo używa pozycjonowania stereo
-- Nawigacja góra/dół używa zmiany wysokości głosu</p>
+<h2>Wymagane metody</h2>
 
-<h2 id="wymagane-metody">Wymagane metody</h2>
-
-<h3 id="get_widget_info">get<em>widget</em>info()</h3>
-
-<p><strong>Wymagana funkcja</strong> na poziomie modułu:</p>
-
-<pre><code>def get_widget_info():
+<h3>get_widget_info()</h3>
+<strong>Wymagana funkcja</strong> na poziomie modułu:
+<pre><code class="language-python">def get_widget_info():
     return {
-        "name": "Nazwa widgetu",
-        "type": "button" # lub "grid"
-    }
-</code></pre>
+        &quot;name&quot;: &quot;Nazwa widgetu&quot;,
+        &quot;type&quot;: &quot;button&quot; # lub &quot;grid&quot;
+    }</code></pre>
 
-<h3 id="get_widget_instance">get<em>widget</em>instance()</h3>
+<h3>get_widget_instance()</h3>
+<strong>Wymagana funkcja</strong> na poziomie modułu:
+<pre><code class="language-python">def get_widget_instance(speak_func, view=None):
+    return MojWidget(speak_func, view)</code></pre>
 
-<p><strong>Wymagana funkcja</strong> na poziomie modułu:</p>
+<h3>get_current_element()</h3>
+<strong>Wymagana metoda</strong> klasy widgetu - zwraca opis aktualnego elementu.
 
-<pre><code>def get_widget_instance(speak_func, view=None):
-    return MojWidget(speak_func, view)
-</code></pre>
+<h3>activate_current_element()</h3>
+<strong>Wymagana metoda</strong> klasy widgetu - wykonuje akcję aktywacji.
 
-<h3 id="get_current_element">get<em>current</em>element()</h3>
-
-<p><strong>Wymagana metoda</strong> klasy widgetu - zwraca opis aktualnego elementu.</p>
-
-<h3 id="activate_current_element">activate<em>current</em>element()</h3>
-
-<p><strong>Wymagana metoda</strong> klasy widgetu - wykonuje akcję aktywacji.</p>
-
-<h3 id="navigate-tylko-dla-typu-grid">navigate() (tylko dla typu "grid")</h3>
-
-<p><strong>Wymagana metoda</strong> dla widgetów typu "grid":</p>
-
-<pre><code>def navigate(self, direction):
-    # direction: 'up', 'down', 'left', 'right'
+<h3>navigate() (tylko dla typu "grid")</h3>
+<strong>Wymagana metoda</strong> dla widgetów typu "grid":
+<pre><code class="language-python">def navigate(self, direction):
+    # direction: &#x27;up&#x27;, &#x27;down&#x27;, &#x27;left&#x27;, &#x27;right&#x27;
     # Zwróć: (success, horizontal_index, total_horizontal_items)
-    return True, current_column, total_columns
-</code></pre>
+    return True, current_column, total_columns</code></pre>
 
-<h2 id="struktura-katalogow">Struktura katalogów</h2>
+<h2>Struktura katalogów</h2>
 
-<h3 id="system-legacy-initpy">System legacy (init.py)</h3>
-
+<h3>System legacy (init.py)</h3>
 <pre><code>data/applets/moj_widget/
-├── init.py              # Główny plik widgetu
-</code></pre>
+├── init.py              # Główny plik widgetu</code></pre>
 
-<h3 id="system-nowy-mainpy-appletjson">System nowy (main.py + applet.json)</h3>
-
+<h3>System nowy (main.py + applet.json)</h3>
 <pre><code>data/applets/moj_widget/
 ├── main.py              # Główny plik widgetu
 ├── applet.json          # Metadane widgetu
@@ -490,30 +469,22 @@ def get_widget_instance(speak_func, view=None):
 └── languages/           # Tłumaczenia (opcjonalnie)
     ├── messages.pot
     ├── pl/
-    └── en/
-</code></pre>
+    └── en/</code></pre>
 
-<h2 id="internacjonalizacja">Internacjonalizacja</h2>
+<h2>Internacjonalizacja</h2>
 
-<h3 id="dodawanie-tłumaczen">Dodawanie tłumaczeń</h3>
+<h3>Dodawanie tłumaczeń</h3>
 
-<ol>
 <li>Utwórz <code>babel.cfg</code>:</li>
-</ol>
+<pre><code class="language-ini">[python: **.py]</code></pre>
 
-<pre><code>[python: **.py]
-</code></pre>
-
-<ol start="2">
 <li>W kodzie używaj funkcji <code>_()</code>:</li>
-</ol>
-
-<pre><code>import gettext
+<pre><code class="language-python">import gettext
 import os
 
 # Setup translations
-domain = 'moj_widget'
-localedir = os.path.join(os.path.dirname(__file__), 'languages')
+domain = &#x27;moj_widget&#x27;
+localedir = os.path.join(os.path.dirname(__file__), &#x27;languages&#x27;)
 try:
     translation = gettext.translation(domain, localedir, fallback=True)
     _ = translation.gettext
@@ -521,135 +492,111 @@ except Exception:
     _ = lambda x: x
 
 # W kodzie
-self.speak(_("Text to translate"))
-</code></pre>
+self.speak(_(&quot;Text to translate&quot;))</code></pre>
 
-<ol start="3">
 <li>Wyciągnij teksty do tłumaczenia:</li>
-</ol>
+<pre><code class="language-bash">pybabel extract -o messages.pot --input-dirs=.</code></pre>
 
-<pre><code>pybabel extract -o messages.pot --input-dirs=.
-</code></pre>
-
-<ol start="4">
 <li>Utwórz pliki tłumaczeń:</li>
-</ol>
+<pre><code class="language-bash">pybabel init -l pl -d languages -i messages.pot
+pybabel init -l en -d languages -i messages.pot</code></pre>
 
-<pre><code>pybabel init -l pl -d languages -i messages.pot
-pybabel init -l en -d languages -i messages.pot
-</code></pre>
-
-<ol start="5">
 <li>Skompiluj tłumaczenia:</li>
-</ol>
+<pre><code class="language-bash">pybabel compile -d languages</code></pre>
 
-<pre><code>pybabel compile -d languages
-</code></pre>
+<h2>Praktyczne przykłady</h2>
 
-<h2 id="praktyczne-przykłady">Praktyczne przykłady</h2>
-
-<h3 id="przykład-1-widget-zegara">Przykład 1: Widget zegara</h3>
-
-<pre><code>import datetime
+<h3>Przykład 1: Widget zegara</h3>
+<pre><code class="language-python">import datetime
 from invisibleui import BaseWidget
 
 class ClockWidget(BaseWidget):
     def __init__(self, speak_func, view=None):
         super().__init__(speak_func)
         self.view = view
-
+        
     def get_current_element(self):
         now = datetime.datetime.now()
-        return f"Godzina: {now.strftime('%H:%M:%S')}"
-
+        return f&quot;Godzina: {now.strftime(&#x27;%H:%M:%S&#x27;)}&quot;
+        
     def activate_current_element(self):
         self.speak(self.get_current_element())
 
 def get_widget_info():
-    return {"name": "Zegar", "type": "button"}
+    return {&quot;name&quot;: &quot;Zegar&quot;, &quot;type&quot;: &quot;button&quot;}
 
 def get_widget_instance(speak_func, view=None):
-    return ClockWidget(speak_func, view)
-</code></pre>
+    return ClockWidget(speak_func, view)</code></pre>
 
-<h3 id="przykład-2-widget-kalkulatora-prostego">Przykład 2: Widget kalkulatora prostego</h3>
-
-<pre><code>from invisibleui import BaseWidget
+<h3>Przykład 2: Widget kalkulatora prostego</h3>
+<pre><code class="language-python">from invisibleui import BaseWidget
 
 class SimpleCalculator(BaseWidget):
     def __init__(self, speak_func, view=None):
         super().__init__(speak_func)
         self.view = view
         self.operations = [
-            ["1 + 1 = 2", "2 + 2 = 4", "3 + 3 = 6"],
-            ["5 * 5 = 25", "10 / 2 = 5", "2^3 = 8"]
+            [&quot;1 + 1 = 2&quot;, &quot;2 + 2 = 4&quot;, &quot;3 + 3 = 6&quot;],
+            [&quot;5 * 5 = 25&quot;, &quot;10 / 2 = 5&quot;, &quot;2^3 = 8&quot;]
         ]
         self.current_pos = [0, 0]
-
+        
     def navigate(self, direction):
         rows = len(self.operations)
         cols = len(self.operations[0])
-
-        if direction == 'up' and self.current_pos[0] &gt; 0:
+        
+        if direction == &#x27;up&#x27; and self.current_pos[0] &gt; 0:
             self.current_pos[0] -= 1
-        elif direction == 'down' and self.current_pos[0] &lt; rows - 1:
+        elif direction == &#x27;down&#x27; and self.current_pos[0] &lt; rows - 1:
             self.current_pos[0] += 1
-        elif direction == 'left' and self.current_pos[1] &gt; 0:
+        elif direction == &#x27;left&#x27; and self.current_pos[1] &gt; 0:
             self.current_pos[1] -= 1
-        elif direction == 'right' and self.current_pos[1] &lt; cols - 1:
+        elif direction == &#x27;right&#x27; and self.current_pos[1] &lt; cols - 1:
             self.current_pos[1] += 1
         else:
             return False, self.current_pos[1], cols
-
+        
         return True, self.current_pos[1], cols
-
+        
     def get_current_element(self):
         return self.operations[self.current_pos[0]][self.current_pos[1]]
-
+        
     def activate_current_element(self):
         element = self.get_current_element()
-        self.speak(f"Wybrany przykład: {element}")
+        self.speak(f&quot;Wybrany przykład: {element}&quot;)
 
 def get_widget_info():
-    return {"name": "Prosty kalkulator", "type": "grid"}
+    return {&quot;name&quot;: &quot;Prosty kalkulator&quot;, &quot;type&quot;: &quot;grid&quot;}
 
 def get_widget_instance(speak_func, view=None):
-    return SimpleCalculator(speak_func, view)
-</code></pre>
+    return SimpleCalculator(speak_func, view)</code></pre>
 
-<h2 id="testowanie-widgetow">Testowanie widgetów</h2>
+<h2>Testowanie widgetów</h2>
 
-<ol>
 <li>Umieść widget w katalogu <code>data/applets/nazwa_widgetu/</code></li>
 <li>Uruchom Titan</li>
 <li>Przejdź do niewidzialnego interfejsu (Ctrl+Shift+strzałki)</li>
 <li>Nawiguj do kategorii "Widgets"</li>
 <li>Wybierz swój widget i przetestuj funkcjonalność</li>
-</ol>
 
-<h2 id="najwazniejsze-wskazowki">Najważniejsze wskazówki</h2>
+<h2>Najważniejsze wskazówki</h2>
 
-<ol>
 <li><strong>NIE</strong> używaj <code>self.speak()</code> w metodzie <code>navigate()</code> - system automatycznie obsługuje mowę z pozycjonowaniem</li>
 <li>Wykorzystuj <code>speak_with_position()</code> w <code>activate_current_element()</code> dla lepszego doświadczenia</li>
 <li>Zawsze implementuj wszystkie wymagane metody</li>
 <li>Testuj nawigację we wszystkich kierunkach</li>
 <li>Dodaj obsługę błędów w przypadku nieprawidłowych danych</li>
 <li>Używaj internacjonalizacji dla lepszej dostępności</li>
-</ol>
 
-<h2 id="dostepne-narzedzia">Dostępne narzędzia</h2>
+<h2>Dostępne narzędzia</h2>
 
-<ul>
 <li><code>self.speak()</code> - podstawowa mowa TTS</li>
 <li><code>self.speak_with_position()</code> - mowa z pozycjonowaniem stereo</li>
 <li><code>play_sound()</code> - odtwarzanie dźwięków (importuj z <code>sound</code>)</li>
 <li>System ustawień (importuj z <code>settings</code>)</li>
 <li>Dostęp do głównej ramki aplikacji przez <code>self.view</code></li>
-</ul>
 
 <p>Titan zapewnia bogate API do tworzenia własnych, dostępnych widgetów z pełnym wsparciem dla użytkowników czytników ekranu.</p>
-
             <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
         </main>
     </div>

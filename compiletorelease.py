@@ -1,16 +1,15 @@
 """
 TCE Launcher Compilation Script
 Compiles the application to a directory structure using PyInstaller.
-Automatically detects and includes dependencies from all applications and games.
 Supports Windows, macOS, and Linux builds.
+Apps/games run as subprocesses with _internal/python.exe and have access
+to full site-packages, so their dependencies don't need hidden imports.
 """
 
 import subprocess
 import sys
 import shutil
 import os
-import re
-import ast
 import platform
 from pathlib import Path
 
@@ -21,117 +20,6 @@ IS_LINUX = platform.system() == 'Linux'
 # PyInstaller --add-data separator differs by platform
 DATA_SEP = ';' if IS_WINDOWS else ':'
 
-def scan_python_imports(file_path):
-    """
-    Scan a Python file for import statements.
-    Returns a set of module names.
-    """
-    imports = set()
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-
-        # Try to parse with AST (more reliable)
-        try:
-            tree = ast.parse(content)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        # Get top-level module name
-                        module = alias.name.split('.')[0]
-                        imports.add(module)
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        # Get top-level module name
-                        module = node.module.split('.')[0]
-                        imports.add(module)
-        except SyntaxError:
-            # Fallback to regex if AST parsing fails
-            import_regex = re.compile(r'^\s*(?:from\s+(\S+)|import\s+(\S+))', re.MULTILINE)
-            for match in import_regex.finditer(content):
-                module = match.group(1) or match.group(2)
-                if module:
-                    # Get top-level module name
-                    module = module.split('.')[0]
-                    imports.add(module)
-    except Exception as e:
-        print(f"Warning: Could not scan {file_path}: {e}")
-
-    return imports
-
-def scan_directory_for_imports(directory):
-    """
-    Recursively scan a directory for Python files and extract all imports.
-    Returns a set of module names.
-    """
-    all_imports = set()
-    if not os.path.exists(directory):
-        return all_imports
-
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.py'):
-                file_path = os.path.join(root, file)
-                imports = scan_python_imports(file_path)
-                all_imports.update(imports)
-
-    return all_imports
-
-def get_app_and_game_dependencies(root_dir):
-    """
-    Scan all applications and games for their Python dependencies.
-    Returns a set of module names.
-    """
-    dependencies = set()
-
-    # Scan applications
-    apps_dir = root_dir / 'data' / 'applications'
-    if apps_dir.exists():
-        print("Scanning applications for dependencies...")
-        app_imports = scan_directory_for_imports(apps_dir)
-        dependencies.update(app_imports)
-        print(f"  Found {len(app_imports)} imports in applications")
-
-    # Scan games
-    games_dir = root_dir / 'data' / 'games'
-    if games_dir.exists():
-        print("Scanning games for dependencies...")
-        game_imports = scan_directory_for_imports(games_dir)
-        dependencies.update(game_imports)
-        print(f"  Found {len(game_imports)} imports in games")
-
-    # Scan components
-    components_dir = root_dir / 'data' / 'components'
-    if components_dir.exists():
-        print("Scanning components for dependencies...")
-        component_imports = scan_directory_for_imports(components_dir)
-        dependencies.update(component_imports)
-        print(f"  Found {len(component_imports)} imports in components")
-
-    # Filter out standard library modules (basic filtering)
-    stdlib_modules = {
-        'os', 'sys', 'time', 'datetime', 'math', 'random', 'json', 'csv',
-        'io', 're', 'threading', 'subprocess', 'pathlib', 'collections',
-        'itertools', 'functools', 'operator', 'typing', 'platform', 'signal',
-        'gc', 'warnings', 'argparse', 'glob', 'shutil', 'tempfile', 'uuid',
-        'hashlib', 'hmac', 'secrets', 'base64', 'binascii', 'struct', 'array',
-        'queue', 'asyncio', 'concurrent', 'multiprocessing', 'socket', 'ssl',
-        'urllib', 'http', 'email', 'mimetypes', 'configparser', 'gettext',
-        'locale', 'codecs', 'encodings', 'string', 'textwrap', 'unicodedata',
-        'abc', 'copy', 'pickle', 'shelve', 'dbm', 'sqlite3', 'zlib', 'gzip',
-        'bz2', 'lzma', 'zipfile', 'tarfile', 'xml', 'html', 'logging', 'unittest',
-        'pdb', 'trace', 'traceback', 'inspect', 'dis', 'ast', 'ctypes', 'enum',
-        'dataclasses', 'contextlib', 'weakref', 'importlib', '__future__',
-    }
-
-    external_deps = dependencies - stdlib_modules
-
-    if external_deps:
-        print(f"\nFound {len(external_deps)} external dependencies:")
-        for dep in sorted(external_deps):
-            print(f"  - {dep}")
-
-    return external_deps
 
 def compile_to_release():
     """Compile TCE Launcher to a directory distribution."""
@@ -142,15 +30,16 @@ def compile_to_release():
     build_dir = root_dir / "build"
 
     print("=" * 70)
-    print("TCE Launcher - PyInstaller Compilation with Dependency Detection")
+    print("TCE Launcher - PyInstaller Compilation")
     print("=" * 70)
     print()
 
-    # Scan for dependencies from applications and games
-    print("Step 1: Scanning for dependencies...")
-    print("-" * 70)
-    app_dependencies = get_app_and_game_dependencies(root_dir)
-    print()
+    # Remove old dist directory permanently (no recycle bin)
+    if dist_dir.exists():
+        print("Removing old dist/ directory...")
+        shutil.rmtree(dist_dir)
+        print("  Removed.")
+        print()
 
     # Data directories to include
     data_dirs = [
@@ -158,6 +47,7 @@ def compile_to_release():
         ("languages", "languages"),
         ("sfx", "sfx"),
         ("skins", "skins"),
+        ("src", "src"),  # Source modules for app/game subprocess access (stays in _internal/)
     ]
 
     # Build the PyInstaller command
@@ -187,7 +77,7 @@ def compile_to_release():
         if src_path.exists():
             cmd.extend(["--add-data", f"{src}{DATA_SEP}{dst}"])
 
-    print("Step 2: Building PyInstaller command...")
+    print("Step 1: Building PyInstaller command...")
     print("-" * 70)
 
     # Comprehensive hidden imports for all TCE dependencies
@@ -278,15 +168,28 @@ def compile_to_release():
         "src.ui.shutdown_question",
         "src.ui.help",
         "src.ui.classic_start_menu",
+        "src.ui.window_switcher",
         "src.settings",
         "src.settings.settings",
         "src.settings.titan_im_config",
         "src.network",
         "src.network.titan_net",
         "src.network.titan_net_gui",
+        "src.network.titan_net_forum_gui",
         "src.network.telegram_client",
         "src.network.telegram_gui",
+        "src.network.telegram_windows",
+        "src.network.telegram_voice",
+        "src.network.messenger_client",
+        "src.network.messenger_gui",
+        "src.network.messenger_webview",
+        "src.network.whatsapp_client",
+        "src.network.whatsapp_webview",
         "src.network.run_messenger",
+        "src.network.im_module_manager",
+        "src.network.titanim_sound_api",
+        "src.network.voice_capture",
+        "src.network.voice_codec",
         "src.titan_core",
         "src.titan_core.app_manager",
         "src.titan_core.game_manager",
@@ -297,6 +200,7 @@ def compile_to_release():
         "src.titan_core.sound",
         "src.titan_core.tsounds",
         "src.titan_core.stereo_speech",
+        "src.titan_core.tce_speech",
         "src.system",
         "src.system.system_monitor",
         "src.system.notifications",
@@ -312,6 +216,28 @@ def compile_to_release():
         "src.controller.controller_ui",
         "src.controller.controller_modes",
         "src.controller.controller_vibrations",
+
+        # TTS engine system
+        "src.tts",
+        "src.tts.base_engine",
+        "src.tts.engine_registry",
+
+        # Accessibility
+        "src.accessibility",
+        "src.accessibility.messages",
+
+        # Launcher, statusbar, skins
+        "src.titan_core.launcher_manager",
+        "src.titan_core.statusbar_applet_manager",
+        "src.titan_core.skin_manager",
+
+        # Elten Link
+        "src.eltenlink_client",
+        "src.eltenlink_client.elten_client",
+        "src.eltenlink_client.elten_gui",
+        "src.eltenlink_client.elten_player",
+        "src.eltenlink_client.elten_voip_client",
+        "src.eltenlink_client.accountmanagement",
     ]
 
     # Platform-specific hidden imports
@@ -344,11 +270,6 @@ def compile_to_release():
             "pywinctl",
         ])
 
-    # Add scanned dependencies from applications and games
-    for dep in sorted(app_dependencies):
-        if dep not in hidden_imports:
-            hidden_imports.append(dep)
-
     print(f"Total hidden imports: {len(hidden_imports)}")
     for imp in hidden_imports:
         cmd.extend(["--hidden-import", imp])
@@ -368,7 +289,7 @@ def compile_to_release():
     cmd.append("main.py")
 
     print()
-    print("Step 3: Running PyInstaller...")
+    print("Step 2: Running PyInstaller...")
     print("-" * 70)
 
     # Run PyInstaller
@@ -376,7 +297,7 @@ def compile_to_release():
 
     if result.returncode == 0:
         print()
-        print("Step 4: Post-processing...")
+        print("Step 3: Post-processing...")
         print("-" * 70)
         print("Moving data directories for backward compatibility...")
 
@@ -480,28 +401,34 @@ def compile_to_release():
         site_packages_dir.mkdir(parents=True, exist_ok=True)
         print(f"  Created: _internal/Lib/site-packages/")
 
-        # Copy entire site-packages from Python installation
-        print("Copying site-packages from Python installation...")
-        import site
-        python_site_packages = site.getsitepackages()
-        copied_count = 0
-        for sp_path in python_site_packages:
-            sp_path = Path(sp_path)
-            if sp_path.exists() and sp_path.is_dir():
-                print(f"  Copying from: {sp_path}")
-                for item in sp_path.iterdir():
-                    dest = site_packages_dir / item.name
-                    try:
-                        if item.is_dir():
-                            if dest.exists():
-                                shutil.rmtree(dest)
-                            shutil.copytree(str(item), str(dest))
-                        else:
-                            shutil.copy2(str(item), str(dest))
-                        copied_count += 1
-                    except Exception as e:
-                        print(f"    Warning: Could not copy {item.name}: {e}")
-        print(f"  Copied {copied_count} items to Lib/site-packages/")
+        # Ask whether to copy site-packages
+        copy_site_packages = input("Do you want to copy site-packages? (y/n): ").strip().lower() == 'y'
+
+        if copy_site_packages:
+            # Copy entire site-packages from Python installation
+            print("Copying site-packages from Python installation...")
+            import site
+            python_site_packages = site.getsitepackages()
+            copied_count = 0
+            for sp_path in python_site_packages:
+                sp_path = Path(sp_path)
+                if sp_path.exists() and sp_path.is_dir():
+                    print(f"  Copying from: {sp_path}")
+                    for item in sp_path.iterdir():
+                        dest = site_packages_dir / item.name
+                        try:
+                            if item.is_dir():
+                                if dest.exists():
+                                    shutil.rmtree(dest)
+                                shutil.copytree(str(item), str(dest))
+                            else:
+                                shutil.copy2(str(item), str(dest))
+                            copied_count += 1
+                        except Exception as e:
+                            print(f"    Warning: Could not copy {item.name}: {e}")
+            print(f"  Copied {copied_count} items to Lib/site-packages/")
+        else:
+            print("Skipping site-packages copy.")
 
         # Also copy standard library (Lib folder) from Python installation
         print("Copying standard library from Python installation...")
@@ -558,28 +485,66 @@ import site
                 f.write(pth_content)
             print(f"  Created: _internal/python{python_version}._pth")
 
-        print()
-        print("Verifying dependencies...")
-        # Verify that all scanned dependencies are included
-        missing_deps = []
-        ext_pattern = "*.pyd" if IS_WINDOWS else "*.so"
-        for dep in sorted(app_dependencies):
-            dep_in_site = site_packages_dir / dep
-            dep_ext = list(internal_dir.glob(f"{dep}*{ext_pattern[1:]}"))
-            dep_in_root = internal_dir / dep
-
-            if not (dep_in_site.exists() or dep_ext or dep_in_root.exists()):
-                missing_deps.append(dep)
-
-        if missing_deps:
-            print(f"  Warning: {len(missing_deps)} dependencies may be missing:")
-            for dep in missing_deps[:10]:
-                print(f"    - {dep}")
-            if len(missing_deps) > 10:
-                print(f"    ... and {len(missing_deps) - 10} more")
-            print("  Note: Some may be included differently or be part of other packages.")
+        # Remove any Telegram/Telethon session files that may have been bundled
+        # These contain developer credentials and MUST NOT be distributed
+        print("Removing sensitive session files from distribution...")
+        session_removed = 0
+        for root, dirs, files in os.walk(str(output_dir)):
+            for f in files:
+                if any(f.endswith(s) for s in ('.session', '.session-journal', '.session-wal', '.session-shm')):
+                    session_path = os.path.join(root, f)
+                    os.remove(session_path)
+                    session_removed += 1
+                    print(f"  Removed: {os.path.relpath(session_path, output_dir)}")
+        if session_removed:
+            print(f"  Removed {session_removed} session file(s)")
         else:
-            print(f"  All {len(app_dependencies)} dependencies appear to be included.")
+            print("  No session files found (clean)")
+
+        # Compile src/ to .pyc bytecode and remove .py source files
+        # This protects source code while keeping modules importable by apps/games
+        src_internal = internal_dir / "src"
+        if src_internal.exists():
+            print("Compiling src/ to bytecode (.pyc) and removing source files...")
+            import compileall
+            compileall.compile_dir(str(src_internal), force=True, quiet=1)
+
+            # Move .pyc from __pycache__/ to parent dirs with simplified names.
+            # Python's import system CANNOT find .pyc files in __pycache__/
+            # when the source .py file is missing — SourceFileLoader requires
+            # the .py file to exist. SourcelessFileLoader only finds .pyc files
+            # placed directly in the package directory.
+            pyc_moved = 0
+            pycache_dirs = []
+            for root, dirs, files in os.walk(str(src_internal)):
+                pycache = os.path.join(root, '__pycache__')
+                if os.path.isdir(pycache):
+                    pycache_dirs.append(pycache)
+                    for pyc_file in os.listdir(pycache):
+                        if pyc_file.endswith('.pyc'):
+                            # "module.cpython-312.pyc" -> "module.pyc"
+                            parts = pyc_file.split('.')
+                            if len(parts) >= 3 and 'cpython' in parts[-2]:
+                                simple_name = '.'.join(parts[:-2]) + '.pyc'
+                            else:
+                                simple_name = pyc_file
+                            src_pyc = os.path.join(pycache, pyc_file)
+                            dst_pyc = os.path.join(root, simple_name)
+                            shutil.move(src_pyc, dst_pyc)
+                            pyc_moved += 1
+
+            # Remove empty __pycache__ directories
+            for pycache in pycache_dirs:
+                shutil.rmtree(pycache, ignore_errors=True)
+
+            # Remove .py source files
+            py_removed = 0
+            for root, dirs, files in os.walk(str(src_internal)):
+                for f in files:
+                    if f.endswith('.py'):
+                        os.remove(os.path.join(root, f))
+                        py_removed += 1
+            print(f"  Compiled {py_removed} .py files, moved {pyc_moved} .pyc to package dirs")
 
         print()
         print("=" * 70)
@@ -609,9 +574,8 @@ import site
         print(f"      {python_names:<23s}- Python interpreter for apps/games")
         print()
         print("Features:")
-        print(f"  - {len(app_dependencies)} external dependencies auto-detected and included")
         print(f"  - Applications/games run via {python_names} subprocess (proper isolation)")
-        print("  - All libraries available to Python scripts from _internal")
+        print("  - All libraries available to Python scripts from _internal/Lib/site-packages")
         print("  - No external Python installation required")
         print()
         print("To run the compiled application:")

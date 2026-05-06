@@ -96,21 +96,52 @@ if __name__ == '__main__':
 Aplikacje mają automatyczny dostęp do modułów Titan:
 
 ```python
-# Import modułów Titan
-from sound import play_sound, play_error_sound
-from settings import get_setting, set_setting
-from translation import get_available_languages
+# Import modułów Titan (kompletne ścieżki src.*)
+from src.titan_core.sound import play_sound, play_error_sound
+from src.settings.settings import get_setting, set_setting
+from src.titan_core.translation import get_available_languages
 
 # Użycie w aplikacji
 def on_action(self):
-    play_sound("focus.ogg")
-    
+    play_sound("ui/focus.ogg")
+
     # Zapisz ustawienie aplikacji
     set_setting('my_app_setting', 'value', section='my_app')
-    
+
     # Odczytaj ustawienie
     value = get_setting('my_app_setting', 'default', section='my_app')
 ```
+
+### TCE Speech API (mowa w aplikacjach i grach)
+
+Moduł `src.titan_core.tce_speech` to ujednolicone API mowy. Honoruje ustawienie `[invisible_interface] stereo_speech` z TCE — używa StereoSpeech (panorama + pitch) jeśli włączone, albo fallback (`accessible_output3` + platforma).
+
+```python
+# Wzorzec kompatybilny z trybem skompilowanym
+try:
+    from src.titan_core.tce_speech import speak as _tce_speak, stop as _tce_stop
+    _SPEECH_AVAILABLE = True
+except ImportError:
+    _SPEECH_AVAILABLE = False
+    def _tce_speak(text, **kw): pass
+    def _tce_stop(): pass
+
+# Użycie
+_tce_speak("Cześć", interrupt=True)
+_tce_speak("Po prawej", position=0.7, pitch_offset=2)
+_tce_stop()
+```
+
+**Główne funkcje API:**
+- `speak(text, position=0.0, interrupt=True, pitch_offset=0)` — synchronicznie
+- `speak_async(text, ...)` — asynchronicznie
+- `stop()` — przerwij mowę
+- `set_rate(rate)`, `set_volume(volume)`, `set_pitch(pitch)` — zakres -10..+10 / 0..100
+- `set_engine(engine_id)`, `set_voice(index)` — wybór silnika i głosu
+- `get_available_engines()`, `get_available_voices()` — listy
+- `is_stereo_available()` — czy StereoSpeech jest aktywne
+
+**Ważne:** w trybie skompilowanym `src/` jest dodawane jako `--add-data` w `compiletorelease.py` i pozostaje w `_internal/`. Plik `python3XX._pth` dodaje `.` (= `_internal/`) do `sys.path`, więc import `from src.titan_core.tce_speech import speak` działa.
 
 ## Obsługa argumentów wiersza poleceń
 

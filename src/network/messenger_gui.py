@@ -4,9 +4,16 @@ import threading
 import time
 from datetime import datetime
 from src.network.messenger_client import messenger_client, connect_to_messenger, disconnect_from_messenger, send_message, get_conversations, is_connected
-from src.titan_core.sound import play_sound
+from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, load_settings
+
+# Guarantee the pygame mixer is initialized even when the messenger window
+# is opened from a context where the main TCE GUI never ran.
+try:
+    initialize_sound()
+except Exception as _e:
+    print(f"[Messenger GUI] initialize_sound() failed at import: {_e}")
 import configparser
 import os
 

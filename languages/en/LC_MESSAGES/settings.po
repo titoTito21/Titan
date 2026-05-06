@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-07 10:57+0100\n"
+"POT-Creation-Date: 2026-05-05 13:38+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,225 +18,351 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/settingsgui.py:206
-msgid "Kategoria ustawień"
-msgstr ""
-
-msgid "Settings category"
-msgstr "Settings category"
-
-#: src/ui/settingsgui.py:230
-msgid "Save"
-msgstr ""
-
-#: src/ui/settingsgui.py:234
-msgid "Cancel"
-msgstr ""
-
-#: src/ui/settingsgui.py:249
+#: src/ui/settingsgui.py:145 src/ui/settingsgui.py:147
+#: src/ui/settingsgui.py:260 src/ui/settingsgui.py:1616
 msgid "Settings"
 msgstr ""
 
-#: src/ui/settingsgui.py:267
+#: src/ui/settingsgui.py:217
+msgid "Settings category"
+msgstr "Settings category"
+
+#: src/ui/settingsgui.py:241
+msgid "Save"
+msgstr ""
+
+#: src/ui/settingsgui.py:245
+msgid "Cancel"
+msgstr ""
+
+#: src/ui/settingsgui.py:278
 msgid "General"
 msgstr ""
 
-#: src/ui/settingsgui.py:268
+#: src/ui/settingsgui.py:279
 msgid "Sound"
 msgstr ""
 
-#: src/ui/settingsgui.py:269
+#: src/ui/settingsgui.py:280
 msgid "Interface"
 msgstr ""
 
-#: src/ui/settingsgui.py:270
+#: src/ui/settingsgui.py:281
 msgid "Invisible Interface"
 msgstr ""
 
-#: src/ui/settingsgui.py:271
+#: src/ui/settingsgui.py:282
 msgid "Environment"
 msgstr ""
 
-#: src/ui/settingsgui.py:272
+#: src/ui/settingsgui.py:283
 msgid "System Monitor"
 msgstr "System Monitor"
 
-#: src/ui/settingsgui.py:273
+#: src/ui/settingsgui.py:284
 msgid "Titan TTS"
 msgstr "Titan TTS"
 
-#: src/ui/settingsgui.py:277
+#: src/ui/settingsgui.py:288
 msgid "Windows"
 msgstr ""
 
-#: src/ui/settingsgui.py:390
+#: src/ui/settingsgui.py:298
+msgid "Titan-Net"
+msgstr "Titan-Net"
+
+#: src/ui/settingsgui.py:416
 msgid "Select sound theme:"
 msgstr ""
 
-#: src/ui/settingsgui.py:404 src/ui/settingsgui.py:880
+#: src/ui/settingsgui.py:430 src/ui/settingsgui.py:1391
 msgid "No themes"
 msgstr ""
 
-#: src/ui/settingsgui.py:410
+#: src/ui/settingsgui.py:436
 msgid "Stereo sounds"
 msgstr ""
 
-#: src/ui/settingsgui.py:415
+#: src/ui/settingsgui.py:441
 msgid "Sound theme volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:433
+#: src/ui/settingsgui.py:459
 msgid "Language:"
 msgstr ""
 
-#: src/ui/settingsgui.py:447
+#: src/ui/settingsgui.py:473
 msgid "Startup mode:"
 msgstr ""
 
-#: src/ui/settingsgui.py:452
+#: src/ui/settingsgui.py:479
 msgid "Normal (Graphical interface)"
 msgstr ""
 
-#: src/ui/settingsgui.py:452
+#: src/ui/settingsgui.py:479
 msgid "Minimized (Invisible interface)"
 msgstr ""
 
-#: src/ui/settingsgui.py:452
+#: src/ui/settingsgui.py:479
 msgid "Classic Mode"
 msgstr ""
 
-#: src/ui/settingsgui.py:459
+#: src/ui/settingsgui.py:479
+msgid "Custom"
+msgstr "Custom"
+
+#: src/ui/settingsgui.py:487
+msgid "Available launchers:"
+msgstr "Available launchers:"
+
+#: src/ui/settingsgui.py:495 src/ui/settingsgui.py:499
+msgid "Launcher description:"
+msgstr "Launcher description:"
+
+#: src/ui/settingsgui.py:514 src/ui/settingsgui.py:520
+msgid "Categories:"
+msgstr "Categories:"
+
+#: src/ui/settingsgui.py:518
+msgid "Applications"
+msgstr "Applications"
+
+#: src/ui/settingsgui.py:518
+msgid "Games"
+msgstr "Games"
+
+#: src/ui/settingsgui.py:518
+msgid "Titan IM"
+msgstr "Titan IM"
+
+#: src/ui/settingsgui.py:538
 msgid "Quick start"
 msgstr ""
 
-#: src/ui/settingsgui.py:464
+#: src/ui/settingsgui.py:543
 msgid "Confirm exit from Titan"
 msgstr ""
 
-#: src/ui/settingsgui.py:474
+#: src/ui/settingsgui.py:553
 msgid "Select interface skin:"
 msgstr ""
 
-#: src/ui/settingsgui.py:488 src/ui/settingsgui.py:490
-#: src/ui/settingsgui.py:740 src/ui/settingsgui.py:741
+#: src/ui/settingsgui.py:567 src/ui/settingsgui.py:569
+#: src/ui/settingsgui.py:1035 src/ui/settingsgui.py:1036
 msgid "Default"
 msgstr ""
 
-#: src/ui/settingsgui.py:505
+#: src/ui/settingsgui.py:584
 msgid "Announce item index"
 msgstr ""
 
-#: src/ui/settingsgui.py:510
+#: src/ui/settingsgui.py:589
 msgid "Announce widget type"
 msgstr ""
 
-#: src/ui/settingsgui.py:515
+#: src/ui/settingsgui.py:594
 msgid "Announce first item in category"
 msgstr ""
 
-#: src/ui/settingsgui.py:525
+#: src/ui/settingsgui.py:604
 msgid "Announce screen locking state"
 msgstr ""
 
-#: src/ui/settingsgui.py:530
+#: src/ui/settingsgui.py:610
 msgid "Modify system interface"
 msgstr ""
 
-#: src/ui/settingsgui.py:535
+#: src/ui/settingsgui.py:617
 msgid "Enable TCE sounds outside environment"
 msgstr ""
 
-#: src/ui/settingsgui.py:547
+#: src/ui/settingsgui.py:623
+msgid "Register Titan TTS as SAPI5 voice"
+msgstr "Register Titan TTS as SAPI5 voice"
+
+#: src/ui/settingsgui.py:637
+msgid "Replace Copilot key"
+msgstr ""
+
+#: src/ui/settingsgui.py:643
+msgid "Replacement key"
+msgstr ""
+
+#: src/ui/settingsgui.py:661
 msgid "Volume Monitor:"
 msgstr "Volume Monitor:"
 
-#: src/ui/settingsgui.py:551
+#: src/ui/settingsgui.py:665
 msgid "None"
 msgstr "None"
 
-#: src/ui/settingsgui.py:551
+#: src/ui/settingsgui.py:665
 msgid "Sound only"
 msgstr "Sound only"
 
-#: src/ui/settingsgui.py:551
+#: src/ui/settingsgui.py:665
 msgid "Speech only"
 msgstr "Speech only"
 
-#: src/ui/settingsgui.py:551
+#: src/ui/settingsgui.py:665
 msgid "Sound and speech"
 msgstr "Sound and speech"
 
-#: src/ui/settingsgui.py:557
+#: src/ui/settingsgui.py:671
 msgid "Announce battery level every:"
 msgstr "Announce battery level every:"
 
-#: src/ui/settingsgui.py:561
+#: src/ui/settingsgui.py:675
 msgid "1%"
 msgstr "1%"
 
-#: src/ui/settingsgui.py:561
+#: src/ui/settingsgui.py:675
 msgid "10%"
 msgstr "10%"
 
-#: src/ui/settingsgui.py:561
+#: src/ui/settingsgui.py:675
 msgid "15%"
 msgstr "15%"
 
-#: src/ui/settingsgui.py:561
+#: src/ui/settingsgui.py:675
 msgid "25%"
 msgstr "25%"
 
-#: src/ui/settingsgui.py:561
+#: src/ui/settingsgui.py:675
 msgid "Never"
 msgstr "Never"
 
-#: src/ui/settingsgui.py:567
+#: src/ui/settingsgui.py:681
 msgid "Monitor charger connection and disconnection"
 msgstr "Monitor charger connection and disconnection"
 
-#: src/ui/settingsgui.py:588
+#: src/ui/settingsgui.py:702
 msgid "System volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:617
+#: src/ui/settingsgui.py:731
 msgid "Disable sound card mute when Titan is running"
 msgstr ""
 
-#: src/ui/settingsgui.py:632
+#: src/ui/settingsgui.py:746
+msgid ""
+"Audio business card allows you to personalize sounds that other users "
+"hear when you log in, send a message, or view your profile."
+msgstr ""
+"Audio business card allows you to personalize sounds that other users "
+"hear when you log in, send a message, or view your profile."
+
+#: src/ui/settingsgui.py:754
+msgid "Custom business card"
+msgstr "Custom business card"
+
+#: src/ui/settingsgui.py:762 src/ui/settingsgui.py:763
+msgid "Audio files"
+msgstr "Audio files"
+
+#: src/ui/settingsgui.py:774 src/ui/settingsgui.py:846
+#: src/ui/settingsgui.py:1110
+msgid "Login sound"
+msgstr "Login sound"
+
+#: src/ui/settingsgui.py:780 src/ui/settingsgui.py:847
+#: src/ui/settingsgui.py:1111
+msgid "Logout sound"
+msgstr "Logout sound"
+
+#: src/ui/settingsgui.py:786 src/ui/settingsgui.py:848
+#: src/ui/settingsgui.py:1112
+msgid "New message sound"
+msgstr "New message sound"
+
+#: src/ui/settingsgui.py:792 src/ui/settingsgui.py:849
+#: src/ui/settingsgui.py:1113
+msgid "Avatar audio"
+msgstr "Avatar audio"
+
+#: src/ui/settingsgui.py:811
+msgid "Notify on user login/logout"
+msgstr "Notify on user login/logout"
+
+#: src/ui/settingsgui.py:816
+msgid "Notify on new applications"
+msgstr "Notify on new applications"
+
+#: src/ui/settingsgui.py:821
+msgid "Notify on new private messages"
+msgstr "Notify on new private messages"
+
+#: src/ui/settingsgui.py:826
+msgid "Notify on new chat messages"
+msgstr "Notify on new chat messages"
+
+#: src/ui/settingsgui.py:857
+#, python-brace-format
+msgid "The file '{}' exceeds the maximum duration of {} seconds."
+msgstr "The file '{}' exceeds the maximum duration of {} seconds."
+
+#: src/ui/settingsgui.py:859 src/ui/settingsgui.py:1278
+#: src/ui/settingsgui.py:1284 src/ui/settingsgui.py:1287
+#: src/ui/settingsgui.py:1317 src/ui/settingsgui.py:1325
+#: src/ui/settingsgui.py:1328
+msgid "Error"
+msgstr ""
+
+#: src/ui/settingsgui.py:880
 msgid "Enable Titan TTS"
 msgstr "Enable Titan TTS"
 
-#: src/ui/settingsgui.py:638
+#: src/ui/settingsgui.py:886
 #, fuzzy
 msgid "Speech engine:"
 msgstr "Speech only"
 
-#: src/ui/settingsgui.py:647
+#: src/ui/settingsgui.py:895
 msgid "Voice:"
 msgstr ""
 
-#: src/ui/settingsgui.py:656
+#: src/ui/settingsgui.py:904
 msgid "Speech rate:"
 msgstr ""
 
-#: src/ui/settingsgui.py:661
+#: src/ui/settingsgui.py:909
 msgid "Speech rate"
 msgstr ""
 
-#: src/ui/settingsgui.py:667
+#: src/ui/settingsgui.py:915
+msgid "Pitch:"
+msgstr ""
+
+#: src/ui/settingsgui.py:920
+msgid "Pitch"
+msgstr ""
+
+#: src/ui/settingsgui.py:926
 msgid "Speech volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:672
+#: src/ui/settingsgui.py:931
 msgid "Speech volume"
 msgstr ""
 
-#: src/ui/settingsgui.py:789 src/ui/settingsgui.py:824
+#: src/ui/settingsgui.py:1011 src/ui/settingsgui.py:1387
+msgid "No description available."
+msgstr "No description available."
+
+#: src/ui/settingsgui.py:1262 src/ui/settingsgui.py:1294
+msgid "This feature is only available on Windows."
+msgstr ""
+
+#: src/ui/settingsgui.py:1262 src/ui/settingsgui.py:1294
+msgid "Information"
+msgstr ""
+
+#: src/ui/settingsgui.py:1272 src/ui/settingsgui.py:1311
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
 msgstr ""
 
-#: src/ui/settingsgui.py:795
+#: src/ui/settingsgui.py:1278
 #, python-brace-format
 msgid ""
 "Cannot open SAPI settings:\n"
@@ -245,19 +371,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:795 src/ui/settingsgui.py:801
-#: src/ui/settingsgui.py:804 src/ui/settingsgui.py:830
-#: src/ui/settingsgui.py:838 src/ui/settingsgui.py:841
-msgid "Error"
-msgstr ""
-
-#: src/ui/settingsgui.py:801
+#: src/ui/settingsgui.py:1284
 msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:804
+#: src/ui/settingsgui.py:1287
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
@@ -266,7 +386,7 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:830
+#: src/ui/settingsgui.py:1317
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
@@ -275,13 +395,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:838
+#: src/ui/settingsgui.py:1325
 msgid ""
 "Error: Cannot find accessibility settings. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:841
+#: src/ui/settingsgui.py:1328
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
@@ -290,27 +410,27 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:1011
+#: src/ui/settingsgui.py:1599
 msgid ""
 "Settings have been saved. Please restart the application for changes to "
 "take full effect."
 msgstr ""
 
-#: src/ui/settingsgui.py:1013
+#: src/ui/settingsgui.py:1601
 msgid "Settings have been saved."
 msgstr ""
 
-#: src/ui/settingsgui.py:1187 src/ui/settingsgui.py:1192
-msgid "Default voice"
+#: src/ui/settingsgui.py:1902
+msgid "macOS Speech"
 msgstr ""
 
-#: src/ui/settingsgui.py:681
-msgid "ElevenLabs API Key:"
-msgstr "ElevenLabs API Key:"
+#: src/ui/settingsgui.py:1903
+msgid "Speech Dispatcher"
+msgstr ""
 
-#: src/ui/settingsgui.py:685
-msgid "Your ElevenLabs API key. Get it from elevenlabs.io"
-msgstr "Your ElevenLabs API key. Get it from elevenlabs.io"
+#: src/ui/settingsgui.py:2063 src/ui/settingsgui.py:2068
+msgid "Default voice"
+msgstr ""
 
 #~ msgid "Titan key:"
 #~ msgstr ""
@@ -337,5 +457,32 @@ msgstr "Your ElevenLabs API key. Get it from elevenlabs.io"
 #~ "Settings have been saved. Please restart"
 #~ " the application for the language "
 #~ "change to take full effect."
+#~ msgstr ""
+
+#~ msgid "Kategoria ustawień"
+#~ msgstr ""
+
+#~ msgid "ElevenLabs API Key:"
+#~ msgstr "ElevenLabs API Key:"
+
+#~ msgid "Your ElevenLabs API key. Get it from elevenlabs.io"
+#~ msgstr "Your ElevenLabs API key. Get it from elevenlabs.io"
+
+#~ msgid "Login sound (max 9 seconds):"
+#~ msgstr "Login sound (max 9 seconds):"
+
+#~ msgid "Logout sound (max 9 seconds):"
+#~ msgstr "Logout sound (max 9 seconds):"
+
+#~ msgid "New message sound (max 9 seconds):"
+#~ msgstr "New message sound (max 9 seconds):"
+
+#~ msgid "Avatar audio (max 30 seconds):"
+#~ msgstr "Avatar audio (max 30 seconds):"
+
+#~ msgid "Right Control"
+#~ msgstr ""
+
+#~ msgid "Context menu"
 #~ msgstr ""
 

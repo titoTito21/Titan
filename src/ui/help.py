@@ -155,6 +155,9 @@ class TitanHelp(wx.Frame):
             play_sound("ui/uiopen.ogg")
             # Ensure focus is set properly with a small delay
             wx.CallAfter(self.header_list.SetFocus)
+            # Register in window switcher
+            from src.ui.window_switcher import register_window
+            register_window(_("Titan Help"), window=self, category='app')
         except Exception as e:
             print(f"Error showing help window: {e}")
 
@@ -163,6 +166,9 @@ class TitanHelp(wx.Frame):
         try:
             self.Hide()
             play_sound("ui/uiclose.ogg")
+            # Unregister from window switcher
+            from src.ui.window_switcher import unregister_window
+            unregister_window(_("Titan Help"))
         except Exception as e:
             print(f"Error hiding help window: {e}")
 

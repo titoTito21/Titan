@@ -27,14 +27,14 @@ class VoiceCaptureManager:
         self.sample_rate = sample_rate
         self.chunk_duration_ms = chunk_duration_ms
         self.chunk_size = int(sample_rate * chunk_duration_ms / 1000)
-        self.use_vad = use_vad
+        self._use_vad = use_vad
 
         # VAD setup (aggressiveness 0-3, 0=least aggressive, most tolerant)
         # Only used if use_vad=True
         self.vad = webrtcvad.Vad(0) if use_vad else None
 
         # Audio processing
-        self.audio_queue = queue.Queue(maxsize=10)  # Small queue for lowest latency (10 chunks = 300ms max)
+        self.audio_queue = queue.Queue(maxsize=50)  # 50 chunks = 1500ms buffer (handles processing delays on remote servers)
         self.is_recording = False
         self.is_speaking = False
         self.stream = None
@@ -55,6 +55,16 @@ class VoiceCaptureManager:
         self.on_audio_chunk: Optional[Callable[[bytes], None]] = None
         self.on_speech_stop: Optional[Callable] = None
         self.on_error: Optional[Callable[[str], None]] = None
+
+    @property
+    def use_vad(self):
+        return self._use_vad
+
+    @use_vad.setter
+    def use_vad(self, value):
+        self._use_vad = value
+        if value and self.vad is None:
+            self.vad = webrtcvad.Vad(0)
 
     def start_capture(self):
         """Start capturing from microphone"""

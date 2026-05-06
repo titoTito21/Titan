@@ -310,10 +310,17 @@ class TelegramVoiceClient:
             print(f"Group creation failed: {e}")
             return None
 
+    def _marked_chat_id(self, channel_id):
+        """Convert raw channel ID to marked chat ID for pytgcalls."""
+        marked = int(f"-100{channel_id}")
+        return marked
+
     async def _start_voice_in_group(self, group_id):
         """Start voice chat in group with microphone capture."""
         if not self.pytgcalls:
             return False
+
+        chat_id = self._marked_chat_id(group_id)
 
         # Method 1: Microphone device
         if MediaDevices:
@@ -327,8 +334,8 @@ class TelegramVoiceClient:
                     mic = MediaDevices.get_audio_device()
 
                 if mic:
-                    stream = MediaStream(audio_path=mic)
-                    await self.pytgcalls.play(group_id, stream)
+                    stream = MediaStream(media_path=mic)
+                    await self.pytgcalls.play(chat_id, stream)
                     print(f"Voice started with microphone: {mic}")
                     return True
             except Exception as mic_err:
@@ -336,8 +343,8 @@ class TelegramVoiceClient:
 
         # Method 2: Try default audio (some versions auto-detect mic)
         try:
-            stream = MediaStream(audio_path="default")
-            await self.pytgcalls.play(group_id, stream)
+            stream = MediaStream(media_path="default")
+            await self.pytgcalls.play(chat_id, stream)
             print("Voice started with default audio")
             return True
         except Exception:
@@ -357,7 +364,7 @@ class TelegramVoiceClient:
                 wav.writeframes(b'\x00' * (48000 * 2 * 2 * 30))
 
             stream = MediaStream(media_path=temp_path)
-            await self.pytgcalls.play(group_id, stream)
+            await self.pytgcalls.play(chat_id, stream)
             print("Voice started with silent audio (microphone not available)")
 
             # Clean up temp file after delay
@@ -526,10 +533,11 @@ class TelegramVoiceClient:
             # Leave group voice chat
             if self.pytgcalls and self.current_group_id:
                 try:
+                    chat_id = self._marked_chat_id(self.current_group_id)
                     if hasattr(self.pytgcalls, 'leave_call'):
-                        await self.pytgcalls.leave_call(self.current_group_id)
+                        await self.pytgcalls.leave_call(chat_id)
                     elif hasattr(self.pytgcalls, 'leave_group_call'):
-                        await self.pytgcalls.leave_group_call(self.current_group_id)
+                        await self.pytgcalls.leave_group_call(chat_id)
                     print("Left group voice chat")
                 except Exception as e:
                     print(f"Leave voice chat: {e}")
@@ -579,18 +587,19 @@ class TelegramVoiceClient:
             return False
 
         try:
+            chat_id = self._marked_chat_id(self.current_group_id)
             if self.is_muted:
                 # Unmute
                 if hasattr(self.pytgcalls, 'resume'):
-                    await self.pytgcalls.resume(self.current_group_id)
+                    await self.pytgcalls.resume(chat_id)
                 elif hasattr(self.pytgcalls, 'unmute_stream'):
-                    await self.pytgcalls.unmute_stream(self.current_group_id)
+                    await self.pytgcalls.unmute_stream(chat_id)
             else:
                 # Mute
                 if hasattr(self.pytgcalls, 'pause'):
-                    await self.pytgcalls.pause(self.current_group_id)
+                    await self.pytgcalls.pause(chat_id)
                 elif hasattr(self.pytgcalls, 'mute_stream'):
-                    await self.pytgcalls.mute_stream(self.current_group_id)
+                    await self.pytgcalls.mute_stream(chat_id)
 
             self.is_muted = not self.is_muted
             self._notify('mute_changed', {'muted': self.is_muted})

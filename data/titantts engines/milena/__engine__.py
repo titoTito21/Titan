@@ -91,7 +91,7 @@ class MilenaEngine(TitanTTSEngine):
 
     Public API:
         generate(text, pitch_offset=0) -> AudioSegment | None
-        set_rate(rate)       - milena rate 0.5..1.0 (lower = faster)
+        set_rate(rate)       - TCE standard -10..+10 (converted to milena 0.5..1.0)
         set_volume(volume)   - 0..100
         is_available()       -> bool
         clear_cache()
@@ -126,8 +126,17 @@ class MilenaEngine(TitanTTSEngine):
     # ------------------------------------------------------------------
 
     def set_rate(self, rate):
-        """Set speech rate (0.5..1.0, lower = faster). Default 0.75."""
-        self._rate = max(0.5, min(1.0, float(rate)))
+        """Set speech rate from TCE standard -10..+10 range.
+
+        Converts to milena's native 0.5..1.0 scale (lower = faster):
+            -10 (slowest) -> 1.0
+              0 (default) -> 0.75
+            +10 (fastest)  -> 0.5
+        """
+        rate = max(-10, min(10, float(rate)))
+        # Map: -10 -> 1.0, 0 -> 0.75, +10 -> 0.5
+        self._rate = round(0.75 - (rate * 0.025), 3)
+        self._rate = max(0.5, min(1.0, self._rate))
 
     def get_rate(self):
         return self._rate
@@ -261,6 +270,7 @@ class MilenaEngine(TitanTTSEngine):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 cwd=self._exe_dir,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
             )
             self._process = proc
 

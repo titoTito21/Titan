@@ -30,13 +30,21 @@ Pasek statusu wyświetla kluczowe informacje systemowe, takie jak: aktualny czas
 #Niewidzialny interfejs
 Po zminimalizowaniu okna głównego, Titan automatycznie przełącza się w tryb niewidzialnego interfejsu. Tryb ten umożliwia pełne sterowanie programem z poziomu dowolnej aplikacji w systemie, bez konieczności przełączania okien.
 
-#Skróty klawiszowe niewidzialnego interfejsu
-Kombinacja Ctrl+Shift stanowi podstawowy modyfikator w niewidzialnym interfejsie. W dokumentacji skróty są przedstawione jako "Titan+klawisz" dla uproszczenia zapisu.
-
-Titan+strzałki - nawigacja w czterech kierunkach (góra, dół, lewo, prawo). W trybie domyślnym (poza widgetami) strzałki góra/dół przełączają między kategoriami, a lewo/prawo między elementami w danej kategorii. W widgetach strzałki zapewniają standardową nawigację kierunkową
-Titan+Enter - aktywacja wybranego elementu
-Titan+Backspace lub Titan+Esc - wyjście z aktualnego widgetu
-Klawisz tyldy (~) - przełączanie trybu Titan UI (jeśli opcja jest aktywna)
-
 #Tryb Titan UI
 Tryb Titan UI umożliwia nawigację po interfejsie wyłącznie za pomocą klawiszy strzałek, bez konieczności przytrzymywania dodatkowych modyfikatorów. Zapewnia to jeszcze większy komfort użytkowania dla osób preferujących uproszczoną nawigację.
+
+#titan IM i elten
+integracja z eltenem w Titan IM jest w wersji beta, co oznacza że niektóre funkcje mogą nie działać prawidłowo. 
+Jeśli użytkownik jest moderatorem ważnych grup lub portalu elten, zalecane jest korzystanie z oficjalnego klienta. Nie można tworzyć konta elten z poziomu TCE, i to jest zamierzone, gdyż integracja ta jest dla użytkowników, którzy mają już konto w tym portalu
+
+#Titan net
+Titan od dwóch wersji ma  swój własny portal, zwany titan-net. Dzięki temu użytkownicy TCE mogą się kontaktować i integrować ze społecznością. 
+
+#system cerberus
+Cerberus służy do aktywnej ochrony użytkowników i serwera titan-net. Jest to system, który wykrywa i wzorcuje potencjalne ataki takie jak brute force, czy włamywanie się do kont użytkowników. Jeśli cerberus wykryje, że atakujący może włamać się na serwer, wtedy mogą być 3 opcje
+Alert - jest to rozpoznanie atakującego lub włamującego się użytkownika
+Lockdown - nikt nie może się zalogować do serwera titan-net
+cerberus - Titan-net jest w trybie aktywnej ochrony, żadne połączenie przychodzące nie będzie przez niego wpuszczane. Do logów systemu ma dostęp moderacja
+
+#model aktualizacyjny
+Titan nie ma częstych aktualizacji, lecz następne wersje rozwiązują błędy zgłaszane przez użytkowników, przy okazji są robione również nowe funkcje. Potencjalnie aktualizacje wychodzą co 1, 2 miesiące

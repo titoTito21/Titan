@@ -27,6 +27,7 @@ class LauncherConfig:
         self.version = '1.0'
         self.status = 1  # 1=disabled, 0=enabled (matches component convention)
         self.features = {}
+        self.libs = []  # library paths relative to launcher dir
         self._parse_config()
 
     def _parse_config(self):
@@ -47,6 +48,10 @@ class LauncherConfig:
                 self.status = int(config.get('launcher', 'status', fallback='1'))
             except ValueError:
                 self.status = 1
+
+            libs_str = config.get('launcher', 'libs', fallback='')
+            if libs_str.strip():
+                self.libs = [d.strip() for d in libs_str.split(',') if d.strip()]
 
         # Parse [features] section - all default to True if section missing
         default_features = {
@@ -259,6 +264,13 @@ class LauncherAPI:
         # Settings frame reference (for show_settings)
         self._settings_frame = services.get('settings_frame', None)
 
+        # Hidden fallback frame for hosting IM windows when the launcher
+        # does not pass its own parent window. TCE Titan-Net / Telegram /
+        # EltenLink / IM modules all need a live wx parent; a launcher may
+        # not use wx or may not want to expose its private window. Creating
+        # the fallback lazily avoids touching wx in non-wx launchers.
+        self._im_host_frame = None
+
         # Statusbar applet manager - full access
         self.statusbar_applet_manager = services.get('statusbar_applet_manager', None)
 
@@ -328,6 +340,89 @@ class LauncherAPI:
             self.invisible_ui = services.get('invisible_ui', None)
         else:
             self.invisible_ui = None
+
+        # === ADDITIONAL FEATURES (matching GUI/IUI functionality) ===
+
+        # Controller vibrations
+        try:
+            from src.controller.controller_vibrations import (
+                vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close,
+                vibrate_selection, vibrate_focus_change, vibrate_error,
+                vibrate_notification, vibrate_startup,
+                set_vibration_enabled, set_vibration_strength,
+                get_controller_info, refresh_controllers, test_vibration
+            )
+            self.vibrate_cursor_move = vibrate_cursor_move
+            self.vibrate_menu_open = vibrate_menu_open
+            self.vibrate_menu_close = vibrate_menu_close
+            self.vibrate_selection = vibrate_selection
+            self.vibrate_focus_change = vibrate_focus_change
+            self.vibrate_error = vibrate_error
+            self.vibrate_notification = vibrate_notification
+            self.vibrate_startup = vibrate_startup
+            self.set_vibration_enabled = set_vibration_enabled
+            self.set_vibration_strength = set_vibration_strength
+            self.get_controller_info = get_controller_info
+            self.refresh_controllers = refresh_controllers
+            self.test_vibration = test_vibration
+        except ImportError:
+            self.vibrate_cursor_move = lambda: None
+            self.vibrate_menu_open = lambda: None
+            self.vibrate_menu_close = lambda: None
+            self.vibrate_selection = lambda: None
+            self.vibrate_focus_change = lambda: None
+            self.vibrate_error = lambda: None
+            self.vibrate_notification = lambda: None
+            self.vibrate_startup = lambda: None
+            self.set_vibration_enabled = lambda enabled: None
+            self.set_vibration_strength = lambda strength: None
+            self.get_controller_info = lambda: None
+            self.refresh_controllers = lambda: None
+            self.test_vibration = lambda: None
+
+        # Stereo speech
+        try:
+            from src.titan_core.stereo_speech import get_stereo_speech, speak_stereo, stop_stereo_speech
+            self.get_stereo_speech = get_stereo_speech
+            self.speak_stereo = speak_stereo
+            self.stop_stereo_speech = stop_stereo_speech
+        except ImportError:
+            self.get_stereo_speech = lambda: None
+            self.speak_stereo = lambda text, **kw: None
+            self.stop_stereo_speech = lambda: None
+
+        # Window switcher
+        try:
+            from src.ui.window_switcher import show_window_switcher, register_window, unregister_window
+            self.show_window_switcher = lambda parent=None: show_window_switcher(parent=parent)
+            self.register_window = register_window
+            self.unregister_window = unregister_window
+        except ImportError:
+            self.show_window_switcher = lambda parent=None: None
+            self.register_window = lambda *a, **kw: None
+            self.unregister_window = lambda *a, **kw: None
+
+        # Shutdown dialog
+        try:
+            from src.ui.shutdown_question import show_shutdown_dialog
+            self.show_shutdown_dialog = show_shutdown_dialog
+        except ImportError:
+            self.show_shutdown_dialog = lambda: None
+
+        # Update checker
+        try:
+            from src.system.updater import check_for_updates_on_startup
+            self._check_for_updates_on_startup = check_for_updates_on_startup
+        except ImportError:
+            self._check_for_updates_on_startup = lambda parent=None: False
+
+    def check_for_updates(self):
+        """Check for application updates. Shows update dialog if available."""
+        try:
+            return self._check_for_updates_on_startup()
+        except Exception as e:
+            print(f"[LauncherAPI] Error checking for updates: {e}")
+            return False
 
     def start_invisible_ui(self):
         """Start the Invisible UI listener (tilde key toggle).
@@ -435,8 +530,66 @@ class LauncherAPI:
 
     # --- Titan IM communicator openers ---
 
+    def _get_im_parent(self):
+        """Return a live wx parent window for IM dialogs.
+
+        Priority:
+          1. The TCE Settings frame (created up-front in launcher mode).
+          2. Any already-visible top-level wx window (e.g. the launcher's
+             own main window, if it uses wx).
+          3. A lazily-created hidden host frame owned by the API.
+
+        IM login/chat windows (Titan-Net, Telegram, EltenLink, Messenger,
+        WhatsApp, third-party IM modules) all need a valid parent to host
+        modal dialogs and get top-level lifecycle events. Without a parent
+        wx will silently drop modal dialogs, which is what the user sees
+        as "can't log in when using a launcher".
+        """
+        try:
+            import wx
+        except Exception:
+            return None
+
+        # 1. Settings frame (always created in launcher mode)
+        if self._settings_frame is not None:
+            try:
+                if bool(self._settings_frame):
+                    return self._settings_frame
+            except Exception:
+                pass
+            # stale reference — forget it
+            self._settings_frame = None
+
+        # 2. First visible top-level window
+        try:
+            for w in wx.GetTopLevelWindows():
+                try:
+                    if w and w.IsShown() and w is not self._im_host_frame:
+                        return w
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # 3. Lazy hidden host frame
+        if self._im_host_frame is None:
+            try:
+                self._im_host_frame = wx.Frame(None, title="TCE IM Host",
+                                               size=(1, 1))
+                self._im_host_frame.Move(-10000, -10000)
+                # Hidden but realised — wx needs that for ShowModal parents.
+                self._im_host_frame.Hide()
+            except Exception as e:
+                print(f"[LauncherAPI] Failed to create IM host frame: {e}")
+                return None
+        return self._im_host_frame
+
     def open_telegram(self):
-        """Open Telegram login dialog. Requires titan_im feature."""
+        """Open Telegram login dialog. Requires titan_im feature.
+
+        Works even when no main TCE GUI is running: a hidden parent is
+        provided automatically if the launcher did not supply one.
+        """
         if not self.has_feature('titan_im'):
             return
         try:
@@ -444,9 +597,12 @@ class LauncherAPI:
             def _open():
                 try:
                     from src.network.telegram_gui import show_telegram_login
-                    show_telegram_login(self._settings_frame)
+                    parent = self._get_im_parent()
+                    show_telegram_login(parent)
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening Telegram: {e}")
+                    import traceback
+                    traceback.print_exc()
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening Telegram: {e}")
@@ -460,9 +616,12 @@ class LauncherAPI:
             def _open():
                 try:
                     from src.network import messenger_webview
-                    messenger_webview.show_messenger_webview(self._settings_frame)
+                    parent = self._get_im_parent()
+                    messenger_webview.show_messenger_webview(parent)
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening Messenger: {e}")
+                    import traceback
+                    traceback.print_exc()
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening Messenger: {e}")
@@ -476,25 +635,50 @@ class LauncherAPI:
             def _open():
                 try:
                     from src.network import whatsapp_webview
-                    whatsapp_webview.show_whatsapp_webview(self._settings_frame)
+                    parent = self._get_im_parent()
+                    whatsapp_webview.show_whatsapp_webview(parent)
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening WhatsApp: {e}")
+                    import traceback
+                    traceback.print_exc()
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening WhatsApp: {e}")
 
     def open_titannet(self):
-        """Open Titan-Net login dialog. Requires titan_im feature and titan_net_client."""
+        """Open Titan-Net: login dialog, then main window on success.
+
+        Previously this only showed the login dialog — when the user
+        successfully logged in from a launcher, the dialog closed and
+        nothing happened. Now the main chat window is opened on success,
+        matching the behaviour of the main TCE GUI.
+        """
         if not self.has_feature('titan_im') or not self.titan_net_client:
             return
         try:
             import wx
             def _open():
                 try:
-                    from src.network.titan_net_gui import show_login_dialog
-                    show_login_dialog(self._settings_frame, self.titan_net_client)
+                    from src.network.titan_net_gui import (
+                        show_login_dialog,
+                        show_titan_net_window,
+                    )
+                    parent = self._get_im_parent()
+                    result = show_login_dialog(parent, self.titan_net_client)
+                    logged_in = False
+                    if isinstance(result, tuple) and result:
+                        logged_in = bool(result[0])
+                    if logged_in:
+                        try:
+                            show_titan_net_window(parent, self.titan_net_client)
+                        except Exception as e:
+                            print(f"[LauncherAPI] Error opening Titan-Net main window: {e}")
+                            import traceback
+                            traceback.print_exc()
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening Titan-Net: {e}")
+                    import traceback
+                    traceback.print_exc()
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening Titan-Net: {e}")
@@ -508,12 +692,45 @@ class LauncherAPI:
             def _open():
                 try:
                     from src.eltenlink_client.elten_gui import show_elten_login
-                    show_elten_login(self._settings_frame)
+                    parent = self._get_im_parent()
+                    show_elten_login(parent)
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening EltenLink: {e}")
+                    import traceback
+                    traceback.print_exc()
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening EltenLink: {e}")
+
+    def open_im_module(self, name_or_id):
+        """Open a third-party Titan IM module by display name or id.
+
+        Dispatches to im_module_manager.open_module with a valid parent
+        window resolved via _get_im_parent, so IM modules work from any
+        launcher even when no main TCE GUI is running. Returns True if
+        the module was found and open() was invoked.
+        """
+        if not self.has_feature('titan_im') or not self.im_module_manager:
+            return False
+        try:
+            import wx
+        except Exception:
+            return False
+        done = {'ok': False}
+        def _open():
+            try:
+                parent = self._get_im_parent()
+                done['ok'] = bool(
+                    self.im_module_manager.open_module(name_or_id, parent)
+                )
+            except Exception as e:
+                print(f"[LauncherAPI] Error opening IM module '{name_or_id}': {e}")
+                import traceback
+                traceback.print_exc()
+        # open_module is synchronous but can pop dialogs, so marshal onto
+        # the wx main thread like the other openers.
+        wx.CallAfter(_open)
+        return True
 
     def force_exit(self):
         """Force shutdown TCE - stops all services and calls os._exit(0).
@@ -743,6 +960,34 @@ class LauncherManager:
             launcher_dir = os.path.dirname(init_path)
             if launcher_dir not in sys.path:
                 sys.path.insert(0, launcher_dir)
+
+            # In compiled mode, add _internal/Lib/site-packages to sys.path
+            # so launchers can import any installed packages (PyQt5, etc.)
+            if _is_frozen():
+                base = _get_base_path()
+                for subdir in ['_internal/Lib/site-packages', '_internal/Lib', '_internal']:
+                    sp = os.path.join(base, subdir)
+                    if os.path.isdir(sp) and sp not in sys.path:
+                        sys.path.insert(0, sp)
+
+            # Add launcher's library paths for bundled dependencies
+            # Config: libs = lib, vendor in [launcher] section of __launcher__.TCE
+            # Default: lib/ if exists
+            _lib_dirs = ["lib"]
+            _config_path = os.path.join(launcher_dir, '__launcher__.TCE')
+            if os.path.isfile(_config_path):
+                _cfg = configparser.ConfigParser()
+                try:
+                    _cfg.read(_config_path, encoding='utf-8')
+                    _libs_str = _cfg.get('launcher', 'libs', fallback='')
+                    if _libs_str.strip():
+                        _lib_dirs = [d.strip() for d in _libs_str.split(',') if d.strip()]
+                except Exception:
+                    pass
+            for _ld in _lib_dirs:
+                _full_lib = os.path.join(launcher_dir, _ld)
+                if os.path.isdir(_full_lib) and _full_lib not in sys.path:
+                    sys.path.insert(0, _full_lib)
 
             module_name = f'launcher_{launcher_name}'
 

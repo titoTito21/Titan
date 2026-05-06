@@ -150,6 +150,8 @@ class KlangoMode:
         self._stereo_speech_enabled = None
         self._load_stereo_settings()
 
+        self._registered_views = []  # Component-registered views (converted to menu submenus)
+
         # Initialize component manager
         self.component_manager = ComponentManager()
 
@@ -281,19 +283,20 @@ class KlangoMode:
         """Load status bar items with same names as GUI but console actions."""
         try:
             from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
-            
+
+            battery = get_battery_status()
             status_items = [
                 {"name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.announce_time},
-                {"name": _("Battery level: {}").format(get_battery_status()), "type": "action", "action": self.announce_battery},
-                {"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.announce_volume},
-                {"name": get_network_status(), "type": "action", "action": self.announce_network}
             ]
+            if battery is not None:
+                status_items.append({"name": _("Battery level: {}").format(battery), "type": "action", "action": self.announce_battery})
+            status_items.append({"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.announce_volume})
+            status_items.append({"name": get_network_status(), "type": "action", "action": self.announce_network})
 
             # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
                 for applet_name in self.statusbar_applet_manager.get_applet_names():
                     try:
-                        # Use applet name instead of dynamic text (which becomes stale)
                         applet_info = self.statusbar_applet_manager.applets[applet_name]['info']
                         display_name = applet_info['name']
                         status_items.append({
@@ -304,19 +307,15 @@ class KlangoMode:
                     except Exception as e:
                         print(f"Error loading statusbar applet '{applet_name}': {e}")
 
-            print(f"DEBUG: Status bar items loaded successfully: {[item['name'] for item in status_items]}")
             # Update Status Bar submenu (index 3 in main menu)
             self.main_menu[3]["items"] = status_items
         except Exception as e:
             print(f"Error loading status bar items: {e}")
             # Fallback to simple announcements
-            fallback_items = [
+            self.main_menu[3]["items"] = [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
-                {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
                 {"name": _("Volume Level"), "type": "action", "action": self.announce_volume}
             ]
-            print(f"DEBUG: Using fallback status bar items: {[item['name'] for item in fallback_items]}")
-            self.main_menu[3]["items"] = fallback_items
     
     def announce_network(self):
         """Announce network status."""
@@ -406,10 +405,21 @@ class KlangoMode:
     def handle_console_keypress(self, key):
         """Handle console keyboard input."""
         try:
+            # Handle special key sequences (function keys)
+            if isinstance(key, bytes) and key in (b'\x00', b'\xe0'):
+                import msvcrt
+                if msvcrt.kbhit():
+                    second = msvcrt.getch()
+                    # F4 = 0x3e (62)
+                    if second == b'\x3e':
+                        self.open_window_switcher()
+                        return
+                return
+
             # Convert bytes to character
             if isinstance(key, bytes):
                 key = key.decode('utf-8')
-            
+
             # Handle special keys
             if key == '\x1b':  # ESC key
                 if self.menu_open:
@@ -448,6 +458,11 @@ class KlangoMode:
     
     def handle_keypress(self, key, mod):
         """Handle keyboard input."""
+        # F4 opens window switcher (bare F4 only)
+        if key == pygame.K_F4 and not (mod & (pygame.KMOD_ALT | pygame.KMOD_CTRL | pygame.KMOD_SHIFT)):
+            self.open_window_switcher()
+            return
+
         # Alt key opens main menu
         if key == pygame.K_LALT or key == pygame.K_RALT:
             if not self.menu_open:
@@ -754,39 +769,47 @@ class KlangoMode:
             speak_klango(_("Error launching game"))
     
     def open_telegram(self):
-        """Open Telegram."""
+        """Open Telegram login/chat GUI window."""
         try:
-            # Import telegram client safely
-            telegram_client = None
-            try:
-                import telegram_client
-                if telegram_client and telegram_client.is_connected():
-                    # Open without announcement
-                    # Create Telegram submenu
-                    telegram_submenu = [
-                        {"name": _("Contacts"), "type": "action", "action": self.show_telegram_contacts},
-                        {"name": _("Groups"), "type": "action", "action": self.show_telegram_groups},
-                        {"name": _("Back"), "type": "action", "action": self.close_titan_im_submenu}
-                    ]
-                    self.open_custom_submenu(_("Telegram Menu"), telegram_submenu)
-                else:
-                    speak_klango(_("Not connected to {}").format("Telegram"))
-            except Exception as e:
-                print(f"Error with Telegram: {e}")
-                speak_klango(_("Telegram client not available"))
-            
+            if not WX_AVAILABLE:
+                speak_klango(_("Telegram GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening Telegram..."), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/SELECT.ogg")
+
+            from src.network.telegram_gui import show_telegram_login
+            chat_window = show_telegram_login(None)
+
+            if chat_window:
+                play_sound("titannet/welcome to IM.ogg")
+                try:
+                    from src.ui.window_switcher import register_window
+                    register_window("Telegram", window=chat_window, category='messenger')
+                except Exception:
+                    pass
+            else:
+                speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+
+            self.close_menu()
         except Exception as e:
             print(f"Error opening Telegram: {e}")
-            speak_klango(_("Error opening Telegram"))
+            speak_klango(_("Error opening Telegram"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
     
     def open_messenger(self):
         """Open Facebook Messenger."""
         try:
-            # Open without announcement
-            # Import messenger webview
             try:
-                from messenger_webview import show_messenger_webview
-                show_messenger_webview()
+                from src.network import messenger_webview
+                messenger_window = messenger_webview.show_messenger_webview(self)
+                if messenger_window:
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("Messenger", window=messenger_window, category='messenger')
+                    except Exception:
+                        pass
                 self.close_menu()
             except Exception as e:
                 print(f"Error with Messenger: {e}")
@@ -798,11 +821,15 @@ class KlangoMode:
     def open_whatsapp(self):
         """Open WhatsApp."""
         try:
-            # Open without announcement
-            # Import whatsapp webview
             try:
-                from whatsapp_webview import show_whatsapp_webview
-                show_whatsapp_webview()
+                from src.network import whatsapp_webview
+                whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+                if whatsapp_window:
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("WhatsApp", window=whatsapp_window, category='messenger')
+                    except Exception:
+                        pass
                 self.close_menu()
             except Exception as e:
                 print(f"Error with WhatsApp: {e}")
@@ -857,7 +884,14 @@ class KlangoMode:
             return (False, "")
 
     def open_titannet(self):
-        """Main Titan-Net entry point - launches GUI window."""
+        """Main Titan-Net entry point - launches GUI window.
+
+        Falls back to the shared Titan-Net client registry so the window
+        opens even if this frame's titan_client reference was never wired
+        up (e.g. boot order issue). After a successful login the main
+        chat window is always shown, and it is explicitly raised so it
+        appears above Klango's hidden host frame.
+        """
         try:
             # Check if GUI is available
             if not WX_AVAILABLE or not TITAN_NET_GUI_AVAILABLE:
@@ -865,7 +899,14 @@ class KlangoMode:
                 play_sound("core/error.ogg")
                 return
 
-            # Check if client is available
+            # Resolve client (prefer local reference, fall back to registry)
+            if not self.titan_client:
+                try:
+                    from src.network.titan_net import get_active_titan_net_client
+                    self.titan_client = get_active_titan_net_client()
+                except Exception:
+                    pass
+
             if not self.titan_client:
                 speak_klango(_("Titan-Net client not available"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
@@ -883,10 +924,15 @@ class KlangoMode:
                 if not is_connected:
                     self.titan_logged_in = False
 
-                success, offline_mode = show_login_dialog(None, self.titan_client)
+                success, offline_mode, motd = show_login_dialog(None, self.titan_client)
 
                 if success:
                     self.titan_logged_in = True
+                    try:
+                        from src.network.titan_net import set_active_titan_logged_in
+                        set_active_titan_logged_in(True)
+                    except Exception:
+                        pass
                     speak_klango(_("Login successful"), position=0.0, pitch_offset=0, interrupt=True)
                     play_sound("titannet/welcome to IM.ogg")
                 elif offline_mode:
@@ -896,16 +942,36 @@ class KlangoMode:
                     speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
                     return
 
+            # Re-check connection after login
+            is_connected = self.titan_client.is_connected if hasattr(self.titan_client, 'is_connected') else False
+
             # Show Titan-Net main window
             if self.titan_logged_in and is_connected:
-                show_titan_net_window(None, self.titan_client)
-                speak_klango(_("Titan-Net window opened"), position=0.0, pitch_offset=0, interrupt=True)
+                titan_win = show_titan_net_window(None, self.titan_client)
+                if titan_win:
+                    try:
+                        titan_win.Show()
+                        titan_win.Raise()
+                    except Exception:
+                        pass
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("Titan-Net", window=titan_win, category='messenger')
+                    except Exception:
+                        pass
+                else:
+                    # show_titan_net_window returned None - surface the
+                    # failure instead of silently doing nothing.
+                    speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                    play_sound("core/error.ogg")
             else:
                 speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
 
         except Exception as e:
             print(f"Error opening Titan-Net: {e}")
+            import traceback
+            traceback.print_exc()
             speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
             play_sound("core/error.ogg")
 
@@ -927,7 +993,11 @@ class KlangoMode:
 
             if eltenlink_window:
                 play_sound("titannet/welcome to IM.ogg")
-                speak_klango(_("EltenLink window opened"), position=0.0, pitch_offset=0, interrupt=True)
+                try:
+                    from src.ui.window_switcher import register_window
+                    register_window("EltenLink", window=eltenlink_window, category='messenger')
+                except Exception:
+                    pass
             else:
                 speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
@@ -959,30 +1029,6 @@ class KlangoMode:
                 stereo_position = 0.0
             speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=0, interrupt=True)
     
-    def show_telegram_contacts(self):
-        """Show Telegram contacts."""
-        try:
-            speak_klango(_("Loading contacts"))
-            # TODO: Implement contact loading from telegram_client
-            self.close_menu()
-        except Exception as e:
-            print(f"Error loading contacts: {e}")
-            speak_klango(_("Error loading contacts"))
-    
-    def show_telegram_groups(self):
-        """Show Telegram groups."""
-        try:
-            speak_klango(_("Loading groups"))
-            # TODO: Implement group loading from telegram_client
-            self.close_menu()
-        except Exception as e:
-            print(f"Error loading groups: {e}")
-            speak_klango(_("Error loading groups"))
-    
-    def close_titan_im_submenu(self):
-        """Close Titan IM submenu."""
-        self.close_menu()
-    
     def announce_time(self):
         """Announce current time."""
         try:
@@ -1010,6 +1056,18 @@ class KlangoMode:
             print(f"Error getting volume level: {e}")
             speak_klango(_("Error getting volume level"))
     
+    def open_window_switcher(self):
+        """Open Switch To dialog."""
+        try:
+            if WX_AVAILABLE:
+                from src.ui.window_switcher import show_window_switcher
+                show_window_switcher(parent=None)
+            else:
+                speak_klango(_("Switch To is not available without GUI"))
+        except Exception as e:
+            print(f"Error opening window switcher: {e}")
+            speak_klango(_("Error opening Switch To"))
+
     def open_settings(self):
         """Open settings."""
         try:
@@ -1224,19 +1282,23 @@ class KlangoFrame(wx.Frame):
         # Bind keyboard events
         self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-        
+
         # Set focus to receive keyboard events
         self.SetCanFocus(True)
-        
+
+        # Register in window switcher (same as GUI)
+        try:
+            from src.ui.window_switcher import register_window
+            register_window("Titan", window=self, callback=self.SetFocus, category='main')
+        except Exception as e:
+            print(f"Warning: Could not register Klango in window switcher: {e}")
+
         # Announce startup
         wx.CallAfter(self.announce_startup)
-    
+
     def announce_startup(self):
         """Announce startup and test stereo speech if enabled."""
-        # Remove startup announcement as requested
         pass
-        
-        # Remove debug channel test messages
     
     def load_applications(self):
         """Load applications into the menu."""
@@ -1315,13 +1377,15 @@ class KlangoFrame(wx.Frame):
         """Load status bar items like IUI using GUI functions."""
         try:
             from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
-            
+
+            battery = get_battery_status()
             status_items = [
                 {"name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.gui_open_time_settings},
-                {"name": _("Battery level: {}").format(get_battery_status()), "type": "action", "action": self.gui_open_power_settings},
-                {"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.gui_open_volume_mixer},
-                {"name": get_network_status(), "type": "action", "action": self.gui_open_network_settings}
             ]
+            if battery is not None:
+                status_items.append({"name": _("Battery level: {}").format(battery), "type": "action", "action": self.gui_open_power_settings})
+            status_items.append({"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.gui_open_volume_mixer})
+            status_items.append({"name": get_network_status(), "type": "action", "action": self.gui_open_network_settings})
 
             # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
@@ -1345,14 +1409,18 @@ class KlangoFrame(wx.Frame):
             # Fallback to simple announcements
             self.main_menu[3]["items"] = [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
-                {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
                 {"name": _("Volume Level"), "type": "action", "action": self.announce_volume}
             ]
-    
+
     def on_key_down(self, event):
         """Handle keyboard input."""
         keycode = event.GetKeyCode()
-        
+
+        # F4 opens window switcher (bare F4 only, not Alt+F4)
+        if keycode == wx.WXK_F4 and not event.HasAnyModifiers():
+            self.open_window_switcher()
+            return
+
         # Alt key toggles main menu
         if keycode == wx.WXK_ALT:
             if not self.menu_open:
@@ -1664,39 +1732,47 @@ class KlangoFrame(wx.Frame):
             speak_klango(_("Error launching game"))
     
     def open_telegram(self):
-        """Open Telegram."""
+        """Open Telegram login/chat GUI window."""
         try:
-            # Import telegram client safely
-            telegram_client = None
-            try:
-                import telegram_client
-                if telegram_client and telegram_client.is_connected():
-                    # Open without announcement
-                    # Create Telegram submenu
-                    telegram_submenu = [
-                        {"name": _("Contacts"), "type": "action", "action": self.show_telegram_contacts},
-                        {"name": _("Groups"), "type": "action", "action": self.show_telegram_groups},
-                        {"name": _("Back"), "type": "action", "action": self.close_titan_im_submenu}
-                    ]
-                    self.open_custom_submenu(_("Telegram Menu"), telegram_submenu)
-                else:
-                    speak_klango(_("Not connected to {}").format("Telegram"))
-            except Exception as e:
-                print(f"Error with Telegram: {e}")
-                speak_klango(_("Telegram client not available"))
-            
+            if not WX_AVAILABLE:
+                speak_klango(_("Telegram GUI not available"), position=0.0, pitch_offset=0, interrupt=True)
+                play_sound("core/error.ogg")
+                return
+
+            speak_klango(_("Opening Telegram..."), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/SELECT.ogg")
+
+            from src.network.telegram_gui import show_telegram_login
+            chat_window = show_telegram_login(None)
+
+            if chat_window:
+                play_sound("titannet/welcome to IM.ogg")
+                try:
+                    from src.ui.window_switcher import register_window
+                    register_window("Telegram", window=chat_window, category='messenger')
+                except Exception:
+                    pass
+            else:
+                speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
+
+            self.close_menu()
         except Exception as e:
             print(f"Error opening Telegram: {e}")
-            speak_klango(_("Error opening Telegram"))
+            speak_klango(_("Error opening Telegram"), position=0.0, pitch_offset=0, interrupt=True)
+            play_sound("core/error.ogg")
     
     def open_messenger(self):
         """Open Facebook Messenger."""
         try:
-            # Open without announcement
-            # Import messenger webview
             try:
-                from messenger_webview import show_messenger_webview
-                show_messenger_webview()
+                from src.network import messenger_webview
+                messenger_window = messenger_webview.show_messenger_webview(self)
+                if messenger_window:
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("Messenger", window=messenger_window, category='messenger')
+                    except Exception:
+                        pass
                 self.close_menu()
             except Exception as e:
                 print(f"Error with Messenger: {e}")
@@ -1708,11 +1784,15 @@ class KlangoFrame(wx.Frame):
     def open_whatsapp(self):
         """Open WhatsApp."""
         try:
-            # Open without announcement
-            # Import whatsapp webview
             try:
-                from whatsapp_webview import show_whatsapp_webview
-                show_whatsapp_webview()
+                from src.network import whatsapp_webview
+                whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+                if whatsapp_window:
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("WhatsApp", window=whatsapp_window, category='messenger')
+                    except Exception:
+                        pass
                 self.close_menu()
             except Exception as e:
                 print(f"Error with WhatsApp: {e}")
@@ -1767,7 +1847,14 @@ class KlangoFrame(wx.Frame):
             return (False, "")
 
     def open_titannet(self):
-        """Main Titan-Net entry point - launches GUI window."""
+        """Main Titan-Net entry point - launches GUI window.
+
+        Falls back to the shared Titan-Net client registry so the window
+        opens even if this frame's titan_client reference was never wired
+        up (e.g. boot order issue). After a successful login the main
+        chat window is always shown, and it is explicitly raised so it
+        appears above Klango's hidden host frame.
+        """
         try:
             # Check if GUI is available
             if not WX_AVAILABLE or not TITAN_NET_GUI_AVAILABLE:
@@ -1775,7 +1862,14 @@ class KlangoFrame(wx.Frame):
                 play_sound("core/error.ogg")
                 return
 
-            # Check if client is available
+            # Resolve client (prefer local reference, fall back to registry)
+            if not self.titan_client:
+                try:
+                    from src.network.titan_net import get_active_titan_net_client
+                    self.titan_client = get_active_titan_net_client()
+                except Exception:
+                    pass
+
             if not self.titan_client:
                 speak_klango(_("Titan-Net client not available"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
@@ -1793,10 +1887,15 @@ class KlangoFrame(wx.Frame):
                 if not is_connected:
                     self.titan_logged_in = False
 
-                success, offline_mode = show_login_dialog(None, self.titan_client)
+                success, offline_mode, motd = show_login_dialog(None, self.titan_client)
 
                 if success:
                     self.titan_logged_in = True
+                    try:
+                        from src.network.titan_net import set_active_titan_logged_in
+                        set_active_titan_logged_in(True)
+                    except Exception:
+                        pass
                     speak_klango(_("Login successful"), position=0.0, pitch_offset=0, interrupt=True)
                     play_sound("titannet/welcome to IM.ogg")
                 elif offline_mode:
@@ -1806,16 +1905,36 @@ class KlangoFrame(wx.Frame):
                     speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
                     return
 
+            # Re-check connection after login
+            is_connected = self.titan_client.is_connected if hasattr(self.titan_client, 'is_connected') else False
+
             # Show Titan-Net main window
             if self.titan_logged_in and is_connected:
-                show_titan_net_window(None, self.titan_client)
-                speak_klango(_("Titan-Net window opened"), position=0.0, pitch_offset=0, interrupt=True)
+                titan_win = show_titan_net_window(None, self.titan_client)
+                if titan_win:
+                    try:
+                        titan_win.Show()
+                        titan_win.Raise()
+                    except Exception:
+                        pass
+                    try:
+                        from src.ui.window_switcher import register_window
+                        register_window("Titan-Net", window=titan_win, category='messenger')
+                    except Exception:
+                        pass
+                else:
+                    # show_titan_net_window returned None - surface the
+                    # failure instead of silently doing nothing.
+                    speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                    play_sound("core/error.ogg")
             else:
                 speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
 
         except Exception as e:
             print(f"Error opening Titan-Net: {e}")
+            import traceback
+            traceback.print_exc()
             speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
             play_sound("core/error.ogg")
 
@@ -1837,7 +1956,11 @@ class KlangoFrame(wx.Frame):
 
             if eltenlink_window:
                 play_sound("titannet/welcome to IM.ogg")
-                speak_klango(_("EltenLink window opened"), position=0.0, pitch_offset=0, interrupt=True)
+                try:
+                    from src.ui.window_switcher import register_window
+                    register_window("EltenLink", window=eltenlink_window, category='messenger')
+                except Exception:
+                    pass
             else:
                 speak_klango(_("Login cancelled"), position=0.0, pitch_offset=0, interrupt=True)
                 play_sound("core/error.ogg")
@@ -1868,30 +1991,6 @@ class KlangoFrame(wx.Frame):
             else:
                 stereo_position = 0.0
             speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=0, interrupt=True)
-    
-    def show_telegram_contacts(self):
-        """Show Telegram contacts."""
-        try:
-            speak_klango(_("Loading contacts"))
-            # TODO: Implement contact loading from telegram_client
-            self.close_menu()
-        except Exception as e:
-            print(f"Error loading contacts: {e}")
-            speak_klango(_("Error loading contacts"))
-    
-    def show_telegram_groups(self):
-        """Show Telegram groups."""
-        try:
-            speak_klango(_("Loading groups"))
-            # TODO: Implement group loading from telegram_client
-            self.close_menu()
-        except Exception as e:
-            print(f"Error loading groups: {e}")
-            speak_klango(_("Error loading groups"))
-    
-    def close_titan_im_submenu(self):
-        """Close Titan IM submenu."""
-        self.close_menu()
     
     def announce_time(self):
         """Announce current time."""
@@ -1936,6 +2035,15 @@ class KlangoFrame(wx.Frame):
         except Exception as e:
             print(f"Error activating statusbar applet '{applet_name}': {e}")
             speak_klango(_("Error activating statusbar item"))
+
+    def open_window_switcher(self):
+        """Open Switch To dialog."""
+        try:
+            from src.ui.window_switcher import show_window_switcher
+            show_window_switcher(parent=self)
+        except Exception as e:
+            print(f"Error opening window switcher: {e}")
+            speak_klango(_("Error opening Switch To"))
 
     def open_settings(self):
         """Open settings."""

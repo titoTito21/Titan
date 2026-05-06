@@ -135,6 +135,52 @@ class EltenLinkClient:
         except requests.exceptions.ConnectionError:
             raise ConnectionError(_("Connection failed"))
 
+    def _post_binary(self, endpoint, params=None, field_name='post', file_data=b'', timeout=30):
+        """Make HTTP POST request with binary file data in multipart form.
+
+        Used for audio post uploads (forum, blog).
+        Based on Ruby Forum.rb audio upload:
+            boundary = "----EltBoundary" + rand
+            data = "--boundary\\r\\nContent-Disposition: form-data; name=\\"post\\"\\r\\n\\r\\n{binary}\\r\\n--boundary--"
+
+        Args:
+            endpoint: PHP file name
+            params: dict of GET query parameters
+            field_name: Name of the form field for the binary data
+            file_data: Raw binary data (bytes)
+            timeout: request timeout
+        """
+        url = self.BASE_URL + endpoint
+        if params is None:
+            params = {}
+
+        # Build multipart boundary, ensure it doesn't appear in file data
+        boundary = f"----EltBoundary{random.randint(100000, 999999)}"
+        while boundary.encode('utf-8') in file_data:
+            boundary = f"----EltBoundary{random.randint(100000, 999999)}"
+
+        # Build multipart body with binary data
+        body = bytearray()
+        body.extend(f'--{boundary}\r\n'.encode('utf-8'))
+        body.extend(f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode('utf-8'))
+        body.extend(file_data)
+        body.extend(f'\r\n--{boundary}--\r\n'.encode('utf-8'))
+
+        try:
+            response = self.session.post(
+                url,
+                params=params,
+                data=bytes(body),
+                headers={'Content-Type': f'multipart/form-data; boundary={boundary}'},
+                timeout=timeout,
+            )
+            response.encoding = 'utf-8'
+            return response.text
+        except requests.exceptions.Timeout:
+            raise TimeoutError(_("Connection timeout"))
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError(_("Connection failed"))
+
     def _auth_request(self, endpoint, params=None, timeout=10):
         """Make authenticated GET request (adds name + token to params).
 
@@ -798,15 +844,33 @@ class EltenLinkClient:
         return [f for f in structure.get('forums', []) if f.get('group_id') == group_id]
 
     def get_threads_in_forum(self, forum_id):
-        """Get threads in a specific forum.
+        """Get threads in a specific forum, sorted like Ruby Elten.
+
+        Sort order: pinned threads first, then by last_update descending (newest activity first).
+        Flags bitfield: bit 0=pinned, bit 1=closed, bit 2=followed, bit 3=marked.
 
         Args:
             forum_id: Forum identifier (string, matches forum['id'] from structure)
         """
         structure = self.get_forum_structure()
-        # forum_id is a string matching forum['id'] (Ruby: Struct_Forum_Forum.id)
         forum_id_str = str(forum_id).strip()
-        return [t for t in structure.get('threads', []) if t.get('forum_id', '').strip() == forum_id_str]
+        threads = [t for t in structure.get('threads', []) if t.get('forum_id', '').strip() == forum_id_str]
+
+        # Parse flags into boolean fields
+        for t in threads:
+            flags_val = self._safe_int(t.get('flags', '0'))
+            t['pinned'] = bool(flags_val & 1)
+            t['closed'] = bool(flags_val & 2)
+            t['followed'] = bool(flags_val & 4)
+            t['marked'] = bool(flags_val & 8)
+
+        # Sort: pinned first, then by last_update descending (like Ruby Elten)
+        threads.sort(key=lambda t: (
+            not t.get('pinned', False),  # False (pinned) sorts before True (not pinned)
+            -self._safe_int(t.get('last_update', '0'))  # Newest first
+        ))
+
+        return threads
 
     def get_thread_posts(self, thread_id):
         """Get posts in a thread.
@@ -944,17 +1008,20 @@ class EltenLinkClient:
 
     # ---- Blogs ----
 
-    def get_blogs_list(self, order_by=0):
+    def get_blogs_list(self, order_by=0, user=None):
         """Get list of blogs.
 
         Endpoint: blog_list.php?details=2 (matching Ruby: 9 fields per blog)
         Args:
             order_by: 0=recent, 1=active, 2=discussed, 3=followed, 5=my blogs
+            user: If set, list blogs managed by this user (Ruby: prm["user"] = @type)
         """
-        text = self._auth_request('blog_list.php', {
-            'orderby': str(order_by),
-            'details': '2',
-        })
+        params = {'details': '2'}
+        if user:
+            params['user'] = user
+        else:
+            params['orderby'] = str(order_by)
+        text = self._auth_request('blog_list.php', params)
         lines = self._parse_response(text)
         ok, err = self._check_status(lines)
         if not ok:
@@ -1593,6 +1660,115 @@ class EltenLinkClient:
         else:
             return {'success': False, 'message': self.ERROR_MESSAGES.get(status, f"Error: {status}")}
 
+    def create_thread_audio(self, forum_id, thread_name, audio_data):
+        """Create a new forum thread with audio post.
+
+        Based on Ruby Forum.rb newthread() for audio type:
+            prm = { "forumname" => ..., "threadname" => ..., "audio" => 1 }
+            ft = srvproc("forum_edit", prm, 0, { "post" => flp })
+        The audio file (Opus/OGG) is sent as binary in multipart POST.
+
+        Args:
+            forum_id: Forum identifier string
+            thread_name: Thread title
+            audio_data: Raw bytes of the audio file (OGG/Opus)
+        """
+        if not self._ensure_token():
+            return {'success': False, 'message': _("Token refresh failed")}
+
+        params = {
+            'name': self.username,
+            'token': self.token,
+            'forumname': forum_id,
+            'threadname': thread_name,
+            'audio': '1',
+            'follow': '1',
+        }
+
+        resp = self._post_binary('forum_edit.php', params, field_name='post', file_data=audio_data)
+        lines = self._parse_response(resp)
+        status = lines[0].strip() if lines else '-1'
+
+        if status == '0':
+            return {'success': True, 'message': _("Thread created")}
+        else:
+            return {'success': False, 'message': self.ERROR_MESSAGES.get(status, f"Error: {status}")}
+
+    def reply_to_thread_audio(self, thread_id, audio_data):
+        """Reply to a forum thread with an audio post.
+
+        Based on Ruby Forum.rb reply for audio type.
+        Audio file (Opus/OGG) is sent as binary in multipart POST with audio=1.
+
+        Args:
+            thread_id: Thread ID
+            audio_data: Raw bytes of the audio file (OGG/Opus)
+        """
+        if not self._ensure_token():
+            return {'success': False, 'message': _("Token refresh failed")}
+
+        params = {
+            'name': self.username,
+            'token': self.token,
+            'threadid': str(thread_id),
+            'audio': '1',
+        }
+
+        resp = self._post_binary('forum_edit.php', params, field_name='post', file_data=audio_data)
+        lines = self._parse_response(resp)
+        status = lines[0].strip() if lines else '-1'
+
+        if status == '0':
+            return {'success': True, 'message': _("Reply posted")}
+        else:
+            return {'success': False, 'message': self.ERROR_MESSAGES.get(status, f"Error: {status}")}
+
+    def create_blog_post_audio(self, blog_name, title, audio_data, category_id=0):
+        """Create a new audio blog post.
+
+        Based on Ruby Blog.rb blog_posts_mod.php with audio content.
+        Audio file is uploaded via buffer_post.php as binary, then blog post is created.
+
+        Args:
+            blog_name: Blog owner username
+            title: Post title
+            audio_data: Raw bytes of the audio file (OGG/Opus)
+            category_id: Optional category ID
+        """
+        if not self._ensure_token():
+            return {'success': False, 'message': _("Token refresh failed")}
+
+        # Upload audio to buffer
+        buf_id = str(random.randint(100000, 999999))
+        buf_params = {
+            'name': self.username,
+            'token': self.token,
+            'id': buf_id,
+        }
+        self._post_binary('buffer_post.php', buf_params, field_name='data', file_data=audio_data)
+
+        # Create blog post with audio flag
+        params = {
+            'name': self.username,
+            'token': self.token,
+            'add': '1',
+            'postname': title,
+            'searchname': blog_name,
+            'buffer': buf_id,
+            'audio': '1',
+        }
+        if category_id:
+            params['categoryid'] = str(category_id)
+
+        resp = self._request('blog_posts_mod.php', params)
+        lines = self._parse_response(resp)
+        status = lines[0].strip() if lines else '-1'
+
+        if status == '0':
+            return {'success': True, 'message': _("Blog post created")}
+        else:
+            return {'success': False, 'message': self.ERROR_MESSAGES.get(status, f"Error: {status}")}
+
     def mark_forum_as_read(self, group_id=None, forum_name=None):
         """Mark forum as read. forum_markasread.php"""
         params = {}
@@ -2046,6 +2222,82 @@ class EltenLinkClient:
             if g.get('id') == group_id:
                 return g
         return {}
+
+    # ---- Voice Calls ----
+
+    def call_user(self, username, channel_id, channel_password):
+        """Initiate a voice call to a user.
+
+        Based on Ruby Scene_Conference.invite():
+            srvproc("calls", {ac: "call", channel: id, channel_password: pw, user: username})
+
+        Returns call_id (int) on success, None on failure.
+        """
+        text = self._auth_request('calls.php', {
+            'ac': 'call',
+            'channel': str(channel_id),
+            'channel_password': channel_password,
+            'user': username,
+        })
+        lines = text.strip().split('\r\n')
+        if lines and lines[0].strip() == '0':
+            return int(lines[1].strip()) if len(lines) > 1 else 0
+        return None
+
+    def cancel_call(self, call_id):
+        """Cancel an outgoing or reject an incoming call.
+
+        Based on Ruby CallWindow.cancel():
+            srvproc("calls", {ac: "cancel", call: @id})
+        """
+        text = self._auth_request('calls.php', {
+            'ac': 'cancel',
+            'call': str(call_id),
+        })
+        return text.strip().startswith('0')
+
+    def get_call_status(self, call_id):
+        """Get absolute status of a call.
+
+        Based on Ruby:
+            srvproc("calls", {ac: "absstatus", call: call_id})
+        Returns status int (1 = missed/unanswered).
+        """
+        text = self._auth_request('calls.php', {
+            'ac': 'absstatus',
+            'call': str(call_id),
+        })
+        lines = text.strip().split('\r\n')
+        if lines and lines[0].strip() == '0':
+            return int(lines[1].strip()) if len(lines) > 1 else -1
+        return -1
+
+    def get_call_history(self):
+        """Get call history.
+
+        Based on Ruby Scene_CallHistory:
+            srvproc("calls", {ac: "list"})
+        Returns list of call dicts.
+        """
+        text = self._auth_request('calls.php', {'ac': 'list'})
+        lines = text.strip().split('\r\n')
+        if not lines or lines[0].strip() != '0':
+            return []
+
+        calls = []
+        for line in lines[1:]:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split('\004')
+            if len(parts) >= 3:
+                calls.append({
+                    'id': parts[0],
+                    'caller': parts[1],
+                    'time': parts[2],
+                    'status': parts[3] if len(parts) > 3 else '',
+                })
+        return calls
 
     def check_server(self):
         """Check if Elten server is reachable."""

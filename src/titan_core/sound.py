@@ -118,8 +118,21 @@ def initialize_sound():
     """Inicjalizuje system dźwiękowy z bezpiecznym podwójnym sprawdzeniem."""
     global _mixer_initialized, background_channel, voice_message_channel, ai_tts_channel, tts_speech_channel
 
+    # If we previously marked the mixer as initialized but pygame.mixer was
+    # torn down externally (for example by klangomode.pygame.quit() or by a
+    # bundled game/app calling pygame.quit()), the stale flag would otherwise
+    # make every subsequent play_sound() a silent no-op. Detect that here
+    # and force a full re-init so sounds keep working after returning from
+    # those modes.
+    if _mixer_initialized and pygame.mixer.get_init() is None:
+        print("Audio system was torn down externally; re-initializing")
+        _mixer_initialized = False
+        background_channel = None
+        voice_message_channel = None
+        ai_tts_channel = None
+        tts_speech_channel = None
+
     if _mixer_initialized:
-        print("Audio system already initialized")
         return True
 
     try:
@@ -277,6 +290,74 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
         print(f"Error playing sound from {theme_type} theme: {e}")
         return False
 
+
+
+def play_sound_file(file_path, pan=None):
+    """Play a sound from an absolute file path (not relative to theme)."""
+    try:
+        if not file_path or not os.path.exists(file_path):
+            return False
+
+        if not _mixer_initialized or pygame.mixer.get_init() is None:
+            if not initialize_sound():
+                return False
+
+        try:
+            settings = load_settings()
+            stereo_enabled = settings.get('sound', {}).get('stereo_sound', 'False').lower() in ['true', '1']
+            sound_theme_volume = int(settings.get('sound', {}).get('sound_theme_volume', 100)) / 100.0
+        except Exception:
+            stereo_enabled = False
+            sound_theme_volume = 1.0
+
+        with lock:
+            try:
+                sound = pygame.mixer.Sound(file_path)
+            except (pygame.error, UnicodeDecodeError, OSError) as e:
+                print(f"Failed to load sound file {file_path}: {e}")
+                return False
+
+            try:
+                channel = pygame.mixer.find_channel()
+                if not channel:
+                    for _cid in range(5, pygame.mixer.get_num_channels()):
+                        _ch = pygame.mixer.Channel(_cid)
+                        if not _ch.get_busy():
+                            channel = _ch
+                            break
+                if not channel:
+                    channel = pygame.mixer.Channel(5)
+            except (pygame.error, AttributeError) as e:
+                print(f"Failed to find audio channel: {e}")
+                return False
+
+            if pan is not None:
+                try:
+                    pan = max(0.0, min(1.0, float(pan)))
+                except (ValueError, TypeError):
+                    pan = None
+
+            try:
+                if stereo_enabled and pan is not None:
+                    left_volume = max(0.0, min(1.0, (1.0 - pan) * sound_theme_volume))
+                    right_volume = max(0.0, min(1.0, pan * sound_theme_volume))
+                    channel.set_volume(left_volume, right_volume)
+                else:
+                    volume = max(0.0, min(1.0, sound_theme_volume))
+                    channel.set_volume(volume)
+            except (pygame.error, AttributeError):
+                pass
+
+            try:
+                channel.play(sound)
+                return True
+            except (pygame.error, AttributeError) as e:
+                print(f"Failed to play sound file: {e}")
+                return False
+
+    except Exception as e:
+        print(f"Error playing sound file {file_path}: {e}")
+        return False
 
 
 # Funkcje odtwarzania dźwięków

@@ -60,6 +60,7 @@ pybabel compile -d languages
 - `help` - Help (src/ui/help.py)
 - `sound` - Sound (src/titan_core/sound.py)
 - `accessibility` - Accessibility messages (src/accessibility/messages.py)
+- `window_switcher` - Window Switcher (src/ui/window_switcher.py)
 
 ## Project Architecture
 

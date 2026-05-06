@@ -15,7 +15,18 @@ Usage in external module init.py:
             sounds.notify("Connected!", 'success')
 """
 
-from src.titan_core.sound import play_sound
+from src.titan_core.sound import play_sound, initialize_sound
+
+# Ensure the pygame mixer is up whenever the Titan IM Sound API is imported.
+# This matters when an IM module GUI (Titan-Net, EltenLink, Telegram, or a
+# third-party titanIM_modules/*) is opened from a context where the main TCE
+# GUI never ran (launcher mode, standalone launch via run_messenger.py, etc.).
+# initialize_sound() is idempotent and cheap when already initialized, and
+# self-heals after pygame.quit() was called by another module.
+try:
+    initialize_sound()
+except Exception as _e:
+    print(f"[TitanIMSoundAPI] initialize_sound() failed at import: {_e}")
 
 
 # TTS functions - imported lazily to avoid circular imports

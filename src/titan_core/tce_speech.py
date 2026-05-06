@@ -158,14 +158,21 @@ def _apply_stereo_settings(stereo):
         except (ValueError, TypeError):
             pass
 
-        # 3. Set volume (0-100)
+        # 3. Set pitch (-10 to +10)
+        try:
+            pitch = int(_get_setting('pitch', '0', 'stereo_speech'))
+            stereo.set_pitch(pitch)
+        except (ValueError, TypeError):
+            pass
+
+        # 4. Set volume (0-100)
         try:
             volume = int(_get_setting('volume', '100', 'stereo_speech'))
             stereo.set_volume(volume)
         except (ValueError, TypeError):
             pass
 
-        # 4. Apply engine-specific config (API keys, model, etc.)
+        # 5. Apply engine-specific config (API keys, model, etc.)
         stereo_section = _load_settings().get('stereo_speech', {})
 
         # Backward compat: migrate old elevenlabs_api_key

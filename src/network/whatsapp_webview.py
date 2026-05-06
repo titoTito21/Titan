@@ -412,9 +412,13 @@ class WhatsAppWebViewFrame(wx.Frame):
                     };
                     
                     // WhatsApp typing indicators - multiple selector approaches
+                    // Scope to the ACTIVE conversation pane (#main) only — the
+                    // sidebar (#side) shows typing badges next to chat-list items
+                    // and we don't want to announce typing for inactive chats.
+                    var convoRoot = document.querySelector('#main');
                     var typingSelectors = [
                         '[aria-label*="typing"]',
-                        '[data-testid*="typing"]', 
+                        '[data-testid*="typing"]',
                         '[aria-label*="is typing"]',
                         '[aria-label*="pisze"]',
                         '[aria-label*="schreibt"]',
@@ -425,16 +429,18 @@ class WhatsAppWebViewFrame(wx.Frame):
                         'div[class*="typing"]',
                         'span[class*="typing"]'
                     ];
-                    
+
                     var typingIndicators = [];
-                    typingSelectors.forEach(selector => {
-                        try {
-                            var elements = document.querySelectorAll(selector);
-                            typingIndicators = typingIndicators.concat(Array.from(elements));
-                        } catch (e) {
-                            // Skip problematic selectors
-                        }
-                    });
+                    if (convoRoot) {
+                        typingSelectors.forEach(selector => {
+                            try {
+                                var elements = convoRoot.querySelectorAll(selector);
+                                typingIndicators = typingIndicators.concat(Array.from(elements));
+                            } catch (e) {
+                                // Skip problematic selectors
+                            }
+                        });
+                    }
                     
                     // Check if any typing indicators are visible and active
                     for (var i = 0; i < typingIndicators.length; i++) {
@@ -469,21 +475,22 @@ class WhatsAppWebViewFrame(wx.Frame):
                     }
                     
                     // Alternative approach: Look for typing animations or status text
-                    if (!result.typing) {
-                        var statusElements = document.querySelectorAll(
+                    // Also scoped to active conversation pane only.
+                    if (!result.typing && convoRoot) {
+                        var statusElements = convoRoot.querySelectorAll(
                             '[data-testid="msg-time"], ' +
                             '[data-testid="last-seen"], ' +
                             'span[dir="auto"][class*="status"], ' +
                             'div[class*="typing"]'
                         );
-                        
+
                         statusElements.forEach(elem => {
                             if (elem.offsetWidth > 0) {
                                 var statusText = (elem.textContent || '').toLowerCase();
                                 if (statusText.includes('typing') || statusText.includes('pisze')) {
                                     result.typing = true;
                                     result.typingUser = 'Contact';
-                                    console.log('TITAN: WhatsApp typing detected via status:', statusText);
+                                    console.log('TITAN: WhatsApp typing detected via status (active chat):', statusText);
                                 }
                             }
                         });
@@ -1925,7 +1932,15 @@ class WhatsAppWebViewFrame(wx.Frame):
         """Handle keyboard events in WebView"""
         keycode = event.GetKeyCode()
         ctrl_down = event.ControlDown()
-        
+        alt_down = event.AltDown()
+        shift_down = event.ShiftDown()
+
+        # Eat bare Alt key — propagating it to the frame triggers MenuBar
+        # mnemonic mode, and WebView2 fails to relinquish focus cleanly,
+        # which appears to the user as a hard freeze on WhatsApp Web.
+        if keycode == wx.WXK_ALT and not ctrl_down and not shift_down:
+            return
+
         # Handle custom shortcuts
         if keycode == wx.WXK_F5:
             self.on_refresh(event)

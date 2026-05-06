@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia launcherów TCE - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html" class="active">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia launcherów TCE</h1>
+            </div>
+            <h1>Przewodnik tworzenia launcherów TCE</h1>
+
+<h2>Wprowadzenie</h2>
+
+<p><strong>Launchery</strong> to alternatywne interfejsy graficzne dla TCE. Zastępują one standardowe GUI własnym oknem napisanym w <strong>dowolnej bibliotece GUI Pythona</strong> (wxPython, PyQt5, tkinter, pygame, kivy, ...). TCE nadal działa w tle i udostępnia wszystkie usługi (aplikacje, gry, dźwięk, ustawienia, Titan IM, statusbar, komponenty) przez obiekt <code>LauncherAPI</code> przekazany do funkcji <code>start()</code> launchera.</p>
+
+<strong>W danym momencie może być uruchomiony tylko jeden launcher.</strong>
+
+<h3>Uruchomienie</h3>
+
+<p>Z linii poleceń:
+<pre><code class="language-bash">python main.py --startup-mode launcher --launcher nazwa_folderu</code></pre></p>
+
+<p>Lub z <code>settings.json</code>:
+<pre><code class="language-ini">[general]
+startup_mode = launcher
+launcher = nazwa_folderu</code></pre></p>
+
+<h2>Architektura</h2>
+
+<pre><code>data/launchers/moj_launcher/
+├── __launcher__.TCE     # Konfiguracja (WYMAGANE, .TCE wielkimi literami)
+├── init.py              # Punkt wejścia z funkcją start(api) (WYMAGANE)
+├── languages/           # Tłumaczenia własne launchera (opcjonalne)
+│   ├── pl/LC_MESSAGES/launcher.po/.mo
+│   └── en/LC_MESSAGES/launcher.po/.mo
+└── lib/                 # Biblioteki dołączone z launcherem (opcjonalne)</code></pre>
+
+<p><code>LauncherManager</code> skanuje <code>data/launchers/</code> przy starcie TCE, znajduje katalogi z plikiem <code>__launcher__.TCE</code>, parsuje konfigurację i uruchamia wybrany launcher.</p>
+
+<h2>Plik konfiguracyjny <code>__launcher__.TCE</code></h2>
+
+<p>Plik w formacie INI z dwiema sekcjami: <code>[launcher]</code> i <code>[features]</code>.</p>
+
+<pre><code class="language-ini">[launcher]
+name = Mój Launcher
+description = Krótki opis launchera
+author = Twoje Imię
+version = 1.0
+status = 0
+libs = lib, vendor
+
+[features]
+applications = true
+games = true
+titan_im = true
+help = true
+components = true
+system_hooks = true
+notifications = true
+sound = true
+invisible_ui = false</code></pre>
+
+<h3>Pola sekcji <code>[launcher]</code></h3>
+
+<table class="doc-table">
+<thead><tr>
+<th>Pole</th>
+<th>Wymagane</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td>name</td>
+<td>nie</td>
+<td>Nazwa wyświetlana (domyślnie nazwa folderu)</td>
+</tr>
+<tr>
+<td>description</td>
+<td>nie</td>
+<td>Krótki opis</td>
+</tr>
+<tr>
+<td>author</td>
+<td>nie</td>
+<td>Autor</td>
+</tr>
+<tr>
+<td>version</td>
+<td>nie</td>
+<td>Wersja (domyślnie <code>1.0</code>)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>tak</td>
+<td><strong><code>0</code> = włączony, <code>1</code> = wyłączony</strong> (taka sama konwencja jak komponenty)</td>
+</tr>
+<tr>
+<td>libs</td>
+<td>nie</td>
+<td>Lista podkatalogów z bibliotekami oddzielona przecinkami (domyślnie <code>lib</code>)</td>
+</tr>
+</tbody></table>
+
+<h3>Pola sekcji <code>[features]</code></h3>
+
+<p>Wszystkie wartości to <code>true</code> lub <code>false</code>. Jeśli pole nie istnieje, użyta zostanie wartość domyślna.</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Funkcja</th>
+<th>Domyślnie</th>
+<th>Co odblokowuje</th>
+</tr></thead><tbody>
+<tr>
+<td>applications</td>
+<td>true</td>
+<td><code>api.get_applications()</code>, <code>api.open_application()</code></td>
+</tr>
+<tr>
+<td>games</td>
+<td>true</td>
+<td><code>api.get_games()</code>, <code>api.open_game()</code></td>
+</tr>
+<tr>
+<td>titan_im</td>
+<td>true</td>
+<td><code>api.titan_net_client</code>, <code>api.open_telegram()</code>, <code>api.open_messenger()</code>, ...</td>
+</tr>
+<tr>
+<td>help</td>
+<td>true</td>
+<td><code>api.show_help()</code></td>
+</tr>
+<tr>
+<td>components</td>
+<td>true</td>
+<td><code>api.get_components()</code>, <code>api.get_component_menu_functions()</code></td>
+</tr>
+<tr>
+<td>system_hooks</td>
+<td>true</td>
+<td>Hooki systemowe (klawisz Win, lockscreen, ...)</td>
+</tr>
+<tr>
+<td>notifications</td>
+<td>true</td>
+<td><code>api.notifications</code></td>
+</tr>
+<tr>
+<td>sound</td>
+<td>true</td>
+<td>Pełny system dźwięków TCE (zawsze dostępny)</td>
+</tr>
+<tr>
+<td>invisible_ui</td>
+<td>false</td>
+<td><code>api.start_invisible_ui()</code> (przełączanie tyldą)</td>
+</tr>
+</tbody></table>
+
+<h2>Implementacja <code>init.py</code></h2>
+
+<p>Plik MUSI nazywać się dokładnie <code>init.py</code> (lub <code>init.pyc</code>).</p>
+
+Launcher MUSI zdefiniować:
+<li><code>start(api)</code> — punkt wejścia, wywoływany raz przy starcie TCE. <strong>Musi szybko wrócić.</strong></li>
+
+Launcher MOŻE zdefiniować:
+<li><code>shutdown()</code> — wywoływane przy zamykaniu TCE.</li>
+
+<h3>Podstawowy szkielet</h3>
+
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+def start(api):
+    &quot;&quot;&quot;Punkt wejścia. Musi szybko wrócić.&quot;&quot;&quot;
+    # wxPython: utwórz wx.Frame i wróć (wx.MainLoop już działa)
+    # PyQt5/tkinter/pygame: uruchom własną pętlę zdarzeń w wątku daemon
+
+def shutdown():
+    &quot;&quot;&quot;Opcjonalne: wywołane przy zamykaniu TCE.&quot;&quot;&quot;
+    pass</code></pre>
+
+<strong>WAŻNE:</strong>
+<li>Dla <strong>wxPython</strong> wystarczy stworzyć <code>wx.Frame</code> i wrócić — <code>wx.MainLoop()</code> już działa w <code>main.py</code>.</li>
+<li>Dla <strong>innych bibliotek</strong> (tkinter, PyQt5, pygame) MUSISZ uruchomić własną pętlę zdarzeń w wątku daemon, inaczej zablokujesz TCE.</li>
+<li><strong>Nigdy</strong> nie twórz nowego <code>wx.App()</code> — użyj <code>api.wx_app</code> jeśli potrzebujesz okien dialogowych wx.</li>
+
+<h2>LauncherAPI</h2>
+
+<p>Obiekt <code>api</code> przekazany do <code>start(api)</code> to interfejs do wszystkich usług TCE.</p>
+
+<h3>Zawsze dostępne (niezależnie od <code>[features]</code>)</h3>
+
+<h4>Ustawienia</h4>
+<pre><code class="language-python">api.get_setting(key, default=&#x27;&#x27;, section=&#x27;general&#x27;)
+api.set_setting(key, value, section=&#x27;general&#x27;)
+api.load_settings()           # zwraca pełny słownik ustawień
+api.save_settings()</code></pre>
+
+<h4>Tłumaczenia</h4>
+<pre><code class="language-python">_ = api._                              # wbudowana funkcja tłumaczeń TCE
+api.language_code                      # bieżący kod języka, np. &#x27;pl&#x27;
+_ = api.load_translations()            # załaduj własne tłumaczenia (domena &#x27;launcher&#x27;)
+_ = api.load_translations(&#x27;moja_nazwa&#x27;)  # własna domena
+api.set_language(lang_code)
+api.get_available_languages()</code></pre>
+
+<h4>Dźwięk (pełny system dźwięków TCE)</h4>
+<pre><code class="language-python">api.play_sound(&#x27;ui/dialog.ogg&#x27;)       # dowolny plik z bieżącego motywu sfx
+api.play_startup_sound()
+api.play_focus_sound()                 # zmiana fokusa na liście
+api.play_select_sound()                # wybór elementu
+api.play_applist_sound()               # wejście w listę aplikacji/gier
+api.play_endoflist_sound()             # koniec listy
+api.play_error_sound()
+api.play_dialog_sound()                # otwarcie dialogu
+api.play_dialogclose_sound()           # zamknięcie dialogu
+api.play_statusbar_sound()             # fokus na pasku statusu
+api.play_loop_sound()                  # rozpocznij dźwięk w pętli
+api.stop_loop_sound()
+api.play_ai_tts(text)                  # AI text-to-speech
+api.stop_ai_tts()
+api.is_ai_tts_playing()                # bool
+api.resource_path(&#x27;sfx/sound.ogg&#x27;)    # ścieżka bezwzględna do zasobu TCE
+api.get_sfx_directory()                # katalog bieżącego motywu sfx</code></pre>
+
+<h4>Speaker (TTS)</h4>
+<pre><code class="language-python">api.speaker.speak(&quot;Cześć&quot;)
+api.speaker.speak(text, interrupt=True)
+# api.speaker to gotowy accessible_output3 Auto()</code></pre>
+
+<h4>Stereo speech (czytanie z panoramą i pitchem)</h4>
+<pre><code class="language-python">api.speak_stereo(text, position=0.0, interrupt=True, pitch_offset=0)
+api.stop_stereo_speech()
+api.get_stereo_speech()                # instancja StereoSpeech lub None</code></pre>
+
+<h4>Wibracje kontrolera</h4>
+<pre><code class="language-python">api.vibrate_cursor_move()
+api.vibrate_selection()
+api.vibrate_focus_change()
+api.vibrate_error()
+api.vibrate_notification()
+api.vibrate_startup()
+api.set_vibration_enabled(True)
+api.set_vibration_strength(0.7)</code></pre>
+
+<h4>Statusbar (pasek statusu)</h4>
+<pre><code class="language-python">api.statusbar_applet_manager.get_statusbar_items()    # lista wszystkich tekstów [str]
+api.statusbar_applet_manager.get_builtin_items()      # tylko wbudowane (Zegar, Bateria, ...)
+api.statusbar_applet_manager.get_applet_names()       # nazwy załadowanych appletów
+api.statusbar_applet_manager.get_all_applet_texts()   # tylko teksty appletów
+api.statusbar_applet_manager.activate_applet(nazwa)   # otwórz okno szczegółów appletu
+api.statusbar_applet_manager.start_auto_update()
+api.statusbar_applet_manager.stop_auto_update()</code></pre>
+
+<h4>Moduły IM (komunikatory)</h4>
+<pre><code class="language-python">for mod in api.im_module_manager.modules:
+    print(mod[&#x27;id&#x27;], mod[&#x27;name&#x27;])
+    status = api.im_module_manager.get_status_text(mod[&#x27;id&#x27;])
+    api.im_module_manager.open_module(mod[&#x27;id&#x27;], parent_window)</code></pre>
+
+<h4>Sterowanie launcherem</h4>
+<pre><code class="language-python">api.show_settings()                        # otwórz okno Ustawień TCE
+api.request_exit()                         # zamknięcie pętli wx (graceful)
+api.force_exit()                           # twardy shutdown TCE + os._exit(0)
+api.register_shutdown_callback(callback)   # zarejestruj callback przy zamykaniu
+api.has_feature(&#x27;applications&#x27;)            # czy funkcja jest włączona (bool)
+api.check_for_updates()                    # sprawdź aktualizacje TCE
+
+# Minimalizacja do tray:
+api.register_minimize_handler(callback)    # callback ukrywa twoje okno
+api.register_restore_handler(callback)     # callback przywraca twoje okno
+api.minimize_launcher()                    # ukryj okno + pokaż ikonę w tray → bool
+api.restore_launcher()                     # pokaż okno + ukryj ikonę z tray → bool
+api.is_minimized                           # bool
+api.supports_minimize                      # bool
+
+# Niewidzialny interfejs (przełączanie tyldą):
+api.start_invisible_ui()                   # wymaga invisible_ui=true w configu
+api.stop_invisible_ui()</code></pre>
+
+<h4>Window switcher</h4>
+<pre><code class="language-python">api.show_window_switcher(parent=None)
+api.register_window(window, name)
+api.unregister_window(window)</code></pre>
+
+<h4>Metadane</h4>
+<pre><code class="language-python">api.version           # wersja TCE, np. &quot;2.1.0&quot;
+api.launcher_path     # ścieżka bezwzględna do katalogu launchera
+api.wx_app            # instancja wx.App (do dialogów wx z launcherów nie-wx)</code></pre>
+
+<h3>Warunkowe (zależnie od <code>[features]</code>)</h3>
+
+<h4>Aplikacje (<code>features.applications = true</code>)</h4>
+<pre><code class="language-python">apps = api.get_applications()             # [{&#x27;name&#x27;: str, &#x27;name_en&#x27;: str, &#x27;shortname&#x27;: str, ...}]
+api.open_application(app_dict)            # uruchom aplikację
+api.find_application_by_shortname(&#x27;tedit&#x27;)</code></pre>
+
+<h4>Gry (<code>features.games = true</code>)</h4>
+<pre><code class="language-python">games = api.get_games()                   # [{&#x27;name&#x27;: str, &#x27;platform&#x27;: str, ...}]
+api.get_games_by_platform(&#x27;Titan&#x27;)
+api.open_game(game_dict)</code></pre>
+
+<h4>Titan IM (<code>features.titan_im = true</code>)</h4>
+<pre><code class="language-python">api.titan_net_client                      # TitanNetClient lub None
+api.open_telegram()                       # dialog logowania Telegrama
+api.open_messenger()                      # Facebook Messenger
+api.open_whatsapp()                       # WhatsApp
+api.open_titannet()                       # Titan-Net (login + okno główne po sukcesie)
+api.open_eltenlink()                      # EltenLink
+api.open_im_module(&#x27;nazwa_lub_id&#x27;)        # otwiera moduł IM po nazwie/id</code></pre>
+
+<h4>Pomoc (<code>features.help = true</code>)</h4>
+<pre><code class="language-python">api.show_help()</code></pre>
+
+<h4>Komponenty (<code>features.components = true</code>)</h4>
+<pre><code class="language-python">api.get_components()
+api.get_component_menu_functions()        # [(label, callback), ...]</code></pre>
+
+<h4>Powiadomienia (<code>features.notifications = true</code>)</h4>
+<pre><code class="language-python">api.notifications                         # menedżer powiadomień</code></pre>
+
+<h4>Niewidzialny interfejs (<code>features.invisible_ui = true</code>)</h4>
+<pre><code class="language-python">api.invisible_ui                          # instancja InvisibleUI</code></pre>
+
+<h2>Hooki komponentów dla launcherów</h2>
+
+<p>Komponenty mogą reagować na uruchomienie launchera, definiując <code>get_launcher_hooks()</code> w swoim <code>init.py</code>:</p>
+
+<pre><code class="language-python"># W init.py komponentu:
+def get_launcher_hooks():
+    def on_launcher_init(launcher_manager, launcher_name):
+        print(f&quot;Launcher &#x27;{launcher_name}&#x27; wystartował, można dostosować&quot;)
+    return {&#x27;on_launcher_init&#x27;: on_launcher_init}</code></pre>
+
+<h2>Tłumaczenia launchera</h2>
+
+<pre><code class="language-bash"># 1. Utwórz katalog languages/ w katalogu launchera
+mkdir data/launchers/moj_launcher/languages
+
+# 2. Wyciągnij teksty z init.py
+pybabel extract -o languages/launcher.pot --no-default-keywords --keyword=_ \
+    data/launchers/moj_launcher/init.py
+
+# 3. Zainicjuj języki
+pybabel init -l pl -d data/launchers/moj_launcher/languages \
+    -i data/launchers/moj_launcher/languages/launcher.pot -D launcher
+pybabel init -l en -d data/launchers/moj_launcher/languages \
+    -i data/launchers/moj_launcher/languages/launcher.pot -D launcher
+
+# 4. Skompiluj
+pybabel compile -d data/launchers/moj_launcher/languages</code></pre>
+
+<p>W <code>init.py</code>:
+<pre><code class="language-python">def start(api):
+    _ = api.load_translations()           # ładuje launcher.mo z languages/
+    print(_(&quot;Witaj&quot;))</code></pre></p>
+
+<h2>Wymagania wieloplatformowości</h2>
+
+<p>Każdy launcher MUSI działać na <strong>Windowsie, macOS i Linuksie</strong>.</p>
+
+<h3>Wybór biblioteki GUI</h3>
+
+<table class="doc-table">
+<thead><tr>
+<th>Biblioteka</th>
+<th>Dodatkowe zależności</th>
+<th>Pętla zdarzeń</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>wxPython</strong></td>
+<td>brak (już wymagane przez TCE)</td>
+<td>Współdzielona — utwórz wx.Frame i wróć z <code>start()</code></td>
+</tr>
+<tr>
+<td><strong>tkinter</strong></td>
+<td>brak (stdlib)</td>
+<td>Własna — <code>root.mainloop()</code> w wątku daemon</td>
+</tr>
+<tr>
+<td><strong>PyQt5</strong></td>
+<td><code>pip install PyQt5</code></td>
+<td>Własna — <code>app.exec_()</code> w wątku daemon</td>
+</tr>
+<tr>
+<td><strong>pygame</strong></td>
+<td><code>pip install pygame</code></td>
+<td>Własna — pętla gry w wątku daemon</td>
+</tr>
+</tbody></table>
+
+<h3>Otwieranie plików/URL (wieloplatformowo)</h3>
+<pre><code class="language-python">import sys, subprocess, os
+if sys.platform == &#x27;win32&#x27;:
+    os.startfile(path)
+elif sys.platform == &#x27;darwin&#x27;:
+    subprocess.Popen([&#x27;open&#x27;, path])
+else:
+    subprocess.Popen([&#x27;xdg-open&#x27;, path])
+
+# URL: zawsze webbrowser.open(url)</code></pre>
+
+<h3>Biblioteka <code>keyboard</code> — guard na macOS</h3>
+<pre><code class="language-python">import sys
+KEYBOARD_AVAILABLE = False
+if sys.platform != &#x27;darwin&#x27;:
+    try:
+        import keyboard
+        KEYBOARD_AVAILABLE = True
+    except ImportError:
+        pass</code></pre>
+
+<h3>Częste pomyłki</h3>
+<li>Tworzenie nowego <code>wx.App()</code> — <strong>NIE</strong>, użyj <code>api.wx_app</code>.</li>
+<li>Blokowanie w <code>start()</code> — własne pętle zdarzeń MUSZĄ działać w wątku daemon (oprócz wxPython).</li>
+<li><code>os.environ[&#x27;APPDATA&#x27;]</code> → <code>os.getenv(&#x27;APPDATA&#x27;) or os.path.expanduser(&#x27;~&#x27;)</code>.</li>
+<li><code>os.startfile(path)</code> → tylko Windows, użyj sprawdzenia platformy.</li>
+<li><code>os.sys.platform</code> → <strong>AttributeError!</strong> Poprawnie: <code>sys.platform</code> (po <code>import sys</code>).</li>
+
+<h2>Przykład 1: Launcher wxPython</h2>
+
+<p>Pełny launcher wxPython z listami aplikacji, gier, Titan IM, statusbar, dźwiękami i obsługą tray. Używa współdzielonej pętli wx — bez wątku daemon.</p>
+
+<p><strong>Plik: <code>data/launchers/simple_wx/__launcher__.TCE</code></strong>
+<pre><code class="language-ini">[launcher]
+name = Simple WX Launcher
+description = Minimalny dostępny launcher wxPython dla TCE
+author = TCE Team
+version = 1.0
+status = 0
+
+[features]
+applications = true
+games = true
+titan_im = true
+help = true
+components = false
+system_hooks = true
+notifications = true
+sound = true
+invisible_ui = false</code></pre></p>
+
+<p><strong>Plik: <code>data/launchers/simple_wx/init.py</code></strong>
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+import wx
+
+_api = None
+_frame = None
+
+
+def start(api):
+    &quot;&quot;&quot;Punkt wejścia — tworzy okno i wraca natychmiast.&quot;&quot;&quot;
+    global _api, _frame
+    _api = api
+
+    frame = SimpleLauncherFrame(None, api)
+    _frame = frame
+
+    api.register_minimize_handler(lambda: wx.CallAfter(frame.Hide))
+    api.register_restore_handler(lambda: (wx.CallAfter(frame.Show),
+                                           wx.CallAfter(frame.Raise)))
+
+    wx.CallAfter(frame.Show)
+    wx.CallAfter(api.play_startup_sound)
+    api.start_invisible_ui()
+
+
+class SimpleLauncherFrame(wx.Frame):
+    def __init__(self, parent, api):
+        _ = api._
+        super().__init__(parent, title=f&quot;TCE {api.version}&quot;, size=(720, 620))
+        self.api = api
+        self._apps = []
+        self._games = []
+        self._build_ui()
+        self.Centre()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+    def _build_ui(self):
+        api = self.api
+        _ = api._
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        if api.get_applications:
+            self._apps = api.get_applications() or []
+            if self._apps:
+                sizer.Add(wx.StaticText(panel, label=_(&quot;Aplikacje&quot;)), 0, wx.LEFT | wx.TOP, 8)
+                self.app_list = wx.ListBox(panel)
+                for app in self._apps:
+                    self.app_list.Append(app.get(&#x27;name&#x27;, app.get(&#x27;name_en&#x27;, &#x27;?&#x27;)))
+                self.app_list.Bind(wx.EVT_LISTBOX, lambda e: api.play_focus_sound())
+                self.app_list.Bind(wx.EVT_LISTBOX_DCLICK, self._on_app_activate)
+                sizer.Add(self.app_list, 2, wx.EXPAND | wx.ALL, 5)
+
+        if api.get_games:
+            self._games = api.get_games() or []
+            if self._games:
+                sizer.Add(wx.StaticText(panel, label=_(&quot;Gry&quot;)), 0, wx.LEFT | wx.TOP, 8)
+                self.game_list = wx.ListBox(panel)
+                for g in self._games:
+                    name = g.get(&#x27;name&#x27;, &#x27;?&#x27;)
+                    plat = g.get(&#x27;platform&#x27;, &#x27;&#x27;)
+                    self.game_list.Append(f&quot;{name} ({plat})&quot; if plat else name)
+                self.game_list.Bind(wx.EVT_LISTBOX, lambda e: api.play_focus_sound())
+                self.game_list.Bind(wx.EVT_LISTBOX_DCLICK, self._on_game_activate)
+                sizer.Add(self.game_list, 2, wx.EXPAND | wx.ALL, 5)
+
+        btns = wx.BoxSizer(wx.HORIZONTAL)
+        s = wx.Button(panel, label=_(&quot;Ustawienia&quot;))
+        s.Bind(wx.EVT_BUTTON, lambda e: (api.play_dialog_sound(), api.show_settings()))
+        btns.Add(s, 0, wx.ALL, 5)
+        x = wx.Button(panel, label=_(&quot;Wyjście&quot;))
+        x.Bind(wx.EVT_BUTTON, self._on_close)
+        btns.Add(x, 0, wx.ALL, 5)
+        sizer.Add(btns, 0, wx.ALIGN_RIGHT | wx.ALL, 5)
+
+        panel.SetSizer(sizer)
+
+        for attr in (&#x27;app_list&#x27;, &#x27;game_list&#x27;):
+            ctrl = getattr(self, attr, None)
+            if ctrl and ctrl.GetCount() &gt; 0:
+                ctrl.SetFocus()
+                ctrl.SetSelection(0)
+                break
+
+    def _on_app_activate(self, event):
+        idx = self.app_list.GetSelection()
+        if 0 &lt;= idx &lt; len(self._apps):
+            self.api.play_select_sound()
+            self.api.open_application(self._apps[idx])
+
+    def _on_game_activate(self, event):
+        idx = self.game_list.GetSelection()
+        if 0 &lt;= idx &lt; len(self._games):
+            self.api.play_select_sound()
+            self.api.open_game(self._games[idx])
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.api.minimize_launcher()
+        else:
+            event.Skip()
+
+    def _on_close(self, event=None):
+        self.api.play_dialogclose_sound()
+        self.api.force_exit()
+
+
+def shutdown():
+    global _frame
+    try:
+        if _api:
+            _api.stop_invisible_ui()
+    except Exception:
+        pass
+    try:
+        if _frame:
+            wx.CallAfter(_frame.Destroy)
+    except Exception:
+        pass
+    _frame = None</code></pre></p>
+
+<h2>Przykład 2: Launcher tkinter</h2>
+
+<p>Wieloplatformowy launcher bez dodatkowych zależności (tkinter jest w stdlib). Działa we własnym wątku daemon z <code>mainloop()</code>.</p>
+
+<p><strong>Plik: <code>data/launchers/simple_tk/__launcher__.TCE</code></strong>
+<pre><code class="language-ini">[launcher]
+name = Simple Tkinter Launcher
+description = Lekki launcher tkinter dla TCE bez dodatkowych zależności
+author = TCE Team
+version = 1.0
+status = 0
+
+[features]
+applications = true
+games = false
+titan_im = false
+help = true
+components = false
+system_hooks = true
+notifications = false
+sound = true
+invisible_ui = false</code></pre></p>
+
+<p><strong>Plik: <code>data/launchers/simple_tk/init.py</code></strong>
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+import threading
+
+_api = None
+_root = None
+
+
+def start(api):
+    &quot;&quot;&quot;Uruchom UI tkinter w wątku daemon i wróć natychmiast.&quot;&quot;&quot;
+    global _api
+    _api = api
+    threading.Thread(target=_run_ui, args=(api,), daemon=True).start()
+
+
+def _run_ui(api):
+    global _root
+    import tkinter as tk
+    from tkinter import font as tkfont
+
+    _ = api._
+    root = tk.Tk()
+    _root = root
+    root.title(f&quot;TCE {api.version}&quot;)
+    root.geometry(&quot;640x520&quot;)
+
+    bold_font = tkfont.Font(weight=&quot;bold&quot;, size=11)
+
+    apps = api.get_applications() if api.get_applications else []
+
+    if apps:
+        tk.Label(root, text=_(&quot;Aplikacje&quot;), font=bold_font).pack(
+            anchor=&quot;w&quot;, padx=10, pady=(10, 0))
+        listbox = tk.Listbox(root, height=14)
+        listbox.pack(fill=&quot;both&quot;, expand=True, padx=10, pady=5)
+
+        for app in apps:
+            listbox.insert(tk.END, app.get(&#x27;name&#x27;, app.get(&#x27;name_en&#x27;, &#x27;?&#x27;)))
+
+        def on_select(event):
+            api.play_focus_sound()
+
+        def on_activate(event):
+            sel = listbox.curselection()
+            if sel and 0 &lt;= sel[0] &lt; len(apps):
+                api.play_select_sound()
+                api.open_application(apps[sel[0]])
+
+        listbox.bind(&quot;&lt;&lt;ListboxSelect&gt;&gt;&quot;, on_select)
+        listbox.bind(&quot;&lt;Return&gt;&quot;, on_activate)
+        listbox.bind(&quot;&lt;Double-Button-1&gt;&quot;, on_activate)
+        listbox.selection_set(0)
+        listbox.focus_set()
+
+    btn_frame = tk.Frame(root)
+    btn_frame.pack(fill=&quot;x&quot;, padx=10, pady=10)
+
+    tk.Button(btn_frame, text=_(&quot;Ustawienia&quot;),
+              command=lambda: (api.play_dialog_sound(), api.show_settings())
+              ).pack(side=&quot;left&quot;, padx=5)
+
+    def on_exit():
+        api.play_dialogclose_sound()
+        api.force_exit()
+
+    tk.Button(btn_frame, text=_(&quot;Wyjście&quot;), command=on_exit).pack(side=&quot;right&quot;, padx=5)
+
+    api.register_minimize_handler(lambda: root.after(0, root.withdraw))
+    api.register_restore_handler(lambda: (root.after(0, root.deiconify),
+                                           root.after(10, root.lift)))
+    root.bind(&#x27;&lt;Escape&gt;&#x27;, lambda e: api.minimize_launcher())
+    root.protocol(&quot;WM_DELETE_WINDOW&quot;, on_exit)
+
+    api.play_startup_sound()
+    root.mainloop()
+
+
+def shutdown():
+    global _root
+    try:
+        if _root:
+            _root.after(0, _root.destroy)
+    except Exception:
+        pass
+    _root = None</code></pre></p>
+
+<h2>Przykład 3: Launcher PyQt5</h2>
+
+<p>Pełny launcher z <code>data/launchers/example_launcher/init.py</code> — listy aplikacji, gier, Titan IM, statusbar z aktualizacją co 2 sekundy, obsługa tray, Invisible UI, i pełna informacja zwrotna dźwiękowa.</p>
+
+<p><strong>Plik: <code>data/launchers/example_launcher/__launcher__.TCE</code></strong> — patrz <a href="../../launchers/example_launcher/__launcher__.TCE">example_launcher</a> w repozytorium.</p>
+
+<p><strong>Plik: <code>data/launchers/example_launcher/init.py</code></strong> — pełna implementacja PyQt5 (ok. 340 linii) jest dostępna w repo. Najważniejsze fragmenty:</p>
+
+<pre><code class="language-python">import sys
+import threading
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                              QListWidget, QPushButton, QShortcut)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QKeySequence
+
+_api = None
+_qt_app = None
+_window = None
+
+
+def start(api):
+    &quot;&quot;&quot;Uruchom PyQt5 w wątku daemon — Qt ma własną pętlę zdarzeń.&quot;&quot;&quot;
+    global _api
+    _api = api
+    threading.Thread(target=_run_pyqt_ui, daemon=True).start()
+
+
+def _run_pyqt_ui():
+    global _window, _qt_app
+    _ = _api._
+
+    _qt_app = QApplication(sys.argv)
+    _qt_app.setQuitOnLastWindowClosed(False)
+    window = QMainWindow()
+    _window = window
+    window.setWindowTitle(f&quot;TCE v{_api.version}&quot;)
+    window.resize(700, 600)
+
+    central = QWidget()
+    layout = QVBoxLayout(central)
+    window.setCentralWidget(central)
+
+    apps = _api.get_applications() or [] if _api.get_applications else []
+    if apps:
+        listw = QListWidget()
+        for app in apps:
+            listw.addItem(app.get(&#x27;name&#x27;, app.get(&#x27;name_en&#x27;, &#x27;?&#x27;)))
+        listw.currentItemChanged.connect(lambda *a: _api.play_focus_sound())
+        listw.itemActivated.connect(
+            lambda item: (_api.play_select_sound(),
+                          _api.open_application(apps[listw.row(item)])))
+        layout.addWidget(listw)
+
+    # Statusbar z aktualizacją co 2 sekundy
+    if _api.statusbar_applet_manager:
+        sb = QListWidget()
+        for text in _api.statusbar_applet_manager.get_statusbar_items():
+            sb.addItem(text)
+        layout.addWidget(sb)
+
+        timer = QTimer(window)
+        def update_sb():
+            items = _api.statusbar_applet_manager.get_statusbar_items()
+            for i, text in enumerate(items):
+                if i &lt; sb.count():
+                    sb.item(i).setText(text)
+        timer.timeout.connect(update_sb)
+        timer.start(2000)
+
+    # Minimalizacja: Esc -&gt; tray
+    _api.register_minimize_handler(lambda: window.hide())
+    _api.register_restore_handler(lambda: (window.show(), window.raise_()))
+    QShortcut(QKeySequence(Qt.Key_Escape), window).activated.connect(
+        _api.minimize_launcher)
+
+    # Zamknięcie okna -&gt; wyjście z TCE
+    def closeEvent(event):
+        event.ignore()
+        _api.play_dialogclose_sound()
+        _qt_app.quit()
+        _api.force_exit()
+    window.closeEvent = closeEvent
+
+    window.show()
+    _api.start_invisible_ui()
+    _api.play_startup_sound()
+    _qt_app.exec_()
+
+
+def shutdown():
+    global _window, _qt_app
+    try:
+        if _qt_app:
+            _qt_app.quit()
+    except Exception:
+        pass
+    _window = None
+    _qt_app = None</code></pre>
+
+<h2>Weryfikacja instalacji</h2>
+
+<li>Uruchom: <code>python main.py --startup-mode launcher --launcher nazwa_folderu</code></li>
+<li>W konsoli sprawdź: <code>[LauncherManager] Starting launcher: NAZWA</code></li>
+<li>Twoje okno powinno się pojawić, listy powinny zawierać aplikacje/gry.</li>
+<li>Przetestuj Escape → minimalizacja do tray.</li>
+<li>Przetestuj zamknięcie okna / przycisk Wyjście → TCE kończy działanie.</li>
+<li>Sprawdź dźwięki: focus, select, startup, dialog.</li>
+<li>Jeśli <code>invisible_ui = true</code> — naciśnij tyldę, powinien pokazać się niewidzialny interfejs.</li>
+
+<h2>Najważniejsze wskazówki</h2>
+
+<li><strong>Zawsze ustaw <code>status = 0</code></strong> — inaczej launcher będzie wyłączony.</li>
+<li><strong><code>init.py</code> — dokładna nazwa</strong>, nie <code>main.py</code>, nie <code>__init__.py</code>.</li>
+<li><strong><code>__launcher__.TCE</code> — wielkie litery <code>.TCE</code></strong>, parser ich wymaga.</li>
+<li><strong>Nigdy nie blokuj <code>start(api)</code></strong> dla bibliotek z własną pętlą zdarzeń.</li>
+<li><strong>Nie twórz nowego <code>wx.App()</code></strong> — używaj <code>api.wx_app</code> jeśli potrzebujesz dialogów wx.</li>
+<li><strong>Rejestruj minimize/restore handlers</strong> — bez tego <code>api.minimize_launcher()</code> nic nie zrobi.</li>
+<li><strong>Wywołuj <code>api.force_exit()</code> przy wyjściu</strong> — inaczej TCE zostanie z osieroconym procesem.</li>
+<li><strong>Używaj <code>api.has_feature(name)</code> przed wywołaniem warunkowego API</strong> — chroni przed <code>None</code>.</li>
+<li><strong>Testuj na wszystkich platformach</strong> — Windows, macOS, Linux.</li>
+<li><strong>Dodaj dźwięki</strong> — TCE jest aplikacją dla osób niewidomych, dźwięki są kluczowe.</li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

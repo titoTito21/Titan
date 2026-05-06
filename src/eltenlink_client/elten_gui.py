@@ -12,10 +12,18 @@ import time
 import tempfile
 import accessible_output3.outputs.auto
 from src.eltenlink_client.elten_client import EltenLinkClient
-from src.eltenlink_client.elten_player import EltenPlayer
-from src.titan_core.sound import play_sound
+from src.eltenlink_client.elten_player import EltenPlayer, EltenRecorder
+from src.eltenlink_client.elten_voip_client import EltenVoipClient
+from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
+
+# Guarantee the pygame mixer is initialized even when EltenLink is opened
+# from a context where the main TCE GUI never ran (launcher mode, etc.).
+try:
+    initialize_sound()
+except Exception as _e:
+    print(f"[EltenLink GUI] initialize_sound() failed at import: {_e}")
 from src.titan_core.skin_manager import get_skin_manager, apply_skin_to_window
 from src.settings.titan_im_config import (
     get_eltenlink_credentials, set_eltenlink_credentials,
@@ -347,7 +355,13 @@ class EltenMainWindow(wx.Frame):
         self.blog_posts_cache = []
         self.blog_entries_cache = []
         self.online_users_cache = []
-        self.feed_cache = {'messages': [], 'friend_requests': []}
+        self.feed_cache = []
+        self._feed_top_posts = []       # All top-level posts from API
+        self._feed_known_ids = set()    # IDs of posts already in tree
+        self._feed_display_count = 0    # How many posts currently shown
+        self._feed_tree_root = None     # Root tree item
+        self._feed_loading = False
+        self._feed_refresh_timer = None
 
         # Navigation state
         self.current_chat_user = None
@@ -365,6 +379,9 @@ class EltenMainWindow(wx.Frame):
         # Auto-refresh
         self.auto_refresh_interval = 15
         self.refresh_timer = None
+
+        # Selection preserved across refresh (F5 / right-click Refresh)
+        self._pending_listbox_selection = None
 
         self.InitUI()
         self.Centre()
@@ -415,7 +432,6 @@ class EltenMainWindow(wx.Frame):
         self.main_sizer.Add(self.main_listbox, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
 
         # Feed tree (only visible in menu view, accessible via Tab)
-        self._populating_feed = False
         self.feed_tree = wx.TreeCtrl(panel, style=wx.TR_DEFAULT_STYLE | wx.TR_HIDE_ROOT)
         self.feed_tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.OnFeedActivate)
         self.feed_tree.Bind(wx.EVT_RIGHT_DOWN, self.OnFeedContextMenu)
@@ -424,12 +440,26 @@ class EltenMainWindow(wx.Frame):
         self.main_sizer.Add(self.feed_tree, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
         self.feed_tree.Hide()
 
-        # Message display (hidden by default)
+        # Message display (hidden by default) - used for forum/blog read mode
         self.message_display = wx.TextCtrl(
             panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2
         )
         self.main_sizer.Add(self.message_display, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
         self.message_display.Hide()
+
+        # Conversation list (hidden by default) - used for private message chat.
+        # Columns: Nick / Message preview / Date. Enter on a row opens a
+        # read-only multiline dialog with the full message.
+        self.conversation_list = wx.ListCtrl(
+            panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL
+        )
+        self.conversation_list.AppendColumn(_("Nick"), width=140)
+        self.conversation_list.AppendColumn(_("Message"), width=420)
+        self.conversation_list.AppendColumn(_("Date"), width=140)
+        self.conversation_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.OnConversationActivated)
+        self.main_sizer.Add(self.conversation_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+        self.conversation_list.Hide()
+        self._conversation_records = []  # parallel list of full message data per row
 
         # Posts container (for forum thread and blog post views)
         self.posts_scroll_panel = scrolled.ScrolledPanel(panel, style=wx.TAB_TRAVERSAL | wx.VSCROLL)
@@ -450,10 +480,19 @@ class EltenMainWindow(wx.Frame):
         self.main_sizer.Add(self.message_input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=5)
         self.message_input.Hide()
 
-        # Send button (hidden by default)
+        # Send button row (hidden by default)
+        send_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.send_button = wx.Button(panel, label=_("Send"))
         self.send_button.Bind(wx.EVT_BUTTON, self.OnSendMessage)
-        self.main_sizer.Add(self.send_button, flag=wx.LEFT | wx.BOTTOM, border=5)
+        send_sizer.Add(self.send_button, flag=wx.RIGHT, border=5)
+
+        # Audio reply button (shown only in forum thread view)
+        self.audio_reply_button = wx.Button(panel, label=_("Audio reply"))
+        self.audio_reply_button.Bind(wx.EVT_BUTTON, self.OnAudioReply)
+        send_sizer.Add(self.audio_reply_button, flag=wx.RIGHT, border=5)
+        self.audio_reply_button.Hide()
+
+        self.main_sizer.Add(send_sizer, flag=wx.LEFT | wx.BOTTOM, border=5)
         self.send_button.Hide()
 
         # Back button
@@ -474,14 +513,27 @@ class EltenMainWindow(wx.Frame):
     # FOCUS.ogg = navigating list (arrow keys), SELECT.ogg = activating element (Enter)
 
     def OnListSelect(self, event):
-        """Play FOCUS sound when navigating list items and new replies sound for unread content."""
+        """Play FOCUS sound when navigating list items and new replies sound for unread content.
+
+        Focus sound is panned according to the selection position so the
+        main TCE GUI navigation cue is preserved in EltenLink. play_sound
+        honours the global stereo_sound setting automatically.
+        """
         try:
-            play_sound('core/FOCUS.ogg')
+            count = self.main_listbox.GetCount()
+            selection = self.main_listbox.GetSelection()
+        except Exception:
+            count = 0
+            selection = wx.NOT_FOUND
+
+        pan = 0.5
+        if count > 1 and selection != wx.NOT_FOUND:
+            pan = selection / (count - 1)
+        try:
+            play_sound('core/FOCUS.ogg', pan=pan)
         except:
             pass
 
-        # Check if selected item has new/unread content
-        selection = self.main_listbox.GetSelection()
         if selection == wx.NOT_FOUND:
             event.Skip()
             return
@@ -510,31 +562,39 @@ class EltenMainWindow(wx.Frame):
         event.Skip()
 
     def OnFeedSelect(self, event):
-        """Play FOCUS sound when navigating feed tree."""
-        if not self._populating_feed:
-            try:
-                play_sound('core/FOCUS.ogg')
-            except:
-                pass
+        """Play FOCUS sound when navigating feed tree + load more on last item."""
+        try:
+            play_sound('core/FOCUS.ogg')
+        except Exception:
+            pass
+        self._on_feed_sel_changed_load_more()
         event.Skip()
 
     def OnListKeyDown(self, event):
-        """Handle end-of-list sound and context menu key."""
+        """Handle end-of-list sound and context menu key.
+
+        End-of-list is played for all four arrow keys (Up/Down/Left/Right)
+        when the selection is at the corresponding edge, mirroring the main
+        TCE GUI navigation contract. Movement away from the edge falls
+        through to wxPython and triggers OnListSelect for the panned
+        focus sound.
+        """
         keycode = event.GetKeyCode()
         count = self.main_listbox.GetCount()
         sel = self.main_listbox.GetSelection()
 
-        # End of list detection
-        if keycode == wx.WXK_DOWN and sel >= count - 1:
+        # End of list detection for all four arrow keys
+        at_top = sel <= 0 and keycode in (wx.WXK_UP, wx.WXK_LEFT)
+        at_bottom = sel >= count - 1 and keycode in (wx.WXK_DOWN, wx.WXK_RIGHT)
+
+        if at_top or at_bottom:
             try:
                 play_sound('ui/endoflist.ogg')
             except:
                 pass
-        elif keycode == wx.WXK_UP and sel <= 0:
-            try:
-                play_sound('ui/endoflist.ogg')
-            except:
-                pass
+            # Don't block movement in case wx wraps - just cue the edge
+            # to stay consistent with TCE main GUI (which also blocks).
+            return
 
         # Context menu key (Shift+F10 or Applications key)
         if keycode == wx.WXK_WINDOWS_MENU or (keycode == wx.WXK_F10 and event.ShiftDown()):
@@ -617,12 +677,14 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.Show()
         self.feed_tree.Hide()
         self.message_display.Hide()
+        self.conversation_list.Hide()
         if self.posts_scroll_panel.IsShown():
             self._cleanup_players()
         self.posts_scroll_panel.Hide()
         self.message_input.Hide()
         self.input_label.Hide()
         self.send_button.Hide()
+        self.audio_reply_button.Hide()
         self.Layout()
 
     def _show_menu_mode(self):
@@ -630,34 +692,40 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.Show()
         self.feed_tree.Show()
         self.message_display.Hide()
+        self.conversation_list.Hide()
         self.posts_scroll_panel.Hide()
         self.message_input.Hide()
         self.input_label.Hide()
         self.send_button.Hide()
+        self.audio_reply_button.Hide()
         self.Layout()
 
     def _show_chat_mode(self):
         self.main_listbox.Hide()
         self.feed_tree.Hide()
-        self.message_display.Show()
+        self.message_display.Hide()
+        self.conversation_list.Show()
         if self.posts_scroll_panel.IsShown():
             self._cleanup_players()
         self.posts_scroll_panel.Hide()
         self.message_input.Show()
         self.input_label.Show()
         self.send_button.Show()
+        self.audio_reply_button.Hide()
         self.Layout()
 
     def _show_read_mode(self):
         self.main_listbox.Hide()
         self.feed_tree.Hide()
         self.message_display.Show()
+        self.conversation_list.Hide()
         if self.posts_scroll_panel.IsShown():
             self._cleanup_players()
         self.posts_scroll_panel.Hide()
         self.message_input.Hide()
         self.input_label.Hide()
         self.send_button.Hide()
+        self.audio_reply_button.Hide()
         self.Layout()
 
     def _show_post_list_with_reply(self):
@@ -665,22 +733,84 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.Show()
         self.feed_tree.Hide()
         self.message_display.Hide()
+        self.conversation_list.Hide()
         self.posts_scroll_panel.Hide()
         self.message_input.Show()
         self.input_label.Show()
         self.send_button.Show()
+        self.audio_reply_button.Show()
         self.Layout()
 
-    def _show_posts_panel_mode(self):
+    def _show_posts_panel_mode(self, show_audio_reply=False):
         """Show scrollable posts panel with reply/comment input below."""
         self.main_listbox.Hide()
         self.feed_tree.Hide()
         self.message_display.Hide()
+        self.conversation_list.Hide()
         self.posts_scroll_panel.Show()
         self.message_input.Show()
         self.input_label.Show()
         self.send_button.Show()
+        if show_audio_reply:
+            self.audio_reply_button.Show()
+        else:
+            self.audio_reply_button.Hide()
         self.Layout()
+
+    # ---- Conversation list helpers (Nick / Message / Date) ----
+    def _conversation_message_preview(self, msg_text):
+        if not msg_text:
+            return ""
+        preview = msg_text.replace('\r', ' ').replace('\n', ' ').strip()
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        return preview
+
+    def _add_conversation_row(self, sender, msg_text, date_value):
+        """Append a single message row to the conversation list."""
+        idx = self.conversation_list.GetItemCount()
+        self.conversation_list.InsertItem(idx, sender or "")
+        self.conversation_list.SetItem(idx, 1, self._conversation_message_preview(msg_text))
+        self.conversation_list.SetItem(idx, 2, self._format_date(date_value))
+        self._conversation_records.append({
+            'sender': sender or "",
+            'message': msg_text or "",
+            'date': date_value or "",
+        })
+        self.conversation_list.EnsureVisible(idx)
+
+    def _clear_conversation_list(self):
+        self.conversation_list.DeleteAllItems()
+        self._conversation_records = []
+
+    def OnConversationActivated(self, event):
+        """Open a read-only dialog with the full message text."""
+        idx = event.GetIndex()
+        if 0 <= idx < len(self._conversation_records):
+            rec = self._conversation_records[idx]
+            self._show_full_conversation_dialog(rec['sender'], rec['message'], rec['date'])
+
+    def _show_full_conversation_dialog(self, sender, message, date_value):
+        """Modal dialog showing the full message in a read-only multiline field."""
+        date_label = self._format_date(date_value) or _("(no date)")
+        title = _("Message from {nick} ({date})").format(nick=sender or "", date=date_label)
+        dlg = wx.Dialog(
+            self, title=title, size=(560, 360),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+        )
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        txt = wx.TextCtrl(
+            dlg, value=message or "",
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP
+        )
+        sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 10)
+        btn_close = wx.Button(dlg, wx.ID_OK, _("Close"))
+        sizer.Add(btn_close, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        dlg.SetSizer(sizer)
+        dlg.SetEscapeId(wx.ID_OK)
+        txt.SetFocus()
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def _threaded_request(self, method, callback, *args):
         def worker():
@@ -690,6 +820,51 @@ class EltenMainWindow(wx.Frame):
             except Exception as e:
                 wx.CallAfter(callback, None, e)
         threading.Thread(target=worker, daemon=True).start()
+
+    # ---- Listbox Selection Preservation (refresh path) ----
+
+    def _capture_listbox_for_refresh(self, target_view):
+        """Stash current main_listbox selection if we're re-entering the same view.
+
+        Why: F5 / right-click Refresh re-runs show_*_view which clears the listbox
+        and inserts "Loading...". Without this, the user's position is lost and
+        the eventual repopulation lands them on item 0.
+        """
+        self._pending_listbox_selection = None
+        if getattr(self, 'current_view', None) != target_view:
+            return
+        try:
+            sel = self.main_listbox.GetSelection()
+            if sel == wx.NOT_FOUND or sel >= self.main_listbox.GetCount():
+                return
+            self._pending_listbox_selection = (sel, self.main_listbox.GetString(sel))
+        except Exception:
+            pass
+
+    def _apply_pending_listbox_selection(self, default_index=0):
+        """Restore a selection captured by _capture_listbox_for_refresh.
+
+        Returns True if a previous selection was restored (refresh path),
+        False if we fell back to default_index (fresh load).
+        """
+        saved = getattr(self, '_pending_listbox_selection', None)
+        self._pending_listbox_selection = None
+        count = self.main_listbox.GetCount()
+        if count == 0:
+            return False
+        if saved is not None:
+            saved_idx, saved_text = saved
+            for i in range(count):
+                if self.main_listbox.GetString(i) == saved_text:
+                    self.main_listbox.SetSelection(i)
+                    return True
+            new_idx = min(saved_idx, count - 1)
+            if 0 <= new_idx < count:
+                self.main_listbox.SetSelection(new_idx)
+                return True
+        if 0 <= default_index < count:
+            self.main_listbox.SetSelection(default_index)
+        return False
 
     # ---- Posts Panel Helpers ----
 
@@ -703,12 +878,13 @@ class EltenMainWindow(wx.Frame):
                     pass
 
     def _populate_posts_panel(self, posts, is_blog=False):
-        """Populate the posts panel with individual TextCtrls per post - streaming style."""
+        """Populate the posts panel with all controls at once (bulk load)."""
         # Stop any active players before clearing
         self._cleanup_players()
         # Clear existing controls
         self.posts_scroll_sizer.Clear(True)
         self._post_textctrls = []
+        self._first_new_post_index = None
 
         if not posts:
             empty = wx.StaticText(self.posts_scroll_panel, label=_("No content"))
@@ -717,34 +893,11 @@ class EltenMainWindow(wx.Frame):
             self.posts_scroll_panel.SetupScrolling(scroll_x=False, scroll_y=True)
             return
 
-        # Stream posts one by one
-        self._posts_stream_data = posts
-        self._posts_stream_is_blog = is_blog
-        self._posts_stream_idx = 0
-        self._stream_next_post()
+        # Freeze UI updates for bulk creation
+        self.posts_scroll_panel.Freeze()
 
-    def _stream_next_post(self):
-        """Add next post(s) to the scroll panel - called progressively.
-        Processes up to 100 audio posts per tick for fast parallel downloading."""
-        posts = self._posts_stream_data
-        is_blog = self._posts_stream_is_blog
-        batch = 0
-
-        while True:
-            i = self._posts_stream_idx
-
-            if i >= len(posts):
-                # All posts added - finalize layout
-                self.posts_scroll_panel.GetParent().Layout()
-                self.posts_scroll_panel.SetupScrolling(scroll_x=False, scroll_y=True, scrollToTop=(True if i == len(posts) else False))
-                if self._post_textctrls:
-                    ctrl = self._post_textctrls[0]
-                    if isinstance(ctrl, wx.TextCtrl):
-                        ctrl.SetInsertionPoint(0)
-                    wx.CallAfter(ctrl.SetFocus)
-                return
-
-            post = posts[i]
+        ctrl_index = 0
+        for i, post in enumerate(posts):
             author = post.get('author', '')
             content = post.get('content', '') or post.get('excerpt', '')
             date = self._format_date(post.get('date', ''))
@@ -781,7 +934,6 @@ class EltenMainWindow(wx.Frame):
 
             # Skip empty posts
             if not full_text.strip() and not audio_url:
-                self._posts_stream_idx += 1
                 continue
 
             # Blog: type label
@@ -815,28 +967,28 @@ class EltenMainWindow(wx.Frame):
                 post_ctrl.SetMinSize((-1, height))
                 self.posts_scroll_sizer.Add(post_ctrl, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=5)
 
-            post_ctrl.post_index = i
+            post_ctrl.post_index = ctrl_index
+            post_ctrl.is_new_post = post.get('is_new', False)
             post_ctrl.Bind(wx.EVT_RIGHT_DOWN, self._on_post_tc_context_menu)
             post_ctrl.Bind(wx.EVT_KEY_DOWN, self._on_post_tc_key_down)
             self._post_textctrls.append(post_ctrl)
 
-            if i == 0:
-                self.posts_scroll_panel.GetParent().Layout()
-                self.posts_scroll_panel.SetupScrolling(scroll_x=False, scroll_y=True, scrollToTop=True)
-                if isinstance(post_ctrl, wx.TextCtrl):
-                    post_ctrl.SetInsertionPoint(0)
-                wx.CallAfter(post_ctrl.SetFocus)
+            # Track first new/unread post
+            if post.get('is_new', False) and self._first_new_post_index is None:
+                self._first_new_post_index = ctrl_index
 
-            self._posts_stream_idx += 1
-            batch += 1
+            ctrl_index += 1
 
-            if audio_url and batch < 20:
-                # Continue loop for audio posts (lightweight widgets, downloads in pool)
-                continue
-            else:
-                # Yield to UI thread to stay responsive
-                wx.CallLater(10, self._stream_next_post)
-                return
+        # Thaw and finalize layout
+        self.posts_scroll_panel.Thaw()
+        self.posts_scroll_panel.GetParent().Layout()
+        self.posts_scroll_panel.SetupScrolling(scroll_x=False, scroll_y=True, scrollToTop=True)
+
+        if self._post_textctrls:
+            ctrl = self._post_textctrls[0]
+            if isinstance(ctrl, wx.TextCtrl):
+                ctrl.SetInsertionPoint(0)
+            wx.CallAfter(ctrl.SetFocus)
 
     def _on_post_tc_context_menu(self, event):
         """Handle right-click on a post TextCtrl."""
@@ -896,8 +1048,59 @@ class EltenMainWindow(wx.Frame):
                 except:
                     pass
                 return
+            elif keycode == ord('U'):
+                # Ctrl+U -> jump to first new/unread post
+                self._jump_to_first_new_post()
+                return
+            elif keycode == ord('.'):
+                # Ctrl+. -> jump to last post
+                self._jump_to_post(-1)
+                return
+            elif keycode == ord(','):
+                # Ctrl+, -> jump to first post
+                self._jump_to_post(0)
+                return
 
         event.Skip()
+
+    def _jump_to_first_new_post(self):
+        """Jump to the first new/unread post in the current thread."""
+        if not self._post_textctrls:
+            return
+
+        # Find first new post by checking is_new_post attribute
+        target_idx = None
+        for i, ctrl in enumerate(self._post_textctrls):
+            if getattr(ctrl, 'is_new_post', False):
+                target_idx = i
+                break
+
+        if target_idx is None:
+            # No new posts found - go to last post
+            self._jump_to_post(-1)
+            return
+
+        self._jump_to_post(target_idx)
+        count_new = sum(1 for c in self._post_textctrls if getattr(c, 'is_new_post', False))
+        speak_elten(_("First new post, {count} new").format(count=count_new))
+
+    def _jump_to_post(self, index):
+        """Jump to a specific post by index. Use -1 for last post."""
+        if not self._post_textctrls:
+            return
+
+        if index < 0:
+            index = len(self._post_textctrls) + index
+
+        if 0 <= index < len(self._post_textctrls):
+            ctrl = self._post_textctrls[index]
+            if isinstance(ctrl, wx.TextCtrl):
+                ctrl.SetInsertionPoint(0)
+            ctrl.SetFocus()
+            try:
+                play_sound('core/FOCUS.ogg')
+            except:
+                pass
 
     def _play_audio_url(self, audio_url):
         """Download and play audio from URL (voice posts)."""
@@ -961,6 +1164,11 @@ class EltenMainWindow(wx.Frame):
 
         submenu.AppendSeparator()
 
+        item_call = submenu.Append(wx.ID_ANY, _("Call this user"))
+        self.Bind(wx.EVT_MENU, lambda e, u=username: self._start_voice_call(u), item_call)
+
+        submenu.AppendSeparator()
+
         item_add = submenu.Append(wx.ID_ANY, _("Add to Contacts"))
         self.Bind(wx.EVT_MENU, lambda e, u=username: self._add_contact(u), item_add)
 
@@ -993,50 +1201,141 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
 
-        # Load feed in background
+        # Load feed in background + start auto-refresh
         self._load_feed()
+        self._start_feed_auto_refresh()
 
         self.Layout()
 
     # ---- Feed / Board (Tablica) ----
+    # Paginated: first 20 posts, then 30 more when reaching the last item.
+    # Only top-level posts (response_to == 0), flat list in feed_tree.
+
+    FEED_INITIAL_COUNT = 20
+    FEED_LOAD_MORE_COUNT = 30
 
     def _load_feed(self):
-        """Load Elten feed (tablica) in background for the tree panel."""
+        """Load Elten feed (tablica) in background."""
+        if self._feed_loading:
+            return
+        self._feed_loading = True
         self._threaded_request(self.client.get_feed, self._on_feed_loaded)
 
     def _on_feed_loaded(self, feed_posts, error):
+        self._feed_loading = False
         if error:
-            self.feed_cache = []
             return
 
-        self.feed_cache = list(reversed(feed_posts)) if feed_posts else []
-        self._populate_feed_tree()
+        all_posts = feed_posts if feed_posts else []
+        # Keep only top-level posts
+        top_posts = [p for p in all_posts if p.get('response_to', 0) == 0]
 
-    def _populate_feed_tree(self):
-        """Populate the feed tree (tablica) with posts - streaming style."""
-        self._populating_feed = True
-        self.feed_tree.DeleteAllItems()
-        root = self.feed_tree.AddRoot(_("Feed"))
+        if not self._feed_known_ids:
+            # First load - store and display first page
+            self._feed_top_posts = top_posts
+            self._feed_display_count = 0
+            self._rebuild_feed_tree()
+            self._feed_show_page(self.FEED_INITIAL_COUNT)
+        else:
+            # Incremental refresh - find new posts
+            new_posts = [p for p in top_posts
+                         if p.get('id', 0) and p.get('id', 0) not in self._feed_known_ids]
+            if new_posts:
+                # Prepend new posts to the cached list
+                self._feed_top_posts = new_posts + self._feed_top_posts
+                self._prepend_feed_items(new_posts)
 
-        if not self.feed_cache:
-            empty_item = self.feed_tree.AppendItem(root, _("No feed posts"))
-            self.feed_tree.SetItemData(empty_item, {'type': 'empty'})
-            self.feed_tree.ExpandAll()
-            self._populating_feed = False
+    def _start_feed_auto_refresh(self):
+        """Start background auto-refresh timer (every 60s)."""
+        if self._feed_refresh_timer:
+            self._feed_refresh_timer.Stop()
+        self._feed_refresh_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_feed_refresh_timer, self._feed_refresh_timer)
+        self._feed_refresh_timer.Start(60000)
+
+    def _stop_feed_auto_refresh(self):
+        if self._feed_refresh_timer:
+            self._feed_refresh_timer.Stop()
+            self._feed_refresh_timer = None
+
+    def _on_feed_refresh_timer(self, event):
+        if self.client and self.client.is_connected:
+            self._load_feed()
+
+    def _rebuild_feed_tree(self):
+        """Clear and prepare the feed tree for fresh population."""
+        self.feed_tree.Freeze()
+        try:
+            self.feed_tree.DeleteAllItems()
+            root = self.feed_tree.AddRoot(_("Feed"))
+            self._feed_tree_root = root
+            self._feed_known_ids = set()
+            self._feed_display_count = 0
+        finally:
+            self.feed_tree.Thaw()
+
+    def _feed_show_page(self, count):
+        """Append the next `count` posts from _feed_top_posts to the tree."""
+        if not self._feed_top_posts:
+            # Show empty placeholder only if nothing displayed yet
+            if self._feed_display_count == 0:
+                self.feed_tree.Freeze()
+                try:
+                    root = self._feed_tree_root
+                    empty = self.feed_tree.AppendItem(root, _("No feed posts"))
+                    self.feed_tree.SetItemData(empty, {'type': 'empty'})
+                finally:
+                    self.feed_tree.Thaw()
             return
 
-        self._feed_stream_root = root
-        self._feed_stream_idx = 0
-        self.feed_tree.ExpandAll()
-        self._stream_next_feed_item()
+        start = self._feed_display_count
+        end = min(start + count, len(self._feed_top_posts))
+        if start >= end:
+            return  # Nothing more to show
 
-    def _stream_next_feed_item(self):
-        """Add next feed item to tree - called progressively."""
-        if self._feed_stream_idx >= len(self.feed_cache):
-            self._populating_feed = False
+        self.feed_tree.Freeze()
+        try:
+            root = self._feed_tree_root
+            for i in range(start, end):
+                post = self._feed_top_posts[i]
+                label = self._make_feed_label(post)
+                item = self.feed_tree.AppendItem(root, label)
+                self.feed_tree.SetItemData(item, {'type': 'feed_post', 'data': post})
+                post_id = post.get('id', 0)
+                if post_id:
+                    self._feed_known_ids.add(post_id)
+            self._feed_display_count = end
+        finally:
+            self.feed_tree.Thaw()
+
+    def _prepend_feed_items(self, new_posts):
+        """Prepend new posts to the top of the feed tree."""
+        root = self._feed_tree_root
+        if not root or not root.IsOk():
             return
 
-        post = self.feed_cache[self._feed_stream_idx]
+        # Remove "No feed posts" placeholder if present
+        first_child, _ = self.feed_tree.GetFirstChild(root)
+        if first_child.IsOk():
+            data = self.feed_tree.GetItemData(first_child)
+            if data and data.get('type') == 'empty':
+                self.feed_tree.Delete(first_child)
+
+        self.feed_tree.Freeze()
+        try:
+            for post in reversed(new_posts):
+                label = self._make_feed_label(post)
+                item = self.feed_tree.InsertItem(root, 0, label)
+                self.feed_tree.SetItemData(item, {'type': 'feed_post', 'data': post})
+                post_id = post.get('id', 0)
+                if post_id:
+                    self._feed_known_ids.add(post_id)
+                self._feed_display_count += 1
+        finally:
+            self.feed_tree.Thaw()
+
+    def _make_feed_label(self, post):
+        """Build display label for a feed post."""
         user = post.get('user', '')
         date = self._format_date(post.get('time', ''))
         message = post.get('message', '').replace('\n', ' ')
@@ -1050,12 +1349,26 @@ class EltenMainWindow(wx.Frame):
             label += f" [{likes} likes]"
         if responses > 0:
             label += f" [{responses} replies]"
+        return label
 
-        item = self.feed_tree.AppendItem(self._feed_stream_root, label)
-        self.feed_tree.SetItemData(item, {'type': 'feed_post', 'data': post})
+    def _on_feed_sel_changed_load_more(self):
+        """Check if user reached last visible item - if so, load 30 more."""
+        if not self._feed_top_posts:
+            return
+        if self._feed_display_count >= len(self._feed_top_posts):
+            return  # All posts already shown
 
-        self._feed_stream_idx += 1
-        wx.CallLater(30, self._stream_next_feed_item)
+        # Check if the selected item is the last child of root
+        sel = self.feed_tree.GetSelection()
+        if not sel.IsOk():
+            return
+        root = self._feed_tree_root
+        if not root or not root.IsOk():
+            return
+
+        last_child = self.feed_tree.GetLastChild(root)
+        if last_child.IsOk() and last_child == sel:
+            self._feed_show_page(self.FEED_LOAD_MORE_COUNT)
 
     def OnFeedActivate(self, event):
         """Handle double-click/Enter on feed tree item."""
@@ -1082,7 +1395,7 @@ class EltenMainWindow(wx.Frame):
 
         play_sound('ui/dialog.ogg')
 
-        info = f"{user} ({date}):\n\n{message}\n\n{likes} likes"
+        info = f"{user} ({date}):\n\n{message}\n\n{likes} {_('likes')}"
         speak_elten(f"{user}: {message}")
         wx.MessageBox(info, _("Feed Post"), wx.OK | wx.ICON_INFORMATION)
 
@@ -1267,16 +1580,17 @@ class EltenMainWindow(wx.Frame):
             likes = post.get('likes', 0)
             parts.append(f"[{date}] {message}")
             if likes > 0:
-                parts.append(f"  {likes} likes")
+                parts.append(f"  {likes} {_('likes')}")
             parts.append("")
 
         info = "\n".join(parts)
-        speak_elten(f"{len(posts)} posts")
+        speak_elten(_("{count} posts").format(count=len(posts)))
         wx.MessageBox(info, _("Feed: {user}").format(user=username), wx.OK | wx.ICON_INFORMATION)
 
     # ---- Contacts ----
 
     def show_contacts_view(self):
+        self._capture_listbox_for_refresh("contacts")
         self.current_view = "contacts"
         self.view_label.SetLabel(_("Contacts"))
         self._show_list_mode()
@@ -1293,10 +1607,12 @@ class EltenMainWindow(wx.Frame):
     def _on_contacts_loaded(self, contacts, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not contacts:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No contacts"))
             speak_elten(_("No contacts"))
             return
@@ -1305,13 +1621,15 @@ class EltenMainWindow(wx.Frame):
         for contact in contacts:
             self.main_listbox.Append(contact)
 
-        self.main_listbox.SetSelection(0)
-        speak_elten(_("{count} contacts").format(count=len(contacts)))
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            speak_elten(_("{count} contacts").format(count=len(contacts)))
+            self.main_listbox.SetFocus()
 
     # ---- Conversations ----
 
     def show_conversations_view(self):
+        self._capture_listbox_for_refresh("conversations")
         self.current_view = "conversations"
         self.view_label.SetLabel(_("Conversations"))
         self._show_list_mode()
@@ -1328,10 +1646,12 @@ class EltenMainWindow(wx.Frame):
     def _on_conversations_loaded(self, conversations, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not conversations:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No conversations"))
             speak_elten(_("No conversations"))
             return
@@ -1346,9 +1666,10 @@ class EltenMainWindow(wx.Frame):
             label = f"{user}: {_('Last message')}: {lastuser}: {lastsubject}. {date}{read_marker}"
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        speak_elten(_("{count} conversations").format(count=len(conversations)))
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            speak_elten(_("{count} conversations").format(count=len(conversations)))
+            self.main_listbox.SetFocus()
 
     def show_conversation_chat(self, user, subject=""):
         if not subject:
@@ -1366,7 +1687,8 @@ class EltenMainWindow(wx.Frame):
 
         play_sound('titannet/new_chat.ogg')
 
-        self.message_display.SetValue(_("Loading..."))
+        self._clear_conversation_list()
+        speak_elten(_("Loading..."))
         self.Layout()
 
         self._threaded_request(
@@ -1377,6 +1699,7 @@ class EltenMainWindow(wx.Frame):
 
     def show_conversation_subjects(self, user):
         """Show list of conversation subjects/threads with a user."""
+        self._capture_listbox_for_refresh("conversation_subjects")
         self.current_view = "conversation_subjects"
         self.current_chat_user = user
         self.view_label.SetLabel(_("Chat with {user}").format(user=user))
@@ -1396,10 +1719,12 @@ class EltenMainWindow(wx.Frame):
     def _on_conversation_subjects_loaded(self, subjects, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not subjects:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No messages yet."))
             speak_elten(_("No messages yet."))
             return
@@ -1413,37 +1738,39 @@ class EltenMainWindow(wx.Frame):
             label = f"{subject_text} ({sender}, {date}){read_marker}"
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        speak_elten(_("{count} conversations").format(count=len(subjects)))
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            speak_elten(_("{count} conversations").format(count=len(subjects)))
+            self.main_listbox.SetFocus()
 
     def _on_messages_loaded(self, messages, error):
-        self.message_display.SetValue("")
+        self._clear_conversation_list()
         if error:
             speak_notification(str(error), 'error')
             return
 
         if not messages:
-            self.message_display.SetValue(_("No messages yet. Type a message below."))
             speak_elten(_("No messages yet."))
             self.message_input.SetFocus()
             return
 
         self.messages_cache = messages
-        text_parts = []
-        for msg in messages:
-            sender = msg.get('sender', '')
-            date = self._format_date(msg.get('date', ''))
-            content = msg.get('message', '')
-            text_parts.append(f"[{date}] {sender}:\n{content}\n")
-
-        self.message_display.SetValue("\n".join(text_parts))
-        self.message_display.SetInsertionPointEnd()
+        self.conversation_list.Freeze()
+        try:
+            for msg in messages:
+                self._add_conversation_row(
+                    msg.get('sender', ''),
+                    msg.get('message', ''),
+                    msg.get('date', ''),
+                )
+        finally:
+            self.conversation_list.Thaw()
         self.message_input.SetFocus()
 
     # ---- Forum ----
 
     def show_forum_groups_view(self):
+        self._capture_listbox_for_refresh("forum_groups")
         self.current_view = "forum_groups"
         self.view_label.SetLabel(_("Forum - Groups"))
         self._show_list_mode()
@@ -1460,10 +1787,12 @@ class EltenMainWindow(wx.Frame):
     def _on_forum_groups_loaded(self, groups, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not groups:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No forum groups"))
             speak_elten(_("No forum groups"))
             return
@@ -1471,6 +1800,7 @@ class EltenMainWindow(wx.Frame):
         # Show only groups user belongs to (role > 0)
         my_groups = [g for g in groups if g.get('role', 0) > 0]
         if not my_groups:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No forum groups"))
             speak_elten(_("No forum groups"))
             return
@@ -1481,14 +1811,16 @@ class EltenMainWindow(wx.Frame):
             lang = group.get('lang', '')
             posts = group.get('posts_count', 0)
             threads = group.get('threads_count', 0)
-            label = f"{name} [{lang}] ({threads} threads, {posts} posts)"
+            label = f"{name} [{lang}] (" + _("{count} threads").format(count=threads) + ", " + _("{count} posts").format(count=posts) + ")"
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        speak_elten(_("{count} forum groups").format(count=len(groups)))
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            speak_elten(_("{count} forum groups").format(count=len(groups)))
+            self.main_listbox.SetFocus()
 
     def show_forum_forums_view(self, group_id, group_name):
+        self._capture_listbox_for_refresh("forum_forums")
         self.current_view = "forum_forums"
         self.current_forum_group_id = group_id
         self.current_forum_group_name = group_name
@@ -1511,10 +1843,12 @@ class EltenMainWindow(wx.Frame):
     def _on_forums_loaded(self, forums, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not forums:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No forums in this group"))
             return
 
@@ -1525,10 +1859,12 @@ class EltenMainWindow(wx.Frame):
             label = f"{name} - {desc}" if desc else name
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            self.main_listbox.SetFocus()
 
     def show_forum_threads_view(self, forum_id, forum_name):
+        self._capture_listbox_for_refresh("forum_threads")
         self.current_view = "forum_threads"
         self.current_forum_id = forum_id
         self.current_forum_name = forum_name
@@ -1551,10 +1887,12 @@ class EltenMainWindow(wx.Frame):
     def _on_threads_loaded(self, threads, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not threads:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No threads"))
             return
 
@@ -1566,12 +1904,13 @@ class EltenMainWindow(wx.Frame):
             read = thread.get('read_count', 0)
             unread_marker = ""
             if posts > 0 and read < posts:
-                unread_marker = f" [{posts - read} new]"
-            label = f"{name} - {author} ({posts} posts){unread_marker}"
+                unread_marker = " [" + _("{count} new").format(count=posts - read) + "]"
+            label = f"{name} - {author} (" + _("{count} posts").format(count=posts) + f"){unread_marker}"
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            self.main_listbox.SetFocus()
 
     def show_forum_thread_view(self, thread_id, thread_name):
         """Show posts in a thread as individual read-only text fields."""
@@ -1579,7 +1918,7 @@ class EltenMainWindow(wx.Frame):
         self.current_thread_id = thread_id
         self.current_thread_name = thread_name
         self.view_label.SetLabel(f"{thread_name}")
-        self._show_posts_panel_mode()
+        self._show_posts_panel_mode(show_audio_reply=True)
         self.back_button.Show()
         self.input_label.SetLabel(_("Reply:"))
 
@@ -1630,7 +1969,7 @@ class EltenMainWindow(wx.Frame):
 
         self.main_listbox.Clear()
         menu_items = [
-            _("My blog"),
+            _("Managed blogs"),
             _("Recently updated blogs"),
             _("Frequently updated blogs"),
             _("Frequently commented blogs"),
@@ -1644,7 +1983,44 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
 
+    def show_managed_blogs_view(self):
+        """Show blogs managed by current user (like Ruby Scene_Blog_List.new(Session.name))."""
+        self.current_view = "blog_list"
+        self.view_label.SetLabel(_("Managed blogs"))
+        self._show_list_mode()
+        self.back_button.Show()
+
+        self.main_listbox.Clear()
+        self.main_listbox.Append(_("Loading..."))
+        self.Layout()
+
+        def fetch_managed():
+            return self.client.get_blogs_list(user=self.client.username)
+        self._threaded_request(fetch_managed, self._on_managed_blogs_loaded)
+
+    def _on_managed_blogs_loaded(self, blogs, error):
+        self.main_listbox.Clear()
+        if error:
+            speak_notification(str(error), 'error')
+            return
+
+        if not blogs:
+            self.main_listbox.Append(_("No managed blogs found"))
+            speak_elten(_("No managed blogs found"))
+            return
+
+        self.blogs_cache = blogs
+        for blog in blogs:
+            name = blog.get('name', blog.get('domain', ''))
+            posts = blog.get('posts', 0)
+            self.main_listbox.Append(f"{name} ({posts} " + _("posts") + ")")
+
+        self.main_listbox.SetSelection(0)
+        speak_elten(_("{count} managed blogs").format(count=len(blogs)))
+        self.main_listbox.SetFocus()
+
     def show_blogs_list_view(self, order_by=0, title=""):
+        self._capture_listbox_for_refresh("blog_list")
         self.current_view = "blog_list"
         self.view_label.SetLabel(title or _("Blogs"))
         self._show_list_mode()
@@ -1661,10 +2037,12 @@ class EltenMainWindow(wx.Frame):
     def _on_blogs_loaded(self, blogs, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not blogs:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No blogs found"))
             return
 
@@ -1673,13 +2051,15 @@ class EltenMainWindow(wx.Frame):
             name = blog.get('name', '')
             posts = blog.get('posts', 0)
             followed = " [+]" if blog.get('followed') else ""
-            label = f"{name} ({posts} posts){followed}"
+            label = f"{name} (" + _("{count} posts").format(count=posts) + f"){followed}"
             self.main_listbox.Append(label)
 
-        self.main_listbox.SetSelection(0)
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            self.main_listbox.SetFocus()
 
-    def show_blog_posts_view(self, blog_name, display_name="", category_id=0):
+    def show_blog_posts_view(self, blog_name, display_name: str = "", category_id=0):
+        self._capture_listbox_for_refresh("blog_posts")
         self.current_view = "blog_posts"
         self.current_blog_user = blog_name
         self.current_blog_name = display_name or blog_name
@@ -1704,6 +2084,7 @@ class EltenMainWindow(wx.Frame):
 
     def _on_blog_posts_loaded(self, result, error):
         if error:
+            self._pending_listbox_selection = None
             self.main_listbox.Clear()
             speak_notification(str(error), 'error')
             return
@@ -1721,6 +2102,7 @@ class EltenMainWindow(wx.Frame):
             self.main_listbox.Clear()
 
         if not posts and is_first_page:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No posts"))
             return
 
@@ -1740,8 +2122,8 @@ class EltenMainWindow(wx.Frame):
             date = self._format_date(post.get('date', ''))
             comments = post.get('comments', 0)
             new_marker = " [*]" if post.get('is_new') else ""
-            audio_marker = " [Audio]" if post.get('is_audio') else ""
-            label = f"{title} - {author} ({date}, {comments} comments){audio_marker}{new_marker}"
+            audio_marker = (" [" + _("Audio") + "]") if post.get('is_audio') else ""
+            label = f"{title} - {author} ({date}, " + _("{count} comments").format(count=comments) + f"){audio_marker}{new_marker}"
             self.main_listbox.Append(label)
 
         # Add "Load more" if there are more pages (like Ruby)
@@ -1749,8 +2131,12 @@ class EltenMainWindow(wx.Frame):
             self.main_listbox.Append(_("Load more"))
 
         if is_first_page:
-            self.main_listbox.SetSelection(0)
-        self.main_listbox.SetFocus()
+            restored = self._apply_pending_listbox_selection()
+            if not restored:
+                self.main_listbox.SetFocus()
+        else:
+            # Pagination path - keep current focus, no selection reset
+            self._pending_listbox_selection = None
 
     def show_blog_post_content(self, post_id, blog_name):
         """Show blog post with comments as individual read-only text fields."""
@@ -1803,6 +2189,7 @@ class EltenMainWindow(wx.Frame):
     # ---- Online Users ----
 
     def show_online_users_view(self):
+        self._capture_listbox_for_refresh("online_users")
         self.current_view = "online_users"
         self.view_label.SetLabel(_("Online Users"))
         self._show_list_mode()
@@ -1819,10 +2206,12 @@ class EltenMainWindow(wx.Frame):
     def _on_online_users_loaded(self, users, error):
         self.main_listbox.Clear()
         if error:
+            self._pending_listbox_selection = None
             speak_notification(str(error), 'error')
             return
 
         if not users:
+            self._pending_listbox_selection = None
             self.main_listbox.Append(_("No users online"))
             speak_elten(_("No users online"))
             return
@@ -1831,9 +2220,10 @@ class EltenMainWindow(wx.Frame):
         for user in users:
             self.main_listbox.Append(user)
 
-        self.main_listbox.SetSelection(0)
-        speak_elten(_("{count} users online").format(count=len(users)))
-        self.main_listbox.SetFocus()
+        restored = self._apply_pending_listbox_selection()
+        if not restored:
+            speak_elten(_("{count} users online").format(count=len(users)))
+            self.main_listbox.SetFocus()
 
     # ---- What's New ----
 
@@ -1879,11 +2269,13 @@ class EltenMainWindow(wx.Frame):
 
         has_anything = False
         self._whats_new_data = data
-        for key, label, sound in self._whats_new_categories:
+        self._whats_new_visible_indices = []  # Maps listbox index -> category index
+        for cat_idx, (key, label, sound) in enumerate(self._whats_new_categories):
             count = data.get(key, 0)
-            item_text = f"{label} ({count})"
-            self.main_listbox.Append(item_text)
             if count > 0:
+                item_text = f"{label} ({count})"
+                self.main_listbox.Append(item_text)
+                self._whats_new_visible_indices.append(cat_idx)
                 has_anything = True
 
         if not has_anything:
@@ -2289,7 +2681,7 @@ class EltenMainWindow(wx.Frame):
 
         # Refresh
         item_refresh = menu.Append(wx.ID_ANY, _("Refresh"))
-        self.Bind(wx.EVT_MENU, lambda e: self.show_blog_posts_view(self.current_blog_user, self.current_blog_name, getattr(self, 'current_blog_category', 0)), item_refresh)
+        self.Bind(wx.EVT_MENU, lambda e: self.show_blog_posts_view(self.current_blog_user, self.current_blog_name or "", getattr(self, 'current_blog_category', 0)), item_refresh)
 
     def _build_blog_post_context_menu(self, menu, selection):
         """Blog post content (post + comments) context menu."""
@@ -2394,6 +2786,81 @@ class EltenMainWindow(wx.Frame):
                 wx.CallAfter(speak_notification, str(e), 'error')
         threading.Thread(target=do_add, daemon=True).start()
 
+    def _start_voice_call(self, username):
+        """Start a voice call to a user. Matches Ruby Elten's voicecall() flow."""
+        if username.lower() == self.client.username.lower():
+            speak_notification(_("You cannot call yourself"), 'error')
+            return
+
+        play_sound('ui/dialog.ogg')
+
+        # Show outgoing call dialog
+        dlg = OutgoingCallDialog(self, self.client, username)
+        result = dlg.ShowModal()
+
+        if result == wx.ID_OK and dlg.voip and dlg.voip.connected:
+            # Call was answered - open in-call dialog
+            in_call_dlg = InCallDialog(self, self.client, dlg.voip, username)
+            in_call_dlg.ShowModal()
+            in_call_dlg.Destroy()
+        elif result == wx.ID_OK:
+            # Connected but voip gone - cleanup already done
+            pass
+
+        dlg.Destroy()
+
+    def _answer_incoming_call(self, call_id, caller, channel_id, channel_password):
+        """Handle an incoming call. Called from background notification system."""
+        play_sound('titannet/ring_in.ogg')
+
+        dlg = IncomingCallDialog(
+            self, self.client, call_id, caller, channel_id, channel_password)
+        result = dlg.ShowModal()
+        dlg.Destroy()
+
+        if result == wx.ID_OK:
+            # User answered - connect to VOIP and join caller's channel
+            self._join_call(caller, channel_id, channel_password)
+
+    def _join_call(self, caller, channel_id, channel_password):
+        """Join an existing call channel (answering an incoming call)."""
+        voip = EltenVoipClient(self.client.username)
+
+        def join_worker():
+            try:
+                if not voip.connect():
+                    wx.CallAfter(speak_notification,
+                                 _("Could not connect to voice server"), 'error')
+                    return
+
+                if not voip.join_channel(channel_id, channel_password):
+                    wx.CallAfter(speak_notification,
+                                 _("Could not join voice channel"), 'error')
+                    voip.disconnect()
+                    return
+
+                # Start audio
+                voip.start_audio()
+
+                wx.CallAfter(play_sound, 'titannet/callsuccess.ogg')
+                wx.CallAfter(speak_notification, _("Call connected"), 'success')
+
+                # Open in-call dialog on main thread
+                wx.CallAfter(self._show_in_call_dialog, voip, caller)
+
+            except Exception as e:
+                wx.CallAfter(speak_notification,
+                             _("Call failed") + f": {e}", 'error')
+                voip.disconnect()
+
+        threading.Thread(target=join_worker, daemon=True).start()
+
+    def _show_in_call_dialog(self, voip, target_user):
+        """Show the in-call dialog on the main thread."""
+        dlg = InCallDialog(self, self.client, voip, target_user)
+        dlg.ShowModal()
+        dlg.Destroy()
+
     def _delete_conversation(self, conv):
         user = conv['user']
         confirm = wx.MessageDialog(
@@ -2481,8 +2948,8 @@ class EltenMainWindow(wx.Frame):
             speak_notification(_("No members"), 'info')
             return
         play_sound('ui/dialog.ogg')
-        info = f"{group_name} - {len(members)} members:\n" + "\n".join(members)
-        speak_elten(f"{len(members)} members")
+        info = f"{group_name} - {_("{count} members").format(count=len(members))}:\n" + "\n".join(members)
+        speak_elten(_("{count} members").format(count=len(members)))
         wx.MessageBox(info, group_name, wx.OK | wx.ICON_INFORMATION)
 
     def _search_forum(self):
@@ -2510,9 +2977,9 @@ class EltenMainWindow(wx.Frame):
         play_sound('ui/dialog.ogg')
         info_parts = [_("Search Results:")]
         for r in results[:20]:
-            info_parts.append(f"Thread #{r.get('thread_id', 0)} ({r.get('post_count', 0)} posts)")
+            info_parts.append(_("Thread #{thread_id} ({post_count} posts)").format(thread_id=r.get('thread_id', 0), post_count=r.get('post_count', 0)))
         info = "\n".join(info_parts)
-        speak_elten(f"{len(results)} results")
+        speak_elten(_("{count} results").format(count=len(results)))
         wx.MessageBox(info, _("Search Results"), wx.OK | wx.ICON_INFORMATION)
 
     def _mark_group_read(self, group):
@@ -2552,36 +3019,76 @@ class EltenMainWindow(wx.Frame):
         threading.Thread(target=do_unfollow, daemon=True).start()
 
     def _create_new_thread(self):
-        """Create a new thread in the current forum."""
+        """Create a new thread in the current forum.
+        Like Ruby Elten: selector for text/audio post type, then appropriate editor."""
         if not self.current_forum_name:
             return
 
+        # Post type selector (like Ruby: selector([text, audio]))
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Thread title:"), _("New Thread"))
-        if dlg.ShowModal() != wx.ID_OK:
-            dlg.Destroy()
+        choices = [_("Text post"), _("Audio post")]
+        type_dlg = wx.SingleChoiceDialog(
+            self, _("Select first post type"), _("New Thread"), choices
+        )
+        type_dlg.SetSelection(0)
+        if type_dlg.ShowModal() != wx.ID_OK:
+            type_dlg.Destroy()
             return
-        title = dlg.GetValue().strip()
-        dlg.Destroy()
+        post_type = type_dlg.GetSelection()  # 0=text, 1=audio
+        type_dlg.Destroy()
+
+        # Thread title
+        play_sound('ui/dialog.ogg')
+        title_dlg = wx.TextEntryDialog(self, _("Thread name:"), _("New Thread"))
+        if title_dlg.ShowModal() != wx.ID_OK:
+            title_dlg.Destroy()
+            return
+        title = title_dlg.GetValue().strip()
+        title_dlg.Destroy()
         if not title:
             speak_notification(_("Title cannot be empty"), 'warning')
             return
 
-        dlg2 = wx.TextEntryDialog(self, _("Thread content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
-        if dlg2.ShowModal() != wx.ID_OK:
+        if post_type == 0:
+            # Text post
+            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            if dlg2.ShowModal() != wx.ID_OK:
+                dlg2.Destroy()
+                return
+            content = dlg2.GetValue().strip()
             dlg2.Destroy()
-            return
-        content = dlg2.GetValue().strip()
-        dlg2.Destroy()
-        if not content:
-            speak_notification(_("Content cannot be empty"), 'warning')
-            return
+            if not content:
+                speak_notification(_("Content cannot be empty"), 'warning')
+                return
 
+            speak_elten(_("Creating thread..."))
+
+            def do_create_text():
+                try:
+                    result = self.client.create_thread(self.current_forum_id, title, content)
+                    if result.get('success'):
+                        wx.CallAfter(speak_notification, _("Thread created"), 'success')
+                        wx.CallAfter(self.show_forum_threads_view, self.current_forum_id, self.current_forum_name)
+                    else:
+                        wx.CallAfter(speak_notification, result.get('message', ''), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+            threading.Thread(target=do_create_text, daemon=True).start()
+
+        else:
+            # Audio post - open recording dialog
+            self._show_audio_record_dialog(
+                _("Record audio post"),
+                lambda audio_data: self._do_create_thread_audio(title, audio_data)
+            )
+
+    def _do_create_thread_audio(self, title, audio_data):
+        """Create thread with audio post data."""
         speak_elten(_("Creating thread..."))
 
         def do_create():
             try:
-                result = self.client.create_thread(self.current_forum_id, title, content)
+                result = self.client.create_thread_audio(self.current_forum_id, title, audio_data)
                 if result.get('success'):
                     wx.CallAfter(speak_notification, _("Thread created"), 'success')
                     wx.CallAfter(self.show_forum_threads_view, self.current_forum_id, self.current_forum_name)
@@ -2592,9 +3099,24 @@ class EltenMainWindow(wx.Frame):
         threading.Thread(target=do_create, daemon=True).start()
 
     def _create_new_thread_in_forum(self, forum_id):
-        """Create a new thread in the specified forum."""
+        """Create a new thread in the specified forum.
+        Like Ruby Elten: selector for text/audio post type."""
+        # Post type selector
         play_sound('ui/dialog.ogg')
-        dlg = wx.TextEntryDialog(self, _("Thread title:"), _("New Thread"))
+        choices = [_("Text post"), _("Audio post")]
+        type_dlg = wx.SingleChoiceDialog(
+            self, _("Select first post type"), _("New Thread"), choices
+        )
+        type_dlg.SetSelection(0)
+        if type_dlg.ShowModal() != wx.ID_OK:
+            type_dlg.Destroy()
+            return
+        post_type = type_dlg.GetSelection()
+        type_dlg.Destroy()
+
+        # Thread title
+        play_sound('ui/dialog.ogg')
+        dlg = wx.TextEntryDialog(self, _("Thread name:"), _("New Thread"))
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -2604,33 +3126,69 @@ class EltenMainWindow(wx.Frame):
             speak_notification(_("Title cannot be empty"), 'warning')
             return
 
-        dlg2 = wx.TextEntryDialog(self, _("Thread content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
-        if dlg2.ShowModal() != wx.ID_OK:
+        if post_type == 0:
+            # Text post
+            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Thread"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            if dlg2.ShowModal() != wx.ID_OK:
+                dlg2.Destroy()
+                return
+            content = dlg2.GetValue().strip()
             dlg2.Destroy()
-            return
-        content = dlg2.GetValue().strip()
-        dlg2.Destroy()
-        if not content:
-            speak_notification(_("Content cannot be empty"), 'warning')
-            return
+            if not content:
+                speak_notification(_("Content cannot be empty"), 'warning')
+                return
 
-        speak_elten(_("Creating thread..."))
+            speak_elten(_("Creating thread..."))
 
-        def do_create():
-            try:
-                result = self.client.create_thread(forum_id, title, content)
-                if result.get('success'):
-                    wx.CallAfter(speak_notification, _("Thread created"), 'success')
-                    if self.current_forum_id and self.current_forum_name:
-                        wx.CallAfter(self.show_forum_threads_view, self.current_forum_id, self.current_forum_name)
-                else:
-                    wx.CallAfter(speak_notification, result.get('message', ''), 'error')
-            except Exception as e:
-                wx.CallAfter(speak_notification, str(e), 'error')
-        threading.Thread(target=do_create, daemon=True).start()
+            def do_create():
+                try:
+                    result = self.client.create_thread(forum_id, title, content)
+                    if result.get('success'):
+                        wx.CallAfter(speak_notification, _("Thread created"), 'success')
+                        if self.current_forum_id and self.current_forum_name:
+                            wx.CallAfter(self.show_forum_threads_view, self.current_forum_id, self.current_forum_name)
+                    else:
+                        wx.CallAfter(speak_notification, result.get('message', ''), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+            threading.Thread(target=do_create, daemon=True).start()
+
+        else:
+            # Audio post
+            def on_audio(audio_data):
+                speak_elten(_("Creating thread..."))
+                def do_create():
+                    try:
+                        result = self.client.create_thread_audio(forum_id, title, audio_data)
+                        if result.get('success'):
+                            wx.CallAfter(speak_notification, _("Thread created"), 'success')
+                            if self.current_forum_id and self.current_forum_name:
+                                wx.CallAfter(self.show_forum_threads_view, self.current_forum_id, self.current_forum_name)
+                        else:
+                            wx.CallAfter(speak_notification, result.get('message', ''), 'error')
+                    except Exception as e:
+                        wx.CallAfter(speak_notification, str(e), 'error')
+                threading.Thread(target=do_create, daemon=True).start()
+
+            self._show_audio_record_dialog(_("Record audio post"), on_audio)
 
     def _create_blog_post(self):
-        """Create a new blog post on own blog."""
+        """Create a new blog post on own blog.
+        Like Ruby Elten: supports both text and audio content."""
+        # Post type selector
+        play_sound('ui/dialog.ogg')
+        choices = [_("Text post"), _("Audio post")]
+        type_dlg = wx.SingleChoiceDialog(
+            self, _("Select post type"), _("New Blog Post"), choices
+        )
+        type_dlg.SetSelection(0)
+        if type_dlg.ShowModal() != wx.ID_OK:
+            type_dlg.Destroy()
+            return
+        post_type = type_dlg.GetSelection()
+        type_dlg.Destroy()
+
+        # Title
         play_sound('ui/dialog.ogg')
         dlg = wx.TextEntryDialog(self, _("Post title:"), _("New Blog Post"))
         if dlg.ShowModal() != wx.ID_OK:
@@ -2642,30 +3200,54 @@ class EltenMainWindow(wx.Frame):
             speak_notification(_("Title cannot be empty"), 'warning')
             return
 
-        dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Blog Post"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
-        if dlg2.ShowModal() != wx.ID_OK:
+        if post_type == 0:
+            # Text post
+            dlg2 = wx.TextEntryDialog(self, _("Post content:"), _("New Blog Post"), style=wx.TE_MULTILINE | wx.OK | wx.CANCEL)
+            if dlg2.ShowModal() != wx.ID_OK:
+                dlg2.Destroy()
+                return
+            content = dlg2.GetValue().strip()
             dlg2.Destroy()
-            return
-        content = dlg2.GetValue().strip()
-        dlg2.Destroy()
-        if not content:
-            speak_notification(_("Content cannot be empty"), 'warning')
-            return
+            if not content:
+                speak_notification(_("Content cannot be empty"), 'warning')
+                return
 
-        speak_elten(_("Publishing post..."))
+            speak_elten(_("Publishing post..."))
 
-        def do_create():
-            try:
-                result = self.client.create_blog_post(self.client.username, title, content)
-                if result.get('success'):
-                    wx.CallAfter(play_sound, 'titannet/message_send.ogg')
-                    wx.CallAfter(speak_notification, _("Blog post created"), 'success')
-                    wx.CallAfter(self.show_blog_posts_view, self.current_blog_user, self.current_blog_name, getattr(self, 'current_blog_category', 0))
-                else:
-                    wx.CallAfter(speak_notification, result.get('message', ''), 'error')
-            except Exception as e:
-                wx.CallAfter(speak_notification, str(e), 'error')
-        threading.Thread(target=do_create, daemon=True).start()
+            def do_create():
+                try:
+                    result = self.client.create_blog_post(self.client.username, title, content)
+                    if result.get('success'):
+                        wx.CallAfter(play_sound, 'titannet/message_send.ogg')
+                        wx.CallAfter(speak_notification, _("Blog post created"), 'success')
+                        wx.CallAfter(self.show_blog_posts_view, self.current_blog_user, self.current_blog_name or "", getattr(self, 'current_blog_category', 0))
+                    else:
+                        wx.CallAfter(speak_notification, result.get('message', ''), 'error')
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+            threading.Thread(target=do_create, daemon=True).start()
+
+        else:
+            # Audio post
+            def on_audio(audio_data):
+                speak_elten(_("Publishing post..."))
+                def do_create():
+                    try:
+                        result = self.client.create_blog_post_audio(
+                            self.client.username, title, audio_data,
+                            getattr(self, 'current_blog_category', 0)
+                        )
+                        if result.get('success'):
+                            wx.CallAfter(play_sound, 'titannet/message_send.ogg')
+                            wx.CallAfter(speak_notification, _("Blog post created"), 'success')
+                            wx.CallAfter(self.show_blog_posts_view, self.current_blog_user, self.current_blog_name or "", getattr(self, 'current_blog_category', 0))
+                        else:
+                            wx.CallAfter(speak_notification, result.get('message', ''), 'error')
+                    except Exception as e:
+                        wx.CallAfter(speak_notification, str(e), 'error')
+                threading.Thread(target=do_create, daemon=True).start()
+
+            self._show_audio_record_dialog(_("Audio content"), on_audio)
 
     def _create_blog_category(self):
         """Create a new blog category."""
@@ -2843,25 +3425,58 @@ class EltenMainWindow(wx.Frame):
 
         play_sound('ui/dialog.ogg')
 
-        info_parts = [f"Username: {username}"]
+        info_parts = [f"{_('Username')}: {username}"]
         if profile.get('elten_version'):
             info_parts.append(f"Elten: {profile['elten_version']}")
         if profile.get('registration_date'):
-            info_parts.append(f"Registered: {self._format_date(profile['registration_date'])}")
+            info_parts.append(f"{_('Registered')}: {self._format_date(profile['registration_date'])}")
         if profile.get('last_seen'):
-            info_parts.append(f"Last seen: {self._format_date(profile['last_seen'])}")
+            info_parts.append(f"{_('Last seen')}: {self._format_date(profile['last_seen'])}")
         if profile.get('forum_posts'):
-            info_parts.append(f"Forum posts: {profile['forum_posts']}")
+            info_parts.append(f"{_('Forum posts')}: {profile['forum_posts']}")
         if profile.get('contacts_count'):
-            info_parts.append(f"Contacts: {profile['contacts_count']}")
+            info_parts.append(f"{_('Contacts')}: {profile['contacts_count']}")
         if profile.get('has_blog'):
-            info_parts.append("Has blog: Yes")
+            info_parts.append(f"{_('Has blog')}: {_('Yes')}")
         if profile.get('is_banned'):
-            info_parts.append("BANNED")
+            info_parts.append(_("BANNED"))
 
         info_text = "\n".join(info_parts)
-        speak_elten(info_text)
-        wx.MessageBox(info_text, f"Profile: {username}", wx.OK | wx.ICON_INFORMATION)
+
+        dlg = wx.Dialog(self, title=_("Profile") + f": {username}",
+                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+
+        dlg_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        text_ctrl = wx.TextCtrl(dlg, value=info_text,
+                                style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+        text_ctrl.SetMinSize(wx.Size(400, 250))
+        dlg_sizer.Add(text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
+
+        ok_btn = wx.Button(dlg, wx.ID_OK, _("OK"))
+        dlg_sizer.Add(ok_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+
+        dlg.SetSizer(dlg_sizer)
+        dlg_sizer.Fit(dlg)
+        dlg.CentreOnParent()
+
+        try:
+            apply_skin_to_window(dlg)
+        except Exception:
+            pass
+
+        ok_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.EndModal(wx.ID_OK))
+
+        def on_key(event):
+            if event.GetKeyCode() == wx.WXK_ESCAPE:
+                dlg.EndModal(wx.ID_OK)
+            else:
+                event.Skip()
+        dlg.Bind(wx.EVT_CHAR_HOOK, on_key)
+
+        text_ctrl.SetFocus()
+        dlg.ShowModal()
+        dlg.Destroy()
 
     # ---- Event Handlers ----
 
@@ -2922,9 +3537,8 @@ class EltenMainWindow(wx.Frame):
                 self.show_forum_thread_view(thread['id'], thread['name'])
 
         elif self.current_view == "blogs":
-            if selected_text == _("My blog"):
-                blog_name = self.client.username
-                self.show_blog_posts_view(blog_name, _("My blog"))
+            if selected_text == _("Managed blogs"):
+                self.show_managed_blogs_view()
             elif selected_text == _("Recently updated blogs"):
                 self.show_blogs_list_view(0, _("Recently updated blogs"))
             elif selected_text == _("Frequently updated blogs"):
@@ -2960,34 +3574,37 @@ class EltenMainWindow(wx.Frame):
                 self.show_blog_post_content(post['id'], post.get('blog', self.current_blog_user))
 
         elif self.current_view == "whats_new":
-            # Navigate to appropriate view when selecting a What's New item (like Ruby)
-            # Categories order matches _whats_new_categories list
+            # Navigate to appropriate view when selecting a What's New item
+            # Map visible listbox index back to original category index
+            if not hasattr(self, '_whats_new_visible_indices') or selection >= len(self._whats_new_visible_indices):
+                return
+            cat_idx = self._whats_new_visible_indices[selection]
             username = self.client.username
-            if selection == 0:  # Messages
+            if cat_idx == 0:  # Messages
                 self.show_conversations_view()
-            elif selection == 1:  # Followed threads
+            elif cat_idx == 1:  # Followed threads
                 self.show_forum_groups_view()
-            elif selection == 2:  # Followed blogs
+            elif cat_idx == 2:  # Followed blogs
                 self.show_blog_posts_view(username, _("New posts on the followed blogs"), "NEWFOLLOWEDBLOGS")
-            elif selection == 3:  # Blog comments
+            elif cat_idx == 3:  # Blog comments
                 self.show_blog_posts_view(username, _("New comments on your blog"), "NEW")
-            elif selection == 4:  # New threads on followed forums
+            elif cat_idx == 4:  # New threads on followed forums
                 self.show_forum_groups_view()
-            elif selection == 5:  # New posts on followed forums
+            elif cat_idx == 5:  # New posts on followed forums
                 self.show_forum_groups_view()
-            elif selection == 6:  # New friends
+            elif cat_idx == 6:  # New friends
                 self.show_contacts_view()
-            elif selection == 7:  # Birthdays
+            elif cat_idx == 7:  # Birthdays
                 self.show_contacts_view()
-            elif selection == 8:  # Mentions
+            elif cat_idx == 8:  # Mentions
                 self.show_forum_groups_view()
-            elif selection == 9:  # Followed blog posts
+            elif cat_idx == 9:  # Followed blog posts
                 self.show_blog_posts_view(username, _("Followed blog posts"), "NEWFOLLOWED")
-            elif selection == 10:  # Blog followers
+            elif cat_idx == 10:  # Blog followers
                 self.show_blog_posts_view(username, _("Blog followers"), "FOLLOWED")
-            elif selection == 11:  # Blog mentions
+            elif cat_idx == 11:  # Blog mentions
                 self.show_blog_posts_view(username, _("Blog mentions"), "NEWMENTIONED")
-            elif selection == 12:  # Group invitations
+            elif cat_idx == 12:  # Group invitations
                 self.show_forum_groups_view()
 
         elif self.current_view == "online_users":
@@ -3065,6 +3682,121 @@ class EltenMainWindow(wx.Frame):
         speak_elten(info_text)
         wx.MessageBox(info_text, _("Account Information"), wx.OK | wx.ICON_INFORMATION)
 
+    # ---- Audio Record Dialog ----
+
+    def _show_audio_record_dialog(self, title, on_complete_callback):
+        """Show dialog for recording or browsing an audio file.
+
+        Like Ruby Elten's OpusRecordButton - supports both recording
+        and browsing audio files from disk.
+
+        Args:
+            title: Dialog title
+            on_complete_callback: Called with audio bytes when confirmed
+        """
+        play_sound('ui/dialog.ogg')
+        dlg = wx.Dialog(self, title=title, size=(500, 350),
+                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Recorder widget
+        recorder = EltenRecorder(panel, label=_("Audio recorder"))
+        sizer.Add(recorder, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+
+        # Browse button - select audio file from disk
+        browse_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        browse_btn = wx.Button(panel, label=_("Browse..."))
+        browse_sizer.Add(browse_btn, flag=wx.RIGHT, border=10)
+
+        file_label = wx.StaticText(panel, label=_("No file selected"))
+        browse_sizer.Add(file_label, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(browse_sizer, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
+
+        # Mutable container for browsed file data (avoids dynamic attr on Dialog)
+        browsed_audio: list = [None]
+
+        def on_browse(event):
+            file_dlg = wx.FileDialog(
+                dlg, _("Select audio file"),
+                wildcard=_("Audio files") + " (*.ogg;*.opus;*.mp3;*.wav)|*.ogg;*.opus;*.mp3;*.wav|" +
+                         _("All files") + " (*.*)|*.*",
+                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+            )
+            if file_dlg.ShowModal() == wx.ID_OK:
+                file_path = file_dlg.GetPath()
+                try:
+                    import os as _os
+                    import subprocess as sp
+                    import tempfile as tf
+                    from src.eltenlink_client.elten_player import _FFMPEG
+
+                    if file_path.lower().endswith(('.ogg', '.opus')):
+                        with open(file_path, 'rb') as f:
+                            browsed_audio[0] = f.read()
+                    else:
+                        tmp = tf.NamedTemporaryFile(suffix='.opus', delete=False)
+                        tmp.close()
+                        result = sp.run(
+                            [_FFMPEG, '-y', '-i', file_path,
+                             '-c:a', 'libopus', '-b:a', '96k', '-ar', '48000',
+                             tmp.name],
+                            capture_output=True, timeout=60,
+                            creationflags=getattr(sp, 'CREATE_NO_WINDOW', 0)
+                        )
+                        if result.returncode == 0:
+                            with open(tmp.name, 'rb') as f:
+                                browsed_audio[0] = f.read()
+                        else:
+                            with open(file_path, 'rb') as f:
+                                browsed_audio[0] = f.read()
+                        try:
+                            _os.unlink(tmp.name)
+                        except Exception:
+                            pass
+
+                    fname = _os.path.basename(file_path)
+                    file_label.SetLabel(fname)
+                    speak_elten(_("File selected") + f": {fname}")
+                except Exception as e:
+                    speak_notification(str(e), 'error')
+            file_dlg.Destroy()
+
+        browse_btn.Bind(wx.EVT_BUTTON, on_browse)
+
+        # Buttons
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        send_btn = wx.Button(panel, wx.ID_OK, _("Send"))
+        cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
+        btn_sizer.Add(send_btn, flag=wx.RIGHT, border=10)
+        btn_sizer.Add(cancel_btn)
+        sizer.Add(btn_sizer, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+
+        panel.SetSizer(sizer)
+
+        try:
+            from src.titan_core.skin_manager import apply_skin_to_window
+            apply_skin_to_window(dlg)
+        except Exception:
+            pass
+
+        if dlg.ShowModal() == wx.ID_OK:
+            # Prefer browsed file, fallback to recorded audio
+            audio_data = browsed_audio[0]
+            if not audio_data:
+                audio_data = recorder.get_audio_data()
+
+            if audio_data:
+                on_complete_callback(audio_data)
+            else:
+                speak_notification(_("No audio recorded or selected"), 'warning')
+
+        try:
+            recorder.close()
+        except Exception:
+            pass
+        dlg.Destroy()
+
     # ---- Navigation ----
 
     def OnBack(self, event):
@@ -3089,7 +3821,7 @@ class EltenMainWindow(wx.Frame):
             self.show_forum_groups_view()
         elif self.current_view == "blog_post":
             if self.current_blog_user:
-                self.show_blog_posts_view(self.current_blog_user, self.current_blog_name, getattr(self, 'current_blog_category', 0))
+                self.show_blog_posts_view(self.current_blog_user, self.current_blog_name or "", getattr(self, 'current_blog_category', 0))
             else:
                 self.show_blogs_menu()
         elif self.current_view == "blog_posts":
@@ -3117,6 +3849,19 @@ class EltenMainWindow(wx.Frame):
                     self.OnSendMessage(None)
                 else:
                     event.Skip()
+            else:
+                event.Skip()
+        elif event.ControlDown() and self.current_view in ("forum_thread", "blog_post"):
+            # Post navigation shortcuts for forum threads and blog posts
+            if keycode == ord('U'):
+                # Ctrl+U -> first new/unread post
+                self._jump_to_first_new_post()
+            elif keycode == ord('.'):
+                # Ctrl+. -> last post
+                self._jump_to_post(-1)
+            elif keycode == ord(','):
+                # Ctrl+, -> first post
+                self._jump_to_post(0)
             else:
                 event.Skip()
         else:
@@ -3154,11 +3899,8 @@ class EltenMainWindow(wx.Frame):
         threading.Thread(target=send, daemon=True).start()
 
     def _on_message_sent(self, text):
-        current = self.message_display.GetValue()
-        timestamp = time.strftime("%Y-%m-%d %H:%M")
-        new_msg = f"\n[{timestamp}] {self.client.username}:\n{text}\n"
-        self.message_display.SetValue(current + new_msg)
-        self.message_display.SetInsertionPointEnd()
+        # Use unix timestamp so _format_date renders it identically to server-side rows.
+        self._add_conversation_row(self.client.username, text, str(int(time.time())))
 
         play_sound('titannet/message_send.ogg')
         speak_elten(_("Message sent"))
@@ -3186,6 +3928,34 @@ class EltenMainWindow(wx.Frame):
         play_sound('titannet/message_send.ogg')
         speak_notification(_("Reply posted"), 'success', play_sound_effect=False)
         self.show_forum_thread_view(self.current_thread_id, self.current_thread_name)
+
+    def OnAudioReply(self, event):
+        """Handle audio reply button click - record/browse audio for forum reply."""
+        if self.current_view != "forum_thread" or not self.current_thread_id:
+            return
+
+        def on_audio_ready(audio_data):
+            speak_elten(_("Posting audio reply..."))
+
+            def send():
+                try:
+                    result = self.client.reply_to_thread_audio(
+                        self.current_thread_id, audio_data
+                    )
+                    if result.get('success'):
+                        wx.CallAfter(self._on_forum_reply_sent)
+                    else:
+                        wx.CallAfter(
+                            speak_notification,
+                            result.get('message', _("Failed to post audio reply")),
+                            'error'
+                        )
+                except Exception as e:
+                    wx.CallAfter(speak_notification, str(e), 'error')
+
+            threading.Thread(target=send, daemon=True).start()
+
+        self._show_audio_record_dialog(_("Audio Reply"), on_audio_ready)
 
     def _send_blog_comment(self, text):
         if not self.current_blog_post_id or not self.current_blog_user:
@@ -3261,15 +4031,18 @@ class EltenMainWindow(wx.Frame):
                         'info', play_sound_effect=False
                     )
 
-            text_parts = []
-            for msg in messages:
-                sender = msg.get('sender', '')
-                date = self._format_date(msg.get('date', ''))
-                content = msg.get('message', '')
-                text_parts.append(f"[{date}] {sender}:\n{content}\n")
-
-            self.message_display.SetValue("\n".join(text_parts))
-            self.message_display.SetInsertionPointEnd()
+            # Append only the new messages to keep the conversation list growing
+            # without losing scroll position or destroying the user's selection.
+            self.conversation_list.Freeze()
+            try:
+                for msg in new_msgs:
+                    self._add_conversation_row(
+                        msg.get('sender', ''),
+                        msg.get('message', ''),
+                        msg.get('date', ''),
+                    )
+            finally:
+                self.conversation_list.Thaw()
 
     def _silent_online_refresh(self, users, error):
         if error or not users:
@@ -3458,6 +4231,7 @@ class EltenMainWindow(wx.Frame):
                 self.refresh_timer.Stop()
             if self._bg_notification_timer:
                 self._bg_notification_timer.Stop()
+            self._stop_feed_auto_refresh()
 
             play_sound('titannet/bye.ogg')
             speak_notification(_("Disconnected"), 'info', play_sound_effect=False)
@@ -3474,14 +4248,507 @@ class EltenMainWindow(wx.Frame):
         """Hide window on close - stay connected for background TTS notifications."""
         if event.CanVeto():
             self.Hide()
+            # Unregister from window switcher while hidden
+            try:
+                from src.ui.window_switcher import unregister_window
+                unregister_window("EltenLink")
+            except Exception:
+                pass
             event.Veto()
         else:
             if self.refresh_timer:
                 self.refresh_timer.Stop()
             if self._bg_notification_timer:
                 self._bg_notification_timer.Stop()
+            self._stop_feed_auto_refresh()
             self.client.logout()
             self.Destroy()
+
+
+# ---- Voice Call Dialogs ----
+
+
+def _get_sound_path(sound_file):
+    """Resolve a sound file path from the sfx directory."""
+    from src.titan_core.sound import resource_path, get_sfx_directory
+    sfx_dir = get_sfx_directory()
+    path = os.path.join(sfx_dir, sound_file)
+    if os.path.exists(path):
+        return path
+    # Fallback to default theme
+    path = resource_path(os.path.join('sfx', 'default', sound_file))
+    if os.path.exists(path):
+        return path
+    return None
+
+
+class OutgoingCallDialog(wx.Dialog):
+    """Outgoing call dialog - plays ring_out.ogg in loop, shows cancel button.
+
+    Matches Ruby Elten's call flow:
+    - Conference.open -> Conference.create -> invite(user) -> calling_play (ring_out loop)
+    - When user joins channel -> calling_stop, switch to InCallDialog
+    - Cancel button -> cancel_call API + close
+    """
+
+    def __init__(self, parent, client, username):
+        super().__init__(parent, title=_("Voice Call"),
+                         style=wx.DEFAULT_DIALOG_STYLE)
+        self.client = client
+        self.target_user = username
+        self.voip = None
+        self.call_id = None
+        self.channel = None
+        self.channel_password = None
+        self._ring_playing = False
+        self._cancelled = False
+        self._connected = False
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.status_label = wx.StaticText(
+            panel, label=_("Calling {user}...").format(user=username))
+        sizer.Add(self.status_label, 0, wx.ALL | wx.EXPAND, 10)
+
+        self.cancel_btn = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
+        sizer.Add(self.cancel_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+
+        panel.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
+        self.CentreOnParent()
+
+        self.cancel_btn.Bind(wx.EVT_BUTTON, self._on_cancel)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+        try:
+            apply_skin_to_window(self)
+        except Exception:
+            pass
+
+        # Start call in background
+        wx.CallAfter(self._start_call)
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self._on_cancel(None)
+        else:
+            event.Skip()
+
+    def _start_call(self):
+        """Initialize VOIP, create channel, invite user."""
+        threading.Thread(target=self._call_worker, daemon=True).start()
+
+    def _call_worker(self):
+        """Background thread: connect VOIP, create channel, send call invite."""
+        try:
+            import random
+            import string
+
+            # Generate random password for the call channel
+            self.channel_password = ''.join(
+                random.choices(string.ascii_lowercase + string.digits, k=32))
+
+            # Connect to VOIP server
+            self.voip = EltenVoipClient(self.client.username)
+            self.voip.on_user_joined = self._on_user_joined
+            self.voip.on_user_left = self._on_user_left
+            self.voip.on_disconnected = self._on_voip_disconnected
+
+            if not self.voip.connect():
+                wx.CallAfter(self._call_failed, _("Could not connect to voice server"))
+                return
+
+            if self._cancelled:
+                self.voip.disconnect()
+                return
+
+            # Create private channel
+            channel_name = f"VoiceCall_{self.client.username}"
+            ch = self.voip.create_channel(
+                name=channel_name,
+                password=self.channel_password,
+                bitrate=56,
+                framesize=40,
+            )
+
+            if not ch:
+                wx.CallAfter(self._call_failed, _("Could not create voice channel"))
+                self.voip.disconnect()
+                return
+
+            self.channel = ch
+
+            if self._cancelled:
+                self.voip.disconnect()
+                return
+
+            # Join the channel
+            if not self.voip.join_channel(ch.id, self.channel_password):
+                wx.CallAfter(self._call_failed, _("Could not join voice channel"))
+                self.voip.disconnect()
+                return
+
+            if self._cancelled:
+                self.voip.disconnect()
+                return
+
+            # Send call invitation via Elten API
+            call_id = self.client.call_user(
+                self.target_user, ch.id, self.channel_password)
+
+            if call_id is None:
+                wx.CallAfter(self._call_failed, _("Could not send call invitation"))
+                self.voip.disconnect()
+                return
+
+            self.call_id = call_id
+
+            # Start playing ring_out sound in loop
+            wx.CallAfter(self._start_ringing)
+
+        except Exception as e:
+            wx.CallAfter(self._call_failed, str(e))
+
+    def _start_ringing(self):
+        """Play ring_out.ogg in a loop."""
+        self._ring_playing = True
+        threading.Thread(target=self._ring_loop, daemon=True).start()
+
+    def _ring_loop(self):
+        """Loop ring_out sound until call is answered or cancelled."""
+        ring_path = _get_sound_path('titannet/ring_out.ogg')
+        if not ring_path:
+            return
+
+        try:
+            import pygame
+            while self._ring_playing and not self._cancelled:
+                try:
+                    pygame.mixer.music.load(ring_path)
+                    pygame.mixer.music.play()
+                    while pygame.mixer.music.get_busy() and self._ring_playing:
+                        time.sleep(0.1)
+                    if self._ring_playing:
+                        time.sleep(0.5)  # Brief pause between rings
+                except Exception:
+                    break
+        except ImportError:
+            pass
+
+    def _stop_ringing(self):
+        """Stop ring sound."""
+        self._ring_playing = False
+        try:
+            import pygame
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    def _on_user_joined(self, username):
+        """Called when target user joins our channel - call answered!"""
+        if username.lower() == self.target_user.lower():
+            self._connected = True
+            self._stop_ringing()
+            wx.CallAfter(self._call_answered)
+
+    def _on_user_left(self, username):
+        """Called when user leaves the channel."""
+        pass
+
+    def _on_voip_disconnected(self):
+        """Called on VOIP connection loss."""
+        if not self._cancelled and not self._connected:
+            self._stop_ringing()
+            wx.CallAfter(self._call_failed, _("Connection lost"))
+
+    def _call_answered(self):
+        """Target user answered - play success sound and open in-call dialog."""
+        play_sound('titannet/callsuccess.ogg')
+        speak_notification(_("Call connected"), 'success')
+
+        # Start audio
+        self.voip.start_audio()
+
+        # Close this dialog and open in-call dialog
+        self.EndModal(wx.ID_OK)
+
+    def _call_failed(self, reason):
+        """Call failed - show error and close."""
+        self._stop_ringing()
+        speak_notification(_("Call failed") + f": {reason}", 'error')
+        if self.voip:
+            self.voip.disconnect()
+        self.EndModal(wx.ID_CANCEL)
+
+    def _on_cancel(self, event):
+        """User cancelled the call."""
+        self._cancelled = True
+        self._stop_ringing()
+
+        # Cancel call on server
+        if self.call_id:
+            threading.Thread(
+                target=lambda: self.client.cancel_call(self.call_id),
+                daemon=True).start()
+
+        if self.voip:
+            self.voip.disconnect()
+
+        speak_notification(_("Call cancelled"), 'info')
+        self.EndModal(wx.ID_CANCEL)
+
+    def _on_close(self, event):
+        self._on_cancel(None)
+
+
+class IncomingCallDialog(wx.Dialog):
+    """Incoming call dialog - "{user} is calling you", Answer, Reject.
+
+    Matches Ruby Elten's CallWindow:
+        Static("{user} is calling you"), Button("Answer"), Button("Reject")
+    """
+
+    def __init__(self, parent, client, call_id, caller, channel_id, channel_password):
+        super().__init__(parent, title=_("Incoming Call"),
+                         style=wx.DEFAULT_DIALOG_STYLE)
+        self.client = client
+        self.call_id = call_id
+        self.caller = caller
+        self.channel_id = channel_id
+        self.channel_password = channel_password
+        self._ring_playing = False
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        label = wx.StaticText(
+            panel, label=_("{user} is calling you").format(user=caller))
+        sizer.Add(label, 0, wx.ALL | wx.EXPAND, 10)
+
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.answer_btn = wx.Button(panel, wx.ID_OK, _("Answer"))
+        btn_sizer.Add(self.answer_btn, 0, wx.ALL, 5)
+
+        self.reject_btn = wx.Button(panel, wx.ID_CANCEL, _("Reject"))
+        btn_sizer.Add(self.reject_btn, 0, wx.ALL, 5)
+
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+
+        panel.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
+        self.CentreOnParent()
+
+        self.answer_btn.Bind(wx.EVT_BUTTON, self._on_answer)
+        self.reject_btn.Bind(wx.EVT_BUTTON, self._on_reject)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+        try:
+            apply_skin_to_window(self)
+        except Exception:
+            pass
+
+        # Play ring_in sound
+        self._start_ringing()
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self._on_reject(None)
+        elif event.GetKeyCode() == wx.WXK_RETURN:
+            self._on_answer(None)
+        else:
+            event.Skip()
+
+    def _start_ringing(self):
+        self._ring_playing = True
+        threading.Thread(target=self._ring_loop, daemon=True).start()
+
+    def _ring_loop(self):
+        ring_path = _get_sound_path('titannet/ring_in.ogg')
+        if not ring_path:
+            return
+        try:
+            import pygame
+            while self._ring_playing:
+                try:
+                    pygame.mixer.music.load(ring_path)
+                    pygame.mixer.music.play()
+                    while pygame.mixer.music.get_busy() and self._ring_playing:
+                        time.sleep(0.1)
+                    if self._ring_playing:
+                        time.sleep(0.5)
+                except Exception:
+                    break
+        except ImportError:
+            pass
+
+    def _stop_ringing(self):
+        self._ring_playing = False
+        try:
+            import pygame
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    def _on_answer(self, event):
+        """Answer the call - join the caller's channel."""
+        self._stop_ringing()
+        self.EndModal(wx.ID_OK)
+
+    def _on_reject(self, event):
+        """Reject the call."""
+        self._stop_ringing()
+        # Cancel/reject on server
+        threading.Thread(
+            target=lambda: self.client.cancel_call(self.call_id),
+            daemon=True).start()
+        self.EndModal(wx.ID_CANCEL)
+
+    def _on_close(self, event):
+        self._on_reject(None)
+
+
+class InCallDialog(wx.Dialog):
+    """In-call dialog - shows users list, mute toggle, close button.
+
+    Matches Ruby Elten's Scene_Conference (simplified for 1:1 calls):
+        ListBox(users), Button("Mute/Unmute"), Button("Close")
+    """
+
+    def __init__(self, parent, client, voip, target_user):
+        super().__init__(parent, title=_("Voice Call - {user}").format(user=target_user),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.client = client
+        self.voip = voip
+        self.target_user = target_user
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Users list
+        users_label = wx.StaticText(panel, label=_("Users in call:"))
+        sizer.Add(users_label, 0, wx.LEFT | wx.TOP, 10)
+
+        self.users_list = wx.ListBox(panel)
+        self.users_list.SetMinSize(wx.Size(300, 100))
+        sizer.Add(self.users_list, 1, wx.EXPAND | wx.ALL, 10)
+
+        # Buttons
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.mute_btn = wx.Button(panel, wx.ID_ANY, _("Mute"))
+        btn_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
+
+        self.close_btn = wx.Button(panel, wx.ID_CANCEL, _("End Call"))
+        btn_sizer.Add(self.close_btn, 0, wx.ALL, 5)
+
+        sizer.Add(btn_sizer, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+
+        panel.SetSizer(sizer)
+        self.SetSizerAndFit(sizer)
+        self.CentreOnParent()
+
+        self.mute_btn.Bind(wx.EVT_BUTTON, self._on_mute_toggle)
+        self.close_btn.Bind(wx.EVT_BUTTON, self._on_close_call)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close_event)
+
+        try:
+            apply_skin_to_window(self)
+        except Exception:
+            pass
+
+        # Set up VOIP callbacks
+        self.voip.on_channel_update = self._on_channel_update
+        self.voip.on_user_left = self._on_user_left_call
+        self.voip.on_disconnected = self._on_disconnected
+
+        # Update users list
+        self._update_users_list()
+
+        # Focus users list
+        self.users_list.SetFocus()
+
+        # Update timer
+        self.update_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_timer, self.update_timer)
+        self.update_timer.Start(2000)
+
+    def _on_key(self, event):
+        kc = event.GetKeyCode()
+        if kc == wx.WXK_ESCAPE:
+            self._on_close_call(None)
+        elif kc == ord('M') and event.ControlDown():
+            self._on_mute_toggle(None)
+        else:
+            event.Skip()
+
+    def _update_users_list(self):
+        """Update the users list from VOIP channel data."""
+        self.users_list.Clear()
+        if self.voip and self.voip.channel:
+            for user in self.voip.channel.users:
+                name = user.get('name', '?')
+                if name == self.client.username:
+                    name += f" ({_('You')})"
+                self.users_list.Append(name)
+
+        if self.users_list.GetCount() > 0:
+            self.users_list.SetSelection(0)
+
+    def _on_channel_update(self, channel):
+        """VOIP channel updated."""
+        wx.CallAfter(self._update_users_list)
+
+    def _on_user_left_call(self, username):
+        """Other user left the call."""
+        if username.lower() == self.target_user.lower():
+            wx.CallAfter(self._end_call, _("{user} ended the call").format(user=username))
+
+    def _on_disconnected(self):
+        """VOIP connection lost."""
+        wx.CallAfter(self._end_call, _("Connection lost"))
+
+    def _on_mute_toggle(self, event):
+        """Toggle microphone mute."""
+        if self.voip:
+            self.voip.muted = not self.voip.muted
+            if self.voip.muted:
+                self.mute_btn.SetLabel(_("Unmute"))
+                speak_notification(_("Microphone muted"), 'info')
+            else:
+                self.mute_btn.SetLabel(_("Mute"))
+                speak_notification(_("Microphone unmuted"), 'info')
+
+    def _on_close_call(self, event):
+        """End the call."""
+        self._end_call()
+
+    def _end_call(self, reason=None):
+        """Clean up and close."""
+        self.update_timer.Stop()
+
+        if self.voip:
+            self.voip.stop_audio()
+            self.voip.leave_channel()
+            self.voip.disconnect()
+
+        if reason:
+            speak_notification(reason, 'info')
+        else:
+            speak_notification(_("Call ended"), 'info')
+
+        self.EndModal(wx.ID_OK)
+
+    def _on_close_event(self, event):
+        self._end_call()
+
+    def _on_timer(self, event):
+        """Periodic update."""
+        self._update_users_list()
 
 
 # ---- Module Entry Points ----

@@ -1,0 +1,17 @@
+opcja interaktywnych gier byłaby w titannet, karta rozrywka, gry interaktywne/interactive games
+każdy użytkownik będzie mógł stworzyć interaktywną grę, pod warunkiem że będzie mieć swój klucz gemini, open ai lub anthropic. Najlepiej gemini, bo to też ma tts
+pod menu kontekstowym lub w dialogu, tak jak w heedback hub, będzie przycisk nowa gra
+w dialogu będą takie opcje jak
+nazwa gry
+opis
+klucz API dla gemini
+i możliwość dodania załączników
+pliku zip, z tekstem do zasad gry, mechaniki itd
+plik txt, teksty do mechaniki gry, promptowanie ai
+pliki dźwiękowe ogg lub wav (bo też chciałbym aby te gry były interaktywne z dźwiękami bądź z możliwością dźwięków
+i przycisk ok
+użytkownik będzie mugł usunąć swoją grę, moderacja też
+użytkownicy nie będą mogli usunąć innych gier, nie swoich, tylko moderacja
+i jak użytkownik odpali grę interaktywną, będzie można albo mówić do ai, albo pisać, włączyć/wyłączyć mikrofnon, tts będzie mógł przerywać w trakcie mówienia użytkowników. 
+Te gry interaktywne będą miały wsparcie zapisania hp, statów postaci, zdolności jakie ma, postępu do uczenia się pewnej zdolności, liczę na kreatywność
+ma być też wsparcie dźwięków do gry, czy to chodu, czy to tło, muzyka, broń, czynności etc etc
