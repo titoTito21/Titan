@@ -7,6 +7,7 @@ from src.network.messenger_client import messenger_client, connect_to_messenger,
 from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, load_settings
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Guarantee the pygame mixer is initialized even when the messenger window
 # is opened from a context where the main TCE GUI never ran.
@@ -19,6 +20,20 @@ import os
 
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
+
+
+def _apply_skin_to_tree(window):
+    """Apply skin colors to the window and all child controls."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        try:
+            apply_skin_to_window(child)
+        except Exception:
+            pass
 
 class TitanIMLoginDialog(wx.Dialog):
     def __init__(self, parent):
@@ -70,35 +85,10 @@ class TitanIMLoginDialog(wx.Dialog):
         self.username_ctrl.SelectAll()
     
     def apply_skin_settings(self):
-        """Apply current skin settings to login dialog"""
+        """Apply current skin settings to login dialog."""
         try:
-            settings = load_settings()
-            skin_name = settings.get('interface', {}).get('skin', 'default')
-            
-            skin_path = os.path.join(os.getcwd(), "skins", skin_name, "skin.ini")
-            if os.path.exists(skin_path):
-                config = configparser.ConfigParser()
-                config.read(skin_path, encoding='utf-8')
-                
-                colors = dict(config.items('Colors')) if config.has_section('Colors') else {}
-                fonts = dict(config.items('Fonts')) if config.has_section('Fonts') else {}
-                
-                if colors:
-                    # Apply background colors
-                    frame_bg = colors.get('frame_background_color', '#C0C0C0')
-                    def hex_to_wx_colour(hex_color):
-                        hex_color = hex_color.lstrip('#')
-                        return wx.Colour(int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16))
-                    
-                    self.SetBackgroundColour(hex_to_wx_colour(frame_bg))
-                
-                if fonts:
-                    default_size = int(fonts.get('default_font_size', 9))
-                    default_face = fonts.get('default_font_face', 'MS Sans Serif')
-                    font = wx.Font(default_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, faceName=default_face)
-                    self.SetFont(font)
-                
-                self.Refresh()
+            _apply_skin_to_tree(self)
+            self.Refresh()
         except Exception as e:
             print(f"Error applying skin to login dialog: {e}")
     
@@ -259,14 +249,10 @@ class MessengerChatWindow(wx.Frame):
             return {}
     
     def apply_skin_settings(self):
-        """Apply current skin settings to messenger window"""
+        """Apply current skin settings to messenger window."""
         try:
-            settings = load_settings()
-            skin_name = settings.get('interface', {}).get('skin', 'default')
-            
-            skin_data = self.load_skin_data(skin_name)
-            if skin_data:
-                self.apply_skin(skin_data)
+            _apply_skin_to_tree(self)
+            self.Refresh()
         except Exception as e:
             print(f"Error applying skin to messenger: {e}")
     

@@ -12,6 +12,7 @@ from src.network.telegram_client import (
 from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Guarantee the pygame mixer is initialized even when Telegram is opened
 # from a context where the main TCE GUI never ran (launcher mode, etc.).
@@ -29,6 +30,20 @@ except ImportError:
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
 _speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _apply_skin_to_tree(window):
+    """Apply skin colors to a window and its children."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        try:
+            apply_skin_to_window(child)
+        except Exception:
+            pass
 
 
 def speak_telegram(text, position=0.0, pitch_offset=0, interrupt=True):
@@ -115,6 +130,14 @@ class TelegramLoginDialog(wx.Dialog):
 
         panel.SetSizer(sizer)
         self.Centre()
+        self.apply_skin_settings()
+
+    def apply_skin_settings(self):
+        try:
+            _apply_skin_to_tree(self)
+            self.Refresh()
+        except Exception as e:
+            print(f"[TELEGRAM GUI] Error applying skin to login dialog: {e}")
 
     def get_credentials(self):
         password = self.password_ctrl.GetValue().strip()
@@ -141,6 +164,7 @@ class TelegramChatWindow(wx.Frame):
         telegram_client.add_status_callback(self.on_status_change)
 
         self.Centre()
+        self.apply_skin_settings()
 
         # Show main menu (will play welcome sound)
         self.show_main_menu(initial=True)
@@ -193,6 +217,13 @@ class TelegramChatWindow(wx.Frame):
         self.Bind(wx.EVT_ICONIZE, self.on_iconize)
 
         self.main_list.SetFocus()
+
+    def apply_skin_settings(self):
+        try:
+            _apply_skin_to_tree(self)
+            self.Refresh()
+        except Exception as e:
+            print(f"[TELEGRAM GUI] Error applying skin to chat window: {e}")
     
     def show_main_menu(self, initial=False):
         """Show main Telegram menu"""
