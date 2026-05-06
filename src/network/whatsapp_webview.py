@@ -15,6 +15,7 @@ import platform
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, SETTINGS_FILE_PATH
+from src.titan_core.skin_manager import apply_skin_to_window
 import accessible_output3.outputs.auto
 
 # Initialize translation
@@ -22,6 +23,19 @@ _ = set_language(get_setting('language', 'pl'))
 
 # TTS speaker
 speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        try:
+            apply_skin_to_window(child)
+        except Exception:
+            pass
 
 def get_whatsapp_cookies_dir():
     """Get the directory for storing WhatsApp cookies and user data - same as Titan config"""
@@ -167,6 +181,9 @@ class WhatsAppWebViewFrame(wx.Frame):
         
         # Bind window events
         self.Bind(wx.EVT_CLOSE, self.on_close)
+
+        # Apply active Titan skin to non-webview controls.
+        _apply_skin_to_tree(self)
     
     def setup_menubar(self):
         """Setup menu bar with WhatsApp options"""

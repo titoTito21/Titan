@@ -14,6 +14,7 @@ import platform
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, SETTINGS_FILE_PATH
+from src.titan_core.skin_manager import apply_skin_to_window
 import accessible_output3.outputs.auto
 
 # Initialize translation
@@ -21,6 +22,19 @@ _ = set_language(get_setting('language', 'pl'))
 
 # TTS speaker
 speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        try:
+            apply_skin_to_window(child)
+        except Exception:
+            pass
 
 def get_messenger_cookies_dir():
     """Get the directory for storing Messenger cookies and user data - same as Titan config"""
@@ -202,6 +216,9 @@ class MessengerWebViewFrame(wx.Frame):
         # Create menu bar after all methods are defined
         wx.CallAfter(self.create_menu_bar)
         wx.CallAfter(self.complete_voice_menu)
+
+        # Keep container controls consistent with active skin.
+        _apply_skin_to_tree(self)
     
     def show_webview_error(self):
         """Show error when WebView is not available"""

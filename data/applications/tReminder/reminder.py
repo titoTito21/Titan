@@ -10,6 +10,11 @@ import json
 import subprocess
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except Exception:
+    apply_skin_to_window = None
+
 # Importowanie modułu do odtwarzania dźwięków
 try:
     import pygame
@@ -52,6 +57,23 @@ SETTINGS_FILE = os.path.join(APP_SETTINGS_DIR, 'settings.ini')
 SFX_DIR = 'sfx'
 
 APP_TITLE = _("Titan Organizer")
+
+
+def _apply_skin_to_tree(window):
+    """Apply Titan skin if available; keep standalone mode working."""
+    if apply_skin_to_window is None:
+        return
+
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        try:
+            apply_skin_to_window(child)
+        except Exception:
+            pass
 
 class Settings:
     def __init__(self):
@@ -124,6 +146,7 @@ class TitanOrganizer(wx.Frame):
         self.load_reminders()
 
         self.init_ui()
+        _apply_skin_to_tree(self)
         self.Centre()
         self.Show()
 
@@ -403,6 +426,7 @@ class NewReminderDialog(wx.Dialog):
 
         self.view_mode = view_mode
         self.init_ui()
+        _apply_skin_to_tree(self)
         self.SetSize((400, 400))
         self.Centre()
 
@@ -521,6 +545,7 @@ class ReminderDialog(wx.Dialog):
 
         self.reminder = reminder
         self.init_ui()
+        _apply_skin_to_tree(self)
         self.SetSize((300, 200))
         self.Centre()
 
@@ -546,6 +571,7 @@ class SettingsDialog(wx.Dialog):
 
         self.settings = settings
         self.init_ui()
+        _apply_skin_to_tree(self)
         self.SetSize((400, 300))
         self.Centre()
 
