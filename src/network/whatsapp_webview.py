@@ -15,6 +15,7 @@ import platform
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, SETTINGS_FILE_PATH
+from src.titan_core.skin_manager import apply_skin_to_window
 import accessible_output3.outputs.auto
 
 # Initialize translation
@@ -22,6 +23,29 @@ _ = set_language(get_setting('language', 'pl'))
 
 # TTS speaker
 speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = _new_message_dialog(parent, message, caption, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
+def _new_message_dialog(*args, **kwargs):
+    dlg = wx.MessageDialog(*args, **kwargs)
+    _apply_skin_to_tree(dlg)
+    return dlg
 
 def get_whatsapp_cookies_dir():
     """Get the directory for storing WhatsApp cookies and user data - same as Titan config"""
@@ -167,6 +191,9 @@ class WhatsAppWebViewFrame(wx.Frame):
         
         # Bind window events
         self.Bind(wx.EVT_CLOSE, self.on_close)
+
+        # Apply active Titan skin to non-webview controls.
+        _apply_skin_to_tree(self)
     
     def setup_menubar(self):
         """Setup menu bar with WhatsApp options"""
@@ -1960,7 +1987,7 @@ class WhatsAppWebViewFrame(wx.Frame):
     
     def on_clear_cookies(self, event):
         """Clear WhatsApp cookies and session data"""
-        dialog = wx.MessageDialog(
+        dialog = _new_message_dialog(
             self,
             _("Czy na pewno chcesz wyczyścić wszystkie dane sesji WhatsApp?\nBędziesz musiał zalogować się ponownie."),
             _("Wyczyść dane sesji"),
@@ -1969,11 +1996,11 @@ class WhatsAppWebViewFrame(wx.Frame):
         
         if dialog.ShowModal() == wx.ID_YES:
             if clear_whatsapp_cookies():
-                wx.MessageBox(_("Dane sesji zostały wyczyszczone.\nOdśwież stronę, aby zalogować się ponownie."), 
+                _show_skinned_message(_("Dane sesji zostały wyczyszczone.\nOdśwież stronę, aby zalogować się ponownie."), 
                              _("Sukces"), wx.OK | wx.ICON_INFORMATION)
                 self.on_refresh(None)
             else:
-                wx.MessageBox(_("Nie udało się wyczyścić danych sesji."), 
+                _show_skinned_message(_("Nie udało się wyczyścić danych sesji."), 
                              _("Błąd"), wx.OK | wx.ICON_ERROR)
         
         dialog.Destroy()
@@ -2103,7 +2130,7 @@ def show_whatsapp_webview(parent=None):
     except Exception as e:
         print(f"Error creating WhatsApp WebView: {e}")
         if wx.GetApp():  # Only show MessageBox if wx.App exists
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Nie można uruchomić WhatsApp WebView.\n"
                   "Sprawdź czy WebView2 jest zainstalowany.\n"
                   "Błąd: {}").format(str(e)),
@@ -2117,7 +2144,7 @@ if __name__ == '__main__':
     
     # Check WebView availability
     if not is_webview_available():
-        wx.MessageBox(
+        _show_skinned_message(
             _("WebView nie jest dostępny na tym systemie.\n"
               "Zainstaluj Microsoft Edge WebView2 Runtime."),
             _("Błąd WebView"),

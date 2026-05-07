@@ -17,6 +17,12 @@ from sound import initialize_sound, play_startup_sound, get_sfx_directory, play_
 
 import string
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window, get_current_skin
+except Exception:
+    apply_skin_to_window = None
+    get_current_skin = None
+
 # TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
     from src.titan_core.tce_speech import speak as _tce_speak
@@ -88,6 +94,20 @@ def _is_fs_root(path):
 
 def get_app_sfx_path():
     return get_sfx_directory()
+
+
+def _apply_skin_to_tree(window):
+    """Apply Titan skin recursively when TFM is launched inside Titan."""
+    if apply_skin_to_window is None:
+        return
+
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
 
 
 class FileManager(wx.Frame):
@@ -208,6 +228,8 @@ class FileManager(wx.Frame):
             self.file_list.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.on_item_deselected)
 
         panel.SetSizer(self.main_sizer)
+
+        _apply_skin_to_tree(self)
 
         # macOS VoiceOver: assign accessible names to list controls
         if platform.system() == 'Darwin':
@@ -1170,6 +1192,18 @@ class FileManager(wx.Frame):
 
         active_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_HIGHLIGHT)
         inactive_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+
+        if get_current_skin is not None:
+            try:
+                skin = get_current_skin()
+                skin_active = skin.get_color('listbox_selection_background_color')
+                skin_inactive = skin.get_color('listbox_background_color')
+                if skin_active and skin_active.IsOk():
+                    active_color = skin_active
+                if skin_inactive and skin_inactive.IsOk():
+                    inactive_color = skin_inactive
+            except Exception:
+                pass
 
         if self.active_panel == 'left':
             self.left_list.SetBackgroundColour(active_color)

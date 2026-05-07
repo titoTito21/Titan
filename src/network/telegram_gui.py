@@ -12,6 +12,7 @@ from src.network.telegram_client import (
 from src.titan_core.sound import play_sound, initialize_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Guarantee the pygame mixer is initialized even when Telegram is opened
 # from a context where the main TCE GUI never ran (launcher mode, etc.).
@@ -29,6 +30,49 @@ except ImportError:
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
 _speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _apply_skin_to_tree(window):
+    """Apply skin colors to a window and its children."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
+
+def _show_skinned_info_dialog(parent, title, message):
+    """Show a simple skinned information dialog."""
+    dlg = wx.Dialog(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE)
+    panel = wx.Panel(dlg)
+    sizer = wx.BoxSizer(wx.VERTICAL)
+
+    msg = wx.StaticText(panel, label=message)
+    sizer.Add(msg, 0, wx.ALL | wx.EXPAND, 12)
+
+    ok_btn = wx.Button(panel, wx.ID_OK, _("OK"))
+    ok_btn.SetDefault()
+    sizer.Add(ok_btn, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+    panel.SetSizer(sizer)
+    dlg_sizer = wx.BoxSizer(wx.VERTICAL)
+    dlg_sizer.Add(panel, 1, wx.EXPAND)
+    dlg.SetSizerAndFit(dlg_sizer)
+    dlg.CentreOnParent()
+
+    _apply_skin_to_tree(dlg)
+    dlg.ShowModal()
+    dlg.Destroy()
+
+
+def _show_skinned_message(parent, message, title, style=wx.OK | wx.ICON_INFORMATION):
+    dlg = wx.MessageDialog(parent, message, title, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def speak_telegram(text, position=0.0, pitch_offset=0, interrupt=True):
@@ -115,6 +159,14 @@ class TelegramLoginDialog(wx.Dialog):
 
         panel.SetSizer(sizer)
         self.Centre()
+        self.apply_skin_settings()
+
+    def apply_skin_settings(self):
+        try:
+            _apply_skin_to_tree(self)
+            self.Refresh()
+        except Exception as e:
+            print(f"[TELEGRAM GUI] Error applying skin to login dialog: {e}")
 
     def get_credentials(self):
         password = self.password_ctrl.GetValue().strip()
@@ -141,6 +193,7 @@ class TelegramChatWindow(wx.Frame):
         telegram_client.add_status_callback(self.on_status_change)
 
         self.Centre()
+        self.apply_skin_settings()
 
         # Show main menu (will play welcome sound)
         self.show_main_menu(initial=True)
@@ -193,6 +246,13 @@ class TelegramChatWindow(wx.Frame):
         self.Bind(wx.EVT_ICONIZE, self.on_iconize)
 
         self.main_list.SetFocus()
+
+    def apply_skin_settings(self):
+        try:
+            _apply_skin_to_tree(self)
+            self.Refresh()
+        except Exception as e:
+            print(f"[TELEGRAM GUI] Error applying skin to chat window: {e}")
     
     def show_main_menu(self, initial=False):
         """Show main Telegram menu"""
@@ -380,7 +440,7 @@ class TelegramChatWindow(wx.Frame):
             elif selected_text == _("Groups"):
                 self.show_groups_view()
             elif selected_text == _("Settings"):
-                wx.MessageBox(_("Settings - coming soon"), _("Information"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_info_dialog(self, _("Information"), _("Settings - coming soon"))
             elif selected_text == _("Disconnect"):
                 self.on_disconnect(None)
 
@@ -442,7 +502,8 @@ class TelegramChatWindow(wx.Frame):
 
         if not is_voice_calls_available():
             speak_telegram(_("Voice calls not available - py-tgcalls required"), position=0.7, pitch_offset=5)
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Voice calls require py-tgcalls.\nInstall with: pip install py-tgcalls"),
                 _("Voice calls unavailable"),
                 wx.OK | wx.ICON_INFORMATION
@@ -467,7 +528,8 @@ class TelegramChatWindow(wx.Frame):
             # Sound is played in telegram_windows.TelegramPrivateMessageWindow.__init__
         except Exception as e:
             print(f"Error opening private message window: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Cannot open chat window.\nError: {error}").format(error=str(e)),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -481,7 +543,8 @@ class TelegramChatWindow(wx.Frame):
             # Sound is played in telegram_windows.TelegramGroupChatWindow.__init__
         except Exception as e:
             print(f"Error opening group chat window: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
+                self,
                 _("Cannot open chat window.\nError: {error}").format(error=str(e)),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -664,7 +727,8 @@ def show_telegram_login(parent=None):
                         print(f"[TELEGRAM GUI] Failed to create chat window: {e}")
                         import traceback
                         traceback.print_exc()
-                        wx.MessageBox(
+                        _show_skinned_message(
+                            parent,
                             _("Error opening Telegram chat window.\nError: {error}").format(error=str(e)),
                             _("Error"), wx.OK | wx.ICON_ERROR,
                         )
@@ -682,9 +746,9 @@ def show_telegram_login(parent=None):
                         pass
                     return chat_window
                 else:
-                    wx.MessageBox(_("Failed to connect to Telegram. Check your phone number and try again."), _("Connection error"), wx.OK | wx.ICON_ERROR)
+                    _show_skinned_message(parent, _("Failed to connect to Telegram. Check your phone number and try again."), _("Connection error"), wx.OK | wx.ICON_ERROR)
             else:
-                wx.MessageBox(_("Failed to start connection. Please try again."), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(parent, _("Failed to start connection. Please try again."), _("Error"), wx.OK | wx.ICON_ERROR)
     else:
         login_dialog.Destroy()
 

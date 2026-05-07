@@ -71,6 +71,17 @@ SKINS_DIR = resource_path('skins')
 speaker = accessible_output3.outputs.auto.Auto()
 
 
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 class SettingsFrame(wx.Frame):
     def __init__(self, *args, component_manager=None, **kw):
         super(SettingsFrame, self).__init__(*args, **kw)
@@ -853,7 +864,7 @@ class SettingsFrame(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
             if not self._validate_audio_duration(path, max_sec):
-                wx.MessageBox(
+                _show_skinned_message(
                     _("The file '{}' exceeds the maximum duration of {} seconds.").format(
                         os.path.basename(path), max_sec),
                     _("Error"), wx.OK | wx.ICON_ERROR)
@@ -1259,7 +1270,7 @@ class SettingsFrame(wx.Frame):
 
     def OnSapiSettings(self, event):
         if sys.platform != 'win32':
-            wx.MessageBox(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
             event.Skip()
             return
         try:
@@ -1275,23 +1286,23 @@ class SettingsFrame(wx.Frame):
                 if result.stderr:
                     error_message += f"Stderr:\n{result.stderr}"
                 print(f"ERROR: Subprocess error in OnSapiSettings:\n{error_message}")
-                wx.MessageBox(_("Cannot open SAPI settings:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Cannot open SAPI settings:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
             else:
                 print("INFO: SAPI settings command executed successfully.")
 
         except FileNotFoundError:
             print("ERROR: Executable control.exe not found.")
-            wx.MessageBox(_("Error: Executable control.exe not found. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Error: Executable control.exe not found. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
             print(f"ERROR: Unexpected error while opening SAPI settings: {e}")
-            wx.MessageBox(_("Unexpected error while opening SAPI settings:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Unexpected error while opening SAPI settings:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
 
 
     def OnEaseOfAccess(self, event):
         if sys.platform != 'win32':
-            wx.MessageBox(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is only available on Windows."), _("Information"), wx.OK | wx.ICON_INFORMATION)
             event.Skip()
             return
         try:
@@ -1314,7 +1325,7 @@ class SettingsFrame(wx.Frame):
                     if result.stderr:
                         error_message += f"Stderr:\n{result.stderr}"
                     print(f"ERROR: Subprocess error in OnEaseOfAccess:\n{error_message}")
-                    wx.MessageBox(_("Cannot open Ease of Access:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
+                    _show_skinned_message(_("Cannot open Ease of Access:\n{}\n\nTechnical details in the console.").format(error_message), _("Error"), wx.OK | wx.ICON_ERROR)
                 else:
                     print("INFO: Legacy Ease of Access command executed successfully.")
             else:
@@ -1322,10 +1333,10 @@ class SettingsFrame(wx.Frame):
 
         except FileNotFoundError:
             print("ERROR: Executable not found.")
-            wx.MessageBox(_("Error: Cannot find accessibility settings. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Error: Cannot find accessibility settings. Make sure Windows is working correctly."), _("Error"), wx.OK | wx.ICON_ERROR)
         except Exception as e:
             print(f"ERROR: Unexpected error while opening Ease of Access: {e}")
-            wx.MessageBox(_("Unexpected error while opening Ease of Access:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Unexpected error while opening Ease of Access:\n{}\n\nTechnical details in the console.").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
             traceback.print_exc()
         event.Skip()
 

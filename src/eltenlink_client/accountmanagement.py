@@ -26,6 +26,18 @@ _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
 
 
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        if apply_skin_to_window:
+            apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 def speak_am(text, position=0.0, pitch_offset=0, interrupt=True):
     """Speak text using stereo speech."""
     if not text:
@@ -1019,7 +1031,7 @@ class AccountManagementDialog(wx.Dialog):
 
         if verified == 0:
             # Email not verified - offer to verify
-            ret = wx.MessageBox(
+            ret = _show_skinned_message(
                 _("Mail events reporting requires email verification. Do you want to verify your email now?"),
                 _("Mail Events"), wx.YES_NO | wx.ICON_QUESTION, parent)
             if ret == wx.YES:
@@ -1161,7 +1173,7 @@ class AccountManagementDialog(wx.Dialog):
         token_list.SetFocus()
 
         def on_logout(evt):
-            ret = wx.MessageBox(
+            ret = _show_skinned_message(
                 _("Are you sure you want to remove all auto-login tokens and log out all sessions?"),
                 _("Log out all sessions"), wx.YES_NO | wx.ICON_WARNING, dlg)
             if ret == wx.YES:
@@ -1283,7 +1295,7 @@ class AccountManagementDialog(wx.Dialog):
             if not password:
                 speak_notification(_("Please enter your password"), 'warning')
             else:
-                ret = wx.MessageBox(
+                ret = _show_skinned_message(
                     _("Are you sure you want to archive this account?"),
                     _("Confirm"), wx.YES_NO | wx.ICON_WARNING, parent)
                 if ret == wx.YES:
@@ -1395,7 +1407,7 @@ class BlacklistDialog(wx.Dialog):
             return
 
         user = self.blacklist[sel]
-        ret = wx.MessageBox(
+        ret = _show_skinned_message(
             _("Are you sure you want to remove {user} from the blacklist?").format(user=user),
             _("Remove from blacklist"), wx.YES_NO | wx.ICON_QUESTION, self)
         if ret != wx.YES:
@@ -1424,3 +1436,4 @@ def show_account_management(parent, client):
     dlg = AccountManagementDialog(parent, client)
     dlg.ShowModal()
     dlg.Destroy()
+

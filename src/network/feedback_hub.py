@@ -37,6 +37,7 @@ from src.titan_core.sound import (
     play_focus_sound,
     play_endoflist_sound,
 )
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Pull translations from the network domain - same domain as titan_net_gui.
 _ = set_language(get_setting('language', 'pl'))
@@ -108,6 +109,17 @@ try:
     initialize_sound()
 except Exception as _e:
     print(f"[Feedback Hub] initialize_sound() failed at import: {_e}")
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def _is_screen_reader_running() -> bool:
@@ -309,12 +321,12 @@ class NewFeedbackDialog(wx.Dialog):
         try:
             size = os.path.getsize(path)
         except OSError as e:
-            wx.MessageBox(_("Cannot read file: {error}").format(error=str(e)),
+            _show_skinned_message(_("Cannot read file: {error}").format(error=str(e)),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
 
         if size > ATTACHMENT_MAX_BYTES:
-            wx.MessageBox(_("Attachment is too large. Maximum size is 12 MB."),
+            _show_skinned_message(_("Attachment is too large. Maximum size is 12 MB."),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
 
@@ -322,7 +334,7 @@ class NewFeedbackDialog(wx.Dialog):
             with open(path, 'rb') as fh:
                 data = fh.read()
         except OSError as e:
-            wx.MessageBox(_("Cannot read file: {error}").format(error=str(e)),
+            _show_skinned_message(_("Cannot read file: {error}").format(error=str(e)),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
 
@@ -626,7 +638,7 @@ class FeedbackDetailDialog(wx.Dialog):
         if not self.item:
             return
         title = self.item.get('title', '')
-        confirm = wx.MessageBox(
+        confirm = _show_skinned_message(
             _("Delete '{title}'? This cannot be undone.").format(title=title),
             _("Delete feedback"),
             wx.YES_NO | wx.ICON_WARNING,
@@ -1182,7 +1194,7 @@ class FeedbackHubFrame(wx.Frame):
         # for the author / moderators.
         feedback_id = int(item.get('id') or 0)
         title = item.get('title', '?')
-        confirm = wx.MessageBox(
+        confirm = _show_skinned_message(
             _("Delete '{title}'? This cannot be undone.").format(title=title),
             _("Delete feedback"),
             wx.YES_NO | wx.ICON_WARNING,
@@ -1265,3 +1277,4 @@ def open_feedback_hub(parent, titan_client) -> Optional[FeedbackHubFrame]:
         # window_switcher is optional in some launcher modes
         pass
     return frame
+

@@ -12,10 +12,21 @@ import traceback
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 from src.ui.help import show_help
-from src.titan_core.skin_manager import get_current_skin
+from src.titan_core.skin_manager import get_current_skin, apply_skin_to_window
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 # Import the Component Manager GUI
 try:
@@ -141,9 +152,9 @@ class MenuBar(wx.MenuBar):
             manager_dialog.ShowModal()
             manager_dialog.Destroy()
         elif not ComponentManagerDialog:
-             wx.MessageBox(_("Cannot load Component Manager (componentmanagergui.py not found)"), _("Error"), wx.OK | wx.ICON_ERROR)
+             _show_skinned_message(_("Cannot load Component Manager (componentmanagergui.py not found)"), _("Error"), wx.OK | wx.ICON_ERROR)
         elif not self.component_manager:
-             wx.MessageBox(_("Component Manager has not been initialized."), _("Error"), wx.OK | wx.ICON_ERROR)
+             _show_skinned_message(_("Component Manager has not been initialized."), _("Error"), wx.OK | wx.ICON_ERROR)
 
     # DISABLED - Titan-Net login
     # def on_titan_net_login(self, event):
@@ -154,12 +165,12 @@ class MenuBar(wx.MenuBar):
 
     #     # Check if titan_client exists
     #     if not hasattr(self.parent, 'titan_client') or not self.parent.titan_client:
-    #         wx.MessageBox(_("Titan-Net client not initialized"), _("Error"), wx.OK | wx.ICON_ERROR)
+    #         _show_skinned_message(_("Titan-Net client not initialized"), _("Error"), wx.OK | wx.ICON_ERROR)
     #         return
 
     #     # Check if already logged in
     #     if hasattr(self.parent, 'active_services') and "titannet" in self.parent.active_services:
-    #         wx.MessageBox(_("You are already logged in to Titan-Network"), _("Information"), wx.OK | wx.ICON_INFORMATION)
+    #         _show_skinned_message(_("You are already logged in to Titan-Network"), _("Information"), wx.OK | wx.ICON_INFORMATION)
     #         return
 
     #     # Import show_login_dialog
@@ -204,7 +215,7 @@ class MenuBar(wx.MenuBar):
             self.progress = None
 
     def show_message_box(self, message, caption, style):
-        wx.MessageBox(message, caption, style)
+        _show_skinned_message(message, caption, style)
 
 
     def extract_package(self, file_path, progress):
@@ -343,3 +354,4 @@ class MenuBar(wx.MenuBar):
             self.parent.show_game_list()
         elif view_id == 'network' and hasattr(self.parent, 'show_network_list'):
             self.parent.show_network_list()
+

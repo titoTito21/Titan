@@ -10,12 +10,24 @@ import signal
 import os
 import sys
 from src.titan_core.translation import _
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Global circuit breaker
 _wifi_gui_active = False
 _wifi_gui_failed_count = 0
 _last_failure_time = 0
 FAILURE_COOLDOWN = 30  # 30 seconds cooldown after failure
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 def is_wifi_gui_safe():
     """Check if WiFi GUI is safe to open based on failure history"""
@@ -46,7 +58,7 @@ def safe_show_wifi_gui(parent=None):
     
     # Check circuit breaker
     if not is_wifi_gui_safe():
-        wx.MessageBox(
+        _show_skinned_message(
             _("WiFi interface has failed multiple times recently.\n"
               "Please wait 30 seconds before trying again, or use system WiFi settings.\n\n"
               "Windows WiFi: Win+I → Network & Internet → WiFi"),
@@ -57,7 +69,7 @@ def safe_show_wifi_gui(parent=None):
     
     # Check if already active
     if _wifi_gui_active:
-        wx.MessageBox(
+        _show_skinned_message(
             _("WiFi interface is already being opened. Please wait."),
             _("WiFi Already Loading"),
             wx.OK | wx.ICON_INFORMATION
@@ -86,7 +98,7 @@ def safe_show_wifi_gui(parent=None):
         global _wifi_gui_active
         _wifi_gui_active = False
         try:
-            wx.MessageBox(
+            _show_skinned_message(
                 _("WiFi interface loading was forcibly stopped.\n\n"
                   "This prevents your computer from freezing.\n"
                   "Please use Windows WiFi settings instead:\n\n"
@@ -167,7 +179,7 @@ def safe_show_wifi_gui(parent=None):
         
         print(f"Critical error in safe WiFi wrapper: {e}")
         try:
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Critical error loading WiFi interface: {}").format(str(e)),
                 _("WiFi Error"),
                 wx.OK | wx.ICON_ERROR

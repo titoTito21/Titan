@@ -39,6 +39,7 @@ from src.titan_core.sound import (
     play_focus_sound,
     play_endoflist_sound,
 )
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Pull translations through the multi-domain wrapper. The dedicated
 # ``interactive_games`` gettext domain is registered in
@@ -107,6 +108,17 @@ try:
     initialize_sound()
 except Exception as _e:
     print(f"[Interactive Games] initialize_sound() failed at import: {_e}")
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def _is_screen_reader_running() -> bool:
@@ -341,16 +353,16 @@ class NewGameDialog(wx.Dialog):
         try:
             size = os.path.getsize(path)
         except OSError as e:
-            wx.MessageBox(_("Cannot read file: {error}").format(error=str(e)),
+            _show_skinned_message(_("Cannot read file: {error}").format(error=str(e)),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
         if size > ATTACHMENT_MAX_BYTES:
-            wx.MessageBox(_("Attachment is too large. Maximum size is 25 MB."),
+            _show_skinned_message(_("Attachment is too large. Maximum size is 25 MB."),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
         total = sum(len(a.get('bytes') or b'') for a in self.attachments) + size
         if total > TOTAL_ATTACHMENT_BYTES:
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Total attachments exceed {limit} MB.").format(
                     limit=TOTAL_ATTACHMENT_BYTES // (1024 * 1024)),
                 _("Attachment"), wx.OK | wx.ICON_ERROR)
@@ -360,14 +372,14 @@ class NewGameDialog(wx.Dialog):
             with open(path, 'rb') as fh:
                 data = fh.read()
         except OSError as e:
-            wx.MessageBox(_("Cannot read file: {error}").format(error=str(e)),
+            _show_skinned_message(_("Cannot read file: {error}").format(error=str(e)),
                           _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
 
         name = os.path.basename(path)
         atype = _classify_attachment(name)
         if atype == 'other':
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Unsupported file type. Use .zip (rules), .txt/.md/.json (prompts) or .ogg/.wav/.mp3/.flac/.opus (sounds)."),
                 _("Attachment"), wx.OK | wx.ICON_ERROR)
             return
@@ -425,7 +437,7 @@ class NewGameDialog(wx.Dialog):
                     skipped_too_large += 1
                     continue
                 if running_total + size > TOTAL_ATTACHMENT_BYTES:
-                    wx.MessageBox(
+                    _show_skinned_message(
                         _("Total attachments would exceed {limit} MB. "
                           "Stopping at {added} files.").format(
                               limit=TOTAL_ATTACHMENT_BYTES // (1024 * 1024),
@@ -731,7 +743,7 @@ class GameDetailDialog(wx.Dialog):
     def _on_delete(self, event):
         if not self.game:
             return
-        confirm = wx.MessageBox(
+        confirm = _show_skinned_message(
             _("Delete '{name}' and all its sessions? This cannot be undone.").format(
                 name=self.game.get('name', '?')),
             _("Delete game"),
@@ -1192,7 +1204,7 @@ class InteractiveGamesFrame(wx.Frame):
         if not (is_owner or is_mod):
             speak_notification(_("You can only delete your own games"), 'error')
             return
-        confirm = wx.MessageBox(
+        confirm = _show_skinned_message(
             _("Delete '{name}'? This cannot be undone.").format(name=data.get('name', '?')),
             _("Delete game"),
             wx.YES_NO | wx.ICON_WARNING,
@@ -1273,3 +1285,4 @@ def open_interactive_games(parent, titan_client) -> Optional[InteractiveGamesFra
     except Exception:
         pass
     return frame
+
