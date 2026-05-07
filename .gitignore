@@ -80,9 +80,9 @@ blog_read_debug.txt
 *.swo
 *~
 
-# Local Claude Code settings
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
+# Claude Code workspace (commands, settings, locks) — kept locally only
+.claude/
+**/.claude/
 
 # ===== OS noise =====
 .DS_Store
