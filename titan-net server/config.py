@@ -5,6 +5,13 @@ Titan-Net Server Configuration
 import os
 
 
+def _require(name):
+    raise RuntimeError(
+        f"{name} environment variable is required. Set it in /opt/titan-net/.env "
+        f"(production) or titan-net server/.env (local) and reload the service."
+    )
+
+
 class Config:
     """Server configuration"""
 
@@ -24,7 +31,7 @@ class Config:
 
     # Security settings
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-this-in-production')
-    DATABASE_KEY = os.getenv('DATABASE_KEY', '***REMOVED***')
+    DATABASE_KEY = os.environ.get('DATABASE_KEY') or _require('DATABASE_KEY')
 
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

@@ -39,6 +39,18 @@ titan-net server/logs/
 titan-net server/*.pid
 **/titannet.db.pid
 
+# ===== Personal deploy / update / recovery scripts =====
+# Kept out of public repo (no secrets in source — they read from .env —
+# but this is admin tooling, not part of the published codebase)
+titan-net server/update.py
+titan-net server/deploy.py
+titan-net server/quick_update.py
+titan-net server/local_backup.py
+titan-net server/_oauth_install.py
+titan-net server/_install_sqlcipher.py
+titan-net server/_post_install_check.py
+titan-net server/_recover_now.py
+
 # ===== Build / compile artifacts =====
 __pycache__/
 *.py[cod]
