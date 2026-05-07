@@ -50,6 +50,23 @@ def compile_to_release():
         ("src", "src"),  # Source modules for app/game subprocess access (stays in _internal/)
     ]
 
+    # Preflight: detect webrtcvad availability and warn early.
+    # The PyInstaller-contrib hook for webrtcvad calls copy_metadata('webrtcvad')
+    # and aborts the build with PackageNotFoundError when only the alternate
+    # 'webrtcvad-wheels' distribution is installed (typical on Python 3.13+).
+    # Our local hook in pyinstaller_hooks/ overrides this, but if neither
+    # variant is importable Titan-Net voice will be broken at runtime - say so.
+    try:
+        import webrtcvad  # noqa: F401
+        print("Preflight: webrtcvad is importable.")
+    except ImportError:
+        print("Preflight WARNING: webrtcvad is NOT installed. Titan-Net voice "
+              "will fall back to continuous mode. To install on Python 3.13+ "
+              "use: pip install webrtcvad-wheels")
+
+    # Local PyInstaller hooks override broken contrib hooks (e.g. webrtcvad).
+    local_hooks_dir = root_dir / "pyinstaller_hooks"
+
     # Build the PyInstaller command
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -58,6 +75,9 @@ def compile_to_release():
         "--name", "TCE Launcher",
         "--noconfirm",  # Overwrite without asking
     ]
+
+    if local_hooks_dir.is_dir():
+        cmd.extend(["--additional-hooks-dir", str(local_hooks_dir)])
 
     # Add icon if exists (platform-specific format)
     if IS_WINDOWS and (root_dir / "icon.ico").exists():

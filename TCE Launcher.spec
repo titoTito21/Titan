@@ -1,5 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
+
+# Local override hooks (loaded before PyInstaller-contrib hooks).
+# Currently overrides the broken hook-webrtcvad.py which crashes the build
+# when only 'webrtcvad-wheels' is installed instead of 'webrtcvad'.
+_LOCAL_HOOKS_DIR = os.path.join(os.path.dirname(os.path.abspath(SPEC)), 'pyinstaller_hooks')
+_HOOKSPATH = [_LOCAL_HOOKS_DIR] if os.path.isdir(_LOCAL_HOOKS_DIR) else []
 
 datas = [('data', 'data'), ('languages', 'languages'), ('sfx', 'sfx'), ('skins', 'skins'), ('src', 'src')]
 binaries = []
@@ -20,7 +27,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=_HOOKSPATH,
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],

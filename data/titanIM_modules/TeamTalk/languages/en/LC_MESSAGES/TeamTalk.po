@@ -1,0 +1,278 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: TeamTalk Titan IM Module\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+
+msgid "TeamTalk"
+msgstr "TeamTalk"
+
+msgid "TeamTalk - Titan IM"
+msgstr "TeamTalk - Titan IM"
+
+msgid "TeamTalk servers"
+msgstr "TeamTalk servers"
+
+msgid "Channels and users"
+msgstr "Channels and users"
+
+msgid "TeamTalk channels and users"
+msgstr "TeamTalk channels and users"
+
+msgid "Channel chat"
+msgstr "Channel chat"
+
+msgid "Connect"
+msgstr "Connect"
+
+msgid "Disconnect"
+msgstr "Disconnect"
+
+msgid "Add"
+msgstr "Add"
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Remove"
+msgstr "Remove"
+
+msgid "Import .tt"
+msgstr "Import .tt"
+
+msgid "Send"
+msgstr "Send"
+
+msgid "Push to talk"
+msgstr "Push to talk"
+
+msgid "Mute microphone"
+msgstr "Mute microphone"
+
+msgid "Server"
+msgstr "Server"
+
+msgid "Help"
+msgstr "Help"
+
+msgid "SDK status"
+msgstr "SDK status"
+
+msgid "Show TeamTalk SDK status"
+msgstr "Show TeamTalk SDK status"
+
+msgid "TeamTalk SDK status"
+msgstr "TeamTalk SDK status"
+
+msgid "Import TeamTalk connection file"
+msgstr "Import TeamTalk connection file"
+
+msgid "Connect to selected server"
+msgstr "Connect to selected server"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Close TeamTalk"
+msgstr "Close TeamTalk"
+
+msgid "Import failed"
+msgstr "Import failed"
+
+msgid "Import .tt file"
+msgstr "Import .tt file"
+
+msgid "TeamTalk Server"
+msgstr "TeamTalk Server"
+
+msgid "TeamTalk server"
+msgstr "TeamTalk server"
+
+msgid "Entry name:"
+msgstr "Entry name:"
+
+msgid "Server address:"
+msgstr "Server address:"
+
+msgid "Server address is required."
+msgstr "Server address is required."
+
+msgid "Remove selected TeamTalk server profile?"
+msgstr "Remove selected TeamTalk server profile?"
+
+msgid "TCP port:"
+msgstr "TCP port:"
+
+msgid "UDP port:"
+msgstr "UDP port:"
+
+msgid "Username:"
+msgstr "Username:"
+
+msgid "Password:"
+msgstr "Password:"
+
+msgid "Nickname:"
+msgstr "Nickname:"
+
+msgid "Channel path:"
+msgstr "Channel path:"
+
+msgid "Channel password:"
+msgstr "Channel password:"
+
+msgid "Encrypted server"
+msgstr "Encrypted server"
+
+msgid "Connect to selected TeamTalk server"
+msgstr "Connect to selected TeamTalk server"
+
+msgid "Disconnect from TeamTalk"
+msgstr "Disconnect from TeamTalk"
+
+msgid "Type TeamTalk message"
+msgstr "Type TeamTalk message"
+
+msgid "TeamTalk chat history"
+msgstr "TeamTalk chat history"
+
+msgid "Import TeamTalk .tt file"
+msgstr "Import TeamTalk .tt file"
+
+msgid "TeamTalk files (*.tt)|*.tt|All files (*.*)|*.*"
+msgstr "TeamTalk files (*.tt)|*.tt|All files (*.*)|*.*"
+
+msgid "TeamTalk file imported"
+msgstr "TeamTalk file imported"
+
+msgid "Imported TeamTalk file: {name}"
+msgstr "Imported TeamTalk file: {name}"
+
+msgid "Select or add a TeamTalk server first."
+msgstr "Select or add a TeamTalk server first."
+
+msgid "TeamTalk SDK not available"
+msgstr "TeamTalk SDK not available"
+
+msgid "TeamTalk SDK loaded"
+msgstr "TeamTalk SDK loaded"
+
+msgid "TeamTalk SDK was not found. Place TeamTalk5.py and the native TeamTalk5 library ({lib}) from the BearWare TeamTalk 5 SDK into data/titanIM_modules/TeamTalk/lib (and TeamTalk_DLL/ on Windows), then restart Titan."
+msgstr "TeamTalk SDK was not found. Place TeamTalk5.py and the native TeamTalk5 library ({lib}) from the BearWare TeamTalk 5 SDK into data/titanIM_modules/TeamTalk/lib (and TeamTalk_DLL/ on Windows), then restart Titan."
+
+msgid "The loaded TeamTalk SDK does not expose a TeamTalk initializer."
+msgstr "The loaded TeamTalk SDK does not expose a TeamTalk initializer."
+
+msgid "The loaded TeamTalk SDK does not expose a connect function."
+msgstr "The loaded TeamTalk SDK does not expose a connect function."
+
+msgid "Could not initialize TeamTalk client."
+msgstr "Could not initialize TeamTalk client."
+
+msgid "Could not start TeamTalk connection."
+msgstr "Could not start TeamTalk connection."
+
+msgid "TeamTalk connection failed."
+msgstr "TeamTalk connection failed."
+
+msgid "TeamTalk command failed."
+msgstr "TeamTalk command failed."
+
+msgid "TeamTalk event: {event}"
+msgstr "TeamTalk event: {event}"
+
+msgid "Connecting to {host}..."
+msgstr "Connecting to {host}..."
+
+msgid "Connection started. Waiting for TeamTalk server..."
+msgstr "Connection started. Waiting for TeamTalk server..."
+
+msgid "Connected. Logging in..."
+msgstr "Connected. Logging in..."
+
+msgid "Connected to {server}"
+msgstr "Connected to {server}"
+
+msgid "Connected to TeamTalk server"
+msgstr "Connected to TeamTalk server"
+
+msgid "Connection failed"
+msgstr "Connection failed"
+
+msgid "TeamTalk connection failed"
+msgstr "TeamTalk connection failed"
+
+msgid "Disconnected from TeamTalk"
+msgstr "Disconnected from TeamTalk"
+
+msgid "Selected channel {channel}"
+msgstr "Selected channel {channel}"
+
+msgid "Selected user: {user}"
+msgstr "Selected user: {user}"
+
+msgid "Enter channel password:"
+msgstr "Enter channel password:"
+
+msgid "Join TeamTalk channel"
+msgstr "Join TeamTalk channel"
+
+msgid "Joining channel {channel}"
+msgstr "Joining channel {channel}"
+
+msgid "Could not join the selected channel."
+msgstr "Could not join the selected channel."
+
+msgid "Join a TeamTalk channel before sending channel messages."
+msgstr "Join a TeamTalk channel before sending channel messages."
+
+msgid "Could not send TeamTalk message."
+msgstr "Could not send TeamTalk message."
+
+msgid "Could not open TeamTalk module"
+msgstr "Could not open TeamTalk module"
+
+msgid "Microphone muted"
+msgstr "Microphone muted"
+
+msgid "Microphone ready"
+msgstr "Microphone ready"
+
+msgid "Me: {message}"
+msgstr "Me: {message}"
+
+msgid "{user} joined the channel"
+msgstr "{user} joined the channel"
+
+msgid "{user} left the channel"
+msgstr "{user} left the channel"
+
+msgid "{user} logged in"
+msgstr "{user} logged in"
+
+msgid "{user} logged out"
+msgstr "{user} logged out"
+
+msgid "{count} users"
+msgstr "{count} users"
+
+msgid "password"
+msgstr "password"
+
+msgid " speaking"
+msgstr " speaking"
+
+msgid "The selected .tt file is empty."
+msgstr "The selected .tt file is empty."
+
+msgid "Could not find TeamTalk server information in this file."
+msgstr "Could not find TeamTalk server information in this file."
+
+msgid "- connected to {server}"
+msgstr "- connected to {server}"
+
+msgid "- connected to {server} as {user}"
+msgstr "- connected to {server} as {user}"
+
+msgid "- ready"
+msgstr "- ready"

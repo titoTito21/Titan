@@ -198,3 +198,81 @@ msgstr " mówi"
 
 msgid "Close"
 msgstr "Zamknij"
+
+msgid "Show TeamTalk SDK status"
+msgstr "Pokaż stan SDK TeamTalk"
+
+msgid "TeamTalk SDK status"
+msgstr "Stan SDK TeamTalk"
+
+msgid "Import TeamTalk connection file"
+msgstr "Importuj plik połączenia TeamTalk"
+
+msgid "Connect to selected server"
+msgstr "Połącz z wybranym serwerem"
+
+msgid "Close TeamTalk"
+msgstr "Zamknij TeamTalk"
+
+msgid "Import failed"
+msgstr "Import nieudany"
+
+msgid "Import .tt file"
+msgstr "Importuj plik .tt"
+
+msgid "TeamTalk server"
+msgstr "Serwer TeamTalk"
+
+msgid "Server address is required."
+msgstr "Adres serwera jest wymagany."
+
+msgid "Remove selected TeamTalk server profile?"
+msgstr "Usunąć wybrany profil serwera TeamTalk?"
+
+msgid "TeamTalk SDK was not found. Place TeamTalk5.py and the native TeamTalk5 library ({lib}) from the BearWare TeamTalk 5 SDK into data/titanIM_modules/TeamTalk/lib (and TeamTalk_DLL/ on Windows), then restart Titan."
+msgstr "Nie znaleziono SDK TeamTalk. Umieść TeamTalk5.py oraz natywną bibliotekę TeamTalk5 ({lib}) z SDK BearWare TeamTalk 5 w katalogu data/titanIM_modules/TeamTalk/lib (a w przypadku Windows także TeamTalk_DLL/), a następnie uruchom Titan ponownie."
+
+msgid "The loaded TeamTalk SDK does not expose a TeamTalk initializer."
+msgstr "Załadowane SDK TeamTalk nie udostępnia inicjalizatora TeamTalk."
+
+msgid "The loaded TeamTalk SDK does not expose a connect function."
+msgstr "Załadowane SDK TeamTalk nie udostępnia funkcji łączenia."
+
+msgid "Could not initialize TeamTalk client."
+msgstr "Nie można zainicjalizować klienta TeamTalk."
+
+msgid "Could not start TeamTalk connection."
+msgstr "Nie można rozpocząć połączenia TeamTalk."
+
+msgid "TeamTalk connection failed."
+msgstr "Połączenie TeamTalk nieudane."
+
+msgid "TeamTalk command failed."
+msgstr "Polecenie TeamTalk nie powiodło się."
+
+msgid "TeamTalk event: {event}"
+msgstr "Zdarzenie TeamTalk: {event}"
+
+msgid "Selected user: {user}"
+msgstr "Wybrany użytkownik: {user}"
+
+msgid "Could not send TeamTalk message."
+msgstr "Nie można wysłać wiadomości TeamTalk."
+
+msgid "Could not open TeamTalk module"
+msgstr "Nie można otworzyć modułu TeamTalk"
+
+msgid "The selected .tt file is empty."
+msgstr "Wybrany plik .tt jest pusty."
+
+msgid "Could not find TeamTalk server information in this file."
+msgstr "Nie znaleziono informacji o serwerze TeamTalk w tym pliku."
+
+msgid "- connected to {server}"
+msgstr "- połączono z {server}"
+
+msgid "- connected to {server} as {user}"
+msgstr "- połączono z {server} jako {user}"
+
+msgid "- ready"
+msgstr "- gotowe"

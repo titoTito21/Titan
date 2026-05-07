@@ -4,7 +4,9 @@
 This module provides a Titan-styled TeamTalk front end. It supports server
 profiles, .tt/tt:// import, Titan IM sounds, and optional BearWare TeamTalk 5
 SDK integration when TeamTalk5.py and the native TeamTalk5 library are bundled
-in this module's lib/ or sdk/ directory.
+under this module's lib/ (Python wrapper) and TeamTalk_DLL/ (native binary)
+directories. The TitanIMModuleManager already adds the configured library
+directories from __im.TCE to sys.path before this module is imported.
 """
 
 import configparser
@@ -20,19 +22,27 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 
 _MODULE_DIR = os.path.dirname(__file__)
-_TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, "..", "..", ".."))
-if _TCE_ROOT not in sys.path:
-    sys.path.insert(0, _TCE_ROOT)
-
 _module = sys.modules[__name__]
 
 DEFAULT_TCP_PORT = 10333
 DEFAULT_UDP_PORT = 10333
-SDK_HINT = (
-    "TeamTalk SDK was not found. Put TeamTalk5.py and TeamTalk5.dll "
-    "from the BearWare TeamTalk 5 SDK into data/titanIM_modules/TeamTalk/lib "
-    "or data/titanIM_modules/TeamTalk/sdk, then restart Titan."
-)
+
+
+def _sdk_native_lib_name():
+    if sys.platform == "win32":
+        return "TeamTalk5.dll"
+    if sys.platform == "darwin":
+        return "libTeamTalk5.dylib"
+    return "libTeamTalk5.so"
+
+
+def _sdk_hint():
+    return _t(
+        "TeamTalk SDK was not found. Place TeamTalk5.py and the native "
+        "TeamTalk5 library ({lib}) from the BearWare TeamTalk 5 SDK into "
+        "data/titanIM_modules/TeamTalk/lib (and TeamTalk_DLL/ on Windows), "
+        "then restart Titan."
+    ).format(lib=_sdk_native_lib_name())
 
 _state = {
     "connected": False,
@@ -356,7 +366,7 @@ class TeamTalkSdkClient:
     def status_message(self):
         if self.available():
             return _t("TeamTalk SDK loaded")
-        return f"{SDK_HINT}\n\n{self.import_error}"
+        return f"{_sdk_hint()}\n\n{self.import_error}"
 
     def _call(self, *names, default=None):
         for name in names:
@@ -367,7 +377,7 @@ class TeamTalkSdkClient:
 
     def connect(self, profile):
         if not self.available():
-            raise RuntimeError(SDK_HINT)
+            raise RuntimeError(_sdk_hint())
         profile = _normalize_profile(profile)
         self.pending_profile = profile
 
@@ -1226,10 +1236,15 @@ class TeamTalkFrame:
             _message(self.frame, _t("Join a TeamTalk channel before sending channel messages."), _t("TeamTalk"), self.wx.OK | self.wx.ICON_WARNING)
             return
         sent = self.client.send_channel_message(text)
-        self._append_chat(_t("Me: {message}").format(message=text))
-        self.message.SetValue("")
-        if self.sounds:
-            self.sounds.message_sent() if sent else self.sounds.chat_message()
+        if sent:
+            self._append_chat(_t("Me: {message}").format(message=text))
+            self.message.SetValue("")
+            if self.sounds:
+                self.sounds.message_sent()
+        else:
+            self._set_status(_t("Could not send TeamTalk message."))
+            if self.sounds:
+                self.sounds.error()
 
     def on_sdk_status(self, event):
         _message(self.frame, self.client.status_message(), _t("TeamTalk SDK status"))
@@ -1370,12 +1385,13 @@ def open(parent_frame):
 
 def get_status_text():
     if _state["connected"]:
-        suffix = f"- connected to {_state['server']}"
         if _state["username"]:
-            suffix += f" as {_state['username']}"
-        return suffix
+            return _t("- connected to {server} as {user}").format(
+                server=_state["server"], user=_state["username"]
+            )
+        return _t("- connected to {server}").format(server=_state["server"])
     if _state["sdk_available"]:
-        return "- ready"
+        return _t("- ready")
     return ""
 
 
