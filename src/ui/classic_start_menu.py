@@ -70,6 +70,17 @@ def _new_message_dialog(*args, **kwargs):
         pass
     return dlg
 
+
+def _apply_skin_to_tree(window):
+    """Apply Titan skin recursively to a window and all descendants."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 class ClassicMenuItem:
     """Element menu w stylu Windows 95"""
     def __init__(self, name, action=None, submenu=None, icon=None, shortcut=None):
@@ -1160,6 +1171,8 @@ class ClassicStartMenu(wx.Frame):
     
     def show_menu(self):
         """Pokaż menu"""
+        # Re-apply skin on every open so Alt+F1 always reflects current theme.
+        self.apply_skin_settings()
         self.Show()
         self.Raise()
         wx.CallAfter(self.menu_tree.SetFocus)
@@ -1176,8 +1189,8 @@ class ClassicStartMenu(wx.Frame):
         try:
             skin = get_current_skin()
 
-            # Apply skin to window
-            apply_skin_to_window(self)
+            # Apply skin to entire window tree (frame, panels, tree, button).
+            _apply_skin_to_tree(self)
 
             # Configure from skin start menu settings
             self.configure_from_skin(skin.start_menu, skin.colors)
@@ -1263,6 +1276,14 @@ class ClassicSubmenu(wx.Frame):
         self.listbox.Bind(wx.EVT_KEY_DOWN, self.on_key)
         
         self.SetSize((200, 150))
+        self.apply_skin_settings()
+
+    def apply_skin_settings(self):
+        """Apply current Titan skin to submenu window and controls."""
+        try:
+            _apply_skin_to_tree(self)
+        except Exception as e:
+            print(f"Error applying skin to classic submenu: {e}")
     
     def add_item(self, item):
         """Dodaj element do podmenu"""
@@ -1275,6 +1296,7 @@ class ClassicSubmenu(wx.Frame):
     
     def show_at_cursor(self):
         """Pokaż podmenu przy kursorze"""
+        self.apply_skin_settings()
         mouse_pos = wx.GetMousePosition()
         self.SetPosition((mouse_pos.x + 10, mouse_pos.y))
         self.Show()
