@@ -1,2 +1,82 @@
 # Auto Claude data directory
 .auto-claude/
+
+# ===== Secrets / credentials =====
+# Environment files (DEPLOY_PASSWORD, TITAN_OAUTH_KEY, provider secrets)
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Hardcoded-credential helper script (already leaked — rotate password)
+refresh_token.py
+
+# ElevenLabs API key (already leaked — rotate key)
+data/applications/elevenlabs client TCE Version/%appdata%/Titosoft/Titan/Additional apps/elevenlabsclient.ini
+
+# OAuth tokens / cached credentials
+**/oauth_tokens.json
+**/oauth_state.json
+**/credentials.json
+**/token.json
+
+# Private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa
+id_ed25519
+
+# ===== Titan-Net server runtime data =====
+# Production + backup SQLCipher databases
+titan-net server/database/
+titan-net server/logs/
+
+# Server PID lock
+titan-net server/*.pid
+**/titannet.db.pid
+
+# ===== Build / compile artifacts =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+build/
+dist/
+*.egg-info/
+*.egg
+
+# PyInstaller
+*.spec.bak
+
+# Compile / debug logs
+compile_log.txt
+engine_registry_debug.log
+**/component_debug*.log
+**/app_manager_debug*.log
+blog_read_debug.txt
+*.log
+
+# ===== Editor / IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local Claude Code settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# ===== OS noise =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Local user data (per-user app state) =====
+# Apps store runtime config under simulated %appdata%
+data/applications/**/%appdata%/
