@@ -92,3 +92,10 @@ desktop.ini
 # ===== Local user data (per-user app state) =====
 # Apps store runtime config under simulated %appdata%
 data/applications/**/%appdata%/
+
+# ===== Bundled TTS engine binaries (kept locally only — large + licensed) =====
+data/titantts engines/
+
+# ===== Sound themes (only ship "default"; other themes are local-only) =====
+sfx/*/
+!sfx/default/
