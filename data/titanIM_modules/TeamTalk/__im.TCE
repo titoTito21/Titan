@@ -1,0 +1,6 @@
+[im_module]
+name = TeamTalk
+status = 0
+description = TeamTalk 5 client for Titan IM with Titan skins, sounds, and .tt file support
+libs = lib, sdk
+

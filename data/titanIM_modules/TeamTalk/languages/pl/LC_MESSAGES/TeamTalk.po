@@ -1,0 +1,200 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: TeamTalk Titan IM Module\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: pl\n"
+
+msgid "TeamTalk"
+msgstr "TeamTalk"
+
+msgid "TeamTalk - Titan IM"
+msgstr "TeamTalk - Titan IM"
+
+msgid "TeamTalk servers"
+msgstr "Serwery TeamTalk"
+
+msgid "Channels and users"
+msgstr "Kanały i użytkownicy"
+
+msgid "TeamTalk channels and users"
+msgstr "Kanały i użytkownicy TeamTalk"
+
+msgid "Channel chat"
+msgstr "Czat kanału"
+
+msgid "Connect"
+msgstr "Połącz"
+
+msgid "Disconnect"
+msgstr "Rozłącz"
+
+msgid "Add"
+msgstr "Dodaj"
+
+msgid "Edit"
+msgstr "Edytuj"
+
+msgid "Remove"
+msgstr "Usuń"
+
+msgid "Import .tt"
+msgstr "Importuj .tt"
+
+msgid "Send"
+msgstr "Wyślij"
+
+msgid "Push to talk"
+msgstr "Naciśnij, aby mówić"
+
+msgid "Mute microphone"
+msgstr "Wycisz mikrofon"
+
+msgid "Server"
+msgstr "Serwer"
+
+msgid "Help"
+msgstr "Pomoc"
+
+msgid "SDK status"
+msgstr "Stan SDK"
+
+msgid "TeamTalk Server"
+msgstr "Serwer TeamTalk"
+
+msgid "Entry name:"
+msgstr "Nazwa wpisu:"
+
+msgid "Server address:"
+msgstr "Adres serwera:"
+
+msgid "TCP port:"
+msgstr "Port TCP:"
+
+msgid "UDP port:"
+msgstr "Port UDP:"
+
+msgid "Username:"
+msgstr "Nazwa użytkownika:"
+
+msgid "Password:"
+msgstr "Hasło:"
+
+msgid "Nickname:"
+msgstr "Pseudonim:"
+
+msgid "Channel path:"
+msgstr "Ścieżka kanału:"
+
+msgid "Channel password:"
+msgstr "Hasło kanału:"
+
+msgid "Encrypted server"
+msgstr "Serwer szyfrowany"
+
+msgid "Connect to selected TeamTalk server"
+msgstr "Połącz z wybranym serwerem TeamTalk"
+
+msgid "Disconnect from TeamTalk"
+msgstr "Rozłącz z TeamTalk"
+
+msgid "Type TeamTalk message"
+msgstr "Wpisz wiadomość TeamTalk"
+
+msgid "TeamTalk chat history"
+msgstr "Historia czatu TeamTalk"
+
+msgid "Import TeamTalk .tt file"
+msgstr "Importuj plik TeamTalk .tt"
+
+msgid "TeamTalk files (*.tt)|*.tt|All files (*.*)|*.*"
+msgstr "Pliki TeamTalk (*.tt)|*.tt|Wszystkie pliki (*.*)|*.*"
+
+msgid "TeamTalk file imported"
+msgstr "Plik TeamTalk zaimportowany"
+
+msgid "Imported TeamTalk file: {name}"
+msgstr "Zaimportowano plik TeamTalk: {name}"
+
+msgid "Select or add a TeamTalk server first."
+msgstr "Najpierw wybierz albo dodaj serwer TeamTalk."
+
+msgid "TeamTalk SDK not available"
+msgstr "SDK TeamTalk niedostępne"
+
+msgid "TeamTalk SDK loaded"
+msgstr "SDK TeamTalk załadowane"
+
+msgid "Connecting to {host}..."
+msgstr "Łączenie z {host}..."
+
+msgid "Connection started. Waiting for TeamTalk server..."
+msgstr "Rozpoczęto połączenie. Oczekiwanie na serwer TeamTalk..."
+
+msgid "Connected. Logging in..."
+msgstr "Połączono. Logowanie..."
+
+msgid "Connected to {server}"
+msgstr "Połączono z {server}"
+
+msgid "Connected to TeamTalk server"
+msgstr "Połączono z serwerem TeamTalk"
+
+msgid "Connection failed"
+msgstr "Połączenie nieudane"
+
+msgid "TeamTalk connection failed"
+msgstr "Połączenie TeamTalk nieudane"
+
+msgid "Disconnected from TeamTalk"
+msgstr "Rozłączono z TeamTalk"
+
+msgid "Selected channel {channel}"
+msgstr "Wybrany kanał {channel}"
+
+msgid "Enter channel password:"
+msgstr "Wprowadź hasło kanału:"
+
+msgid "Join TeamTalk channel"
+msgstr "Dołącz do kanału TeamTalk"
+
+msgid "Joining channel {channel}"
+msgstr "Dołączanie do kanału {channel}"
+
+msgid "Could not join the selected channel."
+msgstr "Nie można dołączyć do wybranego kanału."
+
+msgid "Join a TeamTalk channel before sending channel messages."
+msgstr "Dołącz do kanału TeamTalk przed wysłaniem wiadomości kanałowej."
+
+msgid "Microphone muted"
+msgstr "Mikrofon wyciszony"
+
+msgid "Microphone ready"
+msgstr "Mikrofon gotowy"
+
+msgid "Me: {message}"
+msgstr "Ja: {message}"
+
+msgid "{user} joined the channel"
+msgstr "{user} dołączył do kanału"
+
+msgid "{user} left the channel"
+msgstr "{user} opuścił kanał"
+
+msgid "{user} logged in"
+msgstr "{user} zalogował się"
+
+msgid "{user} logged out"
+msgstr "{user} wylogował się"
+
+msgid "{count} users"
+msgstr "{count} użytkowników"
+
+msgid "password"
+msgstr "hasło"
+
+msgid " speaking"
+msgstr " mówi"
+
+msgid "Close"
+msgstr "Zamknij"
