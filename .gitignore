@@ -50,6 +50,15 @@ titan-net server/_oauth_install.py
 titan-net server/_install_sqlcipher.py
 titan-net server/_post_install_check.py
 titan-net server/_recover_now.py
+# Argon2id migration tooling (2026-05-07). _inject_dbkey.py in particular
+# operates on the SQLCipher DATABASE_KEY value at runtime — it MUST stay
+# out of the public repo. The other three only use DEPLOY_PASSWORD from
+# .env, but they are personal admin tooling and not part of the published
+# codebase either.
+titan-net server/_install_argon2.py
+titan-net server/_inject_dbkey.py
+titan-net server/_smoke_check.py
+titan-net server/_diag_env.py
 
 # ===== Build / compile artifacts =====
 __pycache__/

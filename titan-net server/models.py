@@ -20,9 +20,23 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import json
 import logging
+
+# Argon2id password hashing (RFC-9106). Replaces the legacy unsalted
+# SHA-256 scheme. Existing SHA-256 hashes in the DB stay verifiable via the
+# legacy fallback in Database.verify_password and are upgraded in place on
+# the user's next successful login (lazy migration). Hard-fail at import
+# time if argon2-cffi is missing so the server cannot accidentally boot
+# back to the old algorithm.
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHash, VerificationError
+
+# RFC-9106 baseline parameters: 64 MiB memory, 3 iterations, 4 lanes.
+# ~80-150 ms per verify on a typical Linux server, comfortably inside the
+# 8 s wait_for(authenticate_user) ceiling in server.py.
+_PASSWORD_HASHER = PasswordHasher()
 
 logger = logging.getLogger('TitanNetDB')
 
@@ -1455,13 +1469,72 @@ class Database:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash password using SHA-256"""
+        """Hash a plaintext password with Argon2id.
+
+        Returns a self-describing PHC string of the form
+        ``$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>``. The string carries
+        the algorithm identifier and parameters, so a future parameter bump
+        does not require a schema change.
+        """
+        return _PASSWORD_HASHER.hash(password)
+
+    @staticmethod
+    def _legacy_sha256(password: str) -> str:
+        """Reproduce the historical unsalted SHA-256 hash for verification."""
         return hashlib.sha256(password.encode()).hexdigest()
 
     @staticmethod
-    def verify_password(password: str, password_hash: str) -> bool:
-        """Verify password against hash"""
-        return Database.hash_password(password) == password_hash
+    def verify_password(password: str, stored_hash: str) -> Tuple[bool, bool]:
+        """Verify ``password`` against ``stored_hash``.
+
+        Returns a tuple ``(ok, needs_rehash)``:
+
+        * ``ok``           - the password matches the stored hash.
+        * ``needs_rehash`` - the caller should re-hash and persist a new
+                             value (legacy SHA-256 hashes always set this;
+                             argon2id sets it only when stored parameters
+                             are weaker than the current PasswordHasher).
+
+        Two stored formats are recognized transparently:
+
+        * ``$argon2...`` PHC strings (current format).
+        * 64-character hex digest (legacy unsalted SHA-256).
+
+        Anything else returns ``(False, False)`` instead of raising, so a
+        corrupt row can never crash an auth path.
+        """
+        if not stored_hash:
+            return False, False
+
+        if stored_hash.startswith("$argon2"):
+            try:
+                _PASSWORD_HASHER.verify(stored_hash, password)
+            except VerifyMismatchError:
+                return False, False
+            except (VerificationError, InvalidHash):
+                return False, False
+            try:
+                needs_rehash = _PASSWORD_HASHER.check_needs_rehash(stored_hash)
+            except Exception:
+                needs_rehash = False
+            return True, bool(needs_rehash)
+
+        # Legacy path: 64-char unsalted SHA-256 hex. Constant-time compare
+        # with secrets.compare_digest so a slow re-hash never reveals the
+        # length of the stored value via timing.
+        if len(stored_hash) == 64:
+            try:
+                ok = secrets.compare_digest(
+                    Database._legacy_sha256(password),
+                    stored_hash,
+                )
+            except Exception:
+                ok = False
+            # Every successful legacy verify must be re-hashed to argon2id
+            # by the caller - that is the lazy migration path.
+            return ok, ok
+
+        return False, False
 
     @_serialized_write
     def create_user(self, username: str, password: str, full_name: Optional[str] = None,
@@ -1512,7 +1585,13 @@ class Database:
 
     @_serialized_write
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
-        """Authenticate user and return user data"""
+        """Authenticate user and return user data.
+
+        On a successful login whose stored hash needs upgrading (legacy
+        SHA-256, or argon2id with outdated parameters) the row is rehashed
+        to a fresh argon2id PHC string in the same transaction - this is
+        the lazy migration path for the SHA-256 -> Argon2id transition.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -1523,27 +1602,51 @@ class Database:
 
         user = cursor.fetchone()
 
-        if user and self.verify_password(password, user['password_hash']):
-            # Update last login
-            cursor.execute("""
-                UPDATE users SET last_login = ?, status = 'online'
-                WHERE id = ?
-            """, (datetime.now().isoformat(), user['id']))
-            conn.commit()
-
+        if not user:
             conn.close()
-            return {
-                "id": user['id'],
-                "username": user['username'],
-                "titan_number": user['titan_number'],
-                "full_name": user['full_name'],
-                "is_admin": bool(user['is_admin']),
-                "blog_url": user['blog_url'],
-                "role": user['role'] or 'user'
-            }
+            return None
 
+        ok, needs_rehash = self.verify_password(password, user['password_hash'])
+        if not ok:
+            conn.close()
+            return None
+
+        # Update last login (and rehash atomically with the same commit).
+        cursor.execute("""
+            UPDATE users SET last_login = ?, status = 'online'
+            WHERE id = ?
+        """, (datetime.now().isoformat(), user['id']))
+
+        if needs_rehash:
+            try:
+                new_hash = self.hash_password(password)
+                cursor.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (new_hash, user['id']),
+                )
+                logger.info(
+                    "[Titan-Net] migrated user %s password hash to argon2id",
+                    user['id'],
+                )
+            except Exception as exc:
+                # Migration is best-effort: the user is already authenticated.
+                # Log and let them in - we will retry on the next login.
+                logger.warning(
+                    "[Titan-Net] password rehash failed for user %s: %s",
+                    user['id'], exc,
+                )
+
+        conn.commit()
         conn.close()
-        return None
+        return {
+            "id": user['id'],
+            "username": user['username'],
+            "titan_number": user['titan_number'],
+            "full_name": user['full_name'],
+            "is_admin": bool(user['is_admin']),
+            "blog_url": user['blog_url'],
+            "role": user['role'] or 'user'
+        }
 
     def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get user by ID"""
@@ -1787,11 +1890,33 @@ class Database:
             conn.close()
             return {"success": False, "error": "Room not found"}
 
-        # Verify password if room is private
+        # Verify password if room is private. Lazy migration: a legacy
+        # SHA-256 room hash that verifies correctly is rewritten as
+        # argon2id in place, same approach as authenticate_user above.
         if room['password_hash']:
-            if not password or not self.verify_password(password, room['password_hash']):
+            if not password:
                 conn.close()
                 return {"success": False, "error": "Invalid password"}
+            ok, needs_rehash = self.verify_password(password, room['password_hash'])
+            if not ok:
+                conn.close()
+                return {"success": False, "error": "Invalid password"}
+            if needs_rehash:
+                try:
+                    new_hash = self.hash_password(password)
+                    cursor.execute(
+                        "UPDATE chat_rooms SET password_hash = ? WHERE id = ?",
+                        (new_hash, room_id),
+                    )
+                    logger.info(
+                        "[Titan-Net] migrated chat_room %s password hash to argon2id",
+                        room_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[Titan-Net] room password rehash failed for room %s: %s",
+                        room_id, exc,
+                    )
 
         try:
             joined_at = datetime.now().isoformat()

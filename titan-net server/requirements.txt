@@ -19,6 +19,11 @@ python-dotenv>=1.0.0
 # OAuth proxy: Fernet encryption of stored access/refresh tokens
 cryptography>=41.0.0
 
+# Password hashing: Argon2id (RFC-9106). Replaces unsalted SHA-256 for
+# users.password_hash and chat_rooms.password_hash. Server refuses to
+# start if this import fails - see _PASSWORD_HASHER in models.py.
+argon2-cffi>=23.1.0
+
 # Interactive Games — Gemini Live AI game master.
 # Server falls back to stub mode if this is missing, so the rest of the
 # Titan-Net server still boots cleanly.

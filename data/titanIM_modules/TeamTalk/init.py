@@ -37,6 +37,31 @@ TAB_CHAT = 0
 TAB_LOG = 1
 TAB_PM = 2
 
+# TeamTalk 5 status-mode bitfield (TT Classic constants - the Python wrapper
+# does not export them, so we define them locally and OR them into the
+# integer passed to doChangeStatus()).
+STATUSMODE_AVAILABLE = 0x00000000
+STATUSMODE_AWAY = 0x00000001
+STATUSMODE_QUESTION = 0x00000002
+STATUSMODE_FEMALE = 0x00000100
+STATUSMODE_NEUTRAL = 0x00001000
+
+GENDER_MALE = 0
+GENDER_FEMALE = 1
+GENDER_NEUTRAL = 2
+
+_GENDER_FLAGS = {
+    GENDER_MALE: 0,
+    GENDER_FEMALE: STATUSMODE_FEMALE,
+    GENDER_NEUTRAL: STATUSMODE_NEUTRAL,
+}
+
+
+def _build_status_mode(gender, away=False):
+    """Combine an availability state with a gender flag into a TT status int."""
+    base = STATUSMODE_AWAY if away else STATUSMODE_AVAILABLE
+    return base | _GENDER_FLAGS.get(gender, 0)
+
 
 # =============================================================================
 # Helpers
@@ -51,11 +76,26 @@ def _sounds():
     return getattr(_module, "sounds", None)
 
 
-def _notify(text, kind="info"):
+def _notify(text, kind="info", play_sound=True):
+    """Speak a notification through the Titan IM sound API.
+
+    Important: kind='info' in the central API maps to ui/dialog.ogg as the
+    earcon (see src.network.titan_net_gui.speak_notification). When the
+    caller is already playing its own contextual sound (e.g. new_message
+    for an arriving PM) it should pass play_sound=False to avoid stacking
+    the dialog earcon on top of the message earcon.
+    """
     snd = _sounds()
     if snd:
         try:
-            snd.notify(text, kind)
+            snd.notify(text, kind, play_sound_effect=play_sound)
+        except TypeError:
+            # Older sound API without the keyword - fall back to the
+            # default behaviour rather than crash.
+            try:
+                snd.notify(text, kind)
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -138,12 +178,6 @@ def _message(parent, text, title=None, style=None):
 
     title = title or _t("TeamTalk")
     style = style or (wx.OK | wx.ICON_INFORMATION)
-    snd = _sounds()
-    if snd:
-        try:
-            snd.msg_box()
-        except Exception:
-            pass
     dlg = wx.MessageDialog(parent, text, title, style)
     _apply_skin_recursive(dlg)
     result = dlg.ShowModal()
@@ -220,6 +254,9 @@ def _normalize_profile(data):
         "nickname": "",
         "channel": "",
         "chanpasswd": "",
+        # TT Classic style gender flag, sent via doChangeStatus on login.
+        # 0 = male (default), 1 = female, 2 = neutral.
+        "gender": GENDER_MALE,
     }
     for key, value in (data or {}).items():
         canonical = _config_key_variants(str(key))
@@ -234,6 +271,11 @@ def _normalize_profile(data):
     profile["encrypted"] = _as_bool(profile["encrypted"])
     for key in ("username", "password", "nickname", "channel", "chanpasswd"):
         profile[key] = str(profile.get(key) or "").strip()
+    try:
+        gender = int(profile.get("gender", GENDER_MALE))
+        profile["gender"] = gender if gender in _GENDER_FLAGS else GENDER_MALE
+    except Exception:
+        profile["gender"] = GENDER_MALE
     return profile
 
 
@@ -480,16 +522,51 @@ class TeamTalkSdkClient:
         return True
 
     def _init_default_audio_devices(self):
+        """Initialize the default microphone and speakers.
+
+        Stores results on self so the UI can surface them on the server-log
+        tab and the user can see why voice transmission may be silent
+        (e.g. no microphone, or a device id of -1 from getDefaultSoundDevices).
+        """
+        self.input_device_id = None
+        self.output_device_id = None
+        self.input_device_name = ""
+        self.output_device_name = ""
+        self.input_init_ok = False
+        self.output_init_ok = False
         if not self.obj:
             return
         try:
             indev, outdev = self.obj.getDefaultSoundDevices()
             indev = getattr(indev, "value", indev)
             outdev = getattr(outdev, "value", outdev)
-            self.obj.initSoundInputDevice(indev)
-            self.obj.initSoundOutputDevice(outdev)
+            self.input_device_id = int(indev) if indev is not None else None
+            self.output_device_id = int(outdev) if outdev is not None else None
         except Exception as exc:
-            print(f"[TeamTalk] Could not initialize default audio devices: {exc}")
+            print(f"[TeamTalk] getDefaultSoundDevices failed: {exc}")
+            return
+        # Resolve device names so we can log something meaningful.
+        try:
+            for dev in self.obj.getSoundDevices():
+                dev_id = _value(getattr(dev, "nDeviceID", None), -999)
+                name = _tt_text(getattr(dev, "szDeviceName", ""))
+                if self.input_device_id is not None and dev_id == self.input_device_id:
+                    self.input_device_name = name
+                if self.output_device_id is not None and dev_id == self.output_device_id:
+                    self.output_device_name = name
+        except Exception as exc:
+            print(f"[TeamTalk] getSoundDevices failed: {exc}")
+        try:
+            if self.input_device_id is not None and self.input_device_id != -1:
+                self.input_init_ok = bool(
+                    self.obj.initSoundInputDevice(self.input_device_id)
+                )
+            if self.output_device_id is not None and self.output_device_id != -1:
+                self.output_init_ok = bool(
+                    self.obj.initSoundOutputDevice(self.output_device_id)
+                )
+        except Exception as exc:
+            print(f"[TeamTalk] initSoundDevice failed: {exc}")
 
     def login(self, profile):
         if not self.available() or not self.obj:
@@ -634,11 +711,22 @@ class TeamTalkSdkClient:
     # ---- Voice / audio ---------------------------------------------------
 
     def enable_voice(self, enabled):
+        """Toggle our outgoing voice transmission.
+
+        TT5 will accept the call only when:
+            * a sound input device is initialized (initSoundInputDevice),
+            * we are logged in and inside a channel (getMyChannelID != 0),
+            * our account has USERRIGHT_TRANSMIT_VOICE.
+        Returns the boolean the SDK returns - False means TT5 rejected it.
+        """
         if not (self.available() and self.obj):
             return False
         try:
-            return bool(self.obj.enableVoiceTransmission(enabled))
-        except Exception:
+            result = bool(self.obj.enableVoiceTransmission(enabled))
+            print(f"[TeamTalk] enableVoiceTransmission({enabled}) -> {result}")
+            return result
+        except Exception as exc:
+            print(f"[TeamTalk] enableVoiceTransmission error: {exc}")
             return False
 
     def set_speaker_mute(self, muted):
@@ -707,11 +795,17 @@ class TeamTalkSdkClient:
         if not (self.available() and self.obj):
             return False
         try:
-            channel_id = self.my_channel_id or _value(self.obj.getMyChannelID())
+            # Always ask the SDK for the current channel - the cached value
+            # can be stale right after a join. TT5 won't deliver a channel
+            # message unless we are still in that channel server-side.
+            channel_id = _value(self.obj.getMyChannelID())
             self.my_channel_id = channel_id
             if not channel_id:
                 return False
             msg_type = getattr(self.sdk.TextMsgType, "MSGTYPE_CHANNEL", 2)
+            # buildTextMessage chunks long content (TT_STRLEN limit) and
+            # marks every non-final chunk with bMore=True; doTextMessage
+            # must be called for every chunk in order.
             messages = self.sdk.buildTextMessage(text, msg_type, nChannelID=channel_id)
             sent = False
             for message in messages:
@@ -721,6 +815,29 @@ class TeamTalkSdkClient:
         except Exception as exc:
             print(f"[TeamTalk] send_channel_message error: {exc}")
             return False
+
+    def in_channel(self):
+        """Return True if we are currently logged in AND in a channel."""
+        if not (self.available() and self.obj):
+            return False
+        try:
+            return _value(self.obj.getMyChannelID()) != 0
+        except Exception:
+            return False
+
+    def can_transmit_voice(self):
+        """Check USERRIGHT_TRANSMIT_VOICE on our user account."""
+        if not (self.available() and self.obj):
+            return False
+        try:
+            account = self.obj.getMyUserAccount()
+            rights = _value(getattr(account, "uUserRights", 0))
+            voice_right = _value(self.sdk.UserRight.USERRIGHT_TRANSMIT_VOICE)
+            return bool(rights & voice_right)
+        except Exception:
+            # If we cannot read the account fall back to True - the SDK will
+            # simply reject the transmit later if the right is missing.
+            return True
 
     def send_user_message(self, user_id, text):
         if not (self.available() and self.obj and user_id):
@@ -871,12 +988,6 @@ class ProfileDialog:
         _apply_skin_recursive(self.dialog)
 
     def show_modal(self):
-        snd = _sounds()
-        if snd:
-            try:
-                snd.dialog_open()
-            except Exception:
-                pass
         result = self.dialog.ShowModal()
         if result == self.wx.ID_OK:
             profile = {key: ctrl.GetValue().strip() for key, ctrl in self.controls.items()}
@@ -932,14 +1043,80 @@ class UserInfoDialog:
         _apply_skin_recursive(self.dialog)
 
     def show_modal(self):
-        snd = _sounds()
-        if snd:
-            try:
-                snd.dialog_open()
-            except Exception:
-                pass
         self.dialog.ShowModal()
         self.dialog.Destroy()
+
+
+# =============================================================================
+# Nickname + gender dialog (TeamTalk Classic "Change nickname" style)
+# =============================================================================
+
+class NicknameGenderDialog:
+    """Lets the user set their nickname and TT5 gender flag.
+
+    Mirrors the TeamTalk Classic preferences dialog: nickname text field +
+    Male / Female / Neutral radio. The result is applied with
+    doChangeNickname() and doChangeStatus(STATUSMODE_FEMALE/NEUTRAL).
+    """
+
+    def __init__(self, parent, current_nickname="", current_gender=GENDER_MALE):
+        import wx
+
+        self.wx = wx
+        self.result_nickname = current_nickname
+        self.result_gender = current_gender
+
+        self.dialog = wx.Dialog(parent, title=_t("Set nickname and gender"))
+        panel = wx.Panel(self.dialog)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        sizer.Add(wx.StaticText(panel, label=_t("Nickname:")),
+                  0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.nick_ctrl = wx.TextCtrl(panel)
+        self.nick_ctrl.SetValue(str(current_nickname or ""))
+        self.nick_ctrl.SetName(_t("Nickname"))
+        sizer.Add(self.nick_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        choices = [_t("Male"), _t("Female"), _t("Neutral")]
+        self.gender_radio = wx.RadioBox(
+            panel,
+            label=_t("Gender"),
+            choices=choices,
+            majorDimension=1,
+            style=wx.RA_SPECIFY_COLS,
+        )
+        try:
+            self.gender_radio.SetSelection(
+                int(current_gender) if int(current_gender) in (0, 1, 2) else 0
+            )
+        except Exception:
+            self.gender_radio.SetSelection(0)
+        sizer.Add(self.gender_radio, 0, wx.EXPAND | wx.ALL, 8)
+
+        buttons = self.dialog.CreateSeparatedButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 8)
+
+        panel.SetSizer(sizer)
+        wrapper = wx.BoxSizer(wx.VERTICAL)
+        wrapper.Add(panel, 1, wx.EXPAND)
+        self.dialog.SetSizer(wrapper)
+        self.dialog.Fit()
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+        self.nick_ctrl.SetFocus()
+        try:
+            self.nick_ctrl.SetInsertionPointEnd()
+        except Exception:
+            pass
+
+    def show_modal(self):
+        ok = self.dialog.ShowModal() == self.wx.ID_OK
+        if ok:
+            self.result_nickname = self.nick_ctrl.GetValue().strip()
+            self.result_gender = int(self.gender_radio.GetSelection())
+        self.dialog.Destroy()
+        return ok
 
 
 # =============================================================================
@@ -1000,13 +1177,6 @@ class PrivateMessageWindow:
         panel.SetSizer(sizer)
         _apply_skin_recursive(self.frame)
 
-        snd = _sounds()
-        if snd:
-            try:
-                snd.window_open()
-            except Exception:
-                pass
-
     def show(self):
         self.frame.Show()
         self.frame.Raise()
@@ -1042,12 +1212,6 @@ class PrivateMessageWindow:
                 pass
 
     def _on_close(self, event):
-        snd = _sounds()
-        if snd:
-            try:
-                snd.window_close()
-            except Exception:
-                pass
         try:
             self.frame_owner.pm_windows.pop(self.user_id, None)
         except Exception:
@@ -1086,6 +1250,18 @@ class TeamTalkFrame:
         self.chat_messages = []  # list of (sender, text, time_str)
         self.log_entries = []  # list of (text, time_str)
         self.pm_threads = {}  # user_id -> {"nick": str, "last": str, "time": str}
+
+        # Multi-part text-message buffers (TT chunks long messages with
+        # bMore=True; we re-assemble per (msg_type, from_user, to_user/channel)).
+        self._pm_partials = {}
+
+        # Initial-roster guard: while True, we suppress the user_online /
+        # user_offline earcons. The TT5 server fires CMD_USER_LOGGEDIN /
+        # CMD_USER_JOINED for every account already on the server right
+        # after we connect; without this guard a busy server bombs the user
+        # with dozens of presence sounds at login. Lifted once login has
+        # settled (see _on_connected).
+        self._suppress_presence_sounds = True
 
         # Voice/audio state
         self.ptt_held = False
@@ -1263,10 +1439,13 @@ class TeamTalkFrame:
         m_connect = server_menu.Append(wx.ID_ANY, _t("Connect"))
         m_disconnect = server_menu.Append(wx.ID_ANY, _t("Disconnect"))
         server_menu.AppendSeparator()
+        m_nick = server_menu.Append(wx.ID_ANY, _t("Set nickname and gender...\tCtrl+N"))
+        server_menu.AppendSeparator()
         m_close = server_menu.Append(wx.ID_EXIT, _t("Close"))
         self.frame.Bind(wx.EVT_MENU, self.on_import_tt, m_import)
         self.frame.Bind(wx.EVT_MENU, self.on_connect, m_connect)
         self.frame.Bind(wx.EVT_MENU, self.on_disconnect, m_disconnect)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._show_nickname_dialog(), m_nick)
         self.frame.Bind(wx.EVT_MENU, self.on_close, m_close)
         menubar.Append(server_menu, _t("Server"))
 
@@ -1543,12 +1722,6 @@ class TeamTalkFrame:
         self._set_status(
             _t("Connecting to {host}...").format(host=profile["host"])
         )
-        snd = _sounds()
-        if snd:
-            try:
-                snd.connecting()
-            except Exception:
-                pass
 
         def worker():
             try:
@@ -1568,15 +1741,26 @@ class TeamTalkFrame:
         _state["username"] = profile.get("nickname") or profile.get("username") or ""
         self._save()
         self._show_connected_view()
+        # Apply the saved gender flag right after login so peers see the
+        # correct status bit (TT5 transmits the gender as part of the status
+        # mode bitfield - it is not part of doLogin).
+        try:
+            gender = int(profile.get("gender", GENDER_MALE))
+        except Exception:
+            gender = GENDER_MALE
+        if gender != GENDER_MALE:
+            self.client.change_status(_build_status_mode(gender, away=False), "")
+        # Channel-list snapshot: at the moment CMD_MYSELF_LOGGEDIN fires the
+        # server has typically already pushed every CMD_CHANNEL_NEW for the
+        # tree, so refresh once. We will refresh again on later events.
         self.focus_tree_after_login = True
-        # Manual channel join: refresh tree so the user sees it. Do NOT
-        # auto-join any channel - that is the whole point of this rewrite.
         self._refresh_teamtalk_state()
         if not self.connected_announced:
             self.connected_announced = True
             label = _t("Connected to {server}").format(server=profile["entry_name"])
             self._set_status(label)
             self._log_event(label)
+            self._log_audio_devices()
             snd = _sounds()
             if snd:
                 try:
@@ -1584,6 +1768,72 @@ class TeamTalkFrame:
                 except Exception:
                     pass
             _notify(_t("Connected to TeamTalk server"), "success")
+
+    def _log_audio_devices(self):
+        """Surface microphone / speaker init state on the Server log tab.
+
+        Lets the user verify, without external tools, why voice may not
+        transmit (e.g. no input device picked up, or initSoundInputDevice
+        rejected). Combined with the [TeamTalk] enableVoiceTransmission(...)
+        return-value print line in the SDK wrapper, this gives a complete
+        diagnostic trail.
+        """
+        cli = self.client
+        in_name = cli.input_device_name or _t("(unknown)")
+        out_name = cli.output_device_name or _t("(unknown)")
+        self._log_event(
+            _t("Microphone: {name}, ready: {ok}").format(
+                name=in_name, ok=_t("yes") if cli.input_init_ok else _t("no")
+            )
+        )
+        self._log_event(
+            _t("Speakers: {name}, ready: {ok}").format(
+                name=out_name, ok=_t("yes") if cli.output_init_ok else _t("no")
+            )
+        )
+        # Blind users won't hunt for the tree with a mouse, so we *force*
+        # focus onto the channel tree. wxPython needs the panel switch to
+        # finish first - schedule a delayed second SetFocus so the layout
+        # has settled and the tree is visible. Re-run a few times to cover
+        # the case where channel data arrives slightly after CMD_LOGGEDIN.
+        self.wx.CallAfter(self._focus_channel_tree)
+        for delay in (120, 350, 800):
+            self.wx.CallLater(delay, self._focus_channel_tree)
+        # Lift the presence-sound guard once any tail-end CMD_USER_LOGGEDIN
+        # from the initial roster dump has had a chance to land.
+        self.wx.CallLater(800, self._lift_presence_guard)
+
+    def _lift_presence_guard(self):
+        self._suppress_presence_sounds = False
+
+    def _focus_channel_tree(self):
+        """Move keyboard focus to the channel tree (post-login UX).
+
+        Called repeatedly after login until the user moves focus elsewhere
+        (e.g. into the message input or a button). This is what blind users
+        need - the tree is the primary control once we are connected.
+        """
+        try:
+            if not self.connected_panel.IsShown():
+                return
+            current = self.frame.FindFocus()
+            if current is self.message_input or current is self.send_btn:
+                # User has already started typing - don't yank their focus.
+                return
+            self.channel_tree.SetFocus()
+            # Make sure something is selected so SR reads it on focus.
+            try:
+                if self.current_channel_id in self.channel_items:
+                    self.channel_tree.SelectItem(
+                        self.channel_items[self.current_channel_id]
+                    )
+                elif self.channel_items:
+                    first = next(iter(self.channel_items.values()))
+                    self.channel_tree.SelectItem(first)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _on_connection_failed(self, exc):
         self.client.disconnect()
@@ -1613,6 +1863,9 @@ class TeamTalkFrame:
         _state["username"] = ""
         self.connected_announced = False
         self.focus_tree_after_login = False
+        # Re-arm the presence guard so the next connection's initial roster
+        # dump does not blast online/offline sounds again.
+        self._suppress_presence_sounds = True
         self.current_channel_id = 0
         self.channels = {}
         self.users = {}
@@ -1685,6 +1938,12 @@ class TeamTalkFrame:
 
     def _populate_channel_tree(self, root_id=0):
         tree = self.channel_tree
+        # Preserve which logical item was selected and whether the tree had
+        # keyboard focus, so a refresh triggered by a server event does not
+        # snatch focus away from a blind user mid-navigation.
+        had_focus = self.frame.FindFocus() is tree
+        prev_selection = self._selected_tree_data()
+
         tree.DeleteChildren(self.channel_root)
         self.channel_items = {}
         self.user_items = {}
@@ -1717,14 +1976,31 @@ class TeamTalkFrame:
         root_children_id = root_id if root_id in children else 0
         add_children(self.channel_root, root_children_id)
         tree.Expand(self.channel_root)
-        if self.current_channel_id in self.channel_items:
-            tree.SelectItem(self.channel_items[self.current_channel_id])
-        elif self.channel_items:
-            first_channel_id = next(iter(self.channel_items))
-            tree.SelectItem(self.channel_items[first_channel_id])
-        if self.focus_tree_after_login:
+
+        # Restore selection: prefer the item the user was on, fall back to
+        # our channel, then to the first channel in the tree.
+        target = None
+        if prev_selection.get("kind") == "user":
+            target = self.user_items.get(prev_selection.get("id"))
+        elif prev_selection.get("kind") == "channel":
+            target = self.channel_items.get(prev_selection.get("id"))
+        if target is None and self.current_channel_id in self.channel_items:
+            target = self.channel_items[self.current_channel_id]
+        if target is None and self.channel_items:
+            target = next(iter(self.channel_items.values()))
+        if target is not None:
+            try:
+                tree.SelectItem(target)
+                tree.EnsureVisible(target)
+            except Exception:
+                pass
+
+        if self.focus_tree_after_login or had_focus:
             self.focus_tree_after_login = False
-            tree.SetFocus()
+            try:
+                tree.SetFocus()
+            except Exception:
+                pass
 
     def _get_tree_data(self, item):
         try:
@@ -2107,9 +2383,47 @@ class TeamTalkFrame:
 
     # ---- Voice / mic / speakers ----------------------------------------
 
+    def _gate_voice(self, enable):
+        """Apply the voice-transmission gate around enable_voice().
+
+        Voice will not actually leave the client unless we are in a channel
+        AND have USERRIGHT_TRANSMIT_VOICE. We surface a clear message to
+        the user instead of silently failing.
+        """
+        if not enable:
+            self.client.enable_voice(False)
+            return True
+        if not self.client.in_channel():
+            self._set_status(_t("Join a channel before transmitting voice."))
+            self._log_event(_t("Join a channel before transmitting voice."))
+            snd = _sounds()
+            if snd:
+                try:
+                    snd.error()
+                except Exception:
+                    pass
+            return False
+        if not self.client.can_transmit_voice():
+            self._set_status(_t("This account is not allowed to transmit voice."))
+            self._log_event(_t("This account is not allowed to transmit voice."))
+            snd = _sounds()
+            if snd:
+                try:
+                    snd.error()
+                except Exception:
+                    pass
+            return False
+        self.client.enable_voice(True)
+        return True
+
     def on_ptt_toggle(self, event):
         self.ptt_toggle = self.ptt_btn.GetValue()
-        self.client.enable_voice(self.ptt_toggle and not self.mic_muted)
+        ok = self._gate_voice(self.ptt_toggle and not self.mic_muted)
+        if not ok and self.ptt_toggle:
+            # Roll back the toggle state if voice could not be enabled.
+            self.ptt_toggle = False
+            self.ptt_btn.SetValue(False)
+            return
         snd = _sounds()
         if snd:
             try:
@@ -2126,7 +2440,7 @@ class TeamTalkFrame:
             self.client.enable_voice(False)
             self._set_status(_t("Microphone muted"))
         else:
-            self.client.enable_voice(self.ptt_toggle or self.ptt_held)
+            self._gate_voice(self.ptt_toggle or self.ptt_held)
             self._set_status(_t("Microphone ready"))
 
     def on_mute_speakers_toggle(self, event):
@@ -2141,8 +2455,55 @@ class TeamTalkFrame:
         msg = _ask_text(self.frame, _t("Status message:"), _t("Set status"), default="")
         if msg is None:
             return
-        if self.client.change_status(0, msg):
+        # Preserve the gender flag on the saved profile when sending status.
+        gender = GENDER_MALE
+        if self.current_profile:
+            gender = int(self.current_profile.get("gender", GENDER_MALE))
+        if self.client.change_status(_build_status_mode(gender, away=False), msg):
             self._set_status(_t("Status updated"))
+
+    def _show_nickname_dialog(self):
+        """Open the TT-Classic-style nickname + gender dialog.
+
+        - Pre-fills with the nickname/gender from the active profile (or
+          the last-used profile when offline).
+        - On OK, stores both back into the profile + persistent config.
+        - If we are already connected, applies the change immediately via
+          doChangeNickname() and doChangeStatus(STATUSMODE_FEMALE/NEUTRAL).
+        """
+        profile = self.current_profile
+        if profile is None and self.profiles:
+            profile = self.profiles[0]
+        nickname = (profile or {}).get("nickname", "") if profile else ""
+        gender = int((profile or {}).get("gender", GENDER_MALE)) if profile else GENDER_MALE
+
+        dlg = NicknameGenderDialog(self.frame, nickname, gender)
+        if not dlg.show_modal():
+            return
+        new_nick = dlg.result_nickname
+        new_gender = dlg.result_gender
+
+        # Persist on the active profile and on the config.
+        if profile is not None:
+            profile["nickname"] = new_nick
+            profile["gender"] = new_gender
+            self.current_profile = profile
+            self._save()
+            self._refresh_profiles()
+
+        # Apply live if we are connected. doChangeNickname reaches the
+        # server immediately; doChangeStatus carries the gender bitfield.
+        if self.client.connected:
+            if new_nick:
+                self.client.change_nickname(new_nick)
+            self.client.change_status(_build_status_mode(new_gender, away=False), "")
+            self._set_status(
+                _t("Nickname set to {nick}").format(nick=new_nick or _t("(empty)"))
+            )
+        else:
+            self._set_status(
+                _t("Saved nickname and gender for next connection.")
+            )
 
     # ---- Hotkeys --------------------------------------------------------
 
@@ -2150,6 +2511,71 @@ class TeamTalkFrame:
         wx = self.wx
         key = event.GetKeyCode()
         modifiers = event.GetModifiers()
+
+        # Frame-level Enter handler. EVT_KEY_DOWN on a wx.ListBox is
+        # unreliable across platforms once an EVT_CHAR_HOOK is in place
+        # (the hook swallows the event before it reaches the listbox).
+        # The TitanApp / Titan-Net main GUI / Feedback Hub all handle Enter
+        # exactly like this: route it from the frame based on focus, so
+        # every list reacts to Enter the same way the user expects.
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) and modifiers == wx.MOD_NONE:
+            focus = self.frame.FindFocus()
+
+            def _is(widget):
+                # GetId() comparison is more reliable than identity checks:
+                # FindFocus() can return a wrapped/proxy widget on some
+                # wxPython builds, but the integer id is always stable.
+                if widget is None or focus is None:
+                    return False
+                if focus is widget:
+                    return True
+                try:
+                    return focus.GetId() == widget.GetId()
+                except Exception:
+                    return False
+
+            # --- Connection view: Enter on the server list -> connect ---
+            # Belt-and-suspenders: also try HasFocus() and a "list is the
+            # active widget on the connection panel" fallback so a stray
+            # focus state still produces the expected behaviour. Buttons
+            # consume Enter natively (EVT_BUTTON), so guarding on
+            # isinstance(focus, wx.Button) keeps Connect/Add/Edit clicks
+            # from being intercepted as a server-connect.
+            try:
+                listbox_has_focus = self.profile_list.HasFocus()
+            except Exception:
+                listbox_has_focus = False
+            on_button = isinstance(focus, wx.Button)
+            if (
+                _is(self.profile_list)
+                or listbox_has_focus
+                or (
+                    self.connection_panel.IsShown()
+                    and not on_button
+                    and not isinstance(focus, wx.TextCtrl)
+                )
+            ):
+                self.on_connect(event)
+                return
+
+            if _is(getattr(self, "right_list", None)):
+                idx = self.right_list.GetFirstSelected()
+                if idx > 0 and not self._is_tab_bar_row(idx):
+                    evt = wx.ListEvent(wx.wxEVT_LIST_ITEM_ACTIVATED, self.right_list.GetId())
+                    evt.SetIndex(idx)
+                    self._on_right_activated(evt)
+                return
+            if _is(getattr(self, "channel_tree", None)):
+                item = self.channel_tree.GetSelection()
+                if item.IsOk():
+                    evt = wx.TreeEvent(
+                        wx.wxEVT_COMMAND_TREE_ITEM_ACTIVATED,
+                        self.channel_tree.GetId(),
+                    )
+                    evt.SetItem(item)
+                    self.on_tree_activated(evt)
+                return
+            # Anything else (text fields, buttons) handles Enter natively.
 
         # F2 toggles mic mute, F3 toggles speakers mute, F4 PTT-while-held.
         if key == wx.WXK_F2 and modifiers == wx.MOD_NONE:
@@ -2162,14 +2588,14 @@ class TeamTalkFrame:
             return
         if key == wx.WXK_F4 and modifiers == wx.MOD_NONE:
             if not self.ptt_held and not self.mic_muted:
-                self.ptt_held = True
-                self.client.enable_voice(True)
-                snd = _sounds()
-                if snd:
-                    try:
-                        snd.walkie_talkie_start()
-                    except Exception:
-                        pass
+                if self._gate_voice(True):
+                    self.ptt_held = True
+                    snd = _sounds()
+                    if snd:
+                        try:
+                            snd.walkie_talkie_start()
+                        except Exception:
+                            pass
             return
 
         if key == wx.WXK_TAB and modifiers == wx.MOD_CONTROL:
@@ -2197,7 +2623,7 @@ class TeamTalkFrame:
         key = event.GetKeyCode()
         if key == wx.WXK_F4 and self.ptt_held:
             self.ptt_held = False
-            self.client.enable_voice(self.ptt_toggle and not self.mic_muted)
+            self._gate_voice(self.ptt_toggle and not self.mic_muted)
             snd = _sounds()
             if snd:
                 try:
@@ -2369,7 +2795,7 @@ class TeamTalkFrame:
         text = self.message_input.GetValue().strip()
         if not text:
             return
-        if not self.client.my_channel_id:
+        if not self.client.in_channel():
             _message(
                 self.frame,
                 _t("Join a TeamTalk channel before sending channel messages."),
@@ -2483,12 +2909,16 @@ class TeamTalkFrame:
                             self._log_event,
                             _t("{user} logged in").format(user=display),
                         )
-                        snd = _sounds()
-                        if snd:
-                            try:
-                                snd.user_online()
-                            except Exception:
-                                pass
+                        # Skip the earcon during the initial roster dump so
+                        # we don't bomb the user with dozens of online
+                        # sounds at login on a busy server.
+                        if not self._suppress_presence_sounds:
+                            snd = _sounds()
+                            if snd:
+                                try:
+                                    snd.user_online()
+                                except Exception:
+                                    pass
                     elif (
                         display
                         and not is_me
@@ -2502,12 +2932,13 @@ class TeamTalkFrame:
                             self._log_event,
                             _t("{user} logged out").format(user=display),
                         )
-                        snd = _sounds()
-                        if snd:
-                            try:
-                                snd.user_offline()
-                            except Exception:
-                                pass
+                        if not self._suppress_presence_sounds:
+                            snd = _sounds()
+                            if snd:
+                                try:
+                                    snd.user_offline()
+                                except Exception:
+                                    pass
                     elif display and name == _value(events.CLIENTEVENT_CMD_USER_JOINED):
                         wx.CallAfter(
                             self._set_status,
@@ -2534,6 +2965,21 @@ class TeamTalkFrame:
         text = _tt_text(getattr(text_msg, "szMessage", ""))
         sender = _tt_text(getattr(text_msg, "szFromUsername", ""))
         from_user_id = _value(getattr(text_msg, "nFromUserID", 0))
+        to_user_id = _value(getattr(text_msg, "nToUserID", 0))
+        channel_id = _value(getattr(text_msg, "nChannelID", 0))
+        more = bool(getattr(text_msg, "bMore", False))
+
+        # TT5 chunks long messages and sets bMore=True on every non-final
+        # chunk. The receiver must concatenate them in order before showing
+        # to the user (mirrors TeamTalk5.rebuildTextMessage).
+        partial_key = (msg_type, from_user_id, to_user_id, channel_id)
+        buffered = self._pm_partials.get(partial_key, "")
+        if more:
+            self._pm_partials[partial_key] = buffered + text
+            return
+        if buffered:
+            text = buffered + text
+            self._pm_partials.pop(partial_key, None)
 
         # Resolve a friendly nickname for the sender.
         nick = sender
@@ -2553,11 +2999,21 @@ class TeamTalkFrame:
             channel_type, user_type = 2, 1
 
         if msg_type == channel_type:
+            # Server-side echo guard: when we send a channel message, the
+            # TT5 server broadcasts it to *every* member of the channel,
+            # including ourselves. We've already rendered it locally as
+            # "Me" inside on_send_message, so dropping the echo here keeps
+            # the channel chat from showing every outgoing line twice.
+            if from_user_id and from_user_id == self.client.my_user_id:
+                return
             wx.CallAfter(self._append_chat, nick or _t("user"), text)
+            # Use the same "new message arrived" earcon for channel chat
+            # and private chat - the user wants a single, consistent sound
+            # whenever a message is received (chat or PM).
             snd = _sounds()
             if snd:
                 try:
-                    snd.chat_message()
+                    snd.new_message()
                 except Exception:
                     pass
         elif msg_type == user_type:
@@ -2584,9 +3040,14 @@ class TeamTalkFrame:
                 snd.new_message()
             except Exception:
                 pass
+        # We already played snd.new_message() above for the arriving PM -
+        # tell _notify to skip its own earcon (which would otherwise be
+        # ui/dialog.ogg for the 'info' notification type) and only speak
+        # the announcement.
         _notify(
             _t("Private message from {user}").format(user=nickname or _t("user")),
             "info",
+            play_sound=False,
         )
 
     # ---- Close ---------------------------------------------------------
@@ -2606,12 +3067,6 @@ class TeamTalkFrame:
         _state["connected"] = False
         _state["server"] = ""
         _state["username"] = ""
-        snd = _sounds()
-        if snd:
-            try:
-                snd.window_close()
-            except Exception:
-                pass
         global _window
         _window = None
         self.frame.Destroy()
@@ -2633,11 +3088,6 @@ def open(parent_frame):
                 pass
         if _window is None:
             _window = TeamTalkFrame(parent_frame)
-            if snd:
-                try:
-                    snd.window_open()
-                except Exception:
-                    pass
         _window.show()
     except Exception as exc:
         print(f"[TeamTalk] Error opening module: {exc}")

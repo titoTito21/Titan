@@ -509,3 +509,51 @@ msgstr "{label}, {n} z {total}"
 
 msgid "user"
 msgstr "użytkownik"
+
+msgid "Join a channel before transmitting voice."
+msgstr "Dołącz do kanału przed transmisją głosu."
+
+msgid "This account is not allowed to transmit voice."
+msgstr "To konto nie ma uprawnień do transmisji głosu."
+
+msgid "Microphone: {name}, ready: {ok}"
+msgstr "Mikrofon: {name}, gotowy: {ok}"
+
+msgid "Speakers: {name}, ready: {ok}"
+msgstr "Głośniki: {name}, gotowe: {ok}"
+
+msgid "(unknown)"
+msgstr "(nieznany)"
+
+msgid "yes"
+msgstr "tak"
+
+msgid "no"
+msgstr "nie"
+
+msgid "Set nickname and gender"
+msgstr "Ustaw nick i płeć"
+
+msgid "Set nickname and gender...\tCtrl+N"
+msgstr "Ustaw nick i płeć...\tCtrl+N"
+
+msgid "Gender"
+msgstr "Płeć"
+
+msgid "Male"
+msgstr "Mężczyzna"
+
+msgid "Female"
+msgstr "Kobieta"
+
+msgid "Neutral"
+msgstr "Neutralna"
+
+msgid "Nickname set to {nick}"
+msgstr "Nick ustawiony na {nick}"
+
+msgid "Saved nickname and gender for next connection."
+msgstr "Zapisano nick i płeć dla następnego połączenia."
+
+msgid "(empty)"
+msgstr "(pusty)"
