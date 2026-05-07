@@ -19,6 +19,7 @@ from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.ui.help import show_help
 from src.controller.controller_modes import initialize_controller_modes
 from src.network.titan_net import TitanNetClient
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Import Titan-Net GUI functions
 try:
@@ -48,6 +49,15 @@ _ = set_language(get_setting('language', 'pl'))
 
 # Initialize screen reader output with stereo support
 speaker = accessible_output3.outputs.auto.Auto()
+
+
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
 
 def speak_klango(text, position=0.0, pitch_offset=0, interrupt=True):
     """
@@ -855,7 +865,7 @@ class KlangoMode:
             if mask:
                 style |= wx.TE_PASSWORD
 
-            dlg = wx.TextEntryDialog(
+            dlg = _new_text_entry_dialog(
                 None,
                 prompt,
                 _("Text Input"),
@@ -1818,7 +1828,7 @@ class KlangoFrame(wx.Frame):
             if mask:
                 style |= wx.TE_PASSWORD
 
-            dlg = wx.TextEntryDialog(
+            dlg = _new_text_entry_dialog(
                 None,
                 prompt,
                 _("Text Input"),

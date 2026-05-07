@@ -45,6 +45,31 @@ if IS_WINDOWS:
 # Initialize translation system
 _ = set_language(get_setting('language', 'pl'))
 
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = _new_message_dialog(parent, message, caption, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
+
+
+def _new_message_dialog(*args, **kwargs):
+    dlg = wx.MessageDialog(*args, **kwargs)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
+
 class ClassicMenuItem:
     """Element menu w stylu Windows 95"""
     def __init__(self, name, action=None, submenu=None, icon=None, shortcut=None):
@@ -1029,7 +1054,7 @@ class ClassicStartMenu(wx.Frame):
                 self.Hide()
             else:
                 # Fallback for non-Windows systems
-                dlg = wx.TextEntryDialog(self, _("Enter program name:"), _("Run..."))
+                dlg = _new_text_entry_dialog(self, _("Enter program name:"), _("Run..."))
                 if dlg.ShowModal() == wx.ID_OK:
                     command = dlg.GetValue()
                     if command:
@@ -1037,7 +1062,7 @@ class ClassicStartMenu(wx.Frame):
                             subprocess.run(command, shell=True)
                             self.Hide()
                         except Exception as e:
-                            wx.MessageBox(f"Error: {e}", "Error", wx.OK | wx.ICON_ERROR)
+                            _show_skinned_message(f"Error: {e}", "Error", wx.OK | wx.ICON_ERROR)
                 dlg.Destroy()
         except Exception as e:
             print(f"Error opening run dialog: {e}")
@@ -1050,7 +1075,7 @@ class ClassicStartMenu(wx.Frame):
                 subprocess.run(['rundll32', 'shell32.dll,SHFindFiles'], shell=True)
                 self.Hide()
             else:
-                wx.MessageBox(_("Search function in development"), _("Find"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_message(_("Search function in development"), _("Find"), wx.OK | wx.ICON_INFORMATION)
         except Exception as e:
             print(f"Error opening find dialog: {e}")
     
@@ -1062,7 +1087,7 @@ class ClassicStartMenu(wx.Frame):
                 subprocess.run(['hh.exe'], shell=True)
                 self.Hide()
             else:
-                wx.MessageBox(_("Help function"), _("Help"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_message(_("Help function"), _("Help"), wx.OK | wx.ICON_INFORMATION)
         except Exception as e:
             print(f"Error opening help: {e}")
     
@@ -1073,7 +1098,7 @@ class ClassicStartMenu(wx.Frame):
             play_sound('ui/statusbar.ogg')
             
             # Custom shutdown dialog for all systems
-            dlg = wx.MessageDialog(self, 
+            dlg = _new_message_dialog(self, 
                                   _("Do you want to shut down the system?"),
                                   _("Shut Down Windows"),
                                   wx.YES_NO | wx.ICON_QUESTION)

@@ -8,6 +8,7 @@ import time
 import platform
 from src.titan_core.translation import _, set_language, language_code
 from src.titan_core.sound import play_sound
+from src.titan_core.skin_manager import apply_skin_to_window
 import concurrent.futures
 
 try:
@@ -16,6 +17,17 @@ try:
     PYWIFI_AVAILABLE = True
 except ImportError:
     PYWIFI_AVAILABLE = False
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 class NetworkManager:
     def __init__(self):
@@ -324,7 +336,7 @@ class WiFiPasswordDialog(wx.Dialog):
         if self.password:
             self.EndModal(wx.ID_OK)
         else:
-            wx.MessageBox(_("Please enter a password"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Please enter a password"), _("Error"), wx.OK | wx.ICON_ERROR)
 
 class WiFiGUIPanel(wx.Panel):
     def __init__(self, parent, network_manager):
@@ -508,7 +520,7 @@ class WiFiGUIPanel(wx.Panel):
     
     def show_timeout_message(self):
         """Show timeout message to user"""
-        wx.MessageBox(
+        _show_skinned_message(
             _("WiFi scan timed out. This may happen if your WiFi adapter is busy or there are many networks nearby. Please try again."),
             _("Scan Timeout"),
             wx.OK | wx.ICON_WARNING
@@ -516,7 +528,7 @@ class WiFiGUIPanel(wx.Panel):
     
     def show_error_message(self, error):
         """Show error message to user"""
-        wx.MessageBox(
+        _show_skinned_message(
             _("WiFi scan failed: {}").format(error),
             _("Scan Error"),
             wx.OK | wx.ICON_ERROR
@@ -564,7 +576,7 @@ class WiFiGUIPanel(wx.Panel):
     def on_connect(self, event):
         selection = self.network_list.GetFirstSelected()
         if selection == -1:
-            wx.MessageBox(_("Please select a network"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Please select a network"), _("Error"), wx.OK | wx.ICON_ERROR)
             return
         
         network = self.network_manager.current_networks[selection]
@@ -642,7 +654,7 @@ class WiFiGUIPanel(wx.Panel):
     
     def on_connect_timeout(self, ssid):
         """Handle connection timeout"""
-        wx.MessageBox(
+        _show_skinned_message(
             _("Connection to {} timed out. Please check your password and try again.").format(ssid),
             _("Connection Timeout"),
             wx.OK | wx.ICON_WARNING
@@ -650,19 +662,19 @@ class WiFiGUIPanel(wx.Panel):
     
     def on_connect_result(self, success, ssid):
         if success:
-            wx.MessageBox(_("Connected to {}").format(ssid), _("Success"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Connected to {}").format(ssid), _("Success"), wx.OK | wx.ICON_INFORMATION)
             play_sound('ui/X.ogg')  # Connected sound
             self.refresh_networks(force_scan=False)  # Quick refresh
         else:
-            wx.MessageBox(_("Failed to connect to {}").format(ssid), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Failed to connect to {}").format(ssid), _("Error"), wx.OK | wx.ICON_ERROR)
     
     def on_disconnect(self, event):
         success = self.network_manager.disconnect()
         if success:
-            wx.MessageBox(_("Disconnected from network"), _("Success"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Disconnected from network"), _("Success"), wx.OK | wx.ICON_INFORMATION)
             self.refresh_networks()
         else:
-            wx.MessageBox(_("Failed to disconnect"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Failed to disconnect"), _("Error"), wx.OK | wx.ICON_ERROR)
 
 class WiFiPanel:
     """WiFi Panel for Invisible UI - works like volume panel"""
@@ -1366,7 +1378,7 @@ class WiFiInvisibleUI:
 def show_wifi_gui(parent=None):
     """Show WiFi GUI interface with timeout protection"""
     if not PYWIFI_AVAILABLE:
-        wx.MessageBox(_("WiFi functionality requires pywifi library.\nInstall with: pip install pywifi"), 
+        _show_skinned_message(_("WiFi functionality requires pywifi library.\nInstall with: pip install pywifi"), 
                      _("Error"), wx.OK | wx.ICON_ERROR)
         return None
     
@@ -1394,7 +1406,7 @@ def show_wifi_gui(parent=None):
                 network_manager = future.result(timeout=10.0)  # 10 second timeout
             except concurrent.futures.TimeoutError:
                 loading_dialog.Destroy()
-                wx.MessageBox(_("WiFi initialization timed out. Please try again."), 
+                _show_skinned_message(_("WiFi initialization timed out. Please try again."), 
                              _("Timeout Error"), wx.OK | wx.ICON_ERROR)
                 return None
         
@@ -1402,7 +1414,7 @@ def show_wifi_gui(parent=None):
         
         if not network_manager.wifi_enabled:
             loading_dialog.Destroy()
-            wx.MessageBox(_("No WiFi interfaces available or WiFi initialization failed."), 
+            _show_skinned_message(_("No WiFi interfaces available or WiFi initialization failed."), 
                          _("WiFi Error"), wx.OK | wx.ICON_WARNING)
             return None
         
@@ -1425,7 +1437,7 @@ def show_wifi_gui(parent=None):
         import traceback
         traceback.print_exc()
         try:
-            wx.MessageBox(_("Error creating WiFi interface:\n{}").format(str(e)), 
+            _show_skinned_message(_("Error creating WiFi interface:\n{}").format(str(e)), 
                          _("Error"), wx.OK | wx.ICON_ERROR)
         except:
             print("Could not show error dialog")

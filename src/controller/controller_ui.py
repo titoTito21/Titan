@@ -15,6 +15,18 @@ from accessible_output3 import outputs
 from src.titan_core.stereo_speech import get_stereo_speech
 from src.settings.settings import get_setting
 from src.controller.controller_modes import get_mode_manager, ControllerMode
+from src.titan_core.skin_manager import apply_skin_to_window
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 class ControllerUI:
     """Controller integration for wxPython UI with vibration feedback"""
@@ -766,7 +778,7 @@ class ControllerSettingsPanel(wx.Panel):
         info_text += f"{_('Vibration available')}: {_('Yes') if controller_info['vibration_available'] else _('No')}"
 
         # Update the info label (would need reference to it)
-        wx.MessageBox(_("Controllers refreshed successfully"), _("Controller Settings"))
+        _show_skinned_message(_("Controllers refreshed successfully"), _("Controller Settings"))
 
     def on_test_vibration(self, event):
         """Handle test vibration button"""

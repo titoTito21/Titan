@@ -50,6 +50,7 @@ from src.titan_core.sound import (
     play_focus_sound,
     play_endoflist_sound,
 )
+from src.titan_core.skin_manager import apply_skin_to_window
 
 _ = set_language(get_setting('language', 'pl'))
 
@@ -59,6 +60,17 @@ try:
 except Exception as _e:
     print(f"[Game Session] accessible_output3 unavailable: {_e}")
     _local_speaker = None
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def _speak(text, interrupt=True):
@@ -1428,8 +1440,8 @@ class GameSessionFrame(wx.Frame):
             print(f"[Game Session] voice chunk send failed: {e}")
 
     def _on_leave(self, event):
-        confirm = wx.MessageBox(_("Leave this session?"), _("Leave"),
-                                wx.YES_NO | wx.ICON_QUESTION)
+        confirm = _show_skinned_message(_("Leave this session?"), _("Leave"),
+                        wx.YES_NO | wx.ICON_QUESTION, self)
         if confirm != wx.YES:
             return
 
@@ -1441,9 +1453,10 @@ class GameSessionFrame(wx.Frame):
     def _on_end(self, event):
         if not self.is_host:
             return
-        confirm = wx.MessageBox(_("End the session for everyone?"),
-                                _("End session"),
-                                wx.YES_NO | wx.ICON_WARNING)
+        confirm = _show_skinned_message(_("End the session for everyone?"),
+                        _("End Session"),
+                        wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+                        self)
         if confirm != wx.YES:
             return
 
