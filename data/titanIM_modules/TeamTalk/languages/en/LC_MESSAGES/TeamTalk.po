@@ -276,3 +276,236 @@ msgstr "- connected to {server} as {user}"
 
 msgid "- ready"
 msgstr "- ready"
+
+# --- v2 (manual-channel-join client) ---
+
+msgid "Default channel (optional - never auto-joined):"
+msgstr "Default channel (optional - never auto-joined):"
+
+msgid "User info: {nick}"
+msgstr "User info: {nick}"
+
+msgid "Nickname"
+msgstr "Nickname"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "Status message"
+msgstr "Status message"
+
+msgid "Client"
+msgstr "Client"
+
+msgid "IP address"
+msgstr "IP address"
+
+msgid "User ID"
+msgstr "User ID"
+
+msgid "Channel ID"
+msgstr "Channel ID"
+
+msgid "Voice volume"
+msgstr "Voice volume"
+
+msgid "Private message: {nick}"
+msgstr "Private message: {nick}"
+
+msgid "Conversation with {nick}"
+msgstr "Conversation with {nick}"
+
+msgid "Nick"
+msgstr "Nick"
+
+msgid "Message"
+msgstr "Message"
+
+msgid "Time"
+msgstr "Time"
+
+msgid "Private message history with {nick}"
+msgstr "Private message history with {nick}"
+
+msgid "Type private message"
+msgstr "Type private message"
+
+msgid "Me"
+msgstr "Me"
+
+msgid "Could not send private message."
+msgstr "Could not send private message."
+
+msgid "Mute speakers"
+msgstr "Mute speakers"
+
+msgid "Speakers muted"
+msgstr "Speakers muted"
+
+msgid "Speakers unmuted"
+msgstr "Speakers unmuted"
+
+msgid "Set status..."
+msgstr "Set status..."
+
+msgid "Set status"
+msgstr "Set status"
+
+msgid "Status message:"
+msgstr "Status message:"
+
+msgid "Status updated"
+msgstr "Status updated"
+
+msgid "Join selected channel\tCtrl+J"
+msgstr "Join selected channel\tCtrl+J"
+
+msgid "Leave channel\tCtrl+L"
+msgstr "Leave channel\tCtrl+L"
+
+msgid "Leave channel"
+msgstr "Leave channel"
+
+msgid "Create channel..."
+msgstr "Create channel..."
+
+msgid "Create channel"
+msgstr "Create channel"
+
+msgid "Delete selected channel"
+msgstr "Delete selected channel"
+
+msgid "Channels"
+msgstr "Channels"
+
+msgid "Send private message...\tCtrl+M"
+msgstr "Send private message...\tCtrl+M"
+
+msgid "Send private message..."
+msgstr "Send private message..."
+
+msgid "User info\tCtrl+I"
+msgstr "User info\tCtrl+I"
+
+msgid "User info"
+msgstr "User info"
+
+msgid "Toggle mute for selected user"
+msgstr "Toggle mute for selected user"
+
+msgid "Toggle mute"
+msgstr "Toggle mute"
+
+msgid "Set volume for selected user..."
+msgstr "Set volume for selected user..."
+
+msgid "Set volume..."
+msgstr "Set volume..."
+
+msgid "Set user volume"
+msgstr "Set user volume"
+
+msgid "Volume (0..32000):"
+msgstr "Volume (0..32000):"
+
+msgid "Volume set to {volume}"
+msgstr "Volume set to {volume}"
+
+msgid "Could not set volume."
+msgstr "Could not set volume."
+
+msgid "Could not toggle user mute."
+msgstr "Could not toggle user mute."
+
+msgid "Muted {user}"
+msgstr "Muted {user}"
+
+msgid "Unmuted {user}"
+msgstr "Unmuted {user}"
+
+msgid "Kick selected user"
+msgstr "Kick selected user"
+
+msgid "Kick from channel"
+msgstr "Kick from channel"
+
+msgid "Kick {user} from the channel?"
+msgstr "Kick {user} from the channel?"
+
+msgid "Could not kick user."
+msgstr "Could not kick user."
+
+msgid "Ban selected user"
+msgstr "Ban selected user"
+
+msgid "Ban"
+msgstr "Ban"
+
+msgid "Ban {user}?"
+msgstr "Ban {user}?"
+
+msgid "Could not ban user."
+msgstr "Could not ban user."
+
+msgid "Users"
+msgstr "Users"
+
+msgid "Channel chat\tCtrl+1"
+msgstr "Channel chat\tCtrl+1"
+
+msgid "Server log\tCtrl+2"
+msgstr "Server log\tCtrl+2"
+
+msgid "Private messages\tCtrl+3"
+msgstr "Private messages\tCtrl+3"
+
+msgid "View"
+msgstr "View"
+
+msgid "Server log"
+msgstr "Server log"
+
+msgid "Private messages"
+msgstr "Private messages"
+
+msgid "Join this channel"
+msgstr "Join this channel"
+
+msgid "Create sub-channel..."
+msgstr "Create sub-channel..."
+
+msgid "Delete this channel"
+msgstr "Delete this channel"
+
+msgid "Channel name:"
+msgstr "Channel name:"
+
+msgid "Channel password (leave blank for none):"
+msgstr "Channel password (leave blank for none):"
+
+msgid "Channel '{name}' creation requested."
+msgstr "Channel '{name}' creation requested."
+
+msgid "Delete the selected channel?"
+msgstr "Delete the selected channel?"
+
+msgid "Could not delete channel."
+msgstr "Could not delete channel."
+
+msgid "Could not leave channel."
+msgstr "Could not leave channel."
+
+msgid "Left channel."
+msgstr "Left channel."
+
+msgid "[{user}] {message}"
+msgstr "[{user}] {message}"
+
+msgid "Private message from {user}"
+msgstr "Private message from {user}"
+
+msgid "{label}, {n} of {total}"
+msgstr "{label}, {n} of {total}"
+
+msgid "user"
+msgstr "user"

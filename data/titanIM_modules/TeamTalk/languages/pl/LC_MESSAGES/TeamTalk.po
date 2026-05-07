@@ -276,3 +276,236 @@ msgstr "- połączono z {server} jako {user}"
 
 msgid "- ready"
 msgstr "- gotowe"
+
+# --- v2 (manual-channel-join client) ---
+
+msgid "Default channel (optional - never auto-joined):"
+msgstr "Domyślny kanał (opcjonalny - nigdy nie dołączany automatycznie):"
+
+msgid "User info: {nick}"
+msgstr "Informacje o użytkowniku: {nick}"
+
+msgid "Nickname"
+msgstr "Pseudonim"
+
+msgid "Username"
+msgstr "Nazwa użytkownika"
+
+msgid "Status message"
+msgstr "Wiadomość statusu"
+
+msgid "Client"
+msgstr "Klient"
+
+msgid "IP address"
+msgstr "Adres IP"
+
+msgid "User ID"
+msgstr "ID użytkownika"
+
+msgid "Channel ID"
+msgstr "ID kanału"
+
+msgid "Voice volume"
+msgstr "Głośność głosu"
+
+msgid "Private message: {nick}"
+msgstr "Wiadomość prywatna: {nick}"
+
+msgid "Conversation with {nick}"
+msgstr "Rozmowa z {nick}"
+
+msgid "Nick"
+msgstr "Pseudonim"
+
+msgid "Message"
+msgstr "Wiadomość"
+
+msgid "Time"
+msgstr "Czas"
+
+msgid "Private message history with {nick}"
+msgstr "Historia wiadomości prywatnych z {nick}"
+
+msgid "Type private message"
+msgstr "Wpisz wiadomość prywatną"
+
+msgid "Me"
+msgstr "Ja"
+
+msgid "Could not send private message."
+msgstr "Nie można wysłać wiadomości prywatnej."
+
+msgid "Mute speakers"
+msgstr "Wycisz głośniki"
+
+msgid "Speakers muted"
+msgstr "Głośniki wyciszone"
+
+msgid "Speakers unmuted"
+msgstr "Głośniki włączone"
+
+msgid "Set status..."
+msgstr "Ustaw status..."
+
+msgid "Set status"
+msgstr "Ustaw status"
+
+msgid "Status message:"
+msgstr "Wiadomość statusu:"
+
+msgid "Status updated"
+msgstr "Status zaktualizowany"
+
+msgid "Join selected channel\tCtrl+J"
+msgstr "Dołącz do wybranego kanału\tCtrl+J"
+
+msgid "Leave channel\tCtrl+L"
+msgstr "Opuść kanał\tCtrl+L"
+
+msgid "Leave channel"
+msgstr "Opuść kanał"
+
+msgid "Create channel..."
+msgstr "Utwórz kanał..."
+
+msgid "Create channel"
+msgstr "Utwórz kanał"
+
+msgid "Delete selected channel"
+msgstr "Usuń wybrany kanał"
+
+msgid "Channels"
+msgstr "Kanały"
+
+msgid "Send private message...\tCtrl+M"
+msgstr "Wyślij wiadomość prywatną...\tCtrl+M"
+
+msgid "Send private message..."
+msgstr "Wyślij wiadomość prywatną..."
+
+msgid "User info\tCtrl+I"
+msgstr "Informacje o użytkowniku\tCtrl+I"
+
+msgid "User info"
+msgstr "Informacje o użytkowniku"
+
+msgid "Toggle mute for selected user"
+msgstr "Przełącz wyciszenie wybranego użytkownika"
+
+msgid "Toggle mute"
+msgstr "Przełącz wyciszenie"
+
+msgid "Set volume for selected user..."
+msgstr "Ustaw głośność wybranego użytkownika..."
+
+msgid "Set volume..."
+msgstr "Ustaw głośność..."
+
+msgid "Set user volume"
+msgstr "Ustaw głośność użytkownika"
+
+msgid "Volume (0..32000):"
+msgstr "Głośność (0..32000):"
+
+msgid "Volume set to {volume}"
+msgstr "Głośność ustawiona na {volume}"
+
+msgid "Could not set volume."
+msgstr "Nie można ustawić głośności."
+
+msgid "Could not toggle user mute."
+msgstr "Nie można przełączyć wyciszenia użytkownika."
+
+msgid "Muted {user}"
+msgstr "Wyciszono {user}"
+
+msgid "Unmuted {user}"
+msgstr "Włączono {user}"
+
+msgid "Kick selected user"
+msgstr "Wyrzuć wybranego użytkownika"
+
+msgid "Kick from channel"
+msgstr "Wyrzuć z kanału"
+
+msgid "Kick {user} from the channel?"
+msgstr "Wyrzucić {user} z kanału?"
+
+msgid "Could not kick user."
+msgstr "Nie można wyrzucić użytkownika."
+
+msgid "Ban selected user"
+msgstr "Zbanuj wybranego użytkownika"
+
+msgid "Ban"
+msgstr "Zbanuj"
+
+msgid "Ban {user}?"
+msgstr "Zbanować {user}?"
+
+msgid "Could not ban user."
+msgstr "Nie można zbanować użytkownika."
+
+msgid "Users"
+msgstr "Użytkownicy"
+
+msgid "Channel chat\tCtrl+1"
+msgstr "Czat kanału\tCtrl+1"
+
+msgid "Server log\tCtrl+2"
+msgstr "Dziennik serwera\tCtrl+2"
+
+msgid "Private messages\tCtrl+3"
+msgstr "Wiadomości prywatne\tCtrl+3"
+
+msgid "View"
+msgstr "Widok"
+
+msgid "Server log"
+msgstr "Dziennik serwera"
+
+msgid "Private messages"
+msgstr "Wiadomości prywatne"
+
+msgid "Join this channel"
+msgstr "Dołącz do tego kanału"
+
+msgid "Create sub-channel..."
+msgstr "Utwórz podkanał..."
+
+msgid "Delete this channel"
+msgstr "Usuń ten kanał"
+
+msgid "Channel name:"
+msgstr "Nazwa kanału:"
+
+msgid "Channel password (leave blank for none):"
+msgstr "Hasło kanału (puste = brak):"
+
+msgid "Channel '{name}' creation requested."
+msgstr "Wysłano żądanie utworzenia kanału '{name}'."
+
+msgid "Delete the selected channel?"
+msgstr "Usunąć wybrany kanał?"
+
+msgid "Could not delete channel."
+msgstr "Nie można usunąć kanału."
+
+msgid "Could not leave channel."
+msgstr "Nie można opuścić kanału."
+
+msgid "Left channel."
+msgstr "Opuszczono kanał."
+
+msgid "[{user}] {message}"
+msgstr "[{user}] {message}"
+
+msgid "Private message from {user}"
+msgstr "Wiadomość prywatna od {user}"
+
+msgid "{label}, {n} of {total}"
+msgstr "{label}, {n} z {total}"
+
+msgid "user"
+msgstr "użytkownik"
