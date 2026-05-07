@@ -24,6 +24,38 @@ _sound_api = TitanIMSoundAPI()
 _fallback_parent = None
 
 
+def _apply_skin_to_new_top_windows(before_ids=None):
+    """Apply Titan skin to top-level windows opened after a module call."""
+    try:
+        import wx
+        from src.titan_core.skin_manager import apply_skin_to_window
+    except Exception:
+        return
+
+    before_ids = before_ids or set()
+
+    def _apply_recursive(window):
+        try:
+            apply_skin_to_window(window)
+        except Exception:
+            return
+        for child in window.GetChildren():
+            _apply_recursive(child)
+
+    try:
+        for win in wx.GetTopLevelWindows():
+            try:
+                if not win or not bool(win):
+                    continue
+                if id(win) in before_ids:
+                    continue
+                _apply_recursive(win)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
 def _resolve_parent(parent_frame):
     """Return a usable wx parent, falling back to a hidden host frame.
 
@@ -180,8 +212,16 @@ class TitanIMModuleManager:
         for info in self.modules:
             if info["id"] == name_or_id or info["name"] == name_or_id:
                 try:
+                    before_ids = set()
+                    try:
+                        import wx
+                        before_ids = {id(w) for w in wx.GetTopLevelWindows() if w}
+                    except Exception:
+                        pass
+
                     effective_parent = _resolve_parent(parent_frame)
                     info["module"].open(effective_parent)
+                    _apply_skin_to_new_top_windows(before_ids)
                     return True
                 except Exception as e:
                     print(f"[IM Modules] Error opening {info['name']}: {e}")

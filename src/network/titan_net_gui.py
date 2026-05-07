@@ -39,6 +39,29 @@ _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
 
 
+def _apply_skin_recursive(window):
+    """Apply current skin to a window and all descendants."""
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_recursive(child)
+
+
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    _apply_skin_recursive(dlg)
+    return dlg
+
+
+def _new_message_dialog(*args, **kwargs):
+    dlg = wx.MessageDialog(*args, **kwargs)
+    _apply_skin_recursive(dlg)
+    return dlg
+
+
 def is_running_from_source():
     """
     Check if running from source code or compiled executable.
@@ -237,7 +260,7 @@ class LoginDialog(wx.Dialog):
     def apply_skin(self):
         """Apply current skin to dialog"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to login dialog: {e}")
 
@@ -601,7 +624,7 @@ class CreateAccountDialog(wx.Dialog):
     def apply_skin(self):
         """Apply current skin to dialog"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to create account dialog: {e}")
 
@@ -789,7 +812,7 @@ class ForumTopicWindow(wx.Frame):
     def apply_skin(self):
         """Apply current skin to window"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to forum topic window: {e}")
 
@@ -1006,7 +1029,7 @@ class ForumTopicWindow(wx.Frame):
         play_sound('core/SELECT.ogg')
 
         # Show edit dialog with current content
-        dlg = wx.TextEntryDialog(
+        dlg = _new_text_entry_dialog(
             self,
             _("Edit post content:"),
             _("Edit Post"),
@@ -1055,7 +1078,7 @@ class ForumTopicWindow(wx.Frame):
         """Delete forum reply"""
         play_sound('core/SELECT.ogg')
 
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self,
             _("Are you sure you want to delete this post?\n\nAuthor: {author}\nContent: {content}").format(
                 author=reply.get('author_username', 'Unknown'),
@@ -1512,7 +1535,7 @@ class TitanNetMainWindow(wx.Frame):
     def apply_skin(self):
         """Apply current skin to window"""
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception as e:
             print(f"Error applying skin to Titan-Net window: {e}")
 
@@ -3406,7 +3429,7 @@ class TitanNetMainWindow(wx.Frame):
 
         print(f"[BROADCAST SEND] Message type: {msg_type}")
 
-        dlg = wx.MessageDialog(
+        dlg = _new_message_dialog(
             self,
             _("Send broadcast ({type}) to all users?").format(type=msg_type),
             _("Confirm Broadcast"),
@@ -3695,7 +3718,7 @@ class TitanNetMainWindow(wx.Frame):
         details += f"{_('Description')}:\n{app.get('description', _('No description'))}\n\n"
         details += _("Do you want to download this app?")
 
-        dlg = wx.MessageDialog(
+        dlg = _new_message_dialog(
             self,
             details,
             _("App Details"),
@@ -3776,7 +3799,7 @@ class TitanNetMainWindow(wx.Frame):
         # If room is private and no password provided yet, ask for password
         if room_info and room_info.get('is_private', 0) == 1 and password is None:
             # Show password dialog
-            password_dlg = wx.TextEntryDialog(
+            password_dlg = _new_text_entry_dialog(
                 self,
                 _("This room is password-protected.\nEnter password:"),
                 _("Room Password"),
@@ -5244,7 +5267,7 @@ class TitanNetMainWindow(wx.Frame):
             speak_notification(_("Only developers can activate lockdown"), 'warning')
             return
 
-        dlg = wx.TextEntryDialog(self, _("Enter reason for lockdown:"), _("Activate Lockdown"))
+        dlg = _new_text_entry_dialog(self, _("Enter reason for lockdown:"), _("Activate Lockdown"))
         if dlg.ShowModal() == wx.ID_OK:
             reason = dlg.GetValue().strip() or "Manual lockdown"
             dlg.Destroy()
@@ -5273,7 +5296,7 @@ class TitanNetMainWindow(wx.Frame):
             speak_notification(_("Only developers can activate CERBERUS mode"), 'warning')
             return
 
-        confirm = wx.MessageDialog(
+        confirm = _new_message_dialog(
             self,
             _("CERBERUS mode is the maximum threat level. All new connections will be blocked. "
               "Are you sure you want to activate CERBERUS mode?"),
@@ -5285,7 +5308,7 @@ class TitanNetMainWindow(wx.Frame):
             return
         confirm.Destroy()
 
-        dlg = wx.TextEntryDialog(self, _("Enter reason:"), _("Activate CERBERUS"))
+        dlg = _new_text_entry_dialog(self, _("Enter reason:"), _("Activate CERBERUS"))
         if dlg.ShowModal() == wx.ID_OK:
             reason = dlg.GetValue().strip() or "Manual CERBERUS activation"
             dlg.Destroy()
@@ -5314,7 +5337,7 @@ class TitanNetMainWindow(wx.Frame):
             speak_notification(_("Only developers can deactivate lockdown"), 'warning')
             return
 
-        dlg = wx.TextEntryDialog(self, _("Enter reason for deactivation:"), _("Deactivate Lockdown"))
+        dlg = _new_text_entry_dialog(self, _("Enter reason for deactivation:"), _("Deactivate Lockdown"))
         if dlg.ShowModal() == wx.ID_OK:
             reason = dlg.GetValue().strip() or "Manual deactivation"
             dlg.Destroy()
@@ -5341,7 +5364,7 @@ class TitanNetMainWindow(wx.Frame):
             speak_notification(_("Only developers can ban IPs"), 'warning')
             return
 
-        dlg = wx.TextEntryDialog(self, _("Enter IP address to ban:"), _("Ban IP"))
+        dlg = _new_text_entry_dialog(self, _("Enter IP address to ban:"), _("Ban IP"))
         if dlg.ShowModal() == wx.ID_OK:
             ip = dlg.GetValue().strip()
             dlg.Destroy()
@@ -5379,7 +5402,7 @@ class TitanNetMainWindow(wx.Frame):
         if banned:
             dlg = wx.SingleChoiceDialog(self, _("Select IP to unban:"), _("Unban IP"), banned)
         else:
-            dlg = wx.TextEntryDialog(self, _("Enter IP address to unban:"), _("Unban IP"))
+            dlg = _new_text_entry_dialog(self, _("Enter IP address to unban:"), _("Unban IP"))
 
         if dlg.ShowModal() == wx.ID_OK:
             ip = dlg.GetStringSelection() if isinstance(dlg, wx.SingleChoiceDialog) else dlg.GetValue().strip()
@@ -5418,7 +5441,7 @@ class TitanNetMainWindow(wx.Frame):
         action = 'add' if action_dlg.GetSelection() == 0 else 'remove'
         action_dlg.Destroy()
 
-        dlg = wx.TextEntryDialog(self, _("Enter IP address:"), _("Whitelist IP"))
+        dlg = _new_text_entry_dialog(self, _("Enter IP address:"), _("Whitelist IP"))
         if dlg.ShowModal() == wx.ID_OK:
             ip = dlg.GetValue().strip()
             dlg.Destroy()
@@ -5485,13 +5508,13 @@ class TitanNetMainWindow(wx.Frame):
     def _promote_user_dialog(self):
         """Dialog to promote user to moderator"""
         # Ask for username
-        dlg = wx.TextEntryDialog(self, _("Enter username to promote:"), _("Promote to Moderator"))
+        dlg = _new_text_entry_dialog(self, _("Enter username to promote:"), _("Promote to Moderator"))
 
         if dlg.ShowModal() == wx.ID_OK:
             username = dlg.GetValue().strip()
 
             # Ask for title
-            title_dlg = wx.TextEntryDialog(self, _("Enter moderator title:"), _("Moderator Title"), "Moderator")
+            title_dlg = _new_text_entry_dialog(self, _("Enter moderator title:"), _("Moderator Title"), "Moderator")
 
             if title_dlg.ShowModal() == wx.ID_OK:
                 title = title_dlg.GetValue().strip()
@@ -5516,13 +5539,13 @@ class TitanNetMainWindow(wx.Frame):
 
     def _demote_moderator_dialog(self):
         """Dialog to demote moderator"""
-        dlg = wx.TextEntryDialog(self, _("Enter username to demote:"), _("Demote Moderator"))
+        dlg = _new_text_entry_dialog(self, _("Enter username to demote:"), _("Demote Moderator"))
 
         if dlg.ShowModal() == wx.ID_OK:
             username = dlg.GetValue().strip()
 
             # Confirm
-            confirm = wx.MessageDialog(self,
+            confirm = _new_message_dialog(self,
                 _("Are you sure you want to demote {user}?").format(user=username),
                 _("Confirm Demotion"),
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -5549,7 +5572,7 @@ class TitanNetMainWindow(wx.Frame):
     def _user_create_room(self):
         """Dialog to create a new chat room"""
         # Room name
-        name_dlg = wx.TextEntryDialog(self, _("Enter room name:"), _("Create New Room"))
+        name_dlg = _new_text_entry_dialog(self, _("Enter room name:"), _("Create New Room"))
 
         if name_dlg.ShowModal() == wx.ID_OK:
             room_name = name_dlg.GetValue().strip()
@@ -5560,7 +5583,7 @@ class TitanNetMainWindow(wx.Frame):
                 return
 
             # Room description
-            desc_dlg = wx.TextEntryDialog(self, _("Enter room description (optional):"), _("Room Description"))
+            desc_dlg = _new_text_entry_dialog(self, _("Enter room description (optional):"), _("Room Description"))
 
             if desc_dlg.ShowModal() == wx.ID_OK:
                 room_description = desc_dlg.GetValue().strip()
@@ -5576,7 +5599,7 @@ class TitanNetMainWindow(wx.Frame):
                     room_type = type_map.get(type_dlg.GetSelection(), "text")
 
                     # Ask for password (optional)
-                    password_dlg = wx.TextEntryDialog(self, _("Enter password for private room (leave empty for public):"), _("Room Password"))
+                    password_dlg = _new_text_entry_dialog(self, _("Enter password for private room (leave empty for public):"), _("Room Password"))
 
                     if password_dlg.ShowModal() == wx.ID_OK:
                         password = password_dlg.GetValue().strip()
@@ -5608,7 +5631,7 @@ class TitanNetMainWindow(wx.Frame):
     def _user_create_topic(self):
         """Dialog to create a new forum topic"""
         # Topic title
-        title_dlg = wx.TextEntryDialog(self, _("Enter topic title:"), _("Create New Thread"))
+        title_dlg = _new_text_entry_dialog(self, _("Enter topic title:"), _("Create New Thread"))
 
         if title_dlg.ShowModal() == wx.ID_OK:
             topic_title = title_dlg.GetValue().strip()
@@ -5748,7 +5771,7 @@ class TitanNetMainWindow(wx.Frame):
         if not self.current_room:
             return
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to kick this user from the room?"),
             _("Confirm Kick"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -5774,7 +5797,7 @@ class TitanNetMainWindow(wx.Frame):
         if not self.current_room:
             return
 
-        reason_dlg = wx.TextEntryDialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
+        reason_dlg = _new_text_entry_dialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
 
         if reason_dlg.ShowModal() == wx.ID_OK:
             reason = reason_dlg.GetValue().strip()
@@ -5796,7 +5819,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _admin_promote_user(self, username):
         """Promote user to moderator (context menu action)"""
-        title_dlg = wx.TextEntryDialog(self, _("Enter moderator title:"), _("Moderator Title"), "Moderator")
+        title_dlg = _new_text_entry_dialog(self, _("Enter moderator title:"), _("Moderator Title"), "Moderator")
 
         if title_dlg.ShowModal() == wx.ID_OK:
             title = title_dlg.GetValue().strip()
@@ -5818,7 +5841,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _admin_demote_user(self, username):
         """Demote moderator to user (context menu action)"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to demote {user}?").format(user=username),
             _("Confirm Demotion"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -5874,7 +5897,7 @@ class TitanNetMainWindow(wx.Frame):
             ban_type, duration_hours = ban_config[selection]
 
             # Ask for reason
-            reason_dlg = wx.TextEntryDialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
+            reason_dlg = _new_text_entry_dialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
 
             if reason_dlg.ShowModal() == wx.ID_OK:
                 reason = reason_dlg.GetValue().strip()
@@ -5906,7 +5929,7 @@ class TitanNetMainWindow(wx.Frame):
         if not self.current_room:
             return
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to unban {user} from this room?").format(user=user['username']),
             _("Confirm Unban"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -5958,7 +5981,7 @@ class TitanNetMainWindow(wx.Frame):
             ban_type, duration_hours = ban_config[selection]
 
             # Ask for reason
-            reason_dlg = wx.TextEntryDialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
+            reason_dlg = _new_text_entry_dialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
 
             if reason_dlg.ShowModal() == wx.ID_OK:
                 reason = reason_dlg.GetValue().strip()
@@ -5987,7 +6010,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _context_unban_from_forum(self, user):
         """Unban user from forum via context menu"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to unban {user} from the forum?").format(user=user['username']),
             _("Confirm Unban"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6042,7 +6065,7 @@ class TitanNetMainWindow(wx.Frame):
             # Ask for reason
             reason_prompt = _("Enter ban reason:\n(This is a serious action - user will be banned from entire TCE Community)")
 
-            reason_dlg = wx.TextEntryDialog(self, reason_prompt, _("Ban Reason"), "")
+            reason_dlg = _new_text_entry_dialog(self, reason_prompt, _("Ban Reason"), "")
 
             if reason_dlg.ShowModal() == wx.ID_OK:
                 reason = reason_dlg.GetValue().strip()
@@ -6050,7 +6073,7 @@ class TitanNetMainWindow(wx.Frame):
                 # Final confirmation
                 confirm_msg = _("Are you sure you want to ban {user} from the ENTIRE TCE Community?\nThis will prevent them from accessing Titan-Net completely.").format(user=user['username'])
 
-                confirm = wx.MessageDialog(self,
+                confirm = _new_message_dialog(self,
                     confirm_msg,
                     _("Confirm Global Ban"),
                     wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
@@ -6082,7 +6105,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _context_unban_globally(self, user):
         """Unban user globally via context menu"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to unban {user} globally?").format(user=user['username']),
             _("Confirm Global Unban"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6115,7 +6138,7 @@ class TitanNetMainWindow(wx.Frame):
         # Ask for reason
         reason_prompt = _("Enter ban reason (REQUIRED for HARD BAN):\n\nWARNING: HARD BAN will:\n- Ban user permanently\n- Block their IP address\n- Block their hardware ID\n- Prevent ANY new accounts from this IP/hardware\n\nThis is IRREVERSIBLE!")
 
-        reason_dlg = wx.TextEntryDialog(self, reason_prompt, _("Hard Ban Reason"), "")
+        reason_dlg = _new_text_entry_dialog(self, reason_prompt, _("Hard Ban Reason"), "")
 
         if reason_dlg.ShowModal() == wx.ID_OK:
             reason = reason_dlg.GetValue().strip()
@@ -6129,7 +6152,7 @@ class TitanNetMainWindow(wx.Frame):
             # Final confirmation
             confirm_msg = _("CRITICAL ACTION\n\nAre you ABSOLUTELY SURE you want to issue a HARD BAN on {user}?\n\nThis will:\n- Ban user permanently\n- Block their IP\n- Block their hardware\n- Prevent ALL future accounts\n\nTHIS CANNOT BE UNDONE!").format(user=user['username'])
 
-            confirm = wx.MessageDialog(self,
+            confirm = _new_message_dialog(self,
                 confirm_msg,
                 _("Confirm HARD BAN"),
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
@@ -6164,7 +6187,7 @@ class TitanNetMainWindow(wx.Frame):
         # Warning and confirmation
         confirm_msg = _("CRITICAL ACTION - DELETE USER\n\nAre you ABSOLUTELY SURE you want to DELETE user {user}?\n\nThis will:\n- Delete user account permanently\n- Delete ALL their messages and posts\n- Remove them from all rooms and forums\n- Clear all their data from the system\n\nWARNING: This action CANNOT BE UNDONE!\n\nNote: To prevent new account creation, use HARD BAN instead.").format(user=user['username'])
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             confirm_msg,
             _("Confirm USER DELETION"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
@@ -6199,7 +6222,7 @@ class TitanNetMainWindow(wx.Frame):
 
         topic = self.forum_topics_cache[selection]
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to delete topic '{title}'?").format(title=topic['title']),
             _("Confirm Delete"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6232,7 +6255,7 @@ class TitanNetMainWindow(wx.Frame):
         is_locked = topic.get('is_locked', 0)
         action = _("unlock") if is_locked else _("lock")
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to {action} topic '{title}'?").format(action=action, title=topic['title']),
             _("Confirm"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6269,7 +6292,7 @@ class TitanNetMainWindow(wx.Frame):
         is_pinned = topic.get('is_pinned', 0)
         action = _("unpin") if is_pinned else _("pin")
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to {action} topic '{title}'?").format(action=action, title=topic['title']),
             _("Confirm"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6338,13 +6361,13 @@ class TitanNetMainWindow(wx.Frame):
             return
 
         # Ask for username
-        dlg = wx.TextEntryDialog(self, _("Enter username to kick:"), _("Kick User"))
+        dlg = _new_text_entry_dialog(self, _("Enter username to kick:"), _("Kick User"))
 
         if dlg.ShowModal() == wx.ID_OK:
             username = dlg.GetValue().strip()
 
             # Get user ID from username (simplified - in real app would need API call)
-            confirm = wx.MessageDialog(self,
+            confirm = _new_message_dialog(self,
                 _("Are you sure you want to kick {user} from this room?").format(user=username),
                 _("Confirm Kick"),
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6370,7 +6393,7 @@ class TitanNetMainWindow(wx.Frame):
             return
 
         # Ask for username
-        username_dlg = wx.TextEntryDialog(self, _("Enter username to ban:"), _("Ban User"))
+        username_dlg = _new_text_entry_dialog(self, _("Enter username to ban:"), _("Ban User"))
 
         if username_dlg.ShowModal() == wx.ID_OK:
             username = username_dlg.GetValue().strip()
@@ -6403,7 +6426,7 @@ class TitanNetMainWindow(wx.Frame):
                 ban_type, duration_hours = ban_config[selection]
 
                 # Ask for reason
-                reason_dlg = wx.TextEntryDialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
+                reason_dlg = _new_text_entry_dialog(self, _("Enter ban reason (optional):"), _("Ban Reason"), "")
 
                 if reason_dlg.ShowModal() == wx.ID_OK:
                     reason = reason_dlg.GetValue().strip()
@@ -6435,7 +6458,7 @@ class TitanNetMainWindow(wx.Frame):
 
         room = self.rooms_cache[selection]
 
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to delete room '{name}'? This will remove all messages and members.").format(name=room['name']),
             _("Confirm Delete"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6506,7 +6529,7 @@ class TitanNetMainWindow(wx.Frame):
             else:
                 reason_prompt = _("Enter ban reason:\n(This is a serious action - user will be banned from entire TCE Community)")
 
-            reason_dlg = wx.TextEntryDialog(self, reason_prompt, _("Ban Reason"), "")
+            reason_dlg = _new_text_entry_dialog(self, reason_prompt, _("Ban Reason"), "")
 
             if reason_dlg.ShowModal() == wx.ID_OK:
                 reason = reason_dlg.GetValue().strip()
@@ -6525,7 +6548,7 @@ class TitanNetMainWindow(wx.Frame):
                     confirm_msg = _("Are you sure you want to ban {user} from the ENTIRE TCE Community?\nThis will prevent them from accessing Titan-Net completely.").format(user=user['username'])
 
                 dialog_title = _("Confirm HARD BAN") if ban_type == 'hard' else _("Confirm Global Ban")
-                confirm = wx.MessageDialog(self,
+                confirm = _new_message_dialog(self,
                     confirm_msg,
                     dialog_title,
                     wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
@@ -6664,7 +6687,7 @@ class TitanNetMainWindow(wx.Frame):
             "Do you want to continue?"
         )
 
-        confirm = wx.MessageDialog(self, warning_msg,
+        confirm = _new_message_dialog(self, warning_msg,
             _("Security Warning - Unapproved Package"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
 
@@ -6732,7 +6755,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _reject_app(self, app_id, app_name):
         """Reject package"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to reject {name}?").format(name=app_name),
             _("Confirm Rejection"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6808,7 +6831,7 @@ class TitanNetMainWindow(wx.Frame):
             elif action_selection == 2:  # Delete topic
                 self._delete_topic(topic_id)
             elif action_selection == 3:  # Move topic
-                cat_dlg = wx.TextEntryDialog(self, _("Enter new category:"), _("Move Topic"))
+                cat_dlg = _new_text_entry_dialog(self, _("Enter new category:"), _("Move Topic"))
                 if cat_dlg.ShowModal() == wx.ID_OK:
                     self._move_topic(topic_id, cat_dlg.GetValue())
                 cat_dlg.Destroy()
@@ -6870,7 +6893,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _delete_topic(self, topic_id):
         """Delete forum topic"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to delete topic #{id}?").format(id=topic_id),
             _("Confirm Deletion"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -6893,7 +6916,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def _delete_reply(self, reply_id):
         """Delete forum reply"""
-        confirm = wx.MessageDialog(self,
+        confirm = _new_message_dialog(self,
             _("Are you sure you want to delete reply #{id}?").format(id=reply_id),
             _("Confirm Deletion"),
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -7004,7 +7027,7 @@ class TitanNetMainWindow(wx.Frame):
         content = response.get('content', '')
         editor = BroadcastFileEditDialog(self, self.titan_client, filename, content)
         try:
-            apply_skin_to_window(editor)
+            _apply_skin_recursive(editor)
         except Exception:
             pass
         editor.ShowModal()
@@ -7069,7 +7092,7 @@ class TitanNetMainWindow(wx.Frame):
             dlg.Destroy()
 
             # Get username
-            user_dlg = wx.TextEntryDialog(self, _("Enter username to kick:"), _("Kick User"))
+            user_dlg = _new_text_entry_dialog(self, _("Enter username to kick:"), _("Kick User"))
 
             if user_dlg.ShowModal() == wx.ID_OK:
                 username = user_dlg.GetValue().strip()
@@ -7122,7 +7145,7 @@ class TitanNetMainWindow(wx.Frame):
             dlg.Destroy()
 
             # Get username
-            user_dlg = wx.TextEntryDialog(self, _("Enter username to ban:"), _("Ban User"))
+            user_dlg = _new_text_entry_dialog(self, _("Enter username to ban:"), _("Ban User"))
 
             if user_dlg.ShowModal() == wx.ID_OK:
                 username = user_dlg.GetValue().strip()
@@ -7130,7 +7153,7 @@ class TitanNetMainWindow(wx.Frame):
                 user_dlg.Destroy()
 
                 # Get reason
-                reason_dlg = wx.TextEntryDialog(self, _("Ban reason (optional):"), _("Ban Reason"))
+                reason_dlg = _new_text_entry_dialog(self, _("Ban reason (optional):"), _("Ban Reason"))
                 reason = ""
                 if reason_dlg.ShowModal() == wx.ID_OK:
                     reason = reason_dlg.GetValue().strip()
@@ -7184,7 +7207,7 @@ class TitanNetMainWindow(wx.Frame):
             dlg.Destroy()
 
             # Get username
-            user_dlg = wx.TextEntryDialog(self, _("Enter username to unban:"), _("Unban User"))
+            user_dlg = _new_text_entry_dialog(self, _("Enter username to unban:"), _("Unban User"))
 
             if user_dlg.ShowModal() == wx.ID_OK:
                 username = user_dlg.GetValue().strip()
@@ -7213,7 +7236,7 @@ class TitanNetMainWindow(wx.Frame):
         if msg_dlg.ShowModal() == wx.ID_OK:
             message_id = msg_dlg.GetValue()
 
-            confirm = wx.MessageDialog(self,
+            confirm = _new_message_dialog(self,
                 _("Are you sure you want to delete message #{id}?").format(id=message_id),
                 _("Confirm Deletion"),
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
@@ -7272,7 +7295,7 @@ class TitanNetMainWindow(wx.Frame):
             room_name = selected_room['name']
 
             # Confirm deletion
-            confirm = wx.MessageDialog(self,
+            confirm = _new_message_dialog(self,
                 _("Are you sure you want to delete room '{name}' (ID: {id})? This cannot be undone!").format(name=room_name, id=room_id),
                 _("Confirm Deletion"),
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
@@ -7311,12 +7334,12 @@ class TitanNetMainWindow(wx.Frame):
             file_path = dlg.GetPath()
 
             # Ask for package name
-            name_dlg = wx.TextEntryDialog(self, _("Package name:"), _("Upload Package"))
+            name_dlg = _new_text_entry_dialog(self, _("Package name:"), _("Upload Package"))
             if name_dlg.ShowModal() == wx.ID_OK:
                 app_name = name_dlg.GetValue().strip()
 
                 # Ask for description
-                desc_dlg = wx.TextEntryDialog(self, _("Description:"), _("Upload Package"))
+                desc_dlg = _new_text_entry_dialog(self, _("Description:"), _("Upload Package"))
                 if desc_dlg.ShowModal() == wx.ID_OK:
                     description = desc_dlg.GetValue().strip()
 
@@ -7336,7 +7359,7 @@ class TitanNetMainWindow(wx.Frame):
                         category = categories[cat_dlg.GetSelection()][1]  # Use server-compatible value
 
                         # Ask for version
-                        ver_dlg = wx.TextEntryDialog(self, _("Version (e.g. 1.0.0):"), _("Version"), "1.0.0")
+                        ver_dlg = _new_text_entry_dialog(self, _("Version (e.g. 1.0.0):"), _("Version"), "1.0.0")
                         if ver_dlg.ShowModal() == wx.ID_OK:
                             version = ver_dlg.GetValue().strip()
 
@@ -7373,7 +7396,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def show_search_apps_dialog(self):
         """Dialog to search packages"""
-        dlg = wx.TextEntryDialog(self, _("Enter search query:"), _("Search Packages"))
+        dlg = _new_text_entry_dialog(self, _("Enter search query:"), _("Search Packages"))
 
         if dlg.ShowModal() == wx.ID_OK:
             query = dlg.GetValue().strip()
@@ -7457,7 +7480,7 @@ class MOTDDialog(wx.Dialog):
 
         # Apply skin
         try:
-            apply_skin_to_window(self)
+            _apply_skin_recursive(self)
         except Exception:
             pass
 
@@ -7550,7 +7573,7 @@ class BroadcastFileEditDialog(wx.Dialog):
 
     def _on_close(self, event):
         if self._has_unsaved_changes():
-            dlg = wx.MessageDialog(
+            dlg = _new_message_dialog(
                 self,
                 _("You have unsaved changes. Discard them?"),
                 _("Unsaved changes"),
@@ -7618,7 +7641,7 @@ def show_login_dialog(parent, titan_client: TitanNetClient):
         speak_titannet(_("Titan-Net server is not available. Would you like to continue in offline mode?"))
         play_sound('core/error.ogg')
 
-        dlg = wx.MessageDialog(
+        dlg = _new_message_dialog(
             parent,
             _("Titan-Net server is not available.\nYou can continue in offline mode without messaging features."),
             _("Server Not Available"),
@@ -7741,3 +7764,4 @@ if __name__ == "__main__":
         app.MainLoop()
     else:
         print("Login cancelled or offline mode selected")
+

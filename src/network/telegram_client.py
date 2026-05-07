@@ -11,12 +11,22 @@ from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError, P
 from telethon.tl.types import PeerUser, PeerChat, PeerChannel
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
+from src.titan_core.skin_manager import apply_skin_to_window
 from src.settings.settings import get_setting
 from src.settings.titan_im_config import (
     initialize_config, get_telegram_credentials, set_telegram_credentials,
     get_telegram_config, save_telegram_config, load_titan_im_config
 )
 from src.network import telegram_voice
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
 
 # Initialize translation
 _ = set_language(get_setting('language', 'pl'))
@@ -238,6 +248,7 @@ class TelegramClient:
             dlg = wx.TextEntryDialog(None,
                 _("Enter the verification code received by SMS or Telegram:"),
                 _("Verification code"))
+            _apply_skin_to_tree(dlg)
             if dlg.ShowModal() == wx.ID_OK:
                 result['code'] = dlg.GetValue()
             dlg.Destroy()
@@ -261,6 +272,7 @@ class TelegramClient:
             dlg = wx.PasswordEntryDialog(None,
                 _("Enter two-factor authentication password:"),
                 _("2FA Password"))
+            _apply_skin_to_tree(dlg)
             if dlg.ShowModal() == wx.ID_OK:
                 result['password'] = dlg.GetValue()
             dlg.Destroy()
@@ -634,7 +646,10 @@ class TelegramClient:
         """Notify about errors"""
         play_sound('core/error.ogg')
         print(f"Telegram error: {error_message}")
-        wx.MessageBox(error_message, _("Telegram Error"), wx.OK | wx.ICON_ERROR)
+        dlg = wx.MessageDialog(None, error_message, _("Telegram Error"), wx.OK | wx.ICON_ERROR)
+        _apply_skin_to_tree(dlg)
+        dlg.ShowModal()
+        dlg.Destroy()
     
     def send_message(self, recipient, message):
         """Send message to recipient"""

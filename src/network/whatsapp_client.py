@@ -21,6 +21,7 @@ from src.settings.titan_im_config import (
     initialize_config, load_titan_im_config, save_titan_im_config
 )
 from src.network import whatsapp_webview
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Initialize translation
 _ = set_language(get_setting('language', 'pl'))
@@ -515,7 +516,13 @@ class WhatsAppClient:
         """Notify about errors"""
         play_sound('core/error.ogg')
         print(f"WhatsApp error: {error_message}")
-        wx.MessageBox(error_message, _("WhatsApp Error"), wx.OK | wx.ICON_ERROR)
+        dlg = wx.MessageDialog(None, error_message, _("WhatsApp Error"), wx.OK | wx.ICON_ERROR)
+        try:
+            apply_skin_to_window(dlg)
+        except Exception:
+            pass
+        dlg.ShowModal()
+        dlg.Destroy()
     
     def disconnect(self):
         """Disconnect from WhatsApp"""

@@ -7,9 +7,21 @@ from accessible_output3.outputs.auto import Auto
 from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, load_settings
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def _get_base_path():
@@ -139,7 +151,7 @@ class ComponentManagerDialog(wx.Dialog):
         display_name = self.component_manager.get_component_display_name(component_folder)
 
         if not component_module:
-            wx.MessageBox(_("Component '{}' is not loaded.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Component '{}' is not loaded.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
             return
 
         menu = wx.Menu()
@@ -147,7 +159,7 @@ class ComponentManagerDialog(wx.Dialog):
         has_settings_action = hasattr(component_module, 'show_settings_dialog')
 
         if not has_open_action and not has_settings_action:
-            wx.MessageBox(_("No available actions for component '{}'.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("No available actions for component '{}'.").format(display_name), _("Information"), wx.OK | wx.ICON_INFORMATION)
             return
 
         play_sound('ui/contextmenu.ogg')
@@ -178,7 +190,7 @@ class ComponentManagerDialog(wx.Dialog):
             try:
                 func_to_run(self)
             except Exception as e:
-                wx.MessageBox(_("Error running component '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Error running component '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
     def on_settings_action(self, component_folder):
         display_name = self.component_manager.get_component_display_name(component_folder)
@@ -189,7 +201,7 @@ class ComponentManagerDialog(wx.Dialog):
             try:
                 component_module.show_settings_dialog(self)
             except Exception as e:
-                wx.MessageBox(_("Error opening settings for '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Error opening settings for '{}':\n{}").format(display_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
     def toggle_component(self, component_folder, index):
         new_status = self.component_manager.toggle_component_status(component_folder)
@@ -275,3 +287,4 @@ if __name__ == '__main__':
     dialog = ComponentManagerDialog(None, "Menedżer komponentów - Test", component_manager=dummy_manager)
     dialog.ShowModal()
     dialog.Destroy()
+

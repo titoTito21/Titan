@@ -13,6 +13,7 @@ from src.network import telegram_client
 from src.titan_core.sound import play_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
+from src.titan_core.skin_manager import apply_skin_to_window
 import re
 
 try:
@@ -29,6 +30,24 @@ except ImportError:
 
 # Get translation function
 _ = set_language(get_setting('language', 'pl'))
+
+
+def _apply_skin_to_tree(window):
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
+
+def _show_skinned_message(parent, message, title, style=wx.OK | wx.ICON_INFORMATION):
+    dlg = wx.MessageDialog(parent, message, title, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 def _speak_tg(text, position=0.0, pitch_offset=0, interrupt=False):
@@ -75,6 +94,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
         
         self.setup_ui()
         self.Center()
+        _apply_skin_to_tree(self)
         
         # Setup callbacks
         telegram_client.add_message_callback(self.on_message_received)
@@ -317,7 +337,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
             self.message_input.SetFocus()
         else:
             play_sound('error.ogg')
-            wx.MessageBox(_("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
     
     def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""
@@ -456,6 +476,7 @@ class TelegramVoiceCallWindow(wx.Frame):
 
         self.init_ui()
         self.Center()
+        _apply_skin_to_tree(self)
 
         play_sound('ui/popup.ogg')
 
@@ -643,6 +664,7 @@ class TelegramGroupChatWindow(wx.Frame):
         
         self.setup_ui()
         self.Center()
+        _apply_skin_to_tree(self)
         
         # Setup callbacks
         telegram_client.add_message_callback(self.on_message_received)
@@ -875,7 +897,7 @@ class TelegramGroupChatWindow(wx.Frame):
             self.message_input.SetFocus()
         else:
             play_sound('error.ogg')
-            wx.MessageBox(_("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
     
     def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""
@@ -1027,6 +1049,7 @@ class IncomingCallDialog(wx.Dialog):
 
         self.setup_ui()
         self.Center()
+        _apply_skin_to_tree(self)
 
         # Force to top
         self.SetWindowStyle(self.GetWindowStyle() | wx.STAY_ON_TOP)
