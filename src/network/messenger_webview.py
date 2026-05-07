@@ -33,6 +33,19 @@ def _apply_skin_to_tree(window):
     for child in window.GetChildren():
         _apply_skin_to_tree(child)
 
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = _new_message_dialog(parent, message, caption, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
+def _new_message_dialog(*args, **kwargs):
+    dlg = wx.MessageDialog(*args, **kwargs)
+    _apply_skin_to_tree(dlg)
+    return dlg
+
 def get_messenger_cookies_dir():
     """Get the directory for storing Messenger cookies and user data - same as Titan config"""
     # Use the same base directory as settings.ini
@@ -836,7 +849,7 @@ class MessengerWebViewFrame(wx.Frame):
                 self.webview.RunScript("console.log('Developer tools accessed from Titan IM');")
                 # Note: Actual dev tools opening depends on WebView2 implementation
             except:
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Narzędzia deweloperskie mogą nie być dostępne w tej wersji WebView."),
                     _("Informacja"),
                     wx.OK | wx.ICON_INFORMATION
@@ -1991,7 +2004,7 @@ class MessengerWebViewFrame(wx.Frame):
     def on_end_call(self, event):
         """Handle end call menu item"""
         if not self.is_call_active:
-            wx.MessageBox(_("Brak aktywnego połączenia"), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Brak aktywnego połączenia"), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
             return
         
         # Try to end the call via JavaScript
@@ -2041,7 +2054,7 @@ class MessengerWebViewFrame(wx.Frame):
     def on_show_call_status(self, event):
         """Show call status dialog"""
         if not self.is_call_active:
-            wx.MessageBox(_("Brak aktywnego połączenia"), _("Status połączenia"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Brak aktywnego połączenia"), _("Status połączenia"), wx.OK | wx.ICON_INFORMATION)
             return
         
         # Calculate duration
@@ -2065,7 +2078,7 @@ class MessengerWebViewFrame(wx.Frame):
             duration_text
         )
         
-        wx.MessageBox(status_text, _("Status połączenia"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(status_text, _("Status połączenia"), wx.OK | wx.ICON_INFORMATION)
     
     def on_test_incoming_sound(self, event):
         """Test incoming call sound"""
@@ -2125,7 +2138,7 @@ class MessengerWebViewFrame(wx.Frame):
                     if success:
                         result_str = actual_result
                     else:
-                        wx.MessageBox(_("Błąd pobierania informacji debug"), _("Debug"), wx.OK | wx.ICON_ERROR)
+                        _show_skinned_message(_("Błąd pobierania informacji debug"), _("Debug"), wx.OK | wx.ICON_ERROR)
                         return
                 
                 debug_info = json.loads(result_str)
@@ -2168,7 +2181,7 @@ class MessengerWebViewFrame(wx.Frame):
                 dlg.Destroy()
                 
         except Exception as e:
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Błąd pobierania informacji debug:\n{}").format(str(e)),
                 _("Debug"),
                 wx.OK | wx.ICON_ERROR
@@ -2199,7 +2212,7 @@ class MessengerWebViewFrame(wx.Frame):
                 
         except Exception as e:
             print(f"Error opening cookies directory: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Nie można otworzyć folderu cookies:\n{}").format(str(e)),
                 _("Błąd"),
                 wx.OK | wx.ICON_ERROR
@@ -2208,7 +2221,7 @@ class MessengerWebViewFrame(wx.Frame):
     def on_clear_cookies(self, event):
         """Clear all cookies and user data"""
         # Confirm action
-        dlg = wx.MessageDialog(
+        dlg = _new_message_dialog(
             self,
             _("Czy na pewno chcesz usunąć wszystkie cookies i dane logowania?\n\n"
               "To spowoduje wylogowanie z Messenger i konieczność ponownego logowania."),
@@ -2229,7 +2242,7 @@ class MessengerWebViewFrame(wx.Frame):
                 
             except Exception as e:
                 print(f"Error initiating cookie clear: {e}")
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Błąd podczas czyszczenia cookies:\n{}").format(str(e)),
                     _("Błąd"),
                     wx.OK | wx.ICON_ERROR
@@ -2243,7 +2256,7 @@ class MessengerWebViewFrame(wx.Frame):
             success = clear_messenger_cookies()
             
             if success:
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Cookies zostały usunięte pomyślnie.\n"
                       "Przeładuj stronę aby zastosować zmiany."),
                     _("Cookies usunięte"),
@@ -2258,7 +2271,7 @@ class MessengerWebViewFrame(wx.Frame):
                     speaker.speak(_("Cookies usunięte"))
                     
             else:
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Nie można usunąć cookies.\n"
                       "Może być potrzebne zamknięcie wszystkich okien Messenger."),
                     _("Błąd"),
@@ -2267,7 +2280,7 @@ class MessengerWebViewFrame(wx.Frame):
                 
         except Exception as e:
             print(f"Error clearing cookies: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Błąd podczas usuwania cookies:\n{}").format(str(e)),
                 _("Błąd"),
                 wx.OK | wx.ICON_ERROR
@@ -3357,7 +3370,7 @@ def show_messenger_webview(parent=None):
     except Exception as e:
         print(f"Error creating Messenger WebView: {e}")
         if wx.GetApp():  # Only show MessageBox if wx.App exists
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Nie można otworzyć Messenger WebView.\n"
                   "Sprawdź czy WebView2 jest zainstalowany."),
                 _("Błąd"),
@@ -3472,7 +3485,7 @@ if __name__ == '__main__':
     
     # Check WebView availability
     if not is_webview_available():
-        wx.MessageBox(
+        _show_skinned_message(
             _("WebView nie jest dostępny na tym systemie.\n"
               "Zainstaluj Microsoft Edge WebView2 Runtime."),
             _("Błąd WebView"),

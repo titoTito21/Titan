@@ -47,6 +47,14 @@ def _apply_skin_to_tree(window):
         _apply_skin_to_tree(child)
 
 
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    _apply_skin_to_tree(dlg)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 class TBBUTTON(ctypes.Structure):
     """Toolbar button structure"""
     _fields_ = [
@@ -397,7 +405,7 @@ class SystemTrayListDialog(wx.Dialog):
 def show_system_tray_list(parent):
     """Show the system tray list dialog (Windows only)"""
     if not IS_WINDOWS:
-        wx.MessageBox(
+        _show_skinned_message(
             _("System tray list is only available on Windows"),
             _("Not Available"),
             wx.OK | wx.ICON_INFORMATION
@@ -418,3 +426,4 @@ if __name__ == '__main__':
     app = wx.App()
     show_system_tray_list(None)
     app.MainLoop()
+

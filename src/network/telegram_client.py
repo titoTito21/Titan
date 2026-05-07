@@ -646,7 +646,10 @@ class TelegramClient:
         """Notify about errors"""
         play_sound('core/error.ogg')
         print(f"Telegram error: {error_message}")
-        wx.MessageBox(error_message, _("Telegram Error"), wx.OK | wx.ICON_ERROR)
+        dlg = wx.MessageDialog(None, error_message, _("Telegram Error"), wx.OK | wx.ICON_ERROR)
+        _apply_skin_to_tree(dlg)
+        dlg.ShowModal()
+        dlg.Destroy()
     
     def send_message(self, recipient, message):
         """Send message to recipient"""

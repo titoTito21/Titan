@@ -71,6 +71,22 @@ except Exception as _e:
     speaker = _SilentSpeaker()
 
 
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = _new_message_dialog(parent, message, caption, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
+def _new_message_dialog(parent, message, caption, style):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
+
+
 def _is_screen_reader_running():
     """Return True only when a real screen reader (NVDA, JAWS, VoiceOver, Orca...) is active.
 
@@ -1227,7 +1243,7 @@ class TitanApp(wx.Frame):
     def on_run_from_context_menu(self, event, item_data=None, item_type=None):
         if not item_data or not item_type:
             print("ERROR: No item data to run from context menu.")
-            wx.MessageBox(_("An error occurred: No data to run."), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("An error occurred: No data to run."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         if item_type == "app":
@@ -1245,7 +1261,7 @@ class TitanApp(wx.Frame):
     def on_uninstall(self, event, item_data=None, item_type=None):
         if not item_data or not item_type:
             print("ERROR: No item data or type to uninstall from context menu.")
-            wx.MessageBox(_("An error occurred: No data to uninstall."), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("An error occurred: No data to uninstall."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         item_name = item_data.get('name', _('unknown item'))
@@ -1253,10 +1269,10 @@ class TitanApp(wx.Frame):
 
         if not item_path or not os.path.exists(item_path):
             print(f"ERROR: Uninstall path is invalid or directory does not exist: {item_path}")
-            wx.MessageBox(_("Error: Cannot find the directory '{}' to uninstall.").format(item_name), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Error: Cannot find the directory '{}' to uninstall.").format(item_name), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
-        confirm_dialog = wx.MessageDialog(
+        confirm_dialog = _new_message_dialog(
             self,
             _("Are you sure you want to uninstall '{}' from Titan?\n\nThis will delete the entire directory: {}").format(item_name, item_path),
             _("Confirm Uninstall"),
@@ -1286,7 +1302,7 @@ class TitanApp(wx.Frame):
 
                         play_select_sound()
                         vibrate_selection()  # Add vibration for successful uninstall
-                        wx.MessageBox(_("'{}' has been successfully uninstalled.").format(item_name), _("Success"), wx.OK | wx.ICON_INFORMATION)
+                        _show_skinned_message(_("'{}' has been successfully uninstalled.").format(item_name), _("Success"), wx.OK | wx.ICON_INFORMATION)
 
                     wx.CallAfter(refresh_ui)
 
@@ -1296,7 +1312,7 @@ class TitanApp(wx.Frame):
                     def show_error():
                         play_endoflist_sound()
                         vibrate_error()  # Add vibration for uninstall error
-                        wx.MessageBox(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+                        _show_skinned_message(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
 
                     wx.CallAfter(show_error)
 
@@ -2552,7 +2568,7 @@ class TitanApp(wx.Frame):
             print(f"[GUI] Error loading Telegram: {e}")
             import traceback
             traceback.print_exc()
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot launch Telegram.\nError: {error}").format(error=str(e)),
                 _("Telegram Error"),
                 wx.OK | wx.ICON_ERROR
@@ -2569,7 +2585,7 @@ class TitanApp(wx.Frame):
                 self.setup_messenger_callbacks(messenger_window)
         except Exception as e:
             print(f"WebView Messenger error: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot launch Messenger WebView.\n"
                   "Check if WebView2 is installed."),
                 _("Messenger WebView Error"),
@@ -2589,7 +2605,7 @@ class TitanApp(wx.Frame):
             print(f"WebView WhatsApp error: {e}")
             # Only show MessageBox if we have a running wx.App
             if wx.GetApp():
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Cannot launch WhatsApp WebView.\n"
                       "Check if WebView2 is installed."),
                     _("WhatsApp WebView Error"),
@@ -2675,7 +2691,7 @@ class TitanApp(wx.Frame):
             print(f"Error loading Titan-Net login dialog: {e}")
             import traceback
             traceback.print_exc()
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot launch Titan-Net.\nError: {error}").format(error=str(e)),
                 _("Titan-Net Error"),
                 wx.OK | wx.ICON_ERROR
@@ -2699,7 +2715,7 @@ class TitanApp(wx.Frame):
             print(f"Error opening Titan-Net window: {e}")
             import traceback
             traceback.print_exc()
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot open Titan-Net window.\nError: {error}").format(error=str(e)),
                 _("Titan-Net Error"),
                 wx.OK | wx.ICON_ERROR
@@ -2841,7 +2857,7 @@ class TitanApp(wx.Frame):
                     )
                 )
                 # Show dialog
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Cerberus Protocol: {level}\n\n"
                       "The server has detected a security violation from your connection.\n"
                       "Reason: {reason}\n\n"
@@ -2930,7 +2946,7 @@ class TitanApp(wx.Frame):
             print(f"Error loading EltenLink (Beta) login dialog: {e}")
             import traceback
             traceback.print_exc()
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot open EltenLink (Beta).\nError: {error}").format(error=str(e)),
                 _("EltenLink (Beta) Error"),
                 wx.OK | wx.ICON_ERROR
@@ -2977,14 +2993,14 @@ class TitanApp(wx.Frame):
             if messenger_window:
                 register_window("Messenger", window=messenger_window, category='messenger')
                 self.setup_messenger_callbacks(messenger_window)
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Messenger WebView opened.\nPlease log in to see your contacts in Titan IM."),
                     _("Messenger WebView"),
                     wx.OK | wx.ICON_INFORMATION
                 )
         except Exception as e:
             print(f"Error opening Messenger WebView: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Failed to open Messenger WebView.\nCheck if WebView2 is installed."),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -3030,7 +3046,7 @@ class TitanApp(wx.Frame):
     #     else:
     #         info_text = f"{_('Connection status')}: {_('Disconnected')}"
 
-    #     wx.MessageBox(info_text, _("Titan-Net Information"), wx.OK | wx.ICON_INFORMATION)
+    #     _show_skinned_message(info_text, _("Titan-Net Information"), wx.OK | wx.ICON_INFORMATION)
 
     # DISABLED - Titan-Net callback methods
     def _on_titannet_message(self, message):
@@ -3144,7 +3160,7 @@ class TitanApp(wx.Frame):
             print(f"[GUI] Error opening Telegram: {e}")
             import traceback
             traceback.print_exc()
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Cannot open Telegram.\nError: {error}").format(error=str(e)),
                 _("Telegram Error"),
                 wx.OK | wx.ICON_ERROR
@@ -3224,7 +3240,7 @@ class TitanApp(wx.Frame):
             # Return to main network menu
             self.show_network_list()
                 
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Successfully logged out from {}.").format(service["name"]), 
                 _("Logout"), 
                 wx.OK | wx.ICON_INFORMATION
@@ -3232,7 +3248,7 @@ class TitanApp(wx.Frame):
             
         except Exception as e:
             print(f"Error logging out from {service_name}: {e}")
-            wx.MessageBox(
+            _show_skinned_message(
                 _("Error logging out from {}: {}").format(service["name"], str(e)),
                 _("Logout Error"),
                 wx.OK | wx.ICON_ERROR
@@ -3247,7 +3263,7 @@ class TitanApp(wx.Frame):
         username = self.username_text.GetValue()
         password = self.password_text.GetValue()
         if not username:
-            wx.MessageBox(_("Enter phone number with country code (e.g. +48123456789)."), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Enter phone number with country code (e.g. +48123456789)."), _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         play_sound('system/connecting.ogg')
@@ -3283,7 +3299,7 @@ class TitanApp(wx.Frame):
                 self.telegram_client = telegram_client_instance
                 self.logged_in = True
             else:
-                wx.MessageBox(_("Failed to connect to Telegram server."), _("Connection Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Failed to connect to Telegram server."), _("Connection Error"), wx.OK | wx.ICON_ERROR)
                 return
             
             # Update UI
@@ -3295,7 +3311,7 @@ class TitanApp(wx.Frame):
             # Wait a bit for connection and then refresh users
             wx.CallLater(1000, self.refresh_online_users)
         else:
-            wx.MessageBox(result.get("message"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(result.get("message"), _("Error"), wx.OK | wx.ICON_ERROR)
 
     # on_register function removed - communicators are now in the list
 
@@ -3594,27 +3610,27 @@ class TitanApp(wx.Frame):
                     try:
                         result = subprocess.run(["timedatectl", "status"], 
                                                capture_output=True, text=True, check=True)
-                        wx.MessageBox(_("Current time settings:\n\n{}").format(result.stdout), 
+                        _show_skinned_message(_("Current time settings:\n\n{}").format(result.stdout), 
                                      _("Time Settings"), wx.OK | wx.ICON_INFORMATION)
                     except Exception:
-                        wx.MessageBox(_("Could not open time settings. Please use your system's settings application."), 
+                        _show_skinned_message(_("Could not open time settings. Please use your system's settings application."), 
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
-                wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_power_settings(self):
         if IS_WINDOWS:
             try:
                 subprocess.run(["control", "powercfg.cpl"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
             try:
                 # Try common Linux power management applications
@@ -3652,29 +3668,29 @@ class TitanApp(wx.Frame):
                                     info_text += f"{bat_name}: {capacity}% ({status})\n"
                                 except Exception:
                                     info_text += f"{bat_name}: Information unavailable\n"
-                            wx.MessageBox(_(info_text), _("Power Information"), wx.OK | wx.ICON_INFORMATION)
+                            _show_skinned_message(_(info_text), _("Power Information"), wx.OK | wx.ICON_INFORMATION)
                         else:
-                            wx.MessageBox(_("No battery detected. Power settings may not be available."), 
+                            _show_skinned_message(_("No battery detected. Power settings may not be available."), 
                                          _("Power Information"), wx.OK | wx.ICON_INFORMATION)
                     except Exception:
-                        wx.MessageBox(_("Could not open power settings. Please use your system's settings application."), 
+                        _show_skinned_message(_("Could not open power settings. Please use your system's settings application."), 
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
-                wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def open_volume_mixer(self):
         if IS_WINDOWS:
             try:
                 subprocess.run(["sndvol.exe"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
             try:
                 # Try common Linux audio control applications
@@ -3703,20 +3719,20 @@ class TitanApp(wx.Frame):
                         # Check if alsamixer is available
                         subprocess.run(["which", "alsamixer"], check=True, 
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        wx.MessageBox(_("GUI volume mixer not found.\n\nYou can use 'alsamixer' in terminal for audio control."), 
+                        _show_skinned_message(_("GUI volume mixer not found.\n\nYou can use 'alsamixer' in terminal for audio control."), 
                                      _("Volume Control"), wx.OK | wx.ICON_INFORMATION)
                     except Exception:
-                        wx.MessageBox(_("Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."), 
+                        _show_skinned_message(_("Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."), 
                                      _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
-                wx.MessageBox(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
                 subprocess.run(["open", "/Applications/Utilities/Audio MIDI Setup.app"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open audio settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open audio settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
 
     def open_network_settings(self):
@@ -3744,7 +3760,7 @@ class TitanApp(wx.Frame):
                 print("WiFi GUI opened successfully on main thread!")
             else:
                 print("WiFi GUI returned None")
-                wx.MessageBox(
+                _show_skinned_message(
                     _("WiFi interface could not be initialized.\nThis may be due to missing drivers or system restrictions."),
                     _("WiFi Warning"),
                     wx.OK | wx.ICON_WARNING
@@ -3757,7 +3773,7 @@ class TitanApp(wx.Frame):
             traceback.print_exc()
             
             try:
-                wx.MessageBox(
+                _show_skinned_message(
                     _("Error opening WiFi interface: {}\n\nTrying system WiFi settings instead...").format(str(e)),
                     _("WiFi Error"),
                     wx.OK | wx.ICON_WARNING
@@ -3770,7 +3786,7 @@ class TitanApp(wx.Frame):
             try:
                 subprocess.run(["explorer", "ms-settings:network-status"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
             try:
                 # Try common Linux network management applications
@@ -3806,26 +3822,26 @@ class TitanApp(wx.Frame):
                         if result2.stdout.strip():
                             info_text += "\n\nActive Connections:\n" + result2.stdout
                         
-                        wx.MessageBox(_(info_text), _("Network Information"), wx.OK | wx.ICON_INFORMATION)
+                        _show_skinned_message(_(info_text), _("Network Information"), wx.OK | wx.ICON_INFORMATION)
                     except Exception:
                         # Final fallback - show basic IP info
                         try:
                             result = subprocess.run(["ip", "addr", "show"], 
                                                    capture_output=True, text=True, check=True)
-                            wx.MessageBox(_("Network interface information:\n\n{}").format(result.stdout[:1000]), 
+                            _show_skinned_message(_("Network interface information:\n\n{}").format(result.stdout[:1000]), 
                                          _("Network Information"), wx.OK | wx.ICON_INFORMATION)
                         except Exception:
-                            wx.MessageBox(_("Could not open network settings. Please use your system's network manager."), 
+                            _show_skinned_message(_("Could not open network settings. Please use your system's network manager."), 
                                          _("Information"), wx.OK | wx.ICON_INFORMATION)
             except Exception as e:
-                wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
                 subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
             except Exception as e:
-                 wx.MessageBox(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
+                 _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
-            wx.MessageBox(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def minimize_to_tray(self):
         self.Hide()
@@ -4042,7 +4058,7 @@ class TitanApp(wx.Frame):
     
     def show_network_settings(self):
         """Show network settings"""
-        wx.MessageBox(_("Ustawienia sieciowe - w przygotowaniu"), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(_("Ustawienia sieciowe - w przygotowaniu"), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
     
     def show_network_info(self):
         """Show network information"""
@@ -4055,7 +4071,7 @@ class TitanApp(wx.Frame):
         else:
             info_text = f"{_('Connection status')}: {_('Disconnected')}"
         
-        wx.MessageBox(info_text, _("Telegram Information"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(info_text, _("Telegram Information"), wx.OK | wx.ICON_INFORMATION)
     
     def refresh_contacts(self):
         """Refresh the contacts list (private chats)"""
@@ -4211,13 +4227,13 @@ class TitanApp(wx.Frame):
         """Start voice call with user"""
         if not telegram_client.is_voice_calls_available():
             play_sound('core/error.ogg')
-            wx.MessageBox(_("Voice calls are not available.\nCheck if py-tgcalls is installed."),
+            _show_skinned_message(_("Voice calls are not available.\nCheck if py-tgcalls is installed."),
                          _("Error"), wx.OK | wx.ICON_ERROR)
             return
 
         play_sound('ui/dialog.ogg')
         message = _("Do you want to start a voice call with {}?").format(username)
-        result = wx.MessageBox(message, _("Voice call"), wx.YES_NO | wx.ICON_QUESTION)
+        result = _show_skinned_message(message, _("Voice call"), wx.YES_NO | wx.ICON_QUESTION)
         
         if result == wx.YES:
             # Start voice call
@@ -4228,7 +4244,7 @@ class TitanApp(wx.Frame):
                 self.call_active = True
             else:
                 play_sound('core/error.ogg')
-                wx.MessageBox(_("Failed to start conversation."), _("Error"), wx.OK | wx.ICON_ERROR)
+                _show_skinned_message(_("Failed to start conversation."), _("Error"), wx.OK | wx.ICON_ERROR)
 
         play_sound('ui/dialogclose.ogg')
     
@@ -4266,7 +4282,7 @@ class TitanApp(wx.Frame):
                 self.call_window = None
             self.call_active = False
             play_sound('core/error.ogg')
-            wx.MessageBox(_("Connection failed: {}").format(data.get('error', 'Unknown error')),
+            _show_skinned_message(_("Connection failed: {}").format(data.get('error', 'Unknown error')),
                          _("Connection Error"), wx.OK | wx.ICON_ERROR)
     
     # Message sending moved to separate windows
@@ -4379,3 +4395,4 @@ class TitanApp(wx.Frame):
 
 
 # VoiceCallWindow class moved to telegram_windows.py
+

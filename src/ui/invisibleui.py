@@ -46,6 +46,7 @@ import json
 import traceback
 import re
 import platform
+from src.titan_core.skin_manager import apply_skin_to_window
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 # F6 program switching removed
 try:
@@ -103,6 +104,15 @@ def cleanup_speaker():
     except (RuntimeError, Exception):
         # Lock may not be available during shutdown
         pass
+
+
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
 
 class GlobalHotKeys(threading.Thread):
     """Global hotkey handler.
@@ -2843,7 +2853,7 @@ class InvisibleUI:
             if self.titan_ui_mode:
                 self.temporarily_disable_titan_ui("send_message_dialog")
             
-            dlg = wx.TextEntryDialog(
+            dlg = _new_text_entry_dialog(
                 None,
                 _("Enter message to send to {}:").format(self.current_chat_user),
                 _("Send Message")

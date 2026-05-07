@@ -10,12 +10,33 @@ from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 from src.titan_core.stereo_speech import get_stereo_speech
+from src.titan_core.skin_manager import apply_skin_to_window
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
 
 speaker = accessible_output3.outputs.auto.Auto()
 stereo_speech = get_stereo_speech()
+
+
+def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
+    dlg = wx.MessageDialog(parent, message, caption, style)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
+def _new_text_entry_dialog(*args, **kwargs):
+    dlg = wx.TextEntryDialog(*args, **kwargs)
+    try:
+        apply_skin_to_window(dlg)
+    except Exception:
+        pass
+    return dlg
 
 
 class ForumTopicsWindow(wx.Frame):
@@ -149,10 +170,10 @@ class ForumTopicsWindow(wx.Frame):
                 self.topics_list.SetItemData(idx, topic['id'])
 
             if not topics:
-                wx.MessageBox(_("No topics found"), _("Forum"), wx.OK | wx.ICON_INFORMATION)
+                _show_skinned_message(_("No topics found"), _("Forum"), wx.OK | wx.ICON_INFORMATION)
         else:
             play_sound('core/error.ogg')
-            wx.MessageBox(
+            _show_skinned_message(
                 result.get('error', _('Failed to load topics')),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
@@ -202,7 +223,7 @@ class ForumTopicsWindow(wx.Frame):
         """Search forum"""
         play_sound('core/SELECT.ogg')
 
-        dlg = wx.TextEntryDialog(self, _("Enter search query:"), _("Search Forum"))
+        dlg = _new_text_entry_dialog(self, _("Enter search query:"), _("Search Forum"))
         if dlg.ShowModal() == wx.ID_OK:
             query = dlg.GetValue().strip()
             if query:
@@ -383,7 +404,7 @@ class ForumTopicWindow(wx.Frame):
         """Display topic and replies"""
         if not topic_result.get('success'):
             play_sound('core/error.ogg')
-            wx.MessageBox(_("Failed to load topic"), _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(_("Failed to load topic"), _("Error"), wx.OK | wx.ICON_ERROR)
             self.Close()
             return
 
@@ -435,7 +456,7 @@ class ForumTopicWindow(wx.Frame):
         content = self.reply_input.GetValue().strip()
 
         if not content:
-            wx.MessageBox(_("Please enter reply content"), _("Error"), wx.OK | wx.ICON_WARNING)
+            _show_skinned_message(_("Please enter reply content"), _("Error"), wx.OK | wx.ICON_WARNING)
             return
 
         # Send reply
@@ -452,7 +473,7 @@ class ForumTopicWindow(wx.Frame):
 
         if result.get('success'):
             play_sound('titannet/message_send.ogg')
-            wx.MessageBox(_("Reply sent successfully"), _("Success"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Reply sent successfully"), _("Success"), wx.OK | wx.ICON_INFORMATION)
 
             # Clear input
             self.reply_input.Clear()
@@ -462,7 +483,7 @@ class ForumTopicWindow(wx.Frame):
         else:
             play_sound('core/error.ogg')
             error = result.get('error', _('Failed to send reply'))
-            wx.MessageBox(error, _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(error, _("Error"), wx.OK | wx.ICON_ERROR)
 
     def OnRefresh(self, event):
         """Refresh topic"""
@@ -541,7 +562,7 @@ class NewTopicDialog(wx.Dialog):
         category = self.category_choice.GetStringSelection()
 
         if not title or not content:
-            wx.MessageBox(_("Title and content are required"), _("Error"), wx.OK | wx.ICON_WARNING)
+            _show_skinned_message(_("Title and content are required"), _("Error"), wx.OK | wx.ICON_WARNING)
             return
 
         # Send
@@ -555,12 +576,12 @@ class NewTopicDialog(wx.Dialog):
         """Handle topic created"""
         if result.get('success'):
             play_sound('titannet/new_feedpost.ogg')
-            wx.MessageBox(_("Topic created successfully"), _("Success"), wx.OK | wx.ICON_INFORMATION)
+            _show_skinned_message(_("Topic created successfully"), _("Success"), wx.OK | wx.ICON_INFORMATION)
             self.EndModal(wx.ID_OK)
         else:
             play_sound('core/error.ogg')
             error = result.get('error', _('Failed to create topic'))
-            wx.MessageBox(error, _("Error"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(error, _("Error"), wx.OK | wx.ICON_ERROR)
 
     def OnCancel(self, event):
         """Handle cancel button"""
@@ -584,3 +605,4 @@ if __name__ == "__main__":
         app.MainLoop()
     else:
         print("Login failed")
+
