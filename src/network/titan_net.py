@@ -2139,23 +2139,11 @@ class TitanNetClient:
             return {"success": False, "error": str(e)}
 
     # Role Management Methods
-
-    def set_developer_role(self) -> Dict:
-        """
-        Set current user role to developer (auto-detection from source code)
-
-        Returns:
-            Dict with success status
-        """
-        try:
-            response = requests.post(
-                f"{self.http_url}/api/users/set_developer",
-                headers=self._http_headers(),
-                timeout=10
-            )
-            return response.json()
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+    #
+    # NOTE: There is intentionally no client method to self-promote to
+    # developer/moderator/admin. Roles are assigned server-side by an
+    # existing administrator. Any "set_developer" / self-elevation path
+    # is a privilege-escalation vulnerability and must not be reintroduced.
 
     def get_user_role(self) -> Dict:
         """

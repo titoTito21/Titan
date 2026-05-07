@@ -1,0 +1,20 @@
+Welcome to Titan-Net, {username}!
+A new user {username} has joined Titan-Net! Welcome!
+Everyone welcome {username} to our community!
+{username} just joined Titan-Net. Say hello!
+New member alert! Welcome {username}!
+{username} (Titan #{titan_number}) has entered the network!
+Please welcome our newest member, {username}!
+{username} is now part of Titan-Net family!
+A warm welcome to {username} (Titan #{titan_number})!
+New user {username} has connected to Titan-Net!
+{username} joined the community. Welcome aboard!
+Say hi to {username}, our newest Titan-Net member!
+Welcome {username} with Titan ID {titan_number}!
+{username} is here! Everyone say hello!
+Titan-Net grows! Welcome {username}!
+New face in Titan-Net: {username} (#{titan_number})
+{username} has successfully registered. Welcome!
+Everyone give a warm welcome to {username}!
+{username} joined us with Titan number {titan_number}!
+Fresh blood! {username} is now with us!

@@ -1,0 +1,134 @@
+================================================================================
+TCE Launcher / Titan-Net - OAuth: redirect URIs do recznej rejestracji
+================================================================================
+
+Serwer dziala pod:           https://titosofttitan.com   (Apache + Let's Encrypt)
+WebSocket:                   ws://titosofttitan.com:8001
+Backend titan-net:           127.0.0.1:8000  (HTTPS, za Apache reverse proxy)
+
+REVERSE PROXY: skonfigurowany w /etc/apache2/conf-available/titan-net-proxy.conf
+  - https://titosofttitan.com/oauth/*       -> backend
+  - https://titosofttitan.com/api/oauth/*   -> backend
+Apache zalatwia TLS wobec swiata, backend lokalnie tez na HTTPS (ten sam cert).
+
+Sprawdzenie ze proxy zyje:
+  curl -k https://titosofttitan.com/api/oauth/spotify/status
+  -> {"success":false,"error":"Authentication required"}   (401, OK)
+
+
+--------------------------------------------------------------------------------
+Spotify  -  https://developer.spotify.com/dashboard
+--------------------------------------------------------------------------------
+
+App settings -> Redirect URIs -> Add URI:
+
+    https://titosofttitan.com/oauth/spotify/callback
+
+Server env vars (wpis do .env w /opt/titan-net/.env):
+
+    OAUTH_PUBLIC_URL=https://titosofttitan.com
+    SPOTIFY_CLIENT_ID=<z dashboardu>
+    SPOTIFY_CLIENT_SECRET=<z dashboardu>
+    # opcjonalnie:
+    # SPOTIFY_SCOPE="user-read-private user-read-email user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative user-library-read streaming"
+
+
+--------------------------------------------------------------------------------
+Allegro  -  https://apps.developer.allegro.pl/
+--------------------------------------------------------------------------------
+
+Aplikacje -> Zarejestruj aplikacje -> typ "z dostepem do konta uzytkownika
+przez przegladarke" (Authorization Code flow) -> Redirect URI:
+
+    https://titosofttitan.com/oauth/allegro/callback
+
+Server env vars:
+
+    ALLEGRO_CLIENT_ID=<Client ID z dashboardu>
+    ALLEGRO_CLIENT_SECRET=<Client Secret z dashboardu>
+    # puste = scope domyslny; przyklady:
+    #   allegro:api:profile:read
+    #   allegro:api:orders:read
+    #   allegro:api:sale:offers
+    ALLEGRO_SCOPE=allegro:api:profile:read
+
+Sandbox: Allegro ma osobny dashboard https://apps.developer.allegro.pl.allegrosandbox.pl
+i osobne URLe (allegro.pl.allegrosandbox.pl). Na sandbox edytuj
+config.py -> OAUTH_PROVIDERS['allegro'] -> auth_url + token_url.
+
+
+--------------------------------------------------------------------------------
+Klucz szyfrowania tokenow (JEDNORAZOWO przed pierwszym uzyciem)
+--------------------------------------------------------------------------------
+
+Tokeny access/refresh sa zapisywane w DB zaszyfrowane Fernetem.
+Wygeneruj klucz lokalnie:
+
+    python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+Wynik (44-znakowy string base64) wstaw do /opt/titan-net/.env na serwerze:
+
+    TITAN_OAUTH_KEY=<wynik powyzszego polecenia>
+
+Restart:
+
+    systemctl restart titan-net
+
+Bez TITAN_OAUTH_KEY wszystkie /oauth endpointy odpowiedza 500 z czytelnym
+bledem. Rotacja tego klucza inwaliduje WSZYSTKIE zapisane tokeny -
+uzytkownicy musza polaczyc Spotify/Allegro od nowa.
+
+
+--------------------------------------------------------------------------------
+Lista zmian wgranych przez update.py (2026-04-25)
+--------------------------------------------------------------------------------
+
+  models.py        - tabele oauth_tokens, oauth_states + helpery
+                     (oauth_save_token, oauth_get_token, oauth_delete_token,
+                      oauth_save_state, oauth_consume_state) + Fernet
+  config.py        - OAUTH_PUBLIC_URL, OAUTH_KEY, OAUTH_PROVIDERS
+                     (Spotify, Allegro)
+  http_server.py   - endpointy:
+                       GET  /oauth/{provider}/start
+                       GET  /oauth/{provider}/callback
+                       GET  /api/oauth/{provider}/token
+                       GET  /api/oauth/{provider}/status
+                       DEL  /api/oauth/{provider}
+                     + push WS event 'oauth_connected' po sukcesie
+                     + akceptacja ?session= dla nawigacji z przegladarki
+  main.py          - wpiecie self.http_server.ws_server = self.websocket_server
+  requirements.txt - cryptography>=41.0.0
+
+
+--------------------------------------------------------------------------------
+Po stronie klienta (TCE)
+--------------------------------------------------------------------------------
+
+Nowy plik: src/network/oauth_client.py
+
+  from src.network.oauth_client import OAuthClient
+  from src.network import titan_net
+
+  oauth = OAuthClient(titan_net.client)
+  oauth.connect('spotify')                # otwiera przegladarke
+  # ... user autoryzuje, przegladarka pokazuje "Authorization successful"
+  # ... WS dostaje event {'type':'oauth_connected','provider':'spotify'}
+  print(oauth.is_connected('spotify'))    # -> True
+  token = oauth.get_access_token('spotify')
+  # uzywaj w naglowku: Authorization: Bearer <token>
+
+
+--------------------------------------------------------------------------------
+Smoke test po wgraniu kluczy + rejestracji aplikacji
+--------------------------------------------------------------------------------
+
+1. Edytuj /opt/titan-net/.env, dodaj TITAN_OAUTH_KEY oraz SPOTIFY_*.
+2. systemctl restart titan-net
+3. Z lokalnej maszyny:
+       curl https://titosofttitan.com/api/oauth/spotify/status \
+            -H "Authorization: Bearer $(echo -n '1:twoj_username' | base64)"
+   Oczekiwane: {"success":true,"connected":false,...}
+4. W desktop kliencie zaloguj sie do titan-net, potem:
+       OAuthClient(client).connect('spotify')
+   Powinna otworzyc sie przegladarka z Spotify login.
+5. Po success: tabela oauth_tokens ma 1 wiersz, oauth_states pusta.

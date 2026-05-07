@@ -15,3 +15,11 @@ aiortc>=1.6.0
 
 # Utilities
 python-dotenv>=1.0.0
+
+# OAuth proxy: Fernet encryption of stored access/refresh tokens
+cryptography>=41.0.0
+
+# Interactive Games — Gemini Live AI game master.
+# Server falls back to stub mode if this is missing, so the rest of the
+# Titan-Net server still boots cleanly.
+google-genai>=1.0.0

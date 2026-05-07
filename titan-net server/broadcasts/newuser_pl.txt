@@ -1,0 +1,24 @@
+Witamy w Titan-Net, {username}!
+Nowy użytkownik {username} dołączył do Titan-Net! Witamy!
+Wszyscy witajcie {username} w naszej społeczności!
+{username} właśnie dołączył do Titan-Net. Przywitajcie się!
+{username} (Titan #{titan_number}) wszedł do sieci!
+Proszę powitać naszego najnowszego członka, {username}!
+{username} jest teraz częścią rodziny Titan-Net!
+Ciepłe powitanie dla {username} (Titan #{titan_number})!
+Nowy użytkownik {username} połączył się z Titan-Net!
+{username} dołączył do społeczności. Witamy na pokładzie!
+Przywitajcie się z {username}, naszym najnowszym członkiem Titan-Net!
+Witamy {username} z Titan ID {titan_number}!
+{username} jest tutaj! Wszyscy się przywitajcie!
+Titan-Net rośnie! Witamy {username}!
+Nowa twarz w Titan-Net: {username} (#{titan_number})
+{username} pomyślnie się zarejestrował. Witamy!
+Wszyscy ciepło powitajcie {username}!
+{username} dołączył do nas z numerem Titan {titan_number}!
+Świeża krew! {username} jest teraz z nami!
+{username} (Titan #{titan_number}) oficjalnie w sieci!
+Rejestracja zakończona! Witamy {username}!
+{username} właśnie utworzył konto. Witamy serdecznie!
+Nowy Titanowiec! Przywitajmy {username}!
+{username} z ID {titan_number} dołączył do grona użytkowników!

@@ -39,15 +39,6 @@ _ = set_language(get_setting('language', 'pl'))
 speaker = accessible_output3.outputs.auto.Auto()
 
 
-def is_running_from_source():
-    """
-    Check if running from source code or compiled executable.
-    Returns True if running from source (developer mode), False if compiled.
-    """
-    # Check if running as executable (PyInstaller/Nuitka)
-    return not getattr(sys, 'frozen', False)
-
-
 def speak_titannet(text, position=0.0, pitch_offset=0, interrupt=True):
     """
     Speak text using the same method as Klango Mode and IUI.
@@ -323,14 +314,9 @@ class LoginDialog(wx.Dialog):
 
         if result.get('success'):
             print("[TITAN-NET LOGIN] Login successful, processing...")
-            # Auto-detect developer mode (running from source code)
-            if is_running_from_source():
-                try:
-                    # Set developer role automatically
-                    self.titan_client.set_developer_role()
-                    print("Developer mode detected - role set to developer")
-                except Exception as e:
-                    print(f"Could not set developer role: {e}")
+            # Role is determined by the server based on the authenticated
+            # account, never by the client environment. Running from source
+            # must NOT confer elevated privileges.
 
             # Check if user is banned
             print("[TITAN-NET LOGIN] Checking ban status...")

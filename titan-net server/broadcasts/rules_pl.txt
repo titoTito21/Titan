@@ -1,0 +1,14 @@
+regulamin użytkownika titan-netu
+
+1. użytkownicy
+1.1. Użytkownik jest zobowiązywany do przestrzegania netykiety na forum, w ogłoszeniach, lub wszelkich funkcjach titan-netu, które nie są na prywatny użytek np. Pokoje głosowe lub/i tekstowe
+1.2. Jeśli użytkownik dostaje prywatne wiadomości, które godzą w jego imie/są próbą prześladowania, molestowania seksualnego, może to zgłosić do moderacji. Moderacja może podjąć odpowiednie kroki w oparciu o dowody, lub (na prośbę użytkownika) logi serwera i jego wiadomości prywatne
+1.3. Zaleca się nie tworzyć multi kont, nazwy kont z polskimi znakami bądź z nazwami, które powodują zawieszenie się syntezy mowy/czytnika ekranu
+1.3.1 nazwy kont z polskimi znakami będą poprawiane na odpowiednik bez znaków diakrytycznych'
+1.3.2. Nazwy kont, które mają na celu obrażanie bądź zawieszanie syntezy mowy, czytnika ekranu, komputera są zabronione. Wtedy moderacja może wdrożyć permanent ban (t.j. Nie można używać titan-netu nawet z drugim kontem)
+
+2. Moderacja
+2.1. Moderacja jest zobowiązana na odpowiadanie na pytania  i prośby użytkowników
+2.2. Moderacja może sprawdzać logi systemu cerberus, w razie problemów lub możliwości ataku na serwer może się zgłosić do administracji drogą kontaktową
+2.3. System cerberus blokuje pruby włamania się na konto użytkowników. Jeśli użytkownik zgłosi wcześniej podejrzenie włamania, moderacja musi odpowiadać na to zgłoszenie
+2.4. 

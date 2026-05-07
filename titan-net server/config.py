@@ -24,10 +24,47 @@ class Config:
 
     # Security settings
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-this-in-production')
+    DATABASE_KEY = os.getenv('DATABASE_KEY', '***REMOVED***')
 
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_DIR = os.getenv('LOG_DIR', 'logs')
+
+    # OAuth proxy
+    # Public base URL Spotify/Allegro will redirect back to. MUST be HTTPS for
+    # Allegro and for Spotify production apps. Override via env var.
+    OAUTH_PUBLIC_URL = os.getenv('OAUTH_PUBLIC_URL', 'http://localhost:8000')
+    # Symmetric key used to encrypt access/refresh tokens at rest.
+    # Generate once with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    OAUTH_KEY = os.getenv('TITAN_OAUTH_KEY')
+
+    OAUTH_PROVIDERS = {
+        'spotify': {
+            'auth_url': 'https://accounts.spotify.com/authorize',
+            'token_url': 'https://accounts.spotify.com/api/token',
+            'client_id': os.getenv('SPOTIFY_CLIENT_ID', ''),
+            'client_secret': os.getenv('SPOTIFY_CLIENT_SECRET', ''),
+            # Common scopes - tweak per app needs
+            'scope': os.getenv(
+                'SPOTIFY_SCOPE',
+                'user-read-private user-read-email user-read-playback-state '
+                'user-modify-playback-state user-read-currently-playing '
+                'playlist-read-private playlist-read-collaborative '
+                'user-library-read streaming'
+            ),
+            # Spotify uses HTTP Basic auth on the token endpoint
+            'token_auth_style': 'basic',
+        },
+        'allegro': {
+            'auth_url': 'https://allegro.pl/auth/oauth/authorize',
+            'token_url': 'https://allegro.pl/auth/oauth/token',
+            'client_id': os.getenv('ALLEGRO_CLIENT_ID', ''),
+            'client_secret': os.getenv('ALLEGRO_CLIENT_SECRET', ''),
+            # Empty scope = default user scope. Add e.g. 'allegro:api:orders:read'.
+            'scope': os.getenv('ALLEGRO_SCOPE', ''),
+            'token_auth_style': 'basic',
+        },
+    }
 
     # Categories
     VALID_CATEGORIES = [

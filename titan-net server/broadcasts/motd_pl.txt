@@ -1,0 +1,1 @@
+Serwer jest w trybie konserwacji. Będzie często restartowany w celu wprowadzenia poprawek i napraw błędów.
