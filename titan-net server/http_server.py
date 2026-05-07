@@ -100,7 +100,10 @@ class TitanNetHTTPServer:
         self.app.router.add_get('/api/forum/my_topics', self.handle_get_my_topics)
 
         # User role management routes
-        self.app.router.add_post('/api/users/set_developer', self.handle_set_developer)
+        # NOTE: '/api/users/set_developer' was REMOVED (privilege-escalation
+        # vulnerability — any authenticated user could self-promote to the
+        # developer role). Roles are assigned only by an existing developer
+        # via /api/moderation/promote.
         self.app.router.add_get('/api/users/role', self.handle_get_user_role)
         self.app.router.add_get('/api/users/all', self.handle_get_all_users)
 
@@ -1111,24 +1114,30 @@ class TitanNetHTTPServer:
     # Role Management Handlers
 
     async def handle_set_developer(self, request: web.Request) -> web.Response:
-        """Set user role to developer (auto-detected from source code)"""
+        """DISABLED — was a privilege-escalation vulnerability.
+
+        Previously promoted any authenticated caller to ``developer`` based
+        solely on a client-side check (``not sys.frozen``). Anyone running
+        from source automatically became a developer / moderator on first
+        login. The route is no longer registered; this stub remains as
+        defense-in-depth so reintroducing the route still fails closed and
+        leaves an audit trail. To grant developer/moderator roles, a current
+        developer must use ``/api/moderation/promote``.
+        """
         try:
             user = self.verify_token(request)
-            if not user:
-                return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
-
-            # Set user role to developer (via writer executor — replaces the
-            # bare cursor.execute that previously bypassed _serialized_write
-            # and could race the rest of the write pool).
-            await self.db.run_write_async(self.db.set_user_role, user['id'], 'developer')
-
-            logger.info(f"User {user['username']} set as developer")
-
-            return web.json_response({'success': True, 'message': 'Developer role set'})
-
-        except Exception as e:
-            logger.error(f"Set developer error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            ident = user['username'] if user else 'unauthenticated'
+        except Exception:
+            ident = 'unauthenticated'
+        peer = request.remote
+        logger.warning(
+            f"Blocked self-promotion attempt on /api/users/set_developer "
+            f"from user={ident} peer={peer}"
+        )
+        return web.json_response(
+            {'success': False, 'error': 'Endpoint removed (self-promotion not allowed)'},
+            status=410,
+        )
 
     async def handle_get_user_role(self, request: web.Request) -> web.Response:
         """Get current user's role"""

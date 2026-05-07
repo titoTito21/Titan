@@ -1974,10 +1974,15 @@ class Database:
 
     @_serialized_write
     def set_user_role(self, user_id: int, role: str) -> bool:
-        """Set a user's ``role`` column. Routes through the writer lock so it
-        no longer races the rest of the write pool the way the previous
-        ad-hoc ``cursor.execute('UPDATE users SET role = ...')`` in
-        ``http_server.handle_set_developer`` did."""
+        """Set a user's ``role`` column. Routes through the writer lock so
+        it does not race the rest of the write pool.
+
+        SECURITY: this is a privileged primitive. It MUST only be called
+        from authorization-checked code paths (e.g. promote/demote handlers
+        guarded by ``is_developer``). It must NEVER be exposed to a route
+        that lets a caller pick their own role — doing so re-creates the
+        privilege-escalation hole that the removed
+        ``/api/users/set_developer`` endpoint had."""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
