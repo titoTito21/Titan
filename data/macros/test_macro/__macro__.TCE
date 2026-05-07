@@ -1,0 +1,8 @@
+[macro]
+name_pl = testowe makro
+name_en = test macro
+openfile = testmacro.macro
+
+[macrocfg]
+hotkey = 
+
