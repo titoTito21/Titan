@@ -306,6 +306,15 @@ class TitanNetClient:
                 self._pending_requests.pop(request_id, None)
             return None
 
+    def update_server_config(self, host: str, ws_port: int, http_port: int):
+        """Update server configuration and restart connections if necessary."""
+        self.server_host = host
+        self.server_port = ws_port
+        self.http_port = http_port
+        self.ws_url = f"wss://{host}:{ws_port}"
+        self.http_url = f"https://{host}:{http_port}"
+        print(f"[TitanNetClient] Server configuration updated: {host} (WS: {ws_port}, HTTP: {http_port})")
+
     def check_server(self) -> bool:
         """
         Check if Titan-Net server is accessible

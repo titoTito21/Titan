@@ -215,12 +215,25 @@ class TitanApp(wx.Frame):
             self.call_active = False
             self.call_window = None
 
-            # Titan-Net Client - hardcoded to titosofttitan.com
+            # Titan-Net Client - load configuration from settings
             from src.network.titan_net import TitanNetClient, register_active_titan_net_client
+            from src.settings.titan_im_config import load_titan_im_config
+            
+            try:
+                im_config = load_titan_im_config()
+                tn = im_config.get('titannet_settings', {})
+                server_host = tn.get('server_host', 'titosofttitan.com')
+                server_port = int(tn.get('server_port', 8001))
+                http_port = int(tn.get('http_port', 8000))
+            except Exception:
+                server_host = 'titosofttitan.com'
+                server_port = 8001
+                http_port = 8000
+
             self.titan_client = TitanNetClient(
-                server_host='titosofttitan.com',
-                server_port=8001,
-                http_port=8000
+                server_host=server_host,
+                server_port=server_port,
+                http_port=http_port
             )
             self.titan_logged_in = False
             self.titan_username = None

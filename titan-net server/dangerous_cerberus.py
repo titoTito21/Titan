@@ -311,6 +311,9 @@ class FirewallManager:
                 )
             self._ssh_protected = True
             logger.info("[FIREWALL] SSH port protected - ACCEPT rule at position 1")
+        except FileNotFoundError:
+            logger.warning("[FIREWALL] iptables not found, firewall features disabled.")
+            self._ssh_protected = True
         except Exception as e:
             logger.error(f"[FIREWALL] Failed to protect SSH: {e}")
 
@@ -416,6 +419,8 @@ class FirewallManager:
                         found += 1
             logger.info(f"[FIREWALL] Synced {found} existing bans from kernel")
             return found
+        except FileNotFoundError:
+            pass
         except Exception as e:
             logger.error(f"[FIREWALL] Failed to sync from kernel: {e}")
             return 0
