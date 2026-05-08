@@ -546,10 +546,18 @@ def main(command_line_args=None):
                     from src.network.titan_net import TitanNetClient
 
                     # Get Titan-Net server configuration from settings
-                    titan_net_settings = settings.get('titan_net', {})
-                    server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
-                    server_port = int(titan_net_settings.get('server_port', 8001))
-                    http_port = int(titan_net_settings.get('http_port', 8000))
+                    from src.settings.titan_im_config import load_titan_im_config
+                    try:
+                        im_config = load_titan_im_config()
+                        tn = im_config.get('titannet_settings', {})
+                        server_host = tn.get('server_host', 'titosofttitan.com')
+                        server_port = int(tn.get('server_port', 8001))
+                        http_port = int(tn.get('http_port', 8000))
+                    except Exception:
+                        titan_net_settings = settings.get('titan_net', {})
+                        server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+                        server_port = int(titan_net_settings.get('server_port', 8001))
+                        http_port = int(titan_net_settings.get('http_port', 8000))
 
                     print(f"[KLANGO] Titan-Net configuration: host={server_host}, ws_port={server_port}, http_port={http_port}")
 
@@ -1087,12 +1095,20 @@ if __name__ == "__main__":
     try:
         from src.network.titan_net import TitanNetClient
         from src.network.titan_net_gui import show_login_dialog
+        from src.settings.titan_im_config import load_titan_im_config
 
         # Get Titan-Net server configuration from settings
-        titan_net_settings = settings.get('titan_net', {})
-        server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
-        server_port = int(titan_net_settings.get('server_port', 8001))
-        http_port = int(titan_net_settings.get('http_port', 8000))
+        try:
+            im_config = load_titan_im_config()
+            tn = im_config.get('titannet_settings', {})
+            server_host = tn.get('server_host', 'titosofttitan.com')
+            server_port = int(tn.get('server_port', 8001))
+            http_port = int(tn.get('http_port', 8000))
+        except Exception:
+            titan_net_settings = settings.get('titan_net', {})
+            server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+            server_port = int(titan_net_settings.get('server_port', 8001))
+            http_port = int(titan_net_settings.get('http_port', 8000))
 
         print(f"Titan-Net configuration: host={server_host}, ws_port={server_port}, http_port={http_port}")
 

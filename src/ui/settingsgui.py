@@ -934,9 +934,43 @@ class SettingsFrame(wx.Frame):
         panel.Layout()
 
     def InitTitanNetPanel(self):
-        """Initialize Titan-Net settings panel with audio business card and notifications."""
+        """Initialize Titan-Net settings panel with server configuration, audio business card, and notifications."""
         panel = self.titan_net_panel
         vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Server Configuration section
+        server_group = wx.StaticBox(panel, label=_("Server Configuration"))
+        server_sizer = wx.StaticBoxSizer(server_group, wx.VERTICAL)
+
+        # Server Host
+        host_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        host_label = wx.StaticText(panel, label=_("Server host:"))
+        host_hbox.Add(host_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.server_host_ctrl = wx.TextCtrl(panel)
+        self.server_host_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        host_hbox.Add(self.server_host_ctrl, 1, wx.EXPAND)
+        server_sizer.Add(host_hbox, 0, wx.EXPAND | wx.ALL, 5)
+
+        # Ports
+        ports_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # WebSocket Port
+        ws_port_label = wx.StaticText(panel, label=_("WebSocket port:"))
+        ports_hbox.Add(ws_port_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.server_port_ctrl = wx.TextCtrl(panel)
+        self.server_port_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        ports_hbox.Add(self.server_port_ctrl, 1, wx.EXPAND | wx.RIGHT, 10)
+
+        # HTTP Port
+        http_port_label = wx.StaticText(panel, label=_("HTTP port:"))
+        ports_hbox.Add(http_port_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 5)
+        self.http_port_ctrl = wx.TextCtrl(panel)
+        self.http_port_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        ports_hbox.Add(self.http_port_ctrl, 1, wx.EXPAND)
+        
+        server_sizer.Add(ports_hbox, 0, wx.EXPAND | wx.ALL, 5)
+        
+        vbox.Add(server_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
         # Description
         desc_text = _("Audio business card allows you to personalize sounds that other users hear when you log in, send a message, or view your profile.")
@@ -1314,6 +1348,11 @@ class SettingsFrame(wx.Frame):
             config = load_titan_im_config()
             tn = config.get('titannet_settings', {})
 
+            # Load Server Configuration
+            self.server_host_ctrl.SetValue(tn.get('server_host', 'titosofttitan.com'))
+            self.server_port_ctrl.SetValue(str(tn.get('server_port', 8001)))
+            self.http_port_ctrl.SetValue(str(tn.get('http_port', 8000)))
+
             self.business_card_cb.SetValue(tn.get('business_card_enabled', False))
             # Enable/disable file pickers based on business card state
             enabled = self.business_card_cb.GetValue()
@@ -1350,7 +1389,18 @@ class SettingsFrame(wx.Frame):
 
             config = load_titan_im_config()
 
+            # Validate ports
+            try:
+                server_port = int(self.server_port_ctrl.GetValue())
+                http_port = int(self.http_port_ctrl.GetValue())
+            except ValueError:
+                server_port = 8001
+                http_port = 8000
+
             tn_settings = {
+                'server_host': self.server_host_ctrl.GetValue().strip() or 'titosofttitan.com',
+                'server_port': server_port,
+                'http_port': http_port,
                 'business_card_enabled': self.business_card_cb.GetValue(),
                 'login_sound_path': self._sound_paths.get('login', ''),
                 'logout_sound_path': self._sound_paths.get('logout', ''),
@@ -1364,6 +1414,20 @@ class SettingsFrame(wx.Frame):
 
             config['titannet_settings'] = tn_settings
             save_titan_im_config(config)
+
+            # Update active client if available
+            try:
+                app = wx.GetApp()
+                if app:
+                    for window in app.GetTopLevelWindows():
+                        if hasattr(window, 'titan_client'):
+                            window.titan_client.update_server_config(
+                                tn_settings['server_host'],
+                                tn_settings['server_port'],
+                                tn_settings['http_port']
+                            )
+            except Exception as e:
+                print(f"[SettingsFrame] Error updating active client: {e}")
 
             # Upload sounds to server if business card is enabled
             if self.business_card_cb.GetValue():
@@ -1442,7 +1506,11 @@ class SettingsFrame(wx.Frame):
                         print("[SettingsFrame] No saved Titan-Net credentials for sound upload")
                         return
 
-                    temp_client = TitanNetClient()
+                    temp_client = TitanNetClient(
+                        server_host=self.server_host_ctrl.GetValue().strip() or 'titosofttitan.com',
+                        server_port=int(self.server_port_ctrl.GetValue() or 8001),
+                        http_port=int(self.http_port_ctrl.GetValue() or 8000)
+                    )
                     result = temp_client.login(username, password)
                     if not result.get('success'):
                         print(f"[SettingsFrame] Silent login failed: {result.get('message')}")
