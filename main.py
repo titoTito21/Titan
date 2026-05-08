@@ -1048,12 +1048,30 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
 
-    # Bind the close event to the appropriate handler
-    try:
-        if settings.get('general', {}).get('confirm_exit', 'False').lower() in ['true', '1']:
-            frame.Bind(wx.EVT_CLOSE, frame.on_close)
+    # Bind the close event. The actual action (close vs minimize-to-tray) is read at
+    # event time so changes to settings take effect without restart.
+    def _on_frame_close(evt):
+        try:
+            from src.settings.settings import load_settings as _load
+            cur = _load()
+        except Exception:
+            cur = {}
+        general = cur.get('general', {})
+        action = general.get('alt_f4_action', 'close')
+        if action == 'tray':
+            evt.Veto()
+            try:
+                frame.Iconize(True)
+            except Exception as _e:
+                print(f"Warning: Iconize on close failed: {_e}")
+            return
+        if str(general.get('confirm_exit', 'False')).lower() in ['true', '1']:
+            frame.on_close(evt)
         else:
-            frame.Bind(wx.EVT_CLOSE, frame.on_close_unconfirmed)
+            frame.on_close_unconfirmed(evt)
+
+    try:
+        frame.Bind(wx.EVT_CLOSE, _on_frame_close)
     except Exception as e:
         print(f"Warning: Failed to bind close event: {e}")
 

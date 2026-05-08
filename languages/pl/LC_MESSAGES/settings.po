@@ -487,3 +487,82 @@ msgstr ""
 #~ msgid "Context menu"
 #~ msgstr "Menu kontekstowe"
 
+
+msgid "When TCE is minimized:"
+msgstr "Kiedy TCE zostanie zminimalizowane:"
+
+msgid "Minimize to system tray"
+msgstr "Zminimalizuj do zasobnika systemowego"
+
+msgid "Enable invisible interface"
+msgstr "Włącz niewidzialny interfejs"
+
+msgid "Nothing"
+msgstr "Nic"
+
+msgid "Alt+F4 keyboard shortcut:"
+msgstr "Skrót klawiszowy Alt+F4:"
+
+msgid "Close environment"
+msgstr "Zamknij środowisko"
+
+msgid "Titan UI key: {}"
+msgstr "Klawisz Titan UI: {}"
+
+msgid "Capture Titan UI key"
+msgstr "Przechwyć klawisz Titan UI"
+
+msgid ""
+"Press the key or key combination you want to use as the Titan UI key.\n"
+"Press Escape twice to cancel."
+msgstr ""
+"Naciśnij klawisz lub kombinację klawiszy, którą chcesz ustawić jako klawisz Titan UI.\n"
+"Naciśnij Escape dwukrotnie, aby anulować."
+
+msgid "Current: {}"
+msgstr "Obecny: {}"
+
+msgid "Waiting for input..."
+msgstr "Oczekiwanie na klawisz..."
+
+msgid "Press Escape again to cancel, or press another key."
+msgstr "Naciśnij Escape ponownie, aby anulować, lub naciśnij inny klawisz."
+
+msgid "Captured: {}"
+msgstr "Przechwycono: {}"
+
+msgid "Titan UI key set to {}"
+msgstr "Klawisz Titan UI ustawiony na {}"
+
+msgid "Not set"
+msgstr "Nie ustawiono"
+
+msgid "Accent"
+msgstr "Akcent"
+
+msgid "Space"
+msgstr "Spacja"
+
+msgid "Page Up"
+msgstr "Page Up"
+
+msgid "Page Down"
+msgstr "Page Down"
+
+msgid "Up"
+msgstr "Góra"
+
+msgid "Down"
+msgstr "Dół"
+
+msgid "Left"
+msgstr "Lewo"
+
+msgid "Right"
+msgstr "Prawo"
+
+msgid "Win"
+msgstr "Win"
+
+msgid "Cmd"
+msgstr "Cmd"

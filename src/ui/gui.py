@@ -3580,7 +3580,16 @@ class TitanApp(wx.Frame):
 
     def on_minimize(self, event):
         if self.IsIconized():
-            self.minimize_to_tray()
+            try:
+                from src.settings.settings import get_setting
+                action = get_setting('minimize_action', 'invisible_ui', section='general')
+            except Exception:
+                action = 'invisible_ui'
+            if action == 'invisible_ui':
+                self.minimize_to_tray(activate_invisible_ui=True)
+            elif action == 'tray':
+                self.minimize_to_tray(activate_invisible_ui=False)
+            # 'nothing' → leave the window iconized, take no extra action
         event.Skip()
 
     def open_time_settings(self):
@@ -3843,17 +3852,17 @@ class TitanApp(wx.Frame):
         else:
             _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
-    def minimize_to_tray(self):
+    def minimize_to_tray(self, activate_invisible_ui=True):
         self.Hide()
         skin_name = self.settings.get('interface', {}).get('skin', DEFAULT_SKIN_NAME)
         skin_data = self.load_skin_data(skin_name)
         self.task_bar_icon = TaskBarIcon(self, self.version, skin_data)
         play_sound('ui/minimalize.ogg')
         vibrate_menu_close()  # Add vibration for minimizing to tray
-        self.invisible_ui.start_listening()
-
-        # Show tip about invisible UI after 5-6 seconds
-        show_invisible_ui_tip(delay=5.5)
+        if activate_invisible_ui:
+            self.invisible_ui.start_listening()
+            # Show tip about invisible UI after 5-6 seconds
+            show_invisible_ui_tip(delay=5.5)
 
     def restore_from_tray(self):
         # Auto-disable Titan UI when main window is restored

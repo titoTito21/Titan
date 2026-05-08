@@ -255,17 +255,116 @@ class GlobalHotKeys(threading.Thread):
         except Exception as e:
             print(f"Error in GlobalHotKeys._cleanup: {e}")
 
+_KEY_STRING_TO_VK = {
+    'grave': 0xC0,         # backtick / tilde (also shown as "akcent")
+    'space': 0x20,
+    'tab': 0x09,
+    'enter': 0x0D,
+    'escape': 0x1B,
+    'backspace': 0x08,
+    'delete': 0x2E,
+    'insert': 0x2D,
+    'home': 0x24,
+    'end': 0x23,
+    'pageup': 0x21,
+    'pagedown': 0x22,
+    'up': 0x26,
+    'down': 0x28,
+    'left': 0x25,
+    'right': 0x27,
+    '-': 0xBD,
+    '=': 0xBB,
+    '[': 0xDB,
+    ']': 0xDD,
+    '\\': 0xDC,
+    ';': 0xBA,
+    "'": 0xDE,
+    ',': 0xBC,
+    '.': 0xBE,
+    '/': 0xBF,
+}
+
+_MOD_TO_WINFLAG = {
+    'alt': 0x0001,    # MOD_ALT
+    'ctrl': 0x0002,   # MOD_CONTROL
+    'shift': 0x0004,  # MOD_SHIFT
+    'win': 0x0008,    # MOD_WIN
+}
+
+
+def _parse_titan_ui_key(key_string):
+    """Parse a key string like 'shift+f2' or 'grave' into (modifier_flags, vk_code, fallback_str).
+
+    Returns None if the string cannot be parsed.
+    """
+    if not key_string:
+        return None
+    parts = [p.strip().lower() for p in key_string.split('+') if p.strip()]
+    if not parts:
+        return None
+    mods = 0
+    main = None
+    fallback_parts = []
+    for p in parts:
+        if p in _MOD_TO_WINFLAG:
+            mods |= _MOD_TO_WINFLAG[p]
+            fallback_parts.append(p)
+        else:
+            main = p
+    if main is None:
+        return None
+
+    # Function keys F1..F24
+    if main.startswith('f') and main[1:].isdigit():
+        fnum = int(main[1:])
+        if 1 <= fnum <= 24:
+            vk = 0x70 + (fnum - 1)
+            fallback_parts.append(main)
+            return mods, vk, '+'.join(fallback_parts)
+
+    if main in _KEY_STRING_TO_VK:
+        vk = _KEY_STRING_TO_VK[main]
+        # The keyboard library accepts '`' for grave
+        fb = '`' if main == 'grave' else main
+        fallback_parts.append(fb)
+        return mods, vk, '+'.join(fallback_parts)
+
+    if len(main) == 1:
+        c = main.upper()
+        if 'A' <= c <= 'Z':
+            vk = ord(c)
+            fallback_parts.append(main)
+            return mods, vk, '+'.join(fallback_parts)
+        if '0' <= c <= '9':
+            vk = ord(c)
+            fallback_parts.append(main)
+            return mods, vk, '+'.join(fallback_parts)
+
+    return None
+
+
+def _read_titan_ui_key():
+    """Read the configured Titan UI key from settings, default to 'grave'."""
+    try:
+        from src.settings.settings import get_setting
+        return (get_setting('titan_ui_key', 'grave', section='general') or 'grave').strip()
+    except Exception:
+        return 'grave'
+
+
 class PersistentTildeHotkey:
-    """Register backtick/tilde as a system hotkey using Windows RegisterHotKey API.
+    """Register the configured Titan UI key as a system hotkey using Windows RegisterHotKey API.
+
+    Defaults to backtick/tilde. The key is read from the 'general.titan_ui_key' setting and
+    can be any key/combination supported by _parse_titan_ui_key (e.g. 'grave', 'shift+f2').
 
     Unlike keyboard hooks (used by the keyboard library), RegisterHotKey is
     processed at the system level BEFORE the hook chain. Screen readers like
     JAWS cannot interfere with it, even if they reinstall their own hooks.
 
-    Falls back to the keyboard library on non-Windows platforms.
+    Falls back to the keyboard library on non-Windows platforms or when registration fails.
     """
 
-    VK_OEM_3 = 0xC0    # Backtick/tilde key
     HOTKEY_ID_TILDE = 0x7001
     WM_HOTKEY = 0x0312
     WM_QUIT = 0x0012
@@ -277,15 +376,29 @@ class PersistentTildeHotkey:
         self._stop_event = threading.Event()
         self._fallback_hotkeys = None  # For non-Windows platforms
 
+        # Resolve the configured key. Default to grave if invalid.
+        key_string = _read_titan_ui_key()
+        parsed = _parse_titan_ui_key(key_string) or _parse_titan_ui_key('grave')
+        if parsed is None:
+            parsed = (0, 0xC0, '`')
+        self._mod_flags, self._vk_code, self._fallback_str = parsed
+        print(f"[InvisibleUI] Titan UI key configured: '{key_string}' -> "
+              f"vk={hex(self._vk_code)} mods={hex(self._mod_flags)} fallback='{self._fallback_str}'")
+
     def start(self):
         self._stop_event.clear()
         if IS_WINDOWS:
             self._thread = threading.Thread(target=self._run_windows, daemon=True)
             self._thread.start()
         else:
-            # Fallback to GlobalHotKeys on macOS/Linux
-            self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
-            self._fallback_hotkeys.start()
+            # Fallback to GlobalHotKeys on macOS/Linux using configured key
+            try:
+                self._fallback_hotkeys = GlobalHotKeys({self._fallback_str: self.on_tilde})
+                self._fallback_hotkeys.start()
+            except Exception as e:
+                print(f"[InvisibleUI] Failed to register fallback hotkey '{self._fallback_str}': {e}")
+                self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
+                self._fallback_hotkeys.start()
 
     def stop(self):
         self._stop_event.set()
@@ -316,14 +429,14 @@ class PersistentTildeHotkey:
             self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
 
             if not ctypes.windll.user32.RegisterHotKey(
-                None, self.HOTKEY_ID_TILDE, 0, self.VK_OEM_3
+                None, self.HOTKEY_ID_TILDE, self._mod_flags, self._vk_code
             ):
                 err = ctypes.GetLastError()
-                print(f"RegisterHotKey failed for tilde (error {err}), falling back to keyboard library")
+                print(f"RegisterHotKey failed for Titan UI key (error {err}), falling back to keyboard library")
                 self._run_fallback()
                 return
 
-            print("Tilde registered via RegisterHotKey (system-level, JAWS-safe)")
+            print("Titan UI key registered via RegisterHotKey (system-level, JAWS-safe)")
             msg = wintypes.MSG()
 
             while ctypes.windll.user32.GetMessageW(
@@ -348,7 +461,11 @@ class PersistentTildeHotkey:
 
     def _run_fallback(self):
         """Fallback to keyboard library if RegisterHotKey fails."""
-        self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
+        try:
+            self._fallback_hotkeys = GlobalHotKeys({self._fallback_str: self.on_tilde})
+        except Exception as e:
+            print(f"[InvisibleUI] Fallback hotkey '{self._fallback_str}' invalid ({e}), defaulting to '`'")
+            self._fallback_hotkeys = GlobalHotKeys({'`': self.on_tilde})
         self._fallback_hotkeys.start()
         self._stop_event.wait()
         self._fallback_hotkeys.stop()

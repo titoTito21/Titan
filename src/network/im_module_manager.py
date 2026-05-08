@@ -2,8 +2,8 @@
 
 Loads communicator modules from data/titanIM_modules/ directory.
 Each module has __im.TCE config and init.py with open(parent_frame) function.
-Automatically injects unified TitanIM Sound API and local translations
-into every loaded module.
+Automatically injects unified TitanIM Sound API, local translations and a
+namespaced configuration helper into every loaded module.
 """
 import os
 import sys
@@ -16,6 +16,67 @@ from src.platform_utils import get_base_path
 
 # Shared sound API instance for all modules
 _sound_api = TitanIMSoundAPI()
+
+
+class IMModuleConfig:
+    """Namespaced load/save helper for the encrypted titan.IM file.
+
+    Each Titan IM module gets its own slice of titan.IM keyed by namespace
+    (its folder name). The whole file is read on every load/save so other
+    modules' data (telegram, eltenlink, teamtalk, ...) is preserved.
+    Modules use it as `config.load()` / `config.save({...})` and never need
+    to know the encryption key or the file path.
+    """
+
+    def __init__(self, namespace):
+        self.namespace = namespace
+
+    def _read_all(self):
+        try:
+            from src.settings.titan_im_config import load_titan_im_config
+            return load_titan_im_config() or {}
+        except Exception as exc:
+            print(f"[IM Modules] config.load_all failed for "
+                  f"{self.namespace}: {exc}")
+            return {}
+
+    def _write_all(self, data):
+        try:
+            from src.settings.titan_im_config import save_titan_im_config
+            return bool(save_titan_im_config(data))
+        except Exception as exc:
+            print(f"[IM Modules] config.save_all failed for "
+                  f"{self.namespace}: {exc}")
+            return False
+
+    def load(self):
+        """Return this module's config slice (an empty dict if missing)."""
+        all_config = self._read_all()
+        slice_data = all_config.get(self.namespace, {})
+        return slice_data if isinstance(slice_data, dict) else {}
+
+    def save(self, data):
+        """Persist this module's slice without disturbing other modules."""
+        if not isinstance(data, dict):
+            print(f"[IM Modules] config.save({self.namespace}) "
+                  f"requires a dict, got {type(data).__name__}")
+            return False
+        all_config = self._read_all()
+        all_config[self.namespace] = data
+        return self._write_all(all_config)
+
+    def get(self, key, default=None):
+        return self.load().get(key, default)
+
+    def set(self, key, value):
+        data = self.load()
+        data[key] = value
+        return self.save(data)
+
+    def update(self, **kwargs):
+        data = self.load()
+        data.update(kwargs)
+        return self.save(data)
 
 # Lazily created hidden wx host frame used as fallback parent when the
 # caller does not supply one. This lets IM modules work from any TCE
@@ -170,6 +231,11 @@ class TitanIMModuleManager:
                 # Inject unified Sound API before executing module code
                 # so module can use sounds at import time if needed
                 mod.sounds = _sound_api
+
+                # Inject namespaced config helper. Modules store/restore
+                # their own settings via mod.config.load() / mod.config.save()
+                # without ever touching the encryption key behind titan.IM.
+                mod.config = IMModuleConfig(module_id)
 
                 # Inject local translations from module's own languages/ dir
                 module_locale_dir = os.path.join(module_path, 'languages')

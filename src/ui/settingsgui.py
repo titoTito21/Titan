@@ -82,6 +82,144 @@ def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, p
     return result
 
 
+def _wx_key_to_string(keycode, modifiers):
+    """Convert a wx keycode + modifier mask into a normalized string id like 'shift+f2' or 'grave'.
+
+    Returns None for pure modifier keys (Shift alone, Ctrl alone, etc.)
+    """
+    # Pure modifier presses are ignored
+    if keycode in (wx.WXK_SHIFT, wx.WXK_CONTROL, wx.WXK_ALT,
+                   wx.WXK_RAW_CONTROL, wx.WXK_WINDOWS_LEFT, wx.WXK_WINDOWS_RIGHT):
+        return None
+
+    parts = []
+    if modifiers & wx.MOD_CONTROL:
+        parts.append('ctrl')
+    if modifiers & wx.MOD_ALT:
+        parts.append('alt')
+    if modifiers & wx.MOD_SHIFT:
+        parts.append('shift')
+    if modifiers & wx.MOD_WIN:
+        parts.append('win')
+
+    # Function keys
+    if wx.WXK_F1 <= keycode <= wx.WXK_F24:
+        parts.append('f{}'.format(keycode - wx.WXK_F1 + 1))
+        return '+'.join(parts)
+
+    # Named keys
+    named = {
+        wx.WXK_SPACE: 'space',
+        wx.WXK_TAB: 'tab',
+        wx.WXK_RETURN: 'enter',
+        wx.WXK_NUMPAD_ENTER: 'enter',
+        wx.WXK_ESCAPE: 'escape',
+        wx.WXK_BACK: 'backspace',
+        wx.WXK_DELETE: 'delete',
+        wx.WXK_INSERT: 'insert',
+        wx.WXK_HOME: 'home',
+        wx.WXK_END: 'end',
+        wx.WXK_PAGEUP: 'pageup',
+        wx.WXK_PAGEDOWN: 'pagedown',
+        wx.WXK_UP: 'up',
+        wx.WXK_DOWN: 'down',
+        wx.WXK_LEFT: 'left',
+        wx.WXK_RIGHT: 'right',
+    }
+    if keycode in named:
+        parts.append(named[keycode])
+        return '+'.join(parts)
+
+    # Letters and digits
+    if 32 < keycode < 127:
+        ch = chr(keycode).lower()
+        if ch == '`':
+            ch = 'grave'
+        parts.append(ch)
+        return '+'.join(parts)
+
+    return None
+
+
+class KeyCaptureDialog(wx.Dialog):
+    """Modal dialog that captures the next key combination pressed by the user."""
+
+    def __init__(self, parent, current_label=''):
+        super().__init__(parent, title=_("Capture Titan UI key"),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.captured_key = None
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        prompt = wx.StaticText(self, label=_(
+            "Press the key or key combination you want to use as the Titan UI key.\n"
+            "Press Escape twice to cancel."))
+        vbox.Add(prompt, flag=wx.ALL, border=10)
+
+        self.captured_label = wx.StaticText(
+            self,
+            label=_("Current: {}").format(current_label) if current_label else _("Waiting for input...")
+        )
+        vbox.Add(self.captured_label, flag=wx.ALL | wx.EXPAND, border=10)
+
+        btn_sizer = wx.StdDialogButtonSizer()
+        self.ok_btn = wx.Button(self, wx.ID_OK)
+        self.ok_btn.Enable(False)
+        cancel_btn = wx.Button(self, wx.ID_CANCEL)
+        btn_sizer.AddButton(self.ok_btn)
+        btn_sizer.AddButton(cancel_btn)
+        btn_sizer.Realize()
+        vbox.Add(btn_sizer, flag=wx.ALL | wx.ALIGN_CENTER, border=10)
+
+        self.SetSizer(vbox)
+        self.Fit()
+        self.Centre()
+
+        # Capture every keystroke
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
+        self._last_was_escape = False
+
+    def _on_char_hook(self, event):
+        keycode = event.GetKeyCode()
+        modifiers = event.GetModifiers()
+
+        # Two presses of Escape (with no modifiers) cancel the dialog.
+        if keycode == wx.WXK_ESCAPE and modifiers == wx.MOD_NONE:
+            if self._last_was_escape:
+                self.EndModal(wx.ID_CANCEL)
+                return
+            self._last_was_escape = True
+            self.captured_label.SetLabel(_("Press Escape again to cancel, or press another key."))
+            return
+        self._last_was_escape = False
+
+        # After a key has been captured and the OK button is focused,
+        # Space should activate it (just like Enter) instead of being
+        # re-captured as the new Titan UI key.
+        if (self.captured_key is not None
+                and keycode == wx.WXK_SPACE
+                and modifiers == wx.MOD_NONE
+                and self.FindFocus() is self.ok_btn):
+            self.EndModal(wx.ID_OK)
+            return
+
+        key_string = _wx_key_to_string(keycode, modifiers)
+        if key_string is None:
+            # Modifier-only press — ignore, wait for the actual key.
+            return
+
+        self.captured_key = key_string
+        # Build a friendly display label using the parent's formatter when available
+        try:
+            parent = self.GetParent()
+            display = parent._format_titan_ui_key(key_string) if hasattr(parent, '_format_titan_ui_key') else key_string
+        except Exception:
+            display = key_string
+        self.captured_label.SetLabel(_("Captured: {}").format(display))
+        self.ok_btn.Enable(True)
+        self.ok_btn.SetFocus()
+
+
 class SettingsFrame(wx.Frame):
     def __init__(self, *args, component_manager=None, **kw):
         super(SettingsFrame, self).__init__(*args, **kw)
@@ -556,6 +694,53 @@ class SettingsFrame(wx.Frame):
         self.confirm_exit_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.confirm_exit_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        vbox.AddSpacer(10)
+
+        # When TCE is minimized
+        self._minimize_action_values = ['tray', 'invisible_ui', 'nothing']
+        minimize_choices = [
+            _("Minimize to system tray"),
+            _("Enable invisible interface"),
+            _("Nothing"),
+        ]
+        self.minimize_action_radio = wx.RadioBox(
+            self.general_panel,
+            label=_("When TCE is minimized:"),
+            choices=minimize_choices,
+            majorDimension=1,
+            style=wx.RA_SPECIFY_COLS,
+        )
+        self.minimize_action_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.minimize_action_radio.Bind(wx.EVT_RADIOBOX, self.OnRadioBox)
+        vbox.Add(self.minimize_action_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # Alt+F4 keyboard shortcut
+        self._alt_f4_action_values = ['close', 'tray']
+        alt_f4_choices = [
+            _("Close environment"),
+            _("Minimize to system tray"),
+        ]
+        self.alt_f4_action_radio = wx.RadioBox(
+            self.general_panel,
+            label=_("Alt+F4 keyboard shortcut:"),
+            choices=alt_f4_choices,
+            majorDimension=1,
+            style=wx.RA_SPECIFY_COLS,
+        )
+        self.alt_f4_action_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.alt_f4_action_radio.Bind(wx.EVT_RADIOBOX, self.OnRadioBox)
+        vbox.Add(self.alt_f4_action_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # Titan UI key
+        self._titan_ui_key_value = 'grave'
+        self.titan_ui_key_btn = wx.Button(
+            self.general_panel,
+            label=_("Titan UI key: {}").format(self._format_titan_ui_key(self._titan_ui_key_value)),
+        )
+        self.titan_ui_key_btn.Bind(wx.EVT_BUTTON, self.OnCaptureTitanUIKey)
+        self.titan_ui_key_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.titan_ui_key_btn, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
         self.general_panel.SetSizer(vbox)
 
     def InitInterfacePanel(self):
@@ -1022,6 +1207,25 @@ class SettingsFrame(wx.Frame):
                     self.launcher_description.SetValue(lc.description or _("No description available."))
                     break
 
+        # Load minimize action
+        minimize_action_value = general_settings.get('minimize_action', 'invisible_ui')
+        if minimize_action_value not in self._minimize_action_values:
+            minimize_action_value = 'invisible_ui'
+        self.minimize_action_radio.SetSelection(
+            self._minimize_action_values.index(minimize_action_value))
+
+        # Load Alt+F4 action
+        alt_f4_action_value = general_settings.get('alt_f4_action', 'close')
+        if alt_f4_action_value not in self._alt_f4_action_values:
+            alt_f4_action_value = 'close'
+        self.alt_f4_action_radio.SetSelection(
+            self._alt_f4_action_values.index(alt_f4_action_value))
+
+        # Load Titan UI key
+        self._titan_ui_key_value = general_settings.get('titan_ui_key', 'grave') or 'grave'
+        self.titan_ui_key_btn.SetLabel(
+            _("Titan UI key: {}").format(self._format_titan_ui_key(self._titan_ui_key_value)))
+
         # Load visible categories
         visible_cats = general_settings.get('visible_categories', 'apps,games,network')
         cat_list = [c.strip() for c in visible_cats.split(',')]
@@ -1397,6 +1601,66 @@ class SettingsFrame(wx.Frame):
             config = self._launcher_configs[sel]
             self.launcher_description.SetValue(config.description or _("No description available."))
 
+    def OnRadioBox(self, event):
+        play_sound('core/SELECT.ogg')
+        vibrate_selection()
+        event.Skip()
+
+    def _format_titan_ui_key(self, key_string):
+        """Convert internal key id (e.g. 'grave', 'shift+f2') into a human-readable label."""
+        if not key_string:
+            return _("Not set")
+        parts = [p.strip() for p in key_string.split('+') if p.strip()]
+        names = {
+            'ctrl': _("Ctrl"),
+            'shift': _("Shift"),
+            'alt': _("Alt"),
+            'win': _("Win"),
+            'cmd': _("Cmd"),
+            'grave': _("Accent"),
+            'space': _("Space"),
+            'tab': _("Tab"),
+            'enter': _("Enter"),
+            'escape': _("Escape"),
+            'backspace': _("Backspace"),
+            'delete': _("Delete"),
+            'insert': _("Insert"),
+            'home': _("Home"),
+            'end': _("End"),
+            'pageup': _("Page Up"),
+            'pagedown': _("Page Down"),
+            'up': _("Up"),
+            'down': _("Down"),
+            'left': _("Left"),
+            'right': _("Right"),
+        }
+        display_parts = []
+        for p in parts:
+            if p in names:
+                display_parts.append(names[p])
+            elif p.startswith('f') and p[1:].isdigit():
+                display_parts.append(p.upper())
+            else:
+                display_parts.append(p)
+        return '+'.join(display_parts)
+
+    def OnCaptureTitanUIKey(self, event):
+        """Open a dialog that captures the next key combination from the user."""
+        dlg = KeyCaptureDialog(self, current_label=self._format_titan_ui_key(self._titan_ui_key_value))
+        try:
+            apply_skin_to_window(dlg)
+        except Exception:
+            pass
+        if dlg.ShowModal() == wx.ID_OK and dlg.captured_key:
+            self._titan_ui_key_value = dlg.captured_key
+            self.titan_ui_key_btn.SetLabel(
+                _("Titan UI key: {}").format(self._format_titan_ui_key(self._titan_ui_key_value))
+            )
+            play_sound('ui/X.ogg')
+            speaker.speak(_("Titan UI key set to {}").format(
+                self._format_titan_ui_key(self._titan_ui_key_value)))
+        dlg.Destroy()
+
     def OnThemeSelected(self, event):
         theme = self.theme_choice.GetStringSelection()
         if theme != _("No themes"):
@@ -1459,13 +1723,26 @@ class SettingsFrame(wx.Frame):
         if sel != wx.NOT_FOUND and sel < len(self._launcher_configs):
             launcher_folder = self._launcher_configs[sel].folder_name
 
+        # Read new general fields
+        try:
+            minimize_action_value = self._minimize_action_values[self.minimize_action_radio.GetSelection()]
+        except Exception:
+            minimize_action_value = 'invisible_ui'
+        try:
+            alt_f4_action_value = self._alt_f4_action_values[self.alt_f4_action_radio.GetSelection()]
+        except Exception:
+            alt_f4_action_value = 'close'
+
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
             'confirm_exit': str(self.confirm_exit_cb.GetValue()),
             'startup_mode': startup_mode,
             'language': selected_language,
             'launcher': launcher_folder,
-            'visible_categories': ','.join(checked_cats)
+            'visible_categories': ','.join(checked_cats),
+            'minimize_action': minimize_action_value,
+            'alt_f4_action': alt_f4_action_value,
+            'titan_ui_key': self._titan_ui_key_value or 'grave',
         }
 
         if 'interface' not in self.settings:

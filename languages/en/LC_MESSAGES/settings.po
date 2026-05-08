@@ -486,3 +486,82 @@ msgstr ""
 #~ msgid "Context menu"
 #~ msgstr ""
 
+
+msgid "When TCE is minimized:"
+msgstr "When TCE is minimized:"
+
+msgid "Minimize to system tray"
+msgstr "Minimize to system tray"
+
+msgid "Enable invisible interface"
+msgstr "Enable invisible interface"
+
+msgid "Nothing"
+msgstr "Nothing"
+
+msgid "Alt+F4 keyboard shortcut:"
+msgstr "Alt+F4 keyboard shortcut:"
+
+msgid "Close environment"
+msgstr "Close environment"
+
+msgid "Titan UI key: {}"
+msgstr "Titan UI key: {}"
+
+msgid "Capture Titan UI key"
+msgstr "Capture Titan UI key"
+
+msgid ""
+"Press the key or key combination you want to use as the Titan UI key.\n"
+"Press Escape twice to cancel."
+msgstr ""
+"Press the key or key combination you want to use as the Titan UI key.\n"
+"Press Escape twice to cancel."
+
+msgid "Current: {}"
+msgstr "Current: {}"
+
+msgid "Waiting for input..."
+msgstr "Waiting for input..."
+
+msgid "Press Escape again to cancel, or press another key."
+msgstr "Press Escape again to cancel, or press another key."
+
+msgid "Captured: {}"
+msgstr "Captured: {}"
+
+msgid "Titan UI key set to {}"
+msgstr "Titan UI key set to {}"
+
+msgid "Not set"
+msgstr "Not set"
+
+msgid "Accent"
+msgstr "Accent"
+
+msgid "Space"
+msgstr "Space"
+
+msgid "Page Up"
+msgstr "Page Up"
+
+msgid "Page Down"
+msgstr "Page Down"
+
+msgid "Up"
+msgstr "Up"
+
+msgid "Down"
+msgstr "Down"
+
+msgid "Left"
+msgstr "Left"
+
+msgid "Right"
+msgstr "Right"
+
+msgid "Win"
+msgstr "Win"
+
+msgid "Cmd"
+msgstr "Cmd"

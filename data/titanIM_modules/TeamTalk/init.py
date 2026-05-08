@@ -17,6 +17,7 @@ Full-featured TeamTalk 5 client styled like Titan-Net main GUI:
 
 import builtins
 import configparser
+import copy
 import ctypes
 import os
 import sys
@@ -36,6 +37,7 @@ DEFAULT_UDP_PORT = 10333
 TAB_CHAT = 0
 TAB_LOG = 1
 TAB_PM = 2
+TAB_FILES = 3
 
 # TeamTalk 5 status-mode bitfield (TT Classic constants - the Python wrapper
 # does not export them, so we define them locally and OR them into the
@@ -368,9 +370,15 @@ def profile_to_tt_url(profile):
 # =============================================================================
 
 def _load_all_config():
+    """Load the entire titan.IM file (encrypted). Empty dict on failure.
+
+    We always read-modify-write through the full file so other Titan IM
+    modules' settings (telegram, eltenlink, ...) are preserved when we
+    save our own slice back.
+    """
     try:
         from src.settings.titan_im_config import load_titan_im_config
-        return load_titan_im_config()
+        return load_titan_im_config() or {}
     except Exception:
         return {}
 
@@ -378,7 +386,7 @@ def _load_all_config():
 def _save_all_config(config):
     try:
         from src.settings.titan_im_config import save_titan_im_config
-        return save_titan_im_config(config)
+        return bool(save_titan_im_config(config))
     except Exception as exc:
         print(f"[TeamTalk] Failed to save config: {exc}")
         return False
@@ -396,10 +404,13 @@ def load_teamtalk_config():
         "profiles": profiles,
         "last_profile": teamtalk.get("last_profile", ""),
         "ptt_enabled": bool(teamtalk.get("ptt_enabled", True)),
+        "nickname": str(teamtalk.get("nickname", "") or ""),
+        "gender": _as_int(teamtalk.get("gender", GENDER_MALE), GENDER_MALE),
     }
 
 
 def save_teamtalk_config(teamtalk_config):
+    """Persist our slice WITHOUT touching telegram / eltenlink / others."""
     config = _load_all_config()
     config["teamtalk"] = teamtalk_config
     return _save_all_config(config)
@@ -468,6 +479,14 @@ class TeamTalkSdkClient:
 
     Important: this client never auto-joins a channel after login. The UI
     decides when (and which) channel to join based on user input.
+
+    User / channel state is tracked via the SDK's event stream the same
+    way qtTeamTalk's ChannelsTree does. Some TT5 servers (notably the
+    encrypted ones) do not return a complete user list through
+    getServerUsers / getChannelUsers immediately after login - they
+    deliver users one-by-one via CMD_USER_LOGGEDIN and CMD_USER_JOINED.
+    To survive that, we keep our own dicts populated by the events and
+    fall back to a polling refresh only if the dicts are empty.
     """
 
     def __init__(self, on_event=None):
@@ -482,6 +501,12 @@ class TeamTalkSdkClient:
         self.pending_profile = None
         self.my_user_id = 0
         self.my_channel_id = 0
+        # qtTeamTalk-style event caches. ctypes Structures coming out of
+        # the SDK message buffer are reused on every getMessage() call,
+        # so we ALWAYS deep-copy before storing.
+        self.user_cache = {}        # user_id -> User (copy)
+        self.channel_cache = {}     # channel_id -> Channel (copy)
+        self.file_cache = {}        # channel_id -> {file_id: RemoteFile copy}
 
     # ---- Lifecycle -------------------------------------------------------
 
@@ -514,7 +539,20 @@ class TeamTalkSdkClient:
             0,
             profile["encrypted"],
         )
-        self._init_default_audio_devices()
+        # Audio init goes through several SDK calls that touch the
+        # Windows audio stack (CloseSound* + RestartSoundSystem +
+        # InitSound*). On some setups - WASAPI in exclusive mode,
+        # foreground apps holding the device, virtual audio drivers -
+        # one of those can throw a Python exception or, worse, take
+        # down the worker. Isolating the call protects the connect
+        # state machine: a failed audio init still leaves us logged in
+        # and able to receive text, channel, and presence events; the
+        # user only loses voice TX/RX until they reconnect.
+        try:
+            self._init_default_audio_devices()
+        except Exception as exc:
+            print(f"[TeamTalk] _init_default_audio_devices crashed: {exc}")
+            traceback.print_exc()
         if not ok:
             raise RuntimeError(_t("Could not start TeamTalk connection."))
         self.connected = True
@@ -522,11 +560,18 @@ class TeamTalkSdkClient:
         return True
 
     def _init_default_audio_devices(self):
-        """Initialize the default microphone and speakers.
+        """Mirror qtTeamTalk's initSoundDevices() flow.
 
-        Stores results on self so the UI can surface them on the server-log
-        tab and the user can see why voice transmission may be silent
-        (e.g. no microphone, or a device id of -1 from getDefaultSoundDevices).
+        Steps (in qtTeamTalk's utilsound.cpp/initSoundDevices):
+            1. CloseSoundInputDevice + CloseSoundOutputDevice + CloseSoundDuplexDevices
+            2. RestartSoundSystem (so the SDK re-enumerates devices)
+            3. GetDefaultSoundDevices (to find which IDs the OS actually uses)
+            4. Resolve human-readable device names from getSoundDevices()
+            5. InitSoundInputDevice + InitSoundOutputDevice (separately)
+        We deliberately do NOT take qtTeamTalk's optional duplex/echo
+        cancel branch - that path silently reports success on many
+        configurations where it actually fails to start the audio
+        threads, and it is what made voice TX go silent before.
         """
         self.input_device_id = None
         self.output_device_id = None
@@ -536,6 +581,35 @@ class TeamTalkSdkClient:
         self.output_init_ok = False
         if not self.obj:
             return
+
+        sdk = self.sdk
+        tt_handle = self.tt or getattr(self.obj, "_tt", None)
+
+        # 1. Close any previously initialised devices. Required because
+        # we may end up here a second time (e.g. user plugged a mic and
+        # toggled PTT). qtTeamTalk runs all three Close calls every time.
+        for closer in ("_CloseSoundInputDevice",
+                       "_CloseSoundOutputDevice",
+                       "_CloseSoundDuplexDevices"):
+            fn = getattr(sdk, closer, None)
+            if fn and tt_handle:
+                try:
+                    fn(tt_handle)
+                except Exception as exc:
+                    print(f"[TeamTalk] {closer} failed: {exc}")
+
+        # 2. Restart sound system (also from qtTeamTalk).
+        restart = getattr(sdk, "_RestartSoundSystem", None)
+        if restart:
+            try:
+                restart()
+            except Exception as exc:
+                print(f"[TeamTalk] RestartSoundSystem failed: {exc}")
+
+        # 3. Default device IDs - whatever the OS reports as the system
+        # default for input and output. This is what qtTeamTalk does on
+        # the non-Ex code path and matches the user's expectation that
+        # voice goes through the system default microphone / speakers.
         try:
             indev, outdev = self.obj.getDefaultSoundDevices()
             indev = getattr(indev, "value", indev)
@@ -544,8 +618,14 @@ class TeamTalkSdkClient:
             self.output_device_id = int(outdev) if outdev is not None else None
         except Exception as exc:
             print(f"[TeamTalk] getDefaultSoundDevices failed: {exc}")
+            traceback.print_exc()
             return
-        # Resolve device names so we can log something meaningful.
+        print(
+            f"[TeamTalk] default sound devs: "
+            f"in={self.input_device_id} out={self.output_device_id}"
+        )
+
+        # 4. Resolve device names for logging.
         try:
             for dev in self.obj.getSoundDevices():
                 dev_id = _value(getattr(dev, "nDeviceID", None), -999)
@@ -556,17 +636,34 @@ class TeamTalkSdkClient:
                     self.output_device_name = name
         except Exception as exc:
             print(f"[TeamTalk] getSoundDevices failed: {exc}")
+            traceback.print_exc()
+
+        # 5. Initialize input + output separately (qtTeamTalk's non-duplex
+        # path). Each call returns True on success. We log the result on
+        # both success and failure so the user can see in the server log
+        # exactly why voice may not transmit.
         try:
             if self.input_device_id is not None and self.input_device_id != -1:
                 self.input_init_ok = bool(
                     self.obj.initSoundInputDevice(self.input_device_id)
                 )
+                print(
+                    f"[TeamTalk] initSoundInputDevice"
+                    f"({self.input_device_id}={self.input_device_name!r}) -> "
+                    f"{self.input_init_ok}"
+                )
             if self.output_device_id is not None and self.output_device_id != -1:
                 self.output_init_ok = bool(
                     self.obj.initSoundOutputDevice(self.output_device_id)
                 )
+                print(
+                    f"[TeamTalk] initSoundOutputDevice"
+                    f"({self.output_device_id}={self.output_device_name!r}) -> "
+                    f"{self.output_init_ok}"
+                )
         except Exception as exc:
             print(f"[TeamTalk] initSoundDevice failed: {exc}")
+            traceback.print_exc()
 
     def login(self, profile):
         if not self.available() or not self.obj:
@@ -596,6 +693,158 @@ class TeamTalkSdkClient:
         self.logged_in = False
         self.my_user_id = 0
         self.my_channel_id = 0
+        self.user_cache = {}
+        self.channel_cache = {}
+        self.file_cache = {}
+
+    # ---- Event-driven cache helpers -------------------------------------
+
+    def _struct_copy(self, struct):
+        """Return a standalone copy of a ctypes Structure.
+
+        copy.copy() does NOT reliably deep-copy a ctypes Structure on
+        every Python build - on some it returns a shallow alias whose
+        TTCHAR string fields decay to empty when the source goes out
+        of scope (the SDK's TTMessage instance). We use the canonical
+        ctypes memmove pattern: allocate a fresh instance, then copy
+        sizeof(struct) bytes from the original. This is what qtTeamTalk
+        relies on internally via Qt's QMap value semantics.
+        """
+        if struct is None:
+            return None
+        try:
+            cls = type(struct)
+            new_struct = cls()
+            ctypes.memmove(
+                ctypes.byref(new_struct),
+                ctypes.byref(struct),
+                ctypes.sizeof(cls),
+            )
+            return new_struct
+        except Exception as exc:
+            print(f"[TeamTalk] struct_copy fallback (memmove failed: {exc})")
+            try:
+                return copy.copy(struct)
+            except Exception:
+                return struct
+
+    def cache_user(self, user):
+        """Insert / replace a user in the cache. Returns its user id."""
+        if user is None:
+            return 0
+        user_id = _value(getattr(user, "nUserID", 0))
+        if not user_id:
+            return 0
+        copy_struct = self._struct_copy(user)
+        self.user_cache[user_id] = copy_struct
+        nick = _tt_text(getattr(copy_struct, "szNickname", "")) or "?"
+        chan = _value(getattr(copy_struct, "nChannelID", 0))
+        print(f"[TeamTalk] cache_user id={user_id} nick={nick!r} "
+              f"channel={chan} (cache size now {len(self.user_cache)})")
+        return user_id
+
+    def remove_cached_user(self, user_id):
+        if user_id:
+            self.user_cache.pop(user_id, None)
+
+    def cache_channel(self, channel):
+        if channel is None:
+            return 0
+        channel_id = _value(getattr(channel, "nChannelID", 0))
+        if not channel_id:
+            return 0
+        copy_struct = self._struct_copy(channel)
+        self.channel_cache[channel_id] = copy_struct
+        name = _tt_text(getattr(copy_struct, "szName", "")) or "?"
+        print(f"[TeamTalk] cache_channel id={channel_id} name={name!r} "
+              f"(cache size now {len(self.channel_cache)})")
+        return channel_id
+
+    def remove_cached_channel(self, channel_id):
+        if channel_id:
+            self.channel_cache.pop(channel_id, None)
+            self.file_cache.pop(channel_id, None)
+
+    def cache_file(self, remote_file):
+        if remote_file is None:
+            return (0, 0)
+        channel_id = _value(getattr(remote_file, "nChannelID", 0))
+        file_id = _value(getattr(remote_file, "nFileID", 0))
+        if not (channel_id and file_id):
+            return (channel_id, file_id)
+        bucket = self.file_cache.setdefault(channel_id, {})
+        bucket[file_id] = self._struct_copy(remote_file)
+        return (channel_id, file_id)
+
+    def remove_cached_file(self, remote_file):
+        channel_id = _value(getattr(remote_file, "nChannelID", 0))
+        file_id = _value(getattr(remote_file, "nFileID", 0))
+        bucket = self.file_cache.get(channel_id)
+        if bucket and file_id in bucket:
+            bucket.pop(file_id, None)
+        return (channel_id, file_id)
+
+    def get_cached_files(self, channel_id):
+        return list((self.file_cache.get(channel_id) or {}).values())
+
+    def cached_users_in_channel(self, channel_id):
+        """Return cached users whose nChannelID matches `channel_id`.
+
+        Used as the qtTeamTalk-style source of truth for tree population.
+        Falls back to nothing if the cache is empty - the UI then asks
+        the SDK directly.
+        """
+        return [
+            user for user in self.user_cache.values()
+            if _value(getattr(user, "nChannelID", 0)) == channel_id
+        ]
+
+    def cached_lobby_users(self):
+        """Return users that are connected but not in any channel yet.
+
+        TT5 puts a user in channel 0 when they have logged in but not
+        joined a channel. qtTeamTalk shows them at the root of the
+        channels tree so admins can still kick / move / message them.
+        """
+        return [
+            user for user in self.user_cache.values()
+            if _value(getattr(user, "nChannelID", 0)) == 0
+        ]
+
+    def seed_caches_from_sdk(self):
+        """Best-effort initial fill of the caches from the SDK queries.
+
+        Called on CMD_MYSELF_LOGGEDIN as a belt-and-suspenders measure -
+        on most servers the events have already populated everything,
+        but on slow / encrypted servers the polling result is what gets
+        the tree onscreen instantly. We never ERASE existing cache
+        entries here; events remain authoritative.
+
+        Logs every channel and user it finds so the user can verify in
+        the console that the SDK does see the roster - that distinguishes
+        "events not flowing" from "tree painting bug".
+        """
+        if not (self.available() and self.obj):
+            print("[TeamTalk] seed_caches_from_sdk: SDK not ready")
+            return
+        try:
+            channels = list(self.obj.getServerChannels())
+            print(f"[TeamTalk] seed: getServerChannels returned "
+                  f"{len(channels)} channel(s)")
+            for ch in channels:
+                self.cache_channel(ch)
+        except Exception as exc:
+            print(f"[TeamTalk] seed channels failed: {exc}")
+            traceback.print_exc()
+        try:
+            users = list(self.obj.getServerUsers())
+            print(f"[TeamTalk] seed: getServerUsers returned "
+                  f"{len(users)} user(s)")
+            for user in users:
+                self.cache_user(user)
+        except Exception as exc:
+            print(f"[TeamTalk] seed users failed: {exc}")
+            traceback.print_exc()
 
     # ---- Channels --------------------------------------------------------
 
@@ -627,7 +876,20 @@ class TeamTalkSdkClient:
         return False
 
     def get_channel_users(self, channel_id):
-        if not (self.available() and self.obj and channel_id):
+        """Return users currently in the given channel.
+
+        Tries our event-driven cache first (qtTeamTalk style) and falls
+        back to the SDK polling API when the cache is empty - some
+        encrypted servers do not return getChannelUsers() until well
+        after the join completes, but the CMD_USER_JOINED events DO
+        arrive on time, so the cache is the more reliable source.
+        """
+        if not channel_id:
+            return []
+        cached = self.cached_users_in_channel(channel_id)
+        if cached:
+            return cached
+        if not (self.available() and self.obj):
             return []
         try:
             return list(self.obj.getChannelUsers(channel_id))
@@ -659,9 +921,67 @@ class TeamTalkSdkClient:
         except Exception:
             return False
 
+    # ---- File transfer ---------------------------------------------------
+
+    def list_channel_files(self, channel_id):
+        """Return the cached file list for a channel.
+
+        Mirrors qtTeamTalk's pattern of trusting CMD_FILE_NEW events for
+        the live list. Falls back to getChannelFiles() when the cache
+        is empty (cold start, before any FILE events arrive).
+        """
+        if not channel_id:
+            return []
+        cached = self.get_cached_files(channel_id)
+        if cached:
+            return cached
+        if not (self.available() and self.obj):
+            return []
+        try:
+            files = list(self.obj.getChannelFiles(channel_id))
+        except Exception:
+            files = []
+        for rf in files:
+            self.cache_file(rf)
+        return self.get_cached_files(channel_id)
+
+    def send_file(self, channel_id, local_path):
+        if not (self.available() and self.obj and channel_id and local_path):
+            return False
+        try:
+            return bool(self.obj.doSendFile(channel_id, local_path))
+        except Exception as exc:
+            print(f"[TeamTalk] doSendFile error: {exc}")
+            return False
+
+    def recv_file(self, channel_id, file_id, local_path):
+        if not (self.available() and self.obj and channel_id and file_id):
+            return False
+        try:
+            return bool(self.obj.doRecvFile(channel_id, file_id, local_path))
+        except Exception as exc:
+            print(f"[TeamTalk] doRecvFile error: {exc}")
+            return False
+
+    def delete_file(self, channel_id, file_id):
+        if not (self.available() and self.obj and channel_id and file_id):
+            return False
+        try:
+            return bool(self.obj.doDeleteFile(channel_id, file_id))
+        except Exception as exc:
+            print(f"[TeamTalk] doDeleteFile error: {exc}")
+            return False
+
     # ---- Refresh ---------------------------------------------------------
 
     def refresh_state(self):
+        """Build a snapshot from the event-driven cache.
+
+        qtTeamTalk's pattern - events are authoritative, polling APIs are
+        best-effort top-ups. We always seed from the SDK once on first
+        login (in case events were delivered before the UI started
+        listening), then prefer the cache for every subsequent refresh.
+        """
         if not (self.available() and self.obj):
             return {
                 "channels": [],
@@ -682,51 +1002,80 @@ class TeamTalkSdkClient:
             root_id = _value(self.obj.getRootChannelID())
         except Exception:
             root_id = 0
-        channels = []
-        users = []
-        try:
-            channels = list(self.obj.getServerChannels())
-        except Exception:
-            pass
-        try:
-            users = list(self.obj.getServerUsers())
-        except Exception:
-            pass
+        # Top-up the cache from the SDK if it is empty. This handles the
+        # cold-start case where the GUI subscribes to events after some
+        # of the CMD_USER_LOGGEDIN have already been processed.
+        if not self.channel_cache:
+            try:
+                for ch in self.obj.getServerChannels():
+                    self.cache_channel(ch)
+            except Exception:
+                pass
+        if not self.user_cache:
+            try:
+                for user in self.obj.getServerUsers():
+                    self.cache_user(user)
+            except Exception:
+                pass
         return {
-            "channels": channels,
-            "users": users,
+            "channels": list(self.channel_cache.values()),
+            "users": list(self.user_cache.values()),
             "root_id": root_id,
             "my_channel_id": self.my_channel_id,
             "my_user_id": self.my_user_id,
         }
 
     def get_user(self, user_id):
-        if not (self.available() and self.obj and user_id):
+        if not user_id:
+            return None
+        cached = self.user_cache.get(user_id)
+        if cached is not None:
+            return cached
+        if not (self.available() and self.obj):
             return None
         try:
-            return self.obj.getUser(user_id)
+            user = self.obj.getUser(user_id)
+            if _value(getattr(user, "nUserID", 0)):
+                self.cache_user(user)
+                return self.user_cache.get(user_id)
         except Exception:
-            return None
+            pass
+        return None
 
     # ---- Voice / audio ---------------------------------------------------
 
     def enable_voice(self, enabled):
         """Toggle our outgoing voice transmission.
 
-        TT5 will accept the call only when:
+        TT5 (per qtTeamTalk) will accept the call only when:
             * a sound input device is initialized (initSoundInputDevice),
             * we are logged in and inside a channel (getMyChannelID != 0),
             * our account has USERRIGHT_TRANSMIT_VOICE.
         Returns the boolean the SDK returns - False means TT5 rejected it.
+        Re-tries the input-device init when it failed at connect time so
+        the user can plug a microphone after launching and still talk.
         """
         if not (self.available() and self.obj):
+            print("[TeamTalk] enable_voice: SDK not available")
             return False
         try:
+            if enabled and not self.input_init_ok:
+                print("[TeamTalk] enable_voice: input not ready, re-initing")
+                self._init_default_audio_devices()
+            try:
+                channel_id = _value(self.obj.getMyChannelID())
+            except Exception:
+                channel_id = 0
+            if enabled and not channel_id:
+                print("[TeamTalk] enable_voice: not in a channel; rejected")
+                return False
             result = bool(self.obj.enableVoiceTransmission(enabled))
-            print(f"[TeamTalk] enableVoiceTransmission({enabled}) -> {result}")
+            print(f"[TeamTalk] enableVoiceTransmission({enabled}) -> {result} "
+                  f"(channel={channel_id} input_ok={self.input_init_ok})")
             return result
         except Exception as exc:
             print(f"[TeamTalk] enableVoiceTransmission error: {exc}")
+            traceback.print_exc()
             return False
 
     def set_speaker_mute(self, muted):
@@ -787,6 +1136,40 @@ class TeamTalkSdkClient:
         try:
             return bool(self.obj.doUnsubscribe(user_id, sub_flag))
         except Exception:
+            return False
+
+    def subscribe_standard_streams(self, user_id):
+        """Apply qtTeamTalk's default subscription mask to a user.
+
+        From settings.h in qtTeamTalk: every SETTINGS_CONNECTION_SUBSCRIBE_*
+        defaults to TRUE. Voice on some servers requires the client to
+        explicitly call DoSubscribe even though the default *should* be
+        on - server admins can disable it server-side. Without this we
+        sit silent: we are in the channel, the speaker is talking,
+        their CMD_USER_STATECHANGE shows USERSTATE_VOICE, but no audio
+        plays because we never subscribed.
+        """
+        if not (self.available() and self.sdk and user_id):
+            return False
+        try:
+            sub = self.sdk.Subscription
+            flags = (
+                _value(sub.SUBSCRIBE_USER_MSG)
+                | _value(sub.SUBSCRIBE_CHANNEL_MSG)
+                | _value(sub.SUBSCRIBE_BROADCAST_MSG)
+                | _value(sub.SUBSCRIBE_VOICE)
+                | _value(sub.SUBSCRIBE_VIDEOCAPTURE)
+                | _value(sub.SUBSCRIBE_DESKTOP)
+                | _value(sub.SUBSCRIBE_MEDIAFILE)
+            )
+            cmd_id = self.obj.doSubscribe(user_id, flags)
+            print(f"[TeamTalk] doSubscribe(user={user_id}, flags=0x{flags:x}) "
+                  f"-> cmd#{cmd_id}")
+            return bool(cmd_id)
+        except Exception as exc:
+            print(f"[TeamTalk] subscribe_standard_streams({user_id}) "
+                  f"failed: {exc}")
+            traceback.print_exc()
             return False
 
     # ---- Messaging -------------------------------------------------------
@@ -922,7 +1305,7 @@ class TeamTalkSdkClient:
         events = getattr(self.sdk, "ClientEvent", None)
         try:
             event = _value(getattr(msg, "nClientEvent", 0))
-            # Auto-login is the only auto-step we keep — that is the standard
+            # Auto-login is the only auto-step we keep - that is the standard
             # TeamTalk session handshake. We deliberately do NOT auto-join
             # any channel after CMD_MYSELF_LOGGEDIN.
             if (
@@ -963,7 +1346,7 @@ class ProfileDialog:
             ("username", _t("Username:"), 0),
             ("password", _t("Password:"), wx.TE_PASSWORD),
             ("nickname", _t("Nickname:"), 0),
-            ("channel", _t("Default channel (optional - never auto-joined):"), 0),
+            ("channel", _t("Default channel (optional, suggestion only - never auto-joined):"), 0),
             ("chanpasswd", _t("Channel password:"), wx.TE_PASSWORD),
         ]
         for key, label, style in fields:
@@ -1057,50 +1440,98 @@ class NicknameGenderDialog:
     Mirrors the TeamTalk Classic preferences dialog: nickname text field +
     Male / Female / Neutral radio. The result is applied with
     doChangeNickname() and doChangeStatus(STATUSMODE_FEMALE/NEUTRAL).
+
+    Layout note: every control is a child of the dialog itself (not a
+    nested wx.Panel). The previous nested-panel layout caused the OK and
+    Cancel buttons created with CreateSeparatedButtonSizer to render as
+    dialog children placed in a panel sizer, which on some wxPython
+    builds left them visually present but unable to dismiss the modal.
+    Building everything as direct dialog children removes that hazard.
     """
 
     def __init__(self, parent, current_nickname="", current_gender=GENDER_MALE):
         import wx
 
         self.wx = wx
-        self.result_nickname = current_nickname
-        self.result_gender = current_gender
+        self.result_nickname = current_nickname or ""
+        try:
+            self.result_gender = int(current_gender)
+            if self.result_gender not in (
+                GENDER_MALE, GENDER_FEMALE, GENDER_NEUTRAL
+            ):
+                self.result_gender = GENDER_MALE
+        except Exception:
+            self.result_gender = GENDER_MALE
 
-        self.dialog = wx.Dialog(parent, title=_t("Set nickname and gender"))
-        panel = wx.Panel(self.dialog)
+        self.dialog = wx.Dialog(
+            parent,
+            title=_t("Set nickname and gender"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+        )
+
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        sizer.Add(wx.StaticText(panel, label=_t("Nickname:")),
-                  0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
-        self.nick_ctrl = wx.TextCtrl(panel)
-        self.nick_ctrl.SetValue(str(current_nickname or ""))
+        sizer.Add(
+            wx.StaticText(self.dialog, label=_t("Nickname:")),
+            0,
+            wx.LEFT | wx.RIGHT | wx.TOP,
+            10,
+        )
+        self.nick_ctrl = wx.TextCtrl(self.dialog, style=wx.TE_PROCESS_ENTER)
+        self.nick_ctrl.SetValue(self.result_nickname)
         self.nick_ctrl.SetName(_t("Nickname"))
-        sizer.Add(self.nick_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        # Enter inside the textfield should accept the dialog the same as
+        # clicking OK, matching TeamTalk Classic behaviour.
+        self.nick_ctrl.Bind(
+            wx.EVT_TEXT_ENTER,
+            lambda e: self.dialog.EndModal(wx.ID_OK),
+        )
+        sizer.Add(
+            self.nick_ctrl,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            10,
+        )
 
         choices = [_t("Male"), _t("Female"), _t("Neutral")]
         self.gender_radio = wx.RadioBox(
-            panel,
+            self.dialog,
             label=_t("Gender"),
             choices=choices,
             majorDimension=1,
             style=wx.RA_SPECIFY_COLS,
         )
-        try:
-            self.gender_radio.SetSelection(
-                int(current_gender) if int(current_gender) in (0, 1, 2) else 0
-            )
-        except Exception:
-            self.gender_radio.SetSelection(0)
-        sizer.Add(self.gender_radio, 0, wx.EXPAND | wx.ALL, 8)
+        self.gender_radio.SetSelection(self.result_gender)
+        sizer.Add(self.gender_radio, 0, wx.EXPAND | wx.ALL, 10)
 
-        buttons = self.dialog.CreateSeparatedButtonSizer(wx.OK | wx.CANCEL)
-        sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 8)
+        # Wire the standard wxID_OK / wxID_CANCEL buttons. Using the
+        # dialog's own CreateButtonSizer (rather than CreateSeparatedButtonSizer
+        # via a nested panel) is the documented happy path - wx.Dialog
+        # recognises the OK button as the affirmative one and the Cancel
+        # button as the escape one without any extra wiring.
+        button_sizer = self.dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 10)
 
-        panel.SetSizer(sizer)
-        wrapper = wx.BoxSizer(wx.VERTICAL)
-        wrapper.Add(panel, 1, wx.EXPAND)
-        self.dialog.SetSizer(wrapper)
-        self.dialog.Fit()
+        # Belt-and-suspenders: even though wx.Dialog auto-handles wxID_OK
+        # and wxID_CANCEL, we bind them explicitly so a stray skin/theme
+        # override on the buttons cannot strip the EndModal handler.
+        self.dialog.Bind(
+            wx.EVT_BUTTON,
+            self._on_ok,
+            id=wx.ID_OK,
+        )
+        self.dialog.Bind(
+            wx.EVT_BUTTON,
+            self._on_cancel,
+            id=wx.ID_CANCEL,
+        )
+        # Esc and the close button -> Cancel.
+        self.dialog.Bind(wx.EVT_CLOSE, self._on_cancel)
+        self.dialog.SetEscapeId(wx.ID_CANCEL)
+        self.dialog.SetAffirmativeId(wx.ID_OK)
+
+        self.dialog.SetSizerAndFit(sizer)
+        self.dialog.SetMinSize(self.dialog.GetSize())
         self.dialog.CentreOnParent()
         _apply_skin_recursive(self.dialog)
 
@@ -1110,13 +1541,37 @@ class NicknameGenderDialog:
         except Exception:
             pass
 
-    def show_modal(self):
-        ok = self.dialog.ShowModal() == self.wx.ID_OK
-        if ok:
+    def _capture_values(self):
+        try:
             self.result_nickname = self.nick_ctrl.GetValue().strip()
+        except Exception:
+            pass
+        try:
             self.result_gender = int(self.gender_radio.GetSelection())
-        self.dialog.Destroy()
-        return ok
+        except Exception:
+            pass
+
+    def _on_ok(self, event):
+        self._capture_values()
+        self.dialog.EndModal(self.wx.ID_OK)
+
+    def _on_cancel(self, event):
+        # Capture whatever is in the controls so even a Cancel keeps the
+        # text the user typed in result_nickname for inspection - but the
+        # caller checks show_modal()'s return value before persisting.
+        self._capture_values()
+        self.dialog.EndModal(self.wx.ID_CANCEL)
+
+    def show_modal(self):
+        result = self.dialog.ShowModal()
+        # Final capture in case the dialog was closed via Esc or the X.
+        if result == self.wx.ID_OK:
+            self._capture_values()
+        try:
+            self.dialog.Destroy()
+        except Exception:
+            pass
+        return result == self.wx.ID_OK
 
 
 # =============================================================================
@@ -1220,6 +1675,249 @@ class PrivateMessageWindow:
 
 
 # =============================================================================
+# Server picker dialog (Telegram-style chooser)
+# =============================================================================
+
+class ServerPickerDialog:
+    """Modal "choose a server to connect to" dialog.
+
+    Replaces the old in-frame connection panel with a Telegram-style
+    chooser: open the TeamTalk window, pick a server, OK -> connect.
+    Enter on the listbox accepts the dialog (because OK is the default
+    button on a wx.Dialog). Cancel closes the dialog with no selection.
+    Add / Edit / Remove / Import .tt operate on the same profiles list
+    that is persisted in titan.IM under the "teamtalk" slice.
+    """
+
+    def __init__(self, parent_frame, owner):
+        import wx
+
+        self.wx = wx
+        self.owner = owner  # TeamTalkFrame, source-of-truth for profiles
+        self.selected_profile = None
+
+        self.dialog = wx.Dialog(
+            parent_frame,
+            title=_t("Choose a TeamTalk server"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(600, 460),
+        )
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(
+            wx.StaticText(self.dialog, label=_t("Saved TeamTalk servers:")),
+            0,
+            wx.ALL,
+            10,
+        )
+
+        self.profile_list = wx.ListBox(
+            self.dialog, style=wx.LB_SINGLE | wx.WANTS_CHARS,
+        )
+        self.profile_list.SetName(_t("TeamTalk servers"))
+        # On wx.Dialog, Enter on a focused widget is automatically
+        # routed to the affirmative (default OK) button. Accept on
+        # double-click as well.
+        self.profile_list.Bind(
+            wx.EVT_LISTBOX_DCLICK, lambda e: self._on_ok(e),
+        )
+        # Some wxPython builds still consume Enter inside the listbox
+        # with a beep; bind it explicitly so the dialog accepts.
+        self.profile_list.Bind(wx.EVT_KEY_DOWN, self._on_listbox_key)
+        self.profile_list.Bind(wx.EVT_CHAR, self._on_listbox_key)
+        sizer.Add(self.profile_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.add_btn = wx.Button(self.dialog, label=_t("Add"))
+        self.edit_btn = wx.Button(self.dialog, label=_t("Edit"))
+        self.remove_btn = wx.Button(self.dialog, label=_t("Remove"))
+        self.import_btn = wx.Button(self.dialog, label=_t("Import .tt"))
+        for btn in (self.add_btn, self.edit_btn,
+                    self.remove_btn, self.import_btn):
+            button_row.Add(btn, 0, wx.RIGHT, 5)
+        sizer.Add(button_row, 0, wx.ALL, 10)
+
+        self.add_btn.Bind(wx.EVT_BUTTON, self._on_add)
+        self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit)
+        self.remove_btn.Bind(wx.EVT_BUTTON, self._on_remove)
+        self.import_btn.Bind(wx.EVT_BUTTON, self._on_import)
+
+        # Standard OK / Cancel button row. OK is the default - Enter
+        # anywhere in the dialog clicks it.
+        ok_row = self.dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(ok_row, 0, wx.EXPAND | wx.ALL, 10)
+        self.dialog.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
+        self.dialog.Bind(wx.EVT_BUTTON, self._on_cancel, id=wx.ID_CANCEL)
+        self.dialog.SetEscapeId(wx.ID_CANCEL)
+        self.dialog.SetAffirmativeId(wx.ID_OK)
+        # Find the OK button so we can label it "Connect" - matches
+        # the previous Connect button on the panel exactly.
+        ok_btn = self.dialog.FindWindowById(wx.ID_OK, self.dialog)
+        if ok_btn is not None:
+            ok_btn.SetLabel(_t("Connect"))
+            ok_btn.SetDefault()
+
+        self.dialog.SetSizer(sizer)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+        self._refresh_list()
+
+    # ---- Helpers -------------------------------------------------
+
+    def _refresh_list(self):
+        self.profile_list.Clear()
+        for profile in self.owner.profiles:
+            encrypted = " TLS" if profile.get("encrypted") else ""
+            channel = (
+                f"  {profile['channel']}" if profile.get("channel") else ""
+            )
+            self.profile_list.Append(
+                f"{profile['entry_name']} - {profile['host']}:"
+                f"{profile['tcpport']}{encrypted}{channel}"
+            )
+        if self.owner.profiles:
+            index = 0
+            last = self.owner.config.get("last_profile")
+            for i, profile in enumerate(self.owner.profiles):
+                if profile.get("entry_name") == last:
+                    index = i
+                    break
+            self.profile_list.SetSelection(index)
+        self.profile_list.SetFocus()
+
+    def _selected_index(self):
+        idx = self.profile_list.GetSelection()
+        return idx if idx != self.wx.NOT_FOUND else None
+
+    # ---- Event handlers -----------------------------------------
+
+    def _on_listbox_key(self, event):
+        wx = self.wx
+        try:
+            key = event.GetKeyCode()
+        except Exception:
+            event.Skip()
+            return
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            print("[TeamTalk] picker: Enter on profile list -> Connect")
+            self._on_ok(event)
+            return
+        event.Skip()
+
+    def _on_add(self, event):
+        dlg = ProfileDialog(self.dialog)
+        if dlg.show_modal():
+            if not dlg.profile["host"]:
+                _message(
+                    self.dialog,
+                    _t("Server address is required."),
+                    style=self.wx.OK | self.wx.ICON_WARNING,
+                )
+                return
+            self.owner.profiles.append(dlg.profile)
+            self.owner.current_profile = dlg.profile
+            self.owner._save()
+            self._refresh_list()
+
+    def _on_edit(self, event):
+        idx = self._selected_index()
+        if idx is None:
+            return
+        dlg = ProfileDialog(self.dialog, self.owner.profiles[idx])
+        if dlg.show_modal():
+            if not dlg.profile["host"]:
+                _message(
+                    self.dialog,
+                    _t("Server address is required."),
+                    style=self.wx.OK | self.wx.ICON_WARNING,
+                )
+                return
+            self.owner.profiles[idx] = dlg.profile
+            self.owner.current_profile = dlg.profile
+            self.owner._save()
+            self._refresh_list()
+
+    def _on_remove(self, event):
+        idx = self._selected_index()
+        if idx is None:
+            return
+        if (
+            _message(
+                self.dialog,
+                _t("Remove selected TeamTalk server profile?"),
+                style=(self.wx.YES_NO | self.wx.NO_DEFAULT
+                       | self.wx.ICON_QUESTION),
+            )
+            == self.wx.ID_YES
+        ):
+            del self.owner.profiles[idx]
+            self.owner.current_profile = None
+            self.owner._save()
+            self._refresh_list()
+
+    def _on_import(self, event):
+        wx = self.wx
+        wildcard = _t("TeamTalk files (*.tt)|*.tt|All files (*.*)|*.*")
+        dlg = wx.FileDialog(
+            self.dialog,
+            _t("Import TeamTalk .tt file"),
+            wildcard=wildcard,
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            try:
+                profile = parse_tt_file(path)
+                if (
+                    not profile["entry_name"]
+                    or profile["entry_name"] == _t("TeamTalk server")
+                ):
+                    profile["entry_name"] = os.path.splitext(
+                        os.path.basename(path)
+                    )[0]
+                self.owner.profiles.append(profile)
+                self.owner.current_profile = profile
+                self.owner._save()
+                self._refresh_list()
+            except Exception as exc:
+                _message(
+                    self.dialog,
+                    str(exc),
+                    _t("Import failed"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+
+    def _on_ok(self, event):
+        idx = self._selected_index()
+        if idx is None:
+            _message(
+                self.dialog,
+                _t("Select or add a TeamTalk server first."),
+                style=self.wx.OK | self.wx.ICON_WARNING,
+            )
+            return
+        self.selected_profile = self.owner.profiles[idx]
+        self.dialog.EndModal(self.wx.ID_OK)
+
+    def _on_cancel(self, event):
+        self.selected_profile = None
+        self.dialog.EndModal(self.wx.ID_CANCEL)
+
+    # ---- Modal entry point --------------------------------------
+
+    def show_modal(self):
+        result = self.dialog.ShowModal()
+        try:
+            self.dialog.Destroy()
+        except Exception:
+            pass
+        return result == self.wx.ID_OK
+
+
+# =============================================================================
 # Main TeamTalk frame
 # =============================================================================
 
@@ -1307,6 +2005,14 @@ class TeamTalkFrame:
         self._setup_accessibility_names()
 
     def _build_connection_panel(self):
+        """Telegram-style server list embedded in the main window.
+
+        The whole window becomes the server chooser when not connected,
+        and switches to the channel/chat layout once we are. No modal
+        pop-ups - that approach raced with EVT_CHAR_HOOK on Windows
+        and froze the entire TCE process when Enter fired before the
+        modal had finished tearing down.
+        """
         wx = self.wx
         panel = wx.Panel(self.root_panel)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -1314,10 +2020,16 @@ class TeamTalkFrame:
             wx.StaticText(panel, label=_t("TeamTalk servers")), 0, wx.ALL, 8
         )
 
-        self.profile_list = wx.ListBox(panel, style=wx.LB_SINGLE | wx.WANTS_CHARS)
+        self.profile_list = wx.ListBox(
+            panel, style=wx.LB_SINGLE | wx.WANTS_CHARS,
+        )
         self.profile_list.Bind(wx.EVT_LISTBOX, self.on_profile_selected)
         self.profile_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_connect)
+        # EVT_CHAR is more reliable than EVT_KEY_DOWN for Enter on a
+        # ListBox across wxMSW / wxGTK. Bind both - whichever fires
+        # first wins.
         self.profile_list.Bind(wx.EVT_KEY_DOWN, self.on_profile_key)
+        self.profile_list.Bind(wx.EVT_CHAR, self.on_profile_key)
         sizer.Add(self.profile_list, 1, wx.EXPAND | wx.ALL, 8)
 
         button_row = wx.BoxSizer(wx.HORIZONTAL)
@@ -1341,6 +2053,8 @@ class TeamTalkFrame:
         self.edit_btn.Bind(wx.EVT_BUTTON, self.on_edit_profile)
         self.remove_btn.Bind(wx.EVT_BUTTON, self.on_remove_profile)
         self.import_btn.Bind(wx.EVT_BUTTON, self.on_import_tt)
+
+        self.connect_btn.SetDefault()
 
         panel.SetSizer(sizer)
         self.connection_panel = panel
@@ -1482,10 +2196,21 @@ class TeamTalkFrame:
         m_chat = view_menu.Append(wx.ID_ANY, _t("Channel chat\tCtrl+1"))
         m_log = view_menu.Append(wx.ID_ANY, _t("Server log\tCtrl+2"))
         m_pms = view_menu.Append(wx.ID_ANY, _t("Private messages\tCtrl+3"))
+        m_files = view_menu.Append(wx.ID_ANY, _t("Files\tCtrl+4"))
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_CHAT), m_chat)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_LOG), m_log)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_PM), m_pms)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_FILES), m_files)
         menubar.Append(view_menu, _t("View"))
+
+        files_menu = wx.Menu()
+        m_upload = files_menu.Append(wx.ID_ANY, _t("Upload file..."))
+        m_download = files_menu.Append(wx.ID_ANY, _t("Download selected file..."))
+        m_delete = files_menu.Append(wx.ID_ANY, _t("Delete selected file"))
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._upload_file_dialog(), m_upload)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._download_selected_file(), m_download)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._delete_selected_file(), m_delete)
+        menubar.Append(files_menu, _t("Files"))
 
         help_menu = wx.Menu()
         m_sdk = help_menu.Append(wx.ID_ANY, _t("SDK status"))
@@ -1497,10 +2222,10 @@ class TeamTalkFrame:
     def _setup_accessibility_names(self):
         try:
             self.profile_list.SetName(_t("TeamTalk servers"))
+            self.connect_btn.SetName(_t("Connect to selected TeamTalk server"))
             self.channel_tree.SetName(_t("TeamTalk channels and users"))
             self.right_list.SetName(_t("TeamTalk view"))
             self.message_input.SetName(_t("Type TeamTalk message"))
-            self.connect_btn.SetName(_t("Connect to selected TeamTalk server"))
             self.disconnect_btn.SetName(_t("Disconnect from TeamTalk"))
             self.ptt_btn.SetName(_t("Push to talk"))
             self.mute_mic_btn.SetName(_t("Mute microphone"))
@@ -1516,16 +2241,18 @@ class TeamTalkFrame:
             self.connection_panel.Show()
             self.root_panel.Layout()
             self.profile_list.SetFocus()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[TeamTalk] _show_connection_view failed: {exc}")
+            traceback.print_exc()
 
     def _show_connected_view(self):
         try:
             self.connection_panel.Hide()
             self.connected_panel.Show()
             self.root_panel.Layout()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[TeamTalk] _show_connected_view failed: {exc}")
+            traceback.print_exc()
 
     def show(self):
         self.frame.Show()
@@ -1543,7 +2270,7 @@ class TeamTalkFrame:
         self.config["profiles"] = self.profiles
         if self.current_profile:
             self.config["last_profile"] = self.current_profile.get("entry_name", "")
-        save_teamtalk_config(self.config)
+        return bool(save_teamtalk_config(self.config))
 
     def _refresh_profiles(self):
         self.profile_list.Clear()
@@ -1580,9 +2307,20 @@ class TeamTalkFrame:
                 pass
 
     def on_profile_key(self, event):
-        key = event.GetKeyCode()
-        if key in (self.wx.WXK_RETURN, self.wx.WXK_NUMPAD_ENTER):
-            self.on_connect(event)
+        """Enter on the server listbox connects to the selected server."""
+        wx = self.wx
+        try:
+            key = event.GetKeyCode()
+        except Exception:
+            event.Skip()
+            return
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+            print("[TeamTalk] Enter on profile_list -> on_connect")
+            try:
+                self.on_connect(event)
+            except Exception as exc:
+                print(f"[TeamTalk] on_connect from Enter raised: {exc}")
+                traceback.print_exc()
             return
         event.Skip()
 
@@ -1718,7 +2456,18 @@ class TeamTalkFrame:
                     pass
             return
 
-        profile = self.current_profile
+        # Carry the module-wide nickname / gender (set via Ctrl+N) into
+        # this connection when the profile itself does not override them.
+        # Stored on a copy so we never mutate the saved profile dict.
+        profile = dict(self.current_profile)
+        if not profile.get("nickname") and self.config.get("nickname"):
+            profile["nickname"] = self.config.get("nickname", "")
+        try:
+            profile_gender = int(profile.get("gender", GENDER_MALE))
+        except Exception:
+            profile_gender = GENDER_MALE
+        if profile_gender == GENDER_MALE:
+            profile["gender"] = self.config.get("gender", GENDER_MALE)
         self._set_status(
             _t("Connecting to {host}...").format(host=profile["host"])
         )
@@ -1730,7 +2479,13 @@ class TeamTalkFrame:
                     self._set_status,
                     _t("Connection started. Waiting for TeamTalk server..."),
                 )
-            except Exception as exc:
+            except BaseException as exc:
+                # BaseException (not just Exception) so SystemExit /
+                # KeyboardInterrupt / ctypes-raised errors during the
+                # connect path also land in _on_connection_failed
+                # rather than killing the worker silently.
+                print(f"[TeamTalk] connect worker crashed: {exc!r}")
+                traceback.print_exc()
                 self.wx.CallAfter(self._on_connection_failed, exc)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1750,6 +2505,19 @@ class TeamTalkFrame:
             gender = GENDER_MALE
         if gender != GENDER_MALE:
             self.client.change_status(_build_status_mode(gender, away=False), "")
+        # Belt-and-suspenders cache seed. By CMD_MYSELF_LOGGEDIN every
+        # CMD_USER_LOGGEDIN / CMD_CHANNEL_NEW for the existing roster has
+        # already been delivered to our event handler, but on a few
+        # encrypted servers the events arrive AFTER MyselfLoggedIn -
+        # asking the SDK directly fills any gaps. We poll a few more
+        # times over the next 2 seconds to catch any roster items that
+        # arrive late on slow / encrypted servers.
+        self.client.seed_caches_from_sdk()
+        # Apply the qtTeamTalk default subscription mask to every user
+        # we already know about - this is what makes voice audible.
+        self._sweep_subscribe_all_users()
+        for delay in (250, 600, 1200, 2000):
+            self.wx.CallLater(delay, self._reseed_and_refresh)
         # Channel-list snapshot: at the moment CMD_MYSELF_LOGGEDIN fires the
         # server has typically already pushed every CMD_CHANNEL_NEW for the
         # tree, so refresh once. We will refresh again on later events.
@@ -1768,6 +2536,47 @@ class TeamTalkFrame:
                 except Exception:
                     pass
             _notify(_t("Connected to TeamTalk server"), "success")
+
+    def _reseed_and_refresh(self):
+        """Late-arrival catch-up for slow / encrypted servers.
+
+        Scheduled a few times after _on_connected so that any roster
+        items that the server delivered AFTER CMD_MYSELF_LOGGEDIN still
+        end up in the tree. Bails silently if we have disconnected in
+        the meantime. Also re-subscribes to every cached user so the
+        voice stream is open for them - if the server denies voice
+        we will see CMD_ERROR in the console.
+        """
+        if not self.client.connected:
+            return
+        try:
+            prev_users = len(self.client.user_cache)
+            prev_channels = len(self.client.channel_cache)
+            self.client.seed_caches_from_sdk()
+            now_users = len(self.client.user_cache)
+            now_channels = len(self.client.channel_cache)
+            # Subscribe to everyone we can see, ourselves excluded.
+            self._sweep_subscribe_all_users()
+            if now_users != prev_users or now_channels != prev_channels:
+                print(
+                    f"[TeamTalk] reseed: users {prev_users}->{now_users}, "
+                    f"channels {prev_channels}->{now_channels} -> repaint"
+                )
+                self._refresh_teamtalk_state()
+        except Exception as exc:
+            print(f"[TeamTalk] _reseed_and_refresh failed: {exc}")
+            traceback.print_exc()
+
+    def _sweep_subscribe_all_users(self):
+        """Apply the qtTeamTalk default subscription mask to every
+        cached user. Called after seeding so users we picked up via
+        getServerUsers (rather than via per-event delivery) also get
+        their voice subscription set.
+        """
+        my_id = self.client.my_user_id
+        for user_id in list(self.client.user_cache.keys()):
+            if user_id and user_id != my_id:
+                self.client.subscribe_standard_streams(user_id)
 
     def _log_audio_devices(self):
         """Surface microphone / speaker init state on the Server log tab.
@@ -1812,6 +2621,8 @@ class TeamTalkFrame:
         Called repeatedly after login until the user moves focus elsewhere
         (e.g. into the message input or a button). This is what blind users
         need - the tree is the primary control once we are connected.
+        Mirrors how Elten and Titan-Net land focus on the main list right
+        after a successful login.
         """
         try:
             if not self.connected_panel.IsShown():
@@ -1820,8 +2631,8 @@ class TeamTalkFrame:
             if current is self.message_input or current is self.send_btn:
                 # User has already started typing - don't yank their focus.
                 return
-            self.channel_tree.SetFocus()
-            # Make sure something is selected so SR reads it on focus.
+            # Make sure something is selected BEFORE SetFocus so a screen
+            # reader has a non-empty item to announce when focus arrives.
             try:
                 if self.current_channel_id in self.channel_items:
                     self.channel_tree.SelectItem(
@@ -1832,6 +2643,16 @@ class TeamTalkFrame:
                     self.channel_tree.SelectItem(first)
             except Exception:
                 pass
+            # Force the frame to be the active top-level window. Without
+            # Raise() the panel switch can leave focus on a now-hidden
+            # widget, which is what made Enter-on-server feel like nothing
+            # happened. Activate is the wxMSW hook that the screen reader
+            # listens to for "focused window changed".
+            try:
+                self.frame.Raise()
+            except Exception:
+                pass
+            self.channel_tree.SetFocus()
         except Exception:
             pass
 
@@ -1878,7 +2699,6 @@ class TeamTalkFrame:
             self.right_list.DeleteAllItems()
         except Exception:
             pass
-        self._show_connection_view()
         self._set_status(_t("Disconnected from TeamTalk"))
         if was_connected:
             self._log_event(_t("Disconnected from TeamTalk"))
@@ -1888,12 +2708,28 @@ class TeamTalkFrame:
                     snd.goodbye()
                 except Exception:
                     pass
+        # Drop back to the embedded server-list view.
+        self._show_connection_view()
 
     # ---- Channel tree ---------------------------------------------------
 
     def _channel_label(self, channel):
-        name = _tt_text(getattr(channel, "szName", "")) or "/"
+        name = _tt_text(getattr(channel, "szName", "")).strip()
         channel_id = _value(getattr(channel, "nChannelID", 0))
+        # qtTeamTalk shows an empty / hostname-only root channel as the
+        # server name. The TT5 SDK ships it with a literal "/" or an
+        # empty szName for unnamed root channels - swap in something
+        # sensible the screen reader can announce.
+        if not name:
+            try:
+                root_id = _value(self.client.obj.getRootChannelID())
+            except Exception:
+                root_id = 0
+            if channel_id and channel_id == root_id:
+                server_label = _state.get("server", "") or _t("TeamTalk server")
+                name = server_label
+            else:
+                name = "/"
         user_count = len(self.client.get_channel_users(channel_id))
         password = bool(getattr(channel, "bPassword", False))
         parts = [name]
@@ -1932,9 +2768,19 @@ class TeamTalkFrame:
             _value(user.nUserID): user for user in snapshot["users"]
         }
         my_channel_id = snapshot.get("my_channel_id", 0)
+        channel_changed = bool(my_channel_id) and (
+            my_channel_id != self.current_channel_id
+        )
         if my_channel_id:
             self.current_channel_id = my_channel_id
         self._populate_channel_tree(snapshot.get("root_id", 0))
+        # Repaint the Files tab whenever we land in a new channel so the
+        # right pane reflects the file roster of the channel we just
+        # joined. We never repaint when the user is mid-edit on another
+        # tab (the Files tab is only refreshed when it is currently
+        # visible, see _refresh_files_panel).
+        if channel_changed:
+            self._refresh_files_panel()
 
     def _populate_channel_tree(self, root_id=0):
         tree = self.channel_tree
@@ -1952,30 +2798,92 @@ class TeamTalkFrame:
             parent_id = _value(getattr(channel, "nParentID", 0))
             children.setdefault(parent_id, []).append(channel)
 
-        def add_children(parent_item, parent_id):
-            chans = children.get(parent_id, [])
-            chans.sort(
-                key=lambda ch: _tt_text(getattr(ch, "szName", "")).lower()
+        def append_channel(parent_item, channel):
+            """Add one channel under parent_item, then its users, then
+            its sub-channels. Mirrors qtTeamTalk's ChannelsTree population."""
+            channel_id = _value(getattr(channel, "nChannelID", 0))
+            item = tree.AppendItem(
+                parent_item, self._channel_label(channel)
             )
-            for channel in chans:
-                channel_id = _value(getattr(channel, "nChannelID", 0))
-                item = tree.AppendItem(parent_item, self._channel_label(channel))
-                tree.SetItemData(item, self._tree_item_data("channel", channel_id))
-                self.channel_items[channel_id] = item
-                for user in sorted(
-                    self.client.get_channel_users(channel_id),
-                    key=lambda u: self._user_label(u).lower(),
-                ):
-                    user_id = _value(getattr(user, "nUserID", 0))
-                    user_item = tree.AppendItem(item, self._user_label(user))
-                    tree.SetItemData(user_item, self._tree_item_data("user", user_id))
-                    self.user_items[user_id] = user_item
-                add_children(item, channel_id)
-                tree.Expand(item)
+            tree.SetItemData(item, self._tree_item_data("channel", channel_id))
+            self.channel_items[channel_id] = item
+            channel_users = sorted(
+                self.client.get_channel_users(channel_id),
+                key=lambda u: self._user_label(u).lower(),
+            )
+            print(f"[TeamTalk] tree: channel id={channel_id} "
+                  f"name={_tt_text(getattr(channel, 'szName', ''))!r} "
+                  f"users={len(channel_users)}")
+            for user in channel_users:
+                user_id = _value(getattr(user, "nUserID", 0))
+                user_item = tree.AppendItem(item, self._user_label(user))
+                tree.SetItemData(
+                    user_item, self._tree_item_data("user", user_id)
+                )
+                self.user_items[user_id] = user_item
+            # Recurse into sub-channels.
+            sub_chans = sorted(
+                children.get(channel_id, []),
+                key=lambda ch: _tt_text(getattr(ch, "szName", "")).lower(),
+            )
+            for sub in sub_chans:
+                append_channel(item, sub)
+            tree.Expand(item)
 
-        root_children_id = root_id if root_id in children else 0
-        add_children(self.channel_root, root_children_id)
+        # Resolve the root channel. qtTeamTalk uses TT_GetRootChannelID and
+        # always shows the root as the top item of the tree (its name is
+        # the server hostname or empty). We MUST add the root - otherwise
+        # users whose nChannelID equals the root id never get displayed,
+        # which is the bug the logs were showing.
+        root_channel = None
+        if root_id and root_id in self.channels:
+            root_channel = self.channels[root_id]
+        elif 0 in children and children[0]:
+            # Fallback: pick whichever channel claims parent 0 as the
+            # root if the SDK didn't return a getRootChannelID yet.
+            root_channel = sorted(
+                children[0],
+                key=lambda ch: _tt_text(getattr(ch, "szName", "")).lower(),
+            )[0]
+
+        if root_channel is not None:
+            append_channel(self.channel_root, root_channel)
+        else:
+            # No root channel info; fall back to attaching every parent=0
+            # channel directly under the tree root.
+            for channel in sorted(
+                children.get(0, []),
+                key=lambda ch: _tt_text(getattr(ch, "szName", "")).lower(),
+            ):
+                append_channel(self.channel_root, channel)
+
+        # qtTeamTalk-style lobby section. TT5 leaves users at channel id 0
+        # while they are between channels (just logged in, just kicked,
+        # or just left). Without this fallback those users disappear from
+        # the tree entirely.
+        lobby_users = self.client.cached_lobby_users()
+        if lobby_users:
+            lobby_label = _t("Lobby ({count})").format(
+                count=len(lobby_users)
+            )
+            lobby_item = tree.AppendItem(self.channel_root, lobby_label)
+            tree.SetItemData(lobby_item, self._tree_item_data("channel", 0))
+            self.channel_items[0] = lobby_item
+            for user in sorted(
+                lobby_users,
+                key=lambda u: self._user_label(u).lower(),
+            ):
+                user_id = _value(getattr(user, "nUserID", 0))
+                user_item = tree.AppendItem(lobby_item, self._user_label(user))
+                tree.SetItemData(
+                    user_item, self._tree_item_data("user", user_id)
+                )
+                self.user_items[user_id] = user_item
+            tree.Expand(lobby_item)
+
         tree.Expand(self.channel_root)
+        print(f"[TeamTalk] tree built: {len(self.channel_items)} channels, "
+              f"{len(self.user_items)} users")
 
         # Restore selection: prefer the item the user was on, fall back to
         # our channel, then to the first channel in the tree.
@@ -1995,7 +2903,16 @@ class TeamTalkFrame:
             except Exception:
                 pass
 
-        if self.focus_tree_after_login or had_focus:
+        # Only consume focus_tree_after_login once the tree actually has
+        # something to show. On encrypted / slow servers the first
+        # _populate_channel_tree call after login can land while the
+        # CMD_CHANNEL_NEW events are still arriving - if we move focus
+        # to an empty tree the screen reader has nothing to announce
+        # and the user thinks Enter did nothing. Re-arm the flag in
+        # that case so the next refresh focuses a populated tree.
+        focus_now = self.focus_tree_after_login or had_focus
+        tree_has_content = bool(self.channel_items)
+        if focus_now and tree_has_content:
             self.focus_tree_after_login = False
             try:
                 tree.SetFocus()
@@ -2384,16 +3301,23 @@ class TeamTalkFrame:
     # ---- Voice / mic / speakers ----------------------------------------
 
     def _gate_voice(self, enable):
-        """Apply the voice-transmission gate around enable_voice().
+        """Forward to enable_voice and log the SDK's verdict.
 
-        Voice will not actually leave the client unless we are in a channel
-        AND have USERRIGHT_TRANSMIT_VOICE. We surface a clear message to
-        the user instead of silently failing.
+        qtTeamTalk does NOT pre-check USERRIGHT_TRANSMIT_VOICE before
+        calling TT_EnableVoiceTransmission - it just calls the SDK and
+        relies on the server-side rejection (CMD_ERROR fires if the
+        account lacks the right). We follow the same pattern: the SDK
+        is the source of truth, and our log shows exactly what happened.
         """
         if not enable:
             self.client.enable_voice(False)
             return True
+        # Only the in-channel guard remains. Voice cannot route without
+        # a channel ID - the SDK call is a no-op there. Skip the
+        # account-rights pre-check; if the server denies us, CMD_ERROR
+        # will be logged via _on_sdk_event.
         if not self.client.in_channel():
+            print("[TeamTalk] _gate_voice: not in a channel, refusing PTT")
             self._set_status(_t("Join a channel before transmitting voice."))
             self._log_event(_t("Join a channel before transmitting voice."))
             snd = _sounds()
@@ -2403,17 +3327,14 @@ class TeamTalkFrame:
                 except Exception:
                     pass
             return False
-        if not self.client.can_transmit_voice():
-            self._set_status(_t("This account is not allowed to transmit voice."))
-            self._log_event(_t("This account is not allowed to transmit voice."))
-            snd = _sounds()
-            if snd:
-                try:
-                    snd.error()
-                except Exception:
-                    pass
-            return False
-        self.client.enable_voice(True)
+        result = self.client.enable_voice(True)
+        if not result:
+            self._log_event(
+                _t("Voice transmission rejected by the server.")
+            )
+            self._set_status(
+                _t("Voice transmission rejected by the server.")
+            )
         return True
 
     def on_ptt_toggle(self, event):
@@ -2465,31 +3386,59 @@ class TeamTalkFrame:
     def _show_nickname_dialog(self):
         """Open the TT-Classic-style nickname + gender dialog.
 
-        - Pre-fills with the nickname/gender from the active profile (or
-          the last-used profile when offline).
-        - On OK, stores both back into the profile + persistent config.
+        - Pre-fills with the nickname/gender from the active profile, then
+          falls back to the module-wide defaults stored in titan.IM (so
+          users with no profile yet still get a working dialog).
+        - On OK, stores both as module defaults AND on the active profile
+          so future connections pick them up automatically.
         - If we are already connected, applies the change immediately via
           doChangeNickname() and doChangeStatus(STATUSMODE_FEMALE/NEUTRAL).
         """
         profile = self.current_profile
         if profile is None and self.profiles:
             profile = self.profiles[0]
-        nickname = (profile or {}).get("nickname", "") if profile else ""
-        gender = int((profile or {}).get("gender", GENDER_MALE)) if profile else GENDER_MALE
+
+        # Resolve the pre-fill values defensively. We never let an
+        # exception inside getattr / int conversion crash dialog open.
+        nickname = ""
+        gender = GENDER_MALE
+        try:
+            if profile is not None:
+                nickname = str(profile.get("nickname", "") or "")
+                gender = int(profile.get("gender", GENDER_MALE))
+            if not nickname:
+                nickname = str(self.config.get("nickname", "") or "")
+            if gender == GENDER_MALE:
+                gender = int(self.config.get("gender", GENDER_MALE))
+            if gender not in (GENDER_MALE, GENDER_FEMALE, GENDER_NEUTRAL):
+                gender = GENDER_MALE
+        except Exception:
+            nickname = nickname or ""
+            gender = GENDER_MALE
 
         dlg = NicknameGenderDialog(self.frame, nickname, gender)
         if not dlg.show_modal():
+            self._set_status(_t("Nickname change cancelled."))
             return
-        new_nick = dlg.result_nickname
-        new_gender = dlg.result_gender
+        new_nick = dlg.result_nickname or ""
+        try:
+            new_gender = int(dlg.result_gender)
+        except Exception:
+            new_gender = GENDER_MALE
 
-        # Persist on the active profile and on the config.
+        # Persist as module defaults in titan.IM, and also on the active
+        # profile so server-specific identity follows TeamTalk Classic.
+        # _save() always writes the whole self.config back through
+        # save_teamtalk_config() -> _load_all_config() -> _save_all_config(),
+        # which preserves every other Titan IM module's slice.
+        self.config["nickname"] = new_nick
+        self.config["gender"] = new_gender
         if profile is not None:
             profile["nickname"] = new_nick
             profile["gender"] = new_gender
             self.current_profile = profile
-            self._save()
             self._refresh_profiles()
+        saved = self._save()
 
         # Apply live if we are connected. doChangeNickname reaches the
         # server immediately; doChangeStatus carries the gender bitfield.
@@ -2500,10 +3449,20 @@ class TeamTalkFrame:
             self._set_status(
                 _t("Nickname set to {nick}").format(nick=new_nick or _t("(empty)"))
             )
-        else:
+        elif saved:
             self._set_status(
                 _t("Saved nickname and gender for next connection.")
             )
+        else:
+            self._set_status(
+                _t("Could not save nickname and gender. See log.")
+            )
+            snd = _sounds()
+            if snd:
+                try:
+                    snd.error()
+                except Exception:
+                    pass
 
     # ---- Hotkeys --------------------------------------------------------
 
@@ -2535,12 +3494,6 @@ class TeamTalkFrame:
                     return False
 
             # --- Connection view: Enter on the server list -> connect ---
-            # Belt-and-suspenders: also try HasFocus() and a "list is the
-            # active widget on the connection panel" fallback so a stray
-            # focus state still produces the expected behaviour. Buttons
-            # consume Enter natively (EVT_BUTTON), so guarding on
-            # isinstance(focus, wx.Button) keeps Connect/Add/Edit clicks
-            # from being intercepted as a server-connect.
             try:
                 listbox_has_focus = self.profile_list.HasFocus()
             except Exception:
@@ -2606,6 +3559,9 @@ class TeamTalkFrame:
             return
 
         if modifiers == wx.MOD_CONTROL:
+            if key == ord("4"):
+                self._set_tab(TAB_FILES)
+                return
             if key == ord("1"):
                 self._set_tab(TAB_CHAT)
                 return
@@ -2640,10 +3596,17 @@ class TeamTalkFrame:
             return _t("Channel chat")
         if self.current_tab == TAB_LOG:
             return _t("Server log")
+        if self.current_tab == TAB_FILES:
+            return _t("Files in current channel")
         return _t("Private messages")
 
     def _tab_bar_text(self):
-        labels = [_t("Channel chat"), _t("Server log"), _t("Private messages")]
+        labels = [
+            _t("Channel chat"),
+            _t("Server log"),
+            _t("Private messages"),
+            _t("Files"),
+        ]
         idx = self.current_tab
         return _t("{label}, {n} of {total}").format(
             label=labels[idx], n=idx + 1, total=len(labels)
@@ -2660,13 +3623,13 @@ class TeamTalkFrame:
 
     def _cycle_tab(self, direction):
         new_tab = self.current_tab + direction
-        if new_tab < TAB_CHAT or new_tab > TAB_PM:
+        if new_tab < TAB_CHAT or new_tab > TAB_FILES:
             _play_sound("ui/endoftapbar.ogg")
             return
         self._set_tab(new_tab, play_switch_sound=True)
 
     def _set_tab(self, tab, play_switch_sound=False):
-        if tab not in (TAB_CHAT, TAB_LOG, TAB_PM):
+        if tab not in (TAB_CHAT, TAB_LOG, TAB_PM, TAB_FILES):
             return
         if play_switch_sound and tab != self.current_tab:
             _play_sound("ui/switch_list.ogg")
@@ -2696,6 +3659,28 @@ class TeamTalkFrame:
                 self.right_list.SetItem(row, 1, text)
                 self.right_list.SetItem(row, 2, time_str)
                 self.right_list.SetItemData(row, 0)
+        elif self.current_tab == TAB_FILES:
+            channel_id = self.client.my_channel_id or self.current_channel_id
+            files = (
+                self.client.list_channel_files(channel_id)
+                if channel_id
+                else []
+            )
+            for rf in files:
+                row = self.right_list.GetItemCount()
+                file_id = _value(getattr(rf, "nFileID", 0))
+                file_name = _tt_text(getattr(rf, "szFileName", ""))
+                file_size = _value(getattr(rf, "nFileSize", 0))
+                uploader = _tt_text(getattr(rf, "szUsername", ""))
+                self.right_list.InsertItem(row, file_name)
+                self.right_list.SetItem(
+                    row, 1,
+                    _t("{size} bytes - {who}").format(
+                        size=file_size, who=uploader or _t("(unknown)"),
+                    ),
+                )
+                self.right_list.SetItem(row, 2, "")
+                self.right_list.SetItemData(row, file_id)
         else:
             for user_id, info in self.pm_threads.items():
                 row = self.right_list.GetItemCount()
@@ -2741,6 +3726,123 @@ class TeamTalkFrame:
                 user_id = 0
             if user_id:
                 self._open_pm(user_id)
+        elif self.current_tab == TAB_FILES:
+            try:
+                file_id = self.right_list.GetItemData(idx)
+            except Exception:
+                file_id = 0
+            if file_id:
+                self._download_file(file_id)
+
+    # ---- File management ------------------------------------------------
+
+    def _refresh_files_panel(self):
+        """Repaint the Files tab when CMD_FILE_NEW / FILE_REMOVE arrives."""
+        if self.current_tab == TAB_FILES:
+            self._refresh_right_list()
+
+    def _selected_file_id(self):
+        idx = self.right_list.GetFirstSelected()
+        if idx <= 0 or self._is_tab_bar_row(idx):
+            return 0
+        try:
+            return int(self.right_list.GetItemData(idx))
+        except Exception:
+            return 0
+
+    def _upload_file_dialog(self):
+        wx = self.wx
+        channel_id = self.client.my_channel_id or self.current_channel_id
+        if not channel_id:
+            _message(
+                self.frame,
+                _t("Join a channel before uploading files."),
+                _t("TeamTalk"),
+                wx.OK | wx.ICON_WARNING,
+            )
+            return
+        dlg = wx.FileDialog(
+            self.frame,
+            _t("Upload file to TeamTalk channel"),
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            if self.client.send_file(channel_id, path):
+                self._log_event(
+                    _t("Uploading file: {name}").format(
+                        name=os.path.basename(path)
+                    )
+                )
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not start the file upload."),
+                    _t("TeamTalk"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+
+    def _download_selected_file(self):
+        file_id = self._selected_file_id()
+        if file_id:
+            self._download_file(file_id)
+
+    def _download_file(self, file_id):
+        wx = self.wx
+        channel_id = self.client.my_channel_id or self.current_channel_id
+        if not channel_id or not file_id:
+            return
+        # Find the cached file record so we can suggest a sensible name
+        # in the save dialog (TeamTalk file IDs alone are useless).
+        files = self.client.list_channel_files(channel_id)
+        rf = next(
+            (f for f in files if _value(getattr(f, "nFileID", 0)) == file_id),
+            None,
+        )
+        suggested = _tt_text(getattr(rf, "szFileName", "")) if rf else ""
+        dlg = wx.FileDialog(
+            self.frame,
+            _t("Save TeamTalk file"),
+            defaultFile=suggested,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            if self.client.recv_file(channel_id, file_id, path):
+                self._log_event(
+                    _t("Downloading file: {name}").format(
+                        name=suggested or path
+                    )
+                )
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not start the file download."),
+                    _t("TeamTalk"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+
+    def _delete_selected_file(self):
+        wx = self.wx
+        file_id = self._selected_file_id()
+        channel_id = self.client.my_channel_id or self.current_channel_id
+        if not (file_id and channel_id):
+            return
+        if (
+            _message(
+                self.frame,
+                _t("Delete the selected file from the server?"),
+                style=wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
+            )
+            != wx.ID_YES
+        ):
+            return
+        if not self.client.delete_file(channel_id, file_id):
+            self._log_event(_t("Could not delete file."))
 
     def _on_right_key(self, event):
         wx = self.wx
@@ -2826,14 +3928,38 @@ class TeamTalkFrame:
 
     # ---- SDK event dispatch --------------------------------------------
 
+    # Map every ClientEvent integer to its symbolic name once, lazily,
+    # so the per-event print stays cheap.
+    _EVENT_NAME_CACHE = None
+
+    def _event_label(self, name):
+        if TeamTalkFrame._EVENT_NAME_CACHE is None:
+            cache = {}
+            events = getattr(self.client.sdk, "ClientEvent", None)
+            if events is not None:
+                for attr in dir(events):
+                    if attr.startswith("CLIENTEVENT_"):
+                        try:
+                            cache[_value(getattr(events, attr))] = attr
+                        except Exception:
+                            pass
+            TeamTalkFrame._EVENT_NAME_CACHE = cache
+        return TeamTalkFrame._EVENT_NAME_CACHE.get(name, f"event#{name}")
+
     def _on_sdk_event(self, msg):
         events = getattr(self.client.sdk, "ClientEvent", None)
         if events is None:
             return
         try:
             name = _value(getattr(msg, "nClientEvent", -1))
-        except Exception:
+        except Exception as exc:
+            print(f"[TeamTalk] event: cannot read nClientEvent: {exc}")
             return
+        # Skip the noise of CLIENTEVENT_NONE (returned every 250 ms by
+        # getMessage when nothing else is queued).
+        none_id = _value(getattr(events, "CLIENTEVENT_NONE", 0))
+        if name and name != none_id:
+            print(f"[TeamTalk] EVENT {self._event_label(name)} ({name})")
         wx = self.wx
         try:
             if name == _value(events.CLIENTEVENT_CON_SUCCESS):
@@ -2855,10 +3981,14 @@ class TeamTalkFrame:
                 return
             if name == _value(events.CLIENTEVENT_CMD_ERROR):
                 err = getattr(msg, "clienterrormsg", None)
-                text = (
-                    _tt_text(getattr(err, "szErrorMsg", ""))
-                    or _t("TeamTalk command failed.")
-                )
+                err_code = _value(getattr(err, "nErrorNo", 0))
+                err_text = _tt_text(getattr(err, "szErrorMsg", ""))
+                # Print the FULL error to the console so the user sees
+                # what the server actually rejected. Without this print
+                # we lose the only signal that tells us why a join /
+                # voice / kick / etc. failed.
+                print(f"[TeamTalk] CMD_ERROR code={err_code} text={err_text!r}")
+                text = err_text or _t("TeamTalk command failed.")
                 wx.CallAfter(self._log_event, text)
                 wx.CallAfter(self._set_status, text)
                 snd = _sounds()
@@ -2873,25 +4003,96 @@ class TeamTalkFrame:
                 self._handle_text_message(text_msg)
                 return
 
-            channel_events = {
-                _value(events.CLIENTEVENT_CMD_CHANNEL_NEW),
-                _value(events.CLIENTEVENT_CMD_CHANNEL_UPDATE),
-                _value(events.CLIENTEVENT_CMD_CHANNEL_REMOVE),
-            }
+            # ---- Channel cache maintenance --------------------------
+            chan_new = _value(events.CLIENTEVENT_CMD_CHANNEL_NEW)
+            chan_upd = _value(events.CLIENTEVENT_CMD_CHANNEL_UPDATE)
+            chan_rem = _value(events.CLIENTEVENT_CMD_CHANNEL_REMOVE)
+            channel_events = {chan_new, chan_upd, chan_rem}
+
+            # ---- User cache maintenance -----------------------------
+            usr_login = _value(events.CLIENTEVENT_CMD_USER_LOGGEDIN)
+            usr_logout = _value(events.CLIENTEVENT_CMD_USER_LOGGEDOUT)
+            usr_update = _value(events.CLIENTEVENT_CMD_USER_UPDATE)
+            usr_joined = _value(events.CLIENTEVENT_CMD_USER_JOINED)
+            usr_left = _value(events.CLIENTEVENT_CMD_USER_LEFT)
+            usr_state = _value(events.CLIENTEVENT_USER_STATECHANGE)
             user_events = {
-                _value(events.CLIENTEVENT_CMD_USER_LOGGEDIN),
-                _value(events.CLIENTEVENT_CMD_USER_LOGGEDOUT),
-                _value(events.CLIENTEVENT_CMD_USER_UPDATE),
-                _value(events.CLIENTEVENT_CMD_USER_JOINED),
-                _value(events.CLIENTEVENT_CMD_USER_LEFT),
-                _value(events.CLIENTEVENT_USER_STATECHANGE),
+                usr_login, usr_logout, usr_update,
+                usr_joined, usr_left, usr_state,
             }
-            if name in channel_events or name in user_events:
+
+            # ---- File transfer events (qtTeamTalk style) ------------
+            file_new = _value(getattr(events, "CLIENTEVENT_CMD_FILE_NEW", -1))
+            file_remove = _value(
+                getattr(events, "CLIENTEVENT_CMD_FILE_REMOVE", -1))
+
+            if name in channel_events:
+                channel = getattr(msg, "channel", None)
+                if channel is not None:
+                    if name == chan_rem:
+                        chan_id = _value(getattr(channel, "nChannelID", 0))
+                        self.client.remove_cached_channel(chan_id)
+                    else:
+                        self.client.cache_channel(channel)
                 wx.CallAfter(self._refresh_teamtalk_state)
+                return
+
+            if name in user_events:
                 user = getattr(msg, "user", None)
                 if user is not None:
+                    # Step 1: keep our own cache in sync with events. The
+                    # SDK reuses the message struct on the next poll, so
+                    # cache_user does a copy.copy under the hood.
+                    if name == usr_logout:
+                        user_id = _value(getattr(user, "nUserID", 0))
+                        # USER_LEFT bumps the user out of a channel, so
+                        # update the cached nChannelID before the tree
+                        # repopulates.
+                        if user_id in self.client.user_cache:
+                            try:
+                                self.client.user_cache[user_id].nChannelID = 0
+                            except Exception:
+                                pass
+                        # Then remove on logout.
+                        self.client.remove_cached_user(user_id)
+                    elif name == usr_left:
+                        # CMD_USER_LEFT: user has left a channel but is
+                        # still on the server; cache them with channel 0.
+                        user_id = _value(getattr(user, "nUserID", 0))
+                        if user_id in self.client.user_cache:
+                            try:
+                                self.client.user_cache[user_id].nChannelID = 0
+                            except Exception:
+                                pass
+                        else:
+                            cached = self.client._struct_copy(user)
+                            try:
+                                cached.nChannelID = 0
+                            except Exception:
+                                pass
+                            if cached is not None:
+                                self.client.user_cache[
+                                    _value(getattr(cached, "nUserID", 0))
+                                ] = cached
+                    else:
+                        self.client.cache_user(user)
+
                     user_id = _value(getattr(user, "nUserID", 0))
-                    is_me = bool(user_id and user_id == self.client.my_user_id)
+                    is_me = bool(
+                        user_id and user_id == self.client.my_user_id
+                    )
+                    # qtTeamTalk pattern: explicitly subscribe to the
+                    # default stream mask whenever a user appears on
+                    # the server. Some servers do not turn voice on
+                    # by default, which is exactly why other users go
+                    # silent for us. Skip ourselves and skip the
+                    # logout case (the user is gone).
+                    if (
+                        user_id
+                        and not is_me
+                        and name in (usr_login, usr_joined, usr_update)
+                    ):
+                        self.client.subscribe_standard_streams(user_id)
                     display = (
                         _tt_text(getattr(user, "szNickname", ""))
                         or _tt_text(getattr(user, "szUsername", ""))
@@ -2899,7 +4100,7 @@ class TeamTalkFrame:
                     if (
                         display
                         and not is_me
-                        and name == _value(events.CLIENTEVENT_CMD_USER_LOGGEDIN)
+                        and name == usr_login
                     ):
                         wx.CallAfter(
                             self._set_status,
@@ -2922,7 +4123,7 @@ class TeamTalkFrame:
                     elif (
                         display
                         and not is_me
-                        and name == _value(events.CLIENTEVENT_CMD_USER_LOGGEDOUT)
+                        and name == usr_logout
                     ):
                         wx.CallAfter(
                             self._set_status,
@@ -2939,19 +4140,36 @@ class TeamTalkFrame:
                                     snd.user_offline()
                                 except Exception:
                                     pass
-                    elif display and name == _value(events.CLIENTEVENT_CMD_USER_JOINED):
+                    elif display and name == usr_joined:
                         wx.CallAfter(
                             self._set_status,
                             _t("{user} joined the channel").format(user=display),
                         )
-                    elif display and name == _value(events.CLIENTEVENT_CMD_USER_LEFT):
+                    elif display and name == usr_left:
                         wx.CallAfter(
                             self._set_status,
                             _t("{user} left the channel").format(user=display),
                         )
+                wx.CallAfter(self._refresh_teamtalk_state)
                 return
-        except Exception:
-            pass
+
+            # ---- File new / remove ----------------------------------
+            if name == file_new and file_new != -1:
+                remote_file = getattr(msg, "remotefile", None)
+                if remote_file is not None:
+                    chan_id, _file_id = self.client.cache_file(remote_file)
+                    if chan_id and chan_id == self.client.my_channel_id:
+                        wx.CallAfter(self._refresh_files_panel)
+                return
+            if name == file_remove and file_remove != -1:
+                remote_file = getattr(msg, "remotefile", None)
+                if remote_file is not None:
+                    chan_id, _file_id = self.client.remove_cached_file(remote_file)
+                    if chan_id and chan_id == self.client.my_channel_id:
+                        wx.CallAfter(self._refresh_files_panel)
+                return
+        except Exception as exc:
+            print(f"[TeamTalk] _on_sdk_event error: {exc}")
 
     def _handle_text_message(self, text_msg):
         if text_msg is None:
