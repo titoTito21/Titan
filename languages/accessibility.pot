@@ -17,8 +17,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/accessibility/messages.py:148
-msgid "To use invisible interface, press tilde key"
+#: src/accessibility/messages.py:187
+msgid "To use invisible interface, press {keyname} key"
 msgstr ""
 
 #: src/accessibility/messages.py:192

@@ -137,6 +137,45 @@ def get_messenger():
     return _messenger_instance
 
 
+def _format_titan_ui_key_label(key_string):
+    """Convert internal key id (e.g. 'grave', 'shift+f2') into a human-readable label."""
+    if not key_string:
+        return _("Not set")
+    parts = [p.strip() for p in key_string.split('+') if p.strip()]
+    names = {
+        'ctrl': _("Ctrl"),
+        'shift': _("Shift"),
+        'alt': _("Alt"),
+        'win': _("Win"),
+        'cmd': _("Cmd"),
+        'grave': _("Accent"),
+        'space': _("Space"),
+        'tab': _("Tab"),
+        'enter': _("Enter"),
+        'escape': _("Escape"),
+        'backspace': _("Backspace"),
+        'delete': _("Delete"),
+        'insert': _("Insert"),
+        'home': _("Home"),
+        'end': _("End"),
+        'pageup': _("Page Up"),
+        'pagedown': _("Page Down"),
+        'up': _("Up"),
+        'down': _("Down"),
+        'left': _("Left"),
+        'right': _("Right"),
+    }
+    display_parts = []
+    for p in parts:
+        if p in names:
+            display_parts.append(names[p])
+        elif p.startswith('f') and p[1:].isdigit():
+            display_parts.append(p.upper())
+        else:
+            display_parts.append(p)
+    return '+'.join(display_parts)
+
+
 def show_invisible_ui_tip(delay=5.0):
     """
     Show tip about using invisible UI after minimization.
@@ -145,7 +184,12 @@ def show_invisible_ui_tip(delay=5.0):
         delay (float): Delay in seconds before showing the tip (default: 5.0)
     """
     messenger = get_messenger()
-    message = _("To use invisible interface, press tilde key")
+    try:
+        key_string = (get_setting('titan_ui_key', 'grave', section='general') or 'grave').strip()
+    except Exception:
+        key_string = 'grave'
+    keyname = _format_titan_ui_key_label(key_string)
+    message = _("To use invisible interface, press {keyname} key").format(keyname=keyname)
 
     messenger.show_timed_message(
         text=message,
