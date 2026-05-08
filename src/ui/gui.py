@@ -1345,6 +1345,26 @@ class TitanApp(wx.Frame):
             self.on_show_window_switcher(event)
             return
 
+        # Handle Alt+F4 — only this exact keypress respects the alt_f4_action
+        # setting. All other close paths (menu Exit, IUI Exit, title bar X)
+        # always close the program (subject to confirm_exit).
+        if keycode == wx.WXK_F4 and modifiers == wx.MOD_ALT:
+            try:
+                from src.settings.settings import get_setting
+                action = get_setting('alt_f4_action', 'close', section='general')
+            except Exception:
+                action = 'close'
+            if action == 'tray':
+                # Iconize triggers on_minimize, which honors minimize_action.
+                try:
+                    self.Iconize(True)
+                except Exception as _e:
+                    print(f"Warning: Iconize on Alt+F4 failed: {_e}")
+                return
+            # 'close' → fall through so the system delivers WM_CLOSE → EVT_CLOSE
+            event.Skip()
+            return
+
         # Note: Ctrl+Shift+A (AI Voice Recognition) is now a global hotkey registered in __init__
 
         # Ctrl alone — silence any ongoing Telegram / stereo TTS announcement

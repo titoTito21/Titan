@@ -1048,8 +1048,11 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
 
-    # Bind the close event. The actual action (close vs minimize-to-tray) is read at
-    # event time so changes to settings take effect without restart.
+    # Bind the close event. The alt_f4_action setting is intentionally NOT read here:
+    # only the actual Alt+F4 keypress respects it (handled in TitanApp.on_key_down).
+    # Every other close path — menu Exit, Invisible UI Exit, title bar X — must
+    # close the program normally (subject only to confirm_exit). confirm_exit is
+    # read at event time so changes take effect without restart.
     def _on_frame_close(evt):
         try:
             from src.settings.settings import load_settings as _load
@@ -1057,14 +1060,6 @@ if __name__ == "__main__":
         except Exception:
             cur = {}
         general = cur.get('general', {})
-        action = general.get('alt_f4_action', 'close')
-        if action == 'tray':
-            evt.Veto()
-            try:
-                frame.Iconize(True)
-            except Exception as _e:
-                print(f"Warning: Iconize on close failed: {_e}")
-            return
         if str(general.get('confirm_exit', 'False')).lower() in ['true', '1']:
             frame.on_close(evt)
         else:
