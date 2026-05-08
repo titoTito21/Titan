@@ -491,6 +491,65 @@ print(response.json())
 - Verify category is valid
 - Check upload directory permissions
 
+## Security
+
+### Securing with SSL/TLS (HTTPS/WSS)
+
+It is highly recommended to secure your Titan-Net server with SSL/TLS, especially if it's accessible over the internet.
+
+#### 1. Using a Reverse Proxy (Recommended)
+
+The easiest and most common way to secure the server is using a reverse proxy like Nginx or Apache.
+
+**Nginx Example Configuration:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-titan-server.com;
+
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    # API and File Uploads (HTTP)
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket (WSS)
+    location /ws {
+        proxy_pass http://localhost:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+#### 2. Direct SSL Support
+
+If you prefer to handle SSL directly in the Python application, you will need to modify `server.py` to use an `SSLContext` with the `websockets` and `aiohttp` (or `FastAPI`) servers.
+
+**For WebSockets:**
+```python
+import ssl
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ssl_context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
+
+async with websockets.serve(handler, "0.0.0.0", 8001, ssl=ssl_context):
+    ...
+```
+
+### Authentication Security
+- Passwords are salted and hashed using PBKDF2 with SHA-256.
+- Session tokens are generated using cryptographically secure random strings.
+- Brute-force protection is implemented via the Cerberus system.
+
 ## License
 
 This server is part of TCE Launcher project.
