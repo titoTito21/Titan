@@ -21,6 +21,7 @@ pynput
 pyenchant
 pytube
 beautifulsoup4
+feedparser
 yt-dlp
 python-vlc
 SpeechRecognition
