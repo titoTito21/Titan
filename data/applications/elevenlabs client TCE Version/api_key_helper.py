@@ -4,6 +4,22 @@ import os
 import configparser
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        apply_skin_to_tree(child)
+
 class ApiKeyRequiredDialog(wx.Dialog):
     """Dialog shown when API key is required but not configured"""
 
@@ -73,6 +89,7 @@ class ApiKeyRequiredDialog(wx.Dialog):
         vbox.Add(help_text, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        apply_skin_to_tree(self)
         self.Centre()
 
     def OnGetApiKey(self, event):

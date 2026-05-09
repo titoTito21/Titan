@@ -5,6 +5,22 @@ import platform
 import configparser
 import subprocess
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # Funkcja określająca ścieżkę do pliku konfiguracyjnego w zależności od platformy
 def get_config_path():
     _plat = platform.system()
@@ -55,6 +71,7 @@ class SettingsWindow(wx.Frame):
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
     def on_sound_checkbox(self, event):
         if self.sound_effects_checkbox.IsChecked():

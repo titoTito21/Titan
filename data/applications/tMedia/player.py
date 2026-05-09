@@ -6,6 +6,22 @@ import sys
 import ctypes
 import platform
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 def load_local_vlc():
     """
     Funkcja opcjonalnie wczytuje lokalne biblioteki VLC zależnie od systemu.
@@ -98,6 +114,7 @@ class Player(wx.Frame):
         vbox.Add(self.status, flag=wx.ALL, border=10)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
         # Obsługa klawiatury i zdarzenia zamknięcia okna
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)

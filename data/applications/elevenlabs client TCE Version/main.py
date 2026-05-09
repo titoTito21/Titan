@@ -18,6 +18,22 @@ from sound_effects import SoundEffectsDialog
 from user_info import UserInfoDialog, ModelsDialog
 from cache_viewer import CacheViewerDialog
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 class ElevenLabsClient(wx.Frame):
     def __init__(self, parent, title):
         super(ElevenLabsClient, self).__init__(parent, title=title, size=(600, 500))
@@ -99,6 +115,7 @@ class ElevenLabsClient(wx.Frame):
         menu_bar = MenuBar(self)
         self.SetMenuBar(menu_bar)
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
         
     def get_available_voices(self):
         """Get available voices from ElevenLabs API"""
@@ -294,6 +311,7 @@ class VoiceSettingsDialog(wx.Dialog):
         vbox.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
     def OnOK(self, event):
         """Save settings to generator"""

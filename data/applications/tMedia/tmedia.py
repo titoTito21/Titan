@@ -10,6 +10,22 @@ from Settings import SettingsWindow
 from player import Player  # Import wbudowanego odtwarzacza
 from YoutubeSearch import YoutubeSearchApp  # Importowanie modułu YoutubeSearch
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
     from src.titan_core.tce_speech import speak as _tce_speak
@@ -104,6 +120,7 @@ class TMediaApp(wx.Frame):
         self.function_list.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
     def load_settings(self):
         config = configparser.ConfigParser()

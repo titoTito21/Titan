@@ -8,6 +8,22 @@ import subprocess
 import configparser
 from api_key_helper import check_api_key
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        apply_skin_to_tree(child)
+
 class HistoryDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title=_("History Manager"), size=(800, 600))
@@ -65,6 +81,7 @@ class HistoryDialog(wx.Dialog):
         vbox.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        apply_skin_to_tree(self)
 
         # Bind selection event
         self.history_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)

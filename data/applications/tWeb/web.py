@@ -10,6 +10,22 @@ import pygame
 from translation import _
 import subprocess
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
     from src.titan_core.tce_speech import speak as _tce_speak
@@ -144,6 +160,7 @@ class DownloadsDialog(wx.Dialog):
         panel.SetSizer(vbox)
         self.SetSize((400, 300))
         self.Centre()
+        _apply_skin_to_tree(self)
 
     def onKeyDown(self, event):
         keycode = event.GetKeyCode()
@@ -246,6 +263,7 @@ class BrowserFrame(wx.Frame):
 
         self.BindEvents()
         self.CreateMenuBar()
+        _apply_skin_to_tree(self)
 
     def LoadHomePage(self):
         if isinstance(self.browser, wx.html2.WebView):
@@ -838,6 +856,7 @@ class SettingsDialog(wx.Dialog):
         panel.SetSizer(vbox)
         self.SetSize((400, 400))
         self.Centre()
+        _apply_skin_to_tree(self)
 
     def OnSave(self, event):
         self.settings['announcements']['announce_page_summary'] = str(self.announce_summary_cb.GetValue())

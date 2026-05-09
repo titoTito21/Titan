@@ -13,6 +13,22 @@ from wx.lib.newevent import NewCommandEvent
 import shutil
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # Inicjalizacja Pygame do efektów dźwiękowych
 pygame.mixer.init()
 
@@ -168,6 +184,7 @@ class TitanDownloadManager(wx.Frame):
         
         self.SetTitle(_('Titan Download Manager'))
         self.Centre()
+        _apply_skin_to_tree(self)
 
     def OnOpenDownloadFolder(self, event):
         # Otwórz folder pobierania w eksploratorze
@@ -385,6 +402,7 @@ class NewDownloadDialog(wx.Dialog):
         vbox.Add(hbox, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=10)
         
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
         
     def OnOk(self, event):
         url = self.url.GetValue()
@@ -530,6 +548,7 @@ class SettingsDialog(wx.Dialog):
         main_vbox.Add(hbox, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=10)
         
         panel.SetSizer(main_vbox)
+        _apply_skin_to_tree(self)
         
     def OnSave(self, event):
         self.GetParent().download_method = self.method_choice.GetStringSelection()

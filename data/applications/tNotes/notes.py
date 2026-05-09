@@ -6,6 +6,22 @@ import json
 import platform
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
     from src.titan_core.tce_speech import speak as _tce_speak
@@ -140,6 +156,7 @@ class tNotesApp(wx.Frame):
         self.back_btn.SetName(_('Back'))
 
         self.create_menu_bar()
+        _apply_skin_to_tree(self)
         self.Centre()
         self.Show(True)
 
@@ -282,6 +299,7 @@ class tNotesApp(wx.Frame):
         vbox.Add(hbox, flag=wx.ALL | wx.ALIGN_CENTER, border=5)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self.note_dialog)
         self.note_title.SetFocus()
         self.note_dialog.ShowModal()
         self.note_dialog.Destroy()
@@ -312,6 +330,7 @@ class tNotesApp(wx.Frame):
         vbox.Add(hbox, flag=wx.ALL | wx.ALIGN_CENTER, border=5)
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self.note_dialog)
         self.note_content.SetFocus()
         self.note_dialog.ShowModal()
         self.note_dialog.Destroy()

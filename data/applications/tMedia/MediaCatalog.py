@@ -9,6 +9,22 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 from player import Player  # Importowanie wbudowanego odtwarzacza
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 
 
 class MediaCatalog(wx.Frame):
@@ -30,6 +46,7 @@ class MediaCatalog(wx.Frame):
         self.progress_bar.Hide() # Initially hidden
 
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
         # Bindowanie zdarzeń
         self.media_tree.Bind(wx.EVT_TREE_ITEM_EXPANDING, self.on_item_expanding)
