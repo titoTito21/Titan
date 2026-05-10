@@ -1,6 +1,6 @@
 import wx
 import os
-from src.titan_core.sound import play_sound
+from src.titan_core.sound import play_sound, resource_path
 from src.settings.settings import get_setting
 from src.titan_core.translation import _
 
@@ -44,12 +44,12 @@ class TitanHelp(wx.Frame):
         # Sprawdź plik specyficzny dla języka
         if language != 'pl':
             help_file_name = f"Titan_help_{language}.tdoc"
-            help_file_path = os.path.join("data", "docu", help_file_name)
+            help_file_path = resource_path(os.path.join("data", "docu", help_file_name))
             if os.path.exists(help_file_path):
                 return help_file_path
-        
+
         # Fallback do domyślnego pliku
-        return os.path.join("data", "docu", "Titan_help.tdoc")
+        return resource_path(os.path.join("data", "docu", "Titan_help.tdoc"))
 
     def load_help_data(self):
         """Wczytaj dane pomocy z pliku."""
