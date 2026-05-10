@@ -2,6 +2,22 @@ import wx
 import webbrowser
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        apply_skin_to_tree(child)
+
 class SupportDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title=_("Thank you for using the ElevenLabs Client"), size=(400, 200))
@@ -22,6 +38,7 @@ class SupportDialog(wx.Dialog):
         vbox.Add(ok_button, 0, flag=wx.ALL, border=10)
 
         self.SetSizer(vbox)
+        apply_skin_to_tree(self)
 
     def on_donate(self, event):
         webbrowser.open('https://www.paypal.com/paypalme/tito2x1')

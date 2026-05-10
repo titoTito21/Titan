@@ -4,6 +4,22 @@ from elevenlabs.client import ElevenLabs
 import os
 import configparser
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        apply_skin_to_tree(child)
+
 class VoiceCloningDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title=_("Voice Cloning"), size=(400, 300))
@@ -33,6 +49,7 @@ class VoiceCloningDialog(wx.Dialog):
         sizer.Add(cancel_button, 0, wx.ALL | wx.ALIGN_CENTER, 5)
 
         panel.SetSizer(sizer)
+        apply_skin_to_tree(self)
 
         self.Bind(wx.EVT_BUTTON, self.on_browse, self.path_button)
 

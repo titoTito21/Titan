@@ -7,6 +7,22 @@ import configparser
 import re
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def _apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        _apply_skin_to_tree(child)
+
 # Dodaj importy dla obsługi DOCX, DOC, PDF
 try:
     import docx
@@ -104,6 +120,7 @@ class FindDialog(wx.Dialog):
 
         vbox.Add(hbox2, flag=wx.ALIGN_RIGHT|wx.ALL, border=5)
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
         self.found_pos = -1
 
@@ -148,6 +165,7 @@ class ReplaceDialog(wx.Dialog):
 
         vbox.Add(hbox3, flag=wx.ALIGN_RIGHT|wx.ALL, border=5)
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
     def OnReplace(self, event):
         self.EndModal(wx.ID_OK)
@@ -185,6 +203,7 @@ class UnicodeDialog(wx.Dialog):
 
         vbox.Add(hbox, flag=wx.ALIGN_RIGHT|wx.ALL, border=5)
         panel.SetSizer(vbox)
+        _apply_skin_to_tree(self)
 
     def OnOK(self, event):
         self.EndModal(wx.ID_OK)
@@ -338,6 +357,7 @@ class SettingsDialog(wx.Dialog):
 
         panel.SetSizer(main_sizer)
         self.Layout() # Przelicz layout po ukryciu/pokazaniu pól
+        _apply_skin_to_tree(self)
 
     def OnLineEndingChoice(self, event):
         choice = self.line_ending_choices[self.line_ending_choice.GetSelection()]
@@ -471,6 +491,7 @@ class TextEditor(wx.Frame):
 
         # Tworzenie menu
         self.CreateMenuBar()
+        _apply_skin_to_tree(self)
 
         # Ustawienie skrótów klawiaturowych i powiązań zdarzeń
         self.Bind(wx.EVT_MENU, self.OnNew, id=wx.ID_NEW)

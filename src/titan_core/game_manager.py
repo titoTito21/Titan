@@ -359,7 +359,8 @@ def get_python_executable():
 def find_executable_file(base_path, openfile):
     """
     Find the best executable file for the game.
-    Priority: .pyd/.so (Cython) > .pyc > .py > .exe
+    Priority: .pyd/.so (Cython) > .py > .pyc > .exe
+    Prefer source over bytecode to avoid stale/incompatible .pyc files.
     Returns tuple: (full_path, file_type)
     """
     game_path = os.path.join(base_path, openfile)
@@ -372,15 +373,15 @@ def find_executable_file(base_path, openfile):
     if os.path.exists(cython_file):
         return (cython_file, 'cython')
 
-    # Check for .pyc
-    pyc_file = base_name + '.pyc'
-    if os.path.exists(pyc_file):
-        return (pyc_file, 'pyc')
-
     # Check for .py
     py_file = base_name + '.py'
     if os.path.exists(py_file):
         return (py_file, 'py')
+
+    # Check for .pyc fallback
+    pyc_file = base_name + '.pyc'
+    if os.path.exists(pyc_file):
+        return (pyc_file, 'pyc')
 
     # Check for executable
     if sys.platform == 'win32':

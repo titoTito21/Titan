@@ -2,6 +2,22 @@ import wx
 import os
 from translation import _
 
+try:
+    from src.titan_core.skin_manager import apply_skin_to_window
+except ImportError:
+    apply_skin_to_window = None
+
+
+def apply_skin_to_tree(window):
+    if not apply_skin_to_window or not window:
+        return
+    try:
+        apply_skin_to_window(window)
+    except Exception:
+        return
+    for child in window.GetChildren():
+        apply_skin_to_tree(child)
+
 class VoiceManagerDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title=_("Voice Manager"), size=(800, 600))
@@ -59,6 +75,7 @@ class VoiceManagerDialog(wx.Dialog):
         vbox.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        apply_skin_to_tree(self)
 
         # Bind selection event
         self.voice_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)
@@ -289,6 +306,7 @@ class VoiceEditDialog(wx.Dialog):
         vbox.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        apply_skin_to_tree(self)
 
 
 class VoiceSettingsDialog(wx.Dialog):
@@ -354,3 +372,4 @@ class VoiceSettingsDialog(wx.Dialog):
         vbox.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 5)
 
         panel.SetSizer(vbox)
+        apply_skin_to_tree(self)
