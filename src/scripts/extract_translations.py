@@ -11,7 +11,7 @@ import os
 DOMAIN_FILES = {
     'gui': ['src/ui/gui.py'],
     'invisibleui': ['src/ui/invisibleui.py'],
-    'settings': ['src/settings/settings.py', 'src/ui/settingsgui.py'],
+    'settings': ['src/settings/settings.py', 'src/ui/settingsgui.py', 'src/settings/configvizard.py'],
     'menu': ['src/ui/menu.py'],
     'main': ['main.py'],
     'apps': ['src/titan_core/app_manager.py'],

@@ -346,6 +346,67 @@ def main(command_line_args=None):
         except Exception as e:
             print(f"Error initializing sound system: {e}")
 
+        # Configuration wizard (first run, or forced via --relaunch-config).
+        # Must run BEFORE the startup sound so users see the wizard the very
+        # first time they launch Titan. The wizard owns its own wx event loop;
+        # if the user closes it without finishing, we exit cleanly so they
+        # can rerun later.
+        try:
+            from src.settings.configvizard import (
+                run_wizard, stage_id_from_name,
+                STAGE_WELCOME,
+            )
+            force_wizard = bool(command_line_args
+                                and getattr(command_line_args,
+                                            'relaunch_config', False))
+            first_run = bool(command_line_args
+                             and getattr(command_line_args,
+                                         '_first_run', False))
+            if force_wizard or first_run:
+                stage_name = (getattr(command_line_args, 'config_stage', None)
+                              if command_line_args else None)
+                start_stage = (stage_id_from_name(stage_name)
+                               if stage_name else STAGE_WELCOME)
+                completed = run_wizard(start_stage=start_stage)
+                # Reload settings the wizard just wrote so the rest of main()
+                # picks up the new language / skin / theme / etc.
+                settings = load_settings()
+                try:
+                    lang = get_setting('language', get_system_language())
+                    os.environ['LANG'] = lang
+                    os.environ['LANGUAGE'] = lang
+                    _ = set_language(lang)
+                except Exception as e:
+                    print(f"Error reloading language after wizard: {e}")
+                try:
+                    new_theme = settings.get('sound', {}).get('theme', 'default')
+                    set_theme(new_theme)
+                except Exception as e:
+                    print(f"Error reloading sound theme after wizard: {e}")
+                if not completed:
+                    # User closed the wizard without finishing - kill this
+                    # Titan process entirely. We have to use os._exit because
+                    # the wizard already created (and tore down) a wx.App in
+                    # this process; sys.exit alone can hang on lingering
+                    # daemon threads / mixer state.
+                    print("[STARTUP] Configuration wizard not completed, exiting.")
+                    try:
+                        existing_app = wx.GetApp()
+                        if existing_app is not None:
+                            existing_app.ExitMainLoop()
+                    except Exception:
+                        pass
+                    try:
+                        sys.stdout.flush()
+                        sys.stderr.flush()
+                    except Exception:
+                        pass
+                    os._exit(0)
+        except Exception as e:
+            print(f"Error running configuration wizard: {e}")
+            import traceback
+            traceback.print_exc()
+
         # Apply Titan TTS SAPI5 registration state (Windows only). The named
         # pipe server must run whenever the voice is actually registered in
         # HKLM — otherwise SAPI clients (screen readers) load the DLL, which
@@ -924,6 +985,11 @@ if __name__ == "__main__":
                        default=None, help='Override startup mode setting')
     parser.add_argument('--launcher', default=None,
                        help='Launcher folder name to use (requires --startup-mode launcher)')
+    parser.add_argument('--relaunch-config', action='store_true',
+                       help='Force the configuration wizard to run on this launch (testing)')
+    parser.add_argument('--config-stage', default=None,
+                       help='Stage name to start the configuration wizard at '
+                            '(welcome, language, skin, invisible, titannet, additional)')
     args = parser.parse_args()
 
     # If another TCE instance is already running, announce the restart via
@@ -937,6 +1003,11 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
+    # Detect first run BEFORE we touch the settings file. The wizard
+    # autodetects via this same check (configvizard.is_first_run), but we
+    # cache the result here because the next block may create the file.
+    _first_run_detected = not os.path.exists(SETTINGS_FILE_PATH)
+
     # Set default settings if the file doesn't exist
     if not os.path.exists(SETTINGS_FILE_PATH):
         # Detect system language and set as default
@@ -946,6 +1017,10 @@ if __name__ == "__main__":
 
     if not os.path.exists(NOTIFICATIONS_FILE_PATH):
         create_notifications_file()
+
+    # Pass the first-run signal to main() via the args namespace so the
+    # wizard runs even though the settings file now exists.
+    args._first_run = _first_run_detected
     
     # Uruchom logikę przed-GUI. Jeśli zwróci True, zakończ program.
     if main(args):
