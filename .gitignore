@@ -30,6 +30,13 @@ data/applications/elevenlabs client TCE Version/%appdata%/Titosoft/Titan/Additio
 id_rsa
 id_ed25519
 
+# SSH deploy keypair (lives in titan-net server/.ssh/ — backed up via OneDrive,
+# never committed)
+titan-net server/.ssh/
+**/titannet_deploy
+**/titannet_deploy.pub
+.ssh/
+
 # ===== Titan-Net server runtime data =====
 # Production + backup SQLCipher databases
 titan-net server/database/
@@ -59,6 +66,10 @@ titan-net server/_install_argon2.py
 titan-net server/_inject_dbkey.py
 titan-net server/_smoke_check.py
 titan-net server/_diag_env.py
+# Personal admin scripts directory (2026-05-10) — SSH key migration,
+# PPK generator, and any future admin tooling. Touches sshd_config and the
+# deploy keypair; never publish.
+titan-net server/scripts/
 
 # ===== Build / compile artifacts =====
 __pycache__/

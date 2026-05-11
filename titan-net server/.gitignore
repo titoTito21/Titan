@@ -42,6 +42,16 @@ uploads/approved/*
 .env
 .env.local
 
+# SSH deploy keys (NEVER commit — private key + pubkey for prod deploy)
+.ssh/
+*.pem
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+titannet_deploy
+titannet_deploy.pub
+
 # IDE
 .vscode/
 .idea/
