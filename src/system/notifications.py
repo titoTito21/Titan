@@ -7,6 +7,10 @@ import glob
 import re
 
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_subprocess_kwargs
+from src.titan_core.translation import set_language
+from src.settings.settings import get_setting
+
+_ = set_language(get_setting('language', 'pl'))
 
 # Windows-specific imports
 if IS_WINDOWS:
@@ -138,35 +142,35 @@ def get_network_status():
         try:
             output = subprocess.check_output("netsh wlan show interfaces", shell=True, **get_subprocess_kwargs()).decode()
             if "There is no wireless interface" in output:
-                return "nie połączono, nie ma dostępnych sieci WiFi"
+                return _("Not connected, no WiFi networks available")
             elif "State" in output:
-                ssid = "Unknown"
-                signal = "Unknown"
+                ssid = _("Unknown")
+                signal = _("Unknown")
                 lines = output.split("\n")
                 for line in lines:
                     if "SSID" in line and "BSSID" not in line:
                         ssid = line.split(":")[1].strip()
                     if "Signal" in line:
                         signal = line.split(":")[1].strip()
-                return f"Połączono z {ssid}, moc sygnału: {signal}"
+                return _("Connected to {ssid}, signal strength: {signal}").format(ssid=ssid, signal=signal)
         except subprocess.CalledProcessError:
-            return "nie połączono, dostępne sieci WiFi"
+            return _("Not connected, WiFi networks available")
     elif IS_LINUX:
         try:
             # Try NetworkManager first (nmcli)
             try:
-                output = subprocess.check_output(["nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL", "dev", "wifi"], 
+                output = subprocess.check_output(["nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL", "dev", "wifi"],
                                                 text=True, stderr=subprocess.DEVNULL)
                 lines = output.strip().split('\n')
                 for line in lines:
                     parts = line.split(':')
                     if len(parts) >= 3 and parts[0] == 'yes':
-                        ssid = parts[1] if parts[1] else "Hidden Network"
-                        signal = parts[2] if parts[2] else "Unknown"
-                        return f"Połączono z {ssid}, moc sygnału: {signal}%"
+                        ssid = parts[1] if parts[1] else _("Hidden Network")
+                        signal = (parts[2] + "%") if parts[2] else _("Unknown")
+                        return _("Connected to {ssid}, signal strength: {signal}").format(ssid=ssid, signal=signal)
             except (subprocess.CalledProcessError, FileNotFoundError):
                 pass
-            
+
             # Try iwconfig as fallback
             try:
                 output = subprocess.check_output(["iwconfig"], text=True, stderr=subprocess.DEVNULL)
@@ -178,40 +182,40 @@ def get_network_status():
                         if essid_match:
                             ssid = essid_match.group(1)
                             # Look for signal strength in next lines
-                            signal = "Unknown"
-                            return f"Połączono z {ssid}, moc sygnału: {signal}"
+                            signal = _("Unknown")
+                            return _("Connected to {ssid}, signal strength: {signal}").format(ssid=ssid, signal=signal)
             except (subprocess.CalledProcessError, FileNotFoundError):
                 pass
-            
+
             # Check if we have any network connection
             try:
-                output = subprocess.check_output(["ip", "route", "show", "default"], 
+                output = subprocess.check_output(["ip", "route", "show", "default"],
                                                 text=True, stderr=subprocess.DEVNULL)
                 if output.strip():
-                    return "Połączono z siecią (ethernet lub wifi)"
+                    return _("Connected to network (ethernet or WiFi)")
                 else:
-                    return "Nie połączono z siecią"
+                    return _("Not connected to network")
             except (subprocess.CalledProcessError, FileNotFoundError):
-                return "Unknown"
+                return _("Unknown")
         except Exception as e:
             print(f"Error getting network status on Linux: {e}")
-            return "Unknown"
+            return _("Unknown")
     elif IS_MACOS:  # macOS
         try:
             # Get current WiFi network
-            output = subprocess.check_output(["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"], 
+            output = subprocess.check_output(["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"],
                                             text=True, stderr=subprocess.DEVNULL)
             ssid_match = re.search(r'\s+SSID: (.+)', output)
             if ssid_match:
                 ssid = ssid_match.group(1)
                 # Try to get signal strength
                 signal_match = re.search(r'agrCtlRSSI: (-?\d+)', output)
-                signal = signal_match.group(1) + " dBm" if signal_match else "Unknown"
-                return f"Połączono z {ssid}, moc sygnału: {signal}"
+                signal = signal_match.group(1) + " dBm" if signal_match else _("Unknown")
+                return _("Connected to {ssid}, signal strength: {signal}").format(ssid=ssid, signal=signal)
             else:
-                return "Nie połączono z WiFi"
+                return _("Not connected to WiFi")
         except Exception as e:
             print(f"Error getting network status on macOS: {e}")
-            return "Unknown"
+            return _("Unknown")
     else:
-        return "Unknown"
+        return _("Unknown")

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,75 +18,75 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/controller/controller_ui.py:262
+#: src/controller/controller_ui.py:274
 msgid "Game pad connected"
 msgstr ""
 
-#: src/controller/controller_ui.py:276
+#: src/controller/controller_ui.py:288
 msgid "Game pad disconnected"
 msgstr ""
 
-#: src/controller/controller_ui.py:661
+#: src/controller/controller_ui.py:673
 msgid "Controller Information"
 msgstr ""
 
-#: src/controller/controller_ui.py:664 src/controller/controller_ui.py:759
+#: src/controller/controller_ui.py:676 src/controller/controller_ui.py:771
 msgid "Connected controllers"
 msgstr ""
 
-#: src/controller/controller_ui.py:667 src/controller/controller_ui.py:762
+#: src/controller/controller_ui.py:679 src/controller/controller_ui.py:774
 msgid "Controller names"
 msgstr ""
 
-#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
+#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "Vibration available"
 msgstr ""
 
-#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
+#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "Yes"
 msgstr ""
 
-#: src/controller/controller_ui.py:671 src/controller/controller_ui.py:766
+#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "No"
 msgstr ""
 
-#: src/controller/controller_ui.py:677
+#: src/controller/controller_ui.py:689
 msgid "Vibration Settings"
 msgstr ""
 
-#: src/controller/controller_ui.py:679
+#: src/controller/controller_ui.py:691
 msgid "Enable vibration"
 msgstr ""
 
-#: src/controller/controller_ui.py:684
+#: src/controller/controller_ui.py:696
 msgid "Vibration strength"
 msgstr ""
 
-#: src/controller/controller_ui.py:693 src/controller/controller_ui.py:769
+#: src/controller/controller_ui.py:705 src/controller/controller_ui.py:781
 msgid "Controller Settings"
 msgstr ""
 
-#: src/controller/controller_ui.py:695
+#: src/controller/controller_ui.py:707
 msgid "Enable controller input"
 msgstr ""
 
-#: src/controller/controller_ui.py:700
+#: src/controller/controller_ui.py:712
 msgid "Enable controller navigation"
 msgstr ""
 
-#: src/controller/controller_ui.py:705
+#: src/controller/controller_ui.py:717
 msgid "Analog stick deadzone"
 msgstr ""
 
-#: src/controller/controller_ui.py:716
+#: src/controller/controller_ui.py:728
 msgid "Refresh Controllers"
 msgstr ""
 
-#: src/controller/controller_ui.py:720
+#: src/controller/controller_ui.py:732
 msgid "Test Vibration"
 msgstr ""
 
-#: src/controller/controller_ui.py:769
+#: src/controller/controller_ui.py:781
 msgid "Controllers refreshed successfully"
 msgstr ""
 

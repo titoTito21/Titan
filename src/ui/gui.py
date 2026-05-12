@@ -1655,7 +1655,11 @@ class TitanApp(wx.Frame):
         # Running GUI operations from background threads can cause hanging
         print(f"handle_status_action called with item: '{item}'")
         
-        if _("Network status:") in item or "połączono" in item.lower() or "connected" in item.lower() or "nie połączono" in item.lower() or "disconnected" in item.lower():
+        item_l = item.lower()
+        if _("Network status:") in item or any(k in item_l for k in [
+            'connected', 'disconnected', 'wifi', 'ethernet', 'signal strength',
+            'połączono', 'nie połączono', 'sygnału', 'sieci',
+        ]):
             # WiFi network operations - MUST run on main thread
             print(f"Network item detected: '{item}' - scheduling WiFi operation on main GUI thread...")
             wx.CallAfter(self.open_network_settings_safe)
@@ -4100,7 +4104,7 @@ class TitanApp(wx.Frame):
     
     def show_network_settings(self):
         """Show network settings"""
-        _show_skinned_message(_("Ustawienia sieciowe - w przygotowaniu"), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
+        _show_skinned_message(_("Network settings - coming soon"), _("Information"), wx.OK | wx.ICON_INFORMATION)
     
     def show_network_info(self):
         """Show network information"""

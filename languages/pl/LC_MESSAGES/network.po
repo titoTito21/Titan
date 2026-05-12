@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -19,197 +19,197 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/network/messenger_client.py:298 src/network/whatsapp_client.py:283
+#: src/network/messenger_client.py:299 src/network/whatsapp_client.py:284
 msgid "Thanks for the message!"
 msgstr "Dziękuję za wiadomość!"
 
-#: src/network/messenger_client.py:299 src/network/whatsapp_client.py:284
+#: src/network/messenger_client.py:300 src/network/whatsapp_client.py:285
 msgid "OK, understood"
 msgstr "OK, zrozumiałem"
 
-#: src/network/messenger_client.py:300 src/network/whatsapp_client.py:285
+#: src/network/messenger_client.py:301 src/network/whatsapp_client.py:286
 msgid "Sounds good"
 msgstr "Brzmi dobrze"
 
-#: src/network/messenger_client.py:301 src/network/whatsapp_client.py:286
+#: src/network/messenger_client.py:302 src/network/whatsapp_client.py:287
 msgid "Yes, I agree"
 msgstr "Tak, zgadzam się"
 
-#: src/network/messenger_client.py:302 src/network/whatsapp_client.py:287
+#: src/network/messenger_client.py:303 src/network/whatsapp_client.py:288
 msgid "No problem"
 msgstr "Żaden problem"
 
-#: src/network/messenger_client.py:303 src/network/whatsapp_client.py:288
+#: src/network/messenger_client.py:304 src/network/whatsapp_client.py:289
 msgid "Great!"
 msgstr "Świetnie!"
 
-#: src/network/messenger_client.py:360 src/network/whatsapp_client.py:343
+#: src/network/messenger_client.py:361 src/network/whatsapp_client.py:344
 #, python-brace-format
 msgid "New message at {}"
 msgstr "Nowa wiadomość o {}"
 
-#: src/network/messenger_client.py:406 src/network/whatsapp_client.py:389
+#: src/network/messenger_client.py:407 src/network/whatsapp_client.py:390
 msgid "Hi! How are you?"
 msgstr "Cześć! Jak się masz?"
 
-#: src/network/messenger_client.py:417 src/network/whatsapp_client.py:400
+#: src/network/messenger_client.py:418 src/network/whatsapp_client.py:401
 msgid "Are we meeting today?"
 msgstr "Czy spotykamy się dzisiaj?"
 
-#: src/network/messenger_client.py:424 src/network/messenger_client.py:425
-#: src/network/whatsapp_client.py:407 src/network/whatsapp_client.py:408
+#: src/network/messenger_client.py:425 src/network/messenger_client.py:426
+#: src/network/whatsapp_client.py:408 src/network/whatsapp_client.py:409
 msgid "Work Group"
 msgstr "Grupa robocza"
 
-#: src/network/messenger_client.py:428 src/network/whatsapp_client.py:411
+#: src/network/messenger_client.py:429 src/network/whatsapp_client.py:412
 msgid "Projects for tomorrow"
 msgstr "Projekty na jutro"
 
-#: src/network/messenger_client.py:439 src/network/whatsapp_client.py:422
+#: src/network/messenger_client.py:440 src/network/whatsapp_client.py:423
 msgid "Thanks for the help!"
 msgstr "Dziękuję za pomoc!"
 
-#: src/network/messenger_client.py:440 src/network/whatsapp_client.py:423
+#: src/network/messenger_client.py:441 src/network/whatsapp_client.py:424
 msgid "yesterday"
 msgstr "wczoraj"
 
-#: src/network/messenger_client.py:450 src/network/whatsapp_client.py:433
+#: src/network/messenger_client.py:451 src/network/whatsapp_client.py:434
 msgid "Great, thanks!"
 msgstr "Świetnie, dzięki!"
 
-#: src/network/messenger_client.py:457 src/network/messenger_client.py:458
-#: src/network/whatsapp_client.py:440 src/network/whatsapp_client.py:441
+#: src/network/messenger_client.py:458 src/network/messenger_client.py:459
+#: src/network/whatsapp_client.py:441 src/network/whatsapp_client.py:442
 msgid "Work Friends"
 msgstr "Przyjaciele z pracy"
 
-#: src/network/messenger_client.py:461 src/network/whatsapp_client.py:444
+#: src/network/messenger_client.py:462 src/network/whatsapp_client.py:445
 msgid "Who's going for coffee?"
 msgstr "Kto idzie na kawę?"
 
-#: src/network/messenger_client.py:491 src/network/whatsapp_client.py:474
+#: src/network/messenger_client.py:492 src/network/whatsapp_client.py:475
 msgid "Connected to Titan IM server"
 msgstr "Połączono z serwerem Titan IM"
 
-#: src/network/messenger_client.py:497 src/network/whatsapp_client.py:480
+#: src/network/messenger_client.py:498 src/network/whatsapp_client.py:481
 msgid "Connected to Titan IM"
 msgstr "Połączono z Titan IM"
 
-#: src/network/messenger_client.py:512 src/network/messenger_client.py:518
+#: src/network/messenger_client.py:513 src/network/messenger_client.py:519
 msgid "Opened Facebook Messenger in web browser"
 msgstr "Otwarto Facebook Messenger w przeglądarce"
 
-#: src/network/messenger_client.py:535
+#: src/network/messenger_client.py:536
 msgid "Messenger Error"
 msgstr "Błąd Messengera"
 
-#: src/network/messenger_client.py:542
+#: src/network/messenger_client.py:549
 msgid "Disconnected from Facebook Messenger"
 msgstr "Rozłączono z Facebook Messenger"
 
-#: src/network/messenger_gui.py:25
+#: src/network/messenger_gui.py:46
 msgid "Connect to Titan IM"
 msgstr "Połącz z Titan IM"
 
-#: src/network/messenger_gui.py:32
+#: src/network/messenger_gui.py:53
 msgid ""
 "Connect to Titan IM server for real-time messaging.\n"
 "If server is unavailable, will fallback to web mode."
 msgstr ""
 
-#: src/network/messenger_gui.py:38
+#: src/network/messenger_gui.py:59
 msgid "Your username:"
 msgstr "Twoja nazwa użytkownika:"
 
-#: src/network/messenger_gui.py:46
+#: src/network/messenger_gui.py:67
 msgid "Server: localhost:8001 (WebSocket), localhost:8000 (HTTP)"
 msgstr "Serwer: localhost:8001 (WebSocket), localhost:8000 (HTTP)"
 
-#: src/network/messenger_gui.py:53 src/network/telegram_gui.py:108
+#: src/network/messenger_gui.py:74 src/network/telegram_gui.py:152
 msgid "Connect"
 msgstr "Połącz"
 
-#: src/network/messenger_gui.py:57 src/network/telegram_gui.py:111
+#: src/network/messenger_gui.py:78 src/network/telegram_gui.py:155
 msgid "Cancel"
 msgstr "Anuluj"
 
-#: src/network/messenger_gui.py:145
+#: src/network/messenger_gui.py:141
 msgid "Search conversations:"
 msgstr "Szukaj rozmów:"
 
-#: src/network/messenger_gui.py:153
+#: src/network/messenger_gui.py:149
 msgid "Conversations:"
 msgstr "Rozmowy:"
 
-#: src/network/messenger_gui.py:157
+#: src/network/messenger_gui.py:153
 msgid "Name"
 msgstr "Nazwa"
 
-#: src/network/messenger_gui.py:158
+#: src/network/messenger_gui.py:154
 msgid "Last Message"
 msgstr "Ostatnia wiadomość"
 
-#: src/network/messenger_gui.py:159
+#: src/network/messenger_gui.py:155
 msgid "Time"
 msgstr "Czas"
 
-#: src/network/messenger_gui.py:160
+#: src/network/messenger_gui.py:156
 msgid "Unread"
 msgstr "Nieprzeczytane"
 
-#: src/network/messenger_gui.py:168 src/network/messenger_gui.py:324
-#: src/network/messenger_gui.py:481
+#: src/network/messenger_gui.py:164 src/network/messenger_gui.py:316
+#: src/network/messenger_gui.py:473
 msgid "Status: Disconnected"
 msgstr "Status: Rozłączony"
 
-#: src/network/messenger_gui.py:179
+#: src/network/messenger_gui.py:175
 msgid "Select a conversation to start chatting"
 msgstr "Wybierz rozmowę, aby rozpocząć czat"
 
-#: src/network/messenger_gui.py:195 src/network/telegram_windows.py:713
+#: src/network/messenger_gui.py:191 src/network/telegram_windows.py:735
 msgid "Send"
 msgstr "Wyślij"
 
-#: src/network/messenger_gui.py:215
+#: src/network/messenger_gui.py:211
 msgid "Connect to Messenger\tCtrl+N"
 msgstr "Połącz z Messengerem\tCtrl+N"
 
-#: src/network/messenger_gui.py:216
+#: src/network/messenger_gui.py:212
 msgid "Disconnect\tCtrl+D"
 msgstr "Rozłącz\tCtrl+D"
 
-#: src/network/messenger_gui.py:218
+#: src/network/messenger_gui.py:214
 msgid "Refresh Conversations\tF5"
 msgstr "Odśwież rozmowy\tF5"
 
-#: src/network/messenger_gui.py:220
+#: src/network/messenger_gui.py:216
 msgid "Close\tCtrl+Q"
 msgstr "Zamknij\tCtrl+Q"
 
-#: src/network/messenger_gui.py:227
+#: src/network/messenger_gui.py:223
 msgid "File"
 msgstr "Plik"
 
-#: src/network/messenger_gui.py:231
+#: src/network/messenger_gui.py:227
 msgid "Open Messenger Web\tCtrl+W"
 msgstr "Otwórz Messenger Web\tCtrl+W"
 
-#: src/network/messenger_gui.py:234
+#: src/network/messenger_gui.py:230
 msgid "View"
 msgstr "Widok"
 
-#: src/network/messenger_gui.py:329 src/network/messenger_gui.py:478
+#: src/network/messenger_gui.py:321 src/network/messenger_gui.py:470
 msgid "Status: Connected (Web Mode)"
 msgstr "Status: Połączony (Tryb Web)"
 
-#: src/network/messenger_gui.py:371
+#: src/network/messenger_gui.py:363
 msgid "Click to open chat"
 msgstr "Kliknij, aby otworzyć czat"
 
-#: src/network/messenger_gui.py:387
+#: src/network/messenger_gui.py:379
 msgid "Chat with"
 msgstr "Czat z"
 
-#: src/network/messenger_gui.py:419
+#: src/network/messenger_gui.py:411
 #, python-brace-format
 msgid ""
 "Chat opened with {}\n"
@@ -220,93 +220,93 @@ msgstr ""
 "Brak poprzednich wiadomości.\n"
 "\n"
 
-#: src/network/messenger_gui.py:421
+#: src/network/messenger_gui.py:413
 #, python-brace-format
 msgid "Chat with {}\n"
 msgstr "Czat z {}\n"
 
-#: src/network/messenger_gui.py:436
+#: src/network/messenger_gui.py:428
 msgid "Please select a conversation first"
 msgstr "Proszę wybrać rozmowę najpierw"
 
-#: src/network/messenger_gui.py:436
+#: src/network/messenger_gui.py:428
 msgid "No Chat Selected"
 msgstr "Nie wybrano czatu"
 
-#: src/network/messenger_gui.py:456 src/network/telegram_windows.py:878
+#: src/network/messenger_gui.py:448 src/network/telegram_windows.py:900
 msgid "Failed to send message"
 msgstr "Nie udało się wysłać wiadomości"
 
-#: src/network/messenger_gui.py:456
+#: src/network/messenger_gui.py:448
 msgid "Send Error"
 msgstr "Błąd wysyłania"
 
-#: src/network/messenger_gui.py:475
+#: src/network/messenger_gui.py:467
 msgid "Status: Connected (Titan IM)"
 msgstr "Status: Połączony (Titan IM)"
 
-#: src/network/messenger_gui.py:490
+#: src/network/messenger_gui.py:482
 msgid "Already connected to Messenger"
 msgstr "Już połączony z Messengerem"
 
-#: src/network/messenger_gui.py:490 src/network/messenger_gui.py:511
+#: src/network/messenger_gui.py:482 src/network/messenger_gui.py:503
 msgid "Connection Status"
 msgstr "Status połączenia"
 
-#: src/network/messenger_gui.py:502
+#: src/network/messenger_gui.py:494
 #, python-brace-format
 msgid "Connected to {}"
 msgstr "Połączono z {}"
 
-#: src/network/messenger_gui.py:502
+#: src/network/messenger_gui.py:494
 msgid "Connected"
 msgstr "Połączony"
 
-#: src/network/messenger_gui.py:504
+#: src/network/messenger_gui.py:496
 msgid "Failed to connect"
 msgstr "Nieudane połączenie"
 
-#: src/network/messenger_gui.py:504
+#: src/network/messenger_gui.py:496
 msgid "Connection Error"
 msgstr "Błąd połączenia"
 
-#: src/network/messenger_gui.py:511
+#: src/network/messenger_gui.py:503
 msgid "Not connected to Messenger"
 msgstr "Nie połączono z Messengerem"
 
-#: src/network/messenger_gui.py:515
+#: src/network/messenger_gui.py:507
 msgid "Disconnected from Messenger"
 msgstr "Rozłączono z Messengerem"
 
-#: src/network/messenger_gui.py:515
+#: src/network/messenger_gui.py:507
 msgid "Disconnected"
 msgstr "Rozłączony"
 
-#: src/network/messenger_webview.py:64
+#: src/network/messenger_webview.py:88
 msgid "Facebook Messenger - Titan IM"
 msgstr "Facebook Messenger - Titan IM"
 
-#: src/network/messenger_webview.py:107
+#: src/network/messenger_webview.py:131
 msgid "Wstecz"
 msgstr "Wstecz"
 
-#: src/network/messenger_webview.py:108
+#: src/network/messenger_webview.py:132
 msgid "Dalej"
 msgstr "Dalej"
 
-#: src/network/messenger_webview.py:109
+#: src/network/messenger_webview.py:133
 msgid "Refresh"
 msgstr "Odśwież"
 
-#: src/network/messenger_webview.py:110 src/network/messenger_webview.py:271
+#: src/network/messenger_webview.py:134 src/network/messenger_webview.py:298
 msgid "Messenger"
 msgstr "Messenger"
 
-#: src/network/messenger_webview.py:197
+#: src/network/messenger_webview.py:221
 msgid "Loading Facebook Messenger..."
 msgstr "Ładowanie Facebook Messenger..."
 
-#: src/network/messenger_webview.py:212
+#: src/network/messenger_webview.py:239
 msgid ""
 "WebView is not available on this system.\n"
 "\n"
@@ -322,288 +322,288 @@ msgstr ""
 "• Zainstaluj Microsoft Edge WebView2 Runtime\n"
 "• Sprawdź czy twój system obsługuje WebView2"
 
-#: src/network/messenger_webview.py:219
+#: src/network/messenger_webview.py:246
 msgid "Zamknij"
 msgstr "Zamknij"
 
-#: src/network/messenger_webview.py:228
+#: src/network/messenger_webview.py:255
 msgid "WebView is not available"
 msgstr "WebView niedostępny"
 
-#: src/network/messenger_webview.py:237
+#: src/network/messenger_webview.py:264
 msgid "Refresh\tF5"
 msgstr "Odśwież\tF5"
 
-#: src/network/messenger_webview.py:237
+#: src/network/messenger_webview.py:264
 msgid "Refresh Messenger page"
 msgstr "Odśwież stronę Messengera"
 
-#: src/network/messenger_webview.py:240
+#: src/network/messenger_webview.py:267
 msgid "Zoom In\tCtrl++"
 msgstr "Powiększ\tCtrl++"
 
-#: src/network/messenger_webview.py:240
+#: src/network/messenger_webview.py:267
 msgid "Zoom in page"
 msgstr "Powiększ stronę"
 
-#: src/network/messenger_webview.py:241
+#: src/network/messenger_webview.py:268
 msgid "Zoom Out\tCtrl+-"
 msgstr "Pomniejsz\tCtrl+-"
 
-#: src/network/messenger_webview.py:241
+#: src/network/messenger_webview.py:268
 msgid "Zoom out page"
 msgstr "Pomniejsz stronę"
 
-#: src/network/messenger_webview.py:242
+#: src/network/messenger_webview.py:269
 msgid "Reset Zoom\tCtrl+0"
 msgstr "Resetuj powiększenie\tCtrl+0"
 
-#: src/network/messenger_webview.py:242
+#: src/network/messenger_webview.py:269
 msgid "Reset zoom level"
 msgstr "Resetuj poziom powiększenia"
 
-#: src/network/messenger_webview.py:246
+#: src/network/messenger_webview.py:273
 msgid "Developer Tools\tF12"
 msgstr "Narzędzia deweloperskie\tF12"
 
-#: src/network/messenger_webview.py:246
+#: src/network/messenger_webview.py:273
 msgid "Open developer tools"
 msgstr "Otwórz narzędzia deweloperskie"
 
-#: src/network/messenger_webview.py:252
+#: src/network/messenger_webview.py:279
 msgid "Pokaż folder cookies"
 msgstr "Pokaż folder cookies"
 
-#: src/network/messenger_webview.py:252
+#: src/network/messenger_webview.py:279
 msgid "Otwórz folder z danymi użytkownika"
 msgstr "Otwórz folder z danymi użytkownika"
 
-#: src/network/messenger_webview.py:253
+#: src/network/messenger_webview.py:280
 msgid "Wyczyść cookies"
 msgstr "Wyczyść cookies"
 
-#: src/network/messenger_webview.py:253
+#: src/network/messenger_webview.py:280
 msgid "Usuń wszystkie zapisane dane logowania"
 msgstr "Usuń wszystkie zapisane dane logowania"
 
-#: src/network/messenger_webview.py:255
+#: src/network/messenger_webview.py:282
 msgid "Zarządzanie cookies"
 msgstr "Zarządzanie cookies"
 
-#: src/network/messenger_webview.py:259 src/network/whatsapp_webview.py:188
+#: src/network/messenger_webview.py:286 src/network/whatsapp_webview.py:215
 msgid "Zamknij\tAlt+F4"
 msgstr "Zamknij\tAlt+F4"
 
-#: src/network/messenger_webview.py:259
+#: src/network/messenger_webview.py:286
 msgid "Zamknij Messenger"
 msgstr "Zamknij Messenger"
 
-#: src/network/messenger_webview.py:276
+#: src/network/messenger_webview.py:303
 msgid "Powiadomienia dźwiękowe"
 msgstr "Powiadomienia dźwiękowe"
 
-#: src/network/messenger_webview.py:276
+#: src/network/messenger_webview.py:303
 msgid "Włącz powiadomienia dźwiękowe"
 msgstr "Włącz powiadomienia dźwiękowe"
 
-#: src/network/messenger_webview.py:279
+#: src/network/messenger_webview.py:306
 msgid "Odczytywanie TTS"
 msgstr "Odczytywanie TTS"
 
-#: src/network/messenger_webview.py:279
+#: src/network/messenger_webview.py:306
 msgid "Włącz odczytywanie przez TTS"
 msgstr "Włącz odczytywanie przez TTS"
 
-#: src/network/messenger_webview.py:284
+#: src/network/messenger_webview.py:311
 msgid "Fokus na czat\tCtrl+M"
 msgstr "Fokus na czat\tCtrl+M"
 
-#: src/network/messenger_webview.py:284
+#: src/network/messenger_webview.py:311
 msgid "Ustaw fokus na obszar czatu"
 msgstr "Ustaw fokus na obszar czatu"
 
-#: src/network/messenger_webview.py:288
+#: src/network/messenger_webview.py:315
 msgid "Widok"
 msgstr "Widok"
 
-#: src/network/messenger_webview.py:293
+#: src/network/messenger_webview.py:320
 msgid "Włącz połączenia głosowe"
 msgstr "Włącz połączenia głosowe"
 
-#: src/network/messenger_webview.py:293
+#: src/network/messenger_webview.py:320
 msgid "Włącz obsługę połączeń głosowych"
 msgstr "Włącz obsługę połączeń głosowych"
 
-#: src/network/messenger_webview.py:298 src/network/messenger_webview.py:2030
-#: src/network/messenger_webview.py:2054
+#: src/network/messenger_webview.py:325 src/network/messenger_webview.py:2057
+#: src/network/messenger_webview.py:2081
 msgid "Status połączenia"
 msgstr "Status połączenia"
 
-#: src/network/messenger_webview.py:298
+#: src/network/messenger_webview.py:325
 msgid "Pokaż status aktualnego połączenia"
 msgstr "Pokaż status aktualnego połączenia"
 
-#: src/network/messenger_webview.py:301
+#: src/network/messenger_webview.py:328
 msgid "Zakończ połączenie\tCtrl+E"
 msgstr "Zakończ połączenie\tCtrl+E"
 
-#: src/network/messenger_webview.py:301
+#: src/network/messenger_webview.py:328
 msgid "Zakończ aktywne połączenie głosowe"
 msgstr "Zakończ aktywne połączenie głosowe"
 
-#: src/network/messenger_webview.py:312
+#: src/network/messenger_webview.py:339
 msgid "Połączenia"
 msgstr "Połączenia"
 
-#: src/network/messenger_webview.py:322
+#: src/network/messenger_webview.py:349
 msgid "Test dźwięku przychodzącego"
 msgstr "Test dźwięku przychodzącego"
 
-#: src/network/messenger_webview.py:322
+#: src/network/messenger_webview.py:349
 msgid "Przetestuj dźwięk przychodzącego połączenia"
 msgstr "Przetestuj dźwięk przychodzącego połączenia"
 
-#: src/network/messenger_webview.py:323
+#: src/network/messenger_webview.py:350
 msgid "Test dźwięku wychodzącego"
 msgstr "Test dźwięku wychodzącego"
 
-#: src/network/messenger_webview.py:323
+#: src/network/messenger_webview.py:350
 msgid "Przetestuj dźwięk wychodzącego połączenia"
 msgstr "Przetestuj dźwięk wychodzącego połączenia"
 
-#: src/network/messenger_webview.py:324
+#: src/network/messenger_webview.py:351
 msgid "Test dźwięku nawiązania"
 msgstr "Test dźwięku nawiązania"
 
-#: src/network/messenger_webview.py:324
+#: src/network/messenger_webview.py:351
 msgid "Przetestuj dźwięk nawiązanego połączenia"
 msgstr "Przetestuj dźwięk nawiązanego połączenia"
 
-#: src/network/messenger_webview.py:325
+#: src/network/messenger_webview.py:352
 msgid "Test dźwięku zakończenia"
 msgstr "Test dźwięku zakończenia"
 
-#: src/network/messenger_webview.py:325
+#: src/network/messenger_webview.py:352
 msgid "Przetestuj dźwięk zakończenia połączenia"
 msgstr "Przetestuj dźwięk zakończenia połączenia"
 
-#: src/network/messenger_webview.py:327 src/network/messenger_webview.py:2150
+#: src/network/messenger_webview.py:354 src/network/messenger_webview.py:2177
 msgid "Debug połączeń głosowych"
 msgstr "Debug połączeń głosowych"
 
-#: src/network/messenger_webview.py:327
+#: src/network/messenger_webview.py:354
 msgid "Pokaż informacje debug o połączeniach"
 msgstr "Pokaż informacje debug o połączeniach"
 
-#: src/network/messenger_webview.py:635 src/network/messenger_webview.py:638
+#: src/network/messenger_webview.py:662 src/network/messenger_webview.py:665
 msgid "Łączenie z Messenger"
 msgstr "Łączenie z Messenger"
 
-#: src/network/messenger_webview.py:646
+#: src/network/messenger_webview.py:673
 msgid "Ładowanie..."
 msgstr "Ładowanie..."
 
-#: src/network/messenger_webview.py:651
+#: src/network/messenger_webview.py:678
 msgid "Ładowanie strony"
 msgstr "Ładowanie strony"
 
-#: src/network/messenger_webview.py:655
+#: src/network/messenger_webview.py:682
 msgid "Strona załadowana"
 msgstr "Strona załadowana"
 
-#: src/network/messenger_webview.py:668
+#: src/network/messenger_webview.py:695
 #, python-brace-format
 msgid "Załadowano {}"
 msgstr "Załadowano {}"
 
-#: src/network/messenger_webview.py:717 src/network/messenger_webview.py:724
-#: src/network/whatsapp_webview.py:1922 src/network/whatsapp_webview.py:1929
+#: src/network/messenger_webview.py:744 src/network/messenger_webview.py:751
+#: src/network/whatsapp_webview.py:1949 src/network/whatsapp_webview.py:1956
 msgid "Błąd ładowania strony"
 msgstr "Błąd ładowania strony"
 
-#: src/network/messenger_webview.py:774
+#: src/network/messenger_webview.py:801
 msgid "Odświeżanie"
 msgstr "Odświeżanie"
 
-#: src/network/messenger_webview.py:784
+#: src/network/messenger_webview.py:811
 msgid "Powrót do strony głównej"
 msgstr "Powrót do strony głównej"
 
-#: src/network/messenger_webview.py:826
+#: src/network/messenger_webview.py:853
 msgid "Narzędzia deweloperskie mogą nie być dostępne w tej wersji WebView."
 msgstr "Narzędzia deweloperskie mogą nie być dostępne w tej wersji WebView."
 
-#: src/network/messenger_webview.py:827 src/network/messenger_webview.py:1980
+#: src/network/messenger_webview.py:854 src/network/messenger_webview.py:2007
 msgid "Informacja"
 msgstr "Informacja"
 
-#: src/network/messenger_webview.py:931
+#: src/network/messenger_webview.py:958
 msgid "Połączono z Facebook Messenger"
 msgstr "Połączono z Facebook Messenger"
 
-#: src/network/messenger_webview.py:934
+#: src/network/messenger_webview.py:961
 msgid "Połączono z Messenger"
 msgstr "Połączono z Messenger"
 
-#: src/network/messenger_webview.py:1205
+#: src/network/messenger_webview.py:1232
 #, python-brace-format
 msgid "{} pisze"
 msgstr "{} pisze"
 
-#: src/network/messenger_webview.py:1207
+#: src/network/messenger_webview.py:1234
 msgid "Ktoś pisze"
 msgstr "Ktoś pisze"
 
-#: src/network/messenger_webview.py:1228 src/network/messenger_webview.py:1230
-#: src/network/messenger_webview.py:1232 src/network/messenger_webview.py:1372
-#: src/network/messenger_webview.py:1374 src/network/messenger_webview.py:1376
-#: src/network/whatsapp_webview.py:1122 src/network/whatsapp_webview.py:1126
-#: src/network/whatsapp_webview.py:1130
+#: src/network/messenger_webview.py:1255 src/network/messenger_webview.py:1257
+#: src/network/messenger_webview.py:1259 src/network/messenger_webview.py:1399
+#: src/network/messenger_webview.py:1401 src/network/messenger_webview.py:1403
+#: src/network/whatsapp_webview.py:1149 src/network/whatsapp_webview.py:1153
+#: src/network/whatsapp_webview.py:1157
 msgid "Message sent"
 msgstr "Wiadomość wysłana"
 
-#: src/network/messenger_webview.py:1246
+#: src/network/messenger_webview.py:1273
 msgid "Nowa wiadomość"
 msgstr "Nowa wiadomość"
 
-#: src/network/messenger_webview.py:1862
+#: src/network/messenger_webview.py:1889
 msgid "Łączenie..."
 msgstr "Łączenie..."
 
-#: src/network/messenger_webview.py:1875
+#: src/network/messenger_webview.py:1902
 msgid "Przychodzące połączenie"
 msgstr "Przychodzące połączenie"
 
-#: src/network/messenger_webview.py:1894
+#: src/network/messenger_webview.py:1921
 msgid "Dzwonię..."
 msgstr "Dzwonię..."
 
-#: src/network/messenger_webview.py:1916
+#: src/network/messenger_webview.py:1943
 msgid "Połączenie nawiązane"
 msgstr "Połączenie nawiązane"
 
-#: src/network/messenger_webview.py:1923
+#: src/network/messenger_webview.py:1950
 msgid "Aktywne połączenie głosowe"
 msgstr "Aktywne połączenie głosowe"
 
-#: src/network/messenger_webview.py:1953
+#: src/network/messenger_webview.py:1980
 #, python-brace-format
 msgid "Połączenie zakończone. Czas trwania: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:1955 src/network/messenger_webview.py:1969
+#: src/network/messenger_webview.py:1982 src/network/messenger_webview.py:1996
 msgid "Połączenie zakończone"
 msgstr ""
 
-#: src/network/messenger_webview.py:1980 src/network/messenger_webview.py:2030
+#: src/network/messenger_webview.py:2007 src/network/messenger_webview.py:2057
 msgid "Brak aktywnego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2034 src/network/messenger_webview.py:2049
+#: src/network/messenger_webview.py:2061 src/network/messenger_webview.py:2076
 msgid "Nieznany"
 msgstr "Nieznany"
 
-#: src/network/messenger_webview.py:2043
+#: src/network/messenger_webview.py:2070
 #, python-brace-format
 msgid ""
 "Status połączenia głosowego:\n"
@@ -614,375 +614,379 @@ msgid ""
 "Status: Aktywne"
 msgstr ""
 
-#: src/network/messenger_webview.py:2050
+#: src/network/messenger_webview.py:2077
 msgid "Przychodzące"
 msgstr ""
 
-#: src/network/messenger_webview.py:2050
+#: src/network/messenger_webview.py:2077
 msgid "Wychodzące"
 msgstr ""
 
-#: src/network/messenger_webview.py:2060
+#: src/network/messenger_webview.py:2087
 msgid "Test dźwięku przychodzącego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2066
+#: src/network/messenger_webview.py:2093
 msgid "Test dźwięku wychodzącego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2072
+#: src/network/messenger_webview.py:2099
 msgid "Test dźwięku nawiązania połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2078
+#: src/network/messenger_webview.py:2105
 msgid "Test dźwięku zakończenia połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2114
+#: src/network/messenger_webview.py:2141
 msgid "Błąd pobierania informacji debug"
 msgstr ""
 
-#: src/network/messenger_webview.py:2114 src/network/messenger_webview.py:2159
+#: src/network/messenger_webview.py:2141 src/network/messenger_webview.py:2186
 msgid "Debug"
 msgstr ""
 
-#: src/network/messenger_webview.py:2119
+#: src/network/messenger_webview.py:2146
 msgid ""
 "Informacje debug połączeń głosowych:\n"
 "\n"
 msgstr ""
 
-#: src/network/messenger_webview.py:2158
+#: src/network/messenger_webview.py:2185
 #, python-brace-format
 msgid ""
 "Błąd pobierania informacji debug:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2184
+#: src/network/messenger_webview.py:2211
 msgid "Otwarto folder cookies"
 msgstr ""
 
-#: src/network/messenger_webview.py:2189
+#: src/network/messenger_webview.py:2216
 #, python-brace-format
 msgid ""
 "Nie można otworzyć folderu cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2190 src/network/messenger_webview.py:2220
-#: src/network/messenger_webview.py:2250 src/network/messenger_webview.py:2258
-#: src/network/messenger_webview.py:3349 src/network/telegram_windows.py:320
-#: src/network/whatsapp_webview.py:1977
+#: src/network/messenger_webview.py:2217 src/network/messenger_webview.py:2247
+#: src/network/messenger_webview.py:2277 src/network/messenger_webview.py:2285
+#: src/network/messenger_webview.py:3376 src/network/telegram_windows.py:340
+#: src/network/whatsapp_webview.py:2004
 msgid "Błąd"
 msgstr ""
 
-#: src/network/messenger_webview.py:2199
+#: src/network/messenger_webview.py:2226
 msgid ""
 "Czy na pewno chcesz usunąć wszystkie cookies i dane logowania?\n"
 "\n"
 "To spowoduje wylogowanie z Messenger i konieczność ponownego logowania."
 msgstr ""
 
-#: src/network/messenger_webview.py:2201
+#: src/network/messenger_webview.py:2228
 msgid "Potwierdź usunięcie cookies"
 msgstr ""
 
-#: src/network/messenger_webview.py:2219
+#: src/network/messenger_webview.py:2246
 #, python-brace-format
 msgid ""
 "Błąd podczas czyszczenia cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2233
+#: src/network/messenger_webview.py:2260
 msgid ""
 "Cookies zostały usunięte pomyślnie.\n"
 "Przeładuj stronę aby zastosować zmiany."
 msgstr ""
 
-#: src/network/messenger_webview.py:2235 src/network/messenger_webview.py:2244
+#: src/network/messenger_webview.py:2262 src/network/messenger_webview.py:2271
 msgid "Cookies usunięte"
 msgstr ""
 
-#: src/network/messenger_webview.py:2248
+#: src/network/messenger_webview.py:2275
 msgid ""
 "Nie można usunąć cookies.\n"
 "Może być potrzebne zamknięcie wszystkich okien Messenger."
 msgstr ""
 
-#: src/network/messenger_webview.py:2257
+#: src/network/messenger_webview.py:2284
 #, python-brace-format
 msgid ""
 "Błąd podczas usuwania cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2283
+#: src/network/messenger_webview.py:2310
 msgid "Fokus na obszar czatu"
 msgstr ""
 
-#: src/network/messenger_webview.py:2578 src/network/messenger_webview.py:2582
-#: src/network/messenger_webview.py:2611
+#: src/network/messenger_webview.py:2605 src/network/messenger_webview.py:2609
+#: src/network/messenger_webview.py:2638
 #, python-brace-format
 msgid "Messenger message from {}: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2595
+#: src/network/messenger_webview.py:2622
 #, python-brace-format
 msgid "Messenger: {} new messages from {} contacts"
 msgstr ""
 
-#: src/network/messenger_webview.py:2613 src/network/messenger_webview.py:2669
-#: src/network/messenger_webview.py:2680
+#: src/network/messenger_webview.py:2640 src/network/messenger_webview.py:2696
+#: src/network/messenger_webview.py:2707
 #, python-brace-format
 msgid "Messenger: {} new messages"
 msgstr ""
 
-#: src/network/messenger_webview.py:2659
+#: src/network/messenger_webview.py:2686
 #, python-brace-format
 msgid "New messages from Messenger: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2661
+#: src/network/messenger_webview.py:2688
 msgid "New message from Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:2671 src/network/messenger_webview.py:2682
+#: src/network/messenger_webview.py:2698 src/network/messenger_webview.py:2709
 msgid "Messenger: new message"
 msgstr ""
 
-#: src/network/messenger_webview.py:3320
+#: src/network/messenger_webview.py:3347
 msgid "Rozłączono z Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:3322
+#: src/network/messenger_webview.py:3349
 msgid "Zamykanie Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:3347
+#: src/network/messenger_webview.py:3374
 msgid ""
 "Nie można otworzyć Messenger WebView.\n"
 "Sprawdź czy WebView2 jest zainstalowany."
 msgstr ""
 
-#: src/network/messenger_webview.py:3462 src/network/whatsapp_webview.py:2121
+#: src/network/messenger_webview.py:3489 src/network/whatsapp_webview.py:2148
 msgid ""
 "WebView nie jest dostępny na tym systemie.\n"
 "Zainstaluj Microsoft Edge WebView2 Runtime."
 msgstr ""
 
-#: src/network/messenger_webview.py:3464 src/network/whatsapp_webview.py:2123
+#: src/network/messenger_webview.py:3491 src/network/whatsapp_webview.py:2150
 msgid "Błąd WebView"
 msgstr ""
 
-#: src/network/telegram_client.py:159 src/network/telegram_gui.py:685
+#: src/network/telegram_client.py:169 src/network/telegram_gui.py:749
 msgid "Connection error"
 msgstr "Błąd połączenia"
 
-#: src/network/telegram_client.py:227
+#: src/network/telegram_client.py:237
 msgid "Invalid phone number"
 msgstr "Nieprawidłowy numer telefonu"
 
-#: src/network/telegram_client.py:229
+#: src/network/telegram_client.py:239
 msgid "Invalid verification code"
 msgstr "Nieprawidłowy kod weryfikacyjny"
 
-#: src/network/telegram_client.py:231
+#: src/network/telegram_client.py:241
 msgid "Login error"
 msgstr "Błąd logowania"
 
-#: src/network/telegram_client.py:239
+#: src/network/telegram_client.py:249
 msgid "Enter the verification code received by SMS or Telegram:"
 msgstr "Wprowadź kod weryfikacyjny otrzymany przez SMS lub Telegram:"
 
-#: src/network/telegram_client.py:240
+#: src/network/telegram_client.py:250
 msgid "Verification code"
 msgstr "Kod weryfikacyjny"
 
-#: src/network/telegram_client.py:262
+#: src/network/telegram_client.py:273
 msgid "Enter two-factor authentication password:"
 msgstr "Wprowadź hasło uwierzytelniania dwuetapowego:"
 
-#: src/network/telegram_client.py:263
+#: src/network/telegram_client.py:274
 msgid "2FA Password"
 msgstr "Hasło 2FA"
 
-#: src/network/telegram_client.py:336 src/network/telegram_client.py:397
-#: src/network/telegram_client.py:801 src/network/telegram_windows.py:396
-#: src/network/telegram_windows.py:955
+#: src/network/telegram_client.py:348 src/network/telegram_client.py:409
+#: src/network/telegram_client.py:816 src/network/telegram_windows.py:416
+#: src/network/telegram_windows.py:977
 msgid "Unknown"
 msgstr "Nieznany"
 
-#: src/network/telegram_client.py:613 src/network/telegram_client.py:618
+#: src/network/telegram_client.py:625 src/network/telegram_client.py:630
 #, python-brace-format
 msgid "Connected to Telegram as {}"
 msgstr ""
 
-#: src/network/telegram_client.py:637
+#: src/network/telegram_client.py:649
 msgid "Telegram Error"
 msgstr ""
 
-#: src/network/telegram_client.py:1004
+#: src/network/telegram_client.py:1019
 msgid "Disconnecting from Telegram..."
 msgstr ""
 
-#: src/network/telegram_client.py:1031
+#: src/network/telegram_client.py:1046
 msgid "Event loop stopped, forcing client cleanup"
 msgstr ""
 
-#: src/network/telegram_client.py:1047
+#: src/network/telegram_client.py:1062
 msgid "Waiting for connection thread to finish..."
 msgstr ""
 
-#: src/network/telegram_client.py:1051
+#: src/network/telegram_client.py:1066
 msgid "Warning: Connection thread did not stop cleanly"
 msgstr ""
 
-#: src/network/telegram_client.py:1053
+#: src/network/telegram_client.py:1068
 msgid "Connection thread stopped"
 msgstr ""
 
-#: src/network/telegram_client.py:1063
+#: src/network/telegram_client.py:1078
 msgid "Successfully disconnected from Telegram"
 msgstr ""
 
-#: src/network/telegram_client.py:1069
+#: src/network/telegram_client.py:1084
 msgid "Disconnected from Telegram (with errors)"
 msgstr "Rozłączono z Telegram (z błędami)"
 
-#: src/network/telegram_client.py:1076
+#: src/network/telegram_client.py:1091
 msgid "Telegram client disconnected"
 msgstr "Klient Telegram rozłączony"
 
-#: src/network/telegram_client.py:1085
+#: src/network/telegram_client.py:1100
 msgid "Start login by providing phone number"
 msgstr "Rozpocznij logowanie podając numer telefonu"
 
-#: src/network/telegram_client.py:1090
+#: src/network/telegram_client.py:1105
 msgid "Phone number is required"
 msgstr "Numer telefonu jest wymagany"
 
-#: src/network/telegram_client.py:1091
+#: src/network/telegram_client.py:1106
 msgid "Preparing connection to Telegram..."
 msgstr "Przygotowywanie połączenia z Telegram..."
 
-#: src/network/telegram_gui.py:71
+#: src/network/telegram_gui.py:55
+msgid "OK"
+msgstr ""
+
+#: src/network/telegram_gui.py:115
 msgid "Connect to Telegram"
 msgstr "Połącz z Telegram"
 
-#: src/network/telegram_gui.py:78
+#: src/network/telegram_gui.py:122
 msgid ""
 "To connect to Telegram, enter your phone number.\n"
 "You will receive a verification code by SMS."
 msgstr ""
 
-#: src/network/telegram_gui.py:84
+#: src/network/telegram_gui.py:128
 msgid "Phone number (with country code, e.g. +48123456789):"
 msgstr ""
 
-#: src/network/telegram_gui.py:99
+#: src/network/telegram_gui.py:143
 msgid "2FA Password (optional, leave empty if not set):"
 msgstr ""
 
-#: src/network/telegram_gui.py:179 src/network/telegram_gui.py:206
-#: src/network/telegram_gui.py:384
+#: src/network/telegram_gui.py:232 src/network/telegram_gui.py:266
+#: src/network/telegram_gui.py:444
 msgid "Disconnect"
 msgstr "Rozłącz"
 
-#: src/network/telegram_gui.py:179
+#: src/network/telegram_gui.py:232
 msgid "Disconnect from Telegram"
 msgstr "Rozłącz z Telegram"
 
-#: src/network/telegram_gui.py:187 src/network/telegram_gui.py:547
+#: src/network/telegram_gui.py:240 src/network/telegram_gui.py:610
 msgid "Connected to Telegram"
 msgstr ""
 
-#: src/network/telegram_gui.py:203 src/network/telegram_gui.py:221
-#: src/network/telegram_gui.py:378
+#: src/network/telegram_gui.py:263 src/network/telegram_gui.py:281
+#: src/network/telegram_gui.py:438
 msgid "Contacts"
 msgstr "Kontakty"
 
-#: src/network/telegram_gui.py:204 src/network/telegram_gui.py:244
-#: src/network/telegram_gui.py:380
+#: src/network/telegram_gui.py:264 src/network/telegram_gui.py:304
+#: src/network/telegram_gui.py:440
 msgid "Groups"
 msgstr "Grupy"
 
-#: src/network/telegram_gui.py:205 src/network/telegram_gui.py:382
+#: src/network/telegram_gui.py:265 src/network/telegram_gui.py:442
 msgid "Settings"
 msgstr ""
 
-#: src/network/telegram_gui.py:233 src/network/telegram_gui.py:255
-#: src/network/telegram_gui.py:389 src/network/telegram_gui.py:397
-#: src/network/telegram_gui.py:410 src/network/telegram_gui.py:432
+#: src/network/telegram_gui.py:293 src/network/telegram_gui.py:315
+#: src/network/telegram_gui.py:449 src/network/telegram_gui.py:457
+#: src/network/telegram_gui.py:470 src/network/telegram_gui.py:492
 msgid "Back"
 msgstr ""
 
-#: src/network/telegram_gui.py:383
-msgid "Settings - coming soon"
-msgstr ""
-
-#: src/network/telegram_gui.py:383
+#: src/network/telegram_gui.py:443
 msgid "Information"
 msgstr "Informacja"
 
-#: src/network/telegram_gui.py:414
+#: src/network/telegram_gui.py:443
+msgid "Settings - coming soon"
+msgstr ""
+
+#: src/network/telegram_gui.py:474
 msgid "Message"
 msgstr "Wiadomość"
 
-#: src/network/telegram_gui.py:415 src/network/telegram_windows.py:117
+#: src/network/telegram_gui.py:475 src/network/telegram_windows.py:137
 msgid "Voice Call"
 msgstr "Połączenie głosowe"
 
-#: src/network/telegram_gui.py:440 src/network/telegram_voice.py:210
-#: src/network/telegram_voice.py:408 src/network/telegram_windows.py:414
+#: src/network/telegram_gui.py:500 src/network/telegram_voice.py:210
+#: src/network/telegram_voice.py:408 src/network/telegram_windows.py:434
 msgid "Call already in progress"
 msgstr ""
 
-#: src/network/telegram_gui.py:444
+#: src/network/telegram_gui.py:504
 msgid "Voice calls not available - py-tgcalls required"
 msgstr ""
 
-#: src/network/telegram_gui.py:446
+#: src/network/telegram_gui.py:507
 msgid ""
 "Voice calls require py-tgcalls.\n"
 "Install with: pip install py-tgcalls"
 msgstr ""
 
-#: src/network/telegram_gui.py:447
+#: src/network/telegram_gui.py:508
 msgid "Voice calls unavailable"
 msgstr ""
 
-#: src/network/telegram_gui.py:453
+#: src/network/telegram_gui.py:514
 #, python-brace-format
 msgid "Calling {}..."
 msgstr ""
 
-#: src/network/telegram_gui.py:471 src/network/telegram_gui.py:485
+#: src/network/telegram_gui.py:533 src/network/telegram_gui.py:548
 #, python-brace-format
 msgid ""
 "Cannot open chat window.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:472 src/network/telegram_gui.py:486
-#: src/network/telegram_gui.py:669 src/network/telegram_gui.py:687
-#: src/network/telegram_windows.py:583 src/network/telegram_windows.py:878
+#: src/network/telegram_gui.py:534 src/network/telegram_gui.py:549
+#: src/network/telegram_gui.py:733 src/network/telegram_gui.py:751
+#: src/network/telegram_windows.py:604 src/network/telegram_windows.py:900
 msgid "Error"
 msgstr "Błąd"
 
-#: src/network/telegram_gui.py:668
+#: src/network/telegram_gui.py:732
 #, python-brace-format
 msgid ""
 "Error opening Telegram chat window.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:685
+#: src/network/telegram_gui.py:749
 msgid "Failed to connect to Telegram. Check your phone number and try again."
 msgstr ""
 
-#: src/network/telegram_gui.py:687
+#: src/network/telegram_gui.py:751
 msgid "Failed to start connection. Please try again."
 msgstr ""
 
@@ -1006,343 +1010,343 @@ msgstr ""
 msgid "Could not join voice chat"
 msgstr ""
 
-#: src/network/telegram_windows.py:68 src/network/telegram_windows.py:377
+#: src/network/telegram_windows.py:87 src/network/telegram_windows.py:397
 msgid "Wiadomości prywatne z"
 msgstr ""
 
-#: src/network/telegram_windows.py:112
+#: src/network/telegram_windows.py:132
 msgid "Online"
 msgstr "Online"
 
-#: src/network/telegram_windows.py:150
+#: src/network/telegram_windows.py:170
 msgid "Wyślij"
 msgstr ""
 
-#: src/network/telegram_windows.py:320
+#: src/network/telegram_windows.py:340
 msgid "Nie udało się wysłać wiadomości"
 msgstr ""
 
-#: src/network/telegram_windows.py:340 src/network/telegram_windows.py:898
+#: src/network/telegram_windows.py:360 src/network/telegram_windows.py:920
 msgid "Voice message"
 msgstr "Wiadomość głosowa"
 
-#: src/network/telegram_windows.py:393
+#: src/network/telegram_windows.py:413
 msgid "Historia rozmowy z"
 msgstr ""
 
-#: src/network/telegram_windows.py:418
+#: src/network/telegram_windows.py:438
 msgid "Voice calls not available"
 msgstr "Połączenia głosowe niedostępne"
 
-#: src/network/telegram_windows.py:446 src/network/telegram_windows.py:997
-#: src/network/telegram_windows.py:1093
+#: src/network/telegram_windows.py:466 src/network/telegram_windows.py:1019
+#: src/network/telegram_windows.py:1116
 msgid "Voice call"
 msgstr "Połączenie głosowe"
 
-#: src/network/telegram_windows.py:489
+#: src/network/telegram_windows.py:510
 msgid "Outgoing call"
 msgstr ""
 
-#: src/network/telegram_windows.py:491 src/network/telegram_windows.py:1015
+#: src/network/telegram_windows.py:512 src/network/telegram_windows.py:1037
 msgid "Incoming call"
 msgstr ""
 
-#: src/network/telegram_windows.py:493
+#: src/network/telegram_windows.py:514
 msgid "Incoming call (native)"
 msgstr ""
 
-#: src/network/telegram_windows.py:500
+#: src/network/telegram_windows.py:521
 msgid "Connecting..."
 msgstr "Łączenie..."
 
-#: src/network/telegram_windows.py:512
+#: src/network/telegram_windows.py:533
 msgid "Audio: group voice chat"
 msgstr ""
 
-#: src/network/telegram_windows.py:514
+#: src/network/telegram_windows.py:535
 msgid "Audio: limited (py-tgcalls not installed)"
 msgstr ""
 
-#: src/network/telegram_windows.py:525 src/network/telegram_windows.py:592
+#: src/network/telegram_windows.py:546 src/network/telegram_windows.py:613
 msgid "Mute"
 msgstr ""
 
-#: src/network/telegram_windows.py:529
+#: src/network/telegram_windows.py:550
 msgid "End call"
 msgstr ""
 
-#: src/network/telegram_windows.py:540
+#: src/network/telegram_windows.py:561
 msgid "Shortcuts: Space=Mute/Unmute, Escape=End call"
 msgstr ""
 
-#: src/network/telegram_windows.py:563 src/network/telegram_windows.py:593
+#: src/network/telegram_windows.py:584 src/network/telegram_windows.py:614
 msgid "Connected - call active"
 msgstr ""
 
-#: src/network/telegram_windows.py:564
+#: src/network/telegram_windows.py:585
 msgid "Call connected"
 msgstr "Połączenie nawiązane"
 
-#: src/network/telegram_windows.py:582
+#: src/network/telegram_windows.py:603
 msgid "Unknown error"
 msgstr "Nieznany błąd"
 
-#: src/network/telegram_windows.py:584
+#: src/network/telegram_windows.py:605
 msgid "Call failed"
 msgstr ""
 
-#: src/network/telegram_windows.py:589
+#: src/network/telegram_windows.py:610
 msgid "Unmute"
 msgstr "Włącz mikrofon"
 
-#: src/network/telegram_windows.py:590
+#: src/network/telegram_windows.py:611
 msgid "Microphone muted"
 msgstr ""
 
-#: src/network/telegram_windows.py:605
+#: src/network/telegram_windows.py:626
 msgid "Connecting"
 msgstr "Łączenie"
 
-#: src/network/telegram_windows.py:636 src/network/telegram_windows.py:936
+#: src/network/telegram_windows.py:657 src/network/telegram_windows.py:958
 msgid "Group chat"
 msgstr ""
 
-#: src/network/telegram_windows.py:680
+#: src/network/telegram_windows.py:702
 msgid "Active"
 msgstr ""
 
-#: src/network/telegram_windows.py:873
+#: src/network/telegram_windows.py:895
 msgid "Me"
 msgstr ""
 
-#: src/network/telegram_windows.py:952
+#: src/network/telegram_windows.py:974
 msgid "Group chat history"
 msgstr ""
 
-#: src/network/telegram_windows.py:1053
+#: src/network/telegram_windows.py:1076
 msgid "Incoming call from"
 msgstr ""
 
-#: src/network/telegram_windows.py:1067
+#: src/network/telegram_windows.py:1090
 msgid "CALL"
 msgstr ""
 
-#: src/network/telegram_windows.py:1079
+#: src/network/telegram_windows.py:1102
 msgid "Incoming call from:"
 msgstr ""
 
-#: src/network/telegram_windows.py:1089
+#: src/network/telegram_windows.py:1112
 msgid "Voice chat call (full audio)"
 msgstr ""
 
-#: src/network/telegram_windows.py:1091
+#: src/network/telegram_windows.py:1114
 msgid "Telegram call (signaling only)"
 msgstr ""
 
-#: src/network/telegram_windows.py:1107
+#: src/network/telegram_windows.py:1130
 msgid "Reject"
 msgstr ""
 
-#: src/network/telegram_windows.py:1114
+#: src/network/telegram_windows.py:1137
 msgid "Accept"
 msgstr ""
 
-#: src/network/whatsapp_client.py:495 src/network/whatsapp_client.py:501
+#: src/network/whatsapp_client.py:496 src/network/whatsapp_client.py:502
 msgid "Opened WhatsApp Web in web browser"
 msgstr "Otwarto WhatsApp Web w przeglądarce"
 
-#: src/network/whatsapp_client.py:518
+#: src/network/whatsapp_client.py:519
 msgid "WhatsApp Error"
 msgstr "Błąd WhatsApp"
 
-#: src/network/whatsapp_client.py:524 src/network/whatsapp_webview.py:2066
+#: src/network/whatsapp_client.py:531 src/network/whatsapp_webview.py:2093
 msgid "Disconnected from WhatsApp Web"
 msgstr "Rozłączono z WhatsApp Web"
 
-#: src/network/whatsapp_webview.py:99
+#: src/network/whatsapp_webview.py:123
 msgid "WhatsApp Web - Titan IM"
 msgstr "WhatsApp Web - Titan IM"
 
-#: src/network/whatsapp_webview.py:142 src/network/whatsapp_webview.py:234
-#: src/network/whatsapp_webview.py:333
+#: src/network/whatsapp_webview.py:166 src/network/whatsapp_webview.py:261
+#: src/network/whatsapp_webview.py:360
 msgid "Ładowanie WhatsApp Web..."
 msgstr "Ładowanie WhatsApp Web..."
 
-#: src/network/whatsapp_webview.py:178
+#: src/network/whatsapp_webview.py:205
 msgid "Odśwież\tF5"
 msgstr "Odśwież\tF5"
 
-#: src/network/whatsapp_webview.py:178
+#: src/network/whatsapp_webview.py:205
 msgid "Odśwież stronę"
 msgstr "Odśwież stronę"
 
-#: src/network/whatsapp_webview.py:183 src/network/whatsapp_webview.py:1966
+#: src/network/whatsapp_webview.py:210 src/network/whatsapp_webview.py:1993
 msgid "Wyczyść dane sesji"
 msgstr "Wyczyść dane sesji"
 
-#: src/network/whatsapp_webview.py:183
+#: src/network/whatsapp_webview.py:210
 msgid "Wyczyść cookies i dane"
 msgstr "Wyczyść cookies i dane"
 
-#: src/network/whatsapp_webview.py:188
+#: src/network/whatsapp_webview.py:215
 msgid "Zamknij okno"
 msgstr "Zamknij okno"
 
-#: src/network/whatsapp_webview.py:191
+#: src/network/whatsapp_webview.py:218
 msgid "WhatsApp"
 msgstr "WhatsApp"
 
-#: src/network/whatsapp_webview.py:196
+#: src/network/whatsapp_webview.py:223
 msgid "Powiadomienia"
 msgstr "Powiadomienia"
 
-#: src/network/whatsapp_webview.py:196
+#: src/network/whatsapp_webview.py:223
 msgid "Włącz powiadomienia o nowych wiadomościach"
 msgstr "Włącz powiadomienia o nowych wiadomościach"
 
-#: src/network/whatsapp_webview.py:199
+#: src/network/whatsapp_webview.py:226
 msgid "Mowa (TTS)"
 msgstr "Mowa (TTS)"
 
-#: src/network/whatsapp_webview.py:199
+#: src/network/whatsapp_webview.py:226
 msgid "Włącz powiadomienia głosowe"
 msgstr "Włącz powiadomienia głosowe"
 
-#: src/network/whatsapp_webview.py:202
+#: src/network/whatsapp_webview.py:229
 msgid "Ustawienia"
 msgstr "Ustawienia"
 
-#: src/network/whatsapp_webview.py:207
+#: src/network/whatsapp_webview.py:234
 msgid "O programie"
 msgstr "O programie"
 
-#: src/network/whatsapp_webview.py:207
+#: src/network/whatsapp_webview.py:234
 msgid "Informacje o WhatsApp Web dla Titan IM"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:210
+#: src/network/whatsapp_webview.py:237
 msgid "Pomoc"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:228
+#: src/network/whatsapp_webview.py:255
 msgid "Connecting to WhatsApp Web"
 msgstr "Łączenie z WhatsApp Web"
 
-#: src/network/whatsapp_webview.py:238
+#: src/network/whatsapp_webview.py:265
 msgid "Błąd ładowania WhatsApp Web"
 msgstr "Błąd ładowania WhatsApp Web"
 
-#: src/network/whatsapp_webview.py:247
+#: src/network/whatsapp_webview.py:274
 msgid "WhatsApp Web załadowany"
 msgstr "WhatsApp Web załadowany"
 
-#: src/network/whatsapp_webview.py:329
+#: src/network/whatsapp_webview.py:356
 msgid "Zeskanuj kod QR, aby zalogować się do WhatsApp"
 msgstr "Zeskanuj kod QR, aby zalogować się do WhatsApp"
 
-#: src/network/whatsapp_webview.py:353
+#: src/network/whatsapp_webview.py:380
 msgid "Połączono z WhatsApp"
 msgstr "Połączono z WhatsApp"
 
-#: src/network/whatsapp_webview.py:553 src/network/whatsapp_webview.py:563
-#: src/network/whatsapp_webview.py:570
+#: src/network/whatsapp_webview.py:580 src/network/whatsapp_webview.py:590
+#: src/network/whatsapp_webview.py:597
 #, python-brace-format
 msgid "{} is typing"
 msgstr "{} pisze"
 
-#: src/network/whatsapp_webview.py:555 src/network/whatsapp_webview.py:565
-#: src/network/whatsapp_webview.py:572
+#: src/network/whatsapp_webview.py:582 src/network/whatsapp_webview.py:592
+#: src/network/whatsapp_webview.py:599
 msgid "Someone is typing"
 msgstr "Ktoś pisze"
 
-#: src/network/whatsapp_webview.py:646 src/network/whatsapp_webview.py:656
-#: src/network/whatsapp_webview.py:663
+#: src/network/whatsapp_webview.py:673 src/network/whatsapp_webview.py:683
+#: src/network/whatsapp_webview.py:690
 msgid "New WhatsApp chat"
 msgstr "Nowy czat WhatsApp"
 
-#: src/network/whatsapp_webview.py:648 src/network/whatsapp_webview.py:658
-#: src/network/whatsapp_webview.py:665
+#: src/network/whatsapp_webview.py:675 src/network/whatsapp_webview.py:685
+#: src/network/whatsapp_webview.py:692
 #, python-brace-format
 msgid "New WhatsApp chats: {}"
 msgstr "Nowe czaty WhatsApp: {}"
 
-#: src/network/whatsapp_webview.py:854 src/network/whatsapp_webview.py:858
-#: src/network/whatsapp_webview.py:887
+#: src/network/whatsapp_webview.py:881 src/network/whatsapp_webview.py:885
+#: src/network/whatsapp_webview.py:914
 #, python-brace-format
 msgid "WhatsApp message from {}: {}"
 msgstr "Wiadomość WhatsApp od {}: {}"
 
-#: src/network/whatsapp_webview.py:871
+#: src/network/whatsapp_webview.py:898
 #, python-brace-format
 msgid "WhatsApp: {} new messages from {} contacts"
 msgstr "WhatsApp: {} nowych wiadomości od {} kontaktów"
 
-#: src/network/whatsapp_webview.py:889 src/network/whatsapp_webview.py:948
-#: src/network/whatsapp_webview.py:959
+#: src/network/whatsapp_webview.py:916 src/network/whatsapp_webview.py:975
+#: src/network/whatsapp_webview.py:986
 #, python-brace-format
 msgid "WhatsApp: {} new messages"
 msgstr "WhatsApp: {} nowych wiadomości"
 
-#: src/network/whatsapp_webview.py:938
+#: src/network/whatsapp_webview.py:965
 #, python-brace-format
 msgid "New messages from WhatsApp: {}"
 msgstr "Nowe wiadomości z WhatsApp: {}"
 
-#: src/network/whatsapp_webview.py:940
+#: src/network/whatsapp_webview.py:967
 msgid "New message from WhatsApp"
 msgstr "Nowa wiadomość z WhatsApp"
 
-#: src/network/whatsapp_webview.py:950 src/network/whatsapp_webview.py:961
+#: src/network/whatsapp_webview.py:977 src/network/whatsapp_webview.py:988
 msgid "WhatsApp: new message"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1746
+#: src/network/whatsapp_webview.py:1773
 msgid "Incoming WhatsApp call"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1763
+#: src/network/whatsapp_webview.py:1790
 msgid "WhatsApp call connecting"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1780
+#: src/network/whatsapp_webview.py:1807
 msgid "WhatsApp call connected"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1797
+#: src/network/whatsapp_webview.py:1824
 msgid "WhatsApp call ended"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1957
+#: src/network/whatsapp_webview.py:1984
 msgid "Odświeżanie WhatsApp Web..."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1965
+#: src/network/whatsapp_webview.py:1992
 msgid ""
 "Czy na pewno chcesz wyczyścić wszystkie dane sesji WhatsApp?\n"
 "Będziesz musiał zalogować się ponownie."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1972
+#: src/network/whatsapp_webview.py:1999
 msgid ""
 "Dane sesji zostały wyczyszczone.\n"
 "Odśwież stronę, aby zalogować się ponownie."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1973
+#: src/network/whatsapp_webview.py:2000
 msgid "Sukces"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1976
+#: src/network/whatsapp_webview.py:2003
 msgid "Nie udało się wyczyścić danych sesji."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1986
+#: src/network/whatsapp_webview.py:2013
 msgid ""
 "Integracja WhatsApp Web z systemem Titan IM.\n"
 "Umożliwia korzystanie z WhatsApp w ramach TCE Launcher."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2107
+#: src/network/whatsapp_webview.py:2134
 #, python-brace-format
 msgid ""
 "Nie można uruchomić WhatsApp WebView.\n"
@@ -1350,7 +1354,7 @@ msgid ""
 "Błąd: {}"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2110
+#: src/network/whatsapp_webview.py:2137
 msgid "Błąd WhatsApp WebView"
 msgstr ""
 

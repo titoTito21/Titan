@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,32 +17,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/titan_core/app_manager.py:221
+#: src/titan_core/app_manager.py:223
 msgid "No openfile specified for application"
 msgstr ""
 
-#: src/titan_core/app_manager.py:221 src/titan_core/app_manager.py:229
-#: src/titan_core/app_manager.py:244 src/titan_core/app_manager.py:248
-#: src/titan_core/app_manager.py:283
+#: src/titan_core/app_manager.py:223 src/titan_core/app_manager.py:231
+#: src/titan_core/app_manager.py:246 src/titan_core/app_manager.py:250
+#: src/titan_core/app_manager.py:285
 msgid "Error"
 msgstr ""
 
-#: src/titan_core/app_manager.py:229
+#: src/titan_core/app_manager.py:231
 #, python-brace-format
 msgid "Application file not found: {}"
 msgstr ""
 
-#: src/titan_core/app_manager.py:244
+#: src/titan_core/app_manager.py:246
 #, python-brace-format
 msgid "Unsupported file type: {}"
 msgstr ""
 
-#: src/titan_core/app_manager.py:248
+#: src/titan_core/app_manager.py:250
 #, python-brace-format
 msgid "Error running application: {}"
 msgstr ""
 
-#: src/titan_core/app_manager.py:283
+#: src/titan_core/app_manager.py:285
 #, python-brace-format
 msgid "Cannot run application: {}"
 msgstr ""

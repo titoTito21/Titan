@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-10 14:19+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -46,7 +46,7 @@ msgid "Captured: {}"
 msgstr ""
 
 #: src/ui/settingsgui.py:294 src/ui/settingsgui.py:296
-#: src/ui/settingsgui.py:409 src/ui/settingsgui.py:1972
+#: src/ui/settingsgui.py:409 src/ui/settingsgui.py:1977
 msgid "Settings"
 msgstr ""
 
@@ -98,346 +98,346 @@ msgstr ""
 msgid "Titan-Net"
 msgstr ""
 
-#: src/settings/configvizard.py:334 src/settings/configvizard.py:337
+#: src/settings/configvizard.py:366 src/settings/configvizard.py:369
 #: src/ui/settingsgui.py:565
 msgid "Select sound theme:"
 msgstr ""
 
-#: src/ui/settingsgui.py:579 src/ui/settingsgui.py:1734
+#: src/ui/settingsgui.py:584 src/ui/settingsgui.py:1739
 msgid "No themes"
 msgstr ""
 
-#: src/ui/settingsgui.py:585
+#: src/ui/settingsgui.py:590
 msgid "Stereo sounds"
 msgstr ""
 
-#: src/settings/configvizard.py:349 src/ui/settingsgui.py:590
+#: src/settings/configvizard.py:381 src/ui/settingsgui.py:595
 msgid "Sound theme volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:608
+#: src/ui/settingsgui.py:613
 msgid "Language:"
 msgstr ""
 
-#: src/ui/settingsgui.py:622
+#: src/ui/settingsgui.py:627
 msgid "Startup mode:"
 msgstr ""
 
-#: src/ui/settingsgui.py:628
+#: src/ui/settingsgui.py:633
 msgid "Normal (Graphical interface)"
 msgstr ""
 
-#: src/ui/settingsgui.py:628
+#: src/ui/settingsgui.py:633
 msgid "Minimized (Invisible interface)"
 msgstr ""
 
-#: src/ui/settingsgui.py:628
+#: src/ui/settingsgui.py:633
 msgid "Classic Mode"
 msgstr ""
 
-#: src/ui/settingsgui.py:628
+#: src/ui/settingsgui.py:633
 msgid "Custom"
 msgstr ""
 
-#: src/ui/settingsgui.py:636
+#: src/ui/settingsgui.py:641
 msgid "Available launchers:"
 msgstr ""
 
-#: src/ui/settingsgui.py:644 src/ui/settingsgui.py:648
+#: src/ui/settingsgui.py:649 src/ui/settingsgui.py:653
 msgid "Launcher description:"
 msgstr ""
 
-#: src/ui/settingsgui.py:663 src/ui/settingsgui.py:669
+#: src/ui/settingsgui.py:668 src/ui/settingsgui.py:674
 msgid "Categories:"
 msgstr ""
 
-#: src/ui/settingsgui.py:667
+#: src/ui/settingsgui.py:672
 msgid "Applications"
 msgstr ""
 
-#: src/ui/settingsgui.py:667
+#: src/ui/settingsgui.py:672
 msgid "Games"
 msgstr ""
 
-#: src/ui/settingsgui.py:667
+#: src/ui/settingsgui.py:672
 msgid "Titan IM"
 msgstr ""
 
-#: src/ui/settingsgui.py:687
+#: src/ui/settingsgui.py:692
 msgid "Quick start"
 msgstr ""
 
-#: src/ui/settingsgui.py:692
+#: src/ui/settingsgui.py:697
 msgid "Confirm exit from Titan"
 msgstr ""
 
-#: src/ui/settingsgui.py:702 src/ui/settingsgui.py:721
+#: src/ui/settingsgui.py:707 src/ui/settingsgui.py:726
 msgid "Minimize to system tray"
 msgstr ""
 
-#: src/ui/settingsgui.py:703
+#: src/ui/settingsgui.py:708
 msgid "Enable invisible interface"
 msgstr ""
 
-#: src/ui/settingsgui.py:704
+#: src/ui/settingsgui.py:709
 msgid "Nothing"
 msgstr ""
 
-#: src/ui/settingsgui.py:708
+#: src/ui/settingsgui.py:713
 msgid "When TCE is minimized:"
 msgstr ""
 
-#: src/ui/settingsgui.py:720
+#: src/ui/settingsgui.py:725
 msgid "Close environment"
 msgstr ""
 
-#: src/ui/settingsgui.py:725
+#: src/ui/settingsgui.py:730
 msgid "Alt+F4 keyboard shortcut:"
 msgstr ""
 
-#: src/settings/configvizard.py:387 src/settings/configvizard.py:923
-#: src/ui/settingsgui.py:738 src/ui/settingsgui.py:1261
-#: src/ui/settingsgui.py:1725
+#: src/settings/configvizard.py:419 src/settings/configvizard.py:971
+#: src/ui/settingsgui.py:743 src/ui/settingsgui.py:1266
+#: src/ui/settingsgui.py:1730
 #, python-brace-format
 msgid "Titan UI key: {}"
 msgstr ""
 
-#: src/settings/configvizard.py:319 src/settings/configvizard.py:322
-#: src/ui/settingsgui.py:749
+#: src/settings/configvizard.py:351 src/settings/configvizard.py:354
+#: src/ui/settingsgui.py:754
 msgid "Select interface skin:"
 msgstr ""
 
-#: src/settings/configvizard.py:92 src/settings/configvizard.py:327
-#: src/settings/configvizard.py:754 src/ui/settingsgui.py:763
-#: src/ui/settingsgui.py:765 src/ui/settingsgui.py:1284
-#: src/ui/settingsgui.py:1285
+#: src/settings/configvizard.py:102 src/settings/configvizard.py:359
+#: src/settings/configvizard.py:802 src/ui/settingsgui.py:768
+#: src/ui/settingsgui.py:770 src/ui/settingsgui.py:1289
+#: src/ui/settingsgui.py:1290
 msgid "Default"
 msgstr ""
 
-#: src/settings/configvizard.py:397 src/ui/settingsgui.py:780
+#: src/settings/configvizard.py:429 src/ui/settingsgui.py:785
 msgid "Announce item index"
 msgstr ""
 
-#: src/settings/configvizard.py:405 src/ui/settingsgui.py:785
+#: src/settings/configvizard.py:437 src/ui/settingsgui.py:790
 msgid "Announce widget type"
 msgstr ""
 
-#: src/settings/configvizard.py:413 src/ui/settingsgui.py:790
+#: src/settings/configvizard.py:445 src/ui/settingsgui.py:795
 msgid "Announce first item in category"
 msgstr ""
 
-#: src/ui/settingsgui.py:800
+#: src/ui/settingsgui.py:805
 msgid "Announce screen locking state"
 msgstr ""
 
-#: src/ui/settingsgui.py:806
+#: src/ui/settingsgui.py:811
 msgid "Modify system interface"
 msgstr ""
 
-#: src/ui/settingsgui.py:813
+#: src/ui/settingsgui.py:818
 msgid "Enable TCE sounds outside environment"
 msgstr ""
 
-#: src/settings/configvizard.py:518 src/ui/settingsgui.py:819
+#: src/settings/configvizard.py:550 src/ui/settingsgui.py:824
 msgid "Register Titan TTS as SAPI5 voice"
 msgstr ""
 
-#: src/settings/configvizard.py:537 src/ui/settingsgui.py:833
+#: src/settings/configvizard.py:569 src/ui/settingsgui.py:838
 msgid "Replace Copilot key"
 msgstr ""
 
-#: src/settings/configvizard.py:547 src/ui/settingsgui.py:839
+#: src/settings/configvizard.py:579 src/ui/settingsgui.py:844
 msgid "Replacement key"
 msgstr ""
 
-#: src/ui/settingsgui.py:857
+#: src/ui/settingsgui.py:862
 msgid "Volume Monitor:"
 msgstr ""
 
-#: src/ui/settingsgui.py:861
+#: src/ui/settingsgui.py:866
 msgid "None"
 msgstr ""
 
-#: src/ui/settingsgui.py:861
+#: src/ui/settingsgui.py:866
 msgid "Sound only"
 msgstr ""
 
-#: src/ui/settingsgui.py:861
+#: src/ui/settingsgui.py:866
 msgid "Speech only"
 msgstr ""
 
-#: src/ui/settingsgui.py:861
+#: src/ui/settingsgui.py:866
 msgid "Sound and speech"
 msgstr ""
 
-#: src/ui/settingsgui.py:867
+#: src/ui/settingsgui.py:872
 msgid "Announce battery level every:"
 msgstr ""
 
-#: src/ui/settingsgui.py:871
+#: src/ui/settingsgui.py:876
 msgid "1%"
 msgstr ""
 
-#: src/ui/settingsgui.py:871
+#: src/ui/settingsgui.py:876
 msgid "10%"
 msgstr ""
 
-#: src/ui/settingsgui.py:871
+#: src/ui/settingsgui.py:876
 msgid "15%"
 msgstr ""
 
-#: src/ui/settingsgui.py:871
+#: src/ui/settingsgui.py:876
 msgid "25%"
 msgstr ""
 
-#: src/ui/settingsgui.py:871
+#: src/ui/settingsgui.py:876
 msgid "Never"
 msgstr ""
 
-#: src/ui/settingsgui.py:877
+#: src/ui/settingsgui.py:882
 msgid "Monitor charger connection and disconnection"
 msgstr ""
 
-#: src/ui/settingsgui.py:898
+#: src/ui/settingsgui.py:903
 msgid "System volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:927
+#: src/ui/settingsgui.py:932
 msgid "Disable sound card mute when Titan is running"
 msgstr ""
 
-#: src/ui/settingsgui.py:942
+#: src/ui/settingsgui.py:947
 msgid "Server Configuration"
 msgstr ""
 
-#: src/settings/configvizard.py:457 src/ui/settingsgui.py:947
+#: src/settings/configvizard.py:489 src/ui/settingsgui.py:952
 msgid "Server host:"
 msgstr ""
 
-#: src/settings/configvizard.py:466 src/ui/settingsgui.py:958
+#: src/settings/configvizard.py:498 src/ui/settingsgui.py:963
 msgid "WebSocket port:"
 msgstr ""
 
-#: src/settings/configvizard.py:475 src/ui/settingsgui.py:965
+#: src/settings/configvizard.py:507 src/ui/settingsgui.py:970
 msgid "HTTP port:"
 msgstr ""
 
-#: src/ui/settingsgui.py:976
+#: src/ui/settingsgui.py:981
 msgid ""
 "Audio business card allows you to personalize sounds that other users "
 "hear when you log in, send a message, or view your profile."
 msgstr ""
 
-#: src/ui/settingsgui.py:984
+#: src/ui/settingsgui.py:989
 msgid "Custom business card"
 msgstr ""
 
-#: src/ui/settingsgui.py:992 src/ui/settingsgui.py:993
+#: src/ui/settingsgui.py:997 src/ui/settingsgui.py:998
 msgid "Audio files"
 msgstr ""
 
-#: src/ui/settingsgui.py:1004 src/ui/settingsgui.py:1076
-#: src/ui/settingsgui.py:1364
+#: src/ui/settingsgui.py:1009 src/ui/settingsgui.py:1081
+#: src/ui/settingsgui.py:1369
 msgid "Login sound"
 msgstr ""
 
-#: src/ui/settingsgui.py:1010 src/ui/settingsgui.py:1077
-#: src/ui/settingsgui.py:1365
+#: src/ui/settingsgui.py:1015 src/ui/settingsgui.py:1082
+#: src/ui/settingsgui.py:1370
 msgid "Logout sound"
 msgstr ""
 
-#: src/ui/settingsgui.py:1016 src/ui/settingsgui.py:1078
-#: src/ui/settingsgui.py:1366
+#: src/ui/settingsgui.py:1021 src/ui/settingsgui.py:1083
+#: src/ui/settingsgui.py:1371
 msgid "New message sound"
 msgstr ""
 
-#: src/ui/settingsgui.py:1022 src/ui/settingsgui.py:1079
-#: src/ui/settingsgui.py:1367
+#: src/ui/settingsgui.py:1027 src/ui/settingsgui.py:1084
+#: src/ui/settingsgui.py:1372
 msgid "Avatar audio"
 msgstr ""
 
-#: src/ui/settingsgui.py:1041
+#: src/ui/settingsgui.py:1046
 msgid "Notify on user login/logout"
 msgstr ""
 
-#: src/ui/settingsgui.py:1046
+#: src/ui/settingsgui.py:1051
 msgid "Notify on new applications"
 msgstr ""
 
-#: src/ui/settingsgui.py:1051
+#: src/ui/settingsgui.py:1056
 msgid "Notify on new private messages"
 msgstr ""
 
-#: src/ui/settingsgui.py:1056
+#: src/ui/settingsgui.py:1061
 msgid "Notify on new chat messages"
 msgstr ""
 
-#: src/ui/settingsgui.py:1087
+#: src/ui/settingsgui.py:1092
 #, python-brace-format
 msgid "The file '{}' exceeds the maximum duration of {} seconds."
 msgstr ""
 
-#: src/settings/configvizard.py:939 src/ui/settingsgui.py:1089
-#: src/ui/settingsgui.py:1561 src/ui/settingsgui.py:1567
-#: src/ui/settingsgui.py:1570 src/ui/settingsgui.py:1600
-#: src/ui/settingsgui.py:1608 src/ui/settingsgui.py:1611
+#: src/settings/configvizard.py:987 src/ui/settingsgui.py:1094
+#: src/ui/settingsgui.py:1566 src/ui/settingsgui.py:1572
+#: src/ui/settingsgui.py:1575 src/ui/settingsgui.py:1605
+#: src/ui/settingsgui.py:1613 src/ui/settingsgui.py:1616
 msgid "Error"
 msgstr ""
 
-#: src/ui/settingsgui.py:1110
+#: src/ui/settingsgui.py:1115
 msgid "Enable Titan TTS"
 msgstr ""
 
-#: src/ui/settingsgui.py:1116
+#: src/ui/settingsgui.py:1121
 msgid "Speech engine:"
 msgstr ""
 
-#: src/ui/settingsgui.py:1125
+#: src/ui/settingsgui.py:1130
 msgid "Voice:"
 msgstr ""
 
-#: src/ui/settingsgui.py:1134
+#: src/ui/settingsgui.py:1139
 msgid "Speech rate:"
 msgstr ""
 
-#: src/ui/settingsgui.py:1139
+#: src/ui/settingsgui.py:1144
 msgid "Speech rate"
 msgstr ""
 
-#: src/ui/settingsgui.py:1145
+#: src/ui/settingsgui.py:1150
 msgid "Pitch:"
 msgstr ""
 
-#: src/ui/settingsgui.py:1150
+#: src/ui/settingsgui.py:1155
 msgid "Pitch"
 msgstr ""
 
-#: src/ui/settingsgui.py:1156
+#: src/ui/settingsgui.py:1161
 msgid "Speech volume:"
 msgstr ""
 
-#: src/ui/settingsgui.py:1161
+#: src/ui/settingsgui.py:1166
 msgid "Speech volume"
 msgstr ""
 
-#: src/ui/settingsgui.py:1241 src/ui/settingsgui.py:1670
+#: src/ui/settingsgui.py:1246 src/ui/settingsgui.py:1675
 msgid "No description available."
 msgstr ""
 
-#: src/ui/settingsgui.py:1545 src/ui/settingsgui.py:1577
+#: src/ui/settingsgui.py:1550 src/ui/settingsgui.py:1582
 msgid "This feature is only available on Windows."
 msgstr ""
 
-#: src/ui/settingsgui.py:1545 src/ui/settingsgui.py:1577
+#: src/ui/settingsgui.py:1550 src/ui/settingsgui.py:1582
 msgid "Information"
 msgstr ""
 
-#: src/ui/settingsgui.py:1555 src/ui/settingsgui.py:1594
+#: src/ui/settingsgui.py:1560 src/ui/settingsgui.py:1599
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
 msgstr ""
 
-#: src/ui/settingsgui.py:1561
+#: src/ui/settingsgui.py:1566
 #, python-brace-format
 msgid ""
 "Cannot open SAPI settings:\n"
@@ -446,13 +446,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:1567
+#: src/ui/settingsgui.py:1572
 msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:1570
+#: src/ui/settingsgui.py:1575
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
@@ -461,7 +461,7 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:1600
+#: src/ui/settingsgui.py:1605
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
@@ -470,13 +470,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:1608
+#: src/ui/settingsgui.py:1613
 msgid ""
 "Error: Cannot find accessibility settings. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:1611
+#: src/ui/settingsgui.py:1616
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
@@ -485,222 +485,222 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/settings/configvizard.py:106 src/ui/settingsgui.py:1680
+#: src/settings/configvizard.py:116 src/ui/settingsgui.py:1685
 msgid "Not set"
 msgstr ""
 
-#: src/settings/configvizard.py:109 src/ui/settingsgui.py:1683
+#: src/settings/configvizard.py:119 src/ui/settingsgui.py:1688
 msgid "Ctrl"
 msgstr ""
 
-#: src/settings/configvizard.py:110 src/ui/settingsgui.py:1684
+#: src/settings/configvizard.py:120 src/ui/settingsgui.py:1689
 msgid "Shift"
 msgstr ""
 
-#: src/settings/configvizard.py:111 src/ui/settingsgui.py:1685
+#: src/settings/configvizard.py:121 src/ui/settingsgui.py:1690
 msgid "Alt"
 msgstr ""
 
-#: src/settings/configvizard.py:112 src/ui/settingsgui.py:1686
+#: src/settings/configvizard.py:122 src/ui/settingsgui.py:1691
 msgid "Win"
 msgstr ""
 
-#: src/settings/configvizard.py:113 src/ui/settingsgui.py:1687
+#: src/settings/configvizard.py:123 src/ui/settingsgui.py:1692
 msgid "Cmd"
 msgstr ""
 
-#: src/settings/configvizard.py:114 src/ui/settingsgui.py:1688
+#: src/settings/configvizard.py:124 src/ui/settingsgui.py:1693
 msgid "Accent"
 msgstr ""
 
-#: src/settings/configvizard.py:115 src/ui/settingsgui.py:1689
+#: src/settings/configvizard.py:125 src/ui/settingsgui.py:1694
 msgid "Space"
 msgstr ""
 
-#: src/settings/configvizard.py:116 src/ui/settingsgui.py:1690
+#: src/settings/configvizard.py:126 src/ui/settingsgui.py:1695
 msgid "Tab"
 msgstr ""
 
-#: src/settings/configvizard.py:117 src/ui/settingsgui.py:1691
+#: src/settings/configvizard.py:127 src/ui/settingsgui.py:1696
 msgid "Enter"
 msgstr ""
 
-#: src/settings/configvizard.py:118 src/ui/settingsgui.py:1692
+#: src/settings/configvizard.py:128 src/ui/settingsgui.py:1697
 msgid "Escape"
 msgstr ""
 
-#: src/settings/configvizard.py:119 src/ui/settingsgui.py:1693
+#: src/settings/configvizard.py:129 src/ui/settingsgui.py:1698
 msgid "Backspace"
 msgstr ""
 
-#: src/settings/configvizard.py:120 src/ui/settingsgui.py:1694
+#: src/settings/configvizard.py:130 src/ui/settingsgui.py:1699
 msgid "Delete"
 msgstr ""
 
-#: src/settings/configvizard.py:121 src/ui/settingsgui.py:1695
+#: src/settings/configvizard.py:131 src/ui/settingsgui.py:1700
 msgid "Insert"
 msgstr ""
 
-#: src/settings/configvizard.py:122 src/ui/settingsgui.py:1696
+#: src/settings/configvizard.py:132 src/ui/settingsgui.py:1701
 msgid "Home"
 msgstr ""
 
-#: src/settings/configvizard.py:123 src/ui/settingsgui.py:1697
+#: src/settings/configvizard.py:133 src/ui/settingsgui.py:1702
 msgid "End"
 msgstr ""
 
-#: src/settings/configvizard.py:124 src/ui/settingsgui.py:1698
+#: src/settings/configvizard.py:134 src/ui/settingsgui.py:1703
 msgid "Page Up"
 msgstr ""
 
-#: src/settings/configvizard.py:125 src/ui/settingsgui.py:1699
+#: src/settings/configvizard.py:135 src/ui/settingsgui.py:1704
 msgid "Page Down"
 msgstr ""
 
-#: src/settings/configvizard.py:126 src/ui/settingsgui.py:1700
+#: src/settings/configvizard.py:136 src/ui/settingsgui.py:1705
 msgid "Up"
 msgstr ""
 
-#: src/settings/configvizard.py:127 src/ui/settingsgui.py:1701
+#: src/settings/configvizard.py:137 src/ui/settingsgui.py:1706
 msgid "Down"
 msgstr ""
 
-#: src/settings/configvizard.py:128 src/ui/settingsgui.py:1702
+#: src/settings/configvizard.py:138 src/ui/settingsgui.py:1707
 msgid "Left"
 msgstr ""
 
-#: src/settings/configvizard.py:129 src/ui/settingsgui.py:1703
+#: src/settings/configvizard.py:139 src/ui/settingsgui.py:1708
 msgid "Right"
 msgstr ""
 
-#: src/ui/settingsgui.py:1728
+#: src/ui/settingsgui.py:1733
 #, python-brace-format
 msgid "Titan UI key set to {}"
 msgstr ""
 
-#: src/ui/settingsgui.py:1955
+#: src/ui/settingsgui.py:1960
 msgid ""
 "Settings have been saved. Please restart the application for changes to "
 "take full effect."
 msgstr ""
 
-#: src/ui/settingsgui.py:1957
+#: src/ui/settingsgui.py:1962
 msgid "Settings have been saved."
 msgstr ""
 
-#: src/ui/settingsgui.py:2258
+#: src/ui/settingsgui.py:2263
 msgid "macOS Speech"
 msgstr ""
 
-#: src/ui/settingsgui.py:2259
+#: src/ui/settingsgui.py:2264
 msgid "Speech Dispatcher"
 msgstr ""
 
-#: src/ui/settingsgui.py:2419 src/ui/settingsgui.py:2424
+#: src/ui/settingsgui.py:2424 src/ui/settingsgui.py:2429
 msgid "Default voice"
 msgstr ""
 
-#: src/settings/configvizard.py:150 src/settings/configvizard.py:583
+#: src/settings/configvizard.py:160 src/settings/configvizard.py:615
 msgid "Welcome to Titan!"
 msgstr ""
 
-#: src/settings/configvizard.py:227
+#: src/settings/configvizard.py:237
 msgid "Back"
 msgstr ""
 
-#: src/settings/configvizard.py:232 src/settings/configvizard.py:607
+#: src/settings/configvizard.py:242 src/settings/configvizard.py:639
 msgid "Next"
 msgstr ""
 
-#: src/settings/configvizard.py:245
+#: src/settings/configvizard.py:255
 msgid "Close"
 msgstr ""
 
-#: src/settings/configvizard.py:269
+#: src/settings/configvizard.py:301
 msgid ""
 "This wizard will guide you through configuring TCE to your preferences. "
 "Press Next to continue, or Close to leave the wizard."
 msgstr ""
 
-#: src/settings/configvizard.py:288 src/settings/configvizard.py:292
+#: src/settings/configvizard.py:320 src/settings/configvizard.py:324
 msgid "Available languages:"
 msgstr ""
 
-#: src/settings/configvizard.py:311
+#: src/settings/configvizard.py:343
 msgid ""
 "Titan supports skins and sound themes. Additional sound themes and skins "
 "can be downloaded from the application repository in titan-net or from "
 "other creators."
 msgstr ""
 
-#: src/settings/configvizard.py:377
+#: src/settings/configvizard.py:409
 msgid ""
 "Titan can also switch to an invisible interface so you do not have to "
 "keep a window open all the time. You can configure the invisible "
 "interface here."
 msgstr ""
 
-#: src/settings/configvizard.py:431
+#: src/settings/configvizard.py:463
 msgid ""
 "Titan also includes the titan-net portal, which lets you communicate with"
 " other TCE users and download add-ons for TCE from a dedicated "
 "repository."
 msgstr ""
 
-#: src/settings/configvizard.py:449
+#: src/settings/configvizard.py:481
 msgid "I am using my own titan-net server"
 msgstr ""
 
-#: src/settings/configvizard.py:489
+#: src/settings/configvizard.py:521
 msgid "Create titan-net account"
 msgstr ""
 
-#: src/settings/configvizard.py:506
+#: src/settings/configvizard.py:538
 msgid "On this step you can enable features that may affect the operating system."
 msgstr ""
 
-#: src/settings/configvizard.py:584
+#: src/settings/configvizard.py:616
 msgid "Language selection"
 msgstr ""
 
-#: src/settings/configvizard.py:585
+#: src/settings/configvizard.py:617
 msgid "Skin and sound theme"
 msgstr ""
 
-#: src/settings/configvizard.py:586
+#: src/settings/configvizard.py:618
 msgid "Invisible interface"
 msgstr ""
 
-#: src/settings/configvizard.py:587
+#: src/settings/configvizard.py:619
 msgid "Titan-net"
 msgstr ""
 
-#: src/settings/configvizard.py:588
+#: src/settings/configvizard.py:620
 msgid "Additional settings"
 msgstr ""
 
-#: src/settings/configvizard.py:605
+#: src/settings/configvizard.py:637
 msgid "Finish"
 msgstr ""
 
-#: src/settings/configvizard.py:639
+#: src/settings/configvizard.py:688
 #, python-brace-format
 msgid ""
 "Titan is currently set to {language}. If this message is in the language "
 "you want to use TCE in, press Next."
 msgstr ""
 
-#: src/settings/configvizard.py:938
+#: src/settings/configvizard.py:986
 msgid "Titan-net is not available."
 msgstr ""
 
-#: src/settings/configvizard.py:972
+#: src/settings/configvizard.py:1020
 msgid ""
 "The configuration wizard is complete. You can now use Titan without "
 "restrictions."
 msgstr ""
 
-#: src/settings/configvizard.py:974
+#: src/settings/configvizard.py:1022
 msgid "Congratulations!"
 msgstr ""
 

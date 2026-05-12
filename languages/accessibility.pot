@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,23 +17,116 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/accessibility/messages.py:187
-msgid "To use invisible interface, press {keyname} key"
+#: src/accessibility/messages.py:143
+msgid "Not set"
+msgstr ""
+
+#: src/accessibility/messages.py:146
+msgid "Ctrl"
+msgstr ""
+
+#: src/accessibility/messages.py:147
+msgid "Shift"
+msgstr ""
+
+#: src/accessibility/messages.py:148
+msgid "Alt"
+msgstr ""
+
+#: src/accessibility/messages.py:149
+msgid "Win"
+msgstr ""
+
+#: src/accessibility/messages.py:150
+msgid "Cmd"
+msgstr ""
+
+#: src/accessibility/messages.py:151
+msgid "Accent"
+msgstr ""
+
+#: src/accessibility/messages.py:152
+msgid "Space"
+msgstr ""
+
+#: src/accessibility/messages.py:153
+msgid "Tab"
+msgstr ""
+
+#: src/accessibility/messages.py:154
+msgid "Enter"
+msgstr ""
+
+#: src/accessibility/messages.py:155
+msgid "Escape"
+msgstr ""
+
+#: src/accessibility/messages.py:156
+msgid "Backspace"
+msgstr ""
+
+#: src/accessibility/messages.py:157
+msgid "Delete"
+msgstr ""
+
+#: src/accessibility/messages.py:158
+msgid "Insert"
+msgstr ""
+
+#: src/accessibility/messages.py:159
+msgid "Home"
+msgstr ""
+
+#: src/accessibility/messages.py:160
+msgid "End"
+msgstr ""
+
+#: src/accessibility/messages.py:161
+msgid "Page Up"
+msgstr ""
+
+#: src/accessibility/messages.py:162
+msgid "Page Down"
+msgstr ""
+
+#: src/accessibility/messages.py:163
+msgid "Up"
+msgstr ""
+
+#: src/accessibility/messages.py:164
+msgid "Down"
+msgstr ""
+
+#: src/accessibility/messages.py:165
+msgid "Left"
+msgstr ""
+
+#: src/accessibility/messages.py:166
+msgid "Right"
 msgstr ""
 
 #: src/accessibility/messages.py:192
+#, python-brace-format
+msgid "To use invisible interface, press {keyname} key"
+msgstr ""
+
+#: src/accessibility/messages.py:216
+msgid "Please disable Titan UI"
+msgstr ""
+
+#: src/accessibility/messages.py:260
 msgid "To switch between lists, use left or right arrow keys"
 msgstr ""
 
-#: src/accessibility/messages.py:269
+#: src/accessibility/messages.py:337
 msgid "Tab bar"
 msgstr ""
 
-#: src/accessibility/messages.py:285
+#: src/accessibility/messages.py:353
 msgid "checked"
 msgstr ""
 
-#: src/accessibility/messages.py:285
+#: src/accessibility/messages.py:353
 msgid "unchecked"
 msgstr ""
 

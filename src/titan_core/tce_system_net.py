@@ -3,12 +3,16 @@
 import wx
 import sys
 import os
+import re
 import threading
 import time
 import platform
+import subprocess
+import tempfile
 from src.titan_core.translation import _, set_language, language_code
 from src.titan_core.sound import play_sound
 from src.titan_core.skin_manager import apply_skin_to_window
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_subprocess_kwargs
 import concurrent.futures
 
 try:
@@ -17,6 +21,16 @@ try:
     PYWIFI_AVAILABLE = True
 except ImportError:
     PYWIFI_AVAILABLE = False
+
+
+def _xml_escape(value):
+    """Escape characters that have meaning in XML attribute/text content."""
+    return (str(value)
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('"', '&quot;')
+            .replace("'", '&apos;'))
 
 
 def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
@@ -156,131 +170,480 @@ class NetworkManager:
             # Return cached results if available
             return self.cached_networks if self.cached_networks else []
     
-    def update_connection_status(self):
-        """Update connection status of networks"""
-        if not self.interface:
-            return
-        
+    def _get_windows_connected_ssid(self):
+        """Return the SSID of the currently associated WiFi network on Windows, or None."""
         try:
-            # Reset all to disconnected first
+            result = subprocess.run(
+                ['netsh', 'wlan', 'show', 'interfaces'],
+                capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
+            )
+            if result.returncode != 0:
+                return None
+            state_connected = False
+            ssid = None
+            for line in result.stdout.split('\n'):
+                stripped = line.strip()
+                if stripped.lower().startswith('state'):
+                    state_connected = 'connected' in stripped.lower() and 'disconnect' not in stripped.lower()
+                if re.match(r'^\s*SSID\s*:', line) and 'BSSID' not in line:
+                    parts = line.split(':', 1)
+                    if len(parts) == 2:
+                        ssid = parts[1].strip() or None
+            return ssid if state_connected else None
+        except Exception as e:
+            print(f"netsh show interfaces failed: {e}")
+            return None
+
+    def _get_linux_connected_ssid(self):
+        """Return the SSID of the currently associated WiFi network on Linux via nmcli or iwgetid."""
+        # Try nmcli first
+        try:
+            out = subprocess.check_output(
+                ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                text=True, stderr=subprocess.DEVNULL, timeout=5
+            )
+            for line in out.strip().split('\n'):
+                parts = line.split(':', 1)
+                if len(parts) == 2 and parts[0] == 'yes':
+                    return parts[1] or None
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        # Try iwgetid fallback
+        try:
+            out = subprocess.check_output(['iwgetid', '-r'], text=True, stderr=subprocess.DEVNULL, timeout=3).strip()
+            return out or None
+        except Exception:
+            return None
+
+    def _get_macos_connected_ssid(self):
+        """Return the SSID of the currently associated WiFi network on macOS via airport tool."""
+        try:
+            out = subprocess.check_output(
+                ['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-I'],
+                text=True, stderr=subprocess.DEVNULL, timeout=5
+            )
+            for line in out.split('\n'):
+                line = line.strip()
+                if line.startswith('SSID:'):
+                    return line.split(':', 1)[1].strip() or None
+            return None
+        except Exception:
+            return None
+
+    def update_connection_status(self):
+        """Update connection status of networks. Uses OS-native tools for accuracy."""
+        try:
             for network in self.current_networks:
                 network['connected'] = False
             self.connected_network = None
-            
-            # Check if interface is connected
-            if self.interface.status() == const.IFACE_CONNECTED:
-                # Try multiple methods to get connected network name
-                connected_ssid = None
-                
-                # Method 1: Check network profiles
+
+            connected_ssid = None
+            if IS_WINDOWS:
+                connected_ssid = self._get_windows_connected_ssid()
+            elif IS_LINUX:
+                connected_ssid = self._get_linux_connected_ssid()
+            elif IS_MACOS:
+                connected_ssid = self._get_macos_connected_ssid()
+
+            if not connected_ssid and self.interface:
                 try:
-                    profiles = self.interface.network_profiles()
-                    if profiles:
+                    if self.interface.status() == const.IFACE_CONNECTED:
+                        profiles = self.interface.network_profiles() or []
                         for profile in profiles:
-                            if hasattr(profile, 'ssid') and profile.ssid:
+                            if getattr(profile, 'ssid', None):
                                 connected_ssid = profile.ssid
                                 break
-                except:
+                except Exception:
                     pass
-                
-                # Method 2: Use netsh (Windows specific) as fallback
-                if not connected_ssid and platform.system() == "Windows":
-                    try:
-                        import subprocess
-                        result = subprocess.run(['netsh', 'wlan', 'show', 'profile'], 
-                                              capture_output=True, text=True, timeout=5)
-                        if result.returncode == 0:
-                            # This is a simplified approach - in real implementation 
-                            # you'd parse the output to find the currently connected profile
-                            pass
-                    except:
-                        pass
-                
-                # Mark the connected network if found
-                if connected_ssid:
-                    for network in self.current_networks:
-                        if network['ssid'] == connected_ssid:
-                            network['connected'] = True
-                            self.connected_network = connected_ssid
-                            print(f"Found connected network: {connected_ssid}")
-                            break
-                else:
-                    # If we can't determine the specific network but interface says connected,
-                    # try to guess from scan results (networks with strongest signal might be connected)
-                    print("Interface connected but couldn't determine specific network")
-                    
+
+            if connected_ssid:
+                self.connected_network = connected_ssid
+                for network in self.current_networks:
+                    if network.get('ssid') == connected_ssid:
+                        network['connected'] = True
+                        print(f"Found connected network: {connected_ssid}")
+                        break
         except Exception as e:
             print(f"Error updating connection status: {e}")
-            # Fallback - assume no connections
             for network in self.current_networks:
                 network['connected'] = False
-    
-    def connect_to_network(self, ssid, password=None):
-        """Connect to a WiFi network"""
-        if not self.wifi_enabled or not self.interface:
+
+    def _build_windows_wifi_profile_xml(self, ssid, password, security_type='WPA2PSK'):
+        """Build a Windows WLAN profile XML for the given SSID/security."""
+        safe_ssid = _xml_escape(ssid)
+        if password is None:
+            security_block = (
+                '            <authEncryption>'
+                '                <authentication>open</authentication>'
+                '                <encryption>none</encryption>'
+                '                <useOneX>false</useOneX>'
+                '            </authEncryption>'
+            )
+        else:
+            safe_pwd = _xml_escape(password)
+            encryption = 'AES' if security_type in ('WPA2PSK', 'WPA3SAE') else 'TKIP'
+            security_block = (
+                f'            <authEncryption>'
+                f'                <authentication>{security_type}</authentication>'
+                f'                <encryption>{encryption}</encryption>'
+                f'                <useOneX>false</useOneX>'
+                f'            </authEncryption>'
+                f'            <sharedKey>'
+                f'                <keyType>passPhrase</keyType>'
+                f'                <protected>false</protected>'
+                f'                <keyMaterial>{safe_pwd}</keyMaterial>'
+                f'            </sharedKey>'
+            )
+        return (
+            '<?xml version="1.0"?>'
+            '<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">'
+            f'    <name>{safe_ssid}</name>'
+            '    <SSIDConfig>'
+            '        <SSID>'
+            f'            <name>{safe_ssid}</name>'
+            '        </SSID>'
+            '    </SSIDConfig>'
+            '    <connectionType>ESS</connectionType>'
+            '    <connectionMode>auto</connectionMode>'
+            '    <MSM>'
+            '        <security>'
+            f'{security_block}'
+            '        </security>'
+            '    </MSM>'
+            '</WLANProfile>'
+        )
+
+    def _connect_windows_netsh(self, ssid, password, target_network):
+        """Connect on Windows via netsh - writes profile XML, adds it, then connects."""
+        is_encrypted = bool(target_network and target_network.get('encrypted'))
+        security_types = []
+        if is_encrypted and password:
+            security_types = ['WPA2PSK', 'WPAPSK']
+        elif not is_encrypted:
+            security_types = [None]
+        else:
             return False
-        
+
+        for sec in security_types:
+            profile_path = None
+            try:
+                xml = self._build_windows_wifi_profile_xml(ssid, password if sec else None, sec or 'WPA2PSK')
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False, encoding='utf-8') as f:
+                    f.write(xml)
+                    profile_path = f.name
+
+                add = subprocess.run(
+                    ['netsh', 'wlan', 'add', 'profile', f'filename={profile_path}', 'user=current'],
+                    capture_output=True, text=True, timeout=10, **get_subprocess_kwargs()
+                )
+                if add.returncode != 0:
+                    print(f"netsh add profile ({sec}) failed: {add.stdout} {add.stderr}")
+                    continue
+
+                conn = subprocess.run(
+                    ['netsh', 'wlan', 'connect', f'name={ssid}', f'ssid={ssid}'],
+                    capture_output=True, text=True, timeout=10, **get_subprocess_kwargs()
+                )
+                if conn.returncode != 0:
+                    print(f"netsh connect ({sec}) failed: {conn.stdout} {conn.stderr}")
+                    continue
+
+                # Poll up to 20s for association
+                for _ in range(40):
+                    time.sleep(0.5)
+                    current = self._get_windows_connected_ssid()
+                    if current == ssid:
+                        self.connected_network = ssid
+                        return True
+            except Exception as e:
+                print(f"netsh connect attempt ({sec}) raised: {e}")
+            finally:
+                if profile_path:
+                    try:
+                        os.unlink(profile_path)
+                    except Exception:
+                        pass
+        return False
+
+    def _connect_pywifi(self, ssid, password, target_network):
+        """Fallback connect via pywifi profile - used when OS-native tools aren't available."""
+        if not self.interface:
+            return False
+        is_encrypted = bool(target_network and target_network.get('encrypted'))
+
         try:
-            # Disconnect from current network first
             self.interface.disconnect()
-            time.sleep(1)
-            
-            # Create profile for the network
+            time.sleep(1.0)
+        except Exception:
+            pass
+
+        try:
             profile = pywifi.Profile()
             profile.ssid = ssid
             profile.auth = const.AUTH_ALG_OPEN
-            
-            # Find the network in scan results to get encryption info
-            target_network = None
-            for network in self.current_networks:
-                if network['ssid'] == ssid:
-                    target_network = network
-                    break
-            
-            if target_network and target_network['encrypted'] and password:
+            if is_encrypted and password:
                 profile.akm.append(const.AKM_TYPE_WPA2PSK)
                 profile.cipher = const.CIPHER_TYPE_CCMP
                 profile.key = password
             else:
+                profile.akm.append(const.AKM_TYPE_NONE)
                 profile.cipher = const.CIPHER_TYPE_NONE
-            
-            # Remove all existing profiles and add new one
-            self.interface.remove_all_network_profiles()
+
+            try:
+                self.interface.remove_all_network_profiles()
+            except Exception:
+                pass
             tmp_profile = self.interface.add_network_profile(profile)
-            
-            # Connect to the network
             self.interface.connect(tmp_profile)
-            
-            # Wait for connection
-            for _ in range(10):  # Wait up to 10 seconds
-                time.sleep(1)
+
+            # Poll up to 20s for IFACE_CONNECTED
+            for _ in range(40):
+                time.sleep(0.5)
                 if self.interface.status() == const.IFACE_CONNECTED:
                     self.connected_network = ssid
                     return True
-            
             return False
         except Exception as e:
-            print(f"Error connecting to network: {e}")
+            print(f"pywifi connect error: {e}")
             return False
-    
-    def disconnect(self):
-        """Disconnect from current network"""
-        if not self.interface:
-            return False
-        
+
+    def _connect_linux_nmcli(self, ssid, password, target_network):
+        """Connect on Linux via nmcli - works whether or not the network was scanned."""
+        is_encrypted = bool(target_network and target_network.get('encrypted'))
+        cmd = ['nmcli', 'device', 'wifi', 'connect', ssid]
+        if is_encrypted and password:
+            cmd += ['password', password]
         try:
-            self.interface.disconnect()
-            self.connected_network = None
-            return True
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                # Verify association
+                for _ in range(20):
+                    time.sleep(0.5)
+                    if self._get_linux_connected_ssid() == ssid:
+                        self.connected_network = ssid
+                        return True
+                return False
+            print(f"nmcli connect failed: {result.stdout} {result.stderr}")
+            return False
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+            print(f"nmcli connect raised: {e}")
+            return False
+
+    def _connect_macos_networksetup(self, ssid, password, target_network):
+        """Connect on macOS via networksetup -setairportnetwork."""
+        # Discover Wi-Fi device name
+        iface_name = None
+        try:
+            out = subprocess.check_output(
+                ['networksetup', '-listallhardwareports'],
+                text=True, timeout=5
+            )
+            in_wifi = False
+            for line in out.split('\n'):
+                if line.startswith('Hardware Port:') and 'Wi-Fi' in line:
+                    in_wifi = True
+                elif in_wifi and line.startswith('Device:'):
+                    iface_name = line.split(':', 1)[1].strip()
+                    break
+        except Exception as e:
+            print(f"networksetup discovery failed: {e}")
+            return False
+        if not iface_name:
+            return False
+
+        cmd = ['networksetup', '-setairportnetwork', iface_name, ssid]
+        if password:
+            cmd.append(password)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0 and 'failed' not in (result.stdout + result.stderr).lower():
+                for _ in range(20):
+                    time.sleep(0.5)
+                    if self._get_macos_connected_ssid() == ssid:
+                        self.connected_network = ssid
+                        return True
+                return False
+            print(f"networksetup connect failed: {result.stdout} {result.stderr}")
+            return False
+        except Exception as e:
+            print(f"networksetup connect raised: {e}")
+            return False
+
+    def connect_to_network(self, ssid, password=None):
+        """Connect to a WiFi network. Uses OS-native tools first, pywifi as fallback."""
+        if not self.wifi_enabled:
+            return False
+        if not ssid:
+            return False
+
+        target_network = next((n for n in self.current_networks if n.get('ssid') == ssid), None)
+
+        if IS_WINDOWS:
+            if self._connect_windows_netsh(ssid, password, target_network):
+                return True
+            print("Windows netsh connect failed - falling back to pywifi")
+        elif IS_LINUX:
+            if self._connect_linux_nmcli(ssid, password, target_network):
+                return True
+            print("Linux nmcli connect failed - falling back to pywifi")
+        elif IS_MACOS:
+            if self._connect_macos_networksetup(ssid, password, target_network):
+                return True
+            print("macOS networksetup connect failed - falling back to pywifi")
+
+        return self._connect_pywifi(ssid, password, target_network)
+
+    def disconnect(self):
+        """Disconnect from current network. Uses OS-native tools then pywifi fallback."""
+        try:
+            if IS_WINDOWS:
+                try:
+                    result = subprocess.run(
+                        ['netsh', 'wlan', 'disconnect'],
+                        capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
+                    )
+                    if result.returncode == 0:
+                        self.connected_network = None
+                        return True
+                except Exception as e:
+                    print(f"netsh disconnect failed: {e}")
+            elif IS_LINUX:
+                # Find the active wifi connection name and bring it down
+                try:
+                    out = subprocess.check_output(
+                        ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
+                        text=True, stderr=subprocess.DEVNULL, timeout=5
+                    )
+                    for line in out.strip().split('\n'):
+                        parts = line.split(':')
+                        if len(parts) >= 2 and 'wireless' in parts[1]:
+                            subprocess.run(
+                                ['nmcli', 'connection', 'down', parts[0]],
+                                capture_output=True, text=True, timeout=5
+                            )
+                    self.connected_network = None
+                    return True
+                except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    print(f"nmcli disconnect failed: {e}")
+            elif IS_MACOS:
+                iface_name = None
+                try:
+                    out = subprocess.check_output(
+                        ['networksetup', '-listallhardwareports'], text=True, timeout=5
+                    )
+                    in_wifi = False
+                    for line in out.split('\n'):
+                        if line.startswith('Hardware Port:') and 'Wi-Fi' in line:
+                            in_wifi = True
+                        elif in_wifi and line.startswith('Device:'):
+                            iface_name = line.split(':', 1)[1].strip()
+                            break
+                except Exception:
+                    pass
+                if iface_name:
+                    try:
+                        subprocess.run(
+                            ['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport',
+                             iface_name, '-z'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        self.connected_network = None
+                        return True
+                    except Exception as e:
+                        print(f"airport disassociate failed: {e}")
+
+            # pywifi fallback
+            if self.interface:
+                self.interface.disconnect()
+                self.connected_network = None
+                return True
+            return False
         except Exception as e:
             print(f"Error disconnecting: {e}")
             return False
-    
+
     def toggle_wifi(self, enable):
-        """Enable/disable WiFi interface"""
-        # This is a simplified version - actual implementation would depend on OS
-        self.wifi_enabled = enable
-        return enable
+        """Enable or disable the WiFi radio. On Windows uses netsh (no admin
+        needed for connect/disconnect). 'Off' = disconnect from current network;
+        'On' = re-enable scanning. True hardware radio toggle on Windows
+        requires admin rights, so we use a soft toggle that matches user intent.
+        """
+        try:
+            if IS_WINDOWS:
+                if enable:
+                    # Best-effort re-enable scanning
+                    try:
+                        if self.interface:
+                            self.interface.scan()
+                    except Exception:
+                        pass
+                    self.wifi_enabled = True
+                    return True
+                else:
+                    # Soft "off" - disconnect from any associated network
+                    try:
+                        subprocess.run(
+                            ['netsh', 'wlan', 'disconnect'],
+                            capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
+                        )
+                    except Exception as e:
+                        print(f"netsh disconnect failed: {e}")
+                    self.connected_network = None
+                    self.wifi_enabled = False
+                    return True
+
+            if IS_LINUX:
+                cmd = ['nmcli', 'radio', 'wifi', 'on' if enable else 'off']
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        self.wifi_enabled = enable
+                        return True
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    print(f"nmcli radio toggle failed: {e}")
+                # rfkill fallback
+                try:
+                    action = 'unblock' if enable else 'block'
+                    subprocess.run(['rfkill', action, 'wifi'], capture_output=True, text=True, timeout=5)
+                    self.wifi_enabled = enable
+                    return True
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    print(f"rfkill toggle failed: {e}")
+
+            if IS_MACOS:
+                iface_name = None
+                try:
+                    out = subprocess.check_output(
+                        ['networksetup', '-listallhardwareports'],
+                        text=True, timeout=5
+                    )
+                    in_wifi = False
+                    for line in out.split('\n'):
+                        if line.startswith('Hardware Port:') and 'Wi-Fi' in line:
+                            in_wifi = True
+                        elif in_wifi and line.startswith('Device:'):
+                            iface_name = line.split(':', 1)[1].strip()
+                            break
+                except Exception as e:
+                    print(f"networksetup discovery failed: {e}")
+                if iface_name:
+                    try:
+                        subprocess.run(
+                            ['networksetup', '-setairportpower', iface_name, 'on' if enable else 'off'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        self.wifi_enabled = enable
+                        return True
+                    except Exception as e:
+                        print(f"networksetup setairportpower failed: {e}")
+
+            # Last-resort soft toggle
+            self.wifi_enabled = enable
+            return enable
+        except Exception as e:
+            print(f"toggle_wifi error: {e}")
+            self.wifi_enabled = enable
+            return enable
 
 class WiFiPasswordDialog(wx.Dialog):
     def __init__(self, parent, network_name):
@@ -303,7 +666,7 @@ class WiFiPasswordDialog(wx.Dialog):
         password_label = wx.StaticText(self, label=_("Enter WiFi network password:"))
         sizer.Add(password_label, 0, wx.ALL, 10)
         
-        self.password_ctrl = wx.TextCtrl(self, style=wx.TE_PASSWORD)
+        self.password_ctrl = wx.TextCtrl(self, style=wx.TE_PASSWORD | wx.TE_PROCESS_ENTER)
         sizer.Add(self.password_ctrl, 0, wx.EXPAND | wx.ALL, 10)
         
         # Remember password checkbox
@@ -676,28 +1039,77 @@ class WiFiGUIPanel(wx.Panel):
         else:
             _show_skinned_message(_("Failed to disconnect"), _("Error"), wx.OK | wx.ICON_ERROR)
 
+def _iui_announce_widget_type():
+    """Return True when the IUI 'announce_widget_type' option is on. Safe import."""
+    try:
+        from src.settings.settings import get_setting
+        return get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
+    except Exception as e:
+        print(f"WiFiPanel: unable to read announce_widget_type setting: {e}")
+        return False
+
+
+def _prompt_wifi_password(ssid):
+    """Show a modal wx password dialog for the given SSID. Returns the password string or None."""
+    result = {'password': None}
+
+    def _do_show():
+        try:
+            dlg = WiFiPasswordDialog(None, ssid)
+            try:
+                apply_skin_to_window(dlg)
+            except Exception:
+                pass
+            try:
+                if dlg.ShowModal() == wx.ID_OK:
+                    result['password'] = dlg.password
+            finally:
+                dlg.Destroy()
+        except Exception as e:
+            print(f"Error showing WiFi password dialog: {e}")
+
+    try:
+        if wx.IsMainThread():
+            _do_show()
+        else:
+            evt = threading.Event()
+
+            def _wrapper():
+                try:
+                    _do_show()
+                finally:
+                    evt.set()
+
+            wx.CallAfter(_wrapper)
+            # Wait for the dialog to close; cap the wait so we never deadlock
+            evt.wait(timeout=120)
+    except Exception as e:
+        print(f"Error scheduling WiFi password dialog: {e}")
+
+    return result['password']
+
+
 class WiFiPanel:
-    """WiFi Panel for Invisible UI - works like volume panel"""
+    """WiFi Panel for Invisible UI - works like volume panel.
+
+    Two virtual controls: 'wifi_toggle' (checkbox) and 'networks' (list).
+    The initial network scan runs in a background thread so opening the
+    panel never blocks the IUI thread.
+    """
+
     def __init__(self, speak_func):
         self.speak_func = speak_func
         self.network_manager = NetworkManager()
         self.networks = []
-        self.current_network_index = 0  # Index within network list
+        self.current_network_index = 0
         self.wifi_enabled = self.network_manager.wifi_enabled
         self.scanning_in_progress = False
-        # Control type strings for translation
-        self._control_types = {
-            'checkbox': _("checkbox"),
-            'list item': _("list item")
-        }
-        
-        # Start on networks if available, otherwise on wifi_toggle
-        if self.networks and self.wifi_enabled:
-            self.current_control = "networks"
-        else:
-            self.current_control = "wifi_toggle"
-        
-        self.refresh_networks()
+        # Always start on WiFi toggle until the first scan completes — networks list is empty here.
+        self.current_control = "wifi_toggle"
+
+        # Kick the first scan off in the background so opening the panel is instant.
+        if self.wifi_enabled:
+            self.refresh_networks(force_scan=False, threaded=True)
 
     def speak(self, text, interrupt=True):
         """Safely speak text using the provided speak function"""
@@ -709,225 +1121,188 @@ class WiFiPanel:
         except Exception as e:
             print(f"Error in WiFi Panel speak: {e}")
             print(f"WiFi Panel speak fallback: {text}")
-        
+
     def refresh_networks(self, force_scan=False, threaded=False):
-        """Refresh network list - optionally in background thread"""
+        """Refresh network list - optionally in background thread."""
         if not self.wifi_enabled:
             self.networks = []
             return
-        
+
         if threaded and not self.scanning_in_progress:
-            # Run scan in background thread to avoid freezing
             self.scanning_in_progress = True
-            
+
             def background_scan():
                 try:
-                    if not hasattr(self, 'network_manager') or self.network_manager is None:
-                        print("Error: network_manager not initialized")
-                        self.scanning_in_progress = False
+                    if not getattr(self, 'network_manager', None):
+                        print("WiFiPanel: network_manager not initialized")
                         return
-                        
                     try:
-                        networks = self.network_manager.scan_networks(force_scan=force_scan)
-                        if networks is None:
-                            networks = []
+                        networks = self.network_manager.scan_networks(force_scan=force_scan) or []
                     except Exception as e:
-                        print(f"Error scanning networks: {e}")
+                        print(f"WiFiPanel: error scanning networks: {e}")
                         networks = []
-                    
                     try:
                         self.network_manager.update_connection_status()
                     except Exception as e:
-                        print(f"Error updating connection status: {e}")
-                        
-                    # Update networks on main thread
+                        print(f"WiFiPanel: error updating connection status: {e}")
                     self.networks = networks
-                    self.scanning_in_progress = False
-                    
                     try:
-                        self.speak(_("Networks updated"))
+                        if networks:
+                            self.speak(_("Found {} networks").format(len(networks)))
+                        else:
+                            self.speak(_("No WiFi networks found"))
                     except Exception as e:
-                        print(f"Error speaking networks updated: {e}")
-                        
+                        print(f"WiFiPanel: error speaking scan result: {e}")
                 except Exception as e:
-                    print(f"Error in background scan: {e}")
+                    print(f"WiFiPanel: error in background scan: {e}")
+                finally:
                     self.scanning_in_progress = False
-            
-            import threading
+
             scan_thread = threading.Thread(target=background_scan, daemon=True)
             scan_thread.start()
             self.speak(_("Scanning networks in background..."))
         else:
-            # Synchronous scan
             try:
-                if not hasattr(self, 'network_manager') or self.network_manager is None:
-                    print("Error: network_manager not initialized")
+                if not getattr(self, 'network_manager', None):
                     self.networks = []
                     return
-                    
-                self.networks = self.network_manager.scan_networks(force_scan=force_scan)
-                if self.networks is None:
-                    self.networks = []
-                    
+                self.networks = self.network_manager.scan_networks(force_scan=force_scan) or []
                 self.network_manager.update_connection_status()
             except Exception as e:
-                print(f"Error in synchronous network scan: {e}")
+                print(f"WiFiPanel: error in synchronous network scan: {e}")
                 self.networks = []
-    
+
+    def _format_network_label(self, network, announce_widget_type):
+        ssid = network.get('ssid', _("Unknown"))
+        status = f" - {_('Connected')}" if network.get('connected') else ""
+        security = _("Secured") if network.get('encrypted', False) else _("Open")
+        if announce_widget_type:
+            return f"{ssid} - {security}{status}, {_('list item')}"
+        return f"{ssid} - {security}{status}"
+
     def get_current_element(self):
-        """Get description of current element"""
-        from settings import get_setting
-        announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
-        
+        """Get description of current element. Honors IUI announce_widget_type."""
+        announce_widget_type = _iui_announce_widget_type()
+
         if self.current_control == "wifi_toggle":
             status_text = _("Checked") if self.wifi_enabled else _("Unchecked")
             if announce_widget_type:
                 return f"{_('WiFi')}, {_('checkbox')}: {status_text}"
-            else:
-                return f"{_('WiFi')}: {status_text}"
-        elif self.current_control == "networks":
-            if self.networks and self.current_network_index < len(self.networks):
-                network = self.networks[self.current_network_index]
-                status = f" - {_('Connected')}" if network.get('connected') else ""
-                security = _("Secured") if network['encrypted'] else _("Open")
-                if announce_widget_type:
-                    return f"{network['ssid']} - {security}{status}, {_('list item')}"
-                else:
-                    return f"{network['ssid']} - {security}{status}"
-            else:
-                return _("No WiFi networks available")
-        else:
-            return _("WiFi Manager")
-    
+            return f"{_('WiFi')}: {status_text}"
+
+        if self.current_control == "networks":
+            if self.scanning_in_progress and not self.networks:
+                return _("Scanning for WiFi networks...")
+            if self.networks and 0 <= self.current_network_index < len(self.networks):
+                return self._format_network_label(self.networks[self.current_network_index], announce_widget_type)
+            return _("No WiFi networks available")
+
+        return _("WiFi Manager")
+
     def navigate(self, direction):
-        """Navigate within the WiFi panel - up/down for lists, left/right for controls"""
+        """Navigate within the WiFi panel - up/down for lists, left/right for controls."""
         if direction == "up":
             if self.current_control == "networks":
-                # Navigate up in network list
                 if self.networks and self.current_network_index > 0:
                     self.current_network_index -= 1
-                    # Don't play focus.ogg here - invisible UI will handle it
-                    # Play x.ogg if current network is connected
-                    network = self.networks[self.current_network_index]
-                    if network.get('connected'):
+                    if self.networks[self.current_network_index].get('connected'):
                         play_sound('ui/X.ogg')
-                    return (True, 1, 2)  # networks = position 1 of 2 controls
-                else:
-                    # At top of list or no networks
-                    return (False, 1, 2)
-            elif self.current_control == "wifi_toggle":
-                # Can't go up from WiFi toggle
-                return (False, 0, 2)  # wifi_toggle = position 0 of 2 controls
-                
-        elif direction == "down":
+                    return (True, 1, 2)
+                return (False, 1, 2)
+            return (False, 0, 2)
+
+        if direction == "down":
             if self.current_control == "networks":
-                # Navigate down in network list
                 if self.networks and self.current_network_index < len(self.networks) - 1:
                     self.current_network_index += 1
-                    # Don't play focus.ogg here - invisible UI will handle it
-                    # Play x.ogg if current network is connected
-                    network = self.networks[self.current_network_index]
-                    if network.get('connected'):
+                    if self.networks[self.current_network_index].get('connected'):
                         play_sound('ui/X.ogg')
-                    return (True, 1, 2)  # networks = position 1 of 2 controls
-                else:
-                    # At bottom of list or no networks
-                    return (False, 1, 2)
-            elif self.current_control == "wifi_toggle":
-                # Can't go down from WiFi toggle
-                return (False, 0, 2)  # wifi_toggle = position 0 of 2 controls
-                
-        elif direction == "left":
-            # Switch to WiFi toggle control
+                    return (True, 1, 2)
+                return (False, 1, 2)
+            return (False, 0, 2)
+
+        if direction == "left":
             if self.current_control != "wifi_toggle":
                 self.current_control = "wifi_toggle"
-                return (True, 0, 2)  # wifi_toggle = position 0 of 2 controls
-            else:
-                # Already on WiFi toggle
-                return (False, 0, 2)
-            
-        elif direction == "right":
-            # Switch to networks list control
+                return (True, 0, 2)
+            return (False, 0, 2)
+
+        if direction == "right":
             if self.current_control != "networks":
                 self.current_control = "networks"
-                # Start at first network or stay at 0 if no networks
                 if self.networks:
                     self.current_network_index = 0
-                    # Play x.ogg if first network is connected
-                    network = self.networks[self.current_network_index]
-                    if network.get('connected'):
+                    if self.networks[0].get('connected'):
                         play_sound('ui/X.ogg')
-                return (True, 1, 2)  # networks = position 1 of 2 controls
-            else:
-                # Already on networks list
-                return (False, 1, 2)
-        
+                return (True, 1, 2)
+            return (False, 1, 2)
+
         return (False, 0, 2)
-    
+
     def activate_current_element(self):
-        """Activate current element (connect to network or toggle WiFi)"""
+        """Activate current element (connect to network or toggle WiFi)."""
         if self.current_control == "wifi_toggle":
-            # Toggle WiFi
             self.wifi_enabled = not self.wifi_enabled
             self.network_manager.toggle_wifi(self.wifi_enabled)
             play_sound('core/SELECT.ogg')
-            from settings import get_setting
-            announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
+            announce_widget_type = _iui_announce_widget_type()
             status = _("Checked") if self.wifi_enabled else _("Unchecked")
             if announce_widget_type:
                 self.speak(f"{_('WiFi')}, {_('checkbox')}: {status}")
             else:
                 self.speak(f"{_('WiFi')}: {status}")
-            
             if self.wifi_enabled:
-                self.speak(_("Scanning for networks..."))
                 self.refresh_networks(force_scan=True, threaded=True)
             else:
                 self.networks = []
-        elif self.current_control == "networks":
-            # Connect to selected network
-            if self.networks and self.current_network_index < len(self.networks):
-                network = self.networks[self.current_network_index]
-                self._connect_to_network(network)
-    
+            return
+
+        if self.current_control == "networks":
+            if self.networks and 0 <= self.current_network_index < len(self.networks):
+                self._connect_to_network(self.networks[self.current_network_index])
+
     def _connect_to_network(self, network):
-        """Connect to a network"""
-        ssid = network['ssid']
-        
-        # Check if already connected
+        """Connect to a network. For encrypted networks, prompts for password via wx dialog."""
+        ssid = network.get('ssid', '')
+        if not ssid:
+            self.speak(_("Cannot connect: missing network name"))
+            return
+
         if network.get('connected'):
             self.speak(_("Already connected to {}").format(ssid))
             return
-        
-        if network['encrypted']:
-            self.speak(_("Network {} requires password. Use GUI interface for password entry.").format(ssid))
+
+        password = None
+        if network.get('encrypted', False):
+            self.speak(_("Network {} requires a password").format(ssid))
             play_sound('ui/statusbar.ogg')
-            return
-        else:
-            self.speak(_("Connecting to {}...").format(ssid))
-            
-            # Connect in background thread to avoid blocking
-            def background_connect():
-                try:
-                    success = self.network_manager.connect_to_network(ssid)
-                    if success:
-                        self.speak(_("Connected to {}").format(ssid))
-                        play_sound('ui/X.ogg')
-                        self.refresh_networks(force_scan=True, threaded=True)
-                    else:
-                        self.speak(_("Failed to connect to {}").format(ssid))
-                        play_sound('core/error.ogg')
-                except Exception as e:
-                    print(f"Error connecting to network in background: {e}")
-                    self.speak(_("Connection error"))
+            password = _prompt_wifi_password(ssid)
+            if not password:
+                self.speak(_("Connection cancelled"))
+                return
+
+        self.speak(_("Connecting to {}...").format(ssid))
+
+        def background_connect():
+            try:
+                success = self.network_manager.connect_to_network(ssid, password)
+                if success:
+                    self.speak(_("Connected to {}").format(ssid))
+                    play_sound('ui/X.ogg')
+                    self.refresh_networks(force_scan=True, threaded=True)
+                else:
+                    self.speak(_("Failed to connect to {}").format(ssid))
                     play_sound('core/error.ogg')
-            
-            import threading
-            connect_thread = threading.Thread(target=background_connect, daemon=True)
-            connect_thread.start()
-    
+            except Exception as e:
+                print(f"WiFiPanel: error connecting in background: {e}")
+                self.speak(_("Connection error"))
+                play_sound('core/error.ogg')
+
+        connect_thread = threading.Thread(target=background_connect, daemon=True)
+        connect_thread.start()
+
     def handle_titan_enter(self):
-        """Handle Titan+Enter key - refresh networks in background"""
+        """Handle Titan+Enter key - refresh networks in background."""
         if self.scanning_in_progress:
             self.speak(_("Scan already in progress"))
         else:
@@ -1104,7 +1479,7 @@ class WiFiInvisibleUI:
             print("No WiFi networks found")
         
         # Show WiFi toggle
-        from settings import get_setting
+        from src.settings.settings import get_setting
         announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
         toggle_prefix = "> " if self.is_on_wifi_toggle else "  "
         toggle_status = "Checked" if self.wifi_enabled else "Unchecked"
@@ -1166,7 +1541,7 @@ class WiFiInvisibleUI:
             # Move to WiFi toggle
             self.is_on_wifi_toggle = True
             play_sound('focus.ogg')
-            from settings import get_setting
+            from src.settings.settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = "Checked" if self.wifi_enabled else "Unchecked"
             if announce_widget_type:
@@ -1191,7 +1566,7 @@ class WiFiInvisibleUI:
             # Move to WiFi toggle
             self.is_on_wifi_toggle = True
             play_sound('focus.ogg')
-            from settings import get_setting
+            from src.settings.settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = "Checked" if self.wifi_enabled else "Unchecked"
             if announce_widget_type:
@@ -1204,7 +1579,7 @@ class WiFiInvisibleUI:
         if not self.is_on_wifi_toggle:
             self.is_on_wifi_toggle = True
             play_sound('focus.ogg')
-            from settings import get_setting
+            from src.settings.settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = "Checked" if self.wifi_enabled else "Unchecked"
             if announce_widget_type:
@@ -1226,7 +1601,7 @@ class WiFiInvisibleUI:
             self.wifi_enabled = not self.wifi_enabled
             self.network_manager.toggle_wifi(self.wifi_enabled)
             play_sound('core/SELECT.ogg')
-            from settings import get_setting
+            from src.settings.settings import get_setting
             announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
             status = "Checked" if self.wifi_enabled else "Unchecked"
             if announce_widget_type:
@@ -1250,7 +1625,7 @@ class WiFiInvisibleUI:
         network = self.networks[self.current_index]
         status = f" - {_('Connected')}" if network.get('connected') else ""
         security = _("Secured") if network['encrypted'] else _("Open")
-        from settings import get_setting
+        from src.settings.settings import get_setting
         announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
         if announce_widget_type:
             print(f"{network['ssid']} - {security}{status}, {_('list item')}")
@@ -1342,7 +1717,7 @@ class WiFiInvisibleUI:
     
     def get_current_element(self):
         """Get description of current element (for IUI widget compatibility)"""
-        from settings import get_setting
+        from src.settings.settings import get_setting
         announce_widget_type = get_setting('announce_widget_type', 'False', section='invisible_interface').lower() == 'true'
         
         if self.is_on_wifi_toggle:

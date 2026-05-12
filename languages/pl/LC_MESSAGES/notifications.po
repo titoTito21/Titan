@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -19,3 +19,40 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+#: src/system/notifications.py:142
+msgid "Not connected, no WiFi networks available"
+msgstr "Nie połączono, brak dostępnych sieci WiFi"
+
+#: src/system/notifications.py:144 src/system/notifications.py:145
+#: src/system/notifications.py:166 src/system/notifications.py:182
+#: src/system/notifications.py:196 src/system/notifications.py:199
+#: src/system/notifications.py:210 src/system/notifications.py:216
+#: src/system/notifications.py:218
+msgid "Unknown"
+msgstr "Nieznane"
+
+#: src/system/notifications.py:152 src/system/notifications.py:167
+#: src/system/notifications.py:183 src/system/notifications.py:211
+#, python-brace-format
+msgid "Connected to {ssid}, signal strength: {signal}"
+msgstr "Połączono z {ssid}, moc sygnału: {signal}"
+
+#: src/system/notifications.py:154
+msgid "Not connected, WiFi networks available"
+msgstr "Nie połączono, dostępne sieci WiFi"
+
+#: src/system/notifications.py:165
+msgid "Hidden Network"
+msgstr "Sieć ukryta"
+
+#: src/system/notifications.py:192
+msgid "Connected to network (ethernet or WiFi)"
+msgstr "Połączono z siecią (ethernet lub WiFi)"
+
+#: src/system/notifications.py:194
+msgid "Not connected to network"
+msgstr "Nie połączono z siecią"
+
+#: src/system/notifications.py:213
+msgid "Not connected to WiFi"
+msgstr "Nie połączono z WiFi"

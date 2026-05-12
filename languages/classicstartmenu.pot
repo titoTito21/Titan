@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-05 13:38+0200\n"
+"POT-Creation-Date: 2026-05-12 11:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,129 +17,129 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/classic_start_menu.py:158
+#: src/ui/classic_start_menu.py:194
 msgid "Shut Down"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:187
+#: src/ui/classic_start_menu.py:223
 msgid "Programs"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:188
+#: src/ui/classic_start_menu.py:224
 msgid "Documents"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:189 src/ui/classic_start_menu.py:765
+#: src/ui/classic_start_menu.py:225 src/ui/classic_start_menu.py:801
 msgid "Settings"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:190 src/ui/classic_start_menu.py:1053
+#: src/ui/classic_start_menu.py:226 src/ui/classic_start_menu.py:1089
 msgid "Find"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:191 src/ui/classic_start_menu.py:1065
+#: src/ui/classic_start_menu.py:227 src/ui/classic_start_menu.py:1101
 msgid "Help"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:192 src/ui/classic_start_menu.py:684
-#: src/ui/classic_start_menu.py:1032
+#: src/ui/classic_start_menu.py:228 src/ui/classic_start_menu.py:720
+#: src/ui/classic_start_menu.py:1068
 msgid "Run..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:194
+#: src/ui/classic_start_menu.py:230
 msgid "Shut Down..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:367 src/ui/classic_start_menu.py:368
+#: src/ui/classic_start_menu.py:403 src/ui/classic_start_menu.py:404
 msgid "Titan Applications"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:374 src/ui/classic_start_menu.py:375
+#: src/ui/classic_start_menu.py:410 src/ui/classic_start_menu.py:411
 msgid "Titan Games"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:406 src/ui/classic_start_menu.py:407
+#: src/ui/classic_start_menu.py:442 src/ui/classic_start_menu.py:443
 msgid "My Documents"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:428 src/ui/classic_start_menu.py:429
+#: src/ui/classic_start_menu.py:464 src/ui/classic_start_menu.py:465
 msgid "No applications"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:460 src/ui/classic_start_menu.py:461
+#: src/ui/classic_start_menu.py:496 src/ui/classic_start_menu.py:497
 msgid "No games found"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:496 src/ui/classic_start_menu.py:497
+#: src/ui/classic_start_menu.py:532 src/ui/classic_start_menu.py:533
 msgid "Titan Settings"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:502 src/ui/classic_start_menu.py:503
-#: src/ui/classic_start_menu.py:680
+#: src/ui/classic_start_menu.py:538 src/ui/classic_start_menu.py:539
+#: src/ui/classic_start_menu.py:716
 msgid "Control Panel"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:517 src/ui/classic_start_menu.py:518
+#: src/ui/classic_start_menu.py:553 src/ui/classic_start_menu.py:554
 msgid "Files or Folders..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:523 src/ui/classic_start_menu.py:524
+#: src/ui/classic_start_menu.py:559 src/ui/classic_start_menu.py:560
 msgid "Computer..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:585
+#: src/ui/classic_start_menu.py:621
 msgid "Programy"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:614
+#: src/ui/classic_start_menu.py:650
 msgid "Dokumenty"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:617
+#: src/ui/classic_start_menu.py:653
 msgid "Moje dokumenty"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:619
+#: src/ui/classic_start_menu.py:655
 msgid "(puste)"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:625
+#: src/ui/classic_start_menu.py:661
 msgid "Ustawienia"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:627
+#: src/ui/classic_start_menu.py:663
 msgid "Panel sterowania"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:628
+#: src/ui/classic_start_menu.py:664
 msgid "Drukarki"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:629
+#: src/ui/classic_start_menu.py:665
 msgid "Pasek zadań..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:631
+#: src/ui/classic_start_menu.py:667
 msgid "Ustawienia Titan"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:1032
+#: src/ui/classic_start_menu.py:1068
 msgid "Enter program name:"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:1053
+#: src/ui/classic_start_menu.py:1089
 msgid "Search function in development"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:1065
+#: src/ui/classic_start_menu.py:1101
 msgid "Help function"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:1077
+#: src/ui/classic_start_menu.py:1113
 msgid "Do you want to shut down the system?"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:1078
+#: src/ui/classic_start_menu.py:1114
 msgid "Shut Down Windows"
 msgstr ""
 

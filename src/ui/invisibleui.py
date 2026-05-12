@@ -2523,8 +2523,12 @@ class InvisibleUI:
                     wx.CallAfter(action)
                 return
         
-        # Special handling for network status since get_network_status() returns a raw string
-        if any(keyword in item_string.lower() for keyword in ['połączono', 'connected', 'wifi', 'ethernet', 'nie połączono', 'disconnected', 'network']):
+        # Special handling for network status since get_network_status() returns a raw string.
+        # Match both English (en mode) and Polish (pl mode) translations.
+        if any(keyword in item_string.lower() for keyword in [
+            'connected', 'wifi', 'ethernet', 'disconnected', 'network', 'signal strength',
+            'połączono', 'nie połączono', 'sieci', 'sygnału',
+        ]):
             wx.CallAfter(self.main_frame.open_network_settings)
             return
 
