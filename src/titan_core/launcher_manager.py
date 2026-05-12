@@ -12,7 +12,11 @@ import configparser
 import importlib.util
 import threading
 import types
-from src.platform_utils import get_base_path as _get_base_path, is_frozen as _is_frozen
+from src.platform_utils import (
+    get_base_path as _get_base_path,
+    is_frozen as _is_frozen,
+    discover_data_entries as _discover_data_entries,
+)
 
 
 class LauncherConfig:
@@ -806,25 +810,23 @@ class LauncherManager:
         self._scan_launchers()
 
     def _scan_launchers(self):
-        """Scan data/launchers/ directory for available launchers."""
-        project_root = _get_base_path()
-        launchers_dir = os.path.join(project_root, 'data', 'launchers')
-
-        if not os.path.exists(launchers_dir):
-            print("[LauncherManager] No data/launchers/ directory found")
+        """Scan data/launchers/ directories (bundled + user overlay) for
+        available launchers. User-overlay launchers win on folder-name
+        collision."""
+        entries = _discover_data_entries('launchers')
+        if not entries:
+            print("[LauncherManager] No data/launchers/ entries found (bundled or user)")
             return
 
-        for folder_name in os.listdir(launchers_dir):
-            launcher_path = os.path.join(launchers_dir, folder_name)
-            if os.path.isdir(launcher_path) and folder_name != '.DS_Store':
-                config_path = os.path.join(launcher_path, '__launcher__.TCE')
-                if os.path.exists(config_path):
-                    config = LauncherConfig(launcher_path, folder_name)
-                    self.launchers[folder_name] = config
-                    print(f"[LauncherManager] Found launcher: {config.name} ({folder_name}) "
-                          f"[{'enabled' if config.enabled else 'disabled'}]")
-                else:
-                    print(f"[LauncherManager] Skipping {folder_name}: no __launcher__.TCE")
+        for folder_name, launcher_path in entries.items():
+            config_path = os.path.join(launcher_path, '__launcher__.TCE')
+            if os.path.exists(config_path):
+                config = LauncherConfig(launcher_path, folder_name)
+                self.launchers[folder_name] = config
+                print(f"[LauncherManager] Found launcher: {config.name} ({folder_name}) "
+                      f"[{'enabled' if config.enabled else 'disabled'}] from {launcher_path}")
+            else:
+                print(f"[LauncherManager] Skipping {folder_name}: no __launcher__.TCE")
 
     def get_available_launchers(self):
         """Get list of all discovered launchers."""

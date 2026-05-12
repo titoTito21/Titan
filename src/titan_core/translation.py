@@ -3,7 +3,43 @@ import os
 import sys
 import locale
 from src.settings import settings
-from src.platform_utils import get_resource_path
+from src.platform_utils import get_resource_path, get_user_resource_path
+
+
+def _localedirs():
+    """Return all locale roots to consult, in priority order (user first).
+
+    Both the per-user overlay (`%APPDATA%/titosoft/Titan/languages/`) and the
+    bundled `languages/` directory are returned so users can shadow individual
+    `.mo` files without redistributing the full language pack.
+    """
+    user_dir = get_user_resource_path('languages')
+    bundled_dir = os.path.join(get_resource_path(), 'languages')
+    dirs = []
+    if os.path.isdir(user_dir):
+        dirs.append(user_dir)
+    if os.path.isdir(bundled_dir) and (not dirs or os.path.abspath(bundled_dir) != os.path.abspath(dirs[0])):
+        dirs.append(bundled_dir)
+    return dirs
+
+
+def _load_translation_for_domain(domain, lang_code):
+    """Load the best gettext translation for (domain, lang_code).
+
+    Walks each locale directory in priority order (user first) and returns the
+    first translation that actually has a compiled .mo file. Falls back to a
+    NullTranslations identity if none of the directories yields a real catalog.
+    """
+    for localedir in _localedirs():
+        mo_path = os.path.join(localedir, lang_code, 'LC_MESSAGES', f'{domain}.mo')
+        if os.path.isfile(mo_path):
+            try:
+                return gettext.translation(domain, localedir, languages=[lang_code], fallback=False)
+            except (FileNotFoundError, OSError):
+                continue
+    # No real catalog found - return a NullTranslations so gettext returns
+    # the original message unchanged.
+    return gettext.NullTranslations()
 
 # Global variable to hold the current language code.
 # This can be imported by other modules.
@@ -65,16 +101,20 @@ def get_language_code_from_display_name(display_name):
     return display_name  # Return as-is if not found
 
 def get_available_languages():
-    """Scans the 'languages' directory to find available language codes."""
-    lang_dir = os.path.join(get_resource_path(), 'languages')
-    if not os.path.isdir(lang_dir):
-        return ['en']  # Default to English if languages dir doesn't exist
-
-    languages = [d for d in os.listdir(lang_dir) if os.path.isdir(os.path.join(lang_dir, d))]
-    if 'en' not in languages:
-        languages.insert(0, 'en') # Ensure English is always an option
-    if 'pl' not in languages:
-        languages.insert(0, 'pl') # Ensure Polish is always an option
+    """Scans every languages/ directory (bundled + user overlay) to find
+    available language codes. A language is considered available if its folder
+    exists in either location, since users may drop in extra languages or
+    individual .mo files without touching the installation."""
+    languages = set()
+    for lang_dir in _localedirs():
+        try:
+            for d in os.listdir(lang_dir):
+                if os.path.isdir(os.path.join(lang_dir, d)):
+                    languages.add(d)
+        except OSError:
+            continue
+    languages.add('en')  # Ensure English is always an option
+    languages.add('pl')  # Ensure Polish is always an option
     return sorted(languages)
 
 def get_available_languages_display():
@@ -111,20 +151,22 @@ def get_system_language():
     return 'en'
 
 def set_language(lang_code='pl'):
-    """Sets up the translation objects for the given language code."""
+    """Sets up the translation objects for the given language code, looking up
+    each domain's .mo across both the bundled `languages/` directory and the
+    per-user overlay under `%APPDATA%/titosoft/Titan/languages/`. User .mo
+    files win over bundled ones for the same domain/language."""
     global language_code, _translations
     # Ensure 'pl' is the default if the configured language is invalid
     if lang_code not in get_available_languages():
         lang_code = 'pl'
 
     language_code = lang_code  # Update the global variable
-    localedir = os.path.join(get_resource_path(), 'languages')
 
-    # Load all translation domains
+    # Load all translation domains using the overlay-aware loader
     _translations = {}
     for domain in TRANSLATION_DOMAINS:
         try:
-            trans = gettext.translation(domain, localedir, languages=[lang_code], fallback=True)
+            trans = _load_translation_for_domain(domain, lang_code)
             _translations[domain] = trans.gettext
         except Exception:
             # If a domain doesn't exist, use NullTranslations (returns original string)

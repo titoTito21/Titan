@@ -12,7 +12,7 @@ import configparser
 import importlib.util
 
 from src.network.titanim_sound_api import TitanIMSoundAPI
-from src.platform_utils import get_base_path
+from src.platform_utils import get_base_path, discover_data_entries
 
 # Shared sound API instance for all modules
 _sound_api = TitanIMSoundAPI()
@@ -174,15 +174,15 @@ class TitanIMModuleManager:
         self.modules = []  # list of dicts: {name, id, module, path}
 
     def load_modules(self):
-        """Scan data/titanIM_modules/ and load all valid modules."""
+        """Scan data/titanIM_modules/ across bundled + user overlay and load
+        all valid modules. User-overlay modules win on folder-name collision."""
         self.modules = []
-        base_dir = os.path.join(get_base_path(), "data", "titanIM_modules")
+        entries = discover_data_entries('titanIM_modules')
 
-        if not os.path.isdir(base_dir):
+        if not entries:
             return
 
-        for entry in sorted(os.listdir(base_dir)):
-            module_path = os.path.join(base_dir, entry)
+        for entry, module_path in entries.items():
             if not os.path.isdir(module_path):
                 continue
 

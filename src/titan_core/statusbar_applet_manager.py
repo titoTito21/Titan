@@ -14,7 +14,11 @@ import importlib.util
 import threading
 import time
 from typing import Dict, List, Optional, Any
-from src.platform_utils import get_base_path as get_project_root
+from src.platform_utils import (
+    get_base_path as get_project_root,
+    discover_data_entries as _discover_data_entries,
+    ensure_user_data_subdir as _ensure_user_data_subdir,
+)
 
 
 class StatusbarAppletManager:
@@ -56,20 +60,26 @@ class StatusbarAppletManager:
             project_root = get_project_root()
             applets_dir = os.path.join(project_root, 'data', 'statusbar_applets')
 
-            # Create directory if it doesn't exist
+            # Ensure bundled directory exists (legacy behaviour) but never
+            # bail out early if it's missing - the user overlay may still
+            # contain applets.
             if not os.path.exists(applets_dir):
-                os.makedirs(applets_dir)
-                print(f"Created statusbar applets directory: {applets_dir}")
-                return
+                try:
+                    os.makedirs(applets_dir)
+                    print(f"Created statusbar applets directory: {applets_dir}")
+                except OSError:
+                    pass
 
-            # Scan for applets
-            for applet_name in os.listdir(applets_dir):
-                applet_dir = os.path.join(applets_dir, applet_name)
+            # Also ensure the user-overlay directory exists so users can drop
+            # applets in without manually creating the folder structure.
+            try:
+                _ensure_user_data_subdir('data', 'statusbar_applets')
+            except Exception:
+                pass
 
-                # Skip if not a directory
-                if not os.path.isdir(applet_dir):
-                    continue
-
+            # Scan for applets across bundled + user overlay (user wins)
+            entries = _discover_data_entries('statusbar_applets')
+            for applet_name, applet_dir in entries.items():
                 # Try to load applet
                 try:
                     self._load_single_applet(applet_name, applet_dir)

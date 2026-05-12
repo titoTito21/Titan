@@ -1475,14 +1475,26 @@ class InvisibleUI:
     def load_widgets(self):
         widgets = []
         try:
-            # Get project root directory (supports PyInstaller and Nuitka)
-            applets_dir = resource_path(os.path.join('data', 'applets'))
-            if not os.path.exists(applets_dir):
+            # Discover widget applets across bundled data/applets/ and the
+            # per-user overlay (%APPDATA%/titosoft/Titan/data/applets/). User
+            # entries override bundled entries with the same folder name.
+            try:
+                from src.platform_utils import discover_data_entries as _discover_data_entries
+                entries = _discover_data_entries('applets')
+            except Exception:
+                applets_dir = resource_path(os.path.join('data', 'applets'))
+                entries = {}
+                if os.path.exists(applets_dir):
+                    for n in os.listdir(applets_dir):
+                        f = os.path.join(applets_dir, n)
+                        if os.path.isdir(f):
+                            entries[n] = f
+
+            if not entries:
                 return widgets
 
-            for applet_name in os.listdir(applets_dir):
+            for applet_name, applet_dir in entries.items():
                 try:
-                    applet_dir = os.path.join(applets_dir, applet_name)
                     if not os.path.isdir(applet_dir):
                         continue
 

@@ -74,11 +74,23 @@ class ComponentManagerDialog(wx.Dialog):
             self.component_listbox.Append(_("Component manager not available."))
             return
 
-        # Get project root directory (supports PyInstaller and Nuitka)
-        project_root = _get_base_path()
-        components_dir = os.path.join(project_root, 'data', 'components')
-        for component_folder in sorted(os.listdir(components_dir)):
-            component_path = os.path.join(components_dir, component_folder)
+        # Enumerate components across bundled + user overlay; user wins on
+        # folder-name collision (matches ComponentManager.load_components).
+        try:
+            from src.platform_utils import discover_data_entries as _discover_data_entries
+            entries = _discover_data_entries('components')
+        except Exception:
+            project_root = _get_base_path()
+            components_dir = os.path.join(project_root, 'data', 'components')
+            entries = {}
+            if os.path.isdir(components_dir):
+                for name in sorted(os.listdir(components_dir)):
+                    full = os.path.join(components_dir, name)
+                    if os.path.isdir(full):
+                        entries[name] = full
+
+        for component_folder in sorted(entries.keys()):
+            component_path = entries[component_folder]
             if os.path.isdir(component_path):
                 display_name = self.component_manager.get_component_display_name(component_path, component_folder)
                 status = self.component_manager.component_states.get(component_folder, 1)
@@ -205,10 +217,12 @@ class ComponentManagerDialog(wx.Dialog):
 
     def toggle_component(self, component_folder, index):
         new_status = self.component_manager.toggle_component_status(component_folder)
-        # Get project root directory (supports PyInstaller and Nuitka)
-        project_root = _get_base_path()
-        components_dir = os.path.join(project_root, 'data', 'components')
-        component_path = os.path.join(components_dir, component_folder)
+        # Prefer the path the component was actually loaded from (may be a user
+        # overlay rather than the bundled dir).
+        component_path = self.component_manager.component_paths.get(component_folder)
+        if not component_path or not os.path.isdir(component_path):
+            project_root = _get_base_path()
+            component_path = os.path.join(project_root, 'data', 'components', component_folder)
         display_name = self.component_manager.get_component_display_name(component_path, component_folder)
         status_str = _("Enabled") if new_status == 0 else _("Disabled")
         

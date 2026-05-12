@@ -32,6 +32,28 @@ PROJECT_ROOT = get_project_root()
 SKINS_DIR = os.path.join(PROJECT_ROOT, 'skins')
 DEFAULT_SKIN_NAME = "Default"
 
+
+def _discover_skins():
+    """Discover available skins across bundled `skins/` and per-user overlay
+    `%APPDATA%/titosoft/Titan/skins/`. Returns ordered dict folder_name ->
+    abs_path; user-overlay skins override bundled skins with the same name."""
+    try:
+        from src.platform_utils import discover_resource_entries
+        def _is_skin(name, full):
+            return (os.path.isdir(full)
+                    and name != '.DS_Store'
+                    and os.path.isfile(os.path.join(full, 'skin.ini')))
+        return discover_resource_entries('skins', predicate=_is_skin)
+    except Exception:
+        from collections import OrderedDict
+        found = OrderedDict()
+        if os.path.isdir(SKINS_DIR):
+            for name in sorted(os.listdir(SKINS_DIR)):
+                full = os.path.join(SKINS_DIR, name)
+                if os.path.isdir(full) and os.path.isfile(os.path.join(full, 'skin.ini')):
+                    found[name] = full
+        return found
+
 # Global skin instance
 _current_skin = None
 
@@ -40,9 +62,14 @@ class Skin:
     """Represents a complete skin configuration."""
 
     def __init__(self, name):
-        """Initialize skin with given name."""
+        """Initialize skin with given name. The path is resolved by checking
+        the user-overlay skins/ dir first, then the bundled one."""
         self.name = name
-        self.path = os.path.join(SKINS_DIR, name) if name != DEFAULT_SKIN_NAME else None
+        if name == DEFAULT_SKIN_NAME:
+            self.path = None
+        else:
+            discovered = _discover_skins()
+            self.path = discovered.get(name) or os.path.join(SKINS_DIR, name)
 
         # Skin data
         self.colors = {}
@@ -278,16 +305,12 @@ class SkinManager:
         self._load_current_skin()
 
     def _discover_skins(self):
-        """Discover all available skins."""
+        """Discover all available skins across bundled `skins/` and the
+        per-user overlay (`%APPDATA%/titosoft/Titan/skins/`)."""
         self.available_skins = [DEFAULT_SKIN_NAME]
-
-        if os.path.exists(SKINS_DIR):
-            for item in os.listdir(SKINS_DIR):
-                skin_path = os.path.join(SKINS_DIR, item)
-                if os.path.isdir(skin_path):
-                    skin_ini = os.path.join(skin_path, 'skin.ini')
-                    if os.path.exists(skin_ini):
-                        self.available_skins.append(item)
+        for name in _discover_skins().keys():
+            if name not in self.available_skins:
+                self.available_skins.append(name)
 
     def _load_current_skin(self):
         """Load the currently selected skin from settings."""

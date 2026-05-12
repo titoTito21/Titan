@@ -4,7 +4,14 @@ import threading
 import sys
 import platform
 import webbrowser
-from src.platform_utils import get_base_path, is_frozen, IS_WINDOWS, IS_LINUX, IS_MACOS
+from src.platform_utils import (
+    get_base_path,
+    is_frozen,
+    IS_WINDOWS,
+    IS_LINUX,
+    IS_MACOS,
+    discover_data_entries,
+)
 
 # Windows-only imports
 if IS_WINDOWS:
@@ -16,18 +23,20 @@ GAME_DIR = os.path.join(PROJECT_ROOT, 'data', 'games')
 
 
 def get_games():
-    """Get all games: from data/games/ (Titan-Games) + Steam + Battle.net"""
+    """Get all games: from data/games/ (Titan-Games) + Steam + Battle.net.
+
+    Titan-Games are discovered from both the bundled data/games/ directory and
+    the per-user overlay under %APPDATA%/titosoft/Titan/data/games/. User
+    entries override bundled entries with the same folder name.
+    """
     games = []
 
-    # 1. Titan-Games from data/games/
-    if os.path.exists(GAME_DIR):
-        for game_folder in os.listdir(GAME_DIR):
-            game_path = os.path.join(GAME_DIR, game_folder)
-            if os.path.isdir(game_path):
-                game_info = read_game_info(game_path)
-                if game_info:
-                    game_info['platform'] = game_info.get('platform', 'Titan-Games')
-                    games.append(game_info)
+    # 1. Titan-Games from bundled data/games/ + user overlay
+    for game_folder, game_path in discover_data_entries('games').items():
+        game_info = read_game_info(game_path)
+        if game_info:
+            game_info['platform'] = game_info.get('platform', 'Titan-Games')
+            games.append(game_info)
 
     # 2. Steam games (from registry)
     try:

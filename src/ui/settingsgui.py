@@ -570,10 +570,15 @@ class SettingsFrame(wx.Frame):
         self.theme_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
 
         themes = []
-        if os.path.exists(SFX_DIR):
-            themes = [d for d in os.listdir(SFX_DIR) if os.path.isdir(os.path.join(SFX_DIR, d))]
-        else:
-            print(f"WARNING: SFX directory does not exist: {SFX_DIR}. No sound themes to choose from.")
+        try:
+            from src.titan_core.sound import get_available_sfx_themes
+            themes = get_available_sfx_themes()
+        except Exception:
+            if os.path.exists(SFX_DIR):
+                themes = [d for d in os.listdir(SFX_DIR)
+                          if os.path.isdir(os.path.join(SFX_DIR, d))]
+            else:
+                print(f"WARNING: SFX directory does not exist: {SFX_DIR}. No sound themes to choose from.")
 
         if not themes:
              themes = [_("No themes")]

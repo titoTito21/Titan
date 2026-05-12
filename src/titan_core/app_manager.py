@@ -7,7 +7,7 @@ import importlib.util
 from src.settings import settings
 from src.titan_core.sound import play_sound, play_error_sound, play_dialog_sound, play_dialogclose_sound, resource_path
 from src.titan_core.translation import language_code, _
-from src.platform_utils import is_frozen, IS_WINDOWS
+from src.platform_utils import is_frozen, IS_WINDOWS, discover_data_entries
 
 
 APP_DIR = resource_path(os.path.join('data', 'applications'))
@@ -18,20 +18,26 @@ if not os.path.exists(SITEPACKAGES_DIR):
     os.makedirs(SITEPACKAGES_DIR)
 
 
+def _iter_app_folders():
+    """Yield (folder_name, abs_path) for every application folder in the
+    bundled data/applications/ and the user overlay under
+    %APPDATA%/titosoft/Titan/data/applications/. User entries override bundled
+    entries with the same folder name.
+    """
+    entries = discover_data_entries('applications')
+    for name, path in entries.items():
+        yield name, path
+
+
 def get_applications():
     """Get list of all visible applications."""
     lang = language_code
     applications = []
 
-    if not os.path.exists(APP_DIR):
-        return applications
-
-    for app_folder in os.listdir(APP_DIR):
-        app_path = os.path.join(APP_DIR, app_folder)
-        if os.path.isdir(app_path) and app_folder != '.DS_Store':
-            app_info = read_app_info(app_path, lang)
-            if app_info and not app_info.get('hidden', 'false').lower() == 'true':
-                applications.append(app_info)
+    for app_folder, app_path in _iter_app_folders():
+        app_info = read_app_info(app_path, lang)
+        if app_info and not app_info.get('hidden', 'false').lower() == 'true':
+            applications.append(app_info)
     return applications
 
 
@@ -40,15 +46,10 @@ def get_hidden_applications():
     lang = language_code
     hidden_applications = []
 
-    if not os.path.exists(APP_DIR):
-        return hidden_applications
-
-    for app_folder in os.listdir(APP_DIR):
-        app_path = os.path.join(APP_DIR, app_folder)
-        if os.path.isdir(app_path) and app_folder != '.DS_Store':
-            app_info = read_app_info(app_path, lang)
-            if app_info and app_info.get('hidden', 'false').lower() == 'true':
-                hidden_applications.append(app_info)
+    for app_folder, app_path in _iter_app_folders():
+        app_info = read_app_info(app_path, lang)
+        if app_info and app_info.get('hidden', 'false').lower() == 'true':
+            hidden_applications.append(app_info)
     return hidden_applications
 
 

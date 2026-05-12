@@ -46,8 +46,33 @@ def _get_base_path():
     return os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
 
 
-MACROS_DIR = os.path.join(_get_base_path(), 'data', 'macros')
+def _get_user_macros_dir():
+    """Per-user writable macros dir under %APPDATA%/titosoft/Titan/data/macros/.
+
+    Resolved via src.platform_utils when available, with a fallback that mirrors
+    that module's logic so the macros component still works if Titan ever runs
+    without it (or before it is importable).
+    """
+    try:
+        from src.platform_utils import get_user_resource_path
+        return get_user_resource_path(os.path.join('data', 'macros'))
+    except Exception:
+        if sys.platform == 'win32':
+            base = os.getenv('APPDATA', os.path.expanduser('~'))
+        elif sys.platform == 'darwin':
+            base = os.path.expanduser('~/Library/Application Support')
+        else:
+            base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+        return os.path.join(base, 'titosoft', 'Titan', 'data', 'macros')
+
+
+MACROS_DIR = os.path.join(_get_base_path(), 'data', 'macros')      # bundled
+USER_MACROS_DIR = _get_user_macros_dir()                            # per-user overlay
 os.makedirs(MACROS_DIR, exist_ok=True)
+try:
+    os.makedirs(USER_MACROS_DIR, exist_ok=True)
+except OSError:
+    pass
 
 # ---------------------------------------------------------------------------
 # Translation setup
@@ -393,33 +418,93 @@ def _find_autoit():
 # MacroManager - Core data layer
 # ============================================================================
 class MacroManager:
-    """Handles loading, saving, running, creating, importing, and deleting macros."""
+    """Handles loading, saving, running, creating, importing, and deleting macros.
 
-    def __init__(self, macros_dir):
+    Macros are loaded from BOTH the bundled `data/macros/` directory and the
+    per-user overlay under `%APPDATA%/titosoft/Titan/data/macros/`. User-overlay
+    macros override bundled macros with the same folder name.
+
+    All writes (new macros, imports, hotkey changes, deletions) target the
+    user-overlay dir. Editing a bundled macro transparently shadow-copies its
+    folder to the user dir before persisting changes, so the installation
+    directory stays untouched.
+    """
+
+    def __init__(self, macros_dir, user_macros_dir=None):
         self.macros_dir = macros_dir
+        self.user_macros_dir = user_macros_dir or USER_MACROS_DIR
+        try:
+            os.makedirs(self.user_macros_dir, exist_ok=True)
+        except OSError:
+            pass
         self.macros = []
+        # Map folder_name -> source root the macro was loaded from. Used to
+        # decide whether a write needs to shadow-copy the folder to the user
+        # dir first.
+        self._macro_roots = {}
         self.load_macros()
 
+    def _iter_macro_roots(self):
+        """Yield (root_dir, is_user) tuples in priority order (user wins).
+        Bundled root is yielded first so the user dict overwrites it."""
+        if self.macros_dir and os.path.isdir(self.macros_dir):
+            yield self.macros_dir, False
+        if (self.user_macros_dir and os.path.isdir(self.user_macros_dir)
+                and os.path.abspath(self.user_macros_dir) != os.path.abspath(self.macros_dir or '')):
+            yield self.user_macros_dir, True
+
+    def _ensure_user_copy(self, folder_name):
+        """Return the writable user-dir path for a macro, copying it from the
+        bundled root on first write if needed."""
+        try:
+            os.makedirs(self.user_macros_dir, exist_ok=True)
+        except OSError:
+            pass
+        user_path = os.path.join(self.user_macros_dir, folder_name)
+        if not os.path.isdir(user_path):
+            bundled_path = os.path.join(self.macros_dir, folder_name) if self.macros_dir else ''
+            if bundled_path and os.path.isdir(bundled_path):
+                try:
+                    shutil.copytree(bundled_path, user_path)
+                except Exception as e:
+                    print(f"[macros] Could not shadow-copy '{folder_name}' to user dir: {e}")
+                    return bundled_path
+        self._macro_roots[folder_name] = self.user_macros_dir
+        return user_path
+
     def load_macros(self):
-        """Scan data/macros/ and parse each __macro__.TCE."""
+        """Scan data/macros/ (bundled + user overlay) and parse each
+        __macro__.TCE. User-overlay macros win on folder-name collision."""
         self.macros = []
-        if not os.path.exists(self.macros_dir):
-            return
-        for folder_name in sorted(os.listdir(self.macros_dir)):
-            folder_path = os.path.join(self.macros_dir, folder_name)
-            if not os.path.isdir(folder_path):
+        self._macro_roots = {}
+
+        try:
+            from src.titan_core.translation import language_code
+            lang = language_code
+        except Exception:
+            lang = 'pl'
+
+        # Build name->(folder_path, root_dir) so the user dir overwrites
+        # bundled entries with the same folder name.
+        collected = {}
+        for root, _is_user in self._iter_macro_roots():
+            try:
+                for folder_name in sorted(os.listdir(root)):
+                    folder_path = os.path.join(root, folder_name)
+                    if not os.path.isdir(folder_path):
+                        continue
+                    config_path = os.path.join(folder_path, '__macro__.TCE')
+                    if not os.path.exists(config_path):
+                        continue
+                    collected[folder_name] = (folder_path, root)
+            except OSError:
                 continue
+
+        for folder_name in sorted(collected.keys()):
+            folder_path, root = collected[folder_name]
             config_path = os.path.join(folder_path, '__macro__.TCE')
-            if not os.path.exists(config_path):
-                continue
             config = configparser.ConfigParser()
             config.read(config_path, encoding='utf-8')
-
-            try:
-                from src.titan_core.translation import language_code
-                lang = language_code
-            except Exception:
-                lang = 'pl'
 
             name = config.get('macro', 'name_{}'.format(lang),
                               fallback=config.get('macro', 'name_en', fallback=folder_name))
@@ -427,6 +512,7 @@ class MacroManager:
             hotkey = config.get('macrocfg', 'hotkey', fallback='')
 
             ext = os.path.splitext(openfile)[1].lower() if openfile else ''
+            self._macro_roots[folder_name] = root
             self.macros.append({
                 'name': name,
                 'folder_path': folder_path,
@@ -452,8 +538,10 @@ class MacroManager:
         return None
 
     def set_hotkey(self, folder_name, hotkey_str):
-        """Persist hotkey change to __macro__.TCE."""
-        config_path = os.path.join(self.macros_dir, folder_name, '__macro__.TCE')
+        """Persist hotkey change to __macro__.TCE. If the macro lives in the
+        bundled dir it is shadow-copied to the user dir before the write."""
+        folder_path = self._ensure_user_copy(folder_name)
+        config_path = os.path.join(folder_path, '__macro__.TCE')
         config = configparser.ConfigParser()
         config.read(config_path, encoding='utf-8')
         if 'macrocfg' not in config:
@@ -464,8 +552,12 @@ class MacroManager:
         self.load_macros()
 
     def create_macro_folder(self, folder_name, name_en, name_pl, openfile, hotkey=''):
-        """Create folder + __macro__.TCE for a new macro."""
-        folder_path = os.path.join(self.macros_dir, folder_name)
+        """Create folder + __macro__.TCE for a new macro in the user dir."""
+        try:
+            os.makedirs(self.user_macros_dir, exist_ok=True)
+        except OSError:
+            pass
+        folder_path = os.path.join(self.user_macros_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
         config = configparser.ConfigParser()
         config['macro'] = {
@@ -480,9 +572,13 @@ class MacroManager:
         return folder_path
 
     def import_macro_from_zip(self, zip_path, name_en, name_pl, openfile):
-        """Import from ZIP, extract to macros_dir, create config."""
+        """Import from ZIP, extract to the user macros dir, create config."""
+        try:
+            os.makedirs(self.user_macros_dir, exist_ok=True)
+        except OSError:
+            pass
         folder_name = name_en.lower().replace(' ', '_')
-        folder_path = os.path.join(self.macros_dir, folder_name)
+        folder_path = os.path.join(self.user_macros_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(folder_path)
@@ -500,9 +596,13 @@ class MacroManager:
         return folder_path
 
     def import_macro_from_folder(self, src_folder, name_en, name_pl, openfile):
-        """Import from a folder, copy to macros_dir, create config."""
+        """Import from a folder, copy to the user macros dir, create config."""
+        try:
+            os.makedirs(self.user_macros_dir, exist_ok=True)
+        except OSError:
+            pass
         folder_name = name_en.lower().replace(' ', '_')
-        folder_path = os.path.join(self.macros_dir, folder_name)
+        folder_path = os.path.join(self.user_macros_dir, folder_name)
         if os.path.abspath(src_folder) != os.path.abspath(folder_path):
             shutil.copytree(src_folder, folder_path, dirs_exist_ok=True)
         config = configparser.ConfigParser()
@@ -518,10 +618,20 @@ class MacroManager:
         return folder_path
 
     def delete_macro(self, folder_name):
-        """Delete a macro folder entirely."""
-        folder_path = os.path.join(self.macros_dir, folder_name)
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path, ignore_errors=True)
+        """Delete a macro folder entirely.
+
+        Bundled macros cannot be deleted (the installation dir is treated as
+        read-only); the user copy, if any, is removed and the bundled version
+        will reappear on next scan.
+        """
+        user_path = os.path.join(self.user_macros_dir, folder_name)
+        if os.path.exists(user_path):
+            shutil.rmtree(user_path, ignore_errors=True)
+        else:
+            # Legacy code path: dev mode, no user shadow yet.
+            bundled_path = os.path.join(self.macros_dir, folder_name) if self.macros_dir else ''
+            if bundled_path and os.path.exists(bundled_path):
+                shutil.rmtree(bundled_path, ignore_errors=True)
         self.load_macros()
 
 

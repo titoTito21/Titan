@@ -20,7 +20,18 @@ _project_root = os.path.dirname(os.path.abspath(__file__))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, is_frozen
+from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, is_frozen, ensure_user_overlay_layout
+
+# Create the per-user overlay layout under %APPDATA%/titosoft/Titan/ (Windows),
+# ~/.config/titosoft/Titan/ (Linux) or ~/Library/Application Support/titosoft/
+# Titan/ (macOS) so every overlay-aware loader (apps, components, games,
+# launchers, Titan IM modules, statusbar applets, widgets, macros, TTS engines,
+# skins, sfx themes, language packs) has its target directory ready on first
+# launch and users can drop content in without manually mkdir'ing anything.
+try:
+    ensure_user_overlay_layout()
+except Exception as _e:
+    print(f"[STARTUP] Could not prepare user overlay layout: {_e}")
 
 
 # Remove old Telegram session files immediately on compiled builds

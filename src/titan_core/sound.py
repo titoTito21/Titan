@@ -62,11 +62,40 @@ def resource_path(relative_path):
 
 
 def get_sfx_directory():
-    """Zwraca ścieżkę do katalogu z dźwiękami dla aktualnego motywu."""
-    sfx_dir = resource_path(os.path.join('sfx', current_theme))
-    if not os.path.exists(sfx_dir):
-        print(f"SFX directory does not exist: {sfx_dir}")
-    return sfx_dir
+    """Return the sfx directory for the current theme. Prefers the per-user
+    overlay (`%APPDATA%/titosoft/Titan/sfx/<theme>/`) over the bundled
+    `sfx/<theme>/`. Returns the bundled path if neither exists."""
+    try:
+        from src.platform_utils import find_resource, get_user_resource_path
+        user_dir = get_user_resource_path(os.path.join('sfx', current_theme))
+        if os.path.isdir(user_dir):
+            return user_dir
+        bundled = resource_path(os.path.join('sfx', current_theme))
+        if os.path.isdir(bundled):
+            return bundled
+        # Last resort: return whatever find_resource yields (may not exist).
+        return find_resource(os.path.join('sfx', current_theme)) or bundled
+    except Exception:
+        sfx_dir = resource_path(os.path.join('sfx', current_theme))
+        if not os.path.exists(sfx_dir):
+            print(f"SFX directory does not exist: {sfx_dir}")
+        return sfx_dir
+
+
+def get_available_sfx_themes():
+    """Return a sorted list of every sfx theme available across bundled
+    `sfx/` and the per-user overlay. User-overlay theme folders shadow
+    bundled folders with the same name."""
+    try:
+        from src.platform_utils import discover_resource_entries
+        themes = list(discover_resource_entries('sfx').keys())
+    except Exception:
+        sfx_dir = resource_path('sfx')
+        themes = []
+        if os.path.isdir(sfx_dir):
+            themes = [d for d in os.listdir(sfx_dir)
+                      if os.path.isdir(os.path.join(sfx_dir, d))]
+    return sorted(themes)
 
 
 def get_available_audio_systems():
@@ -220,15 +249,32 @@ def play_sound(sound_file, pan=None):
 
 
 def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=False):
-    """Helper function to try playing sound from a specific theme path."""
+    """Helper function to try playing sound from a specific theme path.
+
+    Looks up the file in the per-user overlay first
+    (`%APPDATA%/titosoft/Titan/sfx/<theme>/<file>`) then falls back to the
+    bundled theme directory. This lets users drop replacement sounds without
+    overwriting the installation directory.
+    """
     try:
-        if use_default_theme:
-            sfx_dir = resource_path(os.path.join('sfx', 'default'))
-        else:
-            sfx_dir = get_sfx_directory()
-            
-        sound_path = os.path.join(sfx_dir, sound_file)
-        
+        theme_name = 'default' if use_default_theme else current_theme
+        rel = os.path.join('sfx', theme_name, sound_file)
+
+        sound_path = None
+        try:
+            from src.platform_utils import find_resource
+            sound_path = find_resource(rel)
+        except Exception:
+            pass
+
+        if not sound_path:
+            # Legacy resolution (bundled only) as a final fallback.
+            if use_default_theme:
+                sfx_dir = resource_path(os.path.join('sfx', 'default'))
+            else:
+                sfx_dir = get_sfx_directory()
+            sound_path = os.path.join(sfx_dir, sound_file)
+
         if not os.path.exists(sound_path):
             return False
             

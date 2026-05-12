@@ -6,7 +6,11 @@ import py_compile
 import shutil
 import platform
 import configparser
-from src.platform_utils import get_base_path as _get_base_path, is_frozen as _is_frozen
+from src.platform_utils import (
+    get_base_path as _get_base_path,
+    is_frozen as _is_frozen,
+    discover_data_entries as _discover_data_entries,
+)
 
 
 def _log_to_file(message):
@@ -31,6 +35,7 @@ class ComponentManager:
         self.component_klango_hooks = {}  # Hooks for Klango mode modifications
         self.component_iui_hooks = {}  # Hooks for Invisible UI modifications
         self.component_launcher_hooks = {}  # Hooks for custom launcher modifications
+        self.component_paths = {}  # folder_name -> absolute path the component was loaded from
         self.components_loaded = False  # Track if components have been loaded
         self.load_components()
 
@@ -44,7 +49,9 @@ class ComponentManager:
             return folder_name
 
     def load_components(self):
-        """Loads all components from the data/components directory."""
+        """Loads all components from the bundled data/components directory and
+        the per-user overlay under %APPDATA%/titosoft/Titan/data/components/.
+        User entries override bundled entries when the folder name collides."""
         try:
             # Get project root directory (supports PyInstaller and Nuitka)
             project_root = _get_base_path()
@@ -52,29 +59,33 @@ class ComponentManager:
 
             _log_to_file(f"=== Component Loading Started ===")
             _log_to_file(f"Project root: {project_root}")
-            _log_to_file(f"Components dir: {components_dir}")
+            _log_to_file(f"Components dir (bundled): {components_dir}")
             _log_to_file(f"Is frozen: {_is_frozen()}")
             _log_to_file(f"Components dir exists: {os.path.exists(components_dir)}")
 
             print(f"[ComponentManager] Project root: {project_root}")
-            print(f"[ComponentManager] Components dir: {components_dir}")
+            print(f"[ComponentManager] Components dir (bundled): {components_dir}")
             print(f"[ComponentManager] Is frozen: {_is_frozen()}")
 
-            if not os.path.exists(components_dir):
-                print(f"Components directory does not exist: {components_dir}")
-                _log_to_file(f"ERROR: Components directory does not exist!")
+            # Discover components across bundled + user overlay (user wins)
+            entries = _discover_data_entries('components')
+            _log_to_file(f"Discovered components: {list(entries.keys())}")
+
+            if not entries:
+                print(f"No components found (bundled: {components_dir})")
+                _log_to_file(f"ERROR: No components discovered in any location")
                 return
 
-            # List contents
-            try:
-                contents = os.listdir(components_dir)
-                _log_to_file(f"Components dir contents: {contents}")
-            except Exception as e:
-                _log_to_file(f"ERROR listing components dir: {e}")
-
-            # Ensure components directory is in sys.path
-            if components_dir not in sys.path:
+            # Ensure components directory is in sys.path (bundled + user)
+            if os.path.isdir(components_dir) and components_dir not in sys.path:
                 sys.path.insert(0, components_dir)
+            try:
+                from src.platform_utils import get_user_resource_path as _user_res
+                user_components_dir = _user_res(os.path.join('data', 'components'))
+                if os.path.isdir(user_components_dir) and user_components_dir not in sys.path:
+                    sys.path.insert(0, user_components_dir)
+            except Exception:
+                pass
 
             # For frozen apps, ensure bundled modules are accessible
             if _is_frozen():
@@ -91,12 +102,12 @@ class ComponentManager:
                         sys.path.insert(0, meipass)
                         print(f"[ComponentManager] Added _MEIPASS to sys.path: {meipass}")
 
-            for component_folder in os.listdir(components_dir):
+            for component_folder, component_path in entries.items():
                 try:
-                    component_path = os.path.join(components_dir, component_folder)
-                    _log_to_file(f"Checking folder: {component_folder}")
+                    _log_to_file(f"Checking folder: {component_folder} ({component_path})")
                     if os.path.isdir(component_path) and component_folder != '.DS_Store':
                         try:
+                            self.component_paths[component_folder] = component_path
                             self.ensure_component_config(component_path, component_folder)
                             status = self.get_component_status(component_path)
                             self.component_states[component_folder] = status
@@ -163,9 +174,13 @@ class ComponentManager:
             return 1  # Default to disabled if error
 
     def toggle_component_status(self, component_folder):
-        # Get project root directory (supports PyInstaller and Nuitka)
-        project_root = _get_base_path()
-        component_path = os.path.join(project_root, 'data', 'components', component_folder)
+        # Prefer the path the component was actually loaded from so that
+        # user-overlay components write their config to the user dir rather
+        # than the bundled dir (which may be read-only).
+        component_path = self.component_paths.get(component_folder)
+        if not component_path or not os.path.isdir(component_path):
+            project_root = _get_base_path()
+            component_path = os.path.join(project_root, 'data', 'components', component_folder)
         config_path = os.path.join(component_path, '__component__.TCE')
         config = configparser.ConfigParser()
         config.read(config_path)

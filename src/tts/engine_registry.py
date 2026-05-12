@@ -66,7 +66,7 @@ class PlatformEngineProxy(TitanTTSEngine):
 
 
 def _get_engines_dir():
-    """Return path to data/titantts engines/ directory."""
+    """Return path to bundled data/titantts engines/ directory."""
     try:
         from src.platform_utils import get_base_path
         base = get_base_path()
@@ -77,6 +77,28 @@ def _get_engines_dir():
     result = os.path.join(base, 'data', 'titantts engines')
     _log(f"[_get_engines_dir] result = {result}, exists = {os.path.isdir(result)}")
     return result
+
+
+def _iter_engine_folders():
+    """Yield (folder_name, abs_path) for every engine folder in the bundled
+    `data/titantts engines/` dir and the per-user overlay under
+    `%APPDATA%/titosoft/Titan/data/titantts engines/`. User entries override
+    bundled entries with the same folder name."""
+    try:
+        from src.platform_utils import discover_data_entries
+        entries = discover_data_entries('titantts engines')
+        for name, path in entries.items():
+            yield name, path
+        return
+    except Exception as e:
+        _log(f"[_iter_engine_folders] discover_data_entries failed: {e}")
+
+    # Fallback to bundled-only enumeration
+    engines_dir = _get_engines_dir()
+    if not os.path.isdir(engines_dir):
+        return
+    for name in sorted(os.listdir(engines_dir)):
+        yield name, os.path.join(engines_dir, name)
 
 
 class EngineRegistry:
@@ -102,19 +124,17 @@ class EngineRegistry:
     # ------------------------------------------------------------------
 
     def _load_engines(self):
-        """Scan data/titantts engines/ for folders with __engine__.TCE."""
+        """Scan data/titantts engines/ for folders with __engine__.TCE across
+        bundled + user overlay. User entries win on folder-name collision."""
         _log(f"[_load_engines] Starting engine scan...")
-        engines_dir = _get_engines_dir()
-        if not os.path.isdir(engines_dir):
-            _log(f"[_load_engines] Directory NOT FOUND: {engines_dir}")
-            print(f"[EngineRegistry] Engines directory not found: {engines_dir}")
+
+        discovered = list(_iter_engine_folders())
+        _log(f"[_load_engines] Found folders: {[n for n, _ in discovered]}")
+        if not discovered:
+            print(f"[EngineRegistry] No engines found in bundled or user dir")
             return
 
-        folders = sorted(os.listdir(engines_dir))
-        _log(f"[_load_engines] Found folders: {folders}")
-
-        for folder in folders:
-            folder_path = os.path.join(engines_dir, folder)
+        for folder, folder_path in discovered:
             if not os.path.isdir(folder_path):
                 continue
 
