@@ -244,12 +244,12 @@ msgstr ""
 #: src/titan_core/tce_system_net.py:825 src/titan_core/tce_system_net.py:886
 #: src/titan_core/tce_system_net.py:1361
 msgid "Checked"
-msgstr "Sprawdzono"
+msgstr "Zaznaczone"
 
 #: src/titan_core/tce_system_net.py:825 src/titan_core/tce_system_net.py:886
 #: src/titan_core/tce_system_net.py:1361
 msgid "Unchecked"
-msgstr ""
+msgstr "Niezaznaczone"
 
 #: src/titan_core/tce_system_net.py:827 src/titan_core/tce_system_net.py:888
 #: src/titan_core/tce_system_net.py:1363
