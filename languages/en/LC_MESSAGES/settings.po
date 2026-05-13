@@ -114,7 +114,15 @@ msgstr ""
 msgid "Stereo sounds"
 msgstr ""
 
-#: src/settings/configvizard.py:381 src/ui/settingsgui.py:595
+#: src/ui/settingsgui.py:595
+msgid "Use skin's sound theme"
+msgstr ""
+
+#: src/ui/settingsgui.py:600
+msgid "Use equivalent from default theme when a sound is unavailable in the selected sound theme"
+msgstr ""
+
+#: src/settings/configvizard.py:381 src/ui/settingsgui.py:605
 msgid "Sound theme volume:"
 msgstr ""
 

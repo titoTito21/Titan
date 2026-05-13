@@ -332,13 +332,23 @@ class SkinManager:
             self.current_skin = Skin(skin_name)
             print(f"Loaded skin: {skin_name}")
 
-            # Apply sound theme if specified
+            # Apply sound theme only when the user opted in via the
+            # "Use skin's sound theme" setting (default: disabled).
             if 'theme' in self.current_skin.sounds:
                 try:
-                    from src.titan_core.sound import set_theme
-                    set_theme(self.current_skin.sounds['theme'])
-                except Exception as e:
-                    print(f"Error applying sound theme: {e}")
+                    settings = load_settings()
+                    use_skin_theme = str(
+                        settings.get('sound', {}).get('use_skin_sound_theme', 'False')
+                    ).lower() in ('true', '1')
+                except Exception:
+                    use_skin_theme = False
+
+                if use_skin_theme:
+                    try:
+                        from src.titan_core.sound import set_theme
+                        set_theme(self.current_skin.sounds['theme'])
+                    except Exception as e:
+                        print(f"Error applying sound theme: {e}")
 
             return True
         except Exception as e:

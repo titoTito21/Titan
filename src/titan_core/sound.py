@@ -233,16 +233,20 @@ def play_sound(sound_file, pan=None):
         
         try:
             settings = load_settings()
-            stereo_enabled = settings.get('sound', {}).get('stereo_sound', 'False').lower() in ['true', '1']
+            sound_settings = settings.get('sound', {})
+            stereo_enabled = str(sound_settings.get('stereo_sound', 'False')).lower() in ['true', '1']
+            fallback_to_default = str(sound_settings.get('fallback_to_default_theme', 'False')).lower() in ['true', '1']
         except Exception:
             stereo_enabled = False
+            fallback_to_default = False
 
         # Try to play from current theme first
         if _try_play_sound_from_path(sound_file, pan, stereo_enabled):
             return
-            
-        # Fallback to default theme
-        _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=True)
+
+        # Fallback to default theme only when the user opted in.
+        if fallback_to_default and current_theme != 'default':
+            _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=True)
             
     except Exception as e:
         print(f"Critical error in play_sound: {e}")

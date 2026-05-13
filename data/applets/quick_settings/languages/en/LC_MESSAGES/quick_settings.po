@@ -55,9 +55,9 @@ msgstr "Announce item index"
 msgid "Announce widget type"
 msgstr "Announce widget type"
 
-#: main.py:65
-msgid "Enable TitanUI support"
-msgstr "Enable TitanUI support"
+#: main.py:175
+msgid "Enable Titan TTS"
+msgstr "Enable Titan TTS"
 
 #: main.py:66
 msgid "Announce first item in category"

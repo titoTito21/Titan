@@ -592,6 +592,16 @@ class SettingsFrame(wx.Frame):
         self.stereo_sound_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.stereo_sound_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        self.use_skin_sound_theme_cb = wx.CheckBox(panel, label=_("Use skin's sound theme"))
+        self.use_skin_sound_theme_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.use_skin_sound_theme_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.use_skin_sound_theme_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.fallback_to_default_theme_cb = wx.CheckBox(panel, label=_("Use equivalent from default theme when a sound is unavailable in the selected sound theme"))
+        self.fallback_to_default_theme_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.fallback_to_default_theme_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.fallback_to_default_theme_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         volume_label_text = _("Sound theme volume:")
         volume_label = wx.StaticText(panel, label=volume_label_text)
         vbox.Add(volume_label, flag=wx.LEFT | wx.TOP, border=10)
@@ -1215,6 +1225,12 @@ class SettingsFrame(wx.Frame):
         stereo_sound_value = sound_settings.get('stereo_sound', 'False')
         self.stereo_sound_cb.SetValue(str(stereo_sound_value).lower() in ['true', '1'])
 
+        use_skin_sound_theme_value = sound_settings.get('use_skin_sound_theme', 'False')
+        self.use_skin_sound_theme_cb.SetValue(str(use_skin_sound_theme_value).lower() in ['true', '1'])
+
+        fallback_to_default_theme_value = sound_settings.get('fallback_to_default_theme', 'False')
+        self.fallback_to_default_theme_cb.SetValue(str(fallback_to_default_theme_value).lower() in ['true', '1'])
+
         theme_volume_value = sound_settings.get('theme_volume', '100')
         self.theme_volume_slider.SetValue(int(theme_volume_value))
         set_sound_theme_volume(int(theme_volume_value))
@@ -1768,6 +1784,8 @@ class SettingsFrame(wx.Frame):
         self.settings['sound'] = {
             'theme': self.theme_choice.GetStringSelection(),
             'stereo_sound': str(self.stereo_sound_cb.GetValue()),
+            'use_skin_sound_theme': str(self.use_skin_sound_theme_cb.GetValue()),
+            'fallback_to_default_theme': str(self.fallback_to_default_theme_cb.GetValue()),
             'theme_volume': str(self.theme_volume_slider.GetValue())
         }
         startup_mode_selection = self.startup_mode_choice.GetSelection()

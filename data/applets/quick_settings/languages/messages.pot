@@ -53,8 +53,8 @@ msgstr ""
 msgid "Announce widget type"
 msgstr ""
 
-#: main.py:65
-msgid "Enable TitanUI support"
+#: main.py:175
+msgid "Enable Titan TTS"
 msgstr ""
 
 #: main.py:66

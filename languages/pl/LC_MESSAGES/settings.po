@@ -116,7 +116,15 @@ msgstr "Brak motywów"
 msgid "Stereo sounds"
 msgstr "Dźwięki stereo"
 
-#: src/settings/configvizard.py:381 src/ui/settingsgui.py:595
+#: src/ui/settingsgui.py:595
+msgid "Use skin's sound theme"
+msgstr "Użyj tematu dźwiękowego skórki"
+
+#: src/ui/settingsgui.py:600
+msgid "Use equivalent from default theme when a sound is unavailable in the selected sound theme"
+msgstr "Użyj odpowiednika z domyślnego tematu, gdy dźwięk jest niedostępny w danym temacie dźwiękowym"
+
+#: src/settings/configvizard.py:381 src/ui/settingsgui.py:605
 msgid "Sound theme volume:"
 msgstr "Głośność motywu dźwiękowego:"
 

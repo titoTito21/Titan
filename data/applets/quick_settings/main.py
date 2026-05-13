@@ -172,7 +172,7 @@ class QuickSettingsWidget(BaseWidget):
                 # Invisible Interface
                 {'name': _("Announce item index"), 'section': 'invisible_interface', 'key': 'announce_index', 'type': 'bool'},
                 {'name': _("Announce widget type"), 'section': 'invisible_interface', 'key': 'announce_widget_type', 'type': 'bool'},
-                {'name': _("Enable TitanUI support"), 'section': 'invisible_interface', 'key': 'enable_titan_ui', 'type': 'bool'},
+                {'name': _("Enable Titan TTS"), 'section': 'invisible_interface', 'key': 'stereo_speech', 'type': 'bool'},
                 {'name': _("Announce first item in category"), 'section': 'invisible_interface', 'key': 'announce_first_item', 'type': 'bool'}
             ]
         except Exception as e:
