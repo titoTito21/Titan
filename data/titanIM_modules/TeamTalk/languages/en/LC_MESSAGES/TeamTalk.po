@@ -557,3 +557,522 @@ msgstr "Saved nickname and gender for next connection."
 
 msgid "(empty)"
 msgstr "(empty)"
+
+msgid "A user"
+msgstr "A user"
+
+msgid "Account type"
+msgstr "Account type"
+
+msgid "Administration"
+msgstr "Administration"
+
+msgid "Administration\tCtrl+6"
+msgstr "Administration\tCtrl+6"
+
+msgid "Administrator"
+msgstr "Administrator"
+
+msgid "Administrator access"
+msgstr "Administrator access"
+
+msgid "Automatically save server configuration"
+msgstr "Automatically save server configuration"
+
+msgid "Banned users"
+msgstr "Banned users"
+
+msgid "Banned users..."
+msgstr "Banned users..."
+
+msgid "Banned users:"
+msgstr "Banned users:"
+
+msgid "Channel"
+msgstr "Channel"
+
+msgid "Choose a TeamTalk server"
+msgstr "Choose a TeamTalk server"
+
+msgid "Connect to a TeamTalk server first."
+msgstr "Connect to a TeamTalk server first."
+
+msgid "Could not create the user account."
+msgstr "Could not create the user account."
+
+msgid "Could not delete file."
+msgstr "Could not delete file."
+
+msgid "Could not delete the user account."
+msgstr "Could not delete the user account."
+
+msgid "Could not play the selected media file."
+msgstr "Could not play the selected media file."
+
+msgid "Could not read the server properties."
+msgstr "Could not read the server properties."
+
+msgid "Could not remove the ban."
+msgstr "Could not remove the ban."
+
+msgid "Could not request the ban list."
+msgstr "Could not request the ban list."
+
+msgid "Could not request the user account list."
+msgstr "Could not request the user account list."
+
+msgid "Could not save nickname and gender. See log."
+msgstr "Could not save nickname and gender. See log."
+
+msgid "Could not save the server configuration. Administrator rights are required."
+msgstr "Could not save the server configuration. Administrator rights are required."
+
+msgid "Could not start recording. Check that your account has the record-voice right."
+msgstr "Could not start recording. Check that your account has the record-voice right."
+
+msgid "Could not start streaming. Check that your account has the stream-media-files right."
+msgstr "Could not start streaming. Check that your account has the stream-media-files right."
+
+msgid "Could not start the file download."
+msgstr "Could not start the file download."
+
+msgid "Could not start the file upload."
+msgstr "Could not start the file upload."
+
+msgid "Could not stop media streaming."
+msgstr "Could not stop media streaming."
+
+msgid "Could not stop recording."
+msgstr "Could not stop recording."
+
+msgid "Could not update the server properties. Administrator rights are required."
+msgstr "Could not update the server properties. Administrator rights are required."
+
+msgid "Could not update the user account."
+msgstr "Could not update the user account."
+
+msgid "Create, edit and delete server accounts"
+msgstr "Create, edit and delete server accounts"
+
+msgid "Default channel (optional, suggestion only - never auto-joined):"
+msgstr "Default channel (optional, suggestion only - never auto-joined):"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete selected file"
+msgstr "Delete selected file"
+
+msgid "Delete the selected file from the server?"
+msgstr "Delete the selected file from the server?"
+
+msgid "Delete the user account '{name}'?"
+msgstr "Delete the user account '{name}'?"
+
+msgid "Download selected file..."
+msgstr "Download selected file..."
+
+msgid "Downloading file: {name}"
+msgstr "Downloading file: {name}"
+
+msgid "Edit user account"
+msgstr "Edit user account"
+
+msgid "Files"
+msgstr "Files"
+
+msgid "Files\tCtrl+4"
+msgstr "Files\tCtrl+4"
+
+msgid "Files in current channel"
+msgstr "Files in current channel"
+
+msgid "Files uploaded: {tx}   Files downloaded: {rx}"
+msgstr "Files uploaded: {tx}   Files downloaded: {rx}"
+
+msgid "Initial channel"
+msgstr "Initial channel"
+
+msgid "Initial channel (optional):"
+msgstr "Initial channel (optional):"
+
+msgid "Join a channel before recording its audio."
+msgstr "Join a channel before recording its audio."
+
+msgid "Join a channel before streaming a media file to it."
+msgstr "Join a channel before streaming a media file to it."
+
+msgid "Join a channel before uploading files."
+msgstr "Join a channel before uploading files."
+
+msgid "Lobby ({count})"
+msgstr "Lobby ({count})"
+
+msgid "Local playback stopped"
+msgstr "Local playback stopped"
+
+msgid "Login delay (milliseconds):"
+msgstr "Login delay (milliseconds):"
+
+msgid "Maximum login attempts:"
+msgstr "Maximum login attempts:"
+
+msgid "Maximum logins per IP address:"
+msgstr "Maximum logins per IP address:"
+
+msgid "Maximum total bytes per second:"
+msgstr "Maximum total bytes per second:"
+
+msgid "Maximum users:"
+msgstr "Maximum users:"
+
+msgid "Maximum voice bytes per second:"
+msgstr "Maximum voice bytes per second:"
+
+msgid "Media file sent: {tx}   Media file received: {rx}"
+msgstr "Media file sent: {tx}   Media file received: {rx}"
+
+msgid "Media files (*.mp3;*.wav;*.ogg;*.mp4;*.wma)|*.mp3;*.wav;*.ogg;*.mp4;*.wma|All files (*.*)|*.*"
+msgstr "Media files (*.mp3;*.wav;*.ogg;*.mp4;*.wma)|*.mp3;*.wav;*.ogg;*.mp4;*.wma|All files (*.*)|*.*"
+
+msgid "Media streaming stopped"
+msgstr "Media streaming stopped"
+
+msgid "Media streaming: {status}"
+msgstr "Media streaming: {status}"
+
+msgid "Message of the day:"
+msgstr "Message of the day:"
+
+msgid "Mix every voice in the channel into one file"
+msgstr "Mix every voice in the channel into one file"
+
+msgid "New user account"
+msgstr "New user account"
+
+msgid "Nickname change cancelled."
+msgstr "Nickname change cancelled."
+
+msgid "Note"
+msgstr "Note"
+
+msgid "Note:"
+msgstr "Note:"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Peak users online: {n}"
+msgstr "Peak users online: {n}"
+
+msgid "Play an audio file into the channel for everyone"
+msgstr "Play an audio file into the channel for everyone"
+
+msgid "Play an audio file through your own speakers only"
+msgstr "Play an audio file through your own speakers only"
+
+msgid "Play media file to myself"
+msgstr "Play media file to myself"
+
+msgid "Play media file to myself..."
+msgstr "Play media file to myself..."
+
+msgid "Playing media file locally"
+msgstr "Playing media file locally"
+
+msgid "Playing media file locally: {name}"
+msgstr "Playing media file locally: {name}"
+
+msgid "Querying server statistics..."
+msgstr "Querying server statistics..."
+
+msgid "Record channel audio to file"
+msgstr "Record channel audio to file"
+
+msgid "Record channel audio to file..."
+msgstr "Record channel audio to file..."
+
+msgid "Record channel audio to file...\tCtrl+R"
+msgstr "Record channel audio to file...\tCtrl+R"
+
+msgid "Recording"
+msgstr "Recording"
+
+msgid "Recording and media"
+msgstr "Recording and media"
+
+msgid "Recording and media\tCtrl+5"
+msgstr "Recording and media\tCtrl+5"
+
+msgid "Recording channel audio"
+msgstr "Recording channel audio"
+
+msgid "Recording channel audio to: {name}"
+msgstr "Recording channel audio to: {name}"
+
+msgid "Recording stopped"
+msgstr "Recording stopped"
+
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "Regular user"
+msgstr "Regular user"
+
+msgid "Save TeamTalk file"
+msgstr "Save TeamTalk file"
+
+msgid "Save server configuration"
+msgstr "Save server configuration"
+
+msgid "Saved TeamTalk servers:"
+msgstr "Saved TeamTalk servers:"
+
+msgid "Server configuration save requested."
+msgstr "Server configuration save requested."
+
+msgid "Server configuration saved"
+msgstr "Server configuration saved"
+
+msgid "Server name:"
+msgstr "Server name:"
+
+msgid "Server properties update requested."
+msgstr "Server properties update requested."
+
+msgid "Server properties updated"
+msgstr "Server properties updated"
+
+msgid "Server properties were updated."
+msgstr "Server properties were updated."
+
+msgid "Server properties..."
+msgstr "Server properties..."
+
+msgid "Server statistics"
+msgstr "Server statistics"
+
+msgid "Server statistics..."
+msgstr "Server statistics..."
+
+msgid "Server uptime: {up}"
+msgstr "Server uptime: {up}"
+
+msgid "Server user accounts"
+msgstr "Server user accounts"
+
+msgid "Server user accounts:"
+msgstr "Server user accounts:"
+
+msgid "Some actions may require administrator rights"
+msgstr "Some actions may require administrator rights"
+
+msgid "Stop all local playback"
+msgstr "Stop all local playback"
+
+msgid "Stop recording channel audio"
+msgstr "Stop recording channel audio"
+
+msgid "Stop recording channel audio\tCtrl+R"
+msgstr "Stop recording channel audio\tCtrl+R"
+
+msgid "Stop streaming media file to channel"
+msgstr "Stop streaming media file to channel"
+
+msgid "Stopped recording channel audio."
+msgstr "Stopped recording channel audio."
+
+msgid "Stopped streaming media file."
+msgstr "Stopped streaming media file."
+
+msgid "Stopped {n} local playback(s)."
+msgstr "Stopped {n} local playback(s)."
+
+msgid "Stream media file to channel"
+msgstr "Stream media file to channel"
+
+msgid "Stream media file to channel..."
+msgstr "Stream media file to channel..."
+
+msgid "Streaming media file to channel"
+msgstr "Streaming media file to channel"
+
+msgid "Streaming media file to channel: {name}"
+msgstr "Streaming media file to channel: {name}"
+
+msgid "TeamTalk banned users"
+msgstr "TeamTalk banned users"
+
+msgid "TeamTalk server properties"
+msgstr "TeamTalk server properties"
+
+msgid "TeamTalk server statistics"
+msgstr "TeamTalk server statistics"
+
+msgid "TeamTalk user accounts"
+msgstr "TeamTalk user accounts"
+
+msgid "TeamTalk view"
+msgstr "TeamTalk view"
+
+msgid "Total sent: {tx}   Total received: {rx}"
+msgstr "Total sent: {tx}   Total received: {rx}"
+
+msgid "Traffic, uptime and user counts"
+msgstr "Traffic, uptime and user counts"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Unban selected"
+msgstr "Unban selected"
+
+msgid "Unbanned: {who}"
+msgstr "Unbanned: {who}"
+
+msgid "Upload file to TeamTalk channel"
+msgstr "Upload file to TeamTalk channel"
+
+msgid "Upload file..."
+msgstr "Upload file..."
+
+msgid "Uploading file: {name}"
+msgstr "Uploading file: {name}"
+
+msgid "User account created: {name}"
+msgstr "User account created: {name}"
+
+msgid "User account deleted: {name}"
+msgstr "User account deleted: {name}"
+
+msgid "User account updated: {name}"
+msgstr "User account updated: {name}"
+
+msgid "User accounts..."
+msgstr "User accounts..."
+
+msgid "User rights"
+msgstr "User rights"
+
+msgid "User rights:"
+msgstr "User rights:"
+
+msgid "User timeout (seconds):"
+msgstr "User timeout (seconds):"
+
+msgid "Username is required."
+msgstr "Username is required."
+
+msgid "Users served (total): {n}"
+msgstr "Users served (total): {n}"
+
+msgid "Version: {ver}   TCP port: {tcp}   UDP port: {udp}"
+msgstr "Version: {ver}   TCP port: {tcp}   UDP port: {udp}"
+
+msgid "View and edit name, MOTD and limits"
+msgstr "View and edit name, MOTD and limits"
+
+msgid "View and remove server bans"
+msgstr "View and remove server bans"
+
+msgid "Voice sent: {tx}   Voice received: {rx}"
+msgstr "Voice sent: {tx}   Voice received: {rx}"
+
+msgid "Voice transmission rejected by the server."
+msgstr "Voice transmission rejected by the server."
+
+msgid "Wave audio (*.wav)|*.wav|MP3 audio (*.mp3)|*.mp3"
+msgstr "Wave audio (*.wav)|*.wav|MP3 audio (*.mp3)|*.mp3"
+
+msgid "aborted"
+msgstr "aborted"
+
+msgid "closed"
+msgstr "closed"
+
+msgid "error"
+msgstr "error"
+
+msgid "finished"
+msgstr "finished"
+
+msgid "paused"
+msgstr "paused"
+
+msgid "playing"
+msgstr "playing"
+
+msgid "started"
+msgstr "started"
+
+msgid "updated"
+msgstr "updated"
+
+msgid "{n} playback(s) running"
+msgstr "{n} playback(s) running"
+
+msgid "{size} bytes - {who}"
+msgstr "{size} bytes - {who}"
+
+msgid "{user} recording: {status}"
+msgstr "{user} recording: {status}"
+
+msgid "Multiple logins with same account"
+msgstr "Multiple logins with same account"
+
+msgid "See all users on the server"
+msgstr "See all users on the server"
+
+msgid "Create temporary channels"
+msgstr "Create temporary channels"
+
+msgid "Create and modify channels"
+msgstr "Create and modify channels"
+
+msgid "Send broadcast text messages"
+msgstr "Send broadcast text messages"
+
+msgid "Send private text messages"
+msgstr "Send private text messages"
+
+msgid "Send channel text messages"
+msgstr "Send channel text messages"
+
+msgid "Kick users"
+msgstr "Kick users"
+
+msgid "Ban users"
+msgstr "Ban users"
+
+msgid "Move users between channels"
+msgstr "Move users between channels"
+
+msgid "Become channel operator"
+msgstr "Become channel operator"
+
+msgid "Upload files to channels"
+msgstr "Upload files to channels"
+
+msgid "Download files from channels"
+msgstr "Download files from channels"
+
+msgid "Update server properties"
+msgstr "Update server properties"
+
+msgid "Transmit voice"
+msgstr "Transmit voice"
+
+msgid "Stream media files to channels"
+msgstr "Stream media files to channels"
+
+msgid "Record voice in channels"
+msgstr "Record voice in channels"
+
+msgid "See hidden channels"
+msgstr "See hidden channels"
+
+msgid "Locked nickname (cannot be changed)"
+msgstr "Locked nickname (cannot be changed)"
+
+msgid "Locked status (cannot be changed)"
+msgstr "Locked status (cannot be changed)"

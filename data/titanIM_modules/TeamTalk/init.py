@@ -7,12 +7,24 @@ Full-featured TeamTalk 5 client styled like Titan-Net main GUI:
 - Channel tree with users nested
 - ListCtrl chat (Nick / Message / Time) - same shape as Titan-Net rooms
 - Row-0 virtual tab bar on the right pane (Channel chat / Server log /
-  Private messages) - same convention as TitanApp / Feedback Hub
+  Private messages / Files / Recording and media / Administration) - same
+  convention as TitanApp / Feedback Hub
 - Per-user private message windows
 - User context menu: PM / info / mute / volume / kick / ban / move / subscribe
 - Channel actions: join, leave, create, update, delete, files
 - Push-to-talk (F4 hold), mute mic (F2), mute speakers (F3)
+- Recording: mix the channel's voice into a single WAV/MP3 file
+- Media: stream an audio file into the channel, or play one to yourself
+- Server administration (admin accounts): edit server properties, manage
+  user accounts and bans, view server statistics, save server config
 - Full Titan IM sound API + Titan skin manager wired through every window
+
+The SDK layer (TeamTalkSdkClient) is the proven event-cache wrapper from
+the previous version - connect/login, audio device init, channels, users,
+voice, files - extended here with recording, media streaming and the
+administration command set. The UI layer adds the Recording and
+Administration tabs plus their dialogs on top of the same titan-net
+row-0 tab bar convention.
 """
 
 import builtins
@@ -38,6 +50,23 @@ TAB_CHAT = 0
 TAB_LOG = 1
 TAB_PM = 2
 TAB_FILES = 3
+TAB_MEDIA = 4
+TAB_ADMIN = 5
+TAB_FIRST = TAB_CHAT
+TAB_LAST = TAB_ADMIN
+
+# Right-pane row action codes (stored via ListCtrl.SetItemData) for the
+# action-list tabs (Recording and media, Administration). current_tab
+# disambiguates which set applies.
+ACT_RECORD = 10
+ACT_STREAM = 11
+ACT_PLAY_LOCAL = 12
+ACT_STOP_PLAYBACK = 13
+ACT_SRV_PROPERTIES = 20
+ACT_SRV_ACCOUNTS = 21
+ACT_SRV_BANS = 22
+ACT_SRV_STATS = 23
+ACT_SRV_SAVECONFIG = 24
 
 # TeamTalk 5 status-mode bitfield (TT Classic constants - the Python wrapper
 # does not export them, so we define them locally and OR them into the
@@ -507,6 +536,13 @@ class TeamTalkSdkClient:
         self.user_cache = {}        # user_id -> User (copy)
         self.channel_cache = {}     # channel_id -> Channel (copy)
         self.file_cache = {}        # channel_id -> {file_id: RemoteFile copy}
+        # Recording / media state. qtTeamTalk keeps the same flags so the
+        # toolbar can reflect "currently recording" / "currently streaming".
+        self.recording = False
+        self.recording_path = ""
+        self.streaming_media = False
+        self.streaming_path = ""
+        self.local_playbacks = set()  # active InitLocalPlayback session ids
 
     # ---- Lifecycle -------------------------------------------------------
 
@@ -521,6 +557,19 @@ class TeamTalkSdkClient:
     def connect(self, profile):
         if not self.available():
             raise RuntimeError(_sdk_hint())
+        # Tear down any existing connection before reconnecting. Calling
+        # connect() while a previous TeamTalk() instance is still live
+        # (a double-fired Connect from overlapping Enter handlers, or a
+        # reconnect without an explicit Disconnect) orphans the old,
+        # logged-in instance: self.obj is replaced by a fresh instance
+        # that is connected but NOT logged in, while the old one stays
+        # logged in server-side. Every subsequent getServerChannels() /
+        # doSubscribe() then hits the new instance and the server replies
+        # CMDERR_NOT_LOGGEDIN (3000) for everything.
+        if self.obj is not None or self.connected:
+            print("[TeamTalk] connect(): tearing down a previous "
+                  "connection before reconnecting")
+            self.disconnect()
         profile = _normalize_profile(profile)
         self.pending_profile = profile
 
@@ -696,6 +745,11 @@ class TeamTalkSdkClient:
         self.user_cache = {}
         self.channel_cache = {}
         self.file_cache = {}
+        self.recording = False
+        self.recording_path = ""
+        self.streaming_media = False
+        self.streaming_path = ""
+        self.local_playbacks = set()
 
     # ---- Event-driven cache helpers -------------------------------------
 
@@ -1282,6 +1336,329 @@ class TeamTalkSdkClient:
             self.obj.doChangeNickname(nickname)
             return True
         except Exception:
+            return False
+
+    def set_channel_operator(self, user_id, channel_id, make_operator):
+        """Grant / revoke channel-operator status (TT_DoChannelOp)."""
+        if not (self.available() and self.obj and user_id and channel_id):
+            return False
+        try:
+            self.obj.doChannelOp(int(user_id), int(channel_id),
+                                 bool(make_operator))
+            return True
+        except Exception as exc:
+            print(f"[TeamTalk] doChannelOp error: {exc}")
+            return False
+
+    def update_channel(self, channel):
+        """Push an edited Channel struct back to the server."""
+        if not (self.available() and self.obj and channel is not None):
+            return False
+        try:
+            self.obj.doUpdateChannel(channel)
+            return True
+        except Exception as exc:
+            print(f"[TeamTalk] doUpdateChannel error: {exc}")
+            return False
+
+    # ---- Voice recording -------------------------------------------------
+
+    def start_recording(self, file_path):
+        """Record the muxed audio of the current channel to one file.
+
+        Mirrors qtTeamTalk's "Record conversations to single file" - the
+        SDK mixes every audible voice stream in the channel into a single
+        WAV (or MP3 when the path ends .mp3). TT_StartRecordingMuxedAudioFile
+        wants the channel's own AudioCodec plus an AudioFileFormat flag.
+        """
+        if not (self.available() and self.sdk and self.tt and file_path):
+            return False
+        fn = getattr(self.sdk, "_StartRecordingMuxedAudioFile", None)
+        if not fn:
+            print("[TeamTalk] start_recording: SDK lacks "
+                  "_StartRecordingMuxedAudioFile")
+            return False
+        try:
+            channel_id = _value(self.obj.getMyChannelID())
+            if not channel_id:
+                print("[TeamTalk] start_recording: not in a channel")
+                return False
+            channel = self.obj.getChannel(channel_id)
+            codec = channel.audiocodec
+            aff = self.sdk.AudioFileFormat
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == ".mp3":
+                fmt = _value(getattr(aff, "AFF_MP3_128KBIT_FORMAT", 6))
+            else:
+                fmt = _value(getattr(aff, "AFF_WAVE_FORMAT", 2))
+            ok = bool(fn(self.tt, ctypes.byref(codec), file_path, fmt))
+            self.recording = ok
+            self.recording_path = file_path if ok else ""
+            print(f"[TeamTalk] StartRecordingMuxedAudioFile({file_path!r}, "
+                  f"fmt={fmt}) -> {ok}")
+            return ok
+        except Exception as exc:
+            print(f"[TeamTalk] start_recording error: {exc}")
+            traceback.print_exc()
+            return False
+
+    def stop_recording(self):
+        if not (self.available() and self.sdk and self.tt):
+            return False
+        fn = getattr(self.sdk, "_StopRecordingMuxedAudioFile", None)
+        if not fn:
+            return False
+        try:
+            ok = bool(fn(self.tt))
+            self.recording = False
+            self.recording_path = ""
+            return ok
+        except Exception as exc:
+            print(f"[TeamTalk] stop_recording error: {exc}")
+            return False
+
+    # ---- Media file streaming / playback --------------------------------
+
+    def stream_media_file(self, file_path):
+        """Stream an audio/video file's audio into the current channel.
+
+        Uses TT_StartStreamingMediaFileToChannel with a NO_CODEC video
+        codec - we only push the audio track (video is out of scope for
+        this Titan IM module).
+        """
+        if not (self.available() and self.obj and self.sdk and file_path):
+            return False
+        try:
+            vc = self.sdk.VideoCodec()
+            vc.nCodec = _value(getattr(self.sdk.Codec, "NO_CODEC", 0))
+            ok = bool(self.obj.startStreamingMediaFileToChannel(file_path, vc))
+            self.streaming_media = ok
+            self.streaming_path = file_path if ok else ""
+            print(f"[TeamTalk] StartStreamingMediaFileToChannel"
+                  f"({file_path!r}) -> {ok}")
+            return ok
+        except Exception as exc:
+            print(f"[TeamTalk] stream_media_file error: {exc}")
+            traceback.print_exc()
+            return False
+
+    def stop_streaming_media(self):
+        if not (self.available() and self.obj):
+            return False
+        try:
+            ok = bool(self.obj.stopStreamingMediaFileToChannel())
+            self.streaming_media = False
+            self.streaming_path = ""
+            return ok
+        except Exception as exc:
+            print(f"[TeamTalk] stop_streaming_media error: {exc}")
+            return False
+
+    def play_media_local(self, file_path):
+        """Play a media file through our own speakers only (not the channel).
+
+        Returns the playback session id (0 on failure). qtTeamTalk's
+        "play media file to myself" feature.
+        """
+        if not (self.available() and self.obj and self.sdk and file_path):
+            return 0
+        try:
+            mfp = self.sdk.MediaFilePlayback()
+            mfp.uOffsetMSec = 0
+            mfp.bPaused = False
+            session_id = _value(self.obj.initLocalPlayback(file_path, mfp))
+            if session_id:
+                self.local_playbacks.add(session_id)
+            print(f"[TeamTalk] InitLocalPlayback({file_path!r}) -> "
+                  f"session {session_id}")
+            return session_id
+        except Exception as exc:
+            print(f"[TeamTalk] play_media_local error: {exc}")
+            traceback.print_exc()
+            return 0
+
+    def stop_media_local(self, session_id):
+        if not (self.available() and self.obj and session_id):
+            return False
+        try:
+            ok = bool(self.obj.stopLocalPlayback(session_id))
+            self.local_playbacks.discard(session_id)
+            return ok
+        except Exception as exc:
+            print(f"[TeamTalk] stop_media_local error: {exc}")
+            return False
+
+    def stop_all_local_playback(self):
+        stopped = 0
+        for session_id in list(self.local_playbacks):
+            if self.stop_media_local(session_id):
+                stopped += 1
+        self.local_playbacks.clear()
+        return stopped
+
+    def get_media_file_info(self, file_path):
+        """Return a MediaFileInfo for a path, or None.
+
+        Note: TeamTalk5.py defines getMediaFileInfo() without a self
+        parameter (an upstream binding quirk), so we call the raw
+        _GetMediaFileInfo function directly.
+        """
+        if not (self.available() and self.sdk and file_path):
+            return None
+        fn = getattr(self.sdk, "_GetMediaFileInfo", None)
+        if not fn:
+            return None
+        try:
+            mfi = self.sdk.MediaFileInfo()
+            fn(file_path, mfi)
+            return mfi
+        except Exception:
+            return None
+
+    # ---- Server administration ------------------------------------------
+
+    def my_user_type(self):
+        if not (self.available() and self.sdk and self.tt):
+            return 0
+        fn = getattr(self.sdk, "_GetMyUserType", None)
+        if not fn:
+            return 0
+        try:
+            return _value(fn(self.tt))
+        except Exception:
+            return 0
+
+    def my_user_rights(self):
+        if not (self.available() and self.sdk and self.tt):
+            return 0
+        fn = getattr(self.sdk, "_GetMyUserRights", None)
+        if not fn:
+            try:
+                return _value(getattr(self.obj.getMyUserAccount(),
+                                      "uUserRights", 0))
+            except Exception:
+                return 0
+        try:
+            return _value(fn(self.tt))
+        except Exception:
+            return 0
+
+    def is_admin(self):
+        """True when our account is USERTYPE_ADMIN on this server."""
+        try:
+            admin_flag = _value(self.sdk.UserType.USERTYPE_ADMIN)
+        except Exception:
+            admin_flag = 0x02
+        return bool(self.my_user_type() & admin_flag)
+
+    def get_server_properties(self):
+        if not (self.available() and self.obj):
+            return None
+        try:
+            return self.obj.getServerProperties()
+        except Exception as exc:
+            print(f"[TeamTalk] getServerProperties error: {exc}")
+            return None
+
+    def update_server(self, props):
+        """Push edited ServerProperties to the server (admin only)."""
+        if not (self.available() and self.obj and props is not None):
+            return False
+        try:
+            cmd_id = _value(self.obj.doUpdateServer(props))
+            print(f"[TeamTalk] doUpdateServer -> cmd#{cmd_id}")
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doUpdateServer error: {exc}")
+            return False
+
+    def list_user_accounts(self):
+        """Ask the server for its user-account list. Accounts arrive
+        asynchronously via CLIENTEVENT_CMD_USERACCOUNT events."""
+        if not (self.available() and self.obj):
+            return False
+        try:
+            cmd_id = _value(self.obj.doListUserAccounts(0, 1000000))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doListUserAccounts error: {exc}")
+            return False
+
+    def new_user_account(self, account):
+        """Create or overwrite a server user account."""
+        if not (self.available() and self.obj and account is not None):
+            return False
+        try:
+            cmd_id = _value(self.obj.doNewUserAccount(account))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doNewUserAccount error: {exc}")
+            return False
+
+    def delete_user_account(self, username):
+        if not (self.available() and self.obj and username):
+            return False
+        try:
+            cmd_id = _value(self.obj.doDeleteUserAccount(username))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doDeleteUserAccount error: {exc}")
+            return False
+
+    def list_bans(self):
+        """Ask the server for its ban list. Bans arrive asynchronously
+        via CLIENTEVENT_CMD_BANNEDUSER events."""
+        if not (self.available() and self.obj):
+            return False
+        try:
+            cmd_id = _value(self.obj.doListBans(0, 0, 1000000))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doListBans error: {exc}")
+            return False
+
+    def unban(self, ip_address, channel_id=0):
+        if not (self.available() and self.obj):
+            return False
+        try:
+            cmd_id = _value(self.obj.doUnBanUser(ip_address or "",
+                                                 channel_id))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doUnBanUser error: {exc}")
+            return False
+
+    def unban_ex(self, banned_user):
+        """Unban via a full BannedUser struct (covers username / IP bans)."""
+        if not (self.available() and self.obj and banned_user is not None):
+            return False
+        try:
+            cmd_id = _value(self.obj.doUnbanUserEx(banned_user))
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doUnbanUserEx error: {exc}")
+            return False
+
+    def save_server_config(self):
+        if not (self.available() and self.obj):
+            return False
+        try:
+            cmd_id = _value(self.obj.doSaveConfig())
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doSaveConfig error: {exc}")
+            return False
+
+    def query_server_stats(self):
+        """Request ServerStatistics. The result arrives via
+        CLIENTEVENT_CMD_SERVERSTATISTICS."""
+        if not (self.available() and self.obj):
+            return False
+        try:
+            cmd_id = _value(self.obj.doQueryServerStats())
+            return cmd_id > 0
+        except Exception as exc:
+            print(f"[TeamTalk] doQueryServerStats error: {exc}")
             return False
 
     # ---- Polling ---------------------------------------------------------
@@ -1918,6 +2295,714 @@ class ServerPickerDialog:
 
 
 # =============================================================================
+# Server administration dialogs
+# =============================================================================
+
+# Ordered list of TeamTalk user-account rights. Each entry is the
+# UserRight attribute name plus an English label (translated at display
+# time). Mirrors the right checklist in qtTeamTalk's UserAccountDlg.
+_USER_RIGHT_ATTRS = [
+    ("USERRIGHT_MULTI_LOGIN", "Multiple logins with same account"),
+    ("USERRIGHT_VIEW_ALL_USERS", "See all users on the server"),
+    ("USERRIGHT_CREATE_TEMPORARY_CHANNEL", "Create temporary channels"),
+    ("USERRIGHT_MODIFY_CHANNELS", "Create and modify channels"),
+    ("USERRIGHT_TEXTMESSAGE_BROADCAST", "Send broadcast text messages"),
+    ("USERRIGHT_TEXTMESSAGE_USER", "Send private text messages"),
+    ("USERRIGHT_TEXTMESSAGE_CHANNEL", "Send channel text messages"),
+    ("USERRIGHT_KICK_USERS", "Kick users"),
+    ("USERRIGHT_BAN_USERS", "Ban users"),
+    ("USERRIGHT_MOVE_USERS", "Move users between channels"),
+    ("USERRIGHT_OPERATOR_ENABLE", "Become channel operator"),
+    ("USERRIGHT_UPLOAD_FILES", "Upload files to channels"),
+    ("USERRIGHT_DOWNLOAD_FILES", "Download files from channels"),
+    ("USERRIGHT_UPDATE_SERVERPROPERTIES", "Update server properties"),
+    ("USERRIGHT_TRANSMIT_VOICE", "Transmit voice"),
+    ("USERRIGHT_TRANSMIT_MEDIAFILE", "Stream media files to channels"),
+    ("USERRIGHT_RECORD_VOICE", "Record voice in channels"),
+    ("USERRIGHT_VIEW_HIDDEN_CHANNELS", "See hidden channels"),
+    ("USERRIGHT_LOCKED_NICKNAME", "Locked nickname (cannot be changed)"),
+    ("USERRIGHT_LOCKED_STATUS", "Locked status (cannot be changed)"),
+]
+
+
+def _user_right_definitions(sdk):
+    """Return [(flag_value, english_label), ...] for the rights checklist."""
+    result = []
+    rights = getattr(sdk, "UserRight", None) if sdk else None
+    if rights is None:
+        return result
+    for attr, label in _USER_RIGHT_ATTRS:
+        try:
+            flag = _value(getattr(rights, attr))
+        except Exception:
+            continue
+        if flag:
+            result.append((flag, label))
+    return result
+
+
+def _format_bytes(num):
+    """Human-readable byte size for the server statistics view."""
+    try:
+        num = float(num)
+    except Exception:
+        return "0 B"
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(num) < 1024.0:
+            return f"{num:.1f} {unit}" if unit != "B" else f"{int(num)} B"
+        num /= 1024.0
+    return f"{num:.1f} PB"
+
+
+def _format_uptime(msec):
+    """Human-readable uptime from a millisecond count."""
+    try:
+        seconds = int(msec) // 1000
+    except Exception:
+        return "0s"
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or days:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+
+class ServerPropertiesDialog:
+    """Edit ServerProperties (admin only). Read current via
+    getServerProperties(), write via update_server()."""
+
+    def __init__(self, parent, sdk, properties):
+        import wx
+
+        self.wx = wx
+        self.sdk = sdk
+        # Edit a private copy so a cancel never touches the live struct.
+        self.properties = properties
+        self.dialog = wx.Dialog(
+            parent,
+            title=_t("TeamTalk server properties"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(480, 560),
+        )
+        panel = wx.Panel(self.dialog)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.controls = {}
+        # (attr, label, is_int)
+        text_fields = [
+            ("szServerName", _t("Server name:"), False),
+            ("szMOTDRaw", _t("Message of the day:"), False),
+            ("nMaxUsers", _t("Maximum users:"), True),
+            ("nMaxLoginAttempts", _t("Maximum login attempts:"), True),
+            ("nMaxLoginsPerIPAddress",
+             _t("Maximum logins per IP address:"), True),
+            ("nUserTimeout", _t("User timeout (seconds):"), True),
+            ("nLoginDelayMSec", _t("Login delay (milliseconds):"), True),
+            ("nMaxVoiceTxPerSecond",
+             _t("Maximum voice bytes per second:"), True),
+            ("nMaxTotalTxPerSecond",
+             _t("Maximum total bytes per second:"), True),
+        ]
+        for attr, label, is_int in text_fields:
+            sizer.Add(wx.StaticText(panel, label=label), 0,
+                      wx.LEFT | wx.RIGHT | wx.TOP, 8)
+            ctrl = wx.TextCtrl(panel)
+            raw = getattr(self.properties, attr, "")
+            ctrl.SetValue(str(_value(raw)) if is_int else _tt_text(raw))
+            ctrl.SetName(label.rstrip(":"))
+            self.controls[attr] = (ctrl, is_int)
+            sizer.Add(ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        self.auto_save = wx.CheckBox(
+            panel, label=_t("Automatically save server configuration"))
+        self.auto_save.SetValue(bool(getattr(self.properties,
+                                             "bAutoSave", False)))
+        sizer.Add(self.auto_save, 0, wx.ALL, 8)
+
+        # Read-only info row.
+        info = _t("Version: {ver}   TCP port: {tcp}   UDP port: {udp}").format(
+            ver=_tt_text(getattr(self.properties, "szServerVersion", "")),
+            tcp=_value(getattr(self.properties, "nTcpPort", 0)),
+            udp=_value(getattr(self.properties, "nUdpPort", 0)),
+        )
+        sizer.Add(wx.StaticText(panel, label=info), 0, wx.ALL, 8)
+
+        buttons = self.dialog.CreateSeparatedButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 8)
+        panel.SetSizer(sizer)
+        wrapper = wx.BoxSizer(wx.VERTICAL)
+        wrapper.Add(panel, 1, wx.EXPAND)
+        self.dialog.SetSizer(wrapper)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+    def show_modal(self):
+        result = self.dialog.ShowModal()
+        if result == self.wx.ID_OK:
+            for attr, (ctrl, is_int) in self.controls.items():
+                value = ctrl.GetValue().strip()
+                try:
+                    if is_int:
+                        setattr(self.properties, attr,
+                                _as_int(value, _value(
+                                    getattr(self.properties, attr, 0))))
+                    else:
+                        setattr(self.properties, attr, value)
+                except Exception as exc:
+                    print(f"[TeamTalk] server prop {attr} set failed: {exc}")
+            try:
+                self.properties.bAutoSave = self.auto_save.GetValue()
+            except Exception:
+                pass
+        self.dialog.Destroy()
+        return result == self.wx.ID_OK
+
+
+class UserAccountDialog:
+    """Create / edit one server UserAccount (admin only)."""
+
+    def __init__(self, parent, sdk, account=None):
+        import wx
+
+        self.wx = wx
+        self.sdk = sdk
+        self.account = account  # existing UserAccount struct or None
+        is_edit = account is not None
+
+        self.dialog = wx.Dialog(
+            parent,
+            title=(_t("Edit user account") if is_edit
+                   else _t("New user account")),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(460, 580),
+        )
+        panel = wx.Panel(self.dialog)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        sizer.Add(wx.StaticText(panel, label=_t("Username:")), 0,
+                  wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.username = wx.TextCtrl(panel)
+        self.username.SetName(_t("Username"))
+        if is_edit:
+            self.username.SetValue(_tt_text(getattr(account,
+                                                    "szUsername", "")))
+        sizer.Add(self.username, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+                  8)
+
+        sizer.Add(wx.StaticText(panel, label=_t("Password:")), 0,
+                  wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.password = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        self.password.SetName(_t("Password"))
+        if is_edit:
+            self.password.SetValue(_tt_text(getattr(account,
+                                                    "szPassword", "")))
+        sizer.Add(self.password, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+                  8)
+
+        self.user_type = wx.RadioBox(
+            panel,
+            label=_t("Account type"),
+            choices=[_t("Regular user"), _t("Administrator")],
+            majorDimension=1,
+            style=wx.RA_SPECIFY_COLS,
+        )
+        if is_edit:
+            try:
+                admin_flag = _value(sdk.UserType.USERTYPE_ADMIN)
+            except Exception:
+                admin_flag = 0x02
+            is_admin = bool(_value(getattr(account, "uUserType", 0))
+                            & admin_flag)
+            self.user_type.SetSelection(1 if is_admin else 0)
+        sizer.Add(self.user_type, 0, wx.EXPAND | wx.ALL, 8)
+
+        sizer.Add(wx.StaticText(panel, label=_t("Note:")), 0,
+                  wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.note = wx.TextCtrl(panel)
+        self.note.SetName(_t("Note"))
+        if is_edit:
+            self.note.SetValue(_tt_text(getattr(account, "szNote", "")))
+        sizer.Add(self.note, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        sizer.Add(wx.StaticText(
+            panel, label=_t("Initial channel (optional):")), 0,
+            wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.init_channel = wx.TextCtrl(panel)
+        self.init_channel.SetName(_t("Initial channel"))
+        if is_edit:
+            self.init_channel.SetValue(_tt_text(getattr(account,
+                                                        "szInitChannel", "")))
+        sizer.Add(self.init_channel, 0,
+                  wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        sizer.Add(wx.StaticText(panel, label=_t("User rights:")), 0,
+                  wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.rights_defs = _user_right_definitions(sdk)
+        self.rights_list = wx.CheckListBox(
+            panel, choices=[_t(label) for _flag, label in self.rights_defs])
+        self.rights_list.SetName(_t("User rights"))
+        if is_edit:
+            current = _value(getattr(account, "uUserRights", 0))
+            for i, (flag, _label) in enumerate(self.rights_defs):
+                if current & flag:
+                    self.rights_list.Check(i, True)
+        else:
+            # Sensible defaults for a brand-new regular account - the
+            # same baseline qtTeamTalk pre-ticks.
+            defaults = {
+                "USERRIGHT_VIEW_ALL_USERS",
+                "USERRIGHT_TEXTMESSAGE_USER",
+                "USERRIGHT_TEXTMESSAGE_CHANNEL",
+                "USERRIGHT_TRANSMIT_VOICE",
+                "USERRIGHT_UPLOAD_FILES",
+                "USERRIGHT_DOWNLOAD_FILES",
+                "USERRIGHT_OPERATOR_ENABLE",
+                "USERRIGHT_CREATE_TEMPORARY_CHANNEL",
+            }
+            default_flags = 0
+            rights = getattr(sdk, "UserRight", None)
+            for attr in defaults:
+                try:
+                    default_flags |= _value(getattr(rights, attr))
+                except Exception:
+                    pass
+            for i, (flag, _label) in enumerate(self.rights_defs):
+                if default_flags & flag:
+                    self.rights_list.Check(i, True)
+        sizer.Add(self.rights_list, 1,
+                  wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        buttons = self.dialog.CreateSeparatedButtonSizer(wx.OK | wx.CANCEL)
+        sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 8)
+        panel.SetSizer(sizer)
+        wrapper = wx.BoxSizer(wx.VERTICAL)
+        wrapper.Add(panel, 1, wx.EXPAND)
+        self.dialog.SetSizer(wrapper)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+        self.username.SetFocus()
+
+    def build_account(self):
+        """Return a UserAccount struct from the current control values."""
+        sdk = self.sdk
+        account = sdk.UserAccount()
+        account.szUsername = self.username.GetValue().strip()
+        account.szPassword = self.password.GetValue()
+        try:
+            default_type = _value(sdk.UserType.USERTYPE_DEFAULT)
+            admin_type = _value(sdk.UserType.USERTYPE_ADMIN)
+        except Exception:
+            default_type, admin_type = 0x01, 0x02
+        account.uUserType = (admin_type if self.user_type.GetSelection() == 1
+                             else default_type)
+        rights = 0
+        for i, (flag, _label) in enumerate(self.rights_defs):
+            if self.rights_list.IsChecked(i):
+                rights |= flag
+        account.uUserRights = rights
+        account.szNote = self.note.GetValue().strip()
+        account.szInitChannel = self.init_channel.GetValue().strip()
+        return account
+
+    def show_modal(self):
+        result = self.dialog.ShowModal()
+        ok = result == self.wx.ID_OK
+        account = None
+        if ok:
+            if not self.username.GetValue().strip():
+                _message(self.dialog, _t("Username is required."),
+                         style=self.wx.OK | self.wx.ICON_WARNING)
+                self.dialog.Destroy()
+                return None
+            account = self.build_account()
+        self.dialog.Destroy()
+        return account
+
+
+class UserAccountsManagerDialog:
+    """List, add, edit and delete server user accounts (admin only).
+
+    Accounts are delivered asynchronously by the server through
+    CLIENTEVENT_CMD_USERACCOUNT events. The owning TeamTalkFrame collects
+    them into owner.collected_accounts and calls refresh_accounts() on this
+    dialog while it is open, so the list fills in live during ShowModal().
+    """
+
+    def __init__(self, parent_frame, owner):
+        import wx
+
+        self.wx = wx
+        self.owner = owner
+        self.dialog = wx.Dialog(
+            parent_frame,
+            title=_t("TeamTalk user accounts"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(620, 460),
+        )
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(wx.StaticText(
+            self.dialog, label=_t("Server user accounts:")), 0, wx.ALL, 10)
+
+        self.account_list = wx.ListCtrl(
+            self.dialog, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.account_list.AppendColumn(_t("Username"), width=200)
+        self.account_list.AppendColumn(_t("Type"), width=130)
+        self.account_list.AppendColumn(_t("Note"), width=260)
+        self.account_list.SetName(_t("Server user accounts"))
+        self.account_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED,
+                               lambda e: self._on_edit(e))
+        sizer.Add(self.account_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.add_btn = wx.Button(self.dialog, label=_t("Add"))
+        self.edit_btn = wx.Button(self.dialog, label=_t("Edit"))
+        self.delete_btn = wx.Button(self.dialog, label=_t("Delete"))
+        self.refresh_btn = wx.Button(self.dialog, label=_t("Refresh"))
+        for btn in (self.add_btn, self.edit_btn,
+                    self.delete_btn, self.refresh_btn):
+            button_row.Add(btn, 0, wx.RIGHT, 5)
+        sizer.Add(button_row, 0, wx.ALL, 10)
+        self.add_btn.Bind(wx.EVT_BUTTON, self._on_add)
+        self.edit_btn.Bind(wx.EVT_BUTTON, self._on_edit)
+        self.delete_btn.Bind(wx.EVT_BUTTON, self._on_delete)
+        self.refresh_btn.Bind(wx.EVT_BUTTON, lambda e: self._request_list())
+
+        close_row = self.dialog.CreateButtonSizer(wx.CLOSE)
+        sizer.Add(close_row, 0, wx.EXPAND | wx.ALL, 10)
+        self.dialog.Bind(wx.EVT_BUTTON,
+                         lambda e: self.dialog.EndModal(wx.ID_CLOSE),
+                         id=wx.ID_CLOSE)
+        self.dialog.SetEscapeId(wx.ID_CLOSE)
+
+        self.dialog.SetSizer(sizer)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+    # ---- Account list -------------------------------------------------
+
+    def _request_list(self):
+        # A queued CallLater can fire after the dialog has been closed.
+        if not self.dialog:
+            return
+        self.owner.collected_accounts = []
+        self.account_list.DeleteAllItems()
+        if not self.owner.client.list_user_accounts():
+            _message(self.dialog,
+                     _t("Could not request the user account list."),
+                     style=self.wx.OK | self.wx.ICON_WARNING)
+
+    def refresh_accounts(self):
+        """Repaint from owner.collected_accounts. Called by the frame as
+        CMD_USERACCOUNT events arrive, and once on open."""
+        sel_username = self._selected_username()
+        self.account_list.DeleteAllItems()
+        try:
+            admin_flag = _value(self.owner.client.sdk.UserType.USERTYPE_ADMIN)
+        except Exception:
+            admin_flag = 0x02
+        for account in self.owner.collected_accounts:
+            username = _tt_text(getattr(account, "szUsername", ""))
+            is_admin = bool(_value(getattr(account, "uUserType", 0))
+                            & admin_flag)
+            row = self.account_list.GetItemCount()
+            self.account_list.InsertItem(row, username)
+            self.account_list.SetItem(
+                row, 1,
+                _t("Administrator") if is_admin else _t("Regular user"))
+            self.account_list.SetItem(
+                row, 2, _tt_text(getattr(account, "szNote", "")))
+        # Restore selection by username.
+        if sel_username:
+            for i in range(self.account_list.GetItemCount()):
+                if self.account_list.GetItemText(i) == sel_username:
+                    self.account_list.Select(i)
+                    self.account_list.Focus(i)
+                    break
+
+    def _selected_index(self):
+        idx = self.account_list.GetFirstSelected()
+        return idx if idx >= 0 else None
+
+    def _selected_username(self):
+        idx = self._selected_index()
+        if idx is None:
+            return ""
+        return self.account_list.GetItemText(idx)
+
+    def _selected_account(self):
+        idx = self._selected_index()
+        if idx is None or idx >= len(self.owner.collected_accounts):
+            return None
+        return self.owner.collected_accounts[idx]
+
+    # ---- Event handlers ----------------------------------------------
+
+    def _on_add(self, event):
+        dlg = UserAccountDialog(self.dialog, self.owner.client.sdk)
+        account = dlg.show_modal()
+        if account is None:
+            return
+        if self.owner.client.new_user_account(account):
+            self.owner._log_event(_t("User account created: {name}").format(
+                name=_tt_text(getattr(account, "szUsername", ""))))
+            self.wx.CallLater(400, self._request_list)
+        else:
+            _message(self.dialog, _t("Could not create the user account."),
+                     style=self.wx.OK | self.wx.ICON_ERROR)
+
+    def _on_edit(self, event):
+        account = self._selected_account()
+        if account is None:
+            return
+        dlg = UserAccountDialog(self.dialog, self.owner.client.sdk, account)
+        edited = dlg.show_modal()
+        if edited is None:
+            return
+        # doNewUserAccount overwrites an account with the same username.
+        if self.owner.client.new_user_account(edited):
+            self.owner._log_event(_t("User account updated: {name}").format(
+                name=_tt_text(getattr(edited, "szUsername", ""))))
+            self.wx.CallLater(400, self._request_list)
+        else:
+            _message(self.dialog, _t("Could not update the user account."),
+                     style=self.wx.OK | self.wx.ICON_ERROR)
+
+    def _on_delete(self, event):
+        username = self._selected_username()
+        if not username:
+            return
+        if _message(
+            self.dialog,
+            _t("Delete the user account '{name}'?").format(name=username),
+            style=(self.wx.YES_NO | self.wx.NO_DEFAULT
+                   | self.wx.ICON_QUESTION),
+        ) != self.wx.ID_YES:
+            return
+        if self.owner.client.delete_user_account(username):
+            self.owner._log_event(_t("User account deleted: {name}").format(
+                name=username))
+            self.wx.CallLater(400, self._request_list)
+        else:
+            _message(self.dialog, _t("Could not delete the user account."),
+                     style=self.wx.OK | self.wx.ICON_ERROR)
+
+    def show_modal(self):
+        self.owner.accounts_dialog = self
+        # Kick off the list request, then paint whatever is already
+        # cached. Live arrivals refresh us via the frame's event handler.
+        self._request_list()
+        self.refresh_accounts()
+        try:
+            self.dialog.ShowModal()
+        finally:
+            self.owner.accounts_dialog = None
+            try:
+                self.dialog.Destroy()
+            except Exception:
+                pass
+
+
+class BannedUsersDialog:
+    """List and remove server bans (admin only).
+
+    Bans arrive asynchronously via CLIENTEVENT_CMD_BANNEDUSER events; the
+    frame collects them into owner.collected_bans and refreshes us live.
+    """
+
+    def __init__(self, parent_frame, owner):
+        import wx
+
+        self.wx = wx
+        self.owner = owner
+        self.dialog = wx.Dialog(
+            parent_frame,
+            title=_t("TeamTalk banned users"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(640, 440),
+        )
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(wx.StaticText(self.dialog, label=_t("Banned users:")),
+                  0, wx.ALL, 10)
+
+        self.ban_list = wx.ListCtrl(
+            self.dialog, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.ban_list.AppendColumn(_t("Nickname"), width=160)
+        self.ban_list.AppendColumn(_t("Username"), width=140)
+        self.ban_list.AppendColumn(_t("IP address"), width=140)
+        self.ban_list.AppendColumn(_t("Channel"), width=140)
+        self.ban_list.SetName(_t("Banned users"))
+        sizer.Add(self.ban_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.unban_btn = wx.Button(self.dialog, label=_t("Unban selected"))
+        self.refresh_btn = wx.Button(self.dialog, label=_t("Refresh"))
+        button_row.Add(self.unban_btn, 0, wx.RIGHT, 5)
+        button_row.Add(self.refresh_btn, 0, wx.RIGHT, 5)
+        sizer.Add(button_row, 0, wx.ALL, 10)
+        self.unban_btn.Bind(wx.EVT_BUTTON, self._on_unban)
+        self.refresh_btn.Bind(wx.EVT_BUTTON, lambda e: self._request_list())
+
+        close_row = self.dialog.CreateButtonSizer(wx.CLOSE)
+        sizer.Add(close_row, 0, wx.EXPAND | wx.ALL, 10)
+        self.dialog.Bind(wx.EVT_BUTTON,
+                         lambda e: self.dialog.EndModal(wx.ID_CLOSE),
+                         id=wx.ID_CLOSE)
+        self.dialog.SetEscapeId(wx.ID_CLOSE)
+
+        self.dialog.SetSizer(sizer)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+    def _request_list(self):
+        # A queued CallLater can fire after the dialog has been closed.
+        if not self.dialog:
+            return
+        self.owner.collected_bans = []
+        self.ban_list.DeleteAllItems()
+        if not self.owner.client.list_bans():
+            _message(self.dialog, _t("Could not request the ban list."),
+                     style=self.wx.OK | self.wx.ICON_WARNING)
+
+    def refresh_bans(self):
+        idx = self.ban_list.GetFirstSelected()
+        self.ban_list.DeleteAllItems()
+        for ban in self.owner.collected_bans:
+            row = self.ban_list.GetItemCount()
+            self.ban_list.InsertItem(
+                row, _tt_text(getattr(ban, "szNickname", "")))
+            self.ban_list.SetItem(
+                row, 1, _tt_text(getattr(ban, "szUsername", "")))
+            self.ban_list.SetItem(
+                row, 2, _tt_text(getattr(ban, "szIPAddress", "")))
+            self.ban_list.SetItem(
+                row, 3, _tt_text(getattr(ban, "szChannelPath", "")))
+        if 0 <= idx < self.ban_list.GetItemCount():
+            self.ban_list.Select(idx)
+            self.ban_list.Focus(idx)
+
+    def _on_unban(self, event):
+        idx = self.ban_list.GetFirstSelected()
+        if idx < 0 or idx >= len(self.owner.collected_bans):
+            return
+        ban = self.owner.collected_bans[idx]
+        if self.owner.client.unban_ex(ban):
+            self.owner._log_event(_t("Unbanned: {who}").format(
+                who=(_tt_text(getattr(ban, "szUsername", ""))
+                     or _tt_text(getattr(ban, "szIPAddress", ""))
+                     or _t("(unknown)"))))
+            self.wx.CallLater(400, self._request_list)
+        else:
+            _message(self.dialog, _t("Could not remove the ban."),
+                     style=self.wx.OK | self.wx.ICON_ERROR)
+
+    def show_modal(self):
+        self.owner.bans_dialog = self
+        self._request_list()
+        self.refresh_bans()
+        try:
+            self.dialog.ShowModal()
+        finally:
+            self.owner.bans_dialog = None
+            try:
+                self.dialog.Destroy()
+            except Exception:
+                pass
+
+
+class ServerStatsDialog:
+    """Read-only server statistics view (admin only).
+
+    Triggers a query on open; the result arrives via
+    CLIENTEVENT_CMD_SERVERSTATISTICS and the frame calls update_stats().
+    """
+
+    def __init__(self, parent_frame, owner):
+        import wx
+
+        self.wx = wx
+        self.owner = owner
+        self.dialog = wx.Dialog(
+            parent_frame,
+            title=_t("TeamTalk server statistics"),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+            size=(520, 420),
+        )
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.stats_view = wx.TextCtrl(
+            self.dialog,
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+        self.stats_view.SetName(_t("Server statistics"))
+        self.stats_view.SetValue(_t("Querying server statistics..."))
+        sizer.Add(self.stats_view, 1, wx.EXPAND | wx.ALL, 10)
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.refresh_btn = wx.Button(self.dialog, label=_t("Refresh"))
+        button_row.Add(self.refresh_btn, 0, wx.RIGHT, 5)
+        sizer.Add(button_row, 0, wx.LEFT | wx.RIGHT, 10)
+        self.refresh_btn.Bind(wx.EVT_BUTTON,
+                              lambda e: self.owner.client.query_server_stats())
+
+        close_row = self.dialog.CreateButtonSizer(wx.CLOSE)
+        sizer.Add(close_row, 0, wx.EXPAND | wx.ALL, 10)
+        self.dialog.Bind(wx.EVT_BUTTON,
+                         lambda e: self.dialog.EndModal(wx.ID_CLOSE),
+                         id=wx.ID_CLOSE)
+        self.dialog.SetEscapeId(wx.ID_CLOSE)
+
+        self.dialog.SetSizer(sizer)
+        self.dialog.CentreOnParent()
+        _apply_skin_recursive(self.dialog)
+
+    def update_stats(self, stats):
+        if stats is None:
+            return
+        lines = [
+            _t("Users served (total): {n}").format(
+                n=_value(getattr(stats, "nUsersServed", 0))),
+            _t("Peak users online: {n}").format(
+                n=_value(getattr(stats, "nUsersPeak", 0))),
+            _t("Server uptime: {up}").format(
+                up=_format_uptime(_value(getattr(stats, "nUptimeMSec", 0)))),
+            "",
+            _t("Total sent: {tx}   Total received: {rx}").format(
+                tx=_format_bytes(_value(getattr(stats, "nTotalBytesTX", 0))),
+                rx=_format_bytes(_value(getattr(stats, "nTotalBytesRX", 0)))),
+            _t("Voice sent: {tx}   Voice received: {rx}").format(
+                tx=_format_bytes(_value(getattr(stats, "nVoiceBytesTX", 0))),
+                rx=_format_bytes(_value(getattr(stats, "nVoiceBytesRX", 0)))),
+            _t("Media file sent: {tx}   Media file received: {rx}").format(
+                tx=_format_bytes(
+                    _value(getattr(stats, "nMediaFileBytesTX", 0))),
+                rx=_format_bytes(
+                    _value(getattr(stats, "nMediaFileBytesRX", 0)))),
+            _t("Files uploaded: {tx}   Files downloaded: {rx}").format(
+                tx=_value(getattr(stats, "nFilesTx", 0)),
+                rx=_value(getattr(stats, "nFilesRx", 0))),
+        ]
+        self.stats_view.SetValue("\n".join(lines))
+
+    def show_modal(self):
+        self.owner.stats_dialog = self
+        if self.owner.last_server_stats is not None:
+            self.update_stats(self.owner.last_server_stats)
+        self.owner.client.query_server_stats()
+        try:
+            self.dialog.ShowModal()
+        finally:
+            self.owner.stats_dialog = None
+            try:
+                self.dialog.Destroy()
+            except Exception:
+                pass
+
+
+# =============================================================================
 # Main TeamTalk frame
 # =============================================================================
 
@@ -1949,6 +3034,18 @@ class TeamTalkFrame:
         self.log_entries = []  # list of (text, time_str)
         self.pm_threads = {}  # user_id -> {"nick": str, "last": str, "time": str}
 
+        # Administration state. Server accounts and bans are delivered
+        # asynchronously via CMD_USERACCOUNT / CMD_BANNEDUSER events; we
+        # collect them here and the admin dialogs read them live while
+        # open. *_dialog refs let the event handler refresh an open
+        # dialog as more rows arrive.
+        self.collected_accounts = []
+        self.collected_bans = []
+        self.last_server_stats = None
+        self.accounts_dialog = None
+        self.bans_dialog = None
+        self.stats_dialog = None
+
         # Multi-part text-message buffers (TT chunks long messages with
         # bMore=True; we re-assemble per (msg_type, from_user, to_user/channel)).
         self._pm_partials = {}
@@ -1966,6 +3063,14 @@ class TeamTalkFrame:
         self.ptt_toggle = False
         self.mic_muted = False
         self.speakers_muted = False
+
+        # Re-entry guard for on_connect. The connection view routes Enter
+        # to on_connect from several overlapping handlers (EVT_CHAR_HOOK,
+        # EVT_KEY_DOWN and EVT_CHAR on the server list), so a single
+        # Return press could fire connect twice. The second call would
+        # orphan the first, logged-in SDK instance. This flag (plus the
+        # client.connected check) makes on_connect safe to call repeatedly.
+        self._connecting = False
 
         # Frame
         self.frame = wx.Frame(parent, title=_t("TeamTalk - Titan IM"), size=(940, 660))
@@ -2197,10 +3302,17 @@ class TeamTalkFrame:
         m_log = view_menu.Append(wx.ID_ANY, _t("Server log\tCtrl+2"))
         m_pms = view_menu.Append(wx.ID_ANY, _t("Private messages\tCtrl+3"))
         m_files = view_menu.Append(wx.ID_ANY, _t("Files\tCtrl+4"))
+        m_media = view_menu.Append(wx.ID_ANY,
+                                   _t("Recording and media\tCtrl+5"))
+        m_admin = view_menu.Append(wx.ID_ANY, _t("Administration\tCtrl+6"))
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_CHAT), m_chat)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_LOG), m_log)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_PM), m_pms)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_FILES), m_files)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_MEDIA),
+                        m_media)
+        self.frame.Bind(wx.EVT_MENU, lambda e: self._set_tab(TAB_ADMIN),
+                        m_admin)
         menubar.Append(view_menu, _t("View"))
 
         files_menu = wx.Menu()
@@ -2211,6 +3323,51 @@ class TeamTalkFrame:
         self.frame.Bind(wx.EVT_MENU, lambda e: self._download_selected_file(), m_download)
         self.frame.Bind(wx.EVT_MENU, lambda e: self._delete_selected_file(), m_delete)
         menubar.Append(files_menu, _t("Files"))
+
+        media_menu = wx.Menu()
+        self.m_record = media_menu.Append(
+            wx.ID_ANY, _t("Record channel audio to file...\tCtrl+R"))
+        self.m_stream = media_menu.Append(
+            wx.ID_ANY, _t("Stream media file to channel..."))
+        media_menu.AppendSeparator()
+        m_play_local = media_menu.Append(
+            wx.ID_ANY, _t("Play media file to myself..."))
+        m_stop_playback = media_menu.Append(
+            wx.ID_ANY, _t("Stop all local playback"))
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._toggle_recording(), self.m_record)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._toggle_media_stream(), self.m_stream)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._play_media_local(), m_play_local)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._stop_all_local_playback(),
+                        m_stop_playback)
+        menubar.Append(media_menu, _t("Recording"))
+
+        admin_menu = wx.Menu()
+        m_srv_props = admin_menu.Append(
+            wx.ID_ANY, _t("Server properties..."))
+        m_srv_accounts = admin_menu.Append(
+            wx.ID_ANY, _t("User accounts..."))
+        m_srv_bans = admin_menu.Append(
+            wx.ID_ANY, _t("Banned users..."))
+        m_srv_stats = admin_menu.Append(
+            wx.ID_ANY, _t("Server statistics..."))
+        admin_menu.AppendSeparator()
+        m_srv_save = admin_menu.Append(
+            wx.ID_ANY, _t("Save server configuration"))
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._open_server_properties(), m_srv_props)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._open_user_accounts(), m_srv_accounts)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._open_banned_users(), m_srv_bans)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._open_server_stats(), m_srv_stats)
+        self.frame.Bind(wx.EVT_MENU,
+                        lambda e: self._save_server_config(), m_srv_save)
+        menubar.Append(admin_menu, _t("Administration"))
 
         help_menu = wx.Menu()
         m_sdk = help_menu.Append(wx.ID_ANY, _t("SDK status"))
@@ -2431,6 +3588,15 @@ class TeamTalkFrame:
     # ---- Connect / disconnect ------------------------------------------
 
     def on_connect(self, event):
+        # Ignore overlapping Connect triggers. The connection view's Enter
+        # key reaches on_connect from EVT_CHAR_HOOK, EVT_KEY_DOWN and
+        # EVT_CHAR, so one Return press can call this two or three times.
+        # A second connect while the first is still in flight orphans the
+        # first SDK instance (see TeamTalkSdkClient.connect).
+        if self._connecting or self.client.connected:
+            print("[TeamTalk] on_connect: ignored - a connection is "
+                  "already active or in progress")
+            return
         idx = self._selected_index()
         if idx is not None:
             self.current_profile = self.profiles[idx]
@@ -2468,6 +3634,7 @@ class TeamTalkFrame:
             profile_gender = GENDER_MALE
         if profile_gender == GENDER_MALE:
             profile["gender"] = self.config.get("gender", GENDER_MALE)
+        self._connecting = True
         self._set_status(
             _t("Connecting to {host}...").format(host=profile["host"])
         )
@@ -2491,6 +3658,7 @@ class TeamTalkFrame:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_connected(self, profile):
+        self._connecting = False
         _state["connected"] = True
         _state["server"] = profile["entry_name"]
         _state["username"] = profile.get("nickname") or profile.get("username") or ""
@@ -2657,6 +3825,7 @@ class TeamTalkFrame:
             pass
 
     def _on_connection_failed(self, exc):
+        self._connecting = False
         self.client.disconnect()
         _state["connected"] = False
         self.connected_announced = False
@@ -2678,6 +3847,7 @@ class TeamTalkFrame:
 
     def on_disconnect(self, event):
         was_connected = self.client.connected or _state["connected"]
+        self._connecting = False
         self.client.disconnect()
         _state["connected"] = False
         _state["server"] = ""
@@ -2694,6 +3864,9 @@ class TeamTalkFrame:
         self.user_items = {}
         self.chat_messages.clear()
         self.pm_threads.clear()
+        self.collected_accounts = []
+        self.collected_bans = []
+        self.last_server_stats = None
         try:
             self.channel_tree.DeleteChildren(self.channel_root)
             self.right_list.DeleteAllItems()
@@ -2781,6 +3954,7 @@ class TeamTalkFrame:
         # visible, see _refresh_files_panel).
         if channel_changed:
             self._refresh_files_panel()
+            self._refresh_media_panel()
 
     def _populate_channel_tree(self, root_id=0):
         tree = self.channel_tree
@@ -3559,17 +4733,16 @@ class TeamTalkFrame:
             return
 
         if modifiers == wx.MOD_CONTROL:
-            if key == ord("4"):
-                self._set_tab(TAB_FILES)
-                return
-            if key == ord("1"):
-                self._set_tab(TAB_CHAT)
-                return
-            if key == ord("2"):
-                self._set_tab(TAB_LOG)
-                return
-            if key == ord("3"):
-                self._set_tab(TAB_PM)
+            tab_keys = {
+                ord("1"): TAB_CHAT,
+                ord("2"): TAB_LOG,
+                ord("3"): TAB_PM,
+                ord("4"): TAB_FILES,
+                ord("5"): TAB_MEDIA,
+                ord("6"): TAB_ADMIN,
+            }
+            if key in tab_keys:
+                self._set_tab(tab_keys[key])
                 return
 
         event.Skip()
@@ -3591,23 +4764,30 @@ class TeamTalkFrame:
 
     # ---- Tab bar (right pane) -------------------------------------------
 
-    def _right_label_for_tab(self):
-        if self.current_tab == TAB_CHAT:
-            return _t("Channel chat")
-        if self.current_tab == TAB_LOG:
-            return _t("Server log")
-        if self.current_tab == TAB_FILES:
-            return _t("Files in current channel")
-        return _t("Private messages")
-
-    def _tab_bar_text(self):
-        labels = [
+    def _tab_labels(self):
+        """Ordered tab labels - index matches the TAB_* constants."""
+        return [
             _t("Channel chat"),
             _t("Server log"),
             _t("Private messages"),
             _t("Files"),
+            _t("Recording and media"),
+            _t("Administration"),
         ]
+
+    def _right_label_for_tab(self):
+        if self.current_tab == TAB_FILES:
+            return _t("Files in current channel")
+        labels = self._tab_labels()
+        if 0 <= self.current_tab < len(labels):
+            return labels[self.current_tab]
+        return labels[TAB_CHAT]
+
+    def _tab_bar_text(self):
+        labels = self._tab_labels()
         idx = self.current_tab
+        if not (0 <= idx < len(labels)):
+            idx = TAB_CHAT
         return _t("{label}, {n} of {total}").format(
             label=labels[idx], n=idx + 1, total=len(labels)
         )
@@ -3623,13 +4803,13 @@ class TeamTalkFrame:
 
     def _cycle_tab(self, direction):
         new_tab = self.current_tab + direction
-        if new_tab < TAB_CHAT or new_tab > TAB_FILES:
+        if new_tab < TAB_FIRST or new_tab > TAB_LAST:
             _play_sound("ui/endoftapbar.ogg")
             return
         self._set_tab(new_tab, play_switch_sound=True)
 
     def _set_tab(self, tab, play_switch_sound=False):
-        if tab not in (TAB_CHAT, TAB_LOG, TAB_PM, TAB_FILES):
+        if not (TAB_FIRST <= tab <= TAB_LAST):
             return
         if play_switch_sound and tab != self.current_tab:
             _play_sound("ui/switch_list.ogg")
@@ -3681,13 +4861,27 @@ class TeamTalkFrame:
                 )
                 self.right_list.SetItem(row, 2, "")
                 self.right_list.SetItemData(row, file_id)
-        else:
+        elif self.current_tab == TAB_PM:
             for user_id, info in self.pm_threads.items():
                 row = self.right_list.GetItemCount()
                 self.right_list.InsertItem(row, info.get("nick", ""))
                 self.right_list.SetItem(row, 1, info.get("last", ""))
                 self.right_list.SetItem(row, 2, info.get("time", ""))
                 self.right_list.SetItemData(row, user_id)
+        elif self.current_tab == TAB_MEDIA:
+            for label, detail, action in self._media_rows():
+                row = self.right_list.GetItemCount()
+                self.right_list.InsertItem(row, label)
+                self.right_list.SetItem(row, 1, detail)
+                self.right_list.SetItem(row, 2, "")
+                self.right_list.SetItemData(row, action)
+        elif self.current_tab == TAB_ADMIN:
+            for label, detail, action in self._admin_rows():
+                row = self.right_list.GetItemCount()
+                self.right_list.InsertItem(row, label)
+                self.right_list.SetItem(row, 1, detail)
+                self.right_list.SetItem(row, 2, "")
+                self.right_list.SetItemData(row, action)
 
         # Always land on row 0 so Left/Right keeps cycling tabs without
         # requiring the user to arrow back up after every switch.
@@ -3733,6 +4927,331 @@ class TeamTalkFrame:
                 file_id = 0
             if file_id:
                 self._download_file(file_id)
+        elif self.current_tab == TAB_MEDIA:
+            try:
+                action = self.right_list.GetItemData(idx)
+            except Exception:
+                action = 0
+            self._activate_media_action(action)
+        elif self.current_tab == TAB_ADMIN:
+            try:
+                action = self.right_list.GetItemData(idx)
+            except Exception:
+                action = 0
+            self._activate_admin_action(action)
+
+    # ---- Recording and media tab ----------------------------------------
+
+    def _media_rows(self):
+        """Build the (label, detail, action_code) rows for the Media tab."""
+        cli = self.client
+        if cli.recording:
+            record_label = _t("Stop recording channel audio")
+            record_detail = cli.recording_path or ""
+        else:
+            record_label = _t("Record channel audio to file...")
+            record_detail = _t("Mix every voice in the channel into one file")
+        if cli.streaming_media:
+            stream_label = _t("Stop streaming media file to channel")
+            stream_detail = cli.streaming_path or ""
+        else:
+            stream_label = _t("Stream media file to channel...")
+            stream_detail = _t("Play an audio file into the channel for "
+                               "everyone")
+        playback_count = len(cli.local_playbacks)
+        rows = [
+            (record_label, record_detail, ACT_RECORD),
+            (stream_label, stream_detail, ACT_STREAM),
+            (_t("Play media file to myself..."),
+             _t("Play an audio file through your own speakers only"),
+             ACT_PLAY_LOCAL),
+        ]
+        if playback_count:
+            rows.append((
+                _t("Stop all local playback"),
+                _t("{n} playback(s) running").format(n=playback_count),
+                ACT_STOP_PLAYBACK,
+            ))
+        return rows
+
+    def _activate_media_action(self, action):
+        if action == ACT_RECORD:
+            self._toggle_recording()
+        elif action == ACT_STREAM:
+            self._toggle_media_stream()
+        elif action == ACT_PLAY_LOCAL:
+            self._play_media_local()
+        elif action == ACT_STOP_PLAYBACK:
+            self._stop_all_local_playback()
+
+    def _refresh_media_panel(self):
+        """Repaint the Media tab and the menu item labels."""
+        try:
+            if self.client.recording:
+                self.m_record.SetItemLabel(
+                    _t("Stop recording channel audio\tCtrl+R"))
+            else:
+                self.m_record.SetItemLabel(
+                    _t("Record channel audio to file...\tCtrl+R"))
+            if self.client.streaming_media:
+                self.m_stream.SetItemLabel(
+                    _t("Stop streaming media file to channel"))
+            else:
+                self.m_stream.SetItemLabel(
+                    _t("Stream media file to channel..."))
+        except Exception:
+            pass
+        if self.current_tab == TAB_MEDIA:
+            self._refresh_right_list()
+
+    def _toggle_recording(self):
+        cli = self.client
+        if cli.recording:
+            if cli.stop_recording():
+                self._log_event(_t("Stopped recording channel audio."))
+                self._set_status(_t("Recording stopped"))
+                snd = _sounds()
+                if snd:
+                    try:
+                        snd.recording_stop()
+                    except Exception:
+                        pass
+            else:
+                self._log_event(_t("Could not stop recording."))
+            self._refresh_media_panel()
+            return
+        if not cli.in_channel():
+            _message(
+                self.frame,
+                _t("Join a channel before recording its audio."),
+                _t("TeamTalk"),
+                self.wx.OK | self.wx.ICON_WARNING,
+            )
+            return
+        wx = self.wx
+        wildcard = _t("Wave audio (*.wav)|*.wav|MP3 audio (*.mp3)|*.mp3")
+        default_name = time.strftime("teamtalk-%Y%m%d-%H%M%S.wav")
+        dlg = wx.FileDialog(
+            self.frame,
+            _t("Record channel audio to file"),
+            defaultFile=default_name,
+            wildcard=wildcard,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            if cli.start_recording(path):
+                self._log_event(
+                    _t("Recording channel audio to: {name}").format(
+                        name=os.path.basename(path)))
+                self._set_status(_t("Recording channel audio"))
+                snd = _sounds()
+                if snd:
+                    try:
+                        snd.recording_start()
+                    except Exception:
+                        pass
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not start recording. Check that your account "
+                       "has the record-voice right."),
+                    _t("TeamTalk"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+        self._refresh_media_panel()
+
+    def _toggle_media_stream(self):
+        cli = self.client
+        if cli.streaming_media:
+            if cli.stop_streaming_media():
+                self._log_event(_t("Stopped streaming media file."))
+                self._set_status(_t("Media streaming stopped"))
+            else:
+                self._log_event(_t("Could not stop media streaming."))
+            self._refresh_media_panel()
+            return
+        if not cli.in_channel():
+            _message(
+                self.frame,
+                _t("Join a channel before streaming a media file to it."),
+                _t("TeamTalk"),
+                self.wx.OK | self.wx.ICON_WARNING,
+            )
+            return
+        wx = self.wx
+        wildcard = _t("Media files (*.mp3;*.wav;*.ogg;*.mp4;*.wma)|"
+                      "*.mp3;*.wav;*.ogg;*.mp4;*.wma|All files (*.*)|*.*")
+        dlg = wx.FileDialog(
+            self.frame,
+            _t("Stream media file to channel"),
+            wildcard=wildcard,
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            if cli.stream_media_file(path):
+                self._log_event(
+                    _t("Streaming media file to channel: {name}").format(
+                        name=os.path.basename(path)))
+                self._set_status(_t("Streaming media file to channel"))
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not start streaming. Check that your account "
+                       "has the stream-media-files right."),
+                    _t("TeamTalk"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+        self._refresh_media_panel()
+
+    def _play_media_local(self):
+        wx = self.wx
+        wildcard = _t("Media files (*.mp3;*.wav;*.ogg;*.mp4;*.wma)|"
+                      "*.mp3;*.wav;*.ogg;*.mp4;*.wma|All files (*.*)|*.*")
+        dlg = wx.FileDialog(
+            self.frame,
+            _t("Play media file to myself"),
+            wildcard=wildcard,
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        _apply_skin_recursive(dlg)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            session_id = self.client.play_media_local(path)
+            if session_id:
+                self._log_event(
+                    _t("Playing media file locally: {name}").format(
+                        name=os.path.basename(path)))
+                self._set_status(_t("Playing media file locally"))
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not play the selected media file."),
+                    _t("TeamTalk"),
+                    wx.OK | wx.ICON_ERROR,
+                )
+        dlg.Destroy()
+        self._refresh_media_panel()
+
+    def _stop_all_local_playback(self):
+        stopped = self.client.stop_all_local_playback()
+        if stopped:
+            self._log_event(
+                _t("Stopped {n} local playback(s).").format(n=stopped))
+            self._set_status(_t("Local playback stopped"))
+        self._refresh_media_panel()
+
+    # ---- Administration tab ---------------------------------------------
+
+    def _admin_rows(self):
+        """Build the (label, detail, action_code) rows for the Admin tab."""
+        if self.client.is_admin():
+            access = _t("Administrator access")
+        else:
+            access = _t("Some actions may require administrator rights")
+        return [
+            (_t("Server properties..."),
+             _t("View and edit name, MOTD and limits"),
+             ACT_SRV_PROPERTIES),
+            (_t("User accounts..."),
+             _t("Create, edit and delete server accounts"),
+             ACT_SRV_ACCOUNTS),
+            (_t("Banned users..."),
+             _t("View and remove server bans"),
+             ACT_SRV_BANS),
+            (_t("Server statistics..."),
+             _t("Traffic, uptime and user counts"),
+             ACT_SRV_STATS),
+            (_t("Save server configuration"),
+             access,
+             ACT_SRV_SAVECONFIG),
+        ]
+
+    def _activate_admin_action(self, action):
+        if action == ACT_SRV_PROPERTIES:
+            self._open_server_properties()
+        elif action == ACT_SRV_ACCOUNTS:
+            self._open_user_accounts()
+        elif action == ACT_SRV_BANS:
+            self._open_banned_users()
+        elif action == ACT_SRV_STATS:
+            self._open_server_stats()
+        elif action == ACT_SRV_SAVECONFIG:
+            self._save_server_config()
+
+    def _require_connected(self):
+        if not self.client.connected:
+            _message(
+                self.frame,
+                _t("Connect to a TeamTalk server first."),
+                _t("TeamTalk"),
+                self.wx.OK | self.wx.ICON_WARNING,
+            )
+            return False
+        return True
+
+    def _open_server_properties(self):
+        if not self._require_connected():
+            return
+        props = self.client.get_server_properties()
+        if props is None:
+            _message(
+                self.frame,
+                _t("Could not read the server properties."),
+                _t("TeamTalk"),
+                self.wx.OK | self.wx.ICON_ERROR,
+            )
+            return
+        dlg = ServerPropertiesDialog(self.frame, self.client.sdk, props)
+        if dlg.show_modal():
+            if self.client.update_server(props):
+                self._log_event(_t("Server properties update requested."))
+                self._set_status(_t("Server properties updated"))
+                _notify(_t("Server properties updated"), "success")
+            else:
+                _message(
+                    self.frame,
+                    _t("Could not update the server properties. "
+                       "Administrator rights are required."),
+                    _t("TeamTalk"),
+                    self.wx.OK | self.wx.ICON_ERROR,
+                )
+
+    def _open_user_accounts(self):
+        if not self._require_connected():
+            return
+        UserAccountsManagerDialog(self.frame, self).show_modal()
+
+    def _open_banned_users(self):
+        if not self._require_connected():
+            return
+        BannedUsersDialog(self.frame, self).show_modal()
+
+    def _open_server_stats(self):
+        if not self._require_connected():
+            return
+        ServerStatsDialog(self.frame, self).show_modal()
+
+    def _save_server_config(self):
+        if not self._require_connected():
+            return
+        if self.client.save_server_config():
+            self._log_event(_t("Server configuration save requested."))
+            self._set_status(_t("Server configuration saved"))
+            _notify(_t("Server configuration saved"), "success")
+        else:
+            _message(
+                self.frame,
+                _t("Could not save the server configuration. "
+                   "Administrator rights are required."),
+                _t("TeamTalk"),
+                self.wx.OK | self.wx.ICON_ERROR,
+            )
 
     # ---- File management ------------------------------------------------
 
@@ -3979,6 +5498,36 @@ class TeamTalkFrame:
             if name == _value(events.CLIENTEVENT_CON_LOST):
                 wx.CallAfter(self.on_disconnect, None)
                 return
+            logged_out = _value(getattr(
+                events, "CLIENTEVENT_CMD_MYSELF_LOGGEDOUT", -1))
+            if name == logged_out and logged_out != -1:
+                # The server logged us out (kick, ban, multi-login
+                # conflict, or our own doLogout). Without handling this
+                # the client keeps its cached roster and keeps issuing
+                # commands the server rejects with "Not logged in".
+                print("[TeamTalk] CMD_MYSELF_LOGGEDOUT - tearing down")
+                wx.CallAfter(self._log_event,
+                             _t("Logged out from the TeamTalk server."))
+                wx.CallAfter(self.on_disconnect, None)
+                return
+            kicked = _value(getattr(
+                events, "CLIENTEVENT_CMD_MYSELF_KICKED", -1))
+            if name == kicked and kicked != -1:
+                # Kicked from a channel (not the whole server) - stay
+                # connected, just refresh so the tree reflects that we
+                # are back in the lobby.
+                wx.CallAfter(self._log_event,
+                             _t("You were kicked from the channel."))
+                wx.CallAfter(self._set_status,
+                             _t("You were kicked from the channel."))
+                wx.CallAfter(self._refresh_teamtalk_state)
+                snd = _sounds()
+                if snd:
+                    try:
+                        snd.error()
+                    except Exception:
+                        pass
+                return
             if name == _value(events.CLIENTEVENT_CMD_ERROR):
                 err = getattr(msg, "clienterrormsg", None)
                 err_code = _value(getattr(err, "nErrorNo", 0))
@@ -4168,6 +5717,61 @@ class TeamTalkFrame:
                     if chan_id and chan_id == self.client.my_channel_id:
                         wx.CallAfter(self._refresh_files_panel)
                 return
+
+            # ---- Administration events ------------------------------
+            acct_id = _value(getattr(events, "CLIENTEVENT_CMD_USERACCOUNT",
+                                     -1))
+            ban_id = _value(getattr(events, "CLIENTEVENT_CMD_BANNEDUSER", -1))
+            stats_id = _value(getattr(events,
+                                      "CLIENTEVENT_CMD_SERVERSTATISTICS", -1))
+            srv_update_id = _value(getattr(events,
+                                           "CLIENTEVENT_CMD_SERVER_UPDATE",
+                                           -1))
+
+            if name == acct_id and acct_id != -1:
+                account = getattr(msg, "useraccount", None)
+                if account is not None:
+                    wx.CallAfter(self._on_user_account_received,
+                                 self.client._struct_copy(account))
+                return
+            if name == ban_id and ban_id != -1:
+                ban = getattr(msg, "banneduser", None)
+                if ban is not None:
+                    wx.CallAfter(self._on_banned_user_received,
+                                 self.client._struct_copy(ban))
+                return
+            if name == stats_id and stats_id != -1:
+                stats = getattr(msg, "serverstatistics", None)
+                if stats is not None:
+                    wx.CallAfter(self._on_server_stats_received,
+                                 self.client._struct_copy(stats))
+                return
+            if name == srv_update_id and srv_update_id != -1:
+                wx.CallAfter(self._log_event,
+                             _t("Server properties were updated."))
+                return
+
+            # ---- Recording / media file events ----------------------
+            rec_id = _value(getattr(events,
+                                    "CLIENTEVENT_USER_RECORD_MEDIAFILE", -1))
+            stream_id = _value(getattr(events,
+                                       "CLIENTEVENT_STREAM_MEDIAFILE", -1))
+            local_id = _value(getattr(events,
+                                      "CLIENTEVENT_LOCAL_MEDIAFILE", -1))
+
+            if name == rec_id and rec_id != -1:
+                info = getattr(msg, "mediafileinfo", None)
+                src = _value(getattr(msg, "nSource", 0))
+                wx.CallAfter(self._on_user_record_event, src, info)
+                return
+            if name == stream_id and stream_id != -1:
+                info = getattr(msg, "mediafileinfo", None)
+                wx.CallAfter(self._on_stream_media_event, info)
+                return
+            if name == local_id and local_id != -1:
+                info = getattr(msg, "mediafileinfo", None)
+                wx.CallAfter(self._on_local_media_event, info)
+                return
         except Exception as exc:
             print(f"[TeamTalk] _on_sdk_event error: {exc}")
 
@@ -4267,6 +5871,104 @@ class TeamTalkFrame:
             "info",
             play_sound=False,
         )
+
+    # ---- Administration / media event handlers --------------------------
+
+    def _on_user_account_received(self, account):
+        """Collect a server user account delivered via CMD_USERACCOUNT."""
+        if account is None:
+            return
+        self.collected_accounts.append(account)
+        if self.accounts_dialog is not None:
+            try:
+                self.accounts_dialog.refresh_accounts()
+            except Exception:
+                pass
+
+    def _on_banned_user_received(self, ban):
+        """Collect a ban entry delivered via CMD_BANNEDUSER."""
+        if ban is None:
+            return
+        self.collected_bans.append(ban)
+        if self.bans_dialog is not None:
+            try:
+                self.bans_dialog.refresh_bans()
+            except Exception:
+                pass
+
+    def _on_server_stats_received(self, stats):
+        """Store the ServerStatistics snapshot from CMD_SERVERSTATISTICS."""
+        self.last_server_stats = stats
+        if self.stats_dialog is not None:
+            try:
+                self.stats_dialog.update_stats(stats)
+            except Exception:
+                pass
+
+    def _media_status_text(self, info):
+        """Map a MediaFileInfo status int to a short human label."""
+        try:
+            statuses = self.client.sdk.MediaFileStatus
+        except Exception:
+            return ""
+        status = _value(getattr(info, "nStatus", 0))
+        mapping = {
+            _value(getattr(statuses, "MFS_STARTED", 2)): _t("started"),
+            _value(getattr(statuses, "MFS_PLAYING", 6)): _t("playing"),
+            _value(getattr(statuses, "MFS_PAUSED", 5)): _t("paused"),
+            _value(getattr(statuses, "MFS_FINISHED", 3)): _t("finished"),
+            _value(getattr(statuses, "MFS_ABORTED", 4)): _t("aborted"),
+            _value(getattr(statuses, "MFS_ERROR", 1)): _t("error"),
+            _value(getattr(statuses, "MFS_CLOSED", 0)): _t("closed"),
+        }
+        return mapping.get(status, "")
+
+    def _media_finished(self, info):
+        """True when a MediaFileInfo reports a terminal status."""
+        try:
+            statuses = self.client.sdk.MediaFileStatus
+            done = {
+                _value(getattr(statuses, "MFS_FINISHED", 3)),
+                _value(getattr(statuses, "MFS_ABORTED", 4)),
+                _value(getattr(statuses, "MFS_ERROR", 1)),
+                _value(getattr(statuses, "MFS_CLOSED", 0)),
+            }
+        except Exception:
+            done = {0, 1, 3, 4}
+        return _value(getattr(info, "nStatus", 0)) in done
+
+    def _on_user_record_event(self, user_id, info):
+        """Another user started / stopped recording a media file."""
+        if info is None:
+            return
+        user = self.client.get_user(user_id)
+        nick = _t("A user")
+        if user is not None:
+            nick = (_tt_text(getattr(user, "szNickname", ""))
+                    or _tt_text(getattr(user, "szUsername", "")) or nick)
+        status = self._media_status_text(info)
+        self._log_event(_t("{user} recording: {status}").format(
+            user=nick, status=status or _t("updated")))
+
+    def _on_stream_media_event(self, info):
+        """Status update for our own media-file-to-channel stream."""
+        if info is None:
+            return
+        status = self._media_status_text(info)
+        if status:
+            self._log_event(_t("Media streaming: {status}").format(
+                status=status))
+        if self._media_finished(info):
+            self.client.streaming_media = False
+            self.client.streaming_path = ""
+            self._refresh_media_panel()
+
+    def _on_local_media_event(self, info):
+        """Status update for a local (to-myself) media playback."""
+        if info is None:
+            return
+        if self._media_finished(info):
+            self._refresh_media_panel()
 
     # ---- Close ---------------------------------------------------------
 

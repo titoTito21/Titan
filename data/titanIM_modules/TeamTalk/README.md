@@ -10,6 +10,29 @@ This module adds a Titan-styled TeamTalk entry to Titan IM.
 - Saved TeamTalk server profiles in the encrypted Titan IM config
 - Import of `.tt` files and `tt://` links
 - Opening `.tt` files passed to `main.py` as a command-line/file-association argument
+- Channels, nested user list, channel text chat, per-user private messages
+- File transfer (upload / download / delete) per channel
+- Push-to-talk, mute microphone, mute speakers, per-user mute and volume
+- Channel admin actions: join, leave, create, delete, kick, ban, move
+- Recording: mix the channel's voice into a single WAV or MP3 file
+- Media: stream an audio file into the channel, or play one to yourself only
+- Server administration (admin accounts): edit server properties, create /
+  edit / delete server user accounts, view and remove bans, view server
+  statistics, and save the server configuration
+- Six-tab right pane (Channel chat / Server log / Private messages / Files /
+  Recording and media / Administration) using the Titan-Net row-0 tab bar
+  convention; `Ctrl+1`..`Ctrl+6` switch tabs, `Ctrl+R` toggles recording
+
+## Architecture
+
+The `TeamTalkSdkClient` class is the proven event-cache SDK wrapper carried
+over from the previous version (connect / login, audio device init, channel
+and user caches, voice, files). It is extended here with recording, media
+streaming / local playback, and the full administration command set
+(`DoUpdateServer`, `DoListUserAccounts`, `DoNewUserAccount`,
+`DoDeleteUserAccount`, `DoListBans`, `DoUnbanUserEx`, `DoSaveConfig`,
+`DoQueryServerStats`). The UI layer adds the Recording and Administration
+tabs plus their dialogs on top of the existing titan-net styled frame.
 
 ## TeamTalk SDK
 
