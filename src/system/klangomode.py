@@ -214,11 +214,46 @@ class KlangoMode:
         self.load_games()
         self.load_components()
         self.load_status_bar_items()
-    
+
+        # Honor the user's saved drag-and-drop order from .index.TCG
+        self._apply_saved_menu_order()
+
+    def _apply_saved_menu_order(self):
+        """Reorder the main menu cards and the Titan IM submenu to match the
+        saved drag-and-drop order from .index.TCG. Cards with no GUI tab bar
+        equivalent (Status Bar, Program, Components) keep their fixed slots."""
+        try:
+            from src.titan_core import list_order
+
+            def _menu_view_id(category):
+                name = category.get("name", "")
+                if name == _("Applications"):
+                    return "apps"
+                if name == _("Games"):
+                    return "games"
+                if name == _("Titan IM"):
+                    return "network"
+                return None
+
+            self.main_menu = list_order.order_categories(self.main_menu, _menu_view_id)
+            for category in self.main_menu:
+                if _menu_view_id(category) == "network":
+                    category["items"] = list_order.order_texts(
+                        'network', category["items"], lambda it: it.get("name", ""))
+                    break
+        except Exception as e:
+            print(f"[Klango] apply saved menu order error: {e}")
+
     def load_applications(self):
         """Load applications into the menu."""
         try:
             apps = get_applications()
+            # Honor the user's saved drag-and-drop order from .index.TCG
+            try:
+                from src.titan_core import list_order
+                apps = list_order.order_apps(apps)
+            except Exception as _e:
+                print(f"[Klango] app order skipped: {_e}")
             app_items = []
             for app in apps:
                 app_items.append({
@@ -246,6 +281,12 @@ class KlangoMode:
                     continue
 
                 games = games_by_platform[platform]
+                # Honor the user's saved drag-and-drop order from .index.TCG
+                try:
+                    from src.titan_core import list_order
+                    games = list_order.order_games(platform, games)
+                except Exception as _e:
+                    print(f"[Klango] game order skipped: {_e}")
 
                 # Create platform submenu with games
                 platform_games = []
@@ -1288,10 +1329,39 @@ class KlangoFrame(wx.Frame):
         self.load_games()
         self.load_components()
         self.load_status_bar_items()
-        
+
+        # Honor the user's saved drag-and-drop order from .index.TCG
+        self._apply_saved_menu_order()
+
         # Bind keyboard events
         self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
         self.Bind(wx.EVT_CLOSE, self.on_close)
+
+    def _apply_saved_menu_order(self):
+        """Reorder the main menu cards and the Titan IM submenu to match the
+        saved drag-and-drop order from .index.TCG. Cards with no GUI tab bar
+        equivalent (Status Bar, Program, Components) keep their fixed slots."""
+        try:
+            from src.titan_core import list_order
+
+            def _menu_view_id(category):
+                name = category.get("name", "")
+                if name == _("Applications"):
+                    return "apps"
+                if name == _("Games"):
+                    return "games"
+                if name == _("Titan IM"):
+                    return "network"
+                return None
+
+            self.main_menu = list_order.order_categories(self.main_menu, _menu_view_id)
+            for category in self.main_menu:
+                if _menu_view_id(category) == "network":
+                    category["items"] = list_order.order_texts(
+                        'network', category["items"], lambda it: it.get("name", ""))
+                    break
+        except Exception as e:
+            print(f"[Klango] apply saved menu order error: {e}")
 
         # Set focus to receive keyboard events
         self.SetCanFocus(True)
@@ -1314,6 +1384,12 @@ class KlangoFrame(wx.Frame):
         """Load applications into the menu."""
         try:
             apps = get_applications()
+            # Honor the user's saved drag-and-drop order from .index.TCG
+            try:
+                from src.titan_core import list_order
+                apps = list_order.order_apps(apps)
+            except Exception as _e:
+                print(f"[Klango] app order skipped: {_e}")
             app_items = []
             for app in apps:
                 app_items.append({
@@ -1340,6 +1416,12 @@ class KlangoFrame(wx.Frame):
                     continue
 
                 games = games_by_platform[platform]
+                # Honor the user's saved drag-and-drop order from .index.TCG
+                try:
+                    from src.titan_core import list_order
+                    games = list_order.order_games(platform, games)
+                except Exception as _e:
+                    print(f"[Klango] game order skipped: {_e}")
 
                 # Create platform submenu with games
                 platform_games = []

@@ -319,7 +319,7 @@ class TitanApp(wx.Frame):
                     self.populate_app_list()
                     self.populate_game_list()
                     self.apply_selected_skin()
-                    self.show_app_list()
+                    self._show_first_view()
                     print("[GUI] UI initialization complete")
                     # Register main window in the window switcher
                     register_window("Titan", window=self, callback=self._focus_current_view_control, category='main')
@@ -458,6 +458,15 @@ class TitanApp(wx.Frame):
         self.tab_bar = None  # legacy attribute, kept for back-compat
         self._tab_bar_tip_active = False
 
+        # Drag-and-drop state (see _start_tab_bar_drag / _handle_list_item_move).
+        # Tab bar "cards" are picked up with Space and moved with Left/Right;
+        # list items are reordered with Ctrl+Up/Down or by mouse drag.
+        self._tab_bar_drag_active = False
+        self._tab_bar_drag_view_id = None
+        self._tab_bar_drag_origin = None  # registered_views id order at pick-up (for Escape)
+        self._lb_drag = None              # in-progress mouse drag on a list box
+        self._tree_drag_item = None       # in-progress mouse drag on the game tree
+
         self.list_label = wx.StaticText(panel, label=_("Application List:"))
         main_vbox.Add(self.list_label, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
@@ -555,6 +564,10 @@ class TitanApp(wx.Frame):
             if v['id'] not in visible_cats:
                 v['control'].Hide()
 
+        # Apply the user's saved tab bar card order from .index.TCG (if any)
+        # before the toolbar is built so toolbar buttons match the order too.
+        self._apply_saved_tab_bar_order()
+
         # Build toolbar entries for all visible views (no more "Switch To" button;
         # component views get their own toolbar buttons via register_view()).
         for view in self.registered_views:
@@ -588,6 +601,11 @@ class TitanApp(wx.Frame):
         self.game_tree.Bind(wx.EVT_CONTEXT_MENU, self.on_game_tree_context_menu)
 
         self.statusbar_listbox.Bind(wx.EVT_MOTION, self.on_focus_change_status)
+
+        # Mouse drag-and-drop reordering for the built-in lists
+        self._enable_listbox_dnd(self.app_listbox)
+        self._enable_listbox_dnd(self.network_listbox)
+        self._enable_tree_dnd(self.game_tree)
 
 
         panel.SetSizer(main_vbox)
@@ -883,7 +901,9 @@ class TitanApp(wx.Frame):
         self.app_listbox.Clear()
         for app in applications:
             self.app_listbox.Append(app.get("name", _("Unknown App")), clientData=app)
-        # Virtual tab bar row is always the first item
+        # Restore the user's saved drag-and-drop order, then prepend the
+        # virtual tab bar row as the first item.
+        self._apply_saved_order_to_listbox('apps', self.app_listbox)
         self._inject_tab_bar_into_listbox(self.app_listbox)
 
 
@@ -905,11 +925,27 @@ class TitanApp(wx.Frame):
         # Store tree items for later reference
         self.game_platform_nodes = {}
 
+        # User's saved drag-and-drop order for games (keys are platform-scoped)
+        try:
+            from src.titan_core import list_order
+            saved_games = list_order.get_list_order('games')
+        except Exception as e:
+            print(f"[GUI] load game order error: {e}")
+            saved_games = []
+
         for platform in platform_order:
             if platform not in games_by_platform or not games_by_platform[platform]:
                 continue
 
             games = games_by_platform[platform]
+            if saved_games:
+                try:
+                    from src.titan_core import list_order
+                    games = list_order.apply_order(
+                        saved_games, games,
+                        lambda g, p=platform: self._game_order_key(p, g))
+                except Exception as e:
+                    print(f"[GUI] apply game order error: {e}")
 
             # Create platform node with translated name
             platform_display = _(platform)
@@ -1341,6 +1377,39 @@ class TitanApp(wx.Frame):
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
+
+        # While a tab bar card is "picked up" (Space on the tab bar row), the
+        # keyboard is locked to dragging: Left/Right move the card, Space drops
+        # it, Escape cancels. All other navigation keys are swallowed so focus
+        # stays on the card being moved.
+        if getattr(self, '_tab_bar_drag_active', False) and self._focused_registered_view() is not None:
+            if keycode == wx.WXK_SPACE and modifiers == wx.MOD_NONE:
+                self._drop_tab_bar_drag()
+                return
+            if keycode == wx.WXK_ESCAPE:
+                self._cancel_tab_bar_drag()
+                return
+            if keycode == wx.WXK_LEFT and modifiers == wx.MOD_NONE:
+                self._move_tab_bar_drag(-1)
+                return
+            if keycode == wx.WXK_RIGHT and modifiers == wx.MOD_NONE:
+                self._move_tab_bar_drag(+1)
+                return
+            if keycode in (wx.WXK_UP, wx.WXK_DOWN, wx.WXK_HOME, wx.WXK_END, wx.WXK_TAB):
+                return  # locked to the picked-up card
+
+        # Space on the virtual tab bar row picks the current card up for
+        # drag-and-drop reordering.
+        if keycode == wx.WXK_SPACE and modifiers == wx.MOD_NONE and not getattr(self, '_tab_bar_drag_active', False):
+            view = self._focused_registered_view()
+            if view is not None and self._is_tab_bar_selection(view['control']):
+                self._start_tab_bar_drag()
+                return
+
+        # Ctrl+Up / Ctrl+Down move the selected list item one row.
+        if keycode in (wx.WXK_UP, wx.WXK_DOWN) and modifiers == wx.MOD_CONTROL:
+            if self._handle_list_item_move(keycode):
+                return
 
         # Handle F1 (Help)
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_NONE:
@@ -2183,6 +2252,556 @@ class TitanApp(wx.Frame):
         self._cancel_tab_bar_tip()
         self._schedule_tab_bar_tip()
 
+    # ------------------------------------------------------------------
+    # Drag-and-drop reordering
+    #
+    # Two surfaces:
+    #   * The virtual tab bar row: Space picks the current card up, Left/Right
+    #     move it, Space drops it, Escape cancels. Mouse: not applicable (the
+    #     tab bar row is reordered via the keyboard).
+    #   * List/tree items: Ctrl+Up / Ctrl+Down move the selected item one row,
+    #     or the item can be dragged with the mouse.
+    # Positions persist to .index.TCG via src.titan_core.list_order.
+    # Sounds: ui/drag.ogg on pick-up / move, ui/drop.ogg on drop.
+    # ------------------------------------------------------------------
+
+    def _view_by_control(self, ctrl):
+        """Return the registered-view dict whose control is ``ctrl`` (or None)."""
+        for view in getattr(self, 'registered_views', []):
+            if view.get('control') is ctrl:
+                return view
+        return None
+
+    def _focused_registered_view(self):
+        """Return the registered-view dict for the currently focused control."""
+        return self._view_by_control(self.FindFocus())
+
+    def _apply_saved_tab_bar_order(self):
+        """Reorder ``registered_views`` to match the saved tab bar order."""
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_tab_bar_order()
+            if not saved:
+                return
+            self.registered_views = list_order.apply_order(
+                saved, self.registered_views, lambda v: v['id'])
+        except Exception as e:
+            print(f"[GUI] apply saved tab bar order error: {e}")
+
+    def _show_first_view(self):
+        """Show the first card in the tab bar.
+
+        The first card is whatever the user dragged into slot 1 — not
+        necessarily the application list — so startup honors the saved
+        drag-and-drop order from .index.TCG.
+        """
+        if not self.registered_views:
+            self.show_app_list()
+            return
+        first = self.registered_views[0]
+        if first.get('show_method'):
+            first['show_method']()
+        else:
+            self._show_registered_view(first['id'])
+
+    def _rebuild_view_toolbar(self):
+        """Rebuild the toolbar view buttons so they match ``registered_views``."""
+        if not getattr(self, 'toolbar', None):
+            return
+        try:
+            for tool in list(self._view_tools.values()):
+                try:
+                    self.toolbar.DeleteTool(tool.GetId())
+                except Exception:
+                    pass
+            self._view_tools = {}
+            for view in self.registered_views:
+                self._add_toolbar_tool(view)
+            self.toolbar.Realize()
+        except Exception as e:
+            print(f"[GUI] rebuild toolbar error: {e}")
+
+    def _speak_drag(self, message):
+        """Speak a short drag-and-drop status message (screen reader feedback)."""
+        try:
+            speaker.speak(message, interrupt=True)
+        except Exception:
+            pass
+
+    # --- Tab bar card drag ---------------------------------------------
+
+    def _start_tab_bar_drag(self):
+        """Pick up the current tab bar card for keyboard drag-and-drop."""
+        view = self._focused_registered_view()
+        if view is None:
+            return
+        self._tab_bar_drag_active = True
+        self._tab_bar_drag_view_id = view['id']
+        self._tab_bar_drag_origin = [v['id'] for v in self.registered_views]
+        try:
+            play_sound('ui/drag.ogg')
+        except Exception:
+            pass
+        self._speak_drag(_("Picked up {}").format(self._view_short_name(view)))
+
+    def _move_tab_bar_drag(self, direction):
+        """Move the picked-up tab bar card one slot left (-1) or right (+1)."""
+        if not self._tab_bar_drag_active:
+            return
+        idx = self._get_view_index(self._tab_bar_drag_view_id)
+        if idx < 0:
+            return
+        new_idx = idx + direction
+        if new_idx < 0 or new_idx >= len(self.registered_views):
+            try:
+                play_sound('ui/endoftapbar.ogg')
+            except Exception:
+                pass
+            return
+        views = self.registered_views
+        views[idx], views[new_idx] = views[new_idx], views[idx]
+        self._rebuild_view_toolbar()
+        self._refresh_all_tab_bar_items()
+        try:
+            play_sound('ui/drag.ogg')
+        except Exception:
+            pass
+        # Keep focus/selection on the picked-up card in its new position.
+        view = self.registered_views[new_idx]
+        ctrl = view.get('control')
+        self._with_tab_bar_nav_speech_suppressed()
+        try:
+            if isinstance(ctrl, wx.ListBox):
+                if ctrl.GetCount() > 0:
+                    ctrl.SetSelection(0)
+                ctrl.SetFocus()
+            elif isinstance(ctrl, wx.TreeCtrl):
+                root = ctrl.GetRootItem()
+                if root.IsOk():
+                    first, _cookie = ctrl.GetFirstChild(root)
+                    if first.IsOk():
+                        ctrl.SelectItem(first)
+                ctrl.SetFocus()
+        except Exception as e:
+            print(f"[GUI] tab bar drag focus error: {e}")
+        self._speak_drag(_("{}, {} of {}").format(
+            self._view_short_name(view), new_idx + 1, len(self.registered_views)))
+        vibrate_cursor_move()
+
+    def _drop_tab_bar_drag(self):
+        """Drop the picked-up tab bar card and persist the new order."""
+        if not self._tab_bar_drag_active:
+            return
+        view_id = self._tab_bar_drag_view_id
+        self._tab_bar_drag_active = False
+        self._tab_bar_drag_view_id = None
+        self._tab_bar_drag_origin = None
+        try:
+            from src.titan_core import list_order
+            list_order.set_tab_bar_order([v['id'] for v in self.registered_views])
+        except Exception as e:
+            print(f"[GUI] save tab bar order error: {e}")
+        try:
+            play_sound('ui/drop.ogg')
+        except Exception:
+            pass
+        idx = self._get_view_index(view_id)
+        if idx >= 0:
+            view = self.registered_views[idx]
+            self._speak_drag(_("Dropped {} at position {}").format(
+                self._view_short_name(view), idx + 1))
+        vibrate_selection()
+
+    def _cancel_tab_bar_drag(self):
+        """Abort the in-progress tab bar drag and restore the original order."""
+        if not self._tab_bar_drag_active:
+            return
+        origin = self._tab_bar_drag_origin or []
+        view_id = self._tab_bar_drag_view_id
+        self._tab_bar_drag_active = False
+        self._tab_bar_drag_view_id = None
+        self._tab_bar_drag_origin = None
+        if origin:
+            by_id = {v['id']: v for v in self.registered_views}
+            restored = [by_id[i] for i in origin if i in by_id]
+            for v in self.registered_views:
+                if v['id'] not in origin:
+                    restored.append(v)
+            self.registered_views = restored
+            self._rebuild_view_toolbar()
+            self._refresh_all_tab_bar_items()
+        try:
+            play_sound('ui/popupclose.ogg')
+        except Exception:
+            pass
+        self._speak_drag(_("Drag cancelled"))
+        idx = self._get_view_index(view_id)
+        if idx >= 0:
+            ctrl = self.registered_views[idx].get('control')
+            self._with_tab_bar_nav_speech_suppressed()
+            try:
+                if isinstance(ctrl, wx.ListBox):
+                    if ctrl.GetCount() > 0:
+                        ctrl.SetSelection(0)
+                    ctrl.SetFocus()
+                elif isinstance(ctrl, wx.TreeCtrl):
+                    root = ctrl.GetRootItem()
+                    if root.IsOk():
+                        first, _cookie = ctrl.GetFirstChild(root)
+                        if first.IsOk():
+                            ctrl.SelectItem(first)
+                    ctrl.SetFocus()
+            except Exception:
+                pass
+
+    # --- List item move (Ctrl+Up / Ctrl+Down) --------------------------
+
+    def _handle_list_item_move(self, keycode):
+        """Move the selected item in the focused list/tree. Returns True if handled."""
+        view = self._focused_registered_view()
+        if view is None:
+            return False
+        direction = -1 if keycode == wx.WXK_UP else +1
+        ctrl = view['control']
+        if isinstance(ctrl, wx.ListBox):
+            return self._move_listbox_item(view, ctrl, direction)
+        if isinstance(ctrl, wx.TreeCtrl):
+            return self._move_tree_item(view, ctrl, direction)
+        return False
+
+    def _move_listbox_item(self, view, listbox, direction):
+        """Ctrl+Up/Down move for a list box item. Always returns True (handled)."""
+        sel = listbox.GetSelection()
+        if sel == wx.NOT_FOUND or sel == 0:
+            return True  # index 0 is the virtual tab bar row — not movable
+        target = sel + direction
+        if target <= 0 or target >= listbox.GetCount():
+            try:
+                play_endoflist_sound()
+            except Exception:
+                pass
+            return True
+        self._move_listbox_item_to(listbox, sel, target)
+        return True
+
+    def _move_listbox_item_to(self, listbox, from_idx, to_idx):
+        """Move a list box item from ``from_idx`` to ``to_idx`` (1-based; index 0
+        is the virtual tab bar row and is left untouched). Persists the new
+        order and gives audio/speech feedback."""
+        count = listbox.GetCount()
+        if from_idx <= 0 or to_idx <= 0 or from_idx >= count or to_idx >= count:
+            return
+        # Snapshot every real item (skip the tab bar row at 0).
+        items = []
+        for i in range(1, count):
+            try:
+                data = listbox.GetClientData(i)
+            except Exception:
+                data = None
+            items.append((listbox.GetString(i), data))
+        moved = items.pop(from_idx - 1)
+        items.insert(to_idx - 1, moved)
+        # Rewrite the real rows, leaving the tab bar row at index 0 in place.
+        for i in range(count - 1, 0, -1):
+            listbox.Delete(i)
+        for text, data in items:
+            if data is None:
+                listbox.Append(text)
+            else:
+                listbox.Append(text, clientData=data)
+        new_sel = items.index(moved) + 1
+        listbox.SetSelection(new_sel)
+        try:
+            play_sound('ui/drop.ogg')
+        except Exception:
+            pass
+        vibrate_selection()
+        view = self._view_by_control(listbox)
+        if view:
+            self._persist_listbox_order(view, listbox)
+        self._speak_drag(_("{}, {} of {}").format(moved[0], new_sel, count - 1))
+
+    def _move_tree_item(self, view, tree, direction):
+        """Ctrl+Up/Down move for a game in the tree (within its platform).
+        Always returns True (handled)."""
+        sel = tree.GetSelection()
+        if not sel.IsOk():
+            return True
+        data = tree.GetItemData(sel)
+        if not isinstance(data, dict) or data.get('type') != 'game':
+            return True  # only games are movable (not platform or tab bar rows)
+        parent = tree.GetItemParent(sel)
+        if not parent.IsOk():
+            return True
+        siblings = []
+        child, cookie = tree.GetFirstChild(parent)
+        while child.IsOk():
+            siblings.append((tree.GetItemText(child), tree.GetItemData(child)))
+            child, cookie = tree.GetNextChild(parent, cookie)
+        cur = next((i for i, (t, d) in enumerate(siblings) if d is data), -1)
+        if cur < 0:
+            return True
+        new = cur + direction
+        if new < 0 or new >= len(siblings):
+            try:
+                play_endoflist_sound()
+            except Exception:
+                pass
+            return True
+        siblings[cur], siblings[new] = siblings[new], siblings[cur]
+        moved_item = self._rebuild_tree_children(tree, parent, siblings, data)
+        if moved_item is not None:
+            self._skip_focus_sound = True
+            tree.SelectItem(moved_item)
+            tree.SetFocus()
+        try:
+            play_sound('ui/drop.ogg')
+        except Exception:
+            pass
+        vibrate_cursor_move()
+        view2 = self._view_by_control(tree)
+        if view2:
+            self._persist_tree_order(view2, tree)
+        game = data.get('data', {})
+        self._speak_drag(_("{}, {} of {}").format(
+            game.get('name', ''), new + 1, len(siblings)))
+        return True
+
+    def _rebuild_tree_children(self, tree, parent, siblings, moved_data):
+        """Delete and re-create ``parent``'s children from the ``siblings`` list
+        of ``(text, data)`` tuples. Returns the tree item whose data is
+        ``moved_data`` (or None)."""
+        tree.DeleteChildren(parent)
+        moved_item = None
+        for text, data in siblings:
+            item = tree.AppendItem(parent, text)
+            tree.SetItemData(item, data)
+            if data is moved_data:
+                moved_item = item
+        tree.Expand(parent)
+        return moved_item
+
+    # --- Persistence helpers -------------------------------------------
+
+    def _is_tab_bar_row_at(self, listbox, index):
+        """True when ``index`` of ``listbox`` is the virtual tab bar row."""
+        try:
+            data = listbox.GetClientData(index)
+            return isinstance(data, dict) and data.get('type') == 'tab_bar'
+        except Exception:
+            return False
+
+    def _listbox_item_key(self, view_id, text, data):
+        """Stable persistence key for a list box item.
+
+        Apps use their ``shortname`` (survives renames/translations); every
+        other list falls back to the visible text.
+        """
+        if view_id == 'apps' and isinstance(data, dict):
+            shortname = data.get('shortname')
+            if shortname:
+                return f"app:{shortname}"
+            path = data.get('path')
+            if path:
+                return f"app:{os.path.basename(path)}"
+        return f"txt:{text}"
+
+    def _game_order_key(self, platform, game):
+        """Stable persistence key for a game (scoped to its platform)."""
+        return f"game:{platform}/{game.get('name', '')}"
+
+    def _apply_saved_order_to_listbox(self, view_id, listbox):
+        """Reorder an already-populated list box to match the saved order in
+        .index.TCG. Newly added items keep their default position at the end.
+        Safe to call whether or not the tab bar row is present yet."""
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_list_order(view_id)
+            if not saved:
+                return
+            start = 1 if (listbox.GetCount() > 0 and self._is_tab_bar_row_at(listbox, 0)) else 0
+            items = []
+            for i in range(start, listbox.GetCount()):
+                try:
+                    data = listbox.GetClientData(i)
+                except Exception:
+                    data = None
+                items.append((listbox.GetString(i), data))
+            ordered = list_order.apply_order(
+                saved, items,
+                lambda it: self._listbox_item_key(view_id, it[0], it[1]))
+            if ordered == items:
+                return
+            for i in range(listbox.GetCount() - 1, start - 1, -1):
+                listbox.Delete(i)
+            for text, data in ordered:
+                if data is None:
+                    listbox.Append(text)
+                else:
+                    listbox.Append(text, clientData=data)
+        except Exception as e:
+            print(f"[GUI] apply saved listbox order error: {e}")
+
+    def _persist_listbox_order(self, view, listbox):
+        """Save the current order of a list box (excluding the tab bar row)."""
+        try:
+            from src.titan_core import list_order
+            keys = []
+            for i in range(1, listbox.GetCount()):
+                try:
+                    data = listbox.GetClientData(i)
+                except Exception:
+                    data = None
+                keys.append(self._listbox_item_key(view['id'], listbox.GetString(i), data))
+            list_order.set_list_order(view['id'], keys)
+        except Exception as e:
+            print(f"[GUI] persist list order error: {e}")
+
+    def _persist_tree_order(self, view, tree):
+        """Save the current order of games in the tree (per platform)."""
+        try:
+            from src.titan_core import list_order
+            keys = []
+            root = tree.GetRootItem()
+            if not root.IsOk():
+                return
+            plat, pcookie = tree.GetFirstChild(root)
+            while plat.IsOk():
+                pdata = tree.GetItemData(plat)
+                if isinstance(pdata, dict) and pdata.get('type') == 'platform':
+                    pname = pdata.get('name', '')
+                    child, ccookie = tree.GetFirstChild(plat)
+                    while child.IsOk():
+                        cdata = tree.GetItemData(child)
+                        if isinstance(cdata, dict) and cdata.get('type') == 'game':
+                            keys.append(self._game_order_key(pname, cdata.get('data', {})))
+                        child, ccookie = tree.GetNextChild(plat, ccookie)
+                plat, pcookie = tree.GetNextChild(root, pcookie)
+            list_order.set_list_order(view['id'], keys)
+        except Exception as e:
+            print(f"[GUI] persist tree order error: {e}")
+
+    # --- Mouse drag-and-drop -------------------------------------------
+
+    def _enable_listbox_dnd(self, listbox):
+        """Bind the mouse handlers that let a list box item be dragged to a new
+        position."""
+        listbox.Bind(wx.EVT_LEFT_DOWN, lambda e, lb=listbox: self._on_listbox_left_down(e, lb))
+        listbox.Bind(wx.EVT_MOTION, lambda e, lb=listbox: self._on_listbox_motion(e, lb))
+        listbox.Bind(wx.EVT_LEFT_UP, lambda e, lb=listbox: self._on_listbox_left_up(e, lb))
+
+    def _on_listbox_left_down(self, event, listbox):
+        idx = listbox.HitTest(event.GetPosition())
+        self._lb_drag = None
+        # Index 0 is the virtual tab bar row and is not draggable.
+        if idx != wx.NOT_FOUND and idx > 0:
+            self._lb_drag = {
+                'listbox': listbox, 'from': idx, 'active': False,
+                'start': event.GetPosition(),
+            }
+        event.Skip()
+
+    def _on_listbox_motion(self, event, listbox):
+        drag = self._lb_drag
+        if drag and drag['listbox'] is listbox and event.Dragging() and event.LeftIsDown():
+            if not drag['active']:
+                start = drag['start']
+                now = event.GetPosition()
+                if abs(now.y - start.y) >= 6:
+                    drag['active'] = True
+                    try:
+                        play_sound('ui/drag.ogg')
+                    except Exception:
+                        pass
+        event.Skip()
+
+    def _on_listbox_left_up(self, event, listbox):
+        drag = self._lb_drag
+        self._lb_drag = None
+        if not drag or drag['listbox'] is not listbox or not drag['active']:
+            event.Skip()
+            return
+        target = listbox.HitTest(event.GetPosition())
+        if target == wx.NOT_FOUND or target <= 0 or target == drag['from']:
+            event.Skip()
+            return
+        # Consume the event (don't Skip) so the drop doesn't double as a click.
+        self._move_listbox_item_to(listbox, drag['from'], target)
+
+    def _enable_tree_dnd(self, tree):
+        """Bind the mouse handlers that let a game be dragged to a new position
+        within its platform."""
+        tree.Bind(wx.EVT_TREE_BEGIN_DRAG, self._on_tree_begin_drag)
+        tree.Bind(wx.EVT_TREE_END_DRAG, self._on_tree_end_drag)
+
+    def _on_tree_begin_drag(self, event):
+        tree = event.GetEventObject()
+        item = event.GetItem()
+        data = tree.GetItemData(item) if item.IsOk() else None
+        if isinstance(data, dict) and data.get('type') == 'game':
+            self._tree_drag_item = item
+            event.Allow()
+            try:
+                play_sound('ui/drag.ogg')
+            except Exception:
+                pass
+        else:
+            self._tree_drag_item = None  # only games are draggable
+
+    def _on_tree_end_drag(self, event):
+        tree = event.GetEventObject()
+        src = getattr(self, '_tree_drag_item', None)
+        self._tree_drag_item = None
+        if not src or not src.IsOk():
+            return
+        target = event.GetItem()
+        if not target.IsOk():
+            return
+        self._reorder_tree_game(tree, src, target)
+
+    def _reorder_tree_game(self, tree, src, target):
+        """Move game ``src`` next to ``target`` (or into ``target`` if it is a
+        platform node). Reordering only happens within a single platform."""
+        src_data = tree.GetItemData(src)
+        if not isinstance(src_data, dict) or src_data.get('type') != 'game':
+            return
+        tgt_data = tree.GetItemData(target)
+        src_parent = tree.GetItemParent(src)
+        if isinstance(tgt_data, dict) and tgt_data.get('type') == 'game':
+            tgt_parent = tree.GetItemParent(target)
+        elif isinstance(tgt_data, dict) and tgt_data.get('type') == 'platform':
+            tgt_parent = target
+        else:
+            return
+        if tgt_parent != src_parent:
+            return  # don't move games between platforms
+        siblings = []
+        child, cookie = tree.GetFirstChild(src_parent)
+        while child.IsOk():
+            siblings.append((tree.GetItemText(child), tree.GetItemData(child)))
+            child, cookie = tree.GetNextChild(src_parent, cookie)
+        src_i = next((i for i, (t, d) in enumerate(siblings) if d is src_data), -1)
+        if src_i < 0:
+            return
+        moved = siblings.pop(src_i)
+        if isinstance(tgt_data, dict) and tgt_data.get('type') == 'game':
+            tgt_i = next((i for i, (t, d) in enumerate(siblings) if d is tgt_data), len(siblings))
+            siblings.insert(tgt_i, moved)
+        else:
+            siblings.append(moved)  # dropped on the platform node — go to the end
+        moved_item = self._rebuild_tree_children(tree, src_parent, siblings, src_data)
+        if moved_item is not None:
+            self._skip_focus_sound = True
+            tree.SelectItem(moved_item)
+        try:
+            play_sound('ui/drop.ogg')
+        except Exception:
+            pass
+        vibrate_selection()
+        view = self._view_by_control(tree)
+        if view:
+            self._persist_tree_order(view, tree)
+
     def _add_toolbar_tool(self, view):
         """Add a toolbar button for a registered view (built-in or component).
 
@@ -2327,10 +2946,25 @@ class TitanApp(wx.Frame):
             except Exception as e:
                 print(f"[GUI] Could not bind listbox handler for view '{view_id}': {e}")
 
-        # Add a toolbar button for this component view
+        # Enable drag-and-drop reordering (Ctrl+Up/Down + mouse) for the
+        # component's control, same as the built-in views.
         try:
-            self._add_toolbar_tool(view_entry)
-            self.toolbar.Realize()
+            if isinstance(control, wx.ListBox):
+                self._enable_listbox_dnd(control)
+            elif isinstance(control, wx.TreeCtrl):
+                self._enable_tree_dnd(control)
+        except Exception as e:
+            print(f"[GUI] Could not enable drag-and-drop for view '{view_id}': {e}")
+
+        # Honor the user's saved tab bar card order: a component reordered in a
+        # previous session should re-appear in its saved slot, not its default
+        # registration position.
+        self._apply_saved_tab_bar_order()
+
+        # Rebuild the toolbar so its buttons match the (possibly reordered)
+        # view list — this also adds the button for the new component view.
+        try:
+            self._rebuild_view_toolbar()
         except Exception as e:
             print(f"[GUI] Error adding toolbar button for view '{view_id}': {e}")
 
@@ -3510,7 +4144,9 @@ class TitanApp(wx.Frame):
             except Exception as _e:
                 print(f"[GUI] IM modules: {_e}")
 
-        # Virtual tab bar row is always the first item
+        # Restore the user's saved drag-and-drop order, then prepend the
+        # virtual tab bar row as the first item.
+        self._apply_saved_order_to_listbox('network', self.network_listbox)
         self._inject_tab_bar_into_listbox(self.network_listbox)
 
     def on_toggle_list(self):
@@ -3914,7 +4550,7 @@ class TitanApp(wx.Frame):
             self.populate_app_list()
             self.populate_game_list()
             self.apply_selected_skin()
-            self.show_app_list()
+            self._show_first_view()
             self.start_minimized = False  # Mark as no longer in minimized startup state
         
         self.Show()

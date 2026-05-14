@@ -1,0 +1,12 @@
+koncepcja przeciągnij i upuść
+w gui. 
+jeśli jestem na pasku kart, klawisz spacja zaczyna przeciąganie danej karty, kiedy już jestem w dobrej pozycji, to jest na dobrym miejscu, żeby upuścić kartę, wtedy upuszcza daną kartę na daną pozycję
+dźwięki: 
+ui/drag.ogg
+ui/drop.ogg
+na liście, aplikacji, gier, titan IM, etc, control strzałka w górę, w dół przenosi daną listę o jeden wiersz w górę, lub w dół, dźwięk drop.ogg
+pozycje mają być zapisane na stałę, w pliku, może być nawet jakaś ikona, w katalogu konfiguracyjnym TCE, np. .index.TCG
+przeciąganie i upuszczanie myszką też powinno działać
+dźwięki odpowiednio
+ui/drag
+ui/drop

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-12 11:46+0200\n"
+"POT-Creation-Date: 2026-05-14 12:48+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,40 +18,41 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/system/notifications.py:142
+#: src/system/notifications.py:145
 msgid "Not connected, no WiFi networks available"
 msgstr "Not connected, no WiFi networks available"
 
-#: src/system/notifications.py:144 src/system/notifications.py:145
-#: src/system/notifications.py:166 src/system/notifications.py:182
-#: src/system/notifications.py:196 src/system/notifications.py:199
-#: src/system/notifications.py:210 src/system/notifications.py:216
-#: src/system/notifications.py:218
+#: src/system/notifications.py:147 src/system/notifications.py:148
+#: src/system/notifications.py:169 src/system/notifications.py:185
+#: src/system/notifications.py:199 src/system/notifications.py:202
+#: src/system/notifications.py:213 src/system/notifications.py:219
+#: src/system/notifications.py:221
 msgid "Unknown"
 msgstr "Unknown"
 
-#: src/system/notifications.py:152 src/system/notifications.py:167
-#: src/system/notifications.py:183 src/system/notifications.py:211
+#: src/system/notifications.py:155 src/system/notifications.py:170
+#: src/system/notifications.py:186 src/system/notifications.py:214
 #, python-brace-format
 msgid "Connected to {ssid}, signal strength: {signal}"
 msgstr "Connected to {ssid}, signal strength: {signal}"
 
-#: src/system/notifications.py:154
+#: src/system/notifications.py:157
 msgid "Not connected, WiFi networks available"
 msgstr "Not connected, WiFi networks available"
 
-#: src/system/notifications.py:165
+#: src/system/notifications.py:168
 msgid "Hidden Network"
 msgstr "Hidden Network"
 
-#: src/system/notifications.py:192
+#: src/system/notifications.py:195
 msgid "Connected to network (ethernet or WiFi)"
 msgstr "Connected to network (ethernet or WiFi)"
 
-#: src/system/notifications.py:194
+#: src/system/notifications.py:197
 msgid "Not connected to network"
 msgstr "Not connected to network"
 
-#: src/system/notifications.py:213
+#: src/system/notifications.py:216
 msgid "Not connected to WiFi"
 msgstr "Not connected to WiFi"
+

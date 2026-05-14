@@ -1161,6 +1161,12 @@ class InvisibleUI:
         try:
             self.debug_log.append("DEBUG: Getting applications...")
             apps_data = get_applications()
+            # Honor the user's saved drag-and-drop order from .index.TCG
+            try:
+                from src.titan_core import list_order
+                apps_data = list_order.order_apps(apps_data)
+            except Exception as _e:
+                self.debug_log.append(f"DEBUG: app order skipped: {_e}")
             self.debug_log.append(f"DEBUG: Apps data type: {type(apps_data)}, first item: {apps_data[0] if apps_data else 'empty'}")
             apps = [app['name'] for app in apps_data]
             self.debug_log.append(f"DEBUG: Apps list created successfully")
@@ -1190,8 +1196,15 @@ class InvisibleUI:
                 if platform in games_by_platform and games_by_platform[platform]:
                     platform_name = _(platform)
                     platform_names.append(platform_name)
+                    # Honor the user's saved drag-and-drop order from .index.TCG
+                    platform_game_data = games_by_platform[platform]
+                    try:
+                        from src.titan_core import list_order
+                        platform_game_data = list_order.order_games(platform, platform_game_data)
+                    except Exception as _e:
+                        self.debug_log.append(f"DEBUG: game order skipped: {_e}")
                     # Create subcategory for this platform
-                    platform_games = [game['name'] for game in games_by_platform[platform]]
+                    platform_games = [game['name'] for game in platform_game_data]
                     self.games_platform_subcategories[platform_name] = {
                         "name": platform_name,
                         "sound": "core/focus.ogg",
@@ -1377,6 +1390,13 @@ class InvisibleUI:
         except Exception as _e:
             print(f"[IUI] IM modules: {_e}")
 
+        # Honor the user's saved drag-and-drop order from .index.TCG
+        try:
+            from src.titan_core import list_order
+            titan_im_elements = list_order.order_texts('network', titan_im_elements)
+        except Exception as _e:
+            print(f"[IUI] Titan IM order skipped: {_e}")
+
         if not titan_im_elements:
             titan_im_elements = [_("No IM clients available")]
 
@@ -1429,6 +1449,35 @@ class InvisibleUI:
         for view in self._registered_views:
             self.categories.append(view)
 
+        # Honor the user's saved tab bar card order from .index.TCG
+        self._apply_saved_category_order()
+
+    def _category_view_id(self, category):
+        """Return the GUI tab bar view id matching an IUI category, or None.
+
+        Categories with no GUI equivalent (Widgets, Status Bar, Menu,
+        Components) return None and keep their fixed position.
+        """
+        vid = category.get("_view_id")
+        if vid:
+            return vid
+        name = category.get("name", "")
+        if name == _("Applications"):
+            return "apps"
+        if name == _("Games"):
+            return "games"
+        if name == _("Titan IM"):
+            return "network"
+        return None
+
+    def _apply_saved_category_order(self):
+        """Reorder ``self.categories`` to match the saved tab bar card order."""
+        try:
+            from src.titan_core import list_order
+            self.categories = list_order.order_categories(
+                self.categories, self._category_view_id)
+        except Exception as e:
+            print(f"[IUI] apply saved category order error: {e}")
 
     def register_view(self, view_id, label, elements_func, action_func, sound="core/focus.ogg", position='after_network'):
         """Register a component view as a navigable IUI category.
@@ -1462,6 +1511,8 @@ class InvisibleUI:
             else:
                 idx = len(self.categories)
             self.categories.insert(idx, category)
+            # Honor the user's saved tab bar card order from .index.TCG
+            self._apply_saved_category_order()
 
     def refresh_registered_view(self, view_id):
         """Refresh elements of a registered view by re-calling its elements_func."""
