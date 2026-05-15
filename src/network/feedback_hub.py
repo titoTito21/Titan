@@ -774,6 +774,25 @@ class FeedbackHubFrame(wx.Frame):
         self.items_cache: List[Dict] = []
         self._last_focus_idx: int = -1
 
+        # Mutable tab order - starts as the canonical FEEDBACK_TABS layout
+        # but can be reordered by the user via Space-on-tab-bar drag (see
+        # TabBarDragController below). Persisted under
+        # ``feedback_hub:tab_bar_order`` in .index.TCG (same file the main
+        # GUI uses for its tab bar order).
+        self.tab_order: List[str] = [tab_id for tab_id, _label in FEEDBACK_TABS]
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_list_order('feedback_hub:tab_bar_order')
+            if saved:
+                known = set(self.tab_order)
+                ordered = [tid for tid in saved if tid in known]
+                for tid in self.tab_order:
+                    if tid not in ordered:
+                        ordered.append(tid)
+                self.tab_order = ordered
+        except Exception:
+            pass
+
         self._build()
         self.Centre()
         self.Bind(wx.EVT_CLOSE, self._on_close)
@@ -826,6 +845,56 @@ class FeedbackHubFrame(wx.Frame):
         self.listbox.Bind(wx.EVT_LISTBOX, self._on_select)
         self.listbox.Bind(wx.EVT_LISTBOX_DCLICK, self._on_activate)
         sizer.Add(self.listbox, proportion=1, flag=wx.EXPAND | wx.ALL, border=8)
+
+        # Drag-and-drop reordering on the feedback list. Row 0 is the
+        # virtual tab bar (Feedback / Ideas) and is never moveable -
+        # has_tab_bar=True keeps it pinned at index 0. Real items below
+        # the tab bar can be reordered (per-tab persistence), so each user
+        # can keep their personally most-relevant items at the top.
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd
+
+            def _feedback_key(_idx, text, data):
+                tab = getattr(self, 'current_tab', '')
+                if isinstance(data, dict):
+                    item_id = data.get('id') or data.get('item_id')
+                    if item_id is not None:
+                        return f"feedback:{tab}:id:{item_id}"
+                return f"feedback:{tab}:txt:{text}"
+
+            self._listbox_dnd = attach_listbox_dnd(
+                self.listbox,
+                view_id='feedback_hub',
+                has_tab_bar=True,
+                item_key_func=_feedback_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[FEEDBACK HUB] DnD setup error: {exc}")
+
+        # Space-on-tab-bar drag (matches main TitanApp): Space picks up
+        # the current tab card, Left/Right moves it, Space drops, Escape
+        # cancels. Persists ``self.tab_order`` to .index.TCG.
+        try:
+            from src.titan_core.tab_bar_helper import TabBarDragController
+
+            def _swap_tabs(a, b):
+                self.tab_order[a], self.tab_order[b] = (
+                    self.tab_order[b], self.tab_order[a])
+
+            self._tab_drag = TabBarDragController(
+                control=self.listbox,
+                get_current_index=lambda: self._tab_index(self.current_tab),
+                get_tab_count=lambda: len(self.tab_order),
+                get_tab_label=lambda i: self._tab_label_for(self.tab_order[i]),
+                swap=_swap_tabs,
+                refresh=lambda: self._refresh_items(announce=False),
+                is_on_tab_bar=lambda: self._is_tab_bar_row(self.listbox.GetSelection()),
+                view_id='feedback_hub:tab_bar_order',
+                get_tab_keys=lambda: list(self.tab_order),
+            )
+        except Exception as exc:
+            print(f"[FEEDBACK HUB] tab bar drag setup error: {exc}")
 
         self.CreateStatusBar()
         self.panel.SetSizer(sizer)
@@ -932,16 +1001,25 @@ class FeedbackHubFrame(wx.Frame):
 
     # ---- List management --------------------------------------------------
 
+    def _tab_label_for(self, tab_id: str) -> str:
+        for tid, label_fn in FEEDBACK_TABS:
+            if tid == tab_id:
+                return label_fn()
+        return tab_id
+
     def _tab_index(self, key: str) -> int:
-        for i, (tab_key, _label) in enumerate(FEEDBACK_TABS):
-            if tab_key == key:
-                return i
-        return 0
+        # Look up against the user-reorderable tab_order, not the static
+        # FEEDBACK_TABS, so position numbers ("1 of 2", "2 of 2") match
+        # the displayed cycle order after a Space-drag reorder.
+        try:
+            return self.tab_order.index(key)
+        except ValueError:
+            return 0
 
     def _tab_bar_text(self) -> str:
         idx = self._tab_index(self.current_tab)
-        label = FEEDBACK_TABS[idx][1]()
-        return _("{}, {} of {}").format(label, idx + 1, len(FEEDBACK_TABS))
+        label = self._tab_label_for(self.current_tab)
+        return _("{}, {} of {}").format(label, idx + 1, len(self.tab_order))
 
     def _is_tab_bar_row(self, idx: int) -> bool:
         """Row 0 is the virtual tab bar - identified by its clientData marker."""
@@ -1010,19 +1088,19 @@ class FeedbackHubFrame(wx.Frame):
         # parameter so callers can still flag a real semantic change later.
 
     def _update_status_bar(self):
-        label = FEEDBACK_TABS[self._tab_index(self.current_tab)][1]()
+        label = self._tab_label_for(self.current_tab)
         self.SetStatusText(_("{tab}: {n} entries").format(tab=label, n=len(self.items_cache)))
 
     def _cycle_tab(self, direction: int):
         idx = self._tab_index(self.current_tab)
         new_idx = idx + direction
-        if new_idx < 0 or new_idx >= len(FEEDBACK_TABS):
+        if new_idx < 0 or new_idx >= len(self.tab_order):
             try:
                 play_sound('ui/endoftapbar.ogg')
             except Exception:
                 pass
             return
-        self.current_tab = FEEDBACK_TABS[new_idx][0]
+        self.current_tab = self.tab_order[new_idx]
         try:
             play_sound('ui/switch_list.ogg')
         except Exception:

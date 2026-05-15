@@ -3040,12 +3040,43 @@ class TeamTalkFrame:
         self._last_tree_rebuild = 0.0
         self.connected_announced = False
         self.focus_tree_after_login = False
+        # Suppresses focus sound + status updates while we restore the
+        # tree selection during a programmatic rebuild. Without this,
+        # every server-triggered refresh re-fires on_tree_selected and
+        # the screen reader announces the same item the user is already
+        # parked on, which feels like the cursor jumping.
+        self._suppress_tree_select_event = False
 
         # PM windows by user id
         self.pm_windows = {}
 
         # Right-pane tab bar
         self.current_tab = TAB_CHAT
+        # Mutable cycle order for the tab bar (Space-on-tab-bar drag).
+        # Defaults to the canonical TAB_* sequence; reload any saved user
+        # ordering from .index.TCG so reorders survive restarts. The
+        # semantic meaning of each TAB_* constant doesn't change - this
+        # only affects the order Left/Right and Ctrl+Tab cycle through.
+        self.tab_order = [TAB_CHAT, TAB_LOG, TAB_PM, TAB_FILES, TAB_MEDIA, TAB_ADMIN]
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_list_order('teamtalk:tab_bar_order')
+            if saved:
+                known = set(self.tab_order)
+                ordered = []
+                for raw in saved:
+                    try:
+                        tid = int(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    if tid in known and tid not in ordered:
+                        ordered.append(tid)
+                for tid in self.tab_order:
+                    if tid not in ordered:
+                        ordered.append(tid)
+                self.tab_order = ordered
+        except Exception:
+            pass
         self.chat_messages = []  # list of (sender, text, time_str)
         self.log_entries = []  # list of (text, time_str)
         self.pm_threads = {}  # user_id -> {"nick": str, "last": str, "time": str}
@@ -3160,6 +3191,27 @@ class TeamTalkFrame:
         self.profile_list.Bind(wx.EVT_CHAR, self.on_profile_key)
         sizer.Add(self.profile_list, 1, wx.EXPAND | wx.ALL, 8)
 
+        # Drag-and-drop reordering for the saved server list. Same earcons
+        # and persistence path (.index.TCG via list_order) as the main TCE
+        # GUI lists - Ctrl+Up / Ctrl+Down or mouse drag. No tab bar on this
+        # list, so every row is movable.
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd
+
+            def _profile_key(_idx, text, _data):
+                return f"teamtalk:profile:{text}"
+
+            attach_listbox_dnd(
+                self.profile_list,
+                view_id='teamtalk:profiles',
+                has_tab_bar=False,
+                item_key_func=_profile_key,
+                on_reorder=self._on_profiles_reordered,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[TeamTalk] profile DnD setup error: {exc}")
+
         button_row = wx.BoxSizer(wx.HORIZONTAL)
         self.connect_btn = wx.Button(panel, label=_t("Connect"))
         self.add_btn = wx.Button(panel, label=_t("Add"))
@@ -3254,6 +3306,43 @@ class TeamTalkFrame:
         self.right_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_right_selected)
         self.right_list.Bind(wx.EVT_KEY_DOWN, self._on_right_key)
         right_sizer.Add(self.right_list, 1, wx.EXPAND | wx.ALL, 6)
+
+        # Space-on-tab-bar drag (matches main TitanApp): Space picks up
+        # the current tab card on row 0, Left/Right moves it, Space drops,
+        # Escape cancels. Persists self.tab_order to .index.TCG so the
+        # user's preferred cycle order survives restarts.
+        try:
+            from src.titan_core.tab_bar_helper import TabBarDragController
+
+            def _swap_tt_tabs(a, b):
+                self.tab_order[a], self.tab_order[b] = (
+                    self.tab_order[b], self.tab_order[a])
+
+            def _tt_current_pos():
+                try:
+                    return self.tab_order.index(self.current_tab)
+                except ValueError:
+                    return 0
+
+            def _tt_label(slot):
+                tid = self.tab_order[slot]
+                labels = self._tab_labels()
+                return labels[tid] if 0 <= tid < len(labels) else ""
+
+            self._tab_drag = TabBarDragController(
+                control=self.right_list,
+                get_current_index=_tt_current_pos,
+                get_tab_count=lambda: len(self.tab_order),
+                get_tab_label=_tt_label,
+                swap=_swap_tt_tabs,
+                refresh=lambda: self._refresh_right_list(announce_tab_bar=True),
+                is_on_tab_bar=lambda: self._is_tab_bar_row(
+                    self.right_list.GetFirstSelected()),
+                view_id='teamtalk:tab_bar_order',
+                get_tab_keys=lambda: [str(t) for t in self.tab_order],
+            )
+        except Exception as exc:
+            print(f"[TeamTalk] tab bar drag setup error: {exc}")
 
         send_row = wx.BoxSizer(wx.HORIZONTAL)
         self.message_input = wx.TextCtrl(right, style=wx.TE_PROCESS_ENTER)
@@ -3452,14 +3541,63 @@ class TeamTalkFrame:
             self.config["last_profile"] = self.current_profile.get("entry_name", "")
         return bool(save_teamtalk_config(self.config))
 
+    def _profile_display_text(self, profile):
+        """Build the visible "entry - host:port[ TLS][  channel]" line.
+
+        Used by both the initial population in :meth:`_refresh_profiles` and
+        by :meth:`_on_profiles_reordered` to map the listbox entries back
+        onto the underlying profile dicts after a drag-and-drop reorder.
+        """
+        encrypted = " TLS" if profile.get("encrypted") else ""
+        channel = f"  {profile['channel']}" if profile.get("channel") else ""
+        return (
+            f"{profile['entry_name']} - {profile['host']}:{profile['tcpport']}"
+            f"{encrypted}{channel}"
+        )
+
+    def _on_profiles_reordered(self, _new_keys):
+        """Rebuild ``self.profiles`` to match the listbox after a DnD move.
+
+        The shared list_dnd helper has already updated the wx.ListBox; this
+        callback walks its current order and reshuffles ``self.profiles``
+        the same way, then persists the change so the new order survives a
+        restart.
+        """
+        try:
+            displayed = [
+                self.profile_list.GetString(i)
+                for i in range(self.profile_list.GetCount())
+            ]
+            text_to_profile = {
+                self._profile_display_text(p): p for p in self.profiles
+            }
+            new_profiles = [text_to_profile[t] for t in displayed if t in text_to_profile]
+            for p in self.profiles:
+                if p not in new_profiles:
+                    new_profiles.append(p)
+            self.profiles = new_profiles
+            self._save()
+        except Exception as exc:
+            print(f"[TeamTalk] profile reorder persist error: {exc}")
+
     def _refresh_profiles(self):
+        # Apply the user's saved drag-and-drop order from .index.TCG before
+        # populating the listbox, so reorders survive a restart. New
+        # profiles (not yet in the saved order) keep their default position
+        # at the end - same behaviour as the main TCE GUI's app/game lists.
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_list_order('teamtalk:profiles')
+            if saved:
+                self.profiles = list_order.apply_order(
+                    saved, self.profiles,
+                    lambda p: f"teamtalk:profile:{self._profile_display_text(p)}",
+                )
+        except Exception:
+            pass
         self.profile_list.Clear()
         for profile in self.profiles:
-            encrypted = " TLS" if profile.get("encrypted") else ""
-            channel = f"  {profile['channel']}" if profile.get("channel") else ""
-            self.profile_list.Append(
-                f"{profile['entry_name']} - {profile['host']}:{profile['tcpport']}{encrypted}{channel}"
-            )
+            self.profile_list.Append(self._profile_display_text(profile))
         if self.profiles:
             index = 0
             last = self.config.get("last_profile")
@@ -3792,13 +3930,14 @@ class TeamTalkFrame:
             )
         )
         # Blind users won't hunt for the tree with a mouse, so we *force*
-        # focus onto the channel tree. wxPython needs the panel switch to
-        # finish first - schedule a delayed second SetFocus so the layout
-        # has settled and the tree is visible. Re-run a few times to cover
-        # the case where channel data arrives slightly after CMD_LOGGEDIN.
+        # focus onto the channel tree once, right after the panel switch
+        # has settled. The late-arrival case (channels still trickling in
+        # after CMD_LOGGEDIN) is handled by _populate_channel_tree, which
+        # re-consumes focus_tree_after_login on the next populated rebuild
+        # - so we do not retry from here. A second retry chain used to
+        # steal focus 800 ms later if the user had already navigated to a
+        # different widget.
         self.wx.CallAfter(self._focus_channel_tree)
-        for delay in (120, 350, 800):
-            self.wx.CallLater(delay, self._focus_channel_tree)
         # Lift the presence-sound guard once any tail-end CMD_USER_LOGGEDIN
         # from the initial roster dump has had a chance to land.
         self.wx.CallLater(800, self._lift_presence_guard)
@@ -4183,11 +4322,19 @@ class TeamTalkFrame:
         if target is None and self.channel_items:
             target = next(iter(self.channel_items.values()))
         if target is not None:
+            # Restoring the selection programmatically fires
+            # EVT_TREE_SEL_CHANGED on every rebuild. Silence the handler
+            # for the duration so blind users do not hear the focus
+            # sound and a re-announcement of an item they never moved
+            # off of.
+            self._suppress_tree_select_event = True
             try:
                 tree.SelectItem(target)
                 tree.EnsureVisible(target)
             except Exception:
                 pass
+            finally:
+                self._suppress_tree_select_event = False
 
         # Only consume focus_tree_after_login once the tree actually has
         # something to show. On encrypted / slow servers the first
@@ -4222,6 +4369,13 @@ class TeamTalkFrame:
         return {"kind": "", "id": 0}
 
     def on_tree_selected(self, event):
+        # Programmatic SelectItem during a tree rebuild also fires
+        # EVT_TREE_SEL_CHANGED. Without this guard every server-triggered
+        # refresh would re-play the focus sound and re-announce the
+        # currently selected item, which a screen-reader user perceives
+        # as the cursor jumping even though nothing actually moved.
+        if self._suppress_tree_select_event:
+            return
         item = event.GetItem()
         data = self._get_tree_data(item)
         snd = _sounds()
@@ -4897,11 +5051,18 @@ class TeamTalkFrame:
 
     def _tab_bar_text(self):
         labels = self._tab_labels()
-        idx = self.current_tab
-        if not (0 <= idx < len(labels)):
-            idx = TAB_CHAT
+        # Position number reflects the user's reordered cycle (self.tab_order),
+        # not the raw TAB_* constant - so "PM, 1 of 6" reads correctly after
+        # the user has dragged PM to the start of the bar.
+        try:
+            pos = self.tab_order.index(self.current_tab)
+        except ValueError:
+            pos = 0
+        tab_id = self.current_tab
+        if not (0 <= tab_id < len(labels)):
+            tab_id = TAB_CHAT
         return _t("{label}, {n} of {total}").format(
-            label=labels[idx], n=idx + 1, total=len(labels)
+            label=labels[tab_id], n=pos + 1, total=len(self.tab_order)
         )
 
     def _is_tab_bar_row(self, idx):
@@ -4914,17 +5075,32 @@ class TeamTalkFrame:
         return data == 1  # tab-bar marker
 
     def _cycle_tab(self, direction):
-        new_tab = self.current_tab + direction
-        if new_tab < TAB_FIRST or new_tab > TAB_LAST:
-            _play_sound("ui/endoftapbar.ogg")
+        # Cycle through self.tab_order (the user-reorderable sequence)
+        # rather than the raw TAB_* enum so a Space-drag reorder actually
+        # changes which tab Left/Right or Ctrl+Tab moves to next.
+        try:
+            pos = self.tab_order.index(self.current_tab)
+        except ValueError:
+            pos = 0
+        new_pos = pos + direction
+        if new_pos < 0 or new_pos >= len(self.tab_order):
+            try:
+                from src.titan_core.tab_bar_helper import play_tab_bar_edge
+                play_tab_bar_edge()
+            except Exception:
+                _play_sound("ui/endoftapbar.ogg")
             return
-        self._set_tab(new_tab, play_switch_sound=True)
+        self._set_tab(self.tab_order[new_pos], play_switch_sound=True)
 
     def _set_tab(self, tab, play_switch_sound=False):
         if not (TAB_FIRST <= tab <= TAB_LAST):
             return
         if play_switch_sound and tab != self.current_tab:
-            _play_sound("ui/switch_list.ogg")
+            try:
+                from src.titan_core.tab_bar_helper import play_tab_switch
+                play_tab_switch()
+            except Exception:
+                _play_sound("ui/switch_list.ogg")
         self.current_tab = tab
         self.right_label.SetLabel(self._right_label_for_tab())
         self._refresh_right_list(announce_tab_bar=True)
@@ -5004,12 +5180,35 @@ class TeamTalkFrame:
         except Exception:
             pass
         if announce_tab_bar:
-            _play_sound("ui/tapbar.ogg")
+            # Play the tab-bar focus earcon - the row 0 text itself reads
+            # "<tab>, N of M" natively so no extra spoken announcement is
+            # needed here (the focus event triggered by Select(0) above
+            # invokes _on_right_selected which schedules the SR tip).
+            try:
+                from src.titan_core.tab_bar_helper import play_tab_bar_focus_sound
+                play_tab_bar_focus_sound()
+            except Exception:
+                _play_sound("ui/tapbar.ogg")
 
     def _on_right_selected(self, event):
         idx = event.GetIndex()
         if self._is_tab_bar_row(idx):
+            # Selection landed on the virtual tab bar row - play the same
+            # earcon, "Tab bar" SR announcement and 4-second tip as the
+            # main TCE GUI does for its row-0 tab bar. Without this, arrow-
+            # navigating up onto row 0 produced no audio or speech feedback.
+            try:
+                from src.titan_core.tab_bar_helper import announce_tab_bar_focus
+                announce_tab_bar_focus()
+            except Exception:
+                _play_sound("ui/tapbar.ogg")
             return
+        # Selection moved off the tab bar row - cancel any pending tip.
+        try:
+            from src.titan_core.tab_bar_helper import cancel_tab_bar_tip
+            cancel_tab_bar_tip()
+        except Exception:
+            pass
         snd = _sounds()
         if snd:
             try:

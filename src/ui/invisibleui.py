@@ -1608,32 +1608,47 @@ class InvisibleUI:
     def get_statusbar_items(self):
         # Import here to avoid circular imports
         from src.ui.gui import get_current_time, get_battery_status, get_volume_level, get_network_status
-        
-        # If GUI is initialized, get from statusbar_listbox
+
+        # If GUI is initialized, get from statusbar_listbox - the listbox
+        # already honours the user's saved drag-and-drop order from
+        # .index.TCG (applied by populate_statusbar in TitanApp).
         if self.main_frame and hasattr(self.main_frame, 'statusbar_listbox'):
             return [self.main_frame.statusbar_listbox.GetString(i) for i in range(self.main_frame.statusbar_listbox.GetCount())]
-        
-        # Otherwise, generate status items directly (for minimized mode)
+
+        # Otherwise, generate status items directly (for minimized mode).
+        # Carry stable keys with each row and apply the same saved DnD
+        # order via list_order so the invisible UI reads slots in the
+        # exact sequence the GUI shows them in.
         try:
             battery = get_battery_status()
-            items = [
-                _("Clock: {}").format(get_current_time()),
+            keyed_items = [
+                ('time', _("Clock: {}").format(get_current_time())),
             ]
             if battery is not None:
-                items.append(_("Battery level: {}").format(battery))
-            items.append(_("Volume: {}").format(get_volume_level()))
-            items.append(get_network_status())
+                keyed_items.append(
+                    ('battery', _("Battery level: {}").format(battery)))
+            keyed_items.append(
+                ('volume', _("Volume: {}").format(get_volume_level())))
+            keyed_items.append(('network', get_network_status()))
 
-            # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
                 for applet_name in self.statusbar_applet_manager.get_applet_names():
                     try:
                         text = self.statusbar_applet_manager.get_applet_text(applet_name)
-                        items.append(text)
+                        keyed_items.append((f'applet:{applet_name}', text))
                     except Exception as e:
                         print(f"Error getting statusbar applet '{applet_name}': {e}")
 
-            return items
+            try:
+                from src.titan_core import list_order
+                saved = list_order.get_list_order('statusbar:items')
+                if saved:
+                    keyed_items = list_order.apply_order(
+                        saved, keyed_items, lambda it: it[0])
+            except Exception:
+                pass
+
+            return [text for _key, text in keyed_items]
         except Exception as e:
             print(f"Error getting status bar items: {e}")
             return [_("No status bar data")]

@@ -222,6 +222,33 @@ class TelegramChatWindow(wx.Frame):
         self.main_list.Bind(wx.EVT_RIGHT_DOWN, self.on_right_click)
         sizer.Add(self.main_list, 1, wx.EXPAND | wx.ALL, 10)
 
+        # Drag-and-drop reordering on the main list - every row in every
+        # view is movable (Ctrl+Up / Ctrl+Down or mouse drag), same
+        # earcons and .index.TCG persistence as the main TCE GUI lists.
+        # view_id is a callable: each Telegram view (menu / contacts /
+        # groups / ...) persists under its own key in .index.TCG so the
+        # reorders don't overwrite each other when the user navigates
+        # between views.
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd
+
+            def _telegram_view_id():
+                return f"telegram:{self.current_view}"
+
+            def _telegram_key(_idx, text, _data):
+                return f"txt:{text}"
+
+            self._main_list_dnd = attach_listbox_dnd(
+                self.main_list,
+                view_id=_telegram_view_id,
+                has_tab_bar=False,
+                item_key_func=_telegram_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[TELEGRAM GUI] DnD setup error: {exc}")
+            self._main_list_dnd = None
+
         panel.SetSizer(sizer)
 
         # Menu bar
@@ -262,8 +289,12 @@ class TelegramChatWindow(wx.Frame):
 
         self.main_list.Append(_("Contacts"))
         self.main_list.Append(_("Groups"))
-        self.main_list.Append(_("Settings"))
         self.main_list.Append(_("Disconnect"))
+
+        # Honour saved drag-and-drop order from .index.TCG so the menu
+        # rearranges to match the user's previous session.
+        if self._main_list_dnd is not None:
+            self._main_list_dnd.apply_saved_order()
 
         if self.main_list.GetCount() > 0:
             self.main_list.SetSelection(0)
@@ -292,6 +323,9 @@ class TelegramChatWindow(wx.Frame):
 
         self.main_list.Append(_("Back"))
 
+        if self._main_list_dnd is not None:
+            self._main_list_dnd.apply_saved_order()
+
         if self.main_list.GetCount() > 0:
             self.main_list.SetSelection(0)
             self.main_list.SetFocus()
@@ -313,6 +347,9 @@ class TelegramChatWindow(wx.Frame):
             self.main_list.Append(group_name)
 
         self.main_list.Append(_("Back"))
+
+        if self._main_list_dnd is not None:
+            self._main_list_dnd.apply_saved_order()
 
         if self.main_list.GetCount() > 0:
             self.main_list.SetSelection(0)
@@ -439,8 +476,6 @@ class TelegramChatWindow(wx.Frame):
                 self.show_contacts_view()
             elif selected_text == _("Groups"):
                 self.show_groups_view()
-            elif selected_text == _("Settings"):
-                _show_skinned_info_dialog(self, _("Information"), _("Settings - coming soon"))
             elif selected_text == _("Disconnect"):
                 self.on_disconnect(None)
 

@@ -331,18 +331,25 @@ class KlangoMode:
             self.main_menu[5]["items"] = []
     
     def load_status_bar_items(self):
-        """Load status bar items with same names as GUI but console actions."""
+        """Load status bar items with same names as GUI but console actions.
+
+        Honors the user's saved drag-and-drop order from .index.TCG so the
+        Klango submenu reads the slots in the exact sequence the GUI shows
+        them in. Each item carries a stable ``_sb_key`` (time / battery /
+        volume / network / applet:<name>) used by list_order to resolve the
+        saved sequence.
+        """
         try:
             from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 
             battery = get_battery_status()
             status_items = [
-                {"name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.announce_time},
+                {"_sb_key": "time", "name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.announce_time},
             ]
             if battery is not None:
-                status_items.append({"name": _("Battery level: {}").format(battery), "type": "action", "action": self.announce_battery})
-            status_items.append({"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.announce_volume})
-            status_items.append({"name": get_network_status(), "type": "action", "action": self.announce_network})
+                status_items.append({"_sb_key": "battery", "name": _("Battery level: {}").format(battery), "type": "action", "action": self.announce_battery})
+            status_items.append({"_sb_key": "volume", "name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.announce_volume})
+            status_items.append({"_sb_key": "network", "name": get_network_status(), "type": "action", "action": self.announce_network})
 
             # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
@@ -351,12 +358,24 @@ class KlangoMode:
                         applet_info = self.statusbar_applet_manager.applets[applet_name]['info']
                         display_name = applet_info['name']
                         status_items.append({
+                            "_sb_key": f"applet:{applet_name}",
                             "name": display_name,
                             "type": "action",
                             "action": lambda n=applet_name: self.activate_statusbar_applet(n)
                         })
                     except Exception as e:
                         print(f"Error loading statusbar applet '{applet_name}': {e}")
+
+            # Apply the saved DnD order from list_order (.index.TCG) so a
+            # reorder done in the GUI is reflected here too.
+            try:
+                from src.titan_core import list_order
+                saved = list_order.get_list_order('statusbar:items')
+                if saved:
+                    status_items = list_order.apply_order(
+                        saved, status_items, lambda it: it.get("_sb_key", ""))
+            except Exception:
+                pass
 
             # Update Status Bar submenu (index 3 in main menu)
             self.main_menu[3]["items"] = status_items
@@ -1466,18 +1485,22 @@ class KlangoFrame(wx.Frame):
             self.main_menu[5]["items"] = []
     
     def load_status_bar_items(self):
-        """Load status bar items like IUI using GUI functions."""
+        """Load status bar items like IUI using GUI functions.
+
+        Honors the user's saved drag-and-drop order from .index.TCG so the
+        Klango submenu reads the slots in the same sequence as the GUI.
+        """
         try:
             from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 
             battery = get_battery_status()
             status_items = [
-                {"name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.gui_open_time_settings},
+                {"_sb_key": "time", "name": _("Clock: {}").format(get_current_time()), "type": "action", "action": self.gui_open_time_settings},
             ]
             if battery is not None:
-                status_items.append({"name": _("Battery level: {}").format(battery), "type": "action", "action": self.gui_open_power_settings})
-            status_items.append({"name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.gui_open_volume_mixer})
-            status_items.append({"name": get_network_status(), "type": "action", "action": self.gui_open_network_settings})
+                status_items.append({"_sb_key": "battery", "name": _("Battery level: {}").format(battery), "type": "action", "action": self.gui_open_power_settings})
+            status_items.append({"_sb_key": "volume", "name": _("Volume: {}").format(get_volume_level()), "type": "action", "action": self.gui_open_volume_mixer})
+            status_items.append({"_sb_key": "network", "name": get_network_status(), "type": "action", "action": self.gui_open_network_settings})
 
             # Add statusbar applets
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
@@ -1487,12 +1510,22 @@ class KlangoFrame(wx.Frame):
                         applet_info = self.statusbar_applet_manager.applets[applet_name]['info']
                         display_name = applet_info['name']
                         status_items.append({
+                            "_sb_key": f"applet:{applet_name}",
                             "name": display_name,
                             "type": "action",
                             "action": lambda n=applet_name: self.activate_statusbar_applet(n)
                         })
                     except Exception as e:
                         print(f"Error loading statusbar applet '{applet_name}': {e}")
+
+            try:
+                from src.titan_core import list_order
+                saved = list_order.get_list_order('statusbar:items')
+                if saved:
+                    status_items = list_order.apply_order(
+                        saved, status_items, lambda it: it.get("_sb_key", ""))
+            except Exception:
+                pass
 
             # Update Status Bar submenu (index 3 in main menu)
             self.main_menu[3]["items"] = status_items

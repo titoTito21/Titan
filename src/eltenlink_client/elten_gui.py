@@ -461,6 +461,34 @@ class EltenMainWindow(wx.Frame):
         self.main_listbox.Bind(wx.EVT_KEY_DOWN, self.OnListKeyDown)
         self.main_sizer.Add(self.main_listbox, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
 
+        # Drag-and-drop reordering on the main listbox - every row in
+        # every view is movable (Ctrl+Up / Ctrl+Down or mouse drag).
+        # view_id is a callable so each Elten view (menu / contacts /
+        # conversations / forum_threads / blog_posts / online_users / ...)
+        # persists under its own slot in .index.TCG. auto_apply_on_focus
+        # spares us from instrumenting every single show_*_view populate
+        # site - the saved order re-applies whenever the listbox gets
+        # focus (a no-op when already in order).
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd
+
+            def _elten_view_id():
+                return f"elten:{getattr(self, 'current_view', 'unknown')}"
+
+            def _elten_main_key(_idx, text, _data):
+                return f"txt:{text}"
+
+            self._main_listbox_dnd = attach_listbox_dnd(
+                self.main_listbox,
+                view_id=_elten_view_id,
+                has_tab_bar=False,
+                item_key_func=_elten_main_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[ELTEN GUI] main_listbox DnD setup error: {exc}")
+            self._main_listbox_dnd = None
+
         # Feed tree (only visible in menu view, accessible via Tab)
         self.feed_tree = wx.TreeCtrl(panel, style=wx.TR_DEFAULT_STYLE | wx.TR_HIDE_ROOT)
         self.feed_tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.OnFeedActivate)

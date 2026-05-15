@@ -1221,6 +1221,34 @@ class TitanNetMainWindow(wx.Frame):
         self.main_listbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.main_vbox.Add(self.main_listbox, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
+        # Drag-and-drop reordering on the main listbox - every row in
+        # every view is movable (Ctrl+Up / Ctrl+Down or mouse drag), and
+        # per-view persistence keys keep each list's order separate in
+        # .index.TCG. The user explicitly asked for "all lists" to be
+        # reorderable; no per-view gating. view_id is a callable so each
+        # view (menu, rooms, users, ...) writes to its own slot in
+        # .index.TCG and the orders don't overwrite each other.
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd
+
+            def _tn_main_view_id():
+                view = getattr(self, 'current_view', 'unknown')
+                return f"titannet:main:{view}"
+
+            def _tn_main_key(_idx, text, _data):
+                return f"txt:{text}"
+
+            self._main_listbox_dnd = attach_listbox_dnd(
+                self.main_listbox,
+                view_id=_tn_main_view_id,
+                has_tab_bar=False,
+                item_key_func=_tn_main_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[TITANNET GUI] main_listbox DnD setup error: {exc}")
+            self._main_listbox_dnd = None
+
         # Room users listbox (shown in room chat view before message history)
         self.room_users_listbox = wx.ListBox(self.panel)
         self.room_users_listbox.Bind(wx.EVT_LISTBOX, self.OnListSelection)
@@ -1229,6 +1257,25 @@ class TitanNetMainWindow(wx.Frame):
         self.room_users_listbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.room_users_listbox.Hide()
         self.main_vbox.Add(self.room_users_listbox, proportion=0, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+
+        # Drag-and-drop reordering on the in-room users panel - personal
+        # ordering preference, persisted under "titannet:room_users".
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd as _attach_users_dnd
+
+            def _tn_room_users_key(_idx, text, _data):
+                return f"txt:{text}"
+
+            self._room_users_dnd = _attach_users_dnd(
+                self.room_users_listbox,
+                view_id='titannet:room_users',
+                has_tab_bar=False,
+                item_key_func=_tn_room_users_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[TITANNET GUI] room_users DnD setup error: {exc}")
+            self._room_users_dnd = None
 
         # Message display: report-mode list with Nick / Message / Date columns.
         # Enter on a row opens a read-only multiline dialog with the full message.
@@ -1671,6 +1718,12 @@ class TitanNetMainWindow(wx.Frame):
         for item in menu_items:
             self.main_listbox.Append(item)
 
+        # Honour saved drag-and-drop order from .index.TCG (per-view) so
+        # the user's preferred row order is restored after view switches
+        # and across program launches.
+        if getattr(self, '_main_listbox_dnd', None) is not None:
+            self._main_listbox_dnd.apply_saved_order()
+
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
         self.panel.Layout()
@@ -1764,6 +1817,9 @@ class TitanNetMainWindow(wx.Frame):
         # indexed access instead. Each entry is (text, action_type, data, sound).
         for entry in self._whats_new_items:
             self.main_listbox.Append(entry[0])
+
+        if getattr(self, '_main_listbox_dnd', None) is not None:
+            self._main_listbox_dnd.apply_saved_order()
 
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
@@ -2008,6 +2064,9 @@ class TitanNetMainWindow(wx.Frame):
 
         for item in repo_items:
             self.main_listbox.Append(item)
+
+        if getattr(self, '_main_listbox_dnd', None) is not None:
+            self._main_listbox_dnd.apply_saved_order()
 
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
@@ -3551,6 +3610,9 @@ class TitanNetMainWindow(wx.Frame):
                     display_text = f"{room['name']}{type_indicator} ({room['member_count']} {_('members')})"
                     self.main_listbox.Append(display_text)
 
+                if getattr(self, '_main_listbox_dnd', None) is not None:
+                    self._main_listbox_dnd.apply_saved_order()
+
                 if self.main_listbox.GetCount() > 0:
                     self._restore_main_listbox_selection(saved)
 
@@ -3586,6 +3648,9 @@ class TitanNetMainWindow(wx.Frame):
                     if user.get('full_name'):
                         display_text += f" - {user['full_name']}"
                     self.main_listbox.Append(display_text)
+
+                if getattr(self, '_main_listbox_dnd', None) is not None:
+                    self._main_listbox_dnd.apply_saved_order()
 
                 if self.main_listbox.GetCount() > 0:
                     restored = self._restore_main_listbox_selection(saved)
@@ -3630,6 +3695,9 @@ class TitanNetMainWindow(wx.Frame):
                     display_text = f"{topic['title']} - {topic['author_username']} ({topic['reply_count']} {_('replies')})"
                     self.main_listbox.Append(display_text)
 
+                if getattr(self, '_main_listbox_dnd', None) is not None:
+                    self._main_listbox_dnd.apply_saved_order()
+
                 if self.main_listbox.GetCount() > 0:
                     self._restore_main_listbox_selection(saved)
 
@@ -3658,6 +3726,9 @@ class TitanNetMainWindow(wx.Frame):
                 for app in self.repository_apps_cache:
                     display_text = f"{app['name']} v{app.get('version', '1.0')} - {app['uploader_username']}"
                     self.main_listbox.Append(display_text)
+
+                if getattr(self, '_main_listbox_dnd', None) is not None:
+                    self._main_listbox_dnd.apply_saved_order()
 
                 if self.main_listbox.GetCount() > 0:
                     self._restore_main_listbox_selection(saved)
@@ -3990,6 +4061,9 @@ class TitanNetMainWindow(wx.Frame):
             username = user.get('username', 'Unknown')
             titan_number = user.get('titan_number', 0)
             self.room_users_listbox.Append(f"{username} (#{titan_number})")
+
+        if getattr(self, '_room_users_dnd', None) is not None:
+            self._room_users_dnd.apply_saved_order()
 
     def OnRoomUserContextMenu(self, event):
         """Show context menu for room user"""

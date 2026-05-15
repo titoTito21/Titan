@@ -607,6 +607,28 @@ class TitanApp(wx.Frame):
         self._enable_listbox_dnd(self.network_listbox)
         self._enable_tree_dnd(self.game_tree)
 
+        # Drag-and-drop reordering on the status bar - every slot (Clock /
+        # Battery / Volume / Network / each applet) is movable and the new
+        # order is persisted in .index.TCG under "statusbar:items". The
+        # listbox stores each row's stable key (time / battery / volume /
+        # network / applet:<name>) as client data so update_statusbar can
+        # refresh by key after a reorder.
+        try:
+            from src.titan_core.list_dnd import attach_listbox_dnd as _attach_sb_dnd
+
+            def _sb_key(_idx, _text, data):
+                return data if isinstance(data, str) else f"txt:{_text}"
+
+            _attach_sb_dnd(
+                self.statusbar_listbox,
+                view_id='statusbar:items',
+                has_tab_bar=False,
+                item_key_func=_sb_key,
+                auto_apply_on_focus=True,
+            )
+        except Exception as exc:
+            print(f"[GUI] statusbar DnD setup error: {exc}")
+
 
         panel.SetSizer(main_vbox)
 
@@ -966,79 +988,115 @@ class TitanApp(wx.Frame):
         self._inject_tab_bar_into_tree(self.game_tree)
 
 
-    def populate_statusbar(self):
-        """Populate statusbar with cached data including applets to avoid blocking GUI."""
-        self.statusbar_listbox.Clear()
-        with self.status_cache_lock:
-            # Standard status items (skip battery on desktops)
-            self.statusbar_listbox.Append(_("Clock: {}").format(self.status_cache['time']))
-            if self.has_battery:
-                self.statusbar_listbox.Append(_("Battery level: {}").format(self.status_cache['battery']))
-            self.statusbar_listbox.Append(_("Volume: {}").format(self.status_cache['volume']))
-            self.statusbar_listbox.Append(self.status_cache['network'])
+    def _statusbar_items(self):
+        """Return ``[(key, text)]`` for every statusbar slot, in default order.
 
-            # Statusbar applets
+        Each row is identified by a stable key:
+        ``time``, ``battery``, ``volume``, ``network`` for built-ins and
+        ``applet:<name>`` for plugin applets. The keys are stored as the
+        listbox client data so DnD reordering can persist by key (not by
+        position) and ``update_statusbar`` can refresh each slot by
+        looking it up rather than indexing.
+        """
+        with self.status_cache_lock:
+            items = [
+                ('time', _("Clock: {}").format(self.status_cache['time'])),
+            ]
+            if self.has_battery:
+                items.append(
+                    ('battery',
+                     _("Battery level: {}").format(self.status_cache['battery'])))
+            items.append(
+                ('volume', _("Volume: {}").format(self.status_cache['volume'])))
+            items.append(('network', self.status_cache['network']))
             if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
                 for applet_name in self.statusbar_applet_manager.get_applet_names():
-                    applet_text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
-                    self.statusbar_listbox.Append(applet_text)
+                    text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
+                    items.append((f'applet:{applet_name}', text))
+        return items
+
+    def _find_statusbar_row(self, key):
+        """Return the listbox row index for a statusbar key, or -1 if missing."""
+        try:
+            for i in range(self.statusbar_listbox.GetCount()):
+                if self.statusbar_listbox.GetClientData(i) == key:
+                    return i
+        except Exception:
+            pass
+        return -1
+
+    def populate_statusbar(self):
+        """Populate statusbar with cached data including applets to avoid blocking GUI.
+
+        Honors the user's saved drag-and-drop order from ``.index.TCG``
+        (key list under ``statusbar:items``) so reorders survive a restart.
+        Each row carries its key as client data, used by
+        :meth:`update_statusbar` to refresh by key and by
+        :meth:`on_statusbar_click` to identify applet slots after a move.
+        """
+        items = self._statusbar_items()
+        try:
+            from src.titan_core import list_order
+            saved = list_order.get_list_order('statusbar:items')
+            if saved:
+                items = list_order.apply_order(saved, items, lambda it: it[0])
+        except Exception:
+            pass
+        self.statusbar_listbox.Clear()
+        for key, text in items:
+            self.statusbar_listbox.Append(text, clientData=key)
 
     def update_statusbar(self, event):
-        """Update statusbar with cached data including applets to avoid blocking GUI."""
-        # If UI is not initialized (minimized start), update invisible UI status instead
+        """Refresh statusbar slots from the cache, looking up each row by key.
+
+        After DnD reorder, slot positions no longer correspond to the
+        original built-in / applet ordering, so we identify each row via
+        its client_data key instead of writing by index.
+        """
         if self.start_minimized and not hasattr(self, 'statusbar_listbox'):
-            # Update status data for invisible UI
             if hasattr(self, 'invisible_ui') and self.invisible_ui:
                 self.invisible_ui.refresh_status_bar()
-        else:
-            # Normal status bar update for GUI mode - read from cache
-            with self.status_cache_lock:
-                # Update standard items (indices depend on has_battery)
-                idx = 0
-                self.statusbar_listbox.SetString(idx, _("Clock: {}").format(self.status_cache['time']))
-                idx += 1
-                if self.has_battery:
-                    self.statusbar_listbox.SetString(idx, _("Battery level: {}").format(self.status_cache['battery']))
-                    idx += 1
-                self.statusbar_listbox.SetString(idx, _("Volume: {}").format(self.status_cache['volume']))
-                idx += 1
-                self.statusbar_listbox.SetString(idx, self.status_cache['network'])
-                idx += 1
-                standard_items_count = idx
-
-                # Update applet items
-                if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
-                    applet_names = self.statusbar_applet_manager.get_applet_names()
-                    for i, applet_name in enumerate(applet_names):
-                        index = standard_items_count + i
-                        applet_text = self.status_cache.get(f'applet_{applet_name}', 'Loading...')
-                        # Check if index exists (in case applets were added after initial populate)
-                        if index < self.statusbar_listbox.GetCount():
-                            self.statusbar_listbox.SetString(index, applet_text)
-                        else:
-                            self.statusbar_listbox.Append(applet_text)
+            return
+        for key, text in self._statusbar_items():
+            row = self._find_statusbar_row(key)
+            if row >= 0:
+                try:
+                    self.statusbar_listbox.SetString(row, text)
+                except Exception:
+                    pass
+            else:
+                # Newly added applet that wasn't in the listbox yet -
+                # append it so it shows up; saved order will pick it up
+                # on the next populate.
+                try:
+                    self.statusbar_listbox.Append(text, clientData=key)
+                except Exception:
+                    pass
 
     def on_statusbar_click(self, event):
-        """Handle statusbar item double-click to activate applet actions."""
+        """Activate the applet whose row was double-clicked.
+
+        The row's client_data is the stable key (``applet:<name>`` for
+        plugin slots) so this works even after the user has reordered the
+        statusbar via drag-and-drop.
+        """
         selection = self.statusbar_listbox.GetSelection()
         if selection == wx.NOT_FOUND:
             return
-
-        # Indices of applets start after standard items (3 or 4 depending on battery)
-        standard_items_count = 4 if self.has_battery else 3
-        if selection >= standard_items_count:
-            # This is an applet item
-            applet_index = selection - standard_items_count
-            if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
-                applet_names = self.statusbar_applet_manager.get_applet_names()
-                if applet_index < len(applet_names):
-                    applet_name = applet_names[applet_index]
-                    try:
-                        self.statusbar_applet_manager.activate_applet(applet_name, parent_frame=self)
-                    except Exception as e:
-                        print(f"Error activating statusbar applet '{applet_name}': {e}")
-                        import traceback
-                        traceback.print_exc()
+        try:
+            key = self.statusbar_listbox.GetClientData(selection)
+        except Exception:
+            key = None
+        if not isinstance(key, str) or not key.startswith('applet:'):
+            return
+        applet_name = key[len('applet:'):]
+        if hasattr(self, 'statusbar_applet_manager') and self.statusbar_applet_manager:
+            try:
+                self.statusbar_applet_manager.activate_applet(applet_name, parent_frame=self)
+            except Exception as e:
+                print(f"Error activating statusbar applet '{applet_name}': {e}")
+                import traceback
+                traceback.print_exc()
 
     def on_app_selected(self, event):
         selection = self.app_listbox.GetSelection()
@@ -1406,10 +1464,18 @@ class TitanApp(wx.Frame):
                 self._start_tab_bar_drag()
                 return
 
-        # Ctrl+Up / Ctrl+Down move the selected list item one row.
+        # Ctrl+Up / Ctrl+Down move the selected list item one row. When the
+        # focused control is one of the registered views, _handle_list_item_move
+        # does the work. For every OTHER list that opted in via the shared
+        # list_dnd helper (status bar, Telegram, Titan-Net, Elten, Feedback
+        # Hub, IM modules), the focused widget has its own EVT_KEY_DOWN
+        # handler from the helper - we must Skip() so it actually fires
+        # rather than being swallowed by handle_navigation below.
         if keycode in (wx.WXK_UP, wx.WXK_DOWN) and modifiers == wx.MOD_CONTROL:
             if self._handle_list_item_move(keycode):
                 return
+            event.Skip()
+            return
 
         # Handle F1 (Help)
         if keycode == wx.WXK_F1 and modifiers == wx.MOD_NONE:
@@ -2321,8 +2387,18 @@ class TitanApp(wx.Frame):
         except Exception as e:
             print(f"[GUI] rebuild toolbar error: {e}")
 
-    def _speak_drag(self, message):
-        """Speak a short drag-and-drop status message (screen reader feedback)."""
+    def _speak_drag(self, message, suppress_if_sr=False):
+        """Speak a short drag-and-drop status message (screen reader feedback).
+
+        ``suppress_if_sr=True`` means this string would duplicate what an
+        active screen reader is already auto-announcing (e.g. the new row
+        text "<View>, N of M" after focus changes). In that case we skip
+        the manual speak so SR users don't hear the same line two or three
+        times. Without an SR (SAPI/NSSpeech/spd fallback only) we always
+        speak so the user still gets feedback.
+        """
+        if suppress_if_sr and _is_screen_reader_running():
+            return
         try:
             speaker.speak(message, interrupt=True)
         except Exception:
@@ -2367,25 +2443,36 @@ class TitanApp(wx.Frame):
         except Exception:
             pass
         # Keep focus/selection on the picked-up card in its new position.
+        # Skip SetSelection/SetFocus when the listbox is already in that
+        # state - calling them anyway can fire EVT_LISTBOX / EVT_SET_FOCUS
+        # which makes screen readers re-read the focused row text on top
+        # of the natural read triggered by the SetString text refresh.
         view = self.registered_views[new_idx]
         ctrl = view.get('control')
         self._with_tab_bar_nav_speech_suppressed()
         try:
             if isinstance(ctrl, wx.ListBox):
-                if ctrl.GetCount() > 0:
+                if ctrl.GetCount() > 0 and ctrl.GetSelection() != 0:
                     ctrl.SetSelection(0)
-                ctrl.SetFocus()
+                if not ctrl.HasFocus():
+                    ctrl.SetFocus()
             elif isinstance(ctrl, wx.TreeCtrl):
                 root = ctrl.GetRootItem()
                 if root.IsOk():
                     first, _cookie = ctrl.GetFirstChild(root)
-                    if first.IsOk():
+                    if first.IsOk() and ctrl.GetSelection() != first:
                         ctrl.SelectItem(first)
-                ctrl.SetFocus()
+                if not ctrl.HasFocus():
+                    ctrl.SetFocus()
         except Exception as e:
             print(f"[GUI] tab bar drag focus error: {e}")
+        # ``suppress_if_sr=True``: SR users already heard the new row text
+        # ("<View>, N of M") auto-announced when SetString refreshed row 0.
+        # Speaking it again here was the source of the doubled / tripled
+        # "Titan-Net, 1 of 4" announcement during tab bar drag.
         self._speak_drag(_("{}, {} of {}").format(
-            self._view_short_name(view), new_idx + 1, len(self.registered_views)))
+            self._view_short_name(view), new_idx + 1, len(self.registered_views)),
+            suppress_if_sr=True)
         vibrate_cursor_move()
 
     def _drop_tab_bar_drag(self):
