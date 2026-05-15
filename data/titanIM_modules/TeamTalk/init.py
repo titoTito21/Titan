@@ -3022,6 +3022,22 @@ class TeamTalkFrame:
         self.channel_items = {}
         self.user_items = {}
         self.current_channel_id = 0
+        # Coalesced tree-refresh state. The SDK poll thread must never call
+        # wx.CallAfter(self._refresh_teamtalk_state) per event - on a busy
+        # server CMD_USER_* and especially USER_STATECHANGE (voice activity)
+        # arrive faster than the main thread can rebuild the whole tree,
+        # flooding the shared wx event loop and freezing all of Titan. The
+        # poll thread only sets these flags; a wx.Timer on the main thread
+        # drains them at most a few times per second.
+        self._tree_dirty = False
+        self._dirty_user_ids = set()
+        # Trailing-debounce bookkeeping: rebuild the tree only after the
+        # event stream goes quiet for ~250 ms, but never wait longer than
+        # ~2 s. Without this a server that trickles CMD_USER_UPDATE forever
+        # rebuilds the tree every tick, wiping the user's expand/collapse
+        # state and focus on every repaint.
+        self._last_tree_request = 0.0
+        self._last_tree_rebuild = 0.0
         self.connected_announced = False
         self.focus_tree_after_login = False
 
@@ -3077,6 +3093,13 @@ class TeamTalkFrame:
         self.frame.Bind(wx.EVT_CLOSE, self.on_close)
         self.frame.Bind(wx.EVT_CHAR_HOOK, self._on_key_hook)
         self.frame.Bind(wx.EVT_KEY_UP, self._on_key_up)
+
+        # Main-thread timer that coalesces tree refreshes requested by the
+        # SDK poll thread (see _request_tree_refresh / _request_user_label_refresh).
+        self._tree_refresh_timer = wx.Timer(self.frame)
+        self.frame.Bind(wx.EVT_TIMER, self._on_tree_refresh_tick,
+                        self._tree_refresh_timer)
+        self._tree_refresh_timer.Start(250)
 
         self._build_ui()
         self._build_menu()
@@ -3932,6 +3955,76 @@ class TeamTalkFrame:
     def _tree_item_data(self, kind, item_id):
         return {"kind": kind, "id": item_id}
 
+    def _request_tree_refresh(self):
+        """Mark the channel tree as needing a full rebuild.
+
+        Safe to call from the SDK poll thread - it only sets a flag plus a
+        timestamp. The main-thread _tree_refresh_timer trailing-debounces
+        the actual rebuild (see _on_tree_refresh_tick), so a burst of server
+        events collapses into a single repaint instead of one full
+        DeleteChildren/rebuild per event.
+        """
+        self._tree_dirty = True
+        self._last_tree_request = time.monotonic()
+
+    def _request_user_label_refresh(self, user_id):
+        """Mark a single user's tree label as stale (e.g. voice on/off).
+
+        Cheaper than a full tree rebuild - USER_STATECHANGE fires constantly
+        while anyone is talking, so it must never trigger a full refresh.
+        Safe to call from the poll thread.
+        """
+        if user_id:
+            self._dirty_user_ids.add(user_id)
+
+    # Rebuild only after the event stream is quiet this long...
+    _TREE_QUIET_SECONDS = 0.25
+    # ...but never defer a pending rebuild longer than this hard cap.
+    _TREE_MAX_DEFER_SECONDS = 2.0
+
+    def _on_tree_refresh_tick(self, event):
+        """Main-thread drain for poll-thread refresh requests."""
+        if self._tree_dirty:
+            now = time.monotonic()
+            quiet = (now - self._last_tree_request) >= self._TREE_QUIET_SECONDS
+            capped = (now - self._last_tree_rebuild) >= self._TREE_MAX_DEFER_SECONDS
+            # Hold off while events are still streaming in - rebuilding mid
+            # -stream would wipe the user's expand/collapse state and focus
+            # every tick. The hard cap guarantees forward progress on a
+            # server that never goes quiet.
+            if not (quiet or capped):
+                return
+            self._tree_dirty = False
+            self._last_tree_rebuild = now
+            # A full rebuild repaints every user label too, so any pending
+            # per-user label updates are subsumed.
+            self._dirty_user_ids = set()
+            try:
+                self._refresh_teamtalk_state()
+            except Exception as exc:
+                print(f"[TeamTalk] coalesced refresh failed: {exc}")
+                traceback.print_exc()
+            return
+        if self._dirty_user_ids:
+            # Atomic swap so the poll thread can keep adding while we drain.
+            dirty = self._dirty_user_ids
+            self._dirty_user_ids = set()
+            for user_id in dirty:
+                self._update_user_item_label(user_id)
+
+    def _update_user_item_label(self, user_id):
+        """Repaint just one user's tree item (no structural change)."""
+        item = self.user_items.get(user_id)
+        if item is None:
+            return
+        user = self.client.user_cache.get(user_id)
+        if user is None:
+            return
+        try:
+            self.channel_tree.SetItemText(item, self._user_label(user))
+        except Exception:
+            pass
+
     def _refresh_teamtalk_state(self):
         snapshot = self.client.refresh_state()
         self.channels = {
@@ -3963,6 +4056,20 @@ class TeamTalkFrame:
         # snatch focus away from a blind user mid-navigation.
         had_focus = self.frame.FindFocus() is tree
         prev_selection = self._selected_tree_data()
+
+        # Preserve which channels the user has collapsed, so a server-event
+        # rebuild does not force every node back open under their hands.
+        # Only channels that HAD children and were collapsed count - a leaf
+        # that later gains users must still appear expanded by default.
+        prev_collapsed = set()
+        for cid, old_item in self.channel_items.items():
+            try:
+                if (old_item and old_item.IsOk()
+                        and tree.ItemHasChildren(old_item)
+                        and not tree.IsExpanded(old_item)):
+                    prev_collapsed.add(cid)
+            except Exception:
+                pass
 
         tree.DeleteChildren(self.channel_root)
         self.channel_items = {}
@@ -4002,7 +4109,12 @@ class TeamTalkFrame:
             )
             for sub in sub_chans:
                 append_channel(item, sub)
-            tree.Expand(item)
+            # Channels are expanded by default; honour a collapse the user
+            # made before this rebuild.
+            if channel_id in prev_collapsed:
+                tree.Collapse(item)
+            else:
+                tree.Expand(item)
 
         # Resolve the root channel. qtTeamTalk uses TT_GetRootChannelID and
         # always shows the root as the top item of the tree (its name is
@@ -5474,10 +5586,17 @@ class TeamTalkFrame:
         except Exception as exc:
             print(f"[TeamTalk] event: cannot read nClientEvent: {exc}")
             return
-        # Skip the noise of CLIENTEVENT_NONE (returned every 250 ms by
-        # getMessage when nothing else is queued).
-        none_id = _value(getattr(events, "CLIENTEVENT_NONE", 0))
-        if name and name != none_id:
+        # Skip the noise of routine, "everything is fine" events:
+        # CLIENTEVENT_NONE (returned every 250 ms by getMessage when idle),
+        # CLIENTEVENT_CMD_PROCESSING (id 200, a command is in flight) and
+        # CLIENTEVENT_CMD_SUCCESS (id 220, a command completed OK). None of
+        # them indicate a problem, so logging them only buries real events.
+        quiet_ids = {
+            _value(getattr(events, "CLIENTEVENT_NONE", 0)),
+            _value(getattr(events, "CLIENTEVENT_CMD_PROCESSING", -1)),
+            _value(getattr(events, "CLIENTEVENT_CMD_SUCCESS", -1)),
+        }
+        if name and name not in quiet_ids:
             print(f"[TeamTalk] EVENT {self._event_label(name)} ({name})")
         wx = self.wx
         try:
@@ -5520,7 +5639,7 @@ class TeamTalkFrame:
                              _t("You were kicked from the channel."))
                 wx.CallAfter(self._set_status,
                              _t("You were kicked from the channel."))
-                wx.CallAfter(self._refresh_teamtalk_state)
+                self._request_tree_refresh()
                 snd = _sounds()
                 if snd:
                     try:
@@ -5583,7 +5702,7 @@ class TeamTalkFrame:
                         self.client.remove_cached_channel(chan_id)
                     else:
                         self.client.cache_channel(channel)
-                wx.CallAfter(self._refresh_teamtalk_state)
+                self._request_tree_refresh()
                 return
 
             if name in user_events:
@@ -5699,7 +5818,17 @@ class TeamTalkFrame:
                             self._set_status,
                             _t("{user} left the channel").format(user=display),
                         )
-                wx.CallAfter(self._refresh_teamtalk_state)
+                # USER_STATECHANGE (voice on/off) fires constantly while
+                # anyone is talking - it only flips the " speaking" suffix
+                # on one label, so never rebuild the whole tree for it.
+                # Everything else (login/logout/join/leave/update) changes
+                # tree structure and needs a coalesced full refresh.
+                if name == usr_state and user is not None:
+                    self._request_user_label_refresh(
+                        _value(getattr(user, "nUserID", 0))
+                    )
+                else:
+                    self._request_tree_refresh()
                 return
 
             # ---- File new / remove ----------------------------------
@@ -5973,6 +6102,12 @@ class TeamTalkFrame:
     # ---- Close ---------------------------------------------------------
 
     def on_close(self, event):
+        # Stop the coalescing timer before tearing the frame down so it
+        # cannot fire against half-destroyed widgets.
+        try:
+            self._tree_refresh_timer.Stop()
+        except Exception:
+            pass
         # Close any open PM windows first.
         try:
             for win in list(self.pm_windows.values()):

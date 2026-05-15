@@ -407,3 +407,35 @@ def announce_checklist_item_navigation(checked, delay_ms=500):
     except Exception:
         pass
     _speak_checklist_state_after(checked, delay_ms)
+
+
+# --- Fn (function) key state ---------------------------------------------
+# Laptop / notebook keyboards expose an Fn lock that changes whether the
+# top row acts as F1-F12 or as hardware shortcuts. These helpers announce
+# the new state with the same earcons used for opening/closing Titan UI.
+
+
+def show_fn_keys_enabled():
+    """Announce that the laptop Fn keys have been turned on."""
+    messenger = get_messenger()
+    messenger.show_timed_message(
+        text=_("Fn keys enabled"),
+        delay=0,
+        position=0.0,
+        pitch_offset=0,
+        pre_sound='ui/tui_open.ogg',
+        post_sound=None,
+    )
+
+
+def show_fn_keys_disabled():
+    """Announce that the laptop Fn keys have been turned off."""
+    messenger = get_messenger()
+    messenger.show_timed_message(
+        text=_("Fn keys disabled"),
+        delay=0,
+        position=0.0,
+        pitch_offset=0,
+        pre_sound='ui/tui_close.ogg',
+        post_sound=None,
+    )

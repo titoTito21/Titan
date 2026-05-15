@@ -132,3 +132,11 @@ msgstr "checked"
 msgid "unchecked"
 msgstr "unchecked"
 
+#: src/accessibility/messages.py:418
+msgid "Fn keys enabled"
+msgstr "Fn keys enabled"
+
+#: src/accessibility/messages.py:431
+msgid "Fn keys disabled"
+msgstr "Fn keys disabled"
+

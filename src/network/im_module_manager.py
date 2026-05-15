@@ -7,6 +7,8 @@ namespaced configuration helper into every loaded module.
 """
 import os
 import sys
+import time
+import threading
 import gettext as _gettext
 import configparser
 import importlib.util
@@ -77,6 +79,165 @@ class IMModuleConfig:
         data = self.load()
         data.update(kwargs)
         return self.save(data)
+
+
+class IMModuleUI:
+    """Coalescing main-thread dispatcher injected into every IM module as
+    `ui`.
+
+    IM modules run in-process and share Titan's single wx event loop. A
+    module with a background polling/network thread that calls wx.CallAfter
+    once per incoming event floods that shared loop on a busy server and
+    freezes ALL of Titan (this is exactly what froze the app via the
+    TeamTalk module's per-event tree rebuilds).
+
+    `ui.request(key, callback)` collapses a burst of requests sharing the
+    same `key` into at most one `callback` call per `interval` seconds,
+    always run on the wx main thread. Crucially, a whole burst posts only
+    ONE wx.CallAfter, so the event loop is never flooded no matter how fast
+    the module's thread produces events.
+
+    Usage from a module's background thread:
+        self.ui.request("tree", self._rebuild_tree)
+        self.ui.request(f"user:{uid}", lambda: self._update_user(uid))
+
+    The most recent callback registered for a key before it fires is the
+    one that runs. For a plain one-shot main-thread call use ui.call().
+    """
+
+    def __init__(self, namespace, interval=0.25):
+        self.namespace = namespace
+        self.interval = interval
+        self._lock = threading.Lock()
+        self._pending = {}        # key -> callback
+        self._scheduled = False   # a flush is already on its way
+
+    def request(self, key, callback):
+        """Schedule `callback` on the wx main thread, coalesced per `key`.
+
+        Safe to call from any thread. A burst of requests for the same key
+        results in a single call to the most recently registered callback.
+        """
+        with self._lock:
+            self._pending[key] = callback
+            if self._scheduled:
+                return
+            self._scheduled = True
+        # Exactly ONE wx.CallAfter per debounce window - this is what keeps
+        # the shared event loop from being flooded.
+        try:
+            import wx
+            wx.CallAfter(self._arm)
+        except Exception:
+            # wx unavailable - run inline so the update is not lost.
+            with self._lock:
+                self._scheduled = False
+            self._flush()
+
+    def call(self, callback):
+        """Run `callback` once on the wx main thread (uncoalesced).
+
+        Thin wrapper over wx.CallAfter for modules that just need a single
+        one-shot marshal and do not have a burst to collapse.
+        """
+        try:
+            import wx
+            wx.CallAfter(callback)
+        except Exception:
+            try:
+                callback()
+            except Exception:
+                pass
+
+    def _arm(self):
+        # Main thread: now it is safe to create a wx timer for the window.
+        try:
+            import wx
+            wx.CallLater(int(self.interval * 1000), self._flush)
+        except Exception:
+            self._flush()
+
+    def _flush(self):
+        # Main thread: run every coalesced callback collected this window.
+        with self._lock:
+            pending = self._pending
+            self._pending = {}
+            self._scheduled = False
+        for key, callback in pending.items():
+            try:
+                callback()
+            except Exception as exc:
+                print(f"[IM Modules] ui.request callback for "
+                      f"{self.namespace}:{key} failed: {exc}")
+
+
+class _MainThreadWatchdog:
+    """Detects when the shared wx main thread stops processing events.
+
+    IM modules share Titan's single wx event loop, so a module that floods
+    wx.CallAfter (or blocks the main thread any other way) freezes the whole
+    application. This watchdog cannot *prevent* that, but it turns a silent
+    total freeze into a logged, attributable event: a daemon thread
+    periodically posts a ping via wx.CallAfter and measures how long the
+    main thread takes to run it. A stall is reported once per episode,
+    naming the IM modules currently open as the likely culprit.
+    """
+
+    STALL_SECONDS = 5.0      # main thread considered frozen past this
+    CHECK_INTERVAL = 2.0     # gap between pings while responsive
+
+    def __init__(self, manager):
+        self._manager = manager
+        self._thread = None
+        self._started = False
+        self._pong = threading.Event()
+        self._stall_reported = False
+
+    def start(self):
+        """Start the watchdog thread once. Safe to call repeatedly."""
+        if self._started:
+            return
+        self._started = True
+        self._thread = threading.Thread(
+            target=self._loop, name="IMModuleWatchdog", daemon=True)
+        self._thread.start()
+
+    def _ping_target(self):
+        # Runs on the wx main thread - its execution latency is the metric.
+        self._pong.set()
+
+    def _loop(self):
+        try:
+            import wx
+        except Exception:
+            return
+        while True:
+            self._pong.clear()
+            try:
+                wx.CallAfter(self._ping_target)
+            except Exception:
+                # wx no longer usable (app shutting down) - stop quietly.
+                return
+            if self._pong.wait(self.STALL_SECONDS):
+                if self._stall_reported:
+                    self._stall_reported = False
+                    print("[IM Modules] wx main thread is responsive "
+                          "again - Titan recovered from the freeze.")
+                time.sleep(self.CHECK_INTERVAL)
+            elif not self._stall_reported:
+                self._stall_reported = True
+                suspects = self._manager.get_opened_module_names()
+                suspect_text = ", ".join(suspects) if suspects \
+                    else "none recorded"
+                print(f"[IM Modules] WARNING: wx main thread unresponsive "
+                      f"for over {self.STALL_SECONDS:.0f}s - Titan is "
+                      f"frozen. Open IM modules (likely culprit): "
+                      f"{suspect_text}. A module's background thread is "
+                      f"probably flooding wx.CallAfter - it should use "
+                      f"the injected 'ui.request(...)' dispatcher instead.")
+            # If still stalled and already reported, just loop: the next
+            # _pong.wait(STALL_SECONDS) blocks ~5s, so there is no spam.
+
 
 # Lazily created hidden wx host frame used as fallback parent when the
 # caller does not supply one. This lets IM modules work from any TCE
@@ -172,6 +333,10 @@ def _resolve_parent(parent_frame):
 class TitanIMModuleManager:
     def __init__(self):
         self.modules = []  # list of dicts: {name, id, module, path}
+        # Module ids that have been opened this session, most recent last.
+        # Used by the watchdog to attribute a main-thread stall.
+        self._opened_module_ids = []
+        self._watchdog = _MainThreadWatchdog(self)
 
     def load_modules(self):
         """Scan data/titanIM_modules/ across bundled + user overlay and load
@@ -237,6 +402,13 @@ class TitanIMModuleManager:
                 # without ever touching the encryption key behind titan.IM.
                 mod.config = IMModuleConfig(module_id)
 
+                # Inject the coalescing main-thread dispatcher. Modules with
+                # a background poll/network thread MUST push UI updates
+                # through mod.ui.request(...) instead of raw wx.CallAfter -
+                # see the IMModuleUI docstring. Stops a module from flooding
+                # the shared wx event loop and freezing Titan.
+                mod.ui = IMModuleUI(module_id)
+
                 # Inject local translations from module's own languages/ dir
                 module_locale_dir = os.path.join(module_path, 'languages')
                 if os.path.isdir(module_locale_dir):
@@ -288,6 +460,13 @@ class TitanIMModuleManager:
                     effective_parent = _resolve_parent(parent_frame)
                     info["module"].open(effective_parent)
                     _apply_skin_to_new_top_windows(before_ids)
+                    # Record as opened (most recent last) and make sure the
+                    # main-thread watchdog is running now that a module is
+                    # in use.
+                    if info["id"] in self._opened_module_ids:
+                        self._opened_module_ids.remove(info["id"])
+                    self._opened_module_ids.append(info["id"])
+                    self._watchdog.start()
                     return True
                 except Exception as e:
                     print(f"[IM Modules] Error opening {info['name']}: {e}")
@@ -295,6 +474,20 @@ class TitanIMModuleManager:
                     traceback.print_exc()
                     return False
         return False
+
+    def get_opened_module_names(self):
+        """Display names of IM modules opened this session, most recent last.
+
+        Used by the main-thread watchdog to attribute a freeze to the
+        likely culprit module.
+        """
+        names = []
+        for module_id in self._opened_module_ids:
+            for info in self.modules:
+                if info["id"] == module_id:
+                    names.append(info["name"])
+                    break
+        return names
 
     def get_status_text(self, name_or_id):
         """Return optional status suffix from module, or empty string."""
