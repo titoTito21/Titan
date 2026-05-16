@@ -4370,9 +4370,9 @@ class TitanApp(wx.Frame):
                 
                 for app_cmd in settings_apps:
                     try:
-                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(app_cmd, stderr=subprocess.DEVNULL)
                         break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
+                    except FileNotFoundError:
                         continue
                 else:
                     # If all GUI options fail, show timedatectl info
@@ -4388,7 +4388,7 @@ class TitanApp(wx.Frame):
                 _show_skinned_message(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
-                subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"])
             except Exception as e:
                  _show_skinned_message(_("Could not open date/time settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
@@ -4397,7 +4397,7 @@ class TitanApp(wx.Frame):
     def open_power_settings(self):
         if IS_WINDOWS:
             try:
-                subprocess.run(["control", "powercfg.cpl"], check=True)
+                subprocess.Popen(["control", "powercfg.cpl"])
             except Exception as e:
                  _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
@@ -4412,12 +4412,12 @@ class TitanApp(wx.Frame):
                     ["lxqt-config-powermanagement"],        # LXQt
                     ["mate-power-preferences"]               # MATE
                 ]
-                
+
                 for app_cmd in power_apps:
                     try:
-                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(app_cmd, stderr=subprocess.DEVNULL)
                         break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
+                    except FileNotFoundError:
                         continue
                 else:
                     # If all GUI options fail, show power info using system commands
@@ -4448,7 +4448,7 @@ class TitanApp(wx.Frame):
                 _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
-                subprocess.run(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/EnergySaver.prefPane"])
             except Exception as e:
                  _show_skinned_message(_("Could not open power settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
@@ -4457,7 +4457,7 @@ class TitanApp(wx.Frame):
     def open_volume_mixer(self):
         if IS_WINDOWS:
             try:
-                subprocess.run(["sndvol.exe"], check=True)
+                subprocess.Popen(["sndvol.exe"])
             except Exception as e:
                  _show_skinned_message(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
@@ -4478,9 +4478,9 @@ class TitanApp(wx.Frame):
                 
                 for app_cmd in audio_apps:
                     try:
-                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(app_cmd, stderr=subprocess.DEVNULL)
                         break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
+                    except FileNotFoundError:
                         continue
                 else:
                     # If all GUI options fail, try terminal-based mixer
@@ -4497,7 +4497,7 @@ class TitanApp(wx.Frame):
                 _show_skinned_message(_("Could not open volume mixer:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
-                subprocess.run(["open", "/Applications/Utilities/Audio MIDI Setup.app"], check=True)
+                subprocess.Popen(["open", "/Applications/Utilities/Audio MIDI Setup.app"])
             except Exception as e:
                  _show_skinned_message(_("Could not open audio settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:
@@ -4553,7 +4553,7 @@ class TitanApp(wx.Frame):
         # Fallback to system network settings
         if IS_WINDOWS:
             try:
-                subprocess.run(["explorer", "ms-settings:network-status"], check=True)
+                subprocess.Popen(["explorer", "ms-settings:network-status"])
             except Exception as e:
                  _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_LINUX:
@@ -4574,9 +4574,9 @@ class TitanApp(wx.Frame):
                 
                 for app_cmd in network_apps:
                     try:
-                        subprocess.run(app_cmd, check=True, stderr=subprocess.DEVNULL)
+                        subprocess.Popen(app_cmd, stderr=subprocess.DEVNULL)
                         break
-                    except (subprocess.CalledProcessError, FileNotFoundError):
+                    except FileNotFoundError:
                         continue
                 else:
                     # If all GUI options fail, show network info using nmcli
@@ -4606,7 +4606,7 @@ class TitanApp(wx.Frame):
                 _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         elif IS_MACOS:
             try:
-                subprocess.run(["open", "/System/Library/PreferencePanes/Network.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/Network.prefPane"])
             except Exception as e:
                  _show_skinned_message(_("Could not open network settings:\n{}").format(e), _("Error"), wx.OK | wx.ICON_ERROR)
         else:

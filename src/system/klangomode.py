@@ -639,14 +639,15 @@ class KlangoMode:
         """Expand current submenu item (Down key/S) and enter it directly."""
         if not self.current_menu or self.current_item >= len(self.current_menu):
             return
-        
+
         item = self.current_menu[self.current_item]
         if item["type"] == "submenu":
             # Enter submenu directly without expanding/collapsing states
             self.activate_current_item()
         else:
-            # If it's an action item, execute it
-            self.activate_current_item()
+            # Not a submenu - Down should not activate actions/apps
+            play_sound("ui/endoflist.ogg")
+            vibrate_cursor_move()
     
     def collapse_item(self):
         """Go back to parent menu (Up key/W)."""
@@ -1666,14 +1667,15 @@ class KlangoFrame(wx.Frame):
         """Enter current submenu item (Down arrow) directly."""
         if not self.current_menu or self.current_item >= len(self.current_menu):
             return
-        
+
         item = self.current_menu[self.current_item]
         if item["type"] == "submenu":
             # Enter submenu directly without expanding/collapsing states
             self.activate_current_item()
         else:
-            # If it's an action item, execute it
-            self.activate_current_item()
+            # Not a submenu - Down should not activate actions/apps
+            play_sound("ui/endoflist.ogg")
+            vibrate_cursor_move()
     
     def collapse_item(self):
         """Go back to parent menu (Up arrow)."""
@@ -2256,9 +2258,9 @@ class KlangoFrame(wx.Frame):
             import platform
             system = platform.system()
             if system == "Windows":
-                subprocess.run(["control", "timedate.cpl"], check=True)
+                subprocess.Popen(["control", "timedate.cpl"])
             elif system == "Darwin":
-                subprocess.run(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/DateAndTime.prefPane"])
             else:
                 for cmd in [["gnome-control-center", "datetime"], ["kcmshell5", "clock"], ["timedatectl"]]:
                     try:
@@ -2279,9 +2281,9 @@ class KlangoFrame(wx.Frame):
             import platform
             system = platform.system()
             if system == "Windows":
-                subprocess.run(["control", "powercfg.cpl"], check=True)
+                subprocess.Popen(["control", "powercfg.cpl"])
             elif system == "Darwin":
-                subprocess.run(["open", "/System/Library/PreferencePanes/Battery.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/Battery.prefPane"])
             else:
                 for cmd in [["gnome-control-center", "power"], ["xfce4-power-manager-settings"], ["kcmshell5", "powerdevilprofilesconfig"]]:
                     try:
@@ -2302,9 +2304,9 @@ class KlangoFrame(wx.Frame):
             import platform
             system = platform.system()
             if system == "Windows":
-                subprocess.run(["sndvol.exe"], check=True)
+                subprocess.Popen(["sndvol.exe"])
             elif system == "Darwin":
-                subprocess.run(["open", "/System/Library/PreferencePanes/Sound.prefPane"], check=True)
+                subprocess.Popen(["open", "/System/Library/PreferencePanes/Sound.prefPane"])
             else:
                 for cmd in [["pavucontrol"], ["gnome-control-center", "sound"], ["kcmshell5", "kcm_pulseaudio"]]:
                     try:
