@@ -90,9 +90,11 @@
     if (logoutBtn) {
       logoutBtn.addEventListener('click', (e) => {
         e.preventDefault();
+        if (window.Titan && Titan.sounds) Titan.sounds.play('logout');
         saveSession(null);
         try { localStorage.removeItem('titan.remember'); } catch (er) {}
-        location.href = 'index.html';
+        // Tiny delay so the bye sound has a chance to start before navigation
+        setTimeout(() => { location.href = 'index.html'; }, 120);
       });
     }
   }

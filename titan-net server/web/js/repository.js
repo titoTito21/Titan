@@ -55,7 +55,18 @@
       const dl = document.createElement('a');
       dl.className = 'btn';
       dl.href = Titan.API.appDownloadUrl(app.id);
-      dl.setAttribute('download', '');
+      // Only hint the filename here when we know the real extension; otherwise
+      // an empty `download` attribute lets the server's Content-Disposition
+      // (which appends the original extension) decide the saved filename.
+      const ext = ((app.file_name || app.filename || '').match(/\.[A-Za-z0-9]+$/) || [''])[0];
+      if (ext) {
+        const safeName = (app.name || 'download').replace(/[\\/:*?"<>|\r\n]+/g, '_').trim();
+        dl.setAttribute('download', safeName.toLowerCase().endsWith(ext.toLowerCase())
+          ? safeName
+          : safeName + ext);
+      } else {
+        dl.setAttribute('download', '');
+      }
       dl.textContent = t('repo.download');
       dl.setAttribute('aria-label', t('repo.download') + ' — ' + app.name);
       article.appendChild(dl);

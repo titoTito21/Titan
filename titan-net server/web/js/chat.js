@@ -351,28 +351,10 @@
     if ($motdDialog.close) $motdDialog.close(); else $motdDialog.removeAttribute('open');
   });
 
-  // ---- TTS / sounds quick toggles (full settings live on settings.html) ----
-  const $ttsEnabled = document.getElementById('tts-enabled');
-  const $soundsEnabled = document.getElementById('sounds-enabled');
-
-  function syncQuickToggles() {
-    if (Titan.tts) $ttsEnabled.checked = !!Titan.tts.getPrefs().enabled;
-    if (Titan.sounds) $soundsEnabled.checked = !!Titan.sounds.getPrefs().enabled;
-  }
-  syncQuickToggles();
-
-  $ttsEnabled.addEventListener('change', () => {
-    Titan.tts.setPrefs({ enabled: $ttsEnabled.checked });
-  });
-  $soundsEnabled.addEventListener('change', () => {
-    Titan.sounds.setPrefs({ enabled: $soundsEnabled.checked });
-  });
-  // Re-sync if the user toggles things on the settings page in another tab
-  window.addEventListener('titan:tts-prefs', syncQuickToggles);
-  window.addEventListener('titan:sounds-prefs', syncQuickToggles);
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'titan.tts' || e.key === 'titan.sounds') syncQuickToggles();
-  });
+  // Sound and TTS preferences are managed exclusively on settings.html.
+  // sounds.js / tts.js read from localStorage on every page load, and the
+  // 'storage' listeners inside those modules pick up cross-tab changes
+  // automatically — no per-page UI controls needed here.
 
   // ---- Create room ----
   const $newRoomBtn = document.getElementById('new-room-btn');

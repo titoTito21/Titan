@@ -16,6 +16,7 @@ import re
 from datetime import datetime
 from typing import Dict, Optional, Any
 import mimetypes
+import urllib.parse
 from models import Database
 
 # Create logs directory if it doesn't exist
@@ -726,9 +727,26 @@ class TitanNetHTTPServer:
             # Determine content type
             content_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
 
-            # Prepare headers with approval status
+            # Build the download filename: <app name>.<original extension>.
+            # Falls back to the stored file's basename when name/ext are missing.
+            ext = os.path.splitext(file_path)[1]
+            raw_name = (app['name'] or os.path.splitext(os.path.basename(file_path))[0] or 'download')
+            safe_name = re.sub(r'[\\/:*?"<>|\r\n]+', '_', raw_name).strip() or 'download'
+            if ext and not safe_name.lower().endswith(ext.lower()):
+                download_name = f"{safe_name}{ext}"
+            else:
+                download_name = safe_name or os.path.basename(file_path)
+
+            # RFC 5987 filename* for non-ASCII names + plain filename fallback.
+            ascii_fallback = re.sub(r'[^\x20-\x7e]+', '_', download_name)
+            quoted = urllib.parse.quote(download_name, safe='')
+            disposition = (
+                f'attachment; filename="{ascii_fallback}"; '
+                f"filename*=UTF-8''{quoted}"
+            )
+
             headers = {
-                'Content-Disposition': f'attachment; filename="{app["name"]}"',
+                'Content-Disposition': disposition,
                 'Content-Type': content_type,
                 'X-App-Approved': '1' if app['approved'] else '0'  # Custom header for client
             }

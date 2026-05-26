@@ -35,6 +35,12 @@
   let prefs = loadPrefs();
   let voicesCache = null;
 
+  // Cross-tab sync: when settings.html updates prefs, other open pages
+  // (chat.html, forum.html, etc.) pick up the change without a refresh.
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY) prefs = loadPrefs();
+  });
+
   function refreshVoices() {
     if (typeof speechSynthesis === 'undefined') return [];
     voicesCache = speechSynthesis.getVoices() || [];

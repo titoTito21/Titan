@@ -21,6 +21,10 @@
     success: 'titannet_success.ogg',
     forum_reply: 'newreplies.ogg',
     bye: 'bye.ogg',
+    connecting: 'connecting.ogg',
+    connected: 'titannet_success.ogg',
+    login_welcome: 'welcome_to_im.ogg',
+    logout: 'bye.ogg',
   };
   // event id -> i18n key (used by the settings UI checkboxes)
   const EVENT_LABELS = {
@@ -38,6 +42,10 @@
     moderation: 'sounds.ev.moderation',
     success: 'sounds.ev.success',
     forum_reply: 'sounds.ev.forum_reply',
+    connecting: 'sounds.ev.connecting',
+    connected: 'sounds.ev.connected',
+    login_welcome: 'sounds.ev.login_welcome',
+    logout: 'sounds.ev.logout',
   };
 
   function defaults() {
@@ -74,6 +82,12 @@
   }
 
   let prefs = loadPrefs();
+
+  // Cross-tab sync: settings changes from settings.html propagate to other
+  // open pages without requiring a refresh.
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY) prefs = loadPrefs();
+  });
 
   // Resolve URL relative to /titannet/ regardless of current page depth
   function soundUrl(file) {

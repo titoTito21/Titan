@@ -65,9 +65,13 @@
 
   // Shared sign-in routine — used by both manual submit and auto-login.
   async function doLogin(u, p, remember) {
+    if (window.Titan && Titan.sounds) Titan.sounds.play('connecting');
     const ws = new Titan.WS();
     await new Promise((res, rej) => {
-      ws.addEventListener('open', res, { once: true });
+      ws.addEventListener('open', () => {
+        if (window.Titan && Titan.sounds) Titan.sounds.play('connected');
+        res();
+      }, { once: true });
       ws.addEventListener('ws-error', () => rej(new Error(t('err.network'))), { once: true });
       ws.connect();
       setTimeout(() => rej(new Error(t('err.network'))), 10000);
@@ -79,6 +83,7 @@
       err.kind = 'auth';
       throw err;
     }
+    if (window.Titan && Titan.sounds) Titan.sounds.play('login_welcome');
     const userData = resp.user;
     const token = btoa(userData.id + ':' + userData.username);
     Titan.saveSession({
@@ -192,6 +197,7 @@
         const loginResp = await ws.login(u, p);
         ws.disconnect();
         if (loginResp.success) {
+          if (window.Titan && Titan.sounds) Titan.sounds.play('login_welcome');
           const userData = loginResp.user;
           const token = btoa(userData.id + ':' + userData.username);
           Titan.saveSession({

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="account.title">Account — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css">
+  <link rel="stylesheet" href="css/titan.css?v=20260526a">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -68,9 +68,10 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/api.js"></script>
+  <script src="js/i18n.js?v=20260526a"></script>
+  <script src="js/app.js?v=20260526a"></script>
+  <script src="js/sounds.js?v=20260526a"></script>
+  <script src="js/api.js?v=20260526a"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       const user = Titan.getUser();
@@ -87,9 +88,10 @@
         if (r && r.role) document.getElementById('acc-role').textContent = r.role;
       } catch (e) { /* role lookup may need extra auth — fall back to dash */ }
       document.getElementById('acc-logout').addEventListener('click', () => {
+        if (window.Titan && Titan.sounds) Titan.sounds.play('logout');
         Titan.saveSession(null);
         try { localStorage.removeItem('titan.remember'); } catch (er) {}
-        location.href = 'index.html';
+        setTimeout(() => { location.href = 'index.html'; }, 120);
       });
     });
   </script>
