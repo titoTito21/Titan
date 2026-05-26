@@ -36,7 +36,8 @@ logger = logging.getLogger('TitanNetHTTP')
 
 class TitanNetHTTPServer:
     def __init__(self, host: str = '0.0.0.0', port: int = 8000, upload_dir: str = 'uploads',
-                 db: Optional[Any] = None):
+                 db: Optional[Any] = None, cerberus: Optional[Any] = None,
+                 web_root: Optional[str] = None):
         self.host = host
         self.port = port
         self.upload_dir = upload_dir
@@ -50,15 +51,69 @@ class TitanNetHTTPServer:
         # Optional reference to the WS server, set by main.py so that OAuth
         # callbacks (and similar) can push live events to connected clients.
         self.ws_server: Optional[Any] = None
+        # Cerberus protection (shared with the WS server). When provided the
+        # middleware rejects banned / locked-down IPs before they ever reach
+        # a handler — same shielding the desktop client gets over WebSocket.
+        self.cerberus = cerberus
+        # Optional static web root for the accessible browser portal.
+        self.web_root = web_root
 
         # Create upload directory structure
         os.makedirs(upload_dir, exist_ok=True)
         os.makedirs(os.path.join(upload_dir, 'pending'), exist_ok=True)
         os.makedirs(os.path.join(upload_dir, 'approved'), exist_ok=True)
 
-        self.app = web.Application(client_max_size=100 * 1024 * 1024)  # 100MB max
+        middlewares = []
+        if self.cerberus is not None:
+            middlewares.append(self._cerberus_middleware)
+        self.app = web.Application(
+            client_max_size=100 * 1024 * 1024,  # 100MB max
+            middlewares=middlewares,
+        )
         self.setup_routes()
         self.setup_cors()
+
+    @staticmethod
+    def _get_client_ip(request: web.Request) -> Optional[str]:
+        """Resolve the real client IP behind the Apache reverse proxy."""
+        xff = request.headers.get('X-Forwarded-For')
+        if xff:
+            return xff.split(',')[0].strip()
+        real = request.headers.get('X-Real-IP')
+        if real:
+            return real.strip()
+        return request.remote
+
+    @web.middleware
+    async def _cerberus_middleware(self, request: web.Request, handler):
+        """Reject banned IPs and lockdown traffic before handlers run.
+
+        Mirrors the WS-side gate in server.py so the browser portal gets the
+        same Cerberus shielding the desktop client has had.
+        """
+        ip = self._get_client_ip(request)
+        path = request.path or ''
+
+        # OAuth callbacks must always reach us (provider-initiated traffic).
+        oauth_path = path.startswith('/oauth/')
+
+        try:
+            if ip and not oauth_path:
+                if self.cerberus.is_ip_banned(ip):
+                    logger.warning(f"[CERBERUS] HTTP blocked banned IP {ip} -> {path}")
+                    return web.json_response(
+                        {'success': False, 'error': 'Forbidden'}, status=403,
+                    )
+                if self.cerberus.is_lockdown_active() and not self.cerberus.is_whitelisted(ip):
+                    logger.warning(f"[CERBERUS] HTTP lockdown blocked {ip} -> {path}")
+                    return web.json_response(
+                        {'success': False, 'error': 'Server in lockdown mode'},
+                        status=503,
+                    )
+        except Exception as e:
+            logger.error(f"[CERBERUS] middleware check failed for {ip}: {e}")
+
+        return await handler(request)
 
     def setup_cors(self):
         """Setup CORS for cross-origin requests"""
@@ -111,6 +166,7 @@ class TitanNetHTTPServer:
         self.app.router.add_post('/api/moderation/promote', self.handle_promote_moderator)
         self.app.router.add_post('/api/moderation/demote', self.handle_demote_moderator)
         self.app.router.add_get('/api/moderation/moderators', self.handle_get_moderators)
+        self.app.router.add_post('/api/moderation/change_password', self.handle_admin_change_password)
 
         # Ban system routes
         self.app.router.add_post('/api/moderation/ban/room', self.handle_ban_from_room)
@@ -159,6 +215,20 @@ class TitanNetHTTPServer:
         self.app.router.add_get('/api/oauth/{provider}/token', self.handle_oauth_get_token)
         self.app.router.add_get('/api/oauth/{provider}/status', self.handle_oauth_status)
         self.app.router.add_delete('/api/oauth/{provider}', self.handle_oauth_disconnect)
+
+        # Static accessible web portal (mirrors the desktop UI in a browser).
+        # Mounted at /titannet/ to match the public URL — Apache also serves
+        # this prefix directly; the aiohttp route is a fallback so the portal
+        # still works if Apache config has not been updated yet.
+        if self.web_root and os.path.isdir(self.web_root):
+            async def _serve_titannet_index(request: web.Request) -> web.Response:
+                idx = os.path.join(self.web_root, 'index.html')
+                if os.path.isfile(idx):
+                    return web.FileResponse(idx)
+                return web.Response(status=404, text='Not found')
+            self.app.router.add_get('/titannet', _serve_titannet_index)
+            self.app.router.add_get('/titannet/', _serve_titannet_index)
+            self.app.router.add_static('/titannet/', self.web_root, show_index=False)
 
     def verify_token(self, request: web.Request) -> Optional[Dict]:
         """Verify authentication token with database lookup"""
@@ -1287,6 +1357,56 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get moderators error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_admin_change_password(self, request: web.Request) -> web.Response:
+        """Admin / developer forced password reset for any user.
+
+        Body: ``{"username": "...", "new_password": "..."}``
+        Auth: requires the caller to hold the ``developer`` role. Moderators
+        are NOT enough — resetting a password is account takeover-grade and
+        must stay narrowly scoped.
+        """
+        try:
+            user = self.verify_token(request)
+            if not user:
+                return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+
+            loop = asyncio.get_event_loop()
+            if not await loop.run_in_executor(None, self.db.is_developer, user['id']):
+                return web.json_response(
+                    {'success': False, 'error': 'Developer role required'}, status=403,
+                )
+
+            data = await request.json()
+            username = (data.get('username') or '').strip()
+            new_password = data.get('new_password') or ''
+
+            if not username:
+                return web.json_response({'success': False, 'error': 'Username required'}, status=400)
+            if len(new_password) < 8:
+                return web.json_response(
+                    {'success': False, 'error': 'Password must be at least 8 characters'},
+                    status=400,
+                )
+
+            result = await self.db.run_write_async(
+                self.db.change_user_password, username, new_password,
+            )
+            if result.get('success'):
+                logger.warning(
+                    f"ADMIN PASSWORD RESET: user='{username}' by "
+                    f"caller='{user['username']}' (id={user['id']})"
+                )
+                return web.json_response({
+                    'success': True,
+                    'username': result.get('username'),
+                    'user_id': result.get('user_id'),
+                })
+            return web.json_response(result, status=400)
+
+        except Exception as e:
+            logger.error(f"Admin change_password error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
     # Ban System Handlers

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="settings.title">Settings — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="settings.title">Settings</h1>
+    <p class="muted" data-i18n="settings.lead">
+      Your preferences are stored in this browser and applied automatically next time you sign in.
+    </p>
+
+    <p id="settings-saved" class="muted" role="status" aria-live="polite"></p>
+
+    <!-- ============== TTS / Speech notifications ============== -->
+    <section class="card" aria-labelledby="tts-heading">
+      <h2 id="tts-heading" data-i18n="settings.tts.heading">Speech notifications</h2>
+      <p class="muted" data-i18n="settings.tts.lead">
+        Spoken alerts use the Web Speech API of your browser. They do not need a screen reader.
+      </p>
+
+      <div class="field">
+        <label>
+          <input id="tts-enabled" type="checkbox" style="min-height:auto;width:auto">
+          <span data-i18n="settings.tts.enable">Enable speech notifications</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="tts-voice" data-i18n="settings.tts.voice">Voice</label>
+        <select id="tts-voice"></select>
+      </div>
+
+      <div class="field">
+        <label for="tts-rate" data-i18n="settings.tts.rate">Speech rate</label>
+        <input id="tts-rate" type="range" min="0.5" max="2" step="0.1" value="1">
+        <output id="tts-rate-out" for="tts-rate"></output>
+      </div>
+      <div class="field">
+        <label for="tts-pitch" data-i18n="settings.tts.pitch">Pitch</label>
+        <input id="tts-pitch" type="range" min="0" max="2" step="0.1" value="1">
+        <output id="tts-pitch-out" for="tts-pitch"></output>
+      </div>
+      <div class="field">
+        <label for="tts-volume" data-i18n="settings.tts.volume">Volume</label>
+        <input id="tts-volume" type="range" min="0" max="1" step="0.05" value="1">
+        <output id="tts-volume-out" for="tts-volume"></output>
+      </div>
+
+      <fieldset>
+        <legend data-i18n="settings.tts.events.heading">What to announce</legend>
+        <label><input id="tts-ev-msg" type="checkbox" style="min-height:auto;width:auto"> <span data-i18n="settings.tts.events.messages">Chat messages</span></label><br>
+        <label><input id="tts-ev-priv" type="checkbox" style="min-height:auto;width:auto"> <span data-i18n="settings.tts.events.private">Private messages</span></label><br>
+        <label><input id="tts-ev-pres" type="checkbox" style="min-height:auto;width:auto"> <span data-i18n="settings.tts.events.presence">User online / offline</span></label><br>
+        <label><input id="tts-ev-voice" type="checkbox" style="min-height:auto;width:auto"> <span data-i18n="settings.tts.events.voice">Voice chat</span></label>
+      </fieldset>
+
+      <p style="margin:1rem 0 0">
+        <button type="button" id="tts-test" class="btn btn-secondary" data-i18n="settings.tts.test">Test voice</button>
+      </p>
+    </section>
+
+    <!-- ============== Notification sounds ============== -->
+    <section class="card" aria-labelledby="sounds-heading">
+      <h2 id="sounds-heading" data-i18n="settings.sounds.heading">Notification sounds</h2>
+      <p class="muted" data-i18n="settings.sounds.lead">
+        Short ogg clips played when chat events happen. The same sound set as the desktop TCE Launcher.
+      </p>
+
+      <div class="field">
+        <label>
+          <input id="snd-enabled" type="checkbox" style="min-height:auto;width:auto">
+          <span data-i18n="settings.sounds.enable">Enable notification sounds</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="snd-volume" data-i18n="settings.sounds.volume">Sound volume</label>
+        <input id="snd-volume" type="range" min="0" max="1" step="0.05" value="0.8">
+        <output id="snd-volume-out" for="snd-volume"></output>
+      </div>
+
+      <fieldset>
+        <legend data-i18n="settings.sounds.events.heading">Play sound for:</legend>
+        <div id="snd-events" style="display:grid;gap:.25rem"></div>
+      </fieldset>
+    </section>
+
+    <p style="margin:1rem 0">
+      <button type="button" id="settings-reset" class="btn btn-secondary" data-i18n="settings.reset">Reset to defaults</button>
+    </p>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/sounds.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

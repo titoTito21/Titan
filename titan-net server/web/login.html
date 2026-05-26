@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="login.title">Log in — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="login.title">Log in</h1>
+
+    <div id="form-alert" role="alert" aria-live="assertive" hidden></div>
+
+    <form id="login-form" novalidate style="max-width:420px">
+      <div class="field">
+        <label for="login-username" data-i18n="login.username">Username</label>
+        <input id="login-username" name="username" type="text" autocomplete="username"
+               required aria-required="true" aria-describedby="login-username-err">
+        <span class="field-error" id="login-username-err" hidden></span>
+      </div>
+      <div class="field">
+        <label for="login-password" data-i18n="login.password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password"
+               required aria-required="true" aria-describedby="login-password-err">
+        <span class="field-error" id="login-password-err" hidden></span>
+      </div>
+      <div class="field">
+        <label style="display:flex;gap:.5rem;align-items:flex-start;font-weight:500">
+          <input id="login-remember" type="checkbox" style="min-height:auto;width:auto" checked>
+          <span>
+            <span data-i18n="login.remember">Remember me on this device</span>
+            <br>
+            <span class="help muted" data-i18n="login.remember_help">Stores your username and password in this browser. Only check this on a private device.</span>
+          </span>
+        </label>
+      </div>
+      <p>
+        <button type="submit" id="login-submit" data-i18n="login.submit">Log in</button>
+      </p>
+      <p class="muted">
+        <span data-i18n="login.no_account">No account yet?</span>
+        <a href="register.html" data-i18n="login.register_link">Create one</a>
+      </p>
+    </form>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

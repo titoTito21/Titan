@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="register.title">Sign up — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="register.title">Create account</h1>
+
+    <div id="form-alert" role="alert" aria-live="assertive" hidden></div>
+
+    <form id="register-form" novalidate style="max-width:480px">
+      <div class="field">
+        <label for="reg-username" data-i18n="register.username">Choose a username</label>
+        <input id="reg-username" name="username" type="text" autocomplete="username"
+               required aria-required="true" minlength="3" maxlength="32"
+               aria-describedby="reg-username-err">
+        <span class="field-error" id="reg-username-err" hidden></span>
+      </div>
+      <div class="field">
+        <label for="reg-password" data-i18n="register.password">Choose a password</label>
+        <input id="reg-password" name="password" type="password" autocomplete="new-password"
+               required aria-required="true" minlength="8"
+               aria-describedby="reg-password-err">
+        <span class="field-error" id="reg-password-err" hidden></span>
+      </div>
+      <div class="field">
+        <label for="reg-password2" data-i18n="register.password2">Repeat password</label>
+        <input id="reg-password2" name="password2" type="password" autocomplete="new-password"
+               required aria-required="true" minlength="8"
+               aria-describedby="reg-password2-err">
+        <span class="field-error" id="reg-password2-err" hidden></span>
+      </div>
+      <div class="field">
+        <label for="reg-firstname" data-i18n="register.firstname">First name (optional)</label>
+        <input id="reg-firstname" name="firstname" type="text" autocomplete="given-name"
+               maxlength="64" aria-describedby="reg-firstname-err">
+        <span class="field-error" id="reg-firstname-err" hidden></span>
+      </div>
+      <div class="field">
+        <label for="reg-lastname" data-i18n="register.lastname">Last name (optional)</label>
+        <input id="reg-lastname" name="lastname" type="text" autocomplete="family-name"
+               maxlength="64" aria-describedby="reg-lastname-err">
+        <span class="field-error" id="reg-lastname-err" hidden></span>
+      </div>
+      <p>
+        <button type="submit" id="reg-submit" data-i18n="register.submit">Create account</button>
+      </p>
+      <p class="muted">
+        <span data-i18n="register.have_account">Already have an account?</span>
+        <a href="login.html" data-i18n="register.login_link">Log in</a>
+      </p>
+    </form>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

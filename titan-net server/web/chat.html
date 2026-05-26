@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="chat.title">Chat — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="chat.title">Chat</h1>
+
+    <div class="flex" style="margin-bottom:1rem">
+      <span id="conn-status" class="muted" role="status" aria-live="polite" data-i18n="chat.connecting">Connecting…</span>
+      <button id="whatsnew-btn" class="btn btn-secondary" type="button" data-i18n="whatsnew.open">What's new</button>
+      <span class="spacer"></span>
+      <label style="display:flex;gap:.5rem;align-items:center;font-weight:500">
+        <input id="tts-enabled" type="checkbox" style="min-height:auto;width:auto">
+        <span data-i18n="tts.enable">Speak notifications</span>
+      </label>
+      <label style="display:flex;gap:.5rem;align-items:center;font-weight:500">
+        <input id="sounds-enabled" type="checkbox" style="min-height:auto;width:auto">
+        <span data-i18n="chat.sounds.enable">Play sounds</span>
+      </label>
+      <a href="settings.html" class="btn btn-secondary" data-i18n="chat.open_settings">Open settings</a>
+    </div>
+
+    <!-- What's new dialog -->
+    <dialog id="whatsnew-dialog" aria-labelledby="wn-title">
+      <form method="dialog" style="display:grid;gap:1rem;min-width:min(560px,92vw);max-height:80vh;overflow:auto">
+        <h2 id="wn-title" data-i18n="whatsnew.title" style="margin:0">What's new</h2>
+        <p id="wn-empty" class="muted" hidden data-i18n="whatsnew.empty">Nothing new right now.</p>
+        <div id="wn-body"></div>
+        <p style="margin:0;text-align:right">
+          <button value="ok" data-i18n="motd.ok">OK</button>
+        </p>
+      </form>
+    </dialog>
+
+    <!-- Private message dialog -->
+    <dialog id="pm-dialog" aria-labelledby="pm-title">
+      <form method="dialog" style="display:grid;gap:.75rem;min-width:min(560px,92vw)">
+        <h2 id="pm-title" style="margin:0"><span data-i18n="pm.heading">Private chat with</span> <span id="pm-with"></span></h2>
+        <div id="pm-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" style="max-height:50vh;overflow:auto" aria-label="Private messages"></div>
+        <div class="chat-form" style="display:flex;gap:.5rem;align-items:flex-end">
+          <label for="pm-input" class="sr-only" data-i18n="pm.write_label">Write a private message</label>
+          <input id="pm-input" type="text" autocomplete="off" maxlength="2000"
+                 data-i18n-attr="placeholder:pm.write_label" style="flex:1">
+          <button type="button" id="pm-send" data-i18n="chat.send">Send</button>
+        </div>
+        <p style="margin:0;text-align:right">
+          <button type="button" id="pm-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
+        </p>
+      </form>
+    </dialog>
+
+    <!-- Message of the day modal (shown only when MOTD hash changes) -->
+    <dialog id="motd-dialog" aria-labelledby="motd-heading">
+      <form method="dialog" style="display:grid;gap:1rem;min-width:min(560px,92vw)">
+        <h2 id="motd-heading" data-i18n="motd.title" style="margin:0">Message of the day</h2>
+        <label for="motd-text" class="sr-only" data-i18n="motd.label">Message of the day content</label>
+        <textarea id="motd-text" readonly rows="10" aria-readonly="true"
+                  style="width:100%;font-family:inherit"></textarea>
+        <p style="margin:0;text-align:right">
+          <button id="motd-ok" value="ok" data-i18n="motd.ok">OK</button>
+        </p>
+      </form>
+    </dialog>
+
+    <div class="chat-grid">
+      <!-- Left: rooms list -->
+      <aside class="chat-aside" aria-labelledby="rooms-heading">
+        <div class="flex" style="margin-bottom:.5rem">
+          <h2 id="rooms-heading" data-i18n="chat.rooms" style="margin:0">Rooms</h2>
+          <span class="spacer"></span>
+          <button id="new-room-btn" class="btn btn-secondary" type="button" data-i18n="rooms.new">New room</button>
+        </div>
+        <p id="rooms-status" class="muted" role="status" aria-live="polite" data-i18n="rooms.loading">Loading rooms…</p>
+        <ul id="rooms-list" class="list-box" role="list"></ul>
+      </aside>
+
+      <!-- New room dialog -->
+      <dialog id="new-room-dialog" aria-labelledby="nr-title">
+        <form id="new-room-form" style="display:grid;gap:1rem;min-width:min(520px,92vw)">
+          <h2 id="nr-title" data-i18n="rooms.new.title" style="margin:0">Create a new room</h2>
+          <div class="field">
+            <label for="nr-name" data-i18n="rooms.name">Room name</label>
+            <input id="nr-name" required aria-required="true" maxlength="80">
+          </div>
+          <div class="field">
+            <label for="nr-desc" data-i18n="rooms.description">Room description (optional)</label>
+            <textarea id="nr-desc" rows="3" maxlength="300"></textarea>
+          </div>
+          <fieldset>
+            <legend data-i18n="rooms.type">Room type</legend>
+            <label><input type="radio" name="nr-type" value="text" checked style="min-height:auto;width:auto"> <span data-i18n="rooms.type.text">Text chat</span></label><br>
+            <label><input type="radio" name="nr-type" value="voice" style="min-height:auto;width:auto"> <span data-i18n="rooms.type.voice">Voice chat</span></label><br>
+            <label><input type="radio" name="nr-type" value="mixed" style="min-height:auto;width:auto"> <span data-i18n="rooms.type.mixed">Text and voice</span></label>
+          </fieldset>
+          <div class="field">
+            <label for="nr-password" data-i18n="rooms.password">Password (leave empty for a public room)</label>
+            <input id="nr-password" type="password" autocomplete="new-password">
+          </div>
+          <p id="nr-error" class="field-error" hidden></p>
+          <p style="margin:0;text-align:right">
+            <button type="button" id="nr-cancel" class="btn btn-secondary" data-i18n="rooms.cancel">Cancel</button>
+            <button type="submit" id="nr-submit" data-i18n="rooms.create">Create room</button>
+          </p>
+        </form>
+      </dialog>
+
+      <!-- Center: messages + voice -->
+      <section class="chat-main" aria-labelledby="chat-area-heading">
+        <div class="chat-header">
+          <h2 id="chat-area-heading" class="muted" data-i18n="chat.no_room">Pick a room from the list to start chatting.</h2>
+          <div class="flex" id="voice-controls" hidden>
+            <button id="voice-toggle" class="btn btn-secondary" type="button" aria-pressed="false">
+              <span data-i18n="voice.start">Start voice</span>
+            </button>
+            <span id="voice-status" class="muted" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Messages"></div>
+        <form id="chat-form" class="chat-form" hidden>
+          <label for="chat-input" class="sr-only" data-i18n="chat.write_label">Write a message</label>
+          <input id="chat-input" type="text" autocomplete="off" maxlength="2000"
+                 data-i18n-attr="placeholder:chat.write_label">
+          <button type="submit" data-i18n="chat.send">Send</button>
+        </form>
+      </section>
+
+      <!-- Right: online users -->
+      <aside class="chat-aside" aria-labelledby="users-heading">
+        <h2 id="users-heading" data-i18n="chat.users">Online users</h2>
+        <ul id="users-list" class="list-box" role="list"></ul>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/sounds.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="account.title">Account — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="account.title">Your account</h1>
+
+    <div id="acc-not-logged-in" class="alert alert-warning" hidden>
+      <p data-i18n="err.login_first">Please log in to use this feature.</p>
+      <p><a class="btn" href="login.html" data-i18n="nav.login">Log in</a></p>
+    </div>
+
+    <div id="acc-info" class="card" hidden>
+      <dl>
+        <dt data-i18n="account.signed_in_as">Signed in as</dt>
+        <dd id="acc-username"></dd>
+        <dt data-i18n="account.titan_number">Titan number</dt>
+        <dd id="acc-titan"></dd>
+        <dt data-i18n="account.role">Role</dt>
+        <dd id="acc-role"></dd>
+      </dl>
+      <p><button id="acc-logout" class="btn btn-danger" data-i18n="account.logout">Log out</button></p>
+    </div>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const user = Titan.getUser();
+      if (!user) {
+        document.getElementById('acc-not-logged-in').hidden = false;
+        return;
+      }
+      document.getElementById('acc-info').hidden = false;
+      document.getElementById('acc-username').textContent = user.username;
+      document.getElementById('acc-titan').textContent = user.titan_number || '—';
+      document.getElementById('acc-role').textContent = '—';
+      try {
+        const r = await Titan.API.getRole();
+        if (r && r.role) document.getElementById('acc-role').textContent = r.role;
+      } catch (e) { /* role lookup may need extra auth — fall back to dash */ }
+      document.getElementById('acc-logout').addEventListener('click', () => {
+        Titan.saveSession(null);
+        try { localStorage.removeItem('titan.remember'); } catch (er) {}
+        location.href = 'index.html';
+      });
+    });
+  </script>
+</body>
+</html>

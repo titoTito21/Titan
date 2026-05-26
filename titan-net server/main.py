@@ -59,11 +59,23 @@ class TitanNetMain:
                 db=shared_db,
             )
 
+            # Resolve optional static web root for the accessible browser
+            # portal — defaults to ``<server-dir>/web`` if present.
+            _server_dir = os.path.dirname(os.path.abspath(__file__))
+            _default_web = os.path.join(_server_dir, 'web')
+            web_root = os.environ.get('WEB_ROOT', _default_web)
+            if not os.path.isdir(web_root):
+                web_root = None
+
             self.http_server = TitanNetHTTPServer(
                 host=self.config.HTTP_HOST,
                 port=self.config.HTTP_PORT,
                 upload_dir=self.config.UPLOAD_DIR,
                 db=shared_db,
+                # Share Cerberus so HTTP traffic is gated by the same
+                # ban / lockdown decisions that protect WebSocket logins.
+                cerberus=self.websocket_server.cerberus,
+                web_root=web_root,
             )
             # Let HTTP layer push events (e.g. oauth_connected) to live WS clients
             self.http_server.ws_server = self.websocket_server

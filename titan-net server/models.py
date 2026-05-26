@@ -1584,6 +1584,41 @@ class Database:
             conn.close()
 
     @_serialized_write
+    def change_user_password(self, username: str, new_password: str) -> Dict[str, Any]:
+        """Replace the password hash for ``username`` with a fresh argon2id hash.
+
+        Admin-only path — callers must enforce role checks. There is no
+        ``old_password`` check on purpose: this is the recovery / forced-reset
+        primitive used by the moderation API. For self-service password
+        changes a caller should verify the current password first.
+        """
+        if not username or not new_password:
+            return {"success": False, "error": "Username and new_password required"}
+        if len(new_password) < 8:
+            return {"success": False, "error": "Password must be at least 8 characters"}
+
+        new_hash = self.hash_password(new_password)
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "error": "User not found"}
+            user_id = row['id']
+            cursor.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (new_hash, user_id),
+            )
+            conn.commit()
+            return {"success": True, "user_id": user_id, "username": username}
+        except Exception as e:
+            conn.rollback()
+            return {"success": False, "error": str(e)}
+        finally:
+            conn.close()
+
+    @_serialized_write
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Authenticate user and return user data.
 
