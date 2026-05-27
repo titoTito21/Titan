@@ -227,7 +227,15 @@ class TitanNetHTTPServer:
                 if os.path.isfile(idx):
                     return web.FileResponse(idx)
                 return web.Response(status=404, text='Not found')
-            self.app.router.add_get('/titannet', _serve_titannet_index)
+
+            # /titannet (no trailing slash) MUST 301 to /titannet/ — otherwise
+            # the browser stays at /titannet and every relative link/sound
+            # in the page resolves against the document root, producing 404s
+            # for login.html, repository.html, sounds/*.ogg, etc.
+            async def _redirect_titannet(request: web.Request) -> web.Response:
+                raise web.HTTPMovedPermanently(location='/titannet/')
+
+            self.app.router.add_get('/titannet', _redirect_titannet)
             self.app.router.add_get('/titannet/', _serve_titannet_index)
             self.app.router.add_static('/titannet/', self.web_root, show_index=False)
 

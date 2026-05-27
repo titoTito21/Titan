@@ -105,6 +105,25 @@
         <ul id="rooms-list" class="list-box" role="list"></ul>
       </aside>
 
+      <!-- Password-protected room: prompt for the room password before joining -->
+      <dialog id="room-password-dialog" aria-labelledby="rp-title">
+        <form id="room-password-form" style="display:grid;gap:1rem;min-width:min(420px,92vw)">
+          <h2 id="rp-title" style="margin:0">
+            <span data-i18n="rooms.password.title">This room requires a password</span>
+            <span id="rp-room-name" style="display:block;font-weight:normal;font-size:.95em"></span>
+          </h2>
+          <div class="field">
+            <label for="rp-password" data-i18n="rooms.password.label">Room password</label>
+            <input id="rp-password" type="password" autocomplete="off" required aria-required="true">
+          </div>
+          <p id="rp-error" class="field-error" hidden></p>
+          <p style="margin:0;text-align:right">
+            <button type="button" id="rp-cancel" class="btn btn-secondary" data-i18n="rooms.cancel">Cancel</button>
+            <button type="submit" id="rp-submit" data-i18n="rooms.password.join">Join</button>
+          </p>
+        </form>
+      </dialog>
+
       <!-- New room dialog -->
       <dialog id="new-room-dialog" aria-labelledby="nr-title">
         <form id="new-room-form" style="display:grid;gap:1rem;min-width:min(520px,92vw)">

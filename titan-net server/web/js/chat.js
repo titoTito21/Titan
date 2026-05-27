@@ -55,13 +55,25 @@
     $status.textContent = t(key);
   }
 
+  function isRoomLocked(room) {
+    // Server returns chat_rooms.password_hash verbatim — non-empty means
+    // the room is password-protected. Cover a couple of plausible alias
+    // names too in case the API ever renames the field.
+    return !!(room && (room.password_hash || room.password_protected || room.has_password));
+  }
+
   function renderRooms() {
     $rooms.innerHTML = '';
     rooms.forEach((room) => {
       const li = document.createElement('li');
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = room.name;
+      const locked = isRoomLocked(room);
+      btn.textContent = locked ? (room.name + ' 🔒') : room.name;
+      if (locked) {
+        // Screen readers should still get a clean, translatable label.
+        btn.setAttribute('aria-label', t('rooms.locked_label', room.name));
+      }
       btn.setAttribute('aria-pressed', currentRoomId === room.id ? 'true' : 'false');
       btn.addEventListener('click', () => selectRoom(room.id));
       li.appendChild(btn);
@@ -141,15 +153,28 @@
     $log.innerHTML = '';
   }
 
+  // Cache passwords the user entered this session so switching back into a
+  // protected room doesn't re-prompt every time. Per-tab only — never
+  // persisted to localStorage.
+  const roomPasswords = {};
+
   async function selectRoom(roomId) {
     if (currentRoomId === roomId) return;
+    const room = rooms.find((r) => r.id === roomId);
+    // Password-protected rooms — ask before we even leave the current one,
+    // so a cancel keeps the user where they were.
+    if (room && isRoomLocked(room) && !roomPasswords[roomId]) {
+      const pwd = await promptRoomPassword(room);
+      if (pwd === null) return; // user cancelled
+      roomPasswords[roomId] = pwd;
+    }
     if (currentRoomId !== null) {
       try { ws.leaveRoom(currentRoomId); } catch (e) {}
       // Stop voice when switching rooms
       if (voice && voice.live) voice.stop();
     }
     currentRoomId = roomId;
-    currentRoom = rooms.find((r) => r.id === roomId);
+    currentRoom = room;
     renderRooms();
     clearLog();
     if (currentRoom) {
@@ -164,12 +189,63 @@
       $voiceToggle.setAttribute('aria-pressed', 'false');
       $voiceToggle.querySelector('span').textContent = t('voice.start');
     }
-    ws.joinRoom(roomId);
+    ws.joinRoom(roomId, roomPasswords[roomId]);
     try {
       const resp = await ws.getRoomMessages(roomId, 50);
       (resp.messages || []).forEach((m) => appendMessage(m, { own: m.user_id === userId }));
     } catch (e) { /* ignore */ }
     $input.focus();
+  }
+
+  // ---- Room password dialog ----
+  const $rpDialog = document.getElementById('room-password-dialog');
+  const $rpForm = document.getElementById('room-password-form');
+  const $rpPwd = document.getElementById('rp-password');
+  const $rpName = document.getElementById('rp-room-name');
+  const $rpError = document.getElementById('rp-error');
+  const $rpCancel = document.getElementById('rp-cancel');
+
+  let rpResolve = null;
+  function promptRoomPassword(room, errorMessage) {
+    return new Promise((resolve) => {
+      rpResolve = resolve;
+      $rpName.textContent = room.name || '';
+      $rpPwd.value = '';
+      if (errorMessage) {
+        $rpError.textContent = errorMessage;
+        $rpError.hidden = false;
+      } else {
+        $rpError.hidden = true;
+        $rpError.textContent = '';
+      }
+      if (typeof $rpDialog.showModal === 'function') $rpDialog.showModal();
+      else $rpDialog.setAttribute('open', '');
+      setTimeout(() => { try { $rpPwd.focus(); } catch (e) {} }, 50);
+    });
+  }
+  function closeRoomPasswordDialog(value) {
+    if ($rpDialog.close) $rpDialog.close();
+    else $rpDialog.removeAttribute('open');
+    if (rpResolve) {
+      const r = rpResolve;
+      rpResolve = null;
+      r(value);
+    }
+  }
+  if ($rpForm) {
+    $rpForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $rpPwd.value;
+      if (!v) {
+        $rpError.textContent = t('err.required');
+        $rpError.hidden = false;
+        return;
+      }
+      closeRoomPasswordDialog(v);
+    });
+  }
+  if ($rpCancel) {
+    $rpCancel.addEventListener('click', () => closeRoomPasswordDialog(null));
   }
 
   function connect() {
@@ -236,6 +312,46 @@
     ws.addEventListener('msg:rooms_list', (e) => {
       rooms = e.detail.rooms || [];
       renderRooms();
+    });
+    // Server replies to every join_room with a room_joined frame. On
+    // success we already have a working session; on failure (bad/missing
+    // room password, ban, etc.) we have to undo the optimistic "I'm in
+    // the room now" state we set in selectRoom and, for password errors,
+    // re-prompt the user. The "Already a member" case is harmless — it
+    // means the user is rejoining a room they never left.
+    ws.addEventListener('msg:room_joined', async (e) => {
+      const detail = e.detail || {};
+      if (detail.success || detail.error === 'Already a member') return;
+      const rid = detail.room_id;
+      const errMsg = detail.error || '';
+      const isPwdError = /password/i.test(errMsg);
+      if (rid != null) {
+        // Forget the cached password so we re-prompt next time
+        if (isPwdError) delete roomPasswords[rid];
+      }
+      // Roll back the optimistic UI from selectRoom
+      currentRoomId = null;
+      currentRoom = null;
+      renderRooms();
+      $headerH2.textContent = t('chat.no_room');
+      $headerH2.classList.add('muted');
+      $form.hidden = true;
+      $voiceControls.hidden = true;
+      clearLog();
+
+      if (isPwdError && rid != null) {
+        const room = rooms.find((r) => r.id === rid);
+        if (room) {
+          const pwd = await promptRoomPassword(room, t('rooms.password.bad'));
+          if (pwd !== null) {
+            roomPasswords[rid] = pwd;
+            // Retry — selectRoom will pick the cached password up
+            selectRoom(rid);
+          }
+          return;
+        }
+      }
+      Titan.announce(errMsg || t('err.generic'));
     });
 
     setStatus('chat.connecting');

@@ -132,7 +132,11 @@
         'room_messages',
       );
     }
-    joinRoom(roomId) { this.send({ type: 'join_room', room_id: roomId }); }
+    joinRoom(roomId, password) {
+      const payload = { type: 'join_room', room_id: roomId };
+      if (password) payload.password = password;
+      this.send(payload);
+    }
     leaveRoom(roomId) { this.send({ type: 'leave_room', room_id: roomId }); }
     createRoom(name, description, roomType, password) {
       const payload = {
