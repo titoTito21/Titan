@@ -77,13 +77,32 @@ __pycache__/
 *$py.class
 *.so
 *.pyd
-build/
-dist/
 *.egg-info/
 *.egg
 
-# PyInstaller
+# PyInstaller — output dirs at repo root + auto-generated spec
+/build/
+/dist/
+*.spec
 *.spec.bak
+pyinstaller-build/
+pyinstaller-dist/
+
+# Nuitka — working dirs, standalone output, onefile temp, crash reports
+*.build/
+*.dist/
+*.onefile-build/
+*.onefile-temp/
+*.onefile-*.tmp
+*.exp
+*.lib
+nuitka-crash-report.xml
+compiled/
+release/
+
+# Cython / C extension intermediates from compilation
+*.c.tmp
+*.cpp.tmp
 
 # Compile / debug logs
 compile_log.txt
