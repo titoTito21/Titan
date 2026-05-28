@@ -204,7 +204,7 @@ from src.system.updater import check_for_updates_on_startup
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
 
-VERSION = "0.5.3"
+VERSION = "0.5.5"
 try:
     speaker = accessible_output3.outputs.auto.Auto()
 except Exception as _e:
