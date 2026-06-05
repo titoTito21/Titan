@@ -25,11 +25,15 @@ _loaded = False
 
 def _get_dll_path():
     """Return path to copilothook.dll."""
-    if getattr(sys, 'frozen', False):
-        base = os.path.join(os.path.dirname(sys.executable), '_internal')
-    else:
+    # Use the shared resolver so the path matches the real build layout.
+    # In a PyInstaller onedir build the data/ folder sits next to the
+    # executable (NOT under _internal/), exactly like get_data_path() returns.
+    try:
+        from src.platform_utils import get_data_path
+        return get_data_path(os.path.join('lib', 'copilothook.dll'))
+    except Exception:
         base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    return os.path.join(base, 'data', 'lib', 'copilothook.dll')
+        return os.path.join(base, 'data', 'lib', 'copilothook.dll')
 
 
 def _ensure_dll():

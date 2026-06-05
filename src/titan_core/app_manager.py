@@ -334,11 +334,13 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
             else:
                 code = f"import sys; {paths_code}; sys.argv = [r'{exec_file}']; import runpy; runpy.run_path(r'{exec_file}', run_name='__main__')"
         else:
-            # .py files - use exec(compile(...))
+            # .py files - use runpy.run_path() so __file__/__name__/__package__ are set
+            # properly. Plain exec(compile(...)) leaves __file__ undefined, which breaks
+            # any app that does `os.path.dirname(__file__)` at import or __init__ time.
             if file_path:
-                code = f"import sys; {paths_code}; sys.argv = [r'{exec_file}', r'{file_path}']; exec(compile(open(r'{exec_file}', 'rb').read(), r'{exec_file}', 'exec'))"
+                code = f"import sys; {paths_code}; sys.argv = [r'{exec_file}', r'{file_path}']; import runpy; runpy.run_path(r'{exec_file}', run_name='__main__')"
             else:
-                code = f"import sys; {paths_code}; sys.argv = [r'{exec_file}']; exec(compile(open(r'{exec_file}', 'rb').read(), r'{exec_file}', 'exec'))"
+                code = f"import sys; {paths_code}; sys.argv = [r'{exec_file}']; import runpy; runpy.run_path(r'{exec_file}', run_name='__main__')"
 
         command = [python_executable, '-c', code]
 
