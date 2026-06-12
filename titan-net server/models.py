@@ -1641,6 +1641,19 @@ class Database:
             conn.close()
             return None
 
+        # Hard-ban gate: block login before burning argon2 hash time.
+        cursor.execute(
+            "SELECT id FROM global_bans WHERE user_id = ? AND ban_type = 'hard'",
+            (user['id'],)
+        )
+        if cursor.fetchone():
+            logger.warning(
+                "[Titan-Net] Hard-banned user %s (%s) attempted login — blocked",
+                user['id'], username,
+            )
+            conn.close()
+            return None
+
         ok, needs_rehash = self.verify_password(password, user['password_hash'])
         if not ok:
             conn.close()
@@ -3077,8 +3090,8 @@ class Database:
 
             cursor.execute("UPDATE users SET status = 'banned' WHERE id = ?", (user_id,))
 
-            # Add IP/Hardware to permanent ban list
-            if ip_address:
+            # Add IP/Hardware to permanent ban list (blocks new account creation)
+            if ip_address or hardware_id:
                 cursor.execute("""
                     INSERT INTO ip_hardware_bans (ip_address, hardware_id, banned_by, banned_at, reason)
                     VALUES (?, ?, ?, ?, ?)
@@ -3099,13 +3112,20 @@ class Database:
             return {"success": False, "error": str(e)}
 
     def is_ip_hardware_banned(self, ip_address: str = None, hardware_id: str = None) -> bool:
-        """Check if IP or hardware ID is banned"""
+        """Check if IP or hardware ID is banned.
+
+        Checks both ip_hardware_bans (explicit IP/HW entries) and global_bans
+        where ban_type='hard' (IP/HW stored directly on the ban record).
+        This covers the case where a hard ban was applied before the ip_hardware_bans
+        row was written, or where a single lookup is sufficient to block registration.
+        """
         if not ip_address and not hardware_id:
             return False
 
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # Check dedicated ip_hardware_bans table first
         if ip_address and hardware_id:
             cursor.execute("""
                 SELECT id FROM ip_hardware_bans
@@ -3116,9 +3136,28 @@ class Database:
         else:
             cursor.execute("SELECT id FROM ip_hardware_bans WHERE hardware_id = ?", (hardware_id,))
 
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+        # Also check global_bans: hard bans store IP/HW on the ban record itself.
+        # This catches bans applied before ip_hardware_bans was populated.
+        if ip_address and hardware_id:
+            cursor.execute("""
+                SELECT id FROM global_bans
+                WHERE ban_type = 'hard' AND (ip_address = ? OR hardware_id = ?)
+            """, (ip_address, hardware_id))
+        elif ip_address:
+            cursor.execute("""
+                SELECT id FROM global_bans WHERE ban_type = 'hard' AND ip_address = ?
+            """, (ip_address,))
+        else:
+            cursor.execute("""
+                SELECT id FROM global_bans WHERE ban_type = 'hard' AND hardware_id = ?
+            """, (hardware_id,))
+
         result = cursor.fetchone()
         conn.close()
-
         return result is not None
 
     @_serialized_write
