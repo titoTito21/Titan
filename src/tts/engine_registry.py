@@ -65,40 +65,61 @@ class PlatformEngineProxy(TitanTTSEngine):
         pass
 
 
-def _get_engines_dir():
-    """Return path to bundled data/titantts engines/ directory."""
+def _get_base():
+    """Return project base path."""
     try:
         from src.platform_utils import get_base_path
-        base = get_base_path()
-        _log(f"[_get_engines_dir] get_base_path() = {base}")
-    except ImportError as e:
-        base = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        _log(f"[_get_engines_dir] ImportError fallback, base = {base}, error = {e}")
+        return get_base_path()
+    except ImportError:
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def _get_engines_dir():
+    """Return path to bundled data/titantts engines/ directory."""
+    base = _get_base()
+    _log(f"[_get_engines_dir] base = {base}")
     result = os.path.join(base, 'data', 'titantts engines')
     _log(f"[_get_engines_dir] result = {result}, exists = {os.path.isdir(result)}")
     return result
 
 
+# Engine subdirectory names to scan (both legacy and new-style)
+_ENGINE_SUBDIRS = ('titantts engines', 'titan tts engines')
+
+
 def _iter_engine_folders():
-    """Yield (folder_name, abs_path) for every engine folder in the bundled
-    `data/titantts engines/` dir and the per-user overlay under
-    `%APPDATA%/titosoft/Titan/data/titantts engines/`. User entries override
-    bundled entries with the same folder name."""
+    """Yield (folder_name, abs_path) for every engine folder found across
+    all known engine subdirectories (both 'titantts engines' and 'titan tts
+    engines'), including per-user overlays. Later entries are skipped when a
+    folder name was already yielded (first-found wins)."""
+    seen = set()
+
     try:
         from src.platform_utils import discover_data_entries
-        entries = discover_data_entries('titantts engines')
-        for name, path in entries.items():
-            yield name, path
+        for subdir in _ENGINE_SUBDIRS:
+            try:
+                entries = discover_data_entries(subdir)
+                for name, path in entries.items():
+                    if name not in seen:
+                        seen.add(name)
+                        yield name, path
+            except Exception:
+                pass
         return
     except Exception as e:
-        _log(f"[_iter_engine_folders] discover_data_entries failed: {e}")
+        _log(f"[_iter_engine_folders] discover_data_entries unavailable: {e}")
 
-    # Fallback to bundled-only enumeration
-    engines_dir = _get_engines_dir()
-    if not os.path.isdir(engines_dir):
-        return
-    for name in sorted(os.listdir(engines_dir)):
-        yield name, os.path.join(engines_dir, name)
+    # Fallback: direct directory enumeration across all engine subdirs
+    base = _get_base()
+    for subdir in _ENGINE_SUBDIRS:
+        engines_dir = os.path.join(base, 'data', subdir)
+        _log(f"[_iter_engine_folders] scanning {engines_dir}, exists={os.path.isdir(engines_dir)}")
+        if not os.path.isdir(engines_dir):
+            continue
+        for name in sorted(os.listdir(engines_dir)):
+            if name not in seen:
+                seen.add(name)
+                yield name, os.path.join(engines_dir, name)
 
 
 class EngineRegistry:

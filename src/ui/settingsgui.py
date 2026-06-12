@@ -2161,9 +2161,14 @@ class SettingsFrame(wx.Frame):
                 field_tooltip = field.get('tooltip', '')
                 field_default = field.get('default', '')
 
-                # Create label
-                label_widget = wx.StaticText(panel, label=field_label)
-                self._engine_config_sizer.Add(label_widget, flag=wx.TOP, border=5)
+                # Checkboxes carry their label inside the widget for screen reader accessibility.
+                # All other types use a separate StaticText label above the control.
+                is_checkbox = (field_type == 'checkbox')
+                if is_checkbox:
+                    label_widget = None
+                else:
+                    label_widget = wx.StaticText(panel, label=field_label)
+                    self._engine_config_sizer.Add(label_widget, flag=wx.TOP, border=5)
 
                 # Create control based on type
                 ctrl = None
@@ -2197,7 +2202,9 @@ class SettingsFrame(wx.Frame):
                     ctrl.SetLabel(field_label)
                     ctrl.Bind(wx.EVT_SLIDER, self._on_engine_config_changed)
                 elif field_type == 'checkbox':
-                    ctrl = wx.CheckBox(panel, label='')
+                    # Label is embedded in the CheckBox widget so screen readers
+                    # (NVDA, JAWS) announce it when the control receives focus.
+                    ctrl = wx.CheckBox(panel, label=field_label)
                     ctrl.SetValue(bool(field_default))
                     ctrl.Bind(wx.EVT_CHECKBOX, self._on_engine_config_changed)
 
@@ -2205,7 +2212,13 @@ class SettingsFrame(wx.Frame):
                     if field_tooltip:
                         ctrl.SetToolTip(field_tooltip)
                     ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-                    self._engine_config_sizer.Add(ctrl, flag=wx.EXPAND | wx.TOP, border=2)
+                    # Checkboxes must NOT be expanded — wx.EXPAND on a checkbox
+                    # makes it fill the full sizer width and can render as a button
+                    # in some Windows themes / accessibility tools.
+                    if field_type == 'checkbox':
+                        self._engine_config_sizer.Add(ctrl, flag=wx.TOP, border=5)
+                    else:
+                        self._engine_config_sizer.Add(ctrl, flag=wx.EXPAND | wx.TOP, border=2)
                     self._engine_config_controls[field_key] = (label_widget, ctrl, field)
 
         except Exception as e:
