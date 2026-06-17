@@ -70,6 +70,7 @@ TRANSLATION_DOMAINS = [
     'macros',        # Macro Manager (data/components/macros/init.py)
     'window_switcher', # Window Switcher (src/ui/window_switcher.py)
     'interactive_games', # Interactive Games (network/interactive_games.py, interactive_game_session.py)
+    'buffers_system', # Titan Buffer System (src/buffers/*.py)
 ]
 
 # Store translation objects for each domain

@@ -31,7 +31,7 @@ class Config:
 
     # File upload settings
     UPLOAD_DIR = os.getenv('UPLOAD_DIR', 'uploads')
-    MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE', 100 * 1024 * 1024))  # 100MB
+    MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE', 1024 * 1024 * 1024))  # 1GB
 
     # Security settings
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-this-in-production')

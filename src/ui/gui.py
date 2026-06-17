@@ -1431,10 +1431,67 @@ class TitanApp(wx.Frame):
             vibrate_focus_change()  # Add vibration for cancel action
 
 
+    def _focus_is_text_entry(self, ctrl):
+        """True if a text-entry control is focused, so the Buffer System keys
+        (- = [ ] , . etc.) stay normal typing characters there."""
+        try:
+            if ctrl is None:
+                return False
+            if isinstance(ctrl, (wx.TextCtrl, wx.ComboBox, wx.SearchCtrl, wx.SpinCtrl)):
+                return True
+            is_editable = getattr(ctrl, 'IsEditable', None)
+            if callable(is_editable):
+                try:
+                    return bool(is_editable())
+                except Exception:
+                    return False
+        except Exception:
+            return False
+        return False
+
+    # Buffer System: base key -> (action without Shift, action with Shift).
+    _BUFFER_BASE_KEYS = {
+        ord('-'): ('prev_category', 'first_category'),
+        ord('='): ('next_category', 'last_category'),
+        ord('['): ('prev_buffer', 'first_buffer'),
+        ord(']'): ('next_buffer', 'last_buffer'),
+        ord(','): ('prev_element', 'first_element'),
+        ord('.'): ('next_element', 'last_element'),
+    }
+
+    def _buffer_action_for_event(self, keycode, modifiers):
+        """Map a key event to a buffer action name, or None. Ignores events
+        carrying Ctrl/Alt so only the bare keys (and Shift) are used."""
+        if modifiers & (wx.MOD_CONTROL | wx.MOD_ALT | wx.MOD_ALTGR):
+            return None
+        shift = bool(modifiers & wx.MOD_SHIFT)
+        pair = self._BUFFER_BASE_KEYS.get(keycode)
+        if pair:
+            return pair[1] if shift else pair[0]
+        # Some layouts deliver the shifted glyph (_ + { } < >) as the keycode.
+        try:
+            from src.buffers import buffer_controller
+            return buffer_controller.action_for_char(chr(keycode))
+        except Exception:
+            return None
+
     def on_key_down(self, event):
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
+
+        # ---- Titan Buffer System review keys ----
+        # Local to this focused window (no global hook); suppressed while a
+        # text-entry control is focused so the keys keep typing normally.
+        if not self._focus_is_text_entry(current_focus):
+            _buf_action = self._buffer_action_for_event(keycode, modifiers)
+            if _buf_action:
+                try:
+                    from src.buffers import buffer_controller
+                    if buffer_controller.dispatch(_buf_action):
+                        return
+                except Exception as e:
+                    print(f"Error in buffer key handling: {e}")
 
         # While a tab bar card is "picked up" (Space on the tab bar row), the
         # keyboard is locked to dragging: Left/Right move the card, Space drops

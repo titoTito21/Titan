@@ -1,3 +1,4 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
 # Elten Translation Template
 # Copyright (C) 2026 TCE Team
 # This file is distributed under the same license as the Elten package.
@@ -9,7 +10,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-02-05 12:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"

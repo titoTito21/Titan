@@ -1,3 +1,4 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
 # Polish translations for PROJECT.
 # Copyright (C) 2025 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
@@ -9,14 +10,13 @@ msgstr ""
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2026-05-14 12:48+0200\n"
 "PO-Revision-Date: 2025-11-22 19:24+0100\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: pl\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
-"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language: pl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: src/network/titan_net.py:423
@@ -1177,7 +1177,8 @@ msgstr "Nazwa"
 msgid "Version"
 msgstr "Wersja"
 
-#: src/network/titan_net_forum_gui.py:92 src/network/titan_net_forum_gui.py:419
+#: src/network/titan_net_forum_gui.py:92
+#: src/network/titan_net_forum_gui.py:419
 #: src/network/titan_net_forum_gui.py:443 src/network/titan_net_gui.py:3701
 msgid "Author"
 msgstr "Autor"
@@ -1464,8 +1465,8 @@ msgstr ""
 #: src/network/titan_net_gui.py:5040
 #, python-brace-format
 msgid ""
-"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
-"Attackers tracked: {attackers}"
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers "
+"tracked: {attackers}"
 msgstr ""
 "Zbanowane IP: {banned} ({perma} permanentne) | Biała lista: {white} | "
 "Śledzeni atakujący: {attackers}"
@@ -1476,8 +1477,8 @@ msgid ""
 "Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs "
 "banned."
 msgstr ""
-"Protokół Cerberus: {level}. Zablokowano {blocked} włamań. Zbanowano "
-"{banned} adresów IP."
+"Protokół Cerberus: {level}. Zablokowano {blocked} włamań. Zbanowano {banned}"
+" adresów IP."
 
 #: src/network/titan_net_gui.py:5081
 msgid "Loading intrusion logs..."
@@ -1836,14 +1837,14 @@ msgstr "Wprowadź treść tematu:"
 msgid "Topic content cannot be empty"
 msgstr "Treść tematu nie może być pusta"
 
-#: src/network/titan_net_forum_gui.py:78 src/network/titan_net_forum_gui.py:134
-#: src/network/titan_net_gui.py:5662
+#: src/network/titan_net_forum_gui.py:78
+#: src/network/titan_net_forum_gui.py:134 src/network/titan_net_gui.py:5662
 msgid "General"
 msgstr "Ogólne"
 
-#: src/network/titan_net_forum_gui.py:79 src/network/titan_net_forum_gui.py:135
-#: src/network/titan_net_gui.py:5662 src/system/klangomode.py:206
-#: src/system/klangomode.py:1280
+#: src/network/titan_net_forum_gui.py:79
+#: src/network/titan_net_forum_gui.py:135 src/network/titan_net_gui.py:5662
+#: src/system/klangomode.py:206 src/system/klangomode.py:1280
 msgid "Help"
 msgstr "Pomoc"
 
@@ -1851,8 +1852,8 @@ msgstr "Pomoc"
 msgid "Off-Topic"
 msgstr "Poza tematem"
 
-#: src/network/titan_net_forum_gui.py:80 src/network/titan_net_forum_gui.py:136
-#: src/network/titan_net_gui.py:5662
+#: src/network/titan_net_forum_gui.py:80
+#: src/network/titan_net_forum_gui.py:136 src/network/titan_net_gui.py:5662
 msgid "Announcements"
 msgstr "Ogłoszenia"
 
@@ -2358,11 +2359,11 @@ msgstr "Najpierw wybierz pokój"
 #: src/network/titan_net_gui.py:6448
 #, python-brace-format
 msgid ""
-"Are you sure you want to delete room '{name}'? This will remove all "
-"messages and members."
+"Are you sure you want to delete room '{name}'? This will remove all messages"
+" and members."
 msgstr ""
-"Czy na pewno chcesz usunąć pokój '{name}'? To usunie wszystkie wiadomości"
-" i członków."
+"Czy na pewno chcesz usunąć pokój '{name}'? To usunie wszystkie wiadomości i "
+"członków."
 
 #: src/network/titan_net_gui.py:6458
 msgid "Room deleted successfully"
@@ -2703,8 +2704,8 @@ msgid ""
 "Are you sure you want to delete room '{name}' (ID: {id})? This cannot be "
 "undone!"
 msgstr ""
-"Czy na pewno chcesz usunąć pokój '{name}' (ID: {id})? Tej operacji nie "
-"można cofnąć!"
+"Czy na pewno chcesz usunąć pokój '{name}' (ID: {id})? Tej operacji nie można"
+" cofnąć!"
 
 #: src/network/titan_net_gui.py:7314
 msgid "Select package file (.TCEPACKAGE)"
@@ -2849,16 +2850,19 @@ msgid "Titan-Net Forum"
 msgstr "Forum Titan-Net"
 
 #: src/network/feedback_hub.py:256 src/network/titan_net_forum_gui.py:75
-#: src/network/titan_net_forum_gui.py:85 src/network/titan_net_forum_gui.py:518
+#: src/network/titan_net_forum_gui.py:85
+#: src/network/titan_net_forum_gui.py:518
 #: src/network/titan_net_forum_gui.py:524
 msgid "Category:"
 msgstr "Kategoria:"
 
-#: src/network/titan_net_forum_gui.py:77 src/network/titan_net_forum_gui.py:133
+#: src/network/titan_net_forum_gui.py:77
+#: src/network/titan_net_forum_gui.py:133
 msgid "All"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:81 src/network/titan_net_forum_gui.py:137
+#: src/network/titan_net_forum_gui.py:81
+#: src/network/titan_net_forum_gui.py:137
 msgid "Discussion"
 msgstr "Dyskusja"
 
@@ -2870,7 +2874,8 @@ msgstr ""
 msgid "Replies"
 msgstr "Odpowiedzi"
 
-#: src/network/titan_net_forum_gui.py:94 src/network/titan_net_forum_gui.py:421
+#: src/network/titan_net_forum_gui.py:94
+#: src/network/titan_net_forum_gui.py:421
 msgid "Views"
 msgstr ""
 
@@ -3592,6 +3597,42 @@ msgstr "Nie można otworzyć ustawień sieci"
 msgid "Titan App Suite"
 msgstr "Titan App Suite"
 
+#: src/network/titan_net_gui.py
+msgid "Uploading Package"
+msgstr "Wysyłanie pakietu"
+
+#: src/network/titan_net_gui.py
+msgid "Starting upload..."
+msgstr "Rozpoczynanie wysyłania..."
+
+#: src/network/titan_net_gui.py
+msgid "Uploading: {percent}%"
+msgstr "Wysyłanie: {percent}%"
+
+#: src/network/titan_net_gui.py
+msgid "Downloading Package"
+msgstr "Pobieranie pakietu"
+
+#: src/network/titan_net_gui.py
+msgid "Starting download..."
+msgstr "Rozpoczynanie pobierania..."
+
+#: src/network/titan_net_gui.py
+msgid "Downloading: {percent}%"
+msgstr "Pobieranie: {percent}%"
+
+#: src/network/titan_net_gui.py
+msgid "Failed to prepare download: {error}"
+msgstr "Nie udało się przygotować pobierania: {error}"
+
+#: src/network/titan_net_gui.py
+msgid ""
+"Package downloaded successfully to:\n"
+"{path}"
+msgstr ""
+"Pakiet pobrany pomyślnie do:\n"
+"{path}"
+
 #~ msgid "Welcome user {username}, Titan ID: {titan_number}"
 #~ msgstr "Witaj użytkowniku {username}, ID Titan: {titan_number}"
 
@@ -3612,8 +3653,8 @@ msgstr "Titan App Suite"
 
 #~ msgid "Forum topic viewing is not yet implemented.\\nTopic: {title}"
 #~ msgstr ""
-#~ "Przeglądanie tematu forum nie jest "
-#~ "jeszcze zaimplementowane.\\nTemat: {title}"
+#~ "Przeglądanie tematu forum nie jest jeszcze zaimplementowane.\\nTemat: "
+#~ "{title}"
 
 #~ msgid "Application downloaded successfully to:\\n{path}"
 #~ msgstr "Aplikacja pobrana pomyślnie do:\\n{path}"
@@ -4440,13 +4481,11 @@ msgstr "Titan App Suite"
 #~ msgstr ""
 
 #~ msgid ""
-#~ "Showing online users. To ban offline "
-#~ "users, use their User ID in the"
-#~ " General Moderation menu."
+#~ "Showing online users. To ban offline users, use their User ID in the General"
+#~ " Moderation menu."
 #~ msgstr ""
-#~ "Pokazuję użytkowników online. Aby zbanować "
-#~ "użytkowników offline, użyj ich ID "
-#~ "użytkownika w menu Ogólna moderacja."
+#~ "Pokazuję użytkowników online. Aby zbanować użytkowników offline, użyj ich ID"
+#~ " użytkownika w menu Ogólna moderacja."
 
 #~ msgid "Banned"
 #~ msgstr "Użytkownik zbanowany"
@@ -4519,8 +4558,8 @@ msgstr "Titan App Suite"
 
 #~ msgid "Voice Activity Detection enabled: Will auto-transmit when speaking"
 #~ msgstr ""
-#~ "Wykrywanie aktywności głosu włączone: Będzie"
-#~ " automatycznie transmitować gdy mówisz"
+#~ "Wykrywanie aktywności głosu włączone: Będzie automatycznie transmitować gdy "
+#~ "mówisz"
 
 #~ msgid "VAD Mode disabled"
 #~ msgstr "Tryb VAD wyłączony"
@@ -4596,4 +4635,3 @@ msgstr "Titan App Suite"
 # #, python-brace-format
 #~ msgid "New message from {user}"
 #~ msgstr "Nowa wiadomość od {user}"
-

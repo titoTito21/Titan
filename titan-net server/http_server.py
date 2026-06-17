@@ -17,7 +17,9 @@ from datetime import datetime
 from typing import Dict, Optional, Any
 import mimetypes
 import urllib.parse
+import tempfile
 from models import Database
+from config import Config
 
 # Create logs directory if it doesn't exist
 import os
@@ -68,7 +70,14 @@ class TitanNetHTTPServer:
         if self.cerberus is not None:
             middlewares.append(self._cerberus_middleware)
         self.app = web.Application(
-            client_max_size=100 * 1024 * 1024,  # 100MB max
+            # Cap the whole request body. TCE packages can be large, so this
+            # tracks Config.MAX_UPLOAD_SIZE (default 1GB) instead of a
+            # hardcoded 100MB. aiohttp rejects anything bigger before it ever
+            # reaches handle_upload. The +16MB margin covers multipart framing
+            # (boundaries, the metadata part, headers) so a file of exactly
+            # MAX_UPLOAD_SIZE bytes isn't rejected by a few bytes of overhead —
+            # the precise per-file limit is still enforced in handle_upload.
+            client_max_size=Config.MAX_UPLOAD_SIZE + 16 * 1024 * 1024,
             middlewares=middlewares,
         )
         self.setup_routes()
@@ -278,9 +287,21 @@ class TitanNetHTTPServer:
         return user and user.get('is_admin', False)
 
     async def handle_upload(self, request: web.Request) -> web.Response:
-        """Handle file upload to repository"""
-        MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+        """Handle file upload to repository.
 
+        The file part is streamed to a temp file on disk in chunks rather
+        than buffered fully in memory. This is what makes large (up to
+        Config.MAX_UPLOAD_SIZE, default 1GB) TCE packages uploadable without
+        the server allocating a gigabyte+ of RAM per concurrent upload. The
+        SHA-256 hash and byte count are computed incrementally while writing.
+        """
+        MAX_FILE_SIZE = Config.MAX_UPLOAD_SIZE
+        # 4 MB read chunks: large enough that per-chunk overhead is negligible
+        # for a 1GB file, small enough to keep memory flat.
+        CHUNK_SIZE = 4 * 1024 * 1024
+        ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z')
+
+        temp_path = None
         try:
             # Verify authentication
             user = self.verify_token(request)
@@ -300,31 +321,73 @@ class TitanNetHTTPServer:
 
             reader = await request.multipart()
 
-            # Read metadata
             metadata = {}
-            file_data = None
             filename = None
+            file_ext = None
+            file_size = 0
+            file_hash = None
+
+            pending_dir = os.path.join(self.upload_dir, 'pending')
 
             async for part in reader:
                 if part.name == 'metadata':
                     metadata_text = await part.text()
                     metadata = json.loads(metadata_text)
                 elif part.name == 'file':
-                    filename = part.filename
-                    file_data = await part.read()
+                    if not part.filename:
+                        continue
 
-            if not file_data or not filename:
+                    # Sanitize filename and validate extension BEFORE writing
+                    # a single byte, so a rejected type never touches disk.
+                    filename = re.sub(r'[^a-zA-Z0-9._-]', '_', part.filename)
+                    file_ext = os.path.splitext(filename)[1].lower()
+                    # Whitelist allowed package extensions. The repository is
+                    # for TCE data packages — never raw executables. .exe /
+                    # .msi / .bat / .ps1 / .sh / .dll / etc. are rejected up
+                    # front so an attacker cannot smuggle a binary through.
+                    if file_ext not in ALLOWED_EXTENSIONS:
+                        return web.json_response({
+                            'success': False,
+                            'error': (
+                                f'Invalid file type: {file_ext or "(no extension)"}. '
+                                f'Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
+                            )
+                        }, status=400)
+
+                    # Stream the part to a temp file, hashing as we go.
+                    hasher = hashlib.sha256()
+                    fd, temp_path = tempfile.mkstemp(suffix='.part', dir=pending_dir)
+                    oversize = False
+                    with os.fdopen(fd, 'wb') as out:
+                        while True:
+                            chunk = await part.read_chunk(CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            file_size += len(chunk)
+                            if file_size > MAX_FILE_SIZE:
+                                oversize = True
+                                break
+                            hasher.update(chunk)
+                            out.write(chunk)
+
+                    if oversize:
+                        try:
+                            os.remove(temp_path)
+                        except OSError:
+                            pass
+                        temp_path = None
+                        return web.json_response({
+                            'success': False,
+                            'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'
+                        }, status=413)
+
+                    file_hash = hasher.hexdigest()
+
+            if not temp_path or not filename or file_size == 0:
                 return web.json_response({
                     'success': False,
                     'error': 'File data required'
                 }, status=400)
-
-            # Validate file size after reading
-            if len(file_data) > MAX_FILE_SIZE:
-                return web.json_response({
-                    'success': False,
-                    'error': 'File too large'
-                }, status=413)
 
             # Validate required fields
             required_fields = ['name', 'description', 'category', 'version']
@@ -346,36 +409,14 @@ class TitanNetHTTPServer:
                     'error': f'Invalid category. Must be one of: {", ".join(valid_categories)}'
                 }, status=400)
 
-            # Sanitize filename
-            import re
-            filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
-
-            # Whitelist allowed package extensions. The repository is for TCE
-            # data packages — never raw executables. .exe / .msi / .bat / .ps1
-            # / .sh / .dll / etc. are rejected up front so an attacker cannot
-            # smuggle a binary through the upload endpoint.
-            ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z')
-            file_ext = os.path.splitext(filename)[1].lower()
-            if file_ext not in ALLOWED_EXTENSIONS:
-                return web.json_response({
-                    'success': False,
-                    'error': (
-                        f'Invalid file type: {file_ext or "(no extension)"}. '
-                        f'Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
-                    )
-                }, status=400)
-
-            # Generate file hash
-            file_hash = hashlib.sha256(file_data).hexdigest()
+            # Move the temp file into place under its content-hash name.
             stored_filename = f"{file_hash}{file_ext}"
-
-            # Save to pending directory with error handling
-            file_path = os.path.join(self.upload_dir, 'pending', stored_filename)
+            file_path = os.path.join(pending_dir, stored_filename)
             try:
-                with open(file_path, 'wb') as f:
-                    f.write(file_data)
+                os.replace(temp_path, file_path)
+                temp_path = None
             except OSError as e:
-                logger.error(f"Failed to write file: {e}")
+                logger.error(f"Failed to store uploaded file: {e}")
                 return web.json_response({
                     'success': False,
                     'error': 'Failed to save file'
@@ -386,7 +427,7 @@ class TitanNetHTTPServer:
             app_id = await self.db.run_write_async(
                 self.db.add_app_to_repository,
                 metadata['name'], metadata['description'], metadata['category'],
-                metadata['version'], user['id'], file_path, len(file_data), metadata,
+                metadata['version'], user['id'], file_path, file_size, metadata,
             )
 
             logger.info(f"File uploaded: {metadata['name']} by {user['username']} (ID: {app_id})")
@@ -403,6 +444,13 @@ class TitanNetHTTPServer:
                 'success': False,
                 'error': str(e)
             }, status=500)
+        finally:
+            # Never leave a half-written .part file behind on any error path.
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
     async def handle_get_apps(self, request: web.Request) -> web.Response:
         """Get apps from repository with filters"""

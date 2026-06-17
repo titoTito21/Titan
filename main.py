@@ -357,6 +357,24 @@ def main(command_line_args=None):
         except Exception as e:
             print(f"Error initializing sound system: {e}")
 
+        # Start the Titan Buffer System IPC host so apps/games (separate
+        # processes) can forward buffer elements to this main process.
+        try:
+            from src.buffers import buffer_bus
+            buffer_bus.start_host()
+        except Exception as e:
+            print(f"Error starting buffer system host: {e}")
+
+        # Built-in categories (Titan-Net / Telegram / Elten) register
+        # contextually on connect/login, so they are NOT pre-registered here.
+
+        # Register the interactive TTS engine category (live parameter control).
+        try:
+            from src.buffers import tts_buffer
+            tts_buffer.register()
+        except Exception as e:
+            print(f"Error registering TTS buffer category: {e}")
+
         # Configuration wizard (first run, or forced via --relaunch-config).
         # Must run BEFORE the startup sound so users see the wizard the very
         # first time they launch Titan. The wizard owns its own wx event loop;

@@ -397,6 +397,15 @@ class TitanIMModuleManager:
                 # so module can use sounds at import time if needed
                 mod.sounds = _sound_api
 
+                # Inject the Buffer System API (category bound to this module),
+                # so an IM module can publish chat/PM/notification buffers into
+                # the global review system: mod.buffers.push("chat", text, ...).
+                try:
+                    from src.buffers import buffer_bus
+                    mod.buffers = buffer_bus.make_module_api(module_id)
+                except Exception as _be:
+                    print(f"[IMModule] buffer API injection failed: {_be}")
+
                 # Inject namespaced config helper. Modules store/restore
                 # their own settings via mod.config.load() / mod.config.save()
                 # without ever touching the encryption key behind titan.IM.

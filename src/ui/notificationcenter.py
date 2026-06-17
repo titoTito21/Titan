@@ -39,6 +39,17 @@ def show_notification(title, message):
     """Odtwarza dźwięk powiadomienia i odczytuje jego treść."""
     play_sound('ui/notify.ogg')
     speaker.speak(f"{title}, {message}")
+    # Feed the Titan Buffer System (Titan category -> Notifications buffer).
+    try:
+        from src.buffers import buffer_bus
+        from src.titan_core.translation import set_language
+        from src.settings.settings import get_setting
+        _ = set_language(get_setting('language', 'pl'))
+        buffer_bus.push('titan', 'notifications', message, author=title,
+                        kind='notification', category_name=_("Titan"),
+                        buffer_name=_("Notifications"))
+    except Exception as e:
+        print(f"[Notifications] buffer feed error: {e}")
 
 def _monitor_network_events():
     """Network monitoring using WMI (Windows only)."""

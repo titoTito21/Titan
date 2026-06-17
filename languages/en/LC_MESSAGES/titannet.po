@@ -1,3 +1,4 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
 # English translations for PROJECT.
 # Copyright (C) 2025 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
@@ -9,13 +10,13 @@ msgstr ""
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2026-05-14 12:48+0200\n"
 "PO-Revision-Date: 2025-11-22 19:24+0100\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: src/network/titan_net.py:423
@@ -1143,7 +1144,8 @@ msgstr "Name"
 msgid "Version"
 msgstr "Version"
 
-#: src/network/titan_net_forum_gui.py:92 src/network/titan_net_forum_gui.py:419
+#: src/network/titan_net_forum_gui.py:92
+#: src/network/titan_net_forum_gui.py:419
 #: src/network/titan_net_forum_gui.py:443 src/network/titan_net_gui.py:3701
 msgid "Author"
 msgstr "Author"
@@ -1421,11 +1423,11 @@ msgstr ""
 #: src/network/titan_net_gui.py:5040
 #, python-brace-format
 msgid ""
-"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
-"Attackers tracked: {attackers}"
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers "
+"tracked: {attackers}"
 msgstr ""
-"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
-"Attackers tracked: {attackers}"
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers "
+"tracked: {attackers}"
 
 #: src/network/titan_net_gui.py:5074
 #, python-brace-format
@@ -1518,7 +1520,8 @@ msgstr "Cerberus IP List"
 #: src/network/titan_net_gui.py:5235
 #, python-brace-format
 msgid "{ip} | Score: {score} | Type: {type} | Level: {level} | Since: {since}"
-msgstr "{ip} | Score: {score} | Type: {type} | Level: {level} | Since: {since}"
+msgstr ""
+"{ip} | Score: {score} | Type: {type} | Level: {level} | Since: {since}"
 
 #: src/network/titan_net_gui.py:5243
 msgid "No tracked attackers"
@@ -1791,14 +1794,14 @@ msgstr "Enter topic content:"
 msgid "Topic content cannot be empty"
 msgstr "Topic content cannot be empty"
 
-#: src/network/titan_net_forum_gui.py:78 src/network/titan_net_forum_gui.py:134
-#: src/network/titan_net_gui.py:5662
+#: src/network/titan_net_forum_gui.py:78
+#: src/network/titan_net_forum_gui.py:134 src/network/titan_net_gui.py:5662
 msgid "General"
 msgstr "General"
 
-#: src/network/titan_net_forum_gui.py:79 src/network/titan_net_forum_gui.py:135
-#: src/network/titan_net_gui.py:5662 src/system/klangomode.py:206
-#: src/system/klangomode.py:1280
+#: src/network/titan_net_forum_gui.py:79
+#: src/network/titan_net_forum_gui.py:135 src/network/titan_net_gui.py:5662
+#: src/system/klangomode.py:206 src/system/klangomode.py:1280
 msgid "Help"
 msgstr "Help"
 
@@ -1806,8 +1809,8 @@ msgstr "Help"
 msgid "Off-Topic"
 msgstr "Off-Topic"
 
-#: src/network/titan_net_forum_gui.py:80 src/network/titan_net_forum_gui.py:136
-#: src/network/titan_net_gui.py:5662
+#: src/network/titan_net_forum_gui.py:80
+#: src/network/titan_net_forum_gui.py:136 src/network/titan_net_gui.py:5662
 msgid "Announcements"
 msgstr "Announcements"
 
@@ -2296,11 +2299,11 @@ msgstr "Please select a room first"
 #: src/network/titan_net_gui.py:6448
 #, python-brace-format
 msgid ""
-"Are you sure you want to delete room '{name}'? This will remove all "
-"messages and members."
+"Are you sure you want to delete room '{name}'? This will remove all messages"
+" and members."
 msgstr ""
-"Are you sure you want to delete room '{name}'? This will remove all "
-"messages and members."
+"Are you sure you want to delete room '{name}'? This will remove all messages"
+" and members."
 
 #: src/network/titan_net_gui.py:6458
 msgid "Room deleted successfully"
@@ -2793,16 +2796,19 @@ msgid "Titan-Net Forum"
 msgstr "Titan-Net Forum"
 
 #: src/network/feedback_hub.py:256 src/network/titan_net_forum_gui.py:75
-#: src/network/titan_net_forum_gui.py:85 src/network/titan_net_forum_gui.py:518
+#: src/network/titan_net_forum_gui.py:85
+#: src/network/titan_net_forum_gui.py:518
 #: src/network/titan_net_forum_gui.py:524
 msgid "Category:"
 msgstr "Category:"
 
-#: src/network/titan_net_forum_gui.py:77 src/network/titan_net_forum_gui.py:133
+#: src/network/titan_net_forum_gui.py:77
+#: src/network/titan_net_forum_gui.py:133
 msgid "All"
 msgstr "All"
 
-#: src/network/titan_net_forum_gui.py:81 src/network/titan_net_forum_gui.py:137
+#: src/network/titan_net_forum_gui.py:81
+#: src/network/titan_net_forum_gui.py:137
 msgid "Discussion"
 msgstr "Discussion"
 
@@ -2814,7 +2820,8 @@ msgstr "Title"
 msgid "Replies"
 msgstr "Replies"
 
-#: src/network/titan_net_forum_gui.py:94 src/network/titan_net_forum_gui.py:421
+#: src/network/titan_net_forum_gui.py:94
+#: src/network/titan_net_forum_gui.py:421
 msgid "Views"
 msgstr "Views"
 
@@ -3529,6 +3536,42 @@ msgstr "Could not open network settings"
 #: src/system/klangomode.py:2333
 msgid "Titan App Suite"
 msgstr "Titan App Suite"
+
+#: src/network/titan_net_gui.py
+msgid "Uploading Package"
+msgstr "Uploading Package"
+
+#: src/network/titan_net_gui.py
+msgid "Starting upload..."
+msgstr "Starting upload..."
+
+#: src/network/titan_net_gui.py
+msgid "Uploading: {percent}%"
+msgstr "Uploading: {percent}%"
+
+#: src/network/titan_net_gui.py
+msgid "Downloading Package"
+msgstr "Downloading Package"
+
+#: src/network/titan_net_gui.py
+msgid "Starting download..."
+msgstr "Starting download..."
+
+#: src/network/titan_net_gui.py
+msgid "Downloading: {percent}%"
+msgstr "Downloading: {percent}%"
+
+#: src/network/titan_net_gui.py
+msgid "Failed to prepare download: {error}"
+msgstr "Failed to prepare download: {error}"
+
+#: src/network/titan_net_gui.py
+msgid ""
+"Package downloaded successfully to:\n"
+"{path}"
+msgstr ""
+"Package downloaded successfully to:\n"
+"{path}"
 
 #~ msgid "Welcome user {username}, Titan ID: {titan_number}"
 #~ msgstr ""
@@ -4373,9 +4416,8 @@ msgstr "Titan App Suite"
 #~ msgstr ""
 
 #~ msgid ""
-#~ "Showing online users. To ban offline "
-#~ "users, use their User ID in the"
-#~ " General Moderation menu."
+#~ "Showing online users. To ban offline users, use their User ID in the General"
+#~ " Moderation menu."
 #~ msgstr ""
 
 #~ msgid "All Users"
@@ -4521,4 +4563,3 @@ msgstr "Titan App Suite"
 
 #~ msgid "New message from {user}"
 #~ msgstr "New message from {user}"
-

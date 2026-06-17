@@ -432,6 +432,24 @@ class TelegramClient:
             if message_data['is_group'] or message_data['is_channel']:
                 message_data['group_name'] = chat_name
 
+            # Feed the Titan Buffer System (Telegram category).
+            try:
+                from src.buffers import buffer_bus
+                from src.titan_core.translation import set_language
+                from src.settings.settings import get_setting
+                _bt = set_language(get_setting('language', 'pl'))
+                if message_data['is_private']:
+                    _bid, _blabel, _kind = 'pm', _bt("Private messages"), 'private'
+                else:
+                    _bid, _blabel, _kind = 'chat', _bt("Chat"), 'message'
+                _author = message_data.get('group_name') or message_data['sender_username']
+                if msg_text:
+                    buffer_bus.push('telegram', _bid, msg_text, author=_author,
+                                    kind=_kind, category_name=_bt("Telegram"),
+                                    buffer_name=_blabel, raw=None)
+            except Exception as _be:
+                print(f"[Telegram] buffer feed error: {_be}")
+
             # Sound + TTS is handled exclusively by the GUI callback
             # (see telegram_gui.on_message_received) so we don't double up.
             for callback in self.message_callbacks:
@@ -623,6 +641,13 @@ class TelegramClient:
     def _notify_connection_success(self):
         """Notify about successful connection"""
         print(_("Connected to Telegram as {}").format(self.user_data['username']))
+
+        # Register the Telegram buffer category (contextual).
+        try:
+            from src.buffers import defaults as _bd
+            _bd.register_telegram()
+        except Exception as _be:
+            print(f"[Telegram] buffer category register error: {_be}")
         
         # Use TTS to announce successful connection
         import accessible_output3.outputs.auto
@@ -1017,10 +1042,17 @@ class TelegramClient:
     def disconnect(self):
         """Disconnect from Telegram safely"""
         print(_("Disconnecting from Telegram..."))
-        
+
         # Set disconnected state immediately to prevent new operations
         self.is_connected = False
         self.logged_in = False
+
+        # Remove the Telegram buffer category (contextual).
+        try:
+            from src.buffers import defaults as _bd
+            _bd.remove_telegram()
+        except Exception as _be:
+            print(f"[Telegram] buffer category remove error: {_be}")
         
         try:
             # Stop any ongoing operations first

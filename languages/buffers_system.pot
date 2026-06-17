@@ -1,0 +1,87 @@
+# Titan Buffer System translations template.
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# Copyright (C) Klaudiusz Wypych.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Titan Buffers System\n"
+"Report-Msgid-Bugs-To: klaldekwypych@gmail.com\n"
+"POT-Creation-Date: 2026-06-16 00:00+0000\n"
+"PO-Revision-Date: 2026-06-16 00:00+0000\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language-Team: Titan\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "buffer category"
+msgstr ""
+
+msgid "buffer"
+msgstr ""
+
+msgid "{author}: {text}"
+msgstr ""
+
+msgid "{index} of {total}"
+msgstr ""
+
+msgid "Buffer is empty"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Titan"
+msgstr ""
+
+msgid "Titan-Net"
+msgstr ""
+
+msgid "Chat"
+msgstr ""
+
+msgid "Private messages"
+msgstr ""
+
+msgid "Notifications"
+msgstr ""
+
+msgid "Voice"
+msgstr ""
+
+msgid "Speed"
+msgstr ""
+
+msgid "Pitch"
+msgstr ""
+
+msgid "Volume"
+msgstr ""
+
+msgid "On"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "None"
+msgstr ""
+
+msgid "No voices"
+msgstr ""
+
+msgid "TTS engine"
+msgstr ""
+
+msgid "{name}, {index} of {total}"
+msgstr ""
+
+msgid "Message from {author}, {text}"
+msgstr ""
+
+msgid "message"
+msgstr ""
+
+msgid "notification"
+msgstr ""

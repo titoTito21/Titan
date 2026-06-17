@@ -514,6 +514,34 @@ class PersistentNavigationHotkeys:
         ('esc', VK_ESCAPE),
     ]
 
+    # Buffer System keys. Registered ONLY while Titan UI is active (these
+    # hotkeys live and die with this thread, which _update_hotkeys only starts
+    # when titan_ui_mode is on), so they are never suppressed system-wide
+    # during normal use. Each is dispatched as 'buffer:<action>'.
+    MOD_SHIFT = 0x0004
+    VK_OEM_MINUS = 0xBD   # -
+    VK_OEM_PLUS = 0xBB     # =
+    VK_OEM_4 = 0xDB        # [
+    VK_OEM_6 = 0xDD        # ]
+    VK_OEM_COMMA = 0xBC    # ,
+    VK_OEM_PERIOD = 0xBE   # .
+
+    BUFFER_KEY_MAP = [
+        # (action, vk, modifiers) - Shift jumps to first/last of the level
+        ('prev_category', VK_OEM_MINUS, 0),
+        ('next_category', VK_OEM_PLUS, 0),
+        ('first_category', VK_OEM_MINUS, MOD_SHIFT),
+        ('last_category', VK_OEM_PLUS, MOD_SHIFT),
+        ('prev_buffer', VK_OEM_4, 0),
+        ('next_buffer', VK_OEM_6, 0),
+        ('first_buffer', VK_OEM_4, MOD_SHIFT),
+        ('last_buffer', VK_OEM_6, MOD_SHIFT),
+        ('prev_element', VK_OEM_COMMA, 0),
+        ('next_element', VK_OEM_PERIOD, 0),
+        ('first_element', VK_OEM_COMMA, MOD_SHIFT),
+        ('last_element', VK_OEM_PERIOD, MOD_SHIFT),
+    ]
+
     def __init__(self, on_key):
         """on_key(name) is called on key press. Names:
         'up', 'down', 'left', 'right', 'space', 'backspace', 'esc',
@@ -571,6 +599,16 @@ class PersistentNavigationHotkeys:
                 else:
                     err = ctypes.GetLastError()
                     print(f"RegisterHotKey failed for nav key '{name}' (vk=0x{vk:02X}, error={err})")
+
+            # Buffer System keys (only while Titan UI active).
+            for idx, (action, vk, mod) in enumerate(self.BUFFER_KEY_MAP):
+                hk_id = self.HOTKEY_BASE_ID + 100 + idx
+                if ctypes.windll.user32.RegisterHotKey(None, hk_id, mod, vk):
+                    self._registered_ids.append(hk_id)
+                    id_to_name[hk_id] = f"buffer:{action}"
+                else:
+                    err = ctypes.GetLastError()
+                    print(f"RegisterHotKey failed for buffer key '{action}' (vk=0x{vk:02X}, mod={mod}, error={err})")
 
             if not self._registered_ids:
                 print("All navigation RegisterHotKey calls failed, falling back to keyboard library")
@@ -635,6 +673,19 @@ class PersistentNavigationHotkeys:
             '<backspace>': lambda: self.on_key('backspace'),
             '<esc>': lambda: self.on_key('esc'),
             '`+<enter>': lambda: self.on_key('titan_enter'),
+            # Buffer System keys (best-effort on non-Windows).
+            '-': lambda: self.on_key('buffer:prev_category'),
+            '=': lambda: self.on_key('buffer:next_category'),
+            '<shift>+-': lambda: self.on_key('buffer:first_category'),
+            '<shift>+=': lambda: self.on_key('buffer:last_category'),
+            '[': lambda: self.on_key('buffer:prev_buffer'),
+            ']': lambda: self.on_key('buffer:next_buffer'),
+            '<shift>+[': lambda: self.on_key('buffer:first_buffer'),
+            '<shift>+]': lambda: self.on_key('buffer:last_buffer'),
+            ',': lambda: self.on_key('buffer:prev_element'),
+            '.': lambda: self.on_key('buffer:next_element'),
+            '<shift>+,': lambda: self.on_key('buffer:first_element'),
+            '<shift>+.': lambda: self.on_key('buffer:last_element'),
         }
         self._fallback_hotkeys = GlobalHotKeys(fallback_map)
         self._fallback_hotkeys.start()
@@ -3613,6 +3664,15 @@ class InvisibleUI:
             if self._shutdown_in_progress:
                 return
             if not self.titan_ui_mode or self.titan_ui_temporarily_disabled:
+                return
+
+            # Buffer System keys are dispatched as 'buffer:<action>'.
+            if name.startswith('buffer:'):
+                try:
+                    from src.buffers import buffer_controller
+                    buffer_controller.dispatch(name.split(':', 1)[1])
+                except Exception as e:
+                    print(f"Error dispatching buffer action '{name}': {e}")
                 return
 
             if name == 'titan_enter':

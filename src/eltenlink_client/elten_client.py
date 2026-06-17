@@ -331,6 +331,13 @@ class EltenLinkClient:
         self.password = password
         self.is_connected = True
 
+        # Register the Elten buffer category (contextual).
+        try:
+            from src.buffers import defaults as _bd
+            _bd.register_elten()
+        except Exception as _be:
+            print(f"[Elten] buffer category register error: {_be}")
+
         return {'success': True, 'message': self.greeting or _("Login successful"), 'requires_2fa': False}
 
     def verify_2fa(self, code):
@@ -683,6 +690,28 @@ class EltenLinkClient:
             }
             messages.append(msg)
             idx += fields_per
+
+        # Feed the Titan Buffer System once per never-seen conversation id, so
+        # repeated polls of the same unread items do not duplicate entries.
+        try:
+            seen = getattr(self, '_buffer_seen_ids', None)
+            if seen is None:
+                seen = set()
+                self._buffer_seen_ids = seen
+            fresh = [m for m in messages if m['id'] not in seen]
+            if fresh:
+                from src.buffers import buffer_bus
+                from src.titan_core.translation import set_language
+                from src.settings.settings import get_setting
+                _bt = set_language(get_setting('language', 'pl'))
+                for m in fresh:
+                    seen.add(m['id'])
+                    buffer_bus.push('elten', 'pm', m.get('subject') or '',
+                                    author=m.get('user'), kind='private',
+                                    category_name=_bt("Elten"),
+                                    buffer_name=_bt("Private messages"))
+        except Exception as _be:
+            print(f"[Elten] buffer feed error: {_be}")
 
         return messages
 

@@ -518,6 +518,14 @@ class TitanNetClient:
                         # Start message listener
                         self._start_listener()
 
+                        # Register the Titan-Net buffer category now that we
+                        # are connected, so it appears in the review cycle.
+                        try:
+                            from src.buffers import defaults as _bd
+                            _bd.register_titannet()
+                        except Exception as _be:
+                            print(f"[CLIENT] buffer category register error: {_be}")
+
                         # Trigger user online callback
                         if self.on_user_online:
                             self.on_user_online(self.username, has_custom_sounds=self.has_custom_sounds)
@@ -580,6 +588,13 @@ class TitanNetClient:
         try:
             # Stop listener
             self._stop_listener()
+
+            # Remove the Titan-Net buffer category (contextual).
+            try:
+                from src.buffers import defaults as _bd
+                _bd.remove_titannet()
+            except Exception as _be:
+                print(f"[CLIENT] buffer category remove error: {_be}")
 
             # Trigger user offline callback before closing
             if self.on_user_offline:
@@ -1368,6 +1383,58 @@ class TitanNetClient:
                 'message': str(e)
             }
 
+    def _feed_buffer_system(self, msg_type, message):
+        """Forward relevant incoming messages to the Titan Buffer System.
+
+        Maps Titan-Net message types to the 'titannet' category and the right
+        buffer. Runs alongside the GUI callbacks and never affects them.
+        """
+        # Only the types worth reviewing land in buffers.
+        mapping = {
+            'private_message': ('pm', 'Private messages', 'private'),
+            'room_message': ('chat', 'Chat', 'message'),
+            'moderation_broadcast': ('notifications', 'Notifications', 'notification'),
+            'new_user_broadcast': ('notifications', 'Notifications', 'notification'),
+        }
+        spec = mapping.get(msg_type)
+        if not spec:
+            return
+        buffer_id, buffer_label, kind = spec
+
+        text = (message.get('message') or message.get('content')
+                or message.get('text') or '')
+        author = (message.get('username') or message.get('from_username')
+                  or message.get('sender') or message.get('from') or None)
+        if not text:
+            return
+
+        try:
+            _ = self._buffer_translator()
+            from src.buffers import buffer_bus
+            buffer_bus.push(
+                'titannet', buffer_id, text, author=author, kind=kind,
+                category_name=_("Titan-Net"), buffer_name=_(buffer_label),
+                raw=message)
+        except Exception as e:
+            print(f"[CLIENT] _feed_buffer_system push error: {e}")
+
+    def _buffer_translator(self):
+        """Cached multi-domain translator (includes the buffers_system domain)."""
+        try:
+            from src.settings.settings import get_setting
+            lang = get_setting('language', 'pl')
+        except Exception:
+            lang = 'pl'
+        if getattr(self, '_buf_tr_lang', None) != lang or getattr(self, '_buf_tr', None) is None:
+            try:
+                from src.titan_core.translation import set_language
+                self._buf_tr = set_language(lang)
+                self._buf_tr_lang = lang
+            except Exception:
+                self._buf_tr = (lambda s: s)
+                self._buf_tr_lang = lang
+        return self._buf_tr
+
     def _start_listener(self):
         """Start WebSocket message listener thread"""
         if self.listener_running:
@@ -1418,6 +1485,13 @@ class TitanNetClient:
                                     self._cached_responses[req_id] = message
                                     event.set()
                                     break  # Process only the first match
+
+                            # Feed the Titan Buffer System (in addition to the
+                            # GUI callbacks below; it never replaces them).
+                            try:
+                                self._feed_buffer_system(msg_type, message)
+                            except Exception as _be:
+                                print(f"[CLIENT] buffer feed error: {_be}")
 
                             # Handle different message types
                             # voice_audio first - highest frequency during calls (~33/sec per speaker)
@@ -1927,21 +2001,33 @@ class TitanNetClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def download_app(self, app_id: int) -> Dict:
+    def download_app(self, app_id: int, save_path: str = None,
+                     progress_callback=None) -> Dict:
         """
-        Download app from repository
+        Download app from repository.
 
         Args:
             app_id: App ID
+            save_path: If given, the file is STREAMED straight to this path in
+                1 MB chunks (constant memory, works for multi-GB packages) and
+                the result carries ``file_path`` instead of ``file_data``.
+                If omitted, the legacy behaviour is kept and the whole file is
+                returned in memory as ``file_data`` (only safe for small files).
+            progress_callback: Optional callable(bytes_done, total_bytes) invoked
+                as bytes arrive. total_bytes is 0 when the server sends no
+                Content-Length.
 
         Returns:
-            Dict with success status, file_data, and filename
+            Dict with success status, filename, and either file_path or file_data
         """
         try:
             response = requests.get(
                 f"{self.http_url}/api/download/{app_id}",
                 headers=self._http_headers(),
-                timeout=30  # Longer timeout for file download
+                # (connect, read) - a multi-GB download over a slow link can
+                # take many minutes; read timeout is the gap between bytes.
+                timeout=(30, 1800),
+                stream=bool(save_path),
             )
 
             if response.status_code == 200:
@@ -1950,6 +2036,27 @@ class TitanNetClient:
                 filename = 'app.zip'
                 if 'filename=' in content_disposition:
                     filename = content_disposition.split('filename=')[1].strip('"')
+
+                if save_path:
+                    total = int(response.headers.get('Content-Length', 0) or 0)
+                    downloaded = 0
+                    with open(save_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=1024 * 1024):
+                            if not chunk:
+                                continue
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if progress_callback:
+                                try:
+                                    progress_callback(downloaded, total)
+                                except Exception:
+                                    pass
+                    return {
+                        "success": True,
+                        "file_path": save_path,
+                        "filename": filename,
+                        "size": downloaded,
+                    }
 
                 return {
                     "success": True,
@@ -1962,7 +2069,8 @@ class TitanNetClient:
             return {"success": False, "error": str(e)}
 
     def upload_app(self, file_path: str, name: str, version: str = '',
-                   description: str = '', category: str = 'tools') -> Dict:
+                   description: str = '', category: str = 'tools',
+                   progress_callback=None) -> Dict:
         """
         Upload app to repository
 
@@ -1978,13 +2086,10 @@ class TitanNetClient:
         """
         try:
             import os
+            import uuid
 
             if not os.path.exists(file_path):
                 return {"success": False, "error": "File not found"}
-
-            # Read file
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
 
             filename = os.path.basename(file_path)
 
@@ -1996,17 +2101,74 @@ class TitanNetClient:
                 'category': category
             }
 
-            # Prepare multipart form data with metadata as JSON
-            files = {
-                'metadata': (None, json.dumps(metadata), 'application/json'),
-                'file': (filename, file_data, 'application/octet-stream')
-            }
+            # Build the multipart/form-data body as a generator so the file is
+            # streamed off disk in 1 MB blocks and never held in RAM.
+            #
+            # NOTE: plain `requests` with files=/a file object does NOT stream
+            # - urllib3's encode_multipart_formdata does fp.read() and assembles
+            # the entire body as one bytes object first. For a multi-GB TCE
+            # package that exhausts client memory and the upload dies BEFORE a
+            # single byte reaches the server (no request even shows up in the
+            # server log). Passing a generator as `data=` makes requests use
+            # chunked transfer-encoding and pull the body lazily, keeping memory
+            # flat regardless of package size. aiohttp dechunks transparently
+            # and request.multipart() reads it exactly as before.
+            boundary = '----TitanNetBoundary' + uuid.uuid4().hex
+            crlf = b'\r\n'
+            dashb = ('--' + boundary).encode('ascii')
 
+            preamble = (
+                dashb + crlf
+                + b'Content-Disposition: form-data; name="metadata"\r\n'
+                + b'Content-Type: application/json\r\n\r\n'
+                + json.dumps(metadata).encode('utf-8') + crlf
+                + dashb + crlf
+                + ('Content-Disposition: form-data; name="file"; '
+                   'filename="%s"\r\n' % filename).encode('utf-8')
+                + b'Content-Type: application/octet-stream\r\n\r\n'
+            )
+            epilogue = crlf + dashb + b'--' + crlf
+
+            # Total body size for progress reporting (preamble + file + epilogue).
+            total_size = len(preamble) + os.path.getsize(file_path) + len(epilogue)
+
+            def _report(sent):
+                if progress_callback:
+                    try:
+                        progress_callback(sent, total_size)
+                    except Exception:
+                        pass
+
+            def body_stream():
+                sent = 0
+                yield preamble
+                sent += len(preamble)
+                _report(sent)
+                with open(file_path, 'rb') as fh:
+                    while True:
+                        chunk = fh.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                        sent += len(chunk)
+                        _report(sent)
+                yield epilogue
+                sent += len(epilogue)
+                _report(sent)
+
+            headers = self._http_headers(include_content_type=False)
+            headers['Content-Type'] = (
+                'multipart/form-data; boundary=%s' % boundary
+            )
+
+            # (connect timeout, read timeout). A multi-GB upload over a slow
+            # link can take many minutes; the read timeout is the gap allowed
+            # between bytes, not the total transfer time.
             response = requests.post(
                 f"{self.http_url}/api/repository/upload",
-                files=files,
-                headers=self._http_headers(include_content_type=False),
-                timeout=60  # Longer timeout for upload
+                data=body_stream(),
+                headers=headers,
+                timeout=(30, 1800)
             )
 
             return response.json()

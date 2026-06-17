@@ -1,0 +1,90 @@
+# Titan Buffer System - English translation.
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# Copyright (C) Klaudiusz Wypych.
+# NOTE: some items are auto translated by AI.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Titan Buffers System\n"
+"Report-Msgid-Bugs-To: klaldekwypych@gmail.com\n"
+"POT-Creation-Date: 2026-06-16 00:00+0000\n"
+"PO-Revision-Date: 2026-06-16 00:00+0000\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Note: some items are auto translated by AI\n"
+
+msgid "buffer category"
+msgstr "buffer category"
+
+msgid "buffer"
+msgstr "buffer"
+
+msgid "{author}: {text}"
+msgstr "{author}: {text}"
+
+msgid "{index} of {total}"
+msgstr "{index} of {total}"
+
+msgid "Buffer is empty"
+msgstr "Buffer is empty"
+
+msgid "All"
+msgstr "All"
+
+msgid "Titan"
+msgstr "Titan"
+
+msgid "Titan-Net"
+msgstr "Titan-Net"
+
+msgid "Chat"
+msgstr "Chat"
+
+msgid "Private messages"
+msgstr "Private messages"
+
+msgid "Notifications"
+msgstr "Notifications"
+
+msgid "Voice"
+msgstr "Voice"
+
+msgid "Speed"
+msgstr "Speed"
+
+msgid "Pitch"
+msgstr "Pitch"
+
+msgid "Volume"
+msgstr "Volume"
+
+msgid "On"
+msgstr "On"
+
+msgid "Off"
+msgstr "Off"
+
+msgid "None"
+msgstr "None"
+
+msgid "No voices"
+msgstr "No voices"
+
+msgid "TTS engine"
+msgstr "TTS engine"
+
+msgid "{name}, {index} of {total}"
+msgstr "{name}, {index} of {total}"
+
+msgid "Message from {author}, {text}"
+msgstr "Message from {author}, {text}"
+
+msgid "message"
+msgstr "message"
+
+msgid "notification"
+msgstr "notification"

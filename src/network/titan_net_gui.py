@@ -3788,61 +3788,8 @@ class TitanNetMainWindow(wx.Frame):
         dlg.Destroy()
 
     def download_app(self, app_id, app):
-        """Download and save app"""
-        speak_titannet(_("Downloading..."))
-        play_sound('system/connecting.ogg')
-
-        def download_thread():
-            result = self.titan_client.download_app(app_id)
-            wx.CallAfter(self._on_app_downloaded, result, app)
-
-        threading.Thread(target=download_thread, daemon=True).start()
-
-    def _on_app_downloaded(self, result, app):
-        """Handle app download completion"""
-        if result.get('success'):
-            play_sound('titannet/file_success.ogg')
-            speak_titannet(_("Download complete"))
-
-            file_data = result.get('file_data')
-
-            try:
-                import os
-                # Create download directory
-                download_dir = os.path.join('data', 'downloaded packages')
-                os.makedirs(download_dir, exist_ok=True)
-
-                # Get author username
-                author = app.get('uploader_username', app.get('author_username', 'unknown'))
-
-                # Create filename: author_packagename_version.TCEPACKAGE
-                safe_author = "".join(c for c in author if c.isalnum() or c in ('-', '_')).strip()
-                safe_name = "".join(c for c in app['name'] if c.isalnum() or c in ('-', '_')).strip()
-                version = app.get('version', '1.0')
-                safe_version = "".join(c for c in version if c.isalnum() or c in ('-', '_', '.')).strip()
-
-                filename = f"{safe_author}_{safe_name}_v{safe_version}.TCEPACKAGE"
-                save_path = os.path.join(download_dir, filename)
-
-                # Save file
-                with open(save_path, 'wb') as f:
-                    f.write(file_data)
-
-                speak_notification(
-                    _("Application downloaded successfully to:\n{path}").format(path=save_path),
-                    'success'
-                )
-                play_sound('core/SELECT.ogg')
-            except Exception as e:
-                play_sound('core/error.ogg')
-                speak_notification(
-                    _("Failed to save file: {error}").format(error=str(e)),
-                    'error'
-                )
-        else:
-            play_sound('core/error.ogg')
-            error = result.get('error', _('Download failed'))
-            speak_notification(error, 'error')
+        """Download and save app (streams to disk with a progress bar)."""
+        self._download_package_with_progress(app_id, app)
 
     def join_room(self, room_id, room_name, password=None):
         """Join a chat room"""
@@ -6760,43 +6707,8 @@ class TitanNetMainWindow(wx.Frame):
         confirm.Destroy()
 
     def _download_app_file(self, app):
-        """Download app file (approved or pending)"""
-        def download_thread():
-            try:
-                import os
-                speak_titannet(_("Downloading package..."))
-                result = self.titan_client.download_app(app['id'])
-
-                if result.get('success'):
-                    # Create download directory
-                    download_dir = os.path.join('data', 'downloaded packages')
-                    os.makedirs(download_dir, exist_ok=True)
-
-                    # Get author username
-                    author = app.get('uploader_username', app.get('author_username', 'unknown'))
-
-                    # Create filename: author_packagename_version.TCEPACKAGE
-                    safe_author = "".join(c for c in author if c.isalnum() or c in ('-', '_')).strip()
-                    safe_name = "".join(c for c in app['name'] if c.isalnum() or c in ('-', '_')).strip()
-                    version = app.get('version', '1.0')
-                    safe_version = "".join(c for c in version if c.isalnum() or c in ('-', '_', '.')).strip()
-
-                    filename = f"{safe_author}_{safe_name}_v{safe_version}.TCEPACKAGE"
-                    file_path = os.path.join(download_dir, filename)
-
-                    # Save file
-                    with open(file_path, 'wb') as f:
-                        f.write(result['file_data'])
-
-                    success_msg = _("Package downloaded successfully") + f"\n{file_path}"
-                    wx.CallAfter(speak_notification, success_msg, 'success')
-                else:
-                    wx.CallAfter(speak_notification,
-                        result.get('error', _("Failed to download package")), 'error')
-            except Exception as e:
-                wx.CallAfter(speak_notification, str(e), 'error')
-
-        threading.Thread(target=download_thread, daemon=True).start()
+        """Download app file (approved or pending) with a progress bar."""
+        self._download_package_with_progress(app['id'], app)
 
     def _approve_app(self, app_id, app_name):
         """Approve package"""
@@ -7423,27 +7335,32 @@ class TitanNetMainWindow(wx.Frame):
                         if ver_dlg.ShowModal() == wx.ID_OK:
                             version = ver_dlg.GetValue().strip()
 
-                            # Upload package
+                            # Upload package with a GUI progress bar.
+                            speak_titannet(_("Uploading package..."))
+                            progress = wx.ProgressDialog(
+                                _("Uploading Package"),
+                                _("Starting upload..."),
+                                maximum=100,
+                                parent=self,
+                                style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_SMOOTH
+                            )
+                            on_progress = self._make_transfer_progress(
+                                progress, _("Uploading: {percent}%"))
+
                             def upload_thread():
                                 try:
-                                    speak_titannet(_("Uploading package..."))
                                     result = self.titan_client.upload_app(
                                         file_path,
                                         app_name,
                                         version,
                                         description,
-                                        category
+                                        category,
+                                        progress_callback=on_progress
                                     )
-                                    if result.get('success'):
-                                        wx.CallAfter(speak_titannet, _("Package uploaded successfully"))
-                                        wx.CallAfter(speak_notification,
-                                            _("Package uploaded and awaiting approval"),
-                                            'success')
-                                    else:
-                                        error_msg = result.get('error', result.get('message', _("Failed to upload package")))
-                                        wx.CallAfter(speak_notification, error_msg, 'error')
+                                    wx.CallAfter(self._on_upload_done, result, progress)
                                 except Exception as e:
-                                    wx.CallAfter(speak_notification, str(e), 'error')
+                                    wx.CallAfter(self._on_upload_done,
+                                                 {"success": False, "error": str(e)}, progress)
 
                             threading.Thread(target=upload_thread, daemon=True).start()
 
@@ -7453,6 +7370,118 @@ class TitanNetMainWindow(wx.Frame):
             name_dlg.Destroy()
 
         dlg.Destroy()
+
+    def _make_transfer_progress(self, progress, announce_template):
+        """Return a thread-safe progress callback for upload/download.
+
+        The returned callback is invoked from a worker thread; it marshals all
+        UI work onto the main thread with wx.CallAfter. The percentage is spoken
+        via the screen reader only every 10% so a long transfer doesn't flood
+        TTS. When the total size is unknown (0) the bar pulses instead.
+        """
+        state = {'last_bucket': -1}
+
+        def on_progress(done, total):
+            def update():
+                if total and total > 0:
+                    pct = int(done * 100 / total)
+                    if pct > 100:
+                        pct = 100
+                    try:
+                        progress.Update(pct)
+                    except Exception:
+                        return
+                    bucket = pct - (pct % 10)
+                    if bucket != state['last_bucket'] and pct < 100:
+                        state['last_bucket'] = bucket
+                        speak_titannet(announce_template.format(percent=bucket))
+                else:
+                    try:
+                        progress.Pulse()
+                    except Exception:
+                        return
+            wx.CallAfter(update)
+
+        return on_progress
+
+    def _on_upload_done(self, result, progress):
+        """Close the upload progress bar and report the outcome."""
+        try:
+            progress.Destroy()
+        except Exception:
+            pass
+        if result.get('success'):
+            speak_titannet(_("Package uploaded successfully"))
+            speak_notification(
+                _("Package uploaded and awaiting approval"), 'success')
+        else:
+            error_msg = result.get('error', result.get('message',
+                                    _("Failed to upload package")))
+            speak_notification(error_msg, 'error')
+
+    def _build_package_save_path(self, app):
+        """Build the on-disk save path for a downloaded package."""
+        import os
+        download_dir = os.path.join('data', 'downloaded packages')
+        os.makedirs(download_dir, exist_ok=True)
+        author = app.get('uploader_username', app.get('author_username', 'unknown'))
+        safe_author = "".join(c for c in author if c.isalnum() or c in ('-', '_')).strip()
+        safe_name = "".join(c for c in app['name'] if c.isalnum() or c in ('-', '_')).strip()
+        version = app.get('version', '1.0')
+        safe_version = "".join(c for c in version if c.isalnum() or c in ('-', '_', '.')).strip()
+        filename = f"{safe_author}_{safe_name}_v{safe_version}.TCEPACKAGE"
+        return os.path.join(download_dir, filename)
+
+    def _download_package_with_progress(self, app_id, app):
+        """Download a package straight to disk with a GUI progress bar."""
+        try:
+            save_path = self._build_package_save_path(app)
+        except Exception as e:
+            speak_notification(
+                _("Failed to prepare download: {error}").format(error=str(e)),
+                'error')
+            return
+
+        speak_titannet(_("Downloading package..."))
+        play_sound('system/connecting.ogg')
+        progress = wx.ProgressDialog(
+            _("Downloading Package"),
+            _("Starting download..."),
+            maximum=100,
+            parent=self,
+            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_SMOOTH
+        )
+        on_progress = self._make_transfer_progress(
+            progress, _("Downloading: {percent}%"))
+
+        def download_thread():
+            try:
+                result = self.titan_client.download_app(
+                    app_id, save_path=save_path, progress_callback=on_progress)
+                wx.CallAfter(self._on_package_download_done,
+                             result, save_path, progress)
+            except Exception as e:
+                wx.CallAfter(self._on_package_download_done,
+                             {"success": False, "error": str(e)}, save_path, progress)
+
+        threading.Thread(target=download_thread, daemon=True).start()
+
+    def _on_package_download_done(self, result, save_path, progress):
+        """Close the download progress bar and report the outcome."""
+        try:
+            progress.Destroy()
+        except Exception:
+            pass
+        if result.get('success'):
+            play_sound('titannet/file_success.ogg')
+            speak_titannet(_("Download complete"))
+            speak_notification(
+                _("Package downloaded successfully to:\n{path}").format(path=save_path),
+                'success')
+            play_sound('core/SELECT.ogg')
+        else:
+            play_sound('core/error.ogg')
+            speak_notification(result.get('error', _('Download failed')), 'error')
 
     def show_search_apps_dialog(self):
         """Dialog to search packages"""

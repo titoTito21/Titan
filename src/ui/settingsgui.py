@@ -2474,6 +2474,14 @@ class SettingsFrame(wx.Frame):
 
                 # Rebuild dynamic engine config controls
                 self._rebuild_engine_config_controls(engine_id)
+
+                # Refresh the Titan Buffer System TTS category so its
+                # parameters reflect the newly selected engine.
+                try:
+                    from src.buffers import tts_buffer
+                    tts_buffer.refresh()
+                except Exception as _be:
+                    print(f"Error refreshing TTS buffer: {_be}")
         except Exception as e:
             print(f"Error setting engine: {e}")
 

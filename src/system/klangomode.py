@@ -490,6 +490,15 @@ class KlangoMode:
             if isinstance(key, bytes):
                 key = key.decode('utf-8')
 
+            # ---- Titan Buffer System review keys ----
+            # msvcrt delivers Shift variants directly as _ + { } < >.
+            try:
+                from src.buffers import buffer_controller
+                if buffer_controller.handle_char(key):
+                    return
+            except Exception as e:
+                print(f"Error in Klango console buffer key: {e}")
+
             # Handle special keys
             if key == '\x1b':  # ESC key
                 if self.menu_open:
@@ -1559,7 +1568,33 @@ class KlangoFrame(wx.Frame):
         if event.ControlDown() and keycode == ord('Q'):
             self.exit_program()
             return
-        
+
+        # ---- Titan Buffer System review keys (- = [ ] , . and Shift) ----
+        if not event.ControlDown() and not event.AltDown():
+            _bufmap = {
+                ord('-'): ('prev_category', 'first_category'),
+                ord('='): ('next_category', 'last_category'),
+                ord('['): ('prev_buffer', 'first_buffer'),
+                ord(']'): ('next_buffer', 'last_buffer'),
+                ord(','): ('prev_element', 'first_element'),
+                ord('.'): ('next_element', 'last_element'),
+            }
+            _pair = _bufmap.get(keycode)
+            _action = (_pair[1] if event.ShiftDown() else _pair[0]) if _pair else None
+            if not _action:
+                try:
+                    from src.buffers import buffer_controller
+                    _action = buffer_controller.action_for_char(chr(keycode))
+                except Exception:
+                    _action = None
+            if _action:
+                try:
+                    from src.buffers import buffer_controller
+                    if buffer_controller.dispatch(_action):
+                        return
+                except Exception as e:
+                    print(f"Error in Klango buffer key: {e}")
+
         # If no menu is open, provide guidance for arrow keys
         if not self.menu_open:
             # Arrow key guidance when menu is not open

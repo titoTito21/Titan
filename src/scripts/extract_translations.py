@@ -36,6 +36,7 @@ DOMAIN_FILES = {
     'eltenclient': ['src/eltenlink_client/elten_client.py', 'src/eltenlink_client/elten_gui.py', 'src/eltenlink_client/elten_voip_client.py', 'src/eltenlink_client/accountmanagement.py'],
     'window_switcher': ['src/ui/window_switcher.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
+    'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py'],
 }
 
 def extract_domain(domain, files):

@@ -301,6 +301,11 @@ class ComponentManager:
 
                         module = importlib.util.module_from_spec(spec)
                         sys.modules[component_name] = module
+                        try:
+                            from src.buffers import buffer_bus
+                            module.buffers = buffer_bus.make_module_api(component_name)
+                        except Exception as _be:
+                            print(f"[Component] buffer API injection failed: {_be}")
                         spec.loader.exec_module(module)
                         self.components.append(module)
                         _log_to_file(f"  Loaded successfully via importlib")
@@ -335,6 +340,11 @@ class ComponentManager:
 
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[component_name] = module
+                try:
+                    from src.buffers import buffer_bus
+                    module.buffers = buffer_bus.make_module_api(component_name)
+                except Exception as _be:
+                    print(f"[Component] buffer API injection failed: {_be}")
                 spec.loader.exec_module(module)
                 self.components.append(module)
 
