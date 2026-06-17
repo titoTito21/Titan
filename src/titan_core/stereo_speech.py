@@ -1446,6 +1446,7 @@ class StereoSpeech:
         self.sapi = None
         self.current_voice = None
         self._sapi_voice_cache = None
+        self._espeak_voice_cache = None  # eSpeak voices are static per session
         self.default_rate = 0
         self.default_volume = 100
         self.default_pitch = 0
@@ -2904,6 +2905,13 @@ class StereoSpeech:
         Returns:
             list: List of voice dicts with 'id' and 'display_name'
         """
+        # eSpeak voices don't change during a session. Listing them via the DLL
+        # enumerates 200+ voices and is called repeatedly at startup (e.g. by
+        # _load_saved_settings -> get_available_voices then set_voice), so cache
+        # the result and reuse it.
+        if self._espeak_voice_cache is not None:
+            return self._espeak_voice_cache
+
         try:
             if not ESPEAK_AVAILABLE and not ESPEAK_DLL_AVAILABLE:
                 return []
@@ -2922,6 +2930,7 @@ class StereoSpeech:
             variant_voices = self._add_espeak_voice_variants(voices)
             all_voices = voices + variant_voices
             all_voices.sort(key=lambda v: v['display_name'])
+            self._espeak_voice_cache = all_voices
             return all_voices
 
         except Exception as e:

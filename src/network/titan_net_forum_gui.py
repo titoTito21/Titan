@@ -4,19 +4,17 @@ Forum interface with topics, replies, and multi-line text editing
 """
 import wx
 import threading
-import accessible_output3.outputs.auto
 from src.network.titan_net import TitanNetClient
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
-from src.titan_core.stereo_speech import get_stereo_speech
+from src.accessibility.lazy_speaker import LazySpeaker
 from src.titan_core.skin_manager import apply_skin_to_window
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
 
-speaker = accessible_output3.outputs.auto.Auto()
-stereo_speech = get_stereo_speech()
+speaker = LazySpeaker()
 
 
 def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):

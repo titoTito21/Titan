@@ -64,11 +64,11 @@ class _SilentSpeaker:
     def braille(self, text, **kwargs):
         pass
 
-try:
-    speaker = accessible_output3.outputs.auto.Auto()
-except Exception as _e:
-    print(f"Warning: Could not initialize accessible_output3 in gui: {_e}")
-    speaker = _SilentSpeaker()
+# Lazy, shared speaker: defers the costly accessible_output3 stack-walk out of
+# import time (see src/accessibility/lazy_speaker.py). Falls back to a no-op
+# speaker internally if accessible_output3 cannot initialize.
+from src.accessibility.lazy_speaker import LazySpeaker
+speaker = LazySpeaker()
 
 
 def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):

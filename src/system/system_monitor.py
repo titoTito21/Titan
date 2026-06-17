@@ -19,9 +19,12 @@ from src.platform_utils import get_subprocess_kwargs, IS_WINDOWS
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
 
-# Speaker initialization moved to avoid TTS conflicts
+# Speaker initialization moved to avoid TTS conflicts.
+# Both the ao3 speaker and StereoSpeech are created lazily: building StereoSpeech
+# at import time forced the whole TTS stack (SAPI worker, engine registry, voice
+# enumeration) to load during startup imports.
 _speaker = None
-_stereo_speech = get_stereo_speech()
+_stereo_speech = None
 
 def _get_speaker():
     """Get ao3 speaker instance, initializing lazily."""
@@ -33,12 +36,20 @@ def _get_speaker():
             print(f"Error initializing system monitor speaker: {e}")
     return _speaker
 
+def _get_stereo():
+    """Get the shared StereoSpeech instance, initializing lazily."""
+    global _stereo_speech
+    if _stereo_speech is None:
+        _stereo_speech = get_stereo_speech()
+    return _stereo_speech
+
 def _speak(message, interrupt=False):
     """Speak using Titan TTS: stereo_speech when enabled, ao3 otherwise, with cross-fallback."""
     stereo_enabled = get_setting('stereo_speech', 'False', 'invisible_interface').lower() in ['true', '1']
-    if stereo_enabled and _stereo_speech:
+    ss = _get_stereo() if stereo_enabled else None
+    if stereo_enabled and ss:
         try:
-            _stereo_speech.speak_async(message, use_fallback=True)
+            ss.speak_async(message, use_fallback=True)
             return
         except Exception as stereo_e:
             print(f"Stereo speech failed: {stereo_e}")
@@ -49,18 +60,20 @@ def _speak(message, interrupt=False):
             return
         except Exception as ao3_e:
             print(f"ao3 TTS failed: {ao3_e}")
-            if _stereo_speech:
+            ss = _get_stereo()
+            if ss:
                 try:
-                    _stereo_speech.speak_async(message, use_fallback=True)
+                    ss.speak_async(message, use_fallback=True)
                 except Exception as stereo_e:
                     print(f"All TTS methods failed: ao3={ao3_e}, stereo={stereo_e}")
 
 
 def _speak_positional(message, position=0.0, pitch_offset=0):
     """Speak with stereo position and pitch using stereo_speech, fallback to _speak."""
-    if _stereo_speech:
+    ss = _get_stereo()
+    if ss:
         try:
-            _stereo_speech.speak_async(message, position=position, pitch_offset=pitch_offset, use_fallback=True)
+            ss.speak_async(message, position=position, pitch_offset=pitch_offset, use_fallback=True)
             return
         except Exception as e:
             print(f"Positional speech failed: {e}")

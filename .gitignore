@@ -1,6 +1,15 @@
 # Auto Claude data directory
 .auto-claude/
 
+# ===== Optimization profiling artifacts (Phase 0) =====
+profile_out/
+*.pstats
+# Cython build artifacts under src/ (generated .pyd live next to .py;
+# .c is the intermediate). Scoped to src/ so the legitimate data/lib/*.c
+# (e.g. copilothook.c) is never ignored.
+src/**/*.c
+src/**/*.pyd
+
 # ===== Secrets / credentials =====
 # Environment files (DEPLOY_PASSWORD, TITAN_OAUTH_KEY, provider secrets)
 .env

@@ -114,6 +114,18 @@ if IS_WINDOWS:
     except Exception as e:
         pass
 
+# ---------------------------------------------------------------------------
+# Single wx.App for the whole process. Created as early as possible so every
+# startup mode (normal/klango/launcher/wizard) can reuse it via wx.GetApp().
+# Best-effort: any failure here must never block startup.
+# ---------------------------------------------------------------------------
+try:
+    if wx.GetApp() is None:
+        _bootstrap_wx_app = wx.App(False)
+except Exception as _e:
+    print(f"[STARTUP] Could not create wx.App: {_e}")
+
+
 import accessible_output3.outputs.auto
 
 # Import libraries used by components for compilation compatibility
@@ -991,7 +1003,7 @@ def main(command_line_args=None):
                 startup_mode = 'normal'
 
         elif startup_mode == 'minimized':
-            # Start GUI in minimized mode (will minimize to tray automatically)
+            # Start GUI in minimized mode (will minimize to tray automatically).
             print("Starting in minimized mode...")
             startup_mode = 'normal'  # Continue with normal GUI startup but will be minimized
                 
@@ -1019,7 +1031,45 @@ if __name__ == "__main__":
     parser.add_argument('--config-stage', default=None,
                        help='Stage name to start the configuration wizard at '
                             '(welcome, language, skin, invisible, titannet, additional)')
+    parser.add_argument('--profile', action='store_true',
+                       help='Run under cProfile and write a .pstats dump on exit '
+                            '(optimization profiling - see src/scripts/profile_hotpaths.py)')
     args = parser.parse_args()
+
+    # Optimization profiling (Phase 0 of the code-optimization plan).
+    # Enabled with --profile: captures main() initialization and the GUI event
+    # loop, dumping a .pstats file on exit via atexit (covers all exit paths).
+    # NOTE: this does NOT capture the module-level imports at the top of this
+    # file, which already ran before __main__. To also profile the import
+    # phase, run instead:  python -m cProfile -o profile_out/startup.pstats main.py
+    if getattr(args, 'profile', False):
+        try:
+            import cProfile, atexit
+            _profiler = cProfile.Profile()
+
+            def _dump_profile():
+                try:
+                    _profiler.disable()
+                except Exception:
+                    pass
+                try:
+                    import time as _t
+                    out_dir = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)), 'profile_out')
+                    os.makedirs(out_dir, exist_ok=True)
+                    out_path = os.path.join(
+                        out_dir, f"titan_{_t.strftime('%Y%m%d_%H%M%S')}.pstats")
+                    _profiler.dump_stats(out_path)
+                    print(f"[PROFILE] Profile written to: {out_path}")
+                    print(f"[PROFILE] Analyze with: python src/scripts/profile_hotpaths.py {out_path}")
+                except Exception as _e:
+                    print(f"[PROFILE] Could not write profile: {_e}")
+
+            atexit.register(_dump_profile)
+            _profiler.enable()
+            print("[PROFILE] cProfile enabled; stats will be written on exit.")
+        except Exception as _e:
+            print(f"[PROFILE] Could not start profiler: {_e}")
 
     # If another TCE instance is already running, announce the restart via
     # Titan TTS / ao3 and kill the old one before continuing.

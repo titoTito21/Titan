@@ -197,10 +197,14 @@ else:
         # Use saved preference
         initial_language = saved_language
     else:
-        # No saved preference - detect system language
+        # No saved preference - detect system language IN MEMORY ONLY.
+        # Do NOT persist it here: this module is imported during startup before
+        # main.py checks whether the settings file exists to decide if this is a
+        # first run (and whether to show the configuration wizard). Writing the
+        # settings file here would create it prematurely and the first-run /
+        # wizard detection would never trigger. The detected language is saved
+        # later by main.py's first-run defaults block and by the wizard itself.
         initial_language = get_system_language()
-        # Save detected language as default for future use
-        settings.set_setting('language', initial_language)
 
 _ = set_language(initial_language)
 

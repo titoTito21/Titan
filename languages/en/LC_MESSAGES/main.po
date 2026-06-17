@@ -19,6 +19,10 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+#: main.py
+msgid "Titan is starting up..."
+msgstr "Titan is starting up..."
+
 #: main.py:271
 msgid "Restarting Titan..."
 msgstr "Restarting Titan..."

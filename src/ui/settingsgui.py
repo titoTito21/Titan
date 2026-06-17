@@ -68,7 +68,10 @@ _ = set_language(get_setting('language', 'pl'))
 
 SFX_DIR = resource_path('sfx')
 SKINS_DIR = resource_path('skins')
-speaker = accessible_output3.outputs.auto.Auto()
+# Lazy, shared speaker (see src/accessibility/lazy_speaker.py): keeps the
+# accessible_output3 stack-walk cost out of import time.
+from src.accessibility.lazy_speaker import LazySpeaker
+speaker = LazySpeaker()
 
 
 def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
