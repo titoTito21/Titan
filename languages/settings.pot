@@ -715,3 +715,39 @@ msgstr ""
 msgid "Congratulations!"
 msgstr ""
 
+
+#: src/ui/settingsgui.py:595
+msgid "Sound positioning mode:"
+msgstr ""
+
+#: src/ui/settingsgui.py:602
+msgid "Stereo"
+msgstr ""
+
+#: src/ui/settingsgui.py:602
+msgid "3D"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Calibrate 3D sound"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Remove calibration profile"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Calibration, please wait"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Calibration complete"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Error while calibrating"
+msgstr ""
+
+#: src/ui/settingsgui.py:610
+msgid "Calibration profile removed"
+msgstr ""

@@ -1253,6 +1253,21 @@ class Database:
             )
             """)
 
+            # App seen status table - tracks which repository apps a user has
+            # already viewed, so "new apps" / "app updates" in What's New clear
+            # per-user once opened. Each app_repository row (including each new
+            # version/update) is a distinct id, so tracking by app_id is enough.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_seen_status (
+                user_id INTEGER NOT NULL,
+                app_id INTEGER NOT NULL,
+                seen_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, app_id),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (app_id) REFERENCES app_repository(id)
+            )
+            """)
+
             # OAuth: encrypted external-provider tokens (Spotify, Allegro, ...)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS oauth_tokens (
@@ -1294,6 +1309,7 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_global_bans_user ON global_bans(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_bans_user ON forum_bans(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_read_status_user_topic ON forum_read_status(user_id, topic_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_seen_status_user_app ON app_seen_status(user_id, app_id)")
 
             # Additional performance indexes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_private_messages_recipient_read ON private_messages(recipient_id, read)")
@@ -2438,6 +2454,27 @@ class Database:
             conn.close()
             return False
 
+    @_serialized_write
+    def mark_app_as_seen(self, user_id: int, app_id: int) -> bool:
+        """Mark a repository app as seen by user, clearing it from What's New."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            seen_at = datetime.now().isoformat()
+            cursor.execute("""
+                INSERT OR IGNORE INTO app_seen_status (user_id, app_id, seen_at)
+                VALUES (?, ?, ?)
+            """, (user_id, app_id, seen_at))
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error marking app as seen: {e}")
+            conn.close()
+            return False
+
     def get_whats_new(self, user_id: int) -> Dict[str, Any]:
         """Get what's new with detailed items for each category."""
         conn = self.get_connection()
@@ -2473,30 +2510,35 @@ class Database:
         result['unread_forum_topics'] = len(topics)
         result['unread_forum_topics_items'] = topics
 
-        # New apps (first version) - with details
+        # New apps (first version) - with details. Excludes apps this user has
+        # already viewed so the entry clears once opened (see mark_app_as_seen).
         cursor.execute("""
             SELECT ar.id, ar.name, ar.version, u.username as author
             FROM app_repository ar
             JOIN users u ON u.id = ar.author_id
+            LEFT JOIN app_seen_status ass ON ass.app_id = ar.id AND ass.user_id = ?
             WHERE ar.approved = 1 AND ar.approved_at IS NOT NULL
             AND datetime(ar.approved_at) > datetime('now', '-7 days')
             AND (ar.version = '1.0' OR ar.version = '0.1')
+            AND ass.app_id IS NULL
             ORDER BY ar.approved_at DESC
-        """)
+        """, (user_id,))
         new_apps = [{'id': r['id'], 'name': r['name'], 'version': r['version'], 'author': r['author']} for r in cursor.fetchall()]
         result['new_apps'] = len(new_apps)
         result['new_apps_items'] = new_apps
 
-        # App updates (version > 1.0/0.1) - with details
+        # App updates (version > 1.0/0.1) - with details. Excludes already-viewed.
         cursor.execute("""
             SELECT ar.id, ar.name, ar.version, u.username as author
             FROM app_repository ar
             JOIN users u ON u.id = ar.author_id
+            LEFT JOIN app_seen_status ass ON ass.app_id = ar.id AND ass.user_id = ?
             WHERE ar.approved = 1 AND ar.approved_at IS NOT NULL
             AND datetime(ar.approved_at) > datetime('now', '-7 days')
             AND ar.version != '1.0' AND ar.version != '0.1'
+            AND ass.app_id IS NULL
             ORDER BY ar.approved_at DESC
-        """)
+        """, (user_id,))
         app_updates = [{'id': r['id'], 'name': r['name'], 'version': r['version'], 'author': r['author']} for r in cursor.fetchall()]
         result['app_updates'] = len(app_updates)
         result['app_updates_items'] = app_updates

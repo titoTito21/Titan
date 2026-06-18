@@ -87,3 +87,19 @@ msgstr "Szybkie ustawienia"
 #~ msgid "No settings available"
 #~ msgstr "Brak dostępnych ustawień"
 
+
+#: main.py:170
+msgid "Sound positioning mode"
+msgstr "Tryb pozycjonowania dźwięku"
+
+#: main.py:171
+msgid "None"
+msgstr "Brak"
+
+#: main.py:171
+msgid "Stereo"
+msgstr "Stereo"
+
+#: main.py:171
+msgid "3D"
+msgstr "3D"

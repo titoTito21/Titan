@@ -28,7 +28,7 @@ try:
 except ImportError:
     if sys.platform == 'darwin':
         print("macOS IUI: pynput not found. Install with: pip install pynput")
-from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused, resource_path, get_sfx_directory
+from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused, resource_path, get_sfx_directory, is_3d_enabled
 from src.settings.settings import load_settings, get_setting
 from src.titan_core.translation import set_language
 from src.titan_core.app_manager import get_applications, open_application
@@ -718,18 +718,19 @@ class BaseWidget:
             'list item': _("list item")
         }
     
-    def speak_with_position(self, text, position=0.0, pitch_offset=0):
+    def speak_with_position(self, text, position=0.0, pitch_offset=0, elevation=0.0):
         """
-        Wypowiada tekst z pozycjonowaniem stereo dla widgetów.
+        Wypowiada tekst z pozycjonowaniem stereo / 3D dla widgetów.
         Używa tego samego systemu stereo speech co główny interface.
-        
+
         Args:
             text (str): Tekst do wypowiedzenia
             position (float): Pozycja stereo od -1.0 (lewo) do 1.0 (prawo)
             pitch_offset (int): Przesunięcie wysokości głosu -10 do +10
+            elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
         """
-        # Używaj bezpośrednio metody speak z InvisibleUI która obsługuje stereo
-        self.speak(text, position=position, pitch_offset=pitch_offset)
+        # Używaj bezpośrednio metody speak z InvisibleUI która obsługuje stereo/3D
+        self.speak(text, position=position, pitch_offset=pitch_offset, elevation=elevation)
 
     def set_border(self):
         if self.view:
@@ -1704,32 +1705,34 @@ class InvisibleUI:
             print(f"Error getting status bar items: {e}")
             return [_("No status bar data")]
 
-    def speak(self, text, interrupt=True, position=0.0, pitch_offset=0):
+    def speak(self, text, interrupt=True, position=0.0, pitch_offset=0, elevation=0.0):
         """
-        Wypowiada tekst z opcjonalnym pozycjonowaniem stereo i kontrolą wysokości.
+        Wypowiada tekst z opcjonalnym pozycjonowaniem stereo / 3D i kontrolą wysokości.
 
         Args:
             text (str): Tekst do wypowiedzenia
             interrupt (bool): Czy przerwać poprzednią mowę
             position (float): Pozycja stereo od -1.0 (lewo) do 1.0 (prawo), 0.0 = środek
             pitch_offset (int): Przesunięcie wysokości głosu -10 do +10
+            elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
         """
         # Skip during Python shutdown
         import sys
         if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
             return
 
-        print(f"DEBUG: speak() called with text='{text}', interrupt={interrupt}, position={position}, pitch_offset={pitch_offset}")
+        print(f"DEBUG: speak() called with text='{text}', interrupt={interrupt}, position={position}, pitch_offset={pitch_offset}, elevation={elevation}")
         try:
             if not text or self._shutdown_in_progress:
                 print("DEBUG: Skipping speech - no text or shutdown in progress")
                 return
-                
+
             # Validate parameters to prevent crashes
             try:
                 text = str(text)
                 position = max(-1.0, min(1.0, float(position)))
                 pitch_offset = max(-10, min(10, int(pitch_offset)))
+                elevation = max(-1.0, min(1.0, float(elevation)))
             except (ValueError, TypeError) as e:
                 print(f"Invalid speech parameters: {e}")
                 return
@@ -1752,7 +1755,7 @@ class InvisibleUI:
                                 except Exception as e:
                                     print(f"Error stopping stereo speech: {e}")
                             
-                            speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True)
+                            speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True, elevation=elevation)
                         except Exception as e:
                             print(f"Error in stereo speech: {e}")
                             # Fallback to regular TTS
@@ -1866,9 +1869,15 @@ class InvisibleUI:
                             play_statusbar_sound()
                         else:
                             pan = 0.5
+                            elevation = 0.0
                             if num_categories > 1:
-                                pan = new_index / (num_categories - 1)
-                            play_sound(new_category.get('sound', 'core/focus.ogg'), pan=pan)
+                                if is_3d_enabled():
+                                    # 3D: convey vertical position via elevation, keep centered L/R
+                                    elevation = 0.5 - (new_index / (num_categories - 1))  # +0.5 top .. -0.5 bottom
+                                    elevation *= 2.0  # -> +1.0 top .. -1.0 bottom
+                                else:
+                                    pan = new_index / (num_categories - 1)
+                            play_sound(new_category.get('sound', 'core/focus.ogg'), pan=pan, elevation=elevation)
                 except Exception as e:
                     play_focus_sound()  # Fallback sound
                     print(f"Error playing category sound: {e}")
@@ -1883,12 +1892,17 @@ class InvisibleUI:
                     # Calculate position for category (vertical navigation)
                     stereo_position = 0.0  # Categories don't use left-right panning
                     pitch_offset = 0
+                    elevation = 0.0
                     if num_categories > 1:
-                        # Vertical pitch - higher categories = higher pitch, lower = lower pitch
-                        pitch_offset = int((0.5 - (new_index / (num_categories - 1))) * 10)  # Range -5 to +5
+                        if is_3d_enabled():
+                            # 3D: real elevation instead of pitch (top = up, bottom = down)
+                            elevation = (0.5 - (new_index / (num_categories - 1))) * 2.0  # +1.0 .. -1.0
+                        else:
+                            # Vertical pitch - higher categories = higher pitch, lower = lower pitch
+                            pitch_offset = int((0.5 - (new_index / (num_categories - 1))) * 10)  # Range -5 to +5
                         # Stereo remains 0.0 (center) for category navigation
-                    
-                    self.speak(speak_text, position=stereo_position, pitch_offset=pitch_offset)
+
+                    self.speak(speak_text, position=stereo_position, pitch_offset=pitch_offset, elevation=elevation)
                 except Exception as e:
                     print(f"Error speaking category: {e}")
                     try:
@@ -2429,32 +2443,39 @@ class InvisibleUI:
                 except Exception as e:
                     print(f"Error playing end of list sound: {e}")
             else:
+                # 3D: up/down widget movement uses real elevation instead of pitch
+                elevation = 0.0
+                if is_3d_enabled() and direction in ["up", "down"]:
+                    elevation = 0.6 if direction == "up" else -0.6
                 try:
-                    play_focus_sound(pan=pan)
+                    play_focus_sound(pan=(0.5 if elevation != 0.0 else pan), elevation=elevation)
                 except Exception as e:
                     play_focus_sound()  # Fallback
                     print(f"Error playing focus sound with pan: {e}")
-                
+
                 # Always try to get and speak the current element when navigation succeeds
                 print("DEBUG: Getting current widget element after successful navigation")
                 try:
                     current_element = self.active_widget.get_current_element()
                     print(f"DEBUG: Widget current element: '{current_element}'")
-                    
+
                     if current_element:
                         # Calculate stereo position for widget elements
                         stereo_position = 0.0
                         pitch_offset = 0
-                        if pan != 0.5:  # If not centered
+                        if elevation != 0.0:
+                            # 3D up/down: convey via elevation, keep centered L/R
+                            pass
+                        elif pan != 0.5:  # If not centered
                             # Convert pan (0.0-1.0) to stereo position (-1.0 to 1.0)
                             stereo_position = (pan * 2.0) - 1.0
-                            
+
                             # Widget navigation - check movement direction
                             if direction in ["up", "down"]:
                                 # Pitch only for up/down navigation in widgets
                                 pitch_offset = int((0.5 - pan) * 4)  # Subtler effect for widgets
-                        
-                        print(f"DEBUG: Stereo position: {stereo_position}, pitch: {pitch_offset}")
+
+                        print(f"DEBUG: Stereo position: {stereo_position}, pitch: {pitch_offset}, elevation: {elevation}")
                         
                         # Speak if element changed or is new
                         if current_element != self.last_widget_element:
@@ -2468,7 +2489,7 @@ class InvisibleUI:
                             
                             def safe_speak_nav():
                                 try:
-                                    self.speak(current_element, position=stereo_position, pitch_offset=pitch_offset)
+                                    self.speak(current_element, position=stereo_position, pitch_offset=pitch_offset, elevation=elevation)
                                     speak_complete.set()
                                 except Exception as e:
                                     speak_error[0] = e

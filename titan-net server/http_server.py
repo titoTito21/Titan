@@ -541,6 +541,19 @@ class TitanNetHTTPServer:
             # Remove file path for security
             app_dict.pop('file_path', None)
 
+            # Best-effort: mark this app as seen for the requesting user so it
+            # clears from their What's New (new apps / app updates). Never let a
+            # failure here break the details response.
+            try:
+                loop = asyncio.get_event_loop()
+                user = await loop.run_in_executor(None, self.verify_token, request)
+                if user:
+                    await loop.run_in_executor(
+                        None, self.db.mark_app_as_seen, user['id'], app_id
+                    )
+            except Exception as seen_err:
+                logger.warning(f"Could not mark app {app_id} as seen: {seen_err}")
+
             return web.json_response({
                 'success': True,
                 'app': app_dict

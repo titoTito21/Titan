@@ -7,7 +7,7 @@ import accessible_output3.outputs.auto
 from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
 from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
-from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_sound
+from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_sound, is_3d_enabled
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification
@@ -59,16 +59,17 @@ def _new_text_entry_dialog(*args, **kwargs):
         pass
     return dlg
 
-def speak_klango(text, position=0.0, pitch_offset=0, interrupt=True):
+def speak_klango(text, position=0.0, pitch_offset=0, interrupt=True, elevation=0.0):
     """
     Speak text using the same method as IUI.
     Position: -1.0 (left) to 1.0 (right), 0.0 (center)
+    Elevation: -1.0 (down) to 1.0 (up), 0.0 (center) - 3D mode only.
     """
     try:
         # Check stereo speech setting safely (same as IUI)
         try:
             stereo_enabled = get_setting('stereo_speech', 'False', section='invisible_interface').lower() == 'true'
-            
+
             if stereo_enabled and STEREO_SPEECH_AVAILABLE:
                 def speak_with_stereo():
                     try:
@@ -81,8 +82,8 @@ def speak_klango(text, position=0.0, pitch_offset=0, interrupt=True):
                                     stereo_speech.stop()
                             except Exception as e:
                                 print(f"Error stopping stereo speech: {e}")
-                        
-                        speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True)
+
+                        speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True, elevation=elevation)
                     except Exception as e:
                         print(f"Error in stereo speech: {e}")
                         # Fallback to regular TTS
@@ -724,7 +725,11 @@ class KlangoMode:
         else:
             stereo_position = 0.0
             
-        speak_klango(first_item_name, position=stereo_position, pitch_offset=30, interrupt=True)
+        # 3D: convey expansion via upward elevation instead of pitch
+        if is_3d_enabled():
+            speak_klango(first_item_name, position=stereo_position, pitch_offset=0, interrupt=True, elevation=0.6)
+        else:
+            speak_klango(first_item_name, position=stereo_position, pitch_offset=30, interrupt=True)
     
     def close_menu(self):
         """Close current menu or submenu."""
@@ -742,7 +747,11 @@ class KlangoMode:
                 stereo_position = -1.0 + (2.0 * self.current_item / (len(self.current_menu) - 1))
             else:
                 stereo_position = 0.0
-            speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=-30, interrupt=True)
+            # 3D: convey collapse via downward elevation instead of pitch
+            if is_3d_enabled():
+                speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=0, interrupt=True, elevation=-0.6)
+            else:
+                speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=-30, interrupt=True)
         else:
             # Close main menu
             self.menu_open = False
@@ -1769,7 +1778,11 @@ class KlangoFrame(wx.Frame):
         else:
             stereo_position = 0.0
             
-        speak_klango(first_item_name, position=stereo_position, pitch_offset=30, interrupt=True)
+        # 3D: convey expansion via upward elevation instead of pitch
+        if is_3d_enabled():
+            speak_klango(first_item_name, position=stereo_position, pitch_offset=0, interrupt=True, elevation=0.6)
+        else:
+            speak_klango(first_item_name, position=stereo_position, pitch_offset=30, interrupt=True)
     
     def close_menu(self):
         """Close current menu or submenu."""
@@ -1787,7 +1800,11 @@ class KlangoFrame(wx.Frame):
                 stereo_position = -1.0 + (2.0 * self.current_item / (len(self.current_menu) - 1))
             else:
                 stereo_position = 0.0
-            speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=-30, interrupt=True)
+            # 3D: convey collapse via downward elevation instead of pitch
+            if is_3d_enabled():
+                speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=0, interrupt=True, elevation=-0.6)
+            else:
+                speak_klango(self.current_menu[self.current_item]["name"], position=stereo_position, pitch_offset=-30, interrupt=True)
         else:
             # Close main menu
             self.menu_open = False

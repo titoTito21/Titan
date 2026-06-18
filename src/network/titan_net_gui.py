@@ -878,6 +878,16 @@ class ForumTopicWindow(wx.Frame):
         if replies_result.get('success'):
             self.replies_data = replies_result.get('replies', [])
             self._display_replies()
+
+            # Mark this topic as read using the actual loaded reply count, so the
+            # "new replies" / What's New status clears no matter how the topic was
+            # opened (forum list, What's New view, etc.). Non-blocking.
+            reply_count = len(self.replies_data)
+            topic_id = self.topic_id
+            threading.Thread(
+                target=lambda: self.titan_client.mark_topic_as_read(topic_id, reply_count),
+                daemon=True
+            ).start()
         else:
             speak_titannet(_("Failed to load replies"))
 
@@ -1235,14 +1245,31 @@ class TitanNetMainWindow(wx.Frame):
                 view = getattr(self, 'current_view', 'unknown')
                 return f"titannet:main:{view}"
 
-            def _tn_main_key(_idx, text, _data):
+            def _tn_main_key(_idx, text, data):
+                # Forum rows carry their topic id as client data; key the
+                # persisted order by that stable id instead of the display
+                # text (which changes when reply counts change) so a saved
+                # drag order survives refreshes. Other views keep the text key.
+                if getattr(self, 'current_view', None) == 'forum' and data is not None:
+                    return f"forum:{data}"
                 return f"txt:{text}"
+
+            def _tn_main_reorderable(_idx, _text, data):
+                # In the forum view, pinned topics are kept at the top by the
+                # server and must not be drag-reordered (the user cannot move a
+                # pinned thread down). Every other row/view stays freely movable.
+                if getattr(self, 'current_view', None) == 'forum':
+                    topic = self._forum_topic_by_id(data)
+                    if topic is not None and topic.get('is_pinned'):
+                        return False
+                return True
 
             self._main_listbox_dnd = attach_listbox_dnd(
                 self.main_listbox,
                 view_id=_tn_main_view_id,
                 has_tab_bar=False,
                 item_key_func=_tn_main_key,
+                is_reorderable=_tn_main_reorderable,
                 auto_apply_on_focus=True,
             )
         except Exception as exc:
@@ -2355,11 +2382,10 @@ class TitanNetMainWindow(wx.Frame):
 
         # Check if current view is forum and if selected topic has new replies
         if listbox is self.main_listbox and self.current_view == "forum":
-            if selection != wx.NOT_FOUND and 0 <= selection < len(self.forum_topics_cache):
-                topic = self.forum_topics_cache[selection]
-                if topic.get('has_new_replies', False):
-                    # Play new replies sound
-                    play_sound('titannet/newreplies.ogg')
+            topic = self._forum_topic_for_selection(selection)
+            if topic and topic.get('has_new_replies', False):
+                # Play new replies sound
+                play_sound('titannet/newreplies.ogg')
 
         event.Skip()
 
@@ -2473,12 +2499,10 @@ class TitanNetMainWindow(wx.Frame):
 
         elif self.current_view == "forum":
             # Open selected forum topic
-            if 0 <= selection < len(self.forum_topics_cache):
-                topic = self.forum_topics_cache[selection]
-                # Mark topic as read in background (non-blocking)
-                topic_id = topic['id']
-                reply_count = topic['reply_count']
-                threading.Thread(target=lambda: self.titan_client.mark_topic_as_read(topic_id, reply_count), daemon=True).start()
+            topic = self._forum_topic_for_selection(selection)
+            if topic:
+                # Topic is marked as read inside ForumTopicWindow once its replies
+                # load, using the actual reply count (see _display_topic_data).
                 self.show_forum_topic(topic['id'], topic['title'], topic.get('last_known_reply_count', 0))
 
         elif self.current_view == "all_users":
@@ -3693,7 +3717,10 @@ class TitanNetMainWindow(wx.Frame):
 
                 for topic in self.forum_topics_cache:
                     display_text = f"{topic['title']} - {topic['author_username']} ({topic['reply_count']} {_('replies')})"
-                    self.main_listbox.Append(display_text)
+                    # Tag each row with its topic id so selection -> topic stays
+                    # correct even after the list is drag-reordered (the listbox
+                    # order can differ from forum_topics_cache).
+                    self.main_listbox.Append(display_text, clientData=topic.get('id'))
 
                 if getattr(self, '_main_listbox_dnd', None) is not None:
                     self._main_listbox_dnd.apply_saved_order()
@@ -3703,6 +3730,36 @@ class TitanNetMainWindow(wx.Frame):
 
         except Exception as e:
             print(f"Error updating forum topics list: {e}")
+
+    def _forum_topic_by_id(self, topic_id):
+        """Find a cached forum topic by its id (order-independent)."""
+        if topic_id is None:
+            return None
+        for topic in self.forum_topics_cache:
+            if topic.get('id') == topic_id:
+                return topic
+        return None
+
+    def _forum_topic_for_selection(self, selection):
+        """Resolve the forum topic for a main_listbox selection.
+
+        The forum list is drag-reorderable, so the listbox row order can differ
+        from forum_topics_cache. Each row stores its topic id as client data, so
+        we resolve by id and only fall back to positional indexing for rows that
+        predate the client-data tagging.
+        """
+        if selection is None or selection == wx.NOT_FOUND or selection < 0:
+            return None
+        try:
+            data = self.main_listbox.GetClientData(selection)
+        except Exception:
+            data = None
+        topic = self._forum_topic_by_id(data)
+        if topic is not None:
+            return topic
+        if 0 <= selection < len(self.forum_topics_cache):
+            return self.forum_topics_cache[selection]
+        return None
 
     def refresh_repository(self):
         """Refresh app repository list"""
@@ -6223,11 +6280,10 @@ class TitanNetMainWindow(wx.Frame):
     def _mod_delete_selected_topic(self):
         """Delete selected forum topic"""
         selection = self.main_listbox.GetSelection()
-        if selection == wx.NOT_FOUND or selection >= len(self.forum_topics_cache):
+        topic = self._forum_topic_for_selection(selection)
+        if topic is None:
             speak_notification(_("Please select a topic first"), 'error')
             return
-
-        topic = self.forum_topics_cache[selection]
 
         confirm = _new_message_dialog(self,
             _("Are you sure you want to delete topic '{title}'?").format(title=topic['title']),
@@ -6254,11 +6310,10 @@ class TitanNetMainWindow(wx.Frame):
     def _mod_toggle_lock_selected_topic(self):
         """Lock or unlock selected forum topic"""
         selection = self.main_listbox.GetSelection()
-        if selection == wx.NOT_FOUND or selection >= len(self.forum_topics_cache):
+        topic = self._forum_topic_for_selection(selection)
+        if topic is None:
             speak_notification(_("Please select a topic first"), 'error')
             return
-
-        topic = self.forum_topics_cache[selection]
         is_locked = topic.get('is_locked', 0)
         action = _("unlock") if is_locked else _("lock")
 
@@ -6291,11 +6346,10 @@ class TitanNetMainWindow(wx.Frame):
     def _mod_toggle_pin_selected_topic(self):
         """Pin or unpin selected forum topic"""
         selection = self.main_listbox.GetSelection()
-        if selection == wx.NOT_FOUND or selection >= len(self.forum_topics_cache):
+        topic = self._forum_topic_for_selection(selection)
+        if topic is None:
             speak_notification(_("Please select a topic first"), 'error')
             return
-
-        topic = self.forum_topics_cache[selection]
         is_pinned = topic.get('is_pinned', 0)
         action = _("unpin") if is_pinned else _("pin")
 
@@ -6328,11 +6382,10 @@ class TitanNetMainWindow(wx.Frame):
     def _mod_move_selected_topic(self):
         """Move selected forum topic to different category"""
         selection = self.main_listbox.GetSelection()
-        if selection == wx.NOT_FOUND or selection >= len(self.forum_topics_cache):
+        topic = self._forum_topic_for_selection(selection)
+        if topic is None:
             speak_notification(_("Please select a topic first"), 'error')
             return
-
-        topic = self.forum_topics_cache[selection]
 
         # Show category selection dialog
         categories = ["general", "announcements", "support", "development", "off-topic"]

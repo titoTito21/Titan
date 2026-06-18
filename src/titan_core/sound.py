@@ -56,6 +56,59 @@ tts_speech_channel = None
 _mixer_initialized = False
 
 
+# ---------------------------------------------------------------------------
+# Sound positioning mode (none / stereo / 3d)
+# ---------------------------------------------------------------------------
+def get_sound_mode():
+    """Return the positioning mode: 'none', 'stereo', or '3d'.
+
+    Reads [sound] sound_mode. If that key is absent (older config), migrate
+    from the legacy booleans: stereo when [sound] stereo_sound or
+    [invisible_interface] stereo_speech was on, otherwise none. 3D is new and
+    only ever set explicitly.
+    """
+    try:
+        settings = load_settings()
+        sound_settings = settings.get('sound', {})
+        mode = str(sound_settings.get('sound_mode', '')).strip().lower()
+        if mode in ('none', 'stereo', '3d'):
+            return mode
+        legacy_stereo = str(sound_settings.get('stereo_sound', 'False')).lower() in ['true', '1']
+        legacy_speech = str(settings.get('invisible_interface', {}).get(
+            'stereo_speech', 'False')).lower() in ['true', '1']
+        return 'stereo' if (legacy_stereo or legacy_speech) else 'none'
+    except Exception:
+        return 'none'
+
+
+def is_positioning_enabled():
+    """True if any left/right (or 3D) positioning is active."""
+    return get_sound_mode() in ('stereo', '3d')
+
+
+def is_3d_enabled():
+    """True if 3D HRTF positioning is selected."""
+    return get_sound_mode() == '3d'
+
+
+def _try_spatial_play(sound_path, pan, elevation, gain):
+    """Play a resolved file through the OpenAL HRTF backend.
+
+    Returns True if the spatial backend accepted it, False to fall back to the
+    regular pygame path.
+    """
+    try:
+        from src.titan_core import spatial_audio
+        if not spatial_audio.spatial_available():
+            return False
+        azimuth = spatial_audio.pan_to_azimuth(pan if pan is not None else 0.5)
+        elev_deg = spatial_audio.norm_to_elevation(elevation or 0.0)
+        return spatial_audio.play_file(sound_path, azimuth, elev_deg, gain) is not None
+    except Exception as e:
+        print(f"[Sound] Spatial playback error: {e}")
+        return False
+
+
 def resource_path(relative_path):
     """Zwraca pełną ścieżkę do plików zasobów, obsługując PyInstaller i Nuitka."""
     return _platform_resource_path(relative_path)
@@ -220,39 +273,41 @@ def initialize_sound():
         return False
 
 
-def play_sound(sound_file, pan=None):
+def play_sound(sound_file, pan=None, elevation=0.0):
     """Odtwarza dźwięk z bezpiecznym sprawdzaniem inicjalizacji i obsługą błędów."""
     try:
         if not sound_file:
             return
-        
+
         # Check if mixer is initialized
         if not _mixer_initialized or pygame.mixer.get_init() is None:
             if not initialize_sound():
                 return  # Cannot initialize sound system
-        
+
         try:
             settings = load_settings()
             sound_settings = settings.get('sound', {})
-            stereo_enabled = str(sound_settings.get('stereo_sound', 'False')).lower() in ['true', '1']
+            mode = get_sound_mode()
+            stereo_enabled = mode in ('stereo', '3d')
             fallback_to_default = str(sound_settings.get('fallback_to_default_theme', 'False')).lower() in ['true', '1']
         except Exception:
+            mode = 'none'
             stereo_enabled = False
             fallback_to_default = False
 
         # Try to play from current theme first
-        if _try_play_sound_from_path(sound_file, pan, stereo_enabled):
+        if _try_play_sound_from_path(sound_file, pan, stereo_enabled, mode=mode, elevation=elevation):
             return
 
         # Fallback to default theme only when the user opted in.
         if fallback_to_default and current_theme != 'default':
-            _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=True)
-            
+            _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=True, mode=mode, elevation=elevation)
+
     except Exception as e:
         print(f"Critical error in play_sound: {e}")
 
 
-def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=False):
+def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme=False, mode='none', elevation=0.0):
     """Helper function to try playing sound from a specific theme path.
 
     Looks up the file in the per-user overlay first
@@ -281,7 +336,14 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
 
         if not os.path.exists(sound_path):
             return False
-            
+
+        # 3D mode: route through OpenAL HRTF (virtual surround). Everything goes
+        # through the spatial backend; centered sounds simply sit front/center.
+        if mode == '3d':
+            if _try_spatial_play(sound_path, pan, elevation, max(0.0, min(1.0, sound_theme_volume))):
+                return True
+            # Fall through to pygame if the spatial backend is unavailable.
+
         with lock:
             # Create sound object
             try:
@@ -342,7 +404,7 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
 
 
 
-def play_sound_file(file_path, pan=None):
+def play_sound_file(file_path, pan=None, elevation=0.0):
     """Play a sound from an absolute file path (not relative to theme)."""
     try:
         if not file_path or not os.path.exists(file_path):
@@ -354,11 +416,18 @@ def play_sound_file(file_path, pan=None):
 
         try:
             settings = load_settings()
-            stereo_enabled = settings.get('sound', {}).get('stereo_sound', 'False').lower() in ['true', '1']
+            mode = get_sound_mode()
+            stereo_enabled = mode in ('stereo', '3d')
             sound_theme_volume = int(settings.get('sound', {}).get('sound_theme_volume', 100)) / 100.0
         except Exception:
+            mode = 'none'
             stereo_enabled = False
             sound_theme_volume = 1.0
+
+        # 3D mode: route through OpenAL HRTF (virtual surround).
+        if mode == '3d':
+            if _try_spatial_play(file_path, pan, elevation, max(0.0, min(1.0, sound_theme_volume))):
+                return True
 
         with lock:
             try:
@@ -418,8 +487,8 @@ def play_connecting_sound():
     play_sound('system/connecting.ogg')
 
 
-def play_focus_sound(pan=None):
-    play_sound('core/FOCUS.ogg', pan=pan)
+def play_focus_sound(pan=None, elevation=0.0):
+    play_sound('core/FOCUS.ogg', pan=pan, elevation=elevation)
 
 
 def play_select_sound():

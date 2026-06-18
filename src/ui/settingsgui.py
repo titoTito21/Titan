@@ -52,7 +52,7 @@ except (ImportError, Exception):
 
 import accessible_output3.outputs.auto
 from src.settings.settings import load_settings, save_settings, get_setting, set_setting
-from src.titan_core.sound import set_theme, initialize_sound, play_sound, resource_path, set_sound_theme_volume
+from src.titan_core.sound import set_theme, initialize_sound, play_sound, resource_path, set_sound_theme_volume, play_focus_sound
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification, test_vibration,
@@ -224,6 +224,9 @@ class KeyCaptureDialog(wx.Dialog):
 
 
 class SettingsFrame(wx.Frame):
+    # Sound mode choice indices -> stored values (none/stereo/3d).
+    _SOUND_MODE_VALUES = ['none', 'stereo', '3d']
+
     def __init__(self, *args, component_manager=None, **kw):
         super(SettingsFrame, self).__init__(*args, **kw)
 
@@ -590,10 +593,26 @@ class SettingsFrame(wx.Frame):
         self.theme_choice.AppendItems(themes)
         vbox.Add(self.theme_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
-        self.stereo_sound_cb = wx.CheckBox(panel, label=_("Stereo sounds"))
-        self.stereo_sound_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        self.stereo_sound_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
-        vbox.Add(self.stereo_sound_cb, flag=wx.LEFT | wx.TOP, border=10)
+        # Sound positioning mode: None / Stereo / 3D (HRTF virtual surround).
+        # Governs left/right (and, in 3D, up/down) placement of UI sounds and Titan TTS.
+        sound_mode_label = wx.StaticText(panel, label=_("Sound positioning mode:"))
+        vbox.Add(sound_mode_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.sound_mode_choice = wx.Choice(panel)
+        self.sound_mode_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.sound_mode_choice.Bind(wx.EVT_CHOICE, self.OnSoundModeChanged)
+        # Index order maps to _SOUND_MODE_VALUES below.
+        self.sound_mode_choice.AppendItems([_("None"), _("Stereo"), _("3D")])
+        vbox.Add(self.sound_mode_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # 3D room calibration: measures the room's echo and applies a matching
+        # reverb. The button toggles between calibrating and removing the saved
+        # profile, and is only shown while the 3D mode is selected.
+        self.calibrate_3d_btn = wx.Button(panel, label=_("Calibrate 3D sound"))
+        self.calibrate_3d_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.calibrate_3d_btn.Bind(wx.EVT_BUTTON, self.OnCalibrate3D)
+        vbox.Add(self.calibrate_3d_btn, flag=wx.LEFT | wx.TOP, border=10)
+        self._update_calibrate_button()
 
         self.use_skin_sound_theme_cb = wx.CheckBox(panel, label=_("Use skin's sound theme"))
         self.use_skin_sound_theme_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -1225,8 +1244,16 @@ class SettingsFrame(wx.Frame):
              else:
                  self.theme_choice.SetSelection(0)
 
-        stereo_sound_value = sound_settings.get('stereo_sound', 'False')
-        self.stereo_sound_cb.SetValue(str(stereo_sound_value).lower() in ['true', '1'])
+        # Sound mode (none/stereo/3d). Migrate from legacy stereo_sound /
+        # stereo_speech when the new key is absent, mirroring sound.get_sound_mode().
+        mode = str(sound_settings.get('sound_mode', '')).strip().lower()
+        if mode not in self._SOUND_MODE_VALUES:
+            legacy_stereo = str(sound_settings.get('stereo_sound', 'False')).lower() in ['true', '1']
+            legacy_speech = str(self.settings.get('invisible_interface', {}).get(
+                'stereo_speech', 'False')).lower() in ['true', '1']
+            mode = 'stereo' if (legacy_stereo or legacy_speech) else 'none'
+        self.sound_mode_choice.SetSelection(self._SOUND_MODE_VALUES.index(mode))
+        self._update_calibrate_button()
 
         use_skin_sound_theme_value = sound_settings.get('use_skin_sound_theme', 'False')
         self.use_skin_sound_theme_cb.SetValue(str(use_skin_sound_theme_value).lower() in ['true', '1'])
@@ -1773,6 +1800,105 @@ class SettingsFrame(wx.Frame):
         
         event.Skip()
 
+    def OnSoundModeChanged(self, event):
+        # Persist immediately so the preview sound uses the new mode, then play a
+        # focus sound so the user can hear the positioning effect.
+        try:
+            mode = self._SOUND_MODE_VALUES[max(0, self.sound_mode_choice.GetSelection())]
+            set_setting('sound_mode', mode, 'sound')
+            set_setting('stereo_sound', str(mode != 'none'), 'sound')
+            self.settings.setdefault('sound', {})['sound_mode'] = mode
+            self.settings['sound']['stereo_sound'] = str(mode != 'none')
+        except Exception as e:
+            print(f"Error applying sound mode: {e}")
+        self._update_calibrate_button()
+        try:
+            play_focus_sound(pan=1.0, elevation=0.6)
+        except Exception:
+            pass
+        event.Skip()
+
+    def _current_sound_mode(self):
+        try:
+            return self._SOUND_MODE_VALUES[max(0, self.sound_mode_choice.GetSelection())]
+        except Exception:
+            return 'none'
+
+    def _is_3d_calibrated(self):
+        try:
+            return get_setting('reverb_enabled', 'False', 'sound').lower() in ('true', '1')
+        except Exception:
+            return False
+
+    def _update_calibrate_button(self):
+        """Show the calibrate/remove button only in 3D and label it by state."""
+        btn = getattr(self, 'calibrate_3d_btn', None)
+        if btn is None:
+            return
+        if self._current_sound_mode() == '3d':
+            btn.SetLabel(_("Remove calibration profile") if self._is_3d_calibrated()
+                         else _("Calibrate 3D sound"))
+            btn.Show()
+        else:
+            btn.Hide()
+        try:
+            btn.GetParent().Layout()
+        except Exception:
+            pass
+
+    def _speak_message(self, text):
+        """Speak a status message via Titan TTS when enabled, else screen reader."""
+        try:
+            from src.titan_core import tce_speech
+            tce_speech.speak(text)
+        except Exception:
+            try:
+                speaker.speak(text)
+            except Exception:
+                pass
+
+    def OnCalibrate3D(self, event):
+        # If already calibrated, this button removes the saved room profile.
+        if self._is_3d_calibrated():
+            try:
+                set_setting('reverb_enabled', 'False', 'sound')
+                self.settings.setdefault('sound', {})['reverb_enabled'] = 'False'
+                from src.titan_core import spatial_audio
+                spatial_audio.clear_reverb()
+            except Exception as e:
+                print(f"Error removing calibration profile: {e}")
+            self._update_calibrate_button()
+            self._speak_message(_("Calibration profile removed"))
+            event.Skip()
+            return
+
+        # Otherwise run a room calibration in the background.
+        self.calibrate_3d_btn.Disable()
+        self._speak_message(_("Calibration, please wait"))
+
+        def _worker():
+            ok = False
+            try:
+                from src.titan_core import sound_calibration
+                sound_calibration.calibrate()
+                ok = True
+            except Exception as e:
+                print(f"3D calibration error: {e}")
+                ok = False
+
+            def _finish():
+                if ok:
+                    self.settings.setdefault('sound', {})['reverb_enabled'] = 'True'
+                    self._speak_message(_("Calibration complete"))
+                else:
+                    self._speak_message(_("Error while calibrating"))
+                self.calibrate_3d_btn.Enable()
+                self._update_calibrate_button()
+            wx.CallAfter(_finish)
+
+        threading.Thread(target=_worker, daemon=True).start()
+        event.Skip()
+
     def OnSave(self, event):
         # Get old settings before saving to check for changes
         old_settings = load_settings()
@@ -1784,9 +1910,12 @@ class SettingsFrame(wx.Frame):
         selected_language = get_language_code_from_display_name(selected_language_display)
         set_setting('language', selected_language)
 
+        sound_mode_value = self._SOUND_MODE_VALUES[max(0, self.sound_mode_choice.GetSelection())]
         self.settings['sound'] = {
             'theme': self.theme_choice.GetStringSelection(),
-            'stereo_sound': str(self.stereo_sound_cb.GetValue()),
+            'sound_mode': sound_mode_value,
+            # Keep legacy stereo_sound in sync for out-of-tree readers.
+            'stereo_sound': str(sound_mode_value != 'none'),
             'use_skin_sound_theme': str(self.use_skin_sound_theme_cb.GetValue()),
             'fallback_to_default_theme': str(self.fallback_to_default_theme_cb.GetValue()),
             'theme_volume': str(self.theme_volume_slider.GetValue())

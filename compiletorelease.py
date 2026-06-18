@@ -107,6 +107,11 @@ def compile_to_release():
         "accessible_output3.outputs",
         "accessible_output3.outputs.auto",
 
+        # 3D positional audio (OpenAL Soft HRTF)
+        "openal",
+        "openal.al",
+        "openal.alc",
+
         # GUI
         "wx",
         "wx.adv",
@@ -220,6 +225,8 @@ def compile_to_release():
         "src.titan_core.sound",
         "src.titan_core.tsounds",
         "src.titan_core.stereo_speech",
+        "src.titan_core.spatial_audio",
+        "src.titan_core.sound_calibration",
         "src.titan_core.tce_speech",
         "src.system",
         "src.system.system_monitor",
@@ -300,6 +307,8 @@ def compile_to_release():
         "babel",
         "wx",
         "cryptography",  # Include Rust bindings (_rust modules)
+        "openal",        # PyOpenAL: bundles soft_oal_64.dll (OpenAL Soft HRTF)
+        "sounddevice",   # bundles PortAudio binary (3D room calibration mic capture)
     ]
 
     for pkg in collect_packages:

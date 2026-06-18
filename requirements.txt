@@ -31,6 +31,9 @@ cryptography
 py-tgcalls
 pydub
 
+# 3D positional audio (OpenAL Soft HRTF) for the "3d" sound mode
+PyOpenAL
+
 # Voice chat dependencies
 sounddevice>=0.4.6
 webrtcvad-wheels>=2.0.14

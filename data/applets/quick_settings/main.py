@@ -166,7 +166,9 @@ class QuickSettingsWidget(BaseWidget):
                 {'name': _("Language"), 'section': 'general', 'key': 'language', 'type': 'choice', 'choices': available_languages},
                 # Sound
                 {'name': _("Sound theme"), 'section': 'sound', 'key': 'theme', 'type': 'choice', 'choices': available_themes},
-                {'name': _("Stereo sounds"), 'section': 'sound', 'key': 'stereo_sound', 'type': 'bool'},
+                {'name': _("Sound positioning mode"), 'section': 'sound', 'key': 'sound_mode', 'type': 'choice',
+                 'choices': ['none', 'stereo', '3d'],
+                 'display_map': {'none': _("None"), 'stereo': _("Stereo"), '3d': _("3D")}},
                 # Interface
                 {'name': _("Skin"), 'section': 'interface', 'key': 'skin', 'type': 'choice', 'choices': available_skins},
                 # Invisible Interface
@@ -205,6 +207,12 @@ class QuickSettingsWidget(BaseWidget):
                 # For language setting, convert code to display name
                 if item['key'] == 'language':
                     value_str = get_language_display_name(str(value)) if value else "Unknown"
+                elif 'display_map' in item:
+                    # Map stored value to a localized display name (e.g. sound_mode).
+                    key = str(value).strip().lower()
+                    if key not in item['display_map']:
+                        key = item['choices'][0]
+                    value_str = item['display_map'][key]
                 else:
                     value_str = str(value) if value else "Unknown"
 
@@ -298,7 +306,8 @@ class QuickSettingsWidget(BaseWidget):
 
                         new_choice_index = (current_choice_index + 1) % len(choices)
                         new_value = choices[new_choice_index]
-                        new_value_display = new_value
+                        # Map stored value to a localized display name when provided.
+                        new_value_display = item.get('display_map', {}).get(new_value, new_value)
 
                     set_setting(item['key'], new_value, section=item['section'])
 
@@ -312,6 +321,13 @@ class QuickSettingsWidget(BaseWidget):
                             set_theme(new_value)
                         except Exception as e:
                             print(f"Error setting theme: {e}")
+
+                    # Keep legacy stereo_sound in sync with the new sound_mode.
+                    if item['key'] == 'sound_mode':
+                        try:
+                            set_setting('stereo_sound', str(new_value != 'none'), section='sound')
+                        except Exception as e:
+                            print(f"Error syncing stereo_sound: {e}")
 
                     play_sound('core/SELECT.ogg')
                     self.speak(f"{item['name']}: {new_value_display}")

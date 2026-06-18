@@ -14,6 +14,29 @@ from src.settings.settings import get_setting
 from src.platform_utils import get_base_path as _get_base_path, IS_WINDOWS, IS_LINUX, IS_MACOS
 
 
+def _get_sound_mode():
+    """Return the positioning mode ('none'/'stereo'/'3d') from sound settings.
+
+    Lazy import of src.titan_core.sound to avoid a circular import at load time.
+    """
+    try:
+        from src.titan_core.sound import get_sound_mode
+        return get_sound_mode()
+    except Exception:
+        # Fallback: derive from legacy stereo_speech flag.
+        return 'stereo' if get_setting(
+            'stereo_speech', 'False', 'invisible_interface').lower() in ['true', '1'] else 'none'
+
+
+def _spatial_ok():
+    """True if the OpenAL HRTF backend is available for 3D playback."""
+    try:
+        from src.titan_core import spatial_audio
+        return spatial_audio.spatial_available()
+    except Exception:
+        return False
+
+
 # Windows-specific imports
 SAPI_AVAILABLE = False
 if IS_WINDOWS:
@@ -1444,6 +1467,7 @@ class StereoSpeech:
 
     def __init__(self):
         self.sapi = None
+        self._spatial_src = None  # OpenAL source id for the current 3D TTS playback
         self.current_voice = None
         self._sapi_voice_cache = None
         self._espeak_voice_cache = None  # eSpeak voices are static per session
@@ -1677,8 +1701,12 @@ class StereoSpeech:
             # Don't call CoUninitialize on errors - can cause crashes
     
     def is_stereo_enabled(self):
-        """Sprawdza czy stereo speech jest włączone w ustawieniach."""
-        return get_setting('stereo_speech', 'False', 'invisible_interface').lower() in ['true', '1']
+        """True if positioning (stereo or 3D) is active per the sound mode."""
+        return _get_sound_mode() in ('stereo', '3d')
+
+    def is_3d_enabled(self):
+        """True if 3D HRTF positioning is selected."""
+        return _get_sound_mode() == '3d'
 
     def get_silence_threshold(self):
         """Get silence threshold from settings in dB (default -50.0)"""
@@ -2191,12 +2219,14 @@ class StereoSpeech:
             print(f"[StereoSpeech] spd-say direct error: {e}")
             return False
 
-    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True, _seq=None):
+    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True, _seq=None, elevation=0.0):
         """
-        Speaks text with optional stereo positioning and pitch control.
+        Speaks text with optional stereo / 3D positioning and pitch control.
 
         Always trims leading/trailing silence (like NVDA).
-        Stereo positioning is optional (controlled by 'stereo_speech' setting).
+        Positioning is controlled by the sound mode (none/stereo/3d). In 3D mode
+        playback is rendered through OpenAL HRTF using both azimuth (position)
+        and elevation; in stereo mode only left/right panning is applied.
 
         Args:
             text (str): Text to speak
@@ -2204,6 +2234,7 @@ class StereoSpeech:
             pitch_offset (int): Pitch offset -10 to +10
             use_fallback (bool): Whether to use fallback if engine fails
             _seq (int|None): Sequence number from speak_async for freshness check
+            elevation (float): Vertical position -1.0 (down) to 1.0 (up), 3D mode only
         """
         if not text:
             return
@@ -2225,9 +2256,16 @@ class StereoSpeech:
             self.stop()
             self.is_speaking = True
 
+            # In 3D mode we must always generate audio to memory so it can be
+            # rendered through OpenAL HRTF; the engines' direct playback paths
+            # cannot be spatialised.
+            spatial_3d = self.is_3d_enabled() and _spatial_ok()
+
             try:
                 # Fast direct speech path: center position, no pitch change, no stereo needed
-                if (position == 0.0 or not self.is_stereo_enabled()) and pitch_offset == 0:
+                if (not spatial_3d and elevation == 0.0
+                        and (position == 0.0 or not self.is_stereo_enabled())
+                        and pitch_offset == 0):
                     if self.engine == 'espeak_dll' and self.espeak_dll:
                         try:
                             self.espeak_dll.speak(text, interrupt=True)
@@ -2438,6 +2476,55 @@ class StereoSpeech:
                     except Exception as e:
                         print(f"Warning: Could not trim silence: {e}")
 
+                    # 3D mode: render through OpenAL HRTF (azimuth + elevation).
+                    if spatial_3d:
+                        try:
+                            from src.titan_core import spatial_audio
+                            mono = audio.set_channels(1).set_sample_width(2)
+                            azimuth = spatial_audio.position_to_azimuth(position)
+                            elev_deg = spatial_audio.norm_to_elevation(elevation)
+                            # Stop any previous 3D TTS source before starting a new one
+                            if self._spatial_src is not None:
+                                spatial_audio.stop_source(self._spatial_src)
+                                self._spatial_src = None
+                            src = spatial_audio.play_pcm(
+                                mono.raw_data, mono.frame_rate, 1, 2,
+                                azimuth, elev_deg, gain=1.0)
+                            if src is not None:
+                                self._spatial_src = src
+                                # Release the lock while playing so a newer
+                                # message can interrupt (mirrors pygame path).
+                                if lock_acquired:
+                                    self.speech_lock.release()
+                                    lock_acquired = False
+                                # Poll the real OpenAL source state instead of a
+                                # wall-clock estimate: HRTF has start-up latency
+                                # that an estimate would clip, cutting off the
+                                # tail of the utterance. Stop early only when
+                                # interrupted (is_speaking) or superseded by a
+                                # newer message (_seq) - never on the final item.
+                                duration = len(mono) / 1000.0
+                                deadline = time.time() + duration + 1.0
+                                started = False
+                                while True:
+                                    if (not self.is_speaking
+                                            or (_seq is not None and _seq != self._speak_seq)):
+                                        spatial_audio.stop_source(src)
+                                        break
+                                    if spatial_audio.is_playing(src):
+                                        started = True
+                                    elif started or time.time() > deadline:
+                                        # Finished naturally, or never started
+                                        # within the safety window.
+                                        break
+                                    time.sleep(0.03)
+                                if self._spatial_src == src:
+                                    self._spatial_src = None
+                                return
+                        except Exception as e:
+                            print(f"[StereoSpeech] Spatial TTS playback error: {e}")
+                        # Fall through to pygame/stereo if spatial playback failed.
+
                     # Apply stereo panning if enabled
                     if position != 0.0 and self.is_stereo_enabled():
                         panned_audio = audio.pan(position)
@@ -2531,9 +2618,9 @@ class StereoSpeech:
             if lock_acquired:
                 self.speech_lock.release()
     
-    def speak_async(self, text, position=0.0, pitch_offset=0, use_fallback=True):
+    def speak_async(self, text, position=0.0, pitch_offset=0, use_fallback=True, elevation=0.0):
         """
-        Wypowiada tekst asynchronicznie z pozycjonowaniem stereo.
+        Wypowiada tekst asynchronicznie z pozycjonowaniem stereo / 3D.
         Używa licznika sekwencji, żeby stare wiadomości czekające na lock były pomijane.
 
         Args:
@@ -2541,6 +2628,7 @@ class StereoSpeech:
             position (float): Pozycja stereo od -1.0 (lewo) do 1.0 (prawo)
             pitch_offset (int): Przesunięcie wysokości głosu -10 do +10
             use_fallback (bool): Czy użyć fallback jeśli SAPI5 nie działa
+            elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
         """
         self._speak_seq += 1
         my_seq = self._speak_seq
@@ -2554,7 +2642,7 @@ class StereoSpeech:
             # If a newer message arrived while we were waiting, skip this one
             if my_seq != self._speak_seq:
                 return
-            self.speak(text, position, pitch_offset, use_fallback, _seq=my_seq)
+            self.speak(text, position, pitch_offset, use_fallback, _seq=my_seq, elevation=elevation)
 
         thread = threading.Thread(target=speak_thread)
         thread.daemon = True
@@ -2581,6 +2669,15 @@ class StereoSpeech:
                     print(f"[StereoSpeech] Error stopping TTS channel: {e}")
                 finally:
                     self.current_tts_channel = None
+
+            # Stop current 3D HRTF TTS source (OpenAL)
+            if getattr(self, '_spatial_src', None) is not None:
+                try:
+                    from src.titan_core import spatial_audio
+                    spatial_audio.stop_source(self._spatial_src)
+                except Exception:
+                    pass
+                self._spatial_src = None
 
             # Stop SAPI5 via worker thread (proper COM apartment)
             if IS_WINDOWS and hasattr(self, '_sapi_worker') and self._sapi_worker:
@@ -3200,25 +3297,27 @@ def get_stereo_speech():
         print(f"Error getting stereo speech instance: {e}")
         return None
 
-def speak_stereo(text, position=0.0, pitch_offset=0, async_mode=False):
+def speak_stereo(text, position=0.0, pitch_offset=0, async_mode=False, elevation=0.0):
     """
-    Funkcja pomocnicza do szybkiego użycia stereo speech.
+    Funkcja pomocnicza do szybkiego użycia stereo / 3D speech.
 
     ZAWSZE odcina ciszę na początku i końcu audio (jak NVDA).
-    Stereo positioning wymaga włączonego ustawienia 'stereo_speech'.
+    Pozycjonowanie zależy od trybu dźwięku (none/stereo/3d). W trybie 3D
+    używana jest również elewacja (góra/dół) przez OpenAL HRTF.
 
     Args:
         text (str): Tekst do wypowiedzenia
-        position (float): Pozycja stereo od -1.0 (lewo) do 1.0 (prawo) - wymaga włączonego stereo_speech
+        position (float): Pozycja stereo od -1.0 (lewo) do 1.0 (prawo)
         pitch_offset (int): Przesunięcie wysokości głosu -10 do +10
         async_mode (bool): Czy mówić asynchronicznie
+        elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
     """
     stereo_speech = get_stereo_speech()
-    
+
     if async_mode:
-        stereo_speech.speak_async(text, position, pitch_offset)
+        stereo_speech.speak_async(text, position, pitch_offset, elevation=elevation)
     else:
-        stereo_speech.speak(text, position, pitch_offset)
+        stereo_speech.speak(text, position, pitch_offset, elevation=elevation)
 
 def stop_stereo_speech():
     """Zatrzymuje aktualną stereo mowę."""

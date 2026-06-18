@@ -109,11 +109,13 @@ def _stereo_enabled():
 
 
 def _sound_stereo_enabled():
+    """True when positioning (stereo or 3D) is active per the sound mode."""
     try:
+        from src.titan_core.sound import get_sound_mode
+        return get_sound_mode() in ('stereo', '3d')
+    except Exception:
         return get_setting('stereo_sound', 'False',
                            section='sound').lower() in ('true', '1')
-    except Exception:
-        return False
 
 
 def _pan_for(index, count):
