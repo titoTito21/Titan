@@ -440,21 +440,26 @@ class ControllerModeManager:
         except Exception as e:
             print(f"Error saving controller mode settings: {e}")
 
-    def speak(self, text: str, position: float = 0.0, interrupt: bool = True):
+    def speak(self, text: str, position: float = 0.0, interrupt: bool = True,
+              pitch_offset: int = 0):
         """
         Speak text with optional stereo positioning
-        Compatible with TCE's speech system
 
         Args:
             text: Text to speak
             position: Stereo position (-1.0 left to 1.0 right)
             interrupt: Whether to interrupt current speech
+            pitch_offset: Voice pitch shift (-10..+10), used to distinguish e.g.
+                a typed character from spoken navigation. Only applied on the
+                stereo / Titan TTS path; ignored by the accessible_output3
+                fallback (which has no pitch control).
         """
         try:
             if self.stereo_enabled and self.stereo_speech:
                 # Stereo speech always interrupts the previous utterance
                 # (speak_async() calls stop() + uses a sequence counter).
-                self.stereo_speech.speak_async(text, position=position, use_fallback=True)
+                self.stereo_speech.speak_async(text, position=position,
+                                               pitch_offset=pitch_offset, use_fallback=True)
             else:
                 # Fallback to accessible_output3. Pass interrupt through so fast
                 # stick/d-pad navigation cuts off the previous line instead of
@@ -850,9 +855,10 @@ class ControllerModeManager:
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
                 if self.virtual_keyboard.type_current_key():
                     play_sound('joystick/ui2.ogg')
-                    # Announce what was typed
+                    # Speak just the typed character, in a lower tone so it is
+                    # distinct from spoken navigation (no "Typed" prefix).
                     key_desc = self.virtual_keyboard.get_key_description()
-                    self.speak(_("Typed {}").format(key_desc))
+                    self.speak(key_desc, pitch_offset=-5)
                 return True
 
             elif button_id == 1:  # Right button -> Backspace

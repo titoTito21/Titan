@@ -272,10 +272,16 @@ def get_clipboard_text():
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
 
+        # IMPORTANT: set restypes/argtypes for the HANDLE-returning calls.
+        # Without this ctypes assumes a 32-bit int return and TRUNCATES the
+        # 64-bit clipboard handle, so GlobalLock dereferences a garbage pointer
+        # and the process crashes.
         user32.OpenClipboard.argtypes = [wintypes.HWND]
+        user32.GetClipboardData.restype = ctypes.c_void_p
+        user32.GetClipboardData.argtypes = [wintypes.UINT]
         kernel32.GlobalLock.restype = ctypes.c_void_p
-        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
-        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
 
         if not user32.OpenClipboard(None):
             return ''
