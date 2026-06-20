@@ -56,7 +56,8 @@ from src.titan_core.sound import set_theme, initialize_sound, play_sound, resour
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification, test_vibration,
-    set_vibration_enabled, set_vibration_strength, set_haptic_mode, get_controller_info
+    set_vibration_enabled, set_vibration_strength, set_haptic_mode, get_controller_info,
+    set_speech_haptic_sync
 )
 from src.titan_core.translation import get_available_languages, get_available_languages_display, get_language_display_name, get_language_code_from_display_name, set_language
 from src.titan_core.stereo_speech import get_stereo_speech
@@ -723,6 +724,16 @@ class SettingsFrame(wx.Frame):
         self.haptic_test_btn.Bind(wx.EVT_BUTTON, self.OnTestVibration)
         vbox.Add(self.haptic_test_btn, flag=wx.LEFT | wx.TOP, border=10)
 
+        # Experimental accessibility option: feel spoken text as controller
+        # rumble. Aimed at deaf / hard-of-hearing users; off by default and works
+        # regardless of the vibration mode above.
+        self.speech_haptic_sync_cb = wx.CheckBox(
+            panel,
+            label=_("Synchronize vibration with speech, for deaf and hard of hearing (experimental)"))
+        self.speech_haptic_sync_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.speech_haptic_sync_cb.Bind(wx.EVT_CHECKBOX, self.OnSpeechHapticSyncChanged)
+        vbox.Add(self.speech_haptic_sync_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         panel.SetSizer(vbox)
         panel.Layout()
         # This panel is registered as a category manually (see
@@ -1371,6 +1382,8 @@ class SettingsFrame(wx.Frame):
         except (TypeError, ValueError):
             strength_pct = 80
         self.haptic_strength_slider.SetValue(max(0, min(100, strength_pct)))
+        speech_haptic_value = controller_settings.get('speech_haptic_sync', 'False')
+        self.speech_haptic_sync_cb.SetValue(str(speech_haptic_value).lower() in ['true', '1'])
 
         general_settings = self.settings.get('general', {})
         quick_start_value = general_settings.get('quick_start', 'False')
@@ -1933,6 +1946,14 @@ class SettingsFrame(wx.Frame):
             print(f"Error testing vibration: {e}")
         event.Skip()
 
+    def OnSpeechHapticSyncChanged(self, event):
+        """Persist the experimental speech-synced haptics toggle."""
+        try:
+            set_speech_haptic_sync(self.speech_haptic_sync_cb.GetValue())
+        except Exception as e:
+            print(f"Error changing speech haptic sync: {e}")
+        event.Skip()
+
     def OnSoundModeChanged(self, event):
         # Persist immediately so the preview sound uses the new mode, then play a
         # focus sound so the user can hear the positioning effect.
@@ -2213,6 +2234,23 @@ class SettingsFrame(wx.Frame):
                 # TODO: Save the current slider volume value if needed on startup
                 # (usually not necessary, as the system remembers the volume)
             }
+
+        # Game controller (vibration / haptics) settings. These also persist
+        # immediately through their live event handlers, but include them in the
+        # main Save flow too so the gamepad panel behaves like every other panel.
+        # Only the keys this panel owns are written; the final merge below keeps
+        # other controller keys (e.g. controller_mode) intact.
+        try:
+            haptic_mode_value = self._HAPTIC_MODE_VALUES[max(0, self.haptic_mode_choice.GetSelection())]
+        except Exception:
+            haptic_mode_value = 'sync'
+        controller_section = self.settings.get('controller', {})
+        controller_section.update({
+            'haptic_mode': haptic_mode_value,
+            'vibration_strength': str(self.haptic_strength_slider.GetValue() / 100.0),
+            'speech_haptic_sync': str(self.speech_haptic_sync_cb.GetValue()),
+        })
+        self.settings['controller'] = controller_section
 
         # Re-read the on-disk settings and merge our GUI-built sections on top
         # at the key level, so values written elsewhere since this dialog opened

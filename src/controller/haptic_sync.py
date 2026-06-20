@@ -72,6 +72,29 @@ def _compute_envelope(sound_path):
 
     try:
         freq = pygame.mixer.get_init()[0] or 44100
+        env = _envelope_from_samples(samples, freq)
+        if env is None:
+            return None
+    except Exception:
+        return None
+
+    result = (env, _HOP_SECONDS)
+    with _env_lock:
+        if len(_env_cache) > 256:
+            _env_cache.clear()
+        _env_cache[key] = result
+    return result
+
+
+def _envelope_from_samples(samples, freq):
+    """Compute the [0..1] motor envelope from raw int16 samples at ``freq`` Hz.
+
+    Shared by file-based haptics and in-memory speech haptics. Returns a float32
+    ndarray (one value per hop) or None if numpy/the data is unusable.
+    """
+    if not _NUMPY_OK:
+        return None
+    try:
         if samples.ndim > 1:
             samples = samples.mean(axis=1)
         samples = samples.astype(_np.float32)
@@ -95,16 +118,9 @@ def _compute_envelope(sound_path):
             prev = amp[i] if amp[i] >= prev else prev * decay
             env[i] = prev
         env[env < _NOISE_GATE] = 0.0
-        env = env.astype(_np.float32)
+        return env.astype(_np.float32)
     except Exception:
         return None
-
-    result = (env, _HOP_SECONDS)
-    with _env_lock:
-        if len(_env_cache) > 256:
-            _env_cache.clear()
-        _env_cache[key] = result
-    return result
 
 
 class _HapticSyncEngine:
@@ -135,6 +151,37 @@ class _HapticSyncEngine:
             self._voices.append({'env': env, 'hop': hop, 't0': time.time(), 'gain': gain})
             self._ensure_thread()
         self._wake.set()
+
+    def add_voice_from_samples(self, samples, freq, gain=1.0):
+        """Register raw int16 samples (shape (n,) or (n, channels)) as a voice."""
+        if not _NUMPY_OK or samples is None:
+            return
+        env = _envelope_from_samples(samples, freq)
+        if env is None or len(env) == 0 or float(env.max()) <= 0.0:
+            return
+        with self._lock:
+            self._voices.append({'env': env, 'hop': _HOP_SECONDS, 't0': time.time(), 'gain': gain})
+            self._ensure_thread()
+        self._wake.set()
+
+    def add_voice_from_sound(self, snd, gain=1.0):
+        """Register an in-memory pygame Sound (e.g. a TTS utterance just played).
+
+        Unlike add_voice() this takes a live Sound object instead of a file path,
+        so it works for synthesized speech that never touches disk. Not cached:
+        every utterance is unique.
+        """
+        if not _NUMPY_OK or snd is None:
+            return
+        try:
+            import pygame
+            if pygame.mixer.get_init() is None:
+                return
+            samples = pygame.sndarray.array(snd)  # int16, (n,) or (n, channels)
+            freq = pygame.mixer.get_init()[0] or 22050
+        except Exception:
+            return
+        self.add_voice_from_samples(samples, freq, gain=gain)
 
     def _set_motors(self, level):
         """Push a single combined level [0..1] to the active rumble backend."""
@@ -238,6 +285,51 @@ def play_for_path(sound_path, volume=1.0):
         if not sound_path:
             return
         _engine.add_voice(sound_path, gain=max(0.0, min(1.0, volume)))
+    except Exception:
+        pass
+
+
+def play_for_speech(snd, volume=1.0):
+    """Fire haptics from a TTS utterance so deaf/hard-of-hearing users feel speech.
+
+    Gated by the experimental 'speech_haptic_sync' setting, NOT by haptic_mode:
+    a user may keep general audio-haptics off yet still want speech felt. Still
+    respects the master vibration enable. Safe to call on every TTS playback.
+    """
+    try:
+        vc = _cv.vibration_controller
+        if not getattr(vc, 'speech_haptic_sync', False):
+            return
+        if not getattr(vc, 'vibration_enabled', True):
+            return
+        _engine.add_voice_from_sound(snd, gain=max(0.0, min(1.0, volume)))
+    except Exception:
+        pass
+
+
+def play_for_speech_segment(audio, volume=1.0):
+    """Fire speech haptics from a pydub AudioSegment (any TTS engine, any mode).
+
+    This is the central entry point: every Titan TTS engine (eSpeak, SAPI, and
+    custom TitanTTS plugin engines like Milena/ElevenLabs) produces an
+    AudioSegment before playback, and it is reached in stereo AND 3D positioning
+    modes - unlike the pygame-Sound path which 3D/OpenAL playback bypasses.
+    Gated by 'speech_haptic_sync'; safe to call on every utterance.
+    """
+    try:
+        vc = _cv.vibration_controller
+        if not getattr(vc, 'speech_haptic_sync', False):
+            return
+        if not getattr(vc, 'vibration_enabled', True):
+            return
+        if not _NUMPY_OK or audio is None:
+            return
+        samples = _np.array(audio.get_array_of_samples())
+        channels = int(getattr(audio, 'channels', 1) or 1)
+        if channels > 1:
+            samples = samples.reshape(-1, channels)
+        freq = int(getattr(audio, 'frame_rate', 22050) or 22050)
+        _engine.add_voice_from_samples(samples, freq, gain=max(0.0, min(1.0, volume)))
     except Exception:
         pass
 

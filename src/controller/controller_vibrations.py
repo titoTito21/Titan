@@ -57,6 +57,11 @@ class SimpleControllerVibration:
         # 'discrete' -> fixed pulses for individual UI events (legacy behaviour)
         # 'off'   -> no haptics at all
         self.haptic_mode = 'sync'
+        # Experimental: drive the rumble motors from the TTS speech envelope so a
+        # deaf / hard-of-hearing user can FEEL what is being spoken. Works
+        # independently of haptic_mode (the user may keep general audio-haptics
+        # off but still want speech to be felt). Default off.
+        self.speech_haptic_sync = False
         self.last_vibration_time = {}
         self.min_vibration_interval = 0.05
         self.vibration_lock = threading.Lock()
@@ -75,6 +80,8 @@ class SimpleControllerVibration:
                 self.vibration_strength = 0.8
             mode = str(get_setting('haptic_mode', 'sync', 'controller')).lower()
             self.haptic_mode = mode if mode in ('sync', 'discrete', 'off') else 'sync'
+            sync_speech = str(get_setting('speech_haptic_sync', 'False', 'controller')).lower()
+            self.speech_haptic_sync = sync_speech in ('true', '1')
         except Exception as e:
             print(f"[VIBRATION] Could not load settings, using defaults: {e}")
 
@@ -212,6 +219,21 @@ class SimpleControllerVibration:
                 pass
         self._save_setting('haptic_mode', mode)
 
+    def set_speech_haptic_sync(self, enabled: bool):
+        """Enable/disable feeling TTS speech as rumble (experimental, persisted).
+
+        When disabled, stop any speech-driven haptics immediately so the motors
+        do not keep buzzing from an in-flight utterance.
+        """
+        self.speech_haptic_sync = bool(enabled)
+        if not enabled:
+            try:
+                from src.controller import haptic_sync
+                haptic_sync.stop()
+            except Exception:
+                pass
+        self._save_setting('speech_haptic_sync', bool(enabled))
+
     def is_vibration_available(self) -> bool:
         """Check if vibration is available"""
         return XINPUT_AVAILABLE
@@ -224,7 +246,8 @@ class SimpleControllerVibration:
             'vibration_available': XINPUT_AVAILABLE,
             'vibration_enabled': self.vibration_enabled,
             'strength': self.vibration_strength,
-            'haptic_mode': self.haptic_mode
+            'haptic_mode': self.haptic_mode,
+            'speech_haptic_sync': self.speech_haptic_sync
         }
 
     def refresh_controllers(self):
@@ -289,6 +312,9 @@ def set_vibration_strength(strength: float):
 
 def set_haptic_mode(mode: str):
     vibration_controller.set_haptic_mode(mode)
+
+def set_speech_haptic_sync(enabled: bool):
+    vibration_controller.set_speech_haptic_sync(enabled)
 
 def get_controller_info():
     return vibration_controller.get_controller_info()

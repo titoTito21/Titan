@@ -869,3 +869,7 @@ msgstr "Testuj wibracje"
 #: src/ui/settingsgui.py
 msgid "Off"
 msgstr "Wyłączone"
+
+#: src/ui/settingsgui.py
+msgid "Synchronize vibration with speech, for deaf and hard of hearing (experimental)"
+msgstr "Synchronizuj wibracje z mową, dla osób niesłyszących i słabosłyszących (eksperymentalne)"

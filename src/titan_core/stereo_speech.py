@@ -351,6 +351,13 @@ class ESpeakDLL:
                     if channel:
                         channel.play(sound)
                         self._play_channel = channel
+                        # Experimental speech-synced haptics (no-op unless the
+                        # 'speech_haptic_sync' setting is enabled).
+                        try:
+                            from src.controller import haptic_sync
+                            haptic_sync.play_for_speech(sound)
+                        except Exception:
+                            pass
                 except Exception as e:
                     print(f"[eSpeak DLL] pygame playback error: {e}")
 
@@ -2475,6 +2482,17 @@ class StereoSpeech:
                         audio = trim_silence(audio, silence_threshold=silence_threshold)
                     except Exception as e:
                         print(f"Warning: Could not trim silence: {e}")
+
+                    # Experimental: drive controller rumble from the speech
+                    # envelope so deaf/hard-of-hearing users can feel what is
+                    # spoken. Central hook - covers every TitanTTS engine
+                    # (eSpeak, SAPI, Milena, ElevenLabs, ...) in both stereo and
+                    # 3D playback. No-op unless 'speech_haptic_sync' is enabled.
+                    try:
+                        from src.controller import haptic_sync
+                        haptic_sync.play_for_speech_segment(audio)
+                    except Exception:
+                        pass
 
                     # 3D mode: render through OpenAL HRTF (azimuth + elevation).
                     if spatial_3d:
