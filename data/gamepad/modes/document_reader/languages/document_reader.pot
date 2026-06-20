@@ -1,0 +1,46 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# Translation template for the Document reader gamepad mode.
+# Copyright (C) 2026 titosoft
+# This file is distributed under the same license as the TCE project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: document_reader 1.0\n"
+"POT-Creation-Date: 2026-06-20 12:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid ""
+"Document reader. Up and down read lines, left and right spell characters, A "
+"reads to the end. Bumpers switch between text field and clipboard."
+msgstr ""
+
+msgid "Not in a text field"
+msgstr ""
+
+msgid "Text field"
+msgstr ""
+
+msgid "Clipboard"
+msgstr ""
+
+msgid "Blank"
+msgstr ""
+
+msgid "Space"
+msgstr ""
+
+msgid "New line"
+msgstr ""
+
+msgid "Tab"
+msgstr ""
+
+msgid "Blank line"
+msgstr ""
+
+msgid "End of document"
+msgstr ""

@@ -1,0 +1,52 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# English translations for the Document reader gamepad mode.
+# Note: English strings are authored directly in the source; entries here are
+# AI-assisted and kept identical to the source msgid.
+# Copyright (C) 2026 titosoft
+# This file is distributed under the same license as the TCE project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: document_reader 1.0\n"
+"PO-Revision-Date: 2026-06-20 12:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid ""
+"Document reader. Up and down read lines, left and right spell characters, A "
+"reads to the end. Bumpers switch between text field and clipboard."
+msgstr ""
+"Document reader. Up and down read lines, left and right spell characters, A "
+"reads to the end. Bumpers switch between text field and clipboard."
+
+msgid "Not in a text field"
+msgstr "Not in a text field"
+
+msgid "Text field"
+msgstr "Text field"
+
+msgid "Clipboard"
+msgstr "Clipboard"
+
+msgid "Blank"
+msgstr "Blank"
+
+msgid "Space"
+msgstr "Space"
+
+msgid "New line"
+msgstr "New line"
+
+msgid "Tab"
+msgstr "Tab"
+
+msgid "Blank line"
+msgstr "Blank line"
+
+msgid "End of document"
+msgstr "End of document"

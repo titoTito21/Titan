@@ -1,0 +1,51 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# Polish translations for the Document reader gamepad mode.
+# Copyright (C) 2026 titosoft
+# This file is distributed under the same license as the TCE project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: document_reader 1.0\n"
+"PO-Revision-Date: 2026-06-20 12:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language: pl\n"
+"Language-Team: pl <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid ""
+"Document reader. Up and down read lines, left and right spell characters, A "
+"reads to the end. Bumpers switch between text field and clipboard."
+msgstr ""
+"Czytnik dokumentów. Góra i dół czytają linie, lewo i prawo literują znaki, A "
+"czyta do końca. Bumpery przełączają między polem tekstowym a schowkiem."
+
+msgid "Not in a text field"
+msgstr "Poza polem tekstowym"
+
+msgid "Text field"
+msgstr "Pole tekstowe"
+
+msgid "Clipboard"
+msgstr "Schowek"
+
+msgid "Blank"
+msgstr "Pusty"
+
+msgid "Space"
+msgstr "Spacja"
+
+msgid "New line"
+msgstr "Nowa linia"
+
+msgid "Tab"
+msgstr "Tabulator"
+
+msgid "Blank line"
+msgstr "Pusta linia"
+
+msgid "End of document"
+msgstr "Koniec dokumentu"

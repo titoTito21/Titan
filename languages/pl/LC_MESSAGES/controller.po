@@ -30,77 +30,77 @@ msgstr "Kontroler do gier odłączony"
 
 #: src/controller/controller_ui.py:673
 msgid "Controller Information"
-msgstr "Informacja"
+msgstr "Informacje o kontrolerze"
 
 #: src/controller/controller_ui.py:676 src/controller/controller_ui.py:771
 msgid "Connected controllers"
-msgstr "Połączono z {}"
+msgstr "Podłączone kontrolery"
 
 #: src/controller/controller_ui.py:679 src/controller/controller_ui.py:774
 msgid "Controller names"
-msgstr "Panel sterowania"
+msgstr "Nazwy kontrolerów"
 
 #: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "Vibration available"
-msgstr "WebView niedostępny"
+msgstr "Wibracje dostępne"
 
 #: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "Yes"
-msgstr ""
+msgstr "Tak"
 
 #: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
 msgid "No"
-msgstr "Brak"
+msgstr "Nie"
 
 #: src/controller/controller_ui.py:689
 msgid "Vibration Settings"
-msgstr "Ustawienia Titan"
+msgstr "Ustawienia wibracji"
 
 #: src/controller/controller_ui.py:691
 msgid "Enable vibration"
-msgstr ""
+msgstr "Włącz wibracje"
 
 #: src/controller/controller_ui.py:696
 msgid "Vibration strength"
-msgstr ""
+msgstr "Siła wibracji"
 
 #: src/controller/controller_ui.py:705 src/controller/controller_ui.py:781
 msgid "Controller Settings"
-msgstr "Ustawienia Titan"
+msgstr "Ustawienia kontrolera"
 
 #: src/controller/controller_ui.py:707
 msgid "Enable controller input"
-msgstr ""
+msgstr "Włącz obsługę kontrolera"
 
 #: src/controller/controller_ui.py:712
 msgid "Enable controller navigation"
-msgstr ""
+msgstr "Włącz nawigację kontrolerem"
 
 #: src/controller/controller_ui.py:717
 msgid "Analog stick deadzone"
-msgstr ""
+msgstr "Martwa strefa gałki analogowej"
 
 #: src/controller/controller_ui.py:728
 msgid "Refresh Controllers"
-msgstr "Odśwież rozmowy\tF5"
+msgstr "Odśwież kontrolery"
 
 #: src/controller/controller_ui.py:732
 msgid "Test Vibration"
-msgstr ""
+msgstr "Testuj wibracje"
 
 #: src/controller/controller_ui.py:781
 msgid "Controllers refreshed successfully"
-msgstr ""
+msgstr "Kontrolery odświeżone pomyślnie"
 
 #: src/controller/controller_modes.py:166
 #: src/controller/controller_modes.py:169
 msgid "on"
-msgstr ""
+msgstr "wł."
 
 #: src/controller/controller_modes.py:166
 #: src/controller/controller_modes.py:169
 msgid "off"
-msgstr ""
+msgstr "wył."
 
 #: src/controller/controller_modes.py:167
 msgid "Caps Lock"
@@ -112,42 +112,42 @@ msgstr ""
 
 #: src/controller/controller_modes.py:172
 msgid "Space"
-msgstr ""
+msgstr "Spacja"
 
 #: src/controller/controller_modes.py:174
 msgid "Enter"
-msgstr ""
+msgstr "Enter"
 
 #: src/controller/controller_modes.py:279
 msgid "System mode"
-msgstr ""
+msgstr "Tryb systemowy"
 
 #: src/controller/controller_modes.py:280
 msgid "Controller mode"
-msgstr ""
+msgstr "Tryb kontrolera"
 
 #: src/controller/controller_modes.py:281
 msgid "Screen reader mode"
-msgstr ""
+msgstr "Czytnik ekranu"
 
 #: src/controller/controller_modes.py:282
 msgid "Screen keyboard mode"
-msgstr ""
+msgstr "Klawiatura ekranowa"
 
 #: src/controller/controller_modes.py:285
 msgid "Unknown mode"
-msgstr ""
+msgstr "Nieznany tryb"
 
 #: src/controller/controller_modes.py:524
 msgid "Exiting screen reader"
-msgstr ""
+msgstr "Wyłączanie czytnika ekranu"
 
 #: src/controller/controller_modes.py:560
 #, python-brace-format
 msgid "Typed {}"
-msgstr ""
+msgstr "Wpisano {}"
 
 #: src/controller/controller_modes.py:567
 msgid "Backspace"
-msgstr ""
+msgstr "Backspace"
 

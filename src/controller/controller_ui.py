@@ -338,8 +338,10 @@ class ControllerUI:
     BUMPER_HOLD_SECONDS = 1.0
 
     def _check_bumper_hold(self, controller_index, controller):
-        """Switch controller mode when a bumper is held for BUMPER_HOLD_SECONDS.
-        LB (button 4) -> previous mode, RB (button 5) -> next mode."""
+        """Bumper gestures. HOLD ~1s changes controller mode (LB=previous,
+        RB=next). A short TAP (release before the threshold) is offered to the
+        active custom mode via handle_bumper_tap, so e.g. the document reader
+        can switch its source on a tap without colliding with mode switching."""
         if not hasattr(self, '_bumper_hold'):
             self._bumper_hold = {}
         now = time.time()
@@ -358,6 +360,13 @@ class ControllerUI:
                         self.mode_manager.cycle_mode()
                     state['done'] = True
             elif state is not None:
+                # Released. If the hold never fired, it was a tap -> hand it to
+                # the active mode (harmless no-op for modes that ignore bumpers).
+                if not state['done']:
+                    try:
+                        self.mode_manager.handle_bumper_tap(is_left)
+                    except Exception as e:
+                        print(f"Error handling bumper tap: {e}")
                 self._bumper_hold[key] = None
 
     def handle_button_press(self, button_id: int, controller: pygame.joystick.Joystick, pressed: bool = True):

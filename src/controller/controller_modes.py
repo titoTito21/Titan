@@ -185,6 +185,17 @@ class ControllerMode(Enum):
     CONTROLLER = "controller"  # Controller mode - button/stick mapping to keyboard
     SCREENREADER = "screenreader"  # Screen reader mode - NVDA/JAWS shortcuts
     KEYBOARD = "keyboard"  # Screen keyboard mode - virtual keyboard navigation
+    CUSTOM = "custom"  # A custom mode loaded from data/gamepad/modes/ is active
+
+
+# Built-in modes that participate in the mode cycle (CUSTOM is a runtime sentinel
+# for "a loaded custom mode is active", not a cycle entry on its own).
+_BUILTIN_CYCLE_MODES = [
+    ControllerMode.SYSTEM,
+    ControllerMode.CONTROLLER,
+    ControllerMode.SCREENREADER,
+    ControllerMode.KEYBOARD,
+]
 
 
 class VirtualKeyboard:
@@ -338,6 +349,13 @@ class ControllerModeManager:
     def __init__(self):
         self.current_mode = ControllerMode.SYSTEM
         self.virtual_keyboard = VirtualKeyboard()
+
+        # Custom modes loaded from data/gamepad/modes/. active_custom_mode is the
+        # GamepadMode instance currently driving input (only when
+        # current_mode == ControllerMode.CUSTOM), otherwise None.
+        self.custom_modes = []
+        self.active_custom_mode = None
+        self._load_custom_modes()
         self.bumper_hold_time = 2.0  # seconds to hold trigger to change mode (2 seconds)
         self.left_trigger_pressed_time = None
         self.right_trigger_pressed_time = None
@@ -359,6 +377,23 @@ class ControllerModeManager:
         # Load settings
         self._load_settings()
 
+    def _load_custom_modes(self):
+        """Load custom gamepad modes from data/gamepad/modes/."""
+        try:
+            from src.controller.gamepad_mode_api import load_custom_modes
+            self.custom_modes = load_custom_modes()
+            print(f"[MODE] Loaded {len(self.custom_modes)} custom gamepad mode(s)")
+        except Exception as e:
+            print(f"Error loading custom gamepad modes: {e}")
+            self.custom_modes = []
+
+    def _find_custom_mode(self, mode_id):
+        """Return the loaded custom mode with the given id, or None."""
+        for mode in self.custom_modes:
+            if mode.mode_id == mode_id:
+                return mode
+        return None
+
     def _load_settings(self):
         """Load controller mode settings"""
         try:
@@ -366,6 +401,16 @@ class ControllerModeManager:
             settings = load_settings()
 
             mode_str = settings.get('controller', {}).get('controller_mode', 'system')
+            if mode_str.startswith('custom:'):
+                # Restore a previously-selected custom mode if it still exists.
+                custom = self._find_custom_mode(mode_str)
+                if custom is not None:
+                    self.current_mode = ControllerMode.CUSTOM
+                    self.active_custom_mode = custom
+                else:
+                    self.current_mode = ControllerMode.SYSTEM
+                self.stereo_enabled = settings.get('invisible_interface', {}).get('stereo_speech', 'False').lower() in ['true', '1']
+                return
             try:
                 self.current_mode = ControllerMode(mode_str)
             except ValueError:
@@ -385,9 +430,13 @@ class ControllerModeManager:
             settings = load_settings()
             if 'controller' not in settings:
                 settings['controller'] = {}
-            settings['controller']['controller_mode'] = self.current_mode.value
+            if self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+                mode_value = self.active_custom_mode.mode_id
+            else:
+                mode_value = self.current_mode.value
+            settings['controller']['controller_mode'] = mode_value
             save_settings_func(settings)
-            print(f"[MODE] Saved mode setting: {self.current_mode.value}")
+            print(f"[MODE] Saved mode setting: {mode_value}")
         except Exception as e:
             print(f"Error saving controller mode settings: {e}")
 
@@ -403,23 +452,67 @@ class ControllerModeManager:
         """
         try:
             if self.stereo_enabled and self.stereo_speech:
-                # Use stereo speech
+                # Stereo speech always interrupts the previous utterance
+                # (speak_async() calls stop() + uses a sequence counter).
                 self.stereo_speech.speak_async(text, position=position, use_fallback=True)
             else:
-                # Fallback to accessible_output3
+                # Fallback to accessible_output3. Pass interrupt through so fast
+                # stick/d-pad navigation cuts off the previous line instead of
+                # queuing - matching the built-in screen-reader/keyboard modes.
                 import accessible_output3.outputs.auto
                 speaker = accessible_output3.outputs.auto.Auto()
-                speaker.output(text)
+                speaker.output(text, interrupt=interrupt)
         except Exception as e:
             print(f"Error speaking: {e}")
 
-    def change_mode(self, new_mode: ControllerMode):
-        """Change controller mode with feedback"""
-        if new_mode == self.current_mode:
+    def _mode_cycle(self):
+        """Ordered list of selectable modes: built-ins followed by custom modes.
+
+        Each entry is either a ControllerMode (built-in) or a GamepadMode
+        instance (custom mode loaded from data/gamepad/modes/).
+        """
+        return list(_BUILTIN_CYCLE_MODES) + list(self.custom_modes)
+
+    def _current_cycle_entry(self):
+        """The entry in _mode_cycle() that represents the current mode."""
+        if self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+            return self.active_custom_mode
+        return self.current_mode
+
+    def change_mode(self, new_mode):
+        """Change controller mode with feedback.
+
+        ``new_mode`` is either a ControllerMode (built-in) or a GamepadMode
+        instance (custom mode).
+        """
+        current_entry = self._current_cycle_entry()
+        if new_mode is current_entry:
             return
 
-        old_mode = self.current_mode
-        self.current_mode = new_mode
+        # Import here to avoid a circular import at module load time.
+        from src.controller.gamepad_mode_api import GamepadMode
+
+        # Deactivate the outgoing custom mode (if any).
+        if self.active_custom_mode is not None:
+            try:
+                self.active_custom_mode.on_deactivate(self)
+            except Exception as e:
+                print(f"Error deactivating custom mode: {e}")
+
+        old_desc = self._mode_description(current_entry)
+
+        if isinstance(new_mode, GamepadMode):
+            self.current_mode = ControllerMode.CUSTOM
+            self.active_custom_mode = new_mode
+            try:
+                new_mode.on_activate(self)
+            except Exception as e:
+                print(f"Error activating custom mode: {e}")
+            message = new_mode.get_display_name()
+        else:
+            self.current_mode = new_mode
+            self.active_custom_mode = None
+            message = self._mode_description(new_mode)
 
         # Play mode change sound
         play_sound('joystick/change_mode.ogg')
@@ -428,34 +521,45 @@ class ControllerModeManager:
         vibration_controller.vibrate(duration=0.3, intensity=0.8, vibration_type="mode_change")
 
         # Announce mode change
-        mode_names = {
-            ControllerMode.SYSTEM: _("System mode"),
-            ControllerMode.CONTROLLER: _("Controller mode"),
-            ControllerMode.SCREENREADER: _("Screen reader mode"),
-            ControllerMode.KEYBOARD: _("Screen keyboard mode")
-        }
-
-        message = mode_names.get(new_mode, _("Unknown mode"))
         self.speak(message, position=0.0, interrupt=True)
 
         # Save settings
         self._save_settings()
 
-        print(f"Controller mode changed: {old_mode.value} -> {new_mode.value}")
+        print(f"Controller mode changed: {old_desc} -> {message}")
+
+    def _mode_description(self, entry) -> str:
+        """Human-readable name for a cycle entry (built-in or custom)."""
+        from src.controller.gamepad_mode_api import GamepadMode
+        if isinstance(entry, GamepadMode):
+            return entry.get_display_name()
+        mode_names = {
+            ControllerMode.SYSTEM: _("System mode"),
+            ControllerMode.CONTROLLER: _("Controller mode"),
+            ControllerMode.SCREENREADER: _("Screen reader mode"),
+            ControllerMode.KEYBOARD: _("Screen keyboard mode"),
+        }
+        return mode_names.get(entry, _("Unknown mode"))
 
     def cycle_mode(self):
-        """Cycle to next mode (right trigger)"""
-        modes = list(ControllerMode)
-        current_index = modes.index(self.current_mode)
-        next_index = (current_index + 1) % len(modes)
-        self.change_mode(modes[next_index])
+        """Cycle to next mode (right trigger / RB)"""
+        cycle = self._mode_cycle()
+        try:
+            current_index = cycle.index(self._current_cycle_entry())
+        except ValueError:
+            current_index = 0
+        next_index = (current_index + 1) % len(cycle)
+        self.change_mode(cycle[next_index])
 
     def cycle_mode_backward(self):
-        """Cycle to previous mode (left trigger)"""
-        modes = list(ControllerMode)
-        current_index = modes.index(self.current_mode)
-        prev_index = (current_index - 1) % len(modes)
-        self.change_mode(modes[prev_index])
+        """Cycle to previous mode (left trigger / LB)"""
+        cycle = self._mode_cycle()
+        try:
+            current_index = cycle.index(self._current_cycle_entry())
+        except ValueError:
+            current_index = 0
+        prev_index = (current_index - 1) % len(cycle)
+        self.change_mode(cycle[prev_index])
 
     def handle_trigger_press(self, is_left: bool, pressed: bool):
         """
@@ -507,17 +611,46 @@ class ControllerModeManager:
                 self.right_trigger_pressed_time = None
                 self.right_trigger_mode_changed = False
 
+    def handle_bumper_tap(self, is_left: bool) -> bool:
+        """Deliver a bumper TAP (short press) to the active custom mode.
+
+        Called by the controller poller when a bumper is released before the
+        hold-to-change-mode threshold. The HOLD gesture still changes mode; a
+        tap is offered to the mode here so the two do not collide. Returns True
+        if the mode consumed it.
+        """
+        if self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+            try:
+                return bool(self.active_custom_mode.handle_bumper(is_left))
+            except Exception as e:
+                print(f"Error in custom mode bumper handling: {e}")
+                return False
+            finally:
+                _release_modifiers()
+        return False
+
     def handle_button_press(self, button_id: int, pressed: bool = True):
         """Handle button press/release based on current mode"""
         if self.current_mode == ControllerMode.SYSTEM:
             # System mode - do nothing, let controller work normally
             return False
 
-        if not KEYBOARD_AVAILABLE:
-            return False
-
         # Only handle button press events (not release)
         if not pressed:
+            return False
+
+        # Custom mode dispatch (does not require a keyboard backend - a custom
+        # mode may only speak / play sounds).
+        if self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+            try:
+                return bool(self.active_custom_mode.handle_button(button_id))
+            except Exception as e:
+                print(f"Error in custom mode button handling: {e}")
+                return False
+            finally:
+                _release_modifiers()
+
+        if not KEYBOARD_AVAILABLE:
             return False
 
         # Always release modifiers afterwards so none stay "stuck" (e.g. Insert
@@ -772,6 +905,12 @@ class ControllerModeManager:
                     return self._handle_screenreader_mode_axis(axis_id, value)
                 elif self.current_mode == ControllerMode.KEYBOARD:
                     return self._handle_keyboard_mode_axis(axis_id, value)
+                elif self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+                    try:
+                        return bool(self.active_custom_mode.handle_axis(axis_id, value))
+                    except Exception as e:
+                        print(f"Error in custom mode axis handling: {e}")
+                        return False
             finally:
                 _release_modifiers()
 
@@ -959,6 +1098,16 @@ class ControllerModeManager:
             return False
 
         x, y = value
+
+        # Custom mode dispatch
+        if self.current_mode == ControllerMode.CUSTOM and self.active_custom_mode is not None:
+            try:
+                return bool(self.active_custom_mode.handle_hat(x, y))
+            except Exception as e:
+                print(f"Error in custom mode hat handling: {e}")
+                return False
+            finally:
+                _release_modifiers()
 
         # In keyboard mode, use D-pad same as left stick
         if self.current_mode == ControllerMode.KEYBOARD:

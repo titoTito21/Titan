@@ -725,6 +725,12 @@ class SettingsFrame(wx.Frame):
 
         panel.SetSizer(vbox)
         panel.Layout()
+        # This panel is registered as a category manually (see
+        # _sync_controller_category), so it never goes through register_category,
+        # which is what hides every other panel. Hide it here explicitly -
+        # otherwise it stays shown and overlaps whatever category is selected
+        # (the "controller settings appear everywhere" bug).
+        panel.Hide()
 
     def InitGeneralPanel(self):
         vbox = wx.BoxSizer(wx.VERTICAL)

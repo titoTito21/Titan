@@ -1,0 +1,8 @@
+[mode]
+name = Document reader
+name_pl = Czytnik dokumentów
+name_en = Document reader
+main = document_reader.py
+domain = document_reader
+description = Read text fields with the gamepad: up/down read lines, left/right spell characters, A reads to the end.
+status = 0
