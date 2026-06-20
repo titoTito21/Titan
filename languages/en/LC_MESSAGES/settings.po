@@ -831,3 +831,31 @@ msgstr "Error while calibrating"
 #: src/ui/settingsgui.py:610
 msgid "Calibration profile removed"
 msgstr "Calibration profile removed"
+
+#: src/ui/settingsgui.py
+msgid "Game controller"
+msgstr "Game controller"
+
+#: src/ui/settingsgui.py
+msgid "Controller vibration:"
+msgstr "Controller vibration:"
+
+#: src/ui/settingsgui.py
+msgid "Audio-synced"
+msgstr "Audio-synced"
+
+#: src/ui/settingsgui.py
+msgid "Discrete pulses"
+msgstr "Discrete pulses"
+
+#: src/ui/settingsgui.py
+msgid "Vibration strength:"
+msgstr "Vibration strength:"
+
+#: src/ui/settingsgui.py
+msgid "Test vibration"
+msgstr "Test vibration"
+
+#: src/ui/settingsgui.py
+msgid "Off"
+msgstr "Off"

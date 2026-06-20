@@ -273,6 +273,19 @@ def initialize_sound():
         return False
 
 
+def _fire_haptics(sound_path):
+    """Drive audio-synced controller haptics for a sound that just started.
+
+    Lazily imported to avoid an import cycle with the controller package, and
+    fully guarded so audio playback is never affected by haptic failures.
+    """
+    try:
+        from src.controller import haptic_sync
+        haptic_sync.play_for_path(sound_path, volume=max(0.0, min(1.0, sound_theme_volume)))
+    except Exception:
+        pass
+
+
 def play_sound(sound_file, pan=None, elevation=0.0):
     """Odtwarza dźwięk z bezpiecznym sprawdzaniem inicjalizacji i obsługą błędów."""
     try:
@@ -341,6 +354,7 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
         # through the spatial backend; centered sounds simply sit front/center.
         if mode == '3d':
             if _try_spatial_play(sound_path, pan, elevation, max(0.0, min(1.0, sound_theme_volume))):
+                _fire_haptics(sound_path)
                 return True
             # Fall through to pygame if the spatial backend is unavailable.
 
@@ -392,11 +406,12 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
             # Play the sound
             try:
                 channel.play(sound)
+                _fire_haptics(sound_path)
                 return True
             except (pygame.error, AttributeError) as e:
                 print(f"Failed to play sound: {e}")
                 return False
-                
+
     except Exception as e:
         theme_type = "default" if use_default_theme else "current"
         print(f"Error playing sound from {theme_type} theme: {e}")
@@ -469,6 +484,7 @@ def play_sound_file(file_path, pan=None, elevation=0.0):
 
             try:
                 channel.play(sound)
+                _fire_haptics(file_path)
                 return True
             except (pygame.error, AttributeError) as e:
                 print(f"Failed to play sound file: {e}")

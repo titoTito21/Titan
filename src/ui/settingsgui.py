@@ -56,7 +56,7 @@ from src.titan_core.sound import set_theme, initialize_sound, play_sound, resour
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification, test_vibration,
-    set_vibration_enabled, set_vibration_strength, get_controller_info
+    set_vibration_enabled, set_vibration_strength, set_haptic_mode, get_controller_info
 )
 from src.titan_core.translation import get_available_languages, get_available_languages_display, get_language_display_name, get_language_code_from_display_name, set_language
 from src.titan_core.stereo_speech import get_stereo_speech
@@ -226,6 +226,8 @@ class KeyCaptureDialog(wx.Dialog):
 class SettingsFrame(wx.Frame):
     # Sound mode choice indices -> stored values (none/stereo/3d).
     _SOUND_MODE_VALUES = ['none', 'stereo', '3d']
+    # Haptic mode choice indices -> stored values.
+    _HAPTIC_MODE_VALUES = ['sync', 'discrete', 'off']
 
     def __init__(self, *args, component_manager=None, **kw):
         super(SettingsFrame, self).__init__(*args, **kw)
@@ -279,6 +281,10 @@ class SettingsFrame(wx.Frame):
             print("[SettingsFrame] >>>>> Show() called - forcing category refresh <<<<<")
             # Always refresh categories before showing
             try:
+                # Re-read from disk so changes made elsewhere while this window
+                # was hidden (quick settings, buffer engine settings, 3D
+                # calibration) are reflected instead of a stale snapshot.
+                self.settings = load_settings()
                 self.force_rebuild_categories()
                 # Reload all settings including component settings
                 self.load_settings_to_ui()
@@ -313,9 +319,46 @@ class SettingsFrame(wx.Frame):
 
         return result
 
+    def _gamepad_connected(self):
+        """Return True if at least one game controller is currently connected."""
+        try:
+            import pygame
+            if not pygame.get_init():
+                pygame.init()
+            if not pygame.joystick.get_init():
+                pygame.joystick.init()
+            pygame.event.pump()
+            return pygame.joystick.get_count() > 0
+        except Exception as e:
+            print(f"[SettingsFrame] Gamepad detection failed: {e}")
+            return False
+
+    def _sync_controller_category(self):
+        """Show the Game controller category only while a gamepad is connected."""
+        name = _("Game controller")
+        connected = self._gamepad_connected()
+        registered = name in self.categories
+
+        if connected and not registered:
+            self.categories[name] = self.controller_panel
+            self.category_order.append(name)
+            self.controller_panel.Hide()
+            print("[SettingsFrame] Gamepad present - added Game controller category")
+        elif not connected and registered:
+            del self.categories[name]
+            if name in self.category_order:
+                self.category_order.remove(name)
+            if self.current_category_panel is self.controller_panel:
+                self.controller_panel.Hide()
+                self.current_category_panel = None
+            print("[SettingsFrame] No gamepad - removed Game controller category")
+
     def force_rebuild_categories(self):
         """Force complete rebuild of category list"""
         print("[SettingsFrame] ***** FORCE REBUILD STARTING *****")
+
+        # Add/remove the Game controller category based on live gamepad presence.
+        self._sync_controller_category()
 
         # Check if category_list is still valid before accessing it
         try:
@@ -428,6 +471,9 @@ class SettingsFrame(wx.Frame):
         self.environment_panel = wx.Panel(self.content_panel)
         self.system_monitor_panel = wx.Panel(self.content_panel)
         self.stereo_speech_panel = wx.Panel(self.content_panel)
+        # Game controller panel is built up-front but only registered as a
+        # category while a gamepad is connected (see _sync_controller_category).
+        self.controller_panel = wx.Panel(self.content_panel)
 
         # Register categories
         self.register_category(_("General"), self.general_panel)
@@ -462,12 +508,16 @@ class SettingsFrame(wx.Frame):
         self.InitEnvironmentPanel()
         self.InitSystemMonitorPanel()
         self.InitStereoSpeechPanel()
+        self.InitControllerPanel()
 
         if sys.platform == 'win32':
             self.InitWindowsPanel()
 
         if self._titan_net_available:
             self.InitTitanNetPanel()
+
+        # Register the Game controller category now if a pad is already present.
+        self._sync_controller_category()
 
     def register_category(self, name, panel, save_callback=None, load_callback=None):
         """
@@ -634,6 +684,44 @@ class SettingsFrame(wx.Frame):
         self.theme_volume_slider.Bind(wx.EVT_SLIDER, self.OnThemeVolumeChange)
         self.theme_volume_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.theme_volume_slider, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        panel.SetSizer(vbox)
+        panel.Layout()
+
+    def InitControllerPanel(self):
+        """Game controller settings (vibration / haptics). Shown only when a pad
+        is connected; see _sync_controller_category."""
+        panel = self.controller_panel
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Controller vibration mode.
+        # Audio-synced rumble follows each sound's loudness (like phone haptics);
+        # discrete fires fixed pulses per UI event; off disables vibration.
+        haptic_label = wx.StaticText(panel, label=_("Controller vibration:"))
+        vbox.Add(haptic_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.haptic_mode_choice = wx.Choice(panel)
+        self.haptic_mode_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.haptic_mode_choice.Bind(wx.EVT_CHOICE, self.OnHapticModeChanged)
+        # Index order maps to _HAPTIC_MODE_VALUES.
+        self.haptic_mode_choice.AppendItems([_("Audio-synced"), _("Discrete pulses"), _("Off")])
+        vbox.Add(self.haptic_mode_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        haptic_strength_text = _("Vibration strength:")
+        haptic_strength_label = wx.StaticText(panel, label=haptic_strength_text)
+        vbox.Add(haptic_strength_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.haptic_strength_slider = wx.Slider(panel, value=80, minValue=0, maxValue=100,
+                                                style=wx.SL_HORIZONTAL)
+        self.haptic_strength_slider.SetLabel(haptic_strength_text)
+        self.haptic_strength_slider.Bind(wx.EVT_SLIDER, self.OnHapticStrengthChange)
+        self.haptic_strength_slider.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.haptic_strength_slider, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        self.haptic_test_btn = wx.Button(panel, label=_("Test vibration"))
+        self.haptic_test_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.haptic_test_btn.Bind(wx.EVT_BUTTON, self.OnTestVibration)
+        vbox.Add(self.haptic_test_btn, flag=wx.LEFT | wx.TOP, border=10)
 
         panel.SetSizer(vbox)
         panel.Layout()
@@ -1265,6 +1353,18 @@ class SettingsFrame(wx.Frame):
         self.theme_volume_slider.SetValue(int(theme_volume_value))
         set_sound_theme_volume(int(theme_volume_value))
 
+        # Game controller (vibration) settings - widgets always exist even when
+        # the category is hidden, so populate them unconditionally.
+        controller_settings = self.settings.get('controller', {})
+        haptic_mode = str(controller_settings.get('haptic_mode', 'sync')).lower()
+        if haptic_mode not in self._HAPTIC_MODE_VALUES:
+            haptic_mode = 'sync'
+        self.haptic_mode_choice.SetSelection(self._HAPTIC_MODE_VALUES.index(haptic_mode))
+        try:
+            strength_pct = int(round(float(controller_settings.get('vibration_strength', '0.8')) * 100))
+        except (TypeError, ValueError):
+            strength_pct = 80
+        self.haptic_strength_slider.SetValue(max(0, min(100, strength_pct)))
 
         general_settings = self.settings.get('general', {})
         quick_start_value = general_settings.get('quick_start', 'False')
@@ -1800,6 +1900,33 @@ class SettingsFrame(wx.Frame):
         
         event.Skip()
 
+    def OnHapticModeChanged(self, event):
+        """Persist the controller vibration mode and play a preview."""
+        try:
+            mode = self._HAPTIC_MODE_VALUES[max(0, self.haptic_mode_choice.GetSelection())]
+            set_haptic_mode(mode)
+            # Audible/haptic confirmation; in 'sync' mode this sound also drives a pulse.
+            play_sound('core/SELECT.ogg')
+        except Exception as e:
+            print(f"Error changing haptic mode: {e}")
+        event.Skip()
+
+    def OnHapticStrengthChange(self, event):
+        """Persist controller vibration strength."""
+        try:
+            set_vibration_strength(self.haptic_strength_slider.GetValue() / 100.0)
+        except Exception as e:
+            print(f"Error changing vibration strength: {e}")
+        event.Skip()
+
+    def OnTestVibration(self, event):
+        """Fire a test vibration so the user can feel the current strength."""
+        try:
+            test_vibration()
+        except Exception as e:
+            print(f"Error testing vibration: {e}")
+        event.Skip()
+
     def OnSoundModeChanged(self, event):
         # Persist immediately so the preview sound uses the new mode, then play a
         # focus sound so the user can hear the positioning effect.
@@ -2081,6 +2208,16 @@ class SettingsFrame(wx.Frame):
                 # (usually not necessary, as the system remembers the volume)
             }
 
+        # Re-read the on-disk settings and merge our GUI-built sections on top
+        # at the key level, so values written elsewhere since this dialog opened
+        # (quick settings, buffer engine settings, 3D calibration reverb_*) are
+        # preserved instead of being clobbered by this dialog's snapshot.
+        disk_settings = load_settings()
+        for section, values in self.settings.items():
+            base = disk_settings.get(section, {})
+            base.update(values)
+            disk_settings[section] = base
+        self.settings = disk_settings
         save_settings(self.settings)
 
         # Save Titan-Net settings

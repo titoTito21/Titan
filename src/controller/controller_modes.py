@@ -11,13 +11,166 @@ from typing import Optional, Dict, List
 from enum import Enum
 
 import sys as _sys
+
+# Keyboard backend abstraction for simulated key presses.
+# pynput is preferred: it injects reliably across platforms (including the very
+# new Python 3.14), whereas the `keyboard` module's SendInput injection does not
+# work in this environment. The `keyboard` module is only a last-resort fallback.
 KEYBOARD_AVAILABLE = False
-if _sys.platform != 'darwin':  # keyboard hangs on macOS without Accessibility permissions
+_KB_BACKEND = None  # 'pynput' | 'keyboard'
+keyboard = None
+_pynput_kb = None
+_pynput_ctrl = None
+
+try:
+    from pynput import keyboard as _pynput_kb
+    _pynput_ctrl = _pynput_kb.Controller()
+    _KB_BACKEND = 'pynput'
+    KEYBOARD_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: pynput not available for key injection: {e}")
+
+if not KEYBOARD_AVAILABLE and _sys.platform == 'win32':
     try:
         import keyboard
+        _KB_BACKEND = 'keyboard'
         KEYBOARD_AVAILABLE = True
-    except ImportError:
-        print("Warning: keyboard module not available")
+    except Exception as e:
+        print(f"Warning: no keyboard backend available (pynput/keyboard): {e}")
+
+# Special-key name -> pynput key. Single characters pass through unchanged.
+# 'numN' names map to the numeric keypad (required for NVDA/JAWS review cursor).
+if _pynput_kb is not None:
+    _KC = _pynput_kb.KeyCode
+    _PYNPUT_KEYS = {
+        'enter': _pynput_kb.Key.enter, 'escape': _pynput_kb.Key.esc,
+        'esc': _pynput_kb.Key.esc, 'backspace': _pynput_kb.Key.backspace,
+        'tab': _pynput_kb.Key.tab, 'space': _pynput_kb.Key.space,
+        'shift': _pynput_kb.Key.shift, 'ctrl': _pynput_kb.Key.ctrl,
+        'alt': _pynput_kb.Key.alt, 'win': _pynput_kb.Key.cmd,
+        'cmd': _pynput_kb.Key.cmd, 'insert': _pynput_kb.Key.insert,
+        'delete': _pynput_kb.Key.delete, 'home': _pynput_kb.Key.home,
+        'end': _pynput_kb.Key.end, 'pageup': _pynput_kb.Key.page_up,
+        'pagedown': _pynput_kb.Key.page_down, 'up': _pynput_kb.Key.up,
+        'down': _pynput_kb.Key.down, 'left': _pynput_kb.Key.left,
+        'right': _pynput_kb.Key.right, 'capslock': _pynput_kb.Key.caps_lock,
+        'f4': _pynput_kb.Key.f4, 'f12': _pynput_kb.Key.f12,
+        # Numeric keypad (VK_NUMPAD0..9 = 0x60..0x69)
+        'num0': _KC.from_vk(0x60), 'num1': _KC.from_vk(0x61),
+        'num2': _KC.from_vk(0x62), 'num3': _KC.from_vk(0x63),
+        'num4': _KC.from_vk(0x64), 'num5': _KC.from_vk(0x65),
+        'num6': _KC.from_vk(0x66), 'num7': _KC.from_vk(0x67),
+        'num8': _KC.from_vk(0x68), 'num9': _KC.from_vk(0x69),
+    }
+else:
+    _PYNPUT_KEYS = {}
+
+
+def _press(key):
+    """Press (hold) a key using whichever backend is available."""
+    if not KEYBOARD_AVAILABLE:
+        print(f"[INPUT] press '{key}' ignored - no keyboard backend available")
+        return
+    try:
+        if _KB_BACKEND == 'pynput':
+            _pynput_ctrl.press(_PYNPUT_KEYS.get(key, key))
+        else:
+            keyboard.press(key.replace('num', '') if key.startswith('num') else key)
+    except Exception as e:
+        print(f"[INPUT] press '{key}' failed: {e}")
+
+
+def _release(key):
+    """Release a key using whichever backend is available."""
+    if not KEYBOARD_AVAILABLE:
+        return
+    try:
+        if _KB_BACKEND == 'pynput':
+            _pynput_ctrl.release(_PYNPUT_KEYS.get(key, key))
+        else:
+            keyboard.release(key.replace('num', '') if key.startswith('num') else key)
+    except Exception as e:
+        print(f"[INPUT] release '{key}' failed: {e}")
+
+
+# --- Numeric-keypad simulation by hardware scancode (Windows) -----------------
+# NVDA/JAWS identify numpad review keys by their hardware SCANCODE, not the
+# virtual key. Sending VK_NUMPAD4 gets interpreted in a NumLock-dependent way
+# (announced as "numLock numpad..."), which is wrong. Sending the raw scancode
+# with KEYEVENTF_SCANCODE (non-extended) produces a true physical numpad key
+# that the screen reader maps to its review command regardless of NumLock.
+_NUMPAD_SCANCODES = {  # Set-1 make codes for the numeric keypad
+    '0': 0x52, '1': 0x4F, '2': 0x50, '3': 0x51, '4': 0x4B,
+    '5': 0x4C, '6': 0x4D, '7': 0x47, '8': 0x48, '9': 0x49,
+}
+_sendinput_ready = False
+if _sys.platform == 'win32':
+    try:
+        import ctypes as _ctypes
+        from ctypes import wintypes as _wt
+
+        _PUL = _ctypes.POINTER(_ctypes.c_ulong)
+
+        class _KEYBDINPUT(_ctypes.Structure):
+            _fields_ = [("wVk", _wt.WORD), ("wScan", _wt.WORD),
+                        ("dwFlags", _wt.DWORD), ("time", _wt.DWORD),
+                        ("dwExtraInfo", _PUL)]
+
+        class _INPUT(_ctypes.Structure):
+            class _U(_ctypes.Union):
+                _fields_ = [("ki", _KEYBDINPUT)]
+            _anonymous_ = ("u",)
+            _fields_ = [("type", _wt.DWORD), ("u", _U)]
+
+        _KEYEVENTF_SCANCODE = 0x0008
+        _KEYEVENTF_KEYUP = 0x0002
+        _sendinput_ready = True
+    except Exception as e:
+        print(f"[INPUT] SendInput scancode setup failed: {e}")
+
+
+def _send_scancode(scan, keyup=False):
+    flags = _KEYEVENTF_SCANCODE | (_KEYEVENTF_KEYUP if keyup else 0)
+    ki = _KEYBDINPUT(0, scan, flags, 0, None)
+    inp = _INPUT(1, _INPUT._U(ki=ki))  # type 1 = INPUT_KEYBOARD
+    _ctypes.windll.user32.SendInput(1, _ctypes.byref(inp), _ctypes.sizeof(inp))
+
+
+def _tap_numpad(digit):
+    """Tap a physical numeric-keypad key (e.g. '4') for screen-reader review.
+
+    Uses raw scancodes on Windows (NumLock-independent, what NVDA expects);
+    elsewhere falls back to the VK-based numpad key via the normal backend.
+    """
+    if _sendinput_ready and digit in _NUMPAD_SCANCODES:
+        scan = _NUMPAD_SCANCODES[digit]
+        try:
+            _send_scancode(scan, keyup=False)
+            time.sleep(0.03)
+            _send_scancode(scan, keyup=True)
+            return
+        except Exception as e:
+            print(f"[INPUT] numpad scancode '{digit}' failed: {e}")
+    # Fallback (non-Windows): VK-based numpad key
+    _press('num' + digit)
+    time.sleep(0.03)
+    _release('num' + digit)
+
+
+# Modifier keys that must never be left held after a simulated action. With the
+# tight press/release timing used by the mode handlers a modifier key-up can get
+# dropped, which leaves e.g. Insert "stuck" (every later keystroke becomes an
+# NVDA command). _release_modifiers() is called after every mode action as a
+# guaranteed safety net.
+_MODIFIER_KEYS = ('insert', 'shift', 'ctrl', 'alt', 'win')
+
+
+def _release_modifiers():
+    """Force-release all modifier keys (harmless if they were not held)."""
+    if not KEYBOARD_AVAILABLE:
+        return
+    for key in _MODIFIER_KEYS:
+        _release(key)
 
 from src.titan_core.translation import _
 from src.titan_core.sound import play_sound
@@ -114,32 +267,32 @@ class VirtualKeyboard:
                 self.shift_enabled = not self.shift_enabled
                 return True
             elif key == 'space':
-                keyboard.press('space')
+                _press('space')
                 time.sleep(0.02)
-                keyboard.release('space')
+                _release('space')
                 return True
             elif key == 'enter':
-                keyboard.press('enter')
+                _press('enter')
                 time.sleep(0.02)
-                keyboard.release('enter')
+                _release('enter')
                 return True
             else:
                 # Apply caps lock or shift
                 if self.caps_lock_enabled or self.shift_enabled:
-                    keyboard.press('shift')
+                    _press('shift')
                     time.sleep(0.01)
-                    keyboard.press(key)
+                    _press(key)
                     time.sleep(0.02)
-                    keyboard.release(key)
+                    _release(key)
                     time.sleep(0.01)
-                    keyboard.release('shift')
+                    _release('shift')
                     # Disable shift after typing (but not caps lock)
                     if self.shift_enabled:
                         self.shift_enabled = False
                 else:
-                    keyboard.press(key)
+                    _press(key)
                     time.sleep(0.02)
-                    keyboard.release(key)
+                    _release(key)
                 return True
         except Exception as e:
             print(f"Error typing key '{key}': {e}")
@@ -151,9 +304,9 @@ class VirtualKeyboard:
             return False
 
         try:
-            keyboard.press('backspace')
+            _press('backspace')
             time.sleep(0.02)
-            keyboard.release('backspace')
+            _release('backspace')
             return True
         except Exception as e:
             print(f"Error pressing backspace: {e}")
@@ -291,11 +444,18 @@ class ControllerModeManager:
         print(f"Controller mode changed: {old_mode.value} -> {new_mode.value}")
 
     def cycle_mode(self):
-        """Cycle to next mode"""
+        """Cycle to next mode (right trigger)"""
         modes = list(ControllerMode)
         current_index = modes.index(self.current_mode)
         next_index = (current_index + 1) % len(modes)
         self.change_mode(modes[next_index])
+
+    def cycle_mode_backward(self):
+        """Cycle to previous mode (left trigger)"""
+        modes = list(ControllerMode)
+        current_index = modes.index(self.current_mode)
+        prev_index = (current_index - 1) % len(modes)
+        self.change_mode(modes[prev_index])
 
     def handle_trigger_press(self, is_left: bool, pressed: bool):
         """
@@ -316,8 +476,8 @@ class ControllerModeManager:
                     # Check if held long enough
                     hold_duration = current_time - self.left_trigger_pressed_time
                     if hold_duration >= self.bumper_hold_time:
-                        print(f"[MODE] Left trigger held for {hold_duration:.1f}s - changing mode!")
-                        self.cycle_mode()
+                        print(f"[MODE] Left trigger held for {hold_duration:.1f}s - previous mode!")
+                        self.cycle_mode_backward()
                         self.left_trigger_mode_changed = True  # Prevent re-trigger
             else:
                 # Trigger released
@@ -337,7 +497,7 @@ class ControllerModeManager:
                     # Check if held long enough
                     hold_duration = current_time - self.right_trigger_pressed_time
                     if hold_duration >= self.bumper_hold_time:
-                        print(f"[MODE] Right trigger held for {hold_duration:.1f}s - changing mode!")
+                        print(f"[MODE] Right trigger held for {hold_duration:.1f}s - next mode!")
                         self.cycle_mode()
                         self.right_trigger_mode_changed = True  # Prevent re-trigger
             else:
@@ -360,16 +520,18 @@ class ControllerModeManager:
         if not pressed:
             return False
 
-        if self.current_mode == ControllerMode.CONTROLLER:
-            return self._handle_controller_mode_button(button_id)
-
-        elif self.current_mode == ControllerMode.SCREENREADER:
-            return self._handle_screenreader_mode_button(button_id)
-
-        elif self.current_mode == ControllerMode.KEYBOARD:
-            return self._handle_keyboard_mode_button(button_id)
-
-        return False
+        # Always release modifiers afterwards so none stay "stuck" (e.g. Insert
+        # turning every later key into an NVDA command).
+        try:
+            if self.current_mode == ControllerMode.CONTROLLER:
+                return self._handle_controller_mode_button(button_id)
+            elif self.current_mode == ControllerMode.SCREENREADER:
+                return self._handle_screenreader_mode_button(button_id)
+            elif self.current_mode == ControllerMode.KEYBOARD:
+                return self._handle_keyboard_mode_button(button_id)
+            return False
+        finally:
+            _release_modifiers()
 
     def _handle_controller_mode_button(self, button_id: int) -> bool:
         """
@@ -395,65 +557,65 @@ class ControllerModeManager:
 
             if button_id == 0:  # A button -> Enter
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('enter')
+                _press('enter')
                 time.sleep(0.05)
-                keyboard.release('enter')
+                _release('enter')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 1:  # B button -> Escape
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('escape')
+                _press('escape')
                 time.sleep(0.05)
-                keyboard.release('escape')
+                _release('escape')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 3:  # Y button -> Backspace
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('backspace')
+                _press('backspace')
                 time.sleep(0.05)
-                keyboard.release('backspace')
+                _release('backspace')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 2:  # X button -> Alt+F4
                 vibration_controller.vibrate(duration=0.1, intensity=0.8)
-                keyboard.press('alt')
+                _press('alt')
                 time.sleep(0.01)
-                keyboard.press('f4')
+                _press('f4')
                 time.sleep(0.05)
-                keyboard.release('f4')
+                _release('f4')
                 time.sleep(0.01)
-                keyboard.release('alt')
+                _release('alt')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 7:  # Start/Menu button -> Windows key
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('win')
+                _press('win')
                 time.sleep(0.05)
-                keyboard.release('win')
+                _release('win')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 6:  # Back/View button -> Alt
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('alt')
+                _press('alt')
                 time.sleep(0.05)
-                keyboard.release('alt')
+                _release('alt')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 10:  # Xbox Guide button -> Alt+Tab
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('alt')
+                _press('alt')
                 time.sleep(0.01)
-                keyboard.press('tab')
+                _press('tab')
                 time.sleep(0.05)
-                keyboard.release('tab')
+                _release('tab')
                 time.sleep(0.01)
-                keyboard.release('alt')
+                _release('alt')
                 play_sound('joystick/ui2.ogg')
                 return True
 
@@ -473,70 +635,70 @@ class ControllerModeManager:
         try:
             if button_id == 7:  # Menu button -> NVDA+N or JAWS+J
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('insert')
+                _press('insert')
                 time.sleep(0.01)
-                keyboard.press('n')
+                _press('n')
                 time.sleep(0.05)
-                keyboard.release('n')
+                _release('n')
                 time.sleep(0.01)
-                keyboard.release('insert')
+                _release('insert')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 0:  # Bottom button -> Check time (Insert+F12)
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('insert')
+                _press('insert')
                 time.sleep(0.01)
-                keyboard.press('f12')
+                _press('f12')
                 time.sleep(0.05)
-                keyboard.release('f12')
+                _release('f12')
                 time.sleep(0.01)
-                keyboard.release('insert')
+                _release('insert')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 1:  # Right button -> Check battery (Insert+Shift+B)
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('insert')
+                _press('insert')
                 time.sleep(0.01)
-                keyboard.press('shift')
+                _press('shift')
                 time.sleep(0.01)
-                keyboard.press('b')
+                _press('b')
                 time.sleep(0.05)
-                keyboard.release('b')
+                _release('b')
                 time.sleep(0.01)
-                keyboard.release('shift')
+                _release('shift')
                 time.sleep(0.01)
-                keyboard.release('insert')
+                _release('insert')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif button_id == 3:  # Top button -> Exit screen reader
                 vibration_controller.vibrate(duration=0.1, intensity=0.8)
-                keyboard.press('insert')
+                _press('insert')
                 time.sleep(0.01)
-                keyboard.press('q')
+                _press('q')
                 time.sleep(0.05)
-                keyboard.release('q')
+                _release('q')
                 time.sleep(0.01)
-                keyboard.release('insert')
+                _release('insert')
                 play_sound('joystick/ui2.ogg')
                 self.speak(_("Exiting screen reader"))
                 return True
 
             elif button_id == 2:  # Left button -> Insert+Ctrl+S
                 vibration_controller.vibrate(duration=0.05, intensity=0.6)
-                keyboard.press('insert')
+                _press('insert')
                 time.sleep(0.01)
-                keyboard.press('ctrl')
+                _press('ctrl')
                 time.sleep(0.01)
-                keyboard.press('s')
+                _press('s')
                 time.sleep(0.05)
-                keyboard.release('s')
+                _release('s')
                 time.sleep(0.01)
-                keyboard.release('ctrl')
+                _release('ctrl')
                 time.sleep(0.01)
-                keyboard.release('insert')
+                _release('insert')
                 play_sound('joystick/ui2.ogg')
                 return True
 
@@ -599,18 +761,19 @@ class ControllerModeManager:
 
             self.last_axis_action_time[axis_key] = current_time
 
-            # Handle based on mode
+            # Handle based on mode. Release modifiers afterwards (Controller-mode
+            # stick navigation uses Shift/Ctrl) so none stay stuck.
             if self.current_mode == ControllerMode.SYSTEM:
                 return False  # Let system handle it
-
-            elif self.current_mode == ControllerMode.CONTROLLER:
-                return self._handle_controller_mode_axis(axis_id, value)
-
-            elif self.current_mode == ControllerMode.SCREENREADER:
-                return self._handle_screenreader_mode_axis(axis_id, value)
-
-            elif self.current_mode == ControllerMode.KEYBOARD:
-                return self._handle_keyboard_mode_axis(axis_id, value)
+            try:
+                if self.current_mode == ControllerMode.CONTROLLER:
+                    return self._handle_controller_mode_axis(axis_id, value)
+                elif self.current_mode == ControllerMode.SCREENREADER:
+                    return self._handle_screenreader_mode_axis(axis_id, value)
+                elif self.current_mode == ControllerMode.KEYBOARD:
+                    return self._handle_keyboard_mode_axis(axis_id, value)
+            finally:
+                _release_modifiers()
 
         return False
 
@@ -628,18 +791,18 @@ class ControllerModeManager:
             if axis_id == 0:  # Left stick X
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 key = 'left' if value < 0 else 'right'
-                keyboard.press(key)
+                _press(key)
                 time.sleep(0.05)
-                keyboard.release(key)
+                _release(key)
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif axis_id == 1:  # Left stick Y
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 key = 'up' if value < 0 else 'down'
-                keyboard.press(key)
+                _press(key)
                 time.sleep(0.05)
-                keyboard.release(key)
+                _release(key)
                 play_sound('joystick/ui2.ogg')
                 return True
 
@@ -647,42 +810,42 @@ class ControllerModeManager:
             elif axis_id == 3:  # Right stick Y
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 if value < 0:
-                    keyboard.press('shift')
+                    _press('shift')
                     time.sleep(0.01)
-                    keyboard.press('tab')
+                    _press('tab')
                     time.sleep(0.05)
-                    keyboard.release('tab')
+                    _release('tab')
                     time.sleep(0.01)
-                    keyboard.release('shift')
+                    _release('shift')
                 else:
-                    keyboard.press('tab')
+                    _press('tab')
                     time.sleep(0.05)
-                    keyboard.release('tab')
+                    _release('tab')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif axis_id == 2:  # Right stick X
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 if value < 0:
-                    keyboard.press('ctrl')
+                    _press('ctrl')
                     time.sleep(0.01)
-                    keyboard.press('shift')
+                    _press('shift')
                     time.sleep(0.01)
-                    keyboard.press('tab')
+                    _press('tab')
                     time.sleep(0.05)
-                    keyboard.release('tab')
+                    _release('tab')
                     time.sleep(0.01)
-                    keyboard.release('shift')
+                    _release('shift')
                     time.sleep(0.01)
-                    keyboard.release('ctrl')
+                    _release('ctrl')
                 else:
-                    keyboard.press('ctrl')
+                    _press('ctrl')
                     time.sleep(0.01)
-                    keyboard.press('tab')
+                    _press('tab')
                     time.sleep(0.05)
-                    keyboard.release('tab')
+                    _release('tab')
                     time.sleep(0.01)
-                    keyboard.release('ctrl')
+                    _release('ctrl')
                 play_sound('joystick/ui2.ogg')
                 return True
 
@@ -703,19 +866,13 @@ class ControllerModeManager:
             # Left stick (axis 0 = X, axis 1 = Y)
             if axis_id == 0:  # Left stick X
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
-                key = '4' if value < 0 else '6'
-                keyboard.press(key)
-                time.sleep(0.05)
-                keyboard.release(key)
+                _tap_numpad('4' if value < 0 else '6')
                 play_sound('joystick/ui2.ogg')
                 return True
 
             elif axis_id == 1:  # Left stick Y
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
-                key = '8' if value < 0 else '2'
-                keyboard.press(key)
-                time.sleep(0.05)
-                keyboard.release(key)
+                _tap_numpad('8' if value < 0 else '2')
                 play_sound('joystick/ui2.ogg')
                 return True
 
@@ -773,18 +930,18 @@ class ControllerModeManager:
             elif axis_id == 2:  # Right stick X
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 key = 'left' if value < 0 else 'right'
-                keyboard.press(key)
+                _press(key)
                 time.sleep(0.05)
-                keyboard.release(key)
+                _release(key)
                 play_sound('joystick/ui1.ogg')
                 return True
 
             elif axis_id == 3:  # Right stick Y
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 key = 'up' if value < 0 else 'down'
-                keyboard.press(key)
+                _press(key)
                 time.sleep(0.05)
-                keyboard.release(key)
+                _release(key)
                 play_sound('joystick/ui1.ogg')
                 return True
 
@@ -825,23 +982,15 @@ class ControllerModeManager:
 
                 # D-pad X axis -> numpad 4 (left) or 6 (right)
                 if x == -1:
-                    keyboard.press('4')
-                    time.sleep(0.05)
-                    keyboard.release('4')
+                    _tap_numpad('4')
                 elif x == 1:
-                    keyboard.press('6')
-                    time.sleep(0.05)
-                    keyboard.release('6')
+                    _tap_numpad('6')
 
                 # D-pad Y axis -> numpad 8 (up) or 2 (down)
                 if y == 1:
-                    keyboard.press('8')
-                    time.sleep(0.05)
-                    keyboard.release('8')
+                    _tap_numpad('8')
                 elif y == -1:
-                    keyboard.press('2')
-                    time.sleep(0.05)
-                    keyboard.release('2')
+                    _tap_numpad('2')
 
                 play_sound('joystick/ui2.ogg')
                 return True
@@ -856,22 +1005,22 @@ class ControllerModeManager:
             try:
                 vibration_controller.vibrate(duration=0.03, intensity=0.4)
                 if x == -1:
-                    keyboard.press('left')
+                    _press('left')
                     time.sleep(0.05)
-                    keyboard.release('left')
+                    _release('left')
                 elif x == 1:
-                    keyboard.press('right')
+                    _press('right')
                     time.sleep(0.05)
-                    keyboard.release('right')
+                    _release('right')
 
                 if y == 1:
-                    keyboard.press('up')
+                    _press('up')
                     time.sleep(0.05)
-                    keyboard.release('up')
+                    _release('up')
                 elif y == -1:
-                    keyboard.press('down')
+                    _press('down')
                     time.sleep(0.05)
-                    keyboard.release('down')
+                    _release('down')
 
                 play_sound('joystick/ui2.ogg')
                 return True

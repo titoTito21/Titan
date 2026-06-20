@@ -53,13 +53,38 @@ class SimpleControllerVibration:
     def __init__(self):
         self.vibration_enabled = True
         self.vibration_strength = 0.8
+        # 'sync'  -> haptics follow the audio envelope (default, iPhone-style)
+        # 'discrete' -> fixed pulses for individual UI events (legacy behaviour)
+        # 'off'   -> no haptics at all
+        self.haptic_mode = 'sync'
         self.last_vibration_time = {}
         self.min_vibration_interval = 0.05
         self.vibration_lock = threading.Lock()
+        self._load_settings()
 
-    def vibrate(self, duration: float = 0.1, intensity: float = None, vibration_type: str = "generic"):
-        """Simple vibration function with rate limiting"""
+    def _load_settings(self):
+        """Load persisted vibration settings from the 'controller' section."""
+        try:
+            from src.settings.settings import get_setting
+            enabled = str(get_setting('vibration_enabled', 'True', 'controller')).lower()
+            self.vibration_enabled = enabled in ('true', '1')
+            try:
+                self.vibration_strength = max(0.0, min(1.0, float(
+                    get_setting('vibration_strength', '0.8', 'controller'))))
+            except (TypeError, ValueError):
+                self.vibration_strength = 0.8
+            mode = str(get_setting('haptic_mode', 'sync', 'controller')).lower()
+            self.haptic_mode = mode if mode in ('sync', 'discrete', 'off') else 'sync'
+        except Exception as e:
+            print(f"[VIBRATION] Could not load settings, using defaults: {e}")
+
+    def vibrate(self, duration: float = 0.1, intensity: float = None, vibration_type: str = "generic", force: bool = False):
+        """Discrete pulse. Used only in 'discrete' haptic mode; in 'sync' mode the
+        audio-synced engine drives the motors instead, so this is normally a no-op.
+        Pass force=True to pulse regardless of mode (used by the Test button)."""
         if not self.vibration_enabled:
+            return
+        if not force and self.haptic_mode != 'discrete':
             return
 
         # Rate limiting check
@@ -155,13 +180,37 @@ class SimpleControllerVibration:
         """Very light vibration for focus changes"""
         self.vibrate(duration=0.03, intensity=0.2, vibration_type="focus")
 
+    def _save_setting(self, key, value):
+        try:
+            from src.settings.settings import set_setting
+            set_setting(key, str(value), 'controller')
+        except Exception as e:
+            print(f"[VIBRATION] Could not save setting {key}: {e}")
+
     def set_vibration_enabled(self, enabled: bool):
-        """Enable or disable vibrations"""
+        """Enable or disable vibrations (persisted)"""
         self.vibration_enabled = enabled
+        if not enabled:
+            self.cleanup()  # zero motors immediately
+        self._save_setting('vibration_enabled', enabled)
 
     def set_vibration_strength(self, strength: float):
-        """Set vibration strength (0.0-1.0)"""
+        """Set vibration strength 0.0-1.0 (persisted)"""
         self.vibration_strength = max(0.0, min(1.0, strength))
+        self._save_setting('vibration_strength', self.vibration_strength)
+
+    def set_haptic_mode(self, mode: str):
+        """Set haptic mode: 'sync', 'discrete' or 'off' (persisted)"""
+        if mode not in ('sync', 'discrete', 'off'):
+            mode = 'sync'
+        self.haptic_mode = mode
+        if mode != 'sync':
+            try:
+                from src.controller import haptic_sync
+                haptic_sync.stop()
+            except Exception:
+                pass
+        self._save_setting('haptic_mode', mode)
 
     def is_vibration_available(self) -> bool:
         """Check if vibration is available"""
@@ -174,7 +223,8 @@ class SimpleControllerVibration:
             'names': ['XInput Controller'] if XINPUT_AVAILABLE else [],
             'vibration_available': XINPUT_AVAILABLE,
             'vibration_enabled': self.vibration_enabled,
-            'strength': self.vibration_strength
+            'strength': self.vibration_strength,
+            'haptic_mode': self.haptic_mode
         }
 
     def refresh_controllers(self):
@@ -237,6 +287,9 @@ def set_vibration_enabled(enabled: bool):
 def set_vibration_strength(strength: float):
     vibration_controller.set_vibration_strength(strength)
 
+def set_haptic_mode(mode: str):
+    vibration_controller.set_haptic_mode(mode)
+
 def get_controller_info():
     return vibration_controller.get_controller_info()
 
@@ -247,22 +300,8 @@ def refresh_controllers():
     vibration_controller.refresh_controllers()
 
 def test_vibration():
-    """Test vibration system"""
-    print("Testing vibration...")
-    info = get_controller_info()
-    print(f"Controller info: {info}")
-
-    if info['vibration_available']:
-        vibrate_startup()
-        time.sleep(4)
-        vibrate_cursor_move()
-        time.sleep(0.2)
-        vibrate_menu_open()
-        time.sleep(0.3)
-        vibrate_selection()
-        print("Vibration test completed!")
-    else:
-        print("No vibration available!")
+    """Fire a single test pulse at the current strength, regardless of haptic mode."""
+    vibration_controller.vibrate(duration=0.6, intensity=1.0, vibration_type="test", force=True)
 
 if __name__ == "__main__":
     test_vibration()

@@ -18,6 +18,7 @@ from src.titan_core.component_manager import ComponentManager
 from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.ui.help import show_help
 from src.controller.controller_modes import initialize_controller_modes
+from src.controller.controller_ui import initialize_controller_system
 from src.network.titan_net import TitanNetClient
 from src.titan_core.skin_manager import apply_skin_to_window
 
@@ -1312,6 +1313,14 @@ class KlangoFrame(wx.Frame):
             print("Controller modes initialized in KlangoFrame (wx mode)")
         except Exception as e:
             print(f"Failed to initialize controller modes in KlangoFrame: {e}")
+
+        # Start the controller poller on this (main) thread so the joystick is
+        # opened and polled on the GUI thread (required for SDL on Windows).
+        try:
+            initialize_controller_system(parent_window=self)
+            print("Controller poller initialized in KlangoFrame")
+        except Exception as e:
+            print(f"Failed to initialize controller poller in KlangoFrame: {e}")
 
         # Load settings for stereo support
         self._stereo_sound_enabled = None

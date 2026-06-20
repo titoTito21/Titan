@@ -130,68 +130,39 @@ class ControllerUI:
                     # Regular monitoring for changes
                     self._check_controller_connections()
 
-            # Handle controller input only if we have parent window for wxPython events
-            if self.parent_window:
+            # Always process controller input. Button/axis/hat events are dispatched to
+            # the mode manager (global keystrokes) regardless of parent_window; only
+            # SYSTEM-mode wx navigation (inside navigate_* / activate_* etc.) requires a
+            # parent window and is guarded there. This lets joystick keys and modes work
+            # in the Invisible UI and Klango interfaces, not just the main GUI.
+            if True:
                 joystick_count = pygame.joystick.get_count()
+
+                # Keep PERSISTENT Joystick handles. Recreating pygame.joystick.Joystick(i)
+                # every poll lets the previous object get garbage-collected, which can
+                # close the device between polls and drop button presses. Opening once
+                # and reusing matches the known-working standalone behaviour.
+                if not hasattr(self, '_joysticks'):
+                    self._joysticks = {}
                 for i in range(joystick_count):
+                    if i not in self._joysticks:
+                        js = pygame.joystick.Joystick(i)
+                        try:
+                            js.init()
+                        except Exception:
+                            pass
+                        self._joysticks[i] = js
+                for i in [k for k in self._joysticks if k >= joystick_count]:
+                    del self._joysticks[i]
+
+                for i, controller in list(self._joysticks.items()):
                     try:
-                        controller = pygame.joystick.Joystick(i)
                         if not controller.get_init():
                             controller.init()
 
-                        # Check triggers for mode changing
-                        # Xbox controllers have triggers as axes 4 (RT) and 5 (LT) in pygame
-                        num_axes = controller.get_numaxes()
-
-                        # Initialize trigger detection on first run
-                        if not hasattr(self, '_trigger_axes_detected'):
-                            self._trigger_axes_detected = True
-                            # Xbox controller in pygame:
-                            # Axis 0: Left stick X
-                            # Axis 1: Left stick Y
-                            # Axis 2: Right stick X
-                            # Axis 3: Right stick Y
-                            # Axis 4: Right Trigger (RT)
-                            # Axis 5: Left Trigger (LT)
-                            self._left_trigger_axis = 5   # Left Trigger
-                            self._right_trigger_axis = 4  # Right Trigger
-                            self._last_trigger_values = (0.0, 0.0)
-                            print(f"[CONTROLLER] Controller has {num_axes} axes")
-                            print(f"[CONTROLLER] Trigger mapping: LT=axis {self._left_trigger_axis}, RT=axis {self._right_trigger_axis}")
-
-                        if num_axes >= 6:  # Xbox controller has 6 axes
-                            # Get trigger values
-                            left_trigger = controller.get_axis(self._left_trigger_axis)
-                            right_trigger = controller.get_axis(self._right_trigger_axis)
-
-                            # Debug: Print trigger values when they change significantly
-                            if abs(left_trigger - self._last_trigger_values[0]) > 0.2 or \
-                               abs(right_trigger - self._last_trigger_values[1]) > 0.2:
-                                print(f"[TRIGGER] LT={left_trigger:+.2f}, RT={right_trigger:+.2f}")
-                                self._last_trigger_values = (left_trigger, right_trigger)
-
-                            # Trigger values in pygame for Xbox controllers:
-                            # Unpressed: -1.0 (or 0.0 before first use on some systems)
-                            # Fully pressed: +1.0
-                            #
-                            # We consider trigger "pressed" when value > 0.0 (about 50% pressed)
-                            # This ensures intentional pressing, not accidental touches
-                            left_pressed = left_trigger > 0.0
-                            right_pressed = right_trigger > 0.0
-
-                            self.mode_manager.handle_trigger_press(is_left=True, pressed=left_pressed)
-                            self.mode_manager.handle_trigger_press(is_left=False, pressed=right_pressed)
-                        elif num_axes >= 4:
-                            # Fallback for controllers with fewer axes
-                            # Try using the last two axes as triggers
-                            left_trigger = controller.get_axis(num_axes - 1)
-                            right_trigger = controller.get_axis(num_axes - 2)
-
-                            left_pressed = left_trigger > 0.0
-                            right_pressed = right_trigger > 0.0
-
-                            self.mode_manager.handle_trigger_press(is_left=True, pressed=left_pressed)
-                            self.mode_manager.handle_trigger_press(is_left=False, pressed=right_pressed)
+                        # Mode switching: HOLD a bumper for ~1s (LB = previous mode,
+                        # RB = next). Hold (not tap) avoids accidental switches.
+                        self._check_bumper_hold(i, controller)
 
                         # Handle button presses and releases
                         for button_id in range(controller.get_numbuttons()):
@@ -363,8 +334,40 @@ class ControllerUI:
             print(f"Error during initial controller check: {e}")
 
 
+    # Seconds a bumper must be held to switch mode.
+    BUMPER_HOLD_SECONDS = 1.0
+
+    def _check_bumper_hold(self, controller_index, controller):
+        """Switch controller mode when a bumper is held for BUMPER_HOLD_SECONDS.
+        LB (button 4) -> previous mode, RB (button 5) -> next mode."""
+        if not hasattr(self, '_bumper_hold'):
+            self._bumper_hold = {}
+        now = time.time()
+        num_buttons = controller.get_numbuttons()
+        for btn, is_left in ((4, True), (5, False)):
+            key = (controller_index, btn)
+            pressed = controller.get_button(btn) if btn < num_buttons else 0
+            state = self._bumper_hold.get(key)
+            if pressed:
+                if state is None:
+                    self._bumper_hold[key] = {'start': now, 'done': False}
+                elif not state['done'] and (now - state['start']) >= self.BUMPER_HOLD_SECONDS:
+                    if is_left:
+                        self.mode_manager.cycle_mode_backward()
+                    else:
+                        self.mode_manager.cycle_mode()
+                    state['done'] = True
+            elif state is not None:
+                self._bumper_hold[key] = None
+
     def handle_button_press(self, button_id: int, controller: pygame.joystick.Joystick, pressed: bool = True):
         """Handle controller button press/release with vibration feedback"""
+        # Bumpers (LB=4, RB=5) are reserved for mode switching via a 1s HOLD,
+        # handled in _check_bumper_hold. Consume them here so a tap does nothing
+        # (no page change / no mode-specific action).
+        if button_id in (4, 5):
+            return
+
         # Check if mode manager handles this button (for non-system modes)
         if self.mode_manager.handle_button_press(button_id, pressed=pressed):
             return  # Mode manager handled it
@@ -388,10 +391,6 @@ class ControllerUI:
                     self.open_context_menu()
                 elif button_id == 3:  # Y button (usually)
                     self.toggle_menu()
-                elif button_id == 4:  # Left shoulder
-                    self.previous_page()
-                elif button_id == 5:  # Right shoulder
-                    self.next_page()
                 elif button_id == 6:  # Back/Select
                     self.show_settings()
                 elif button_id == 7:  # Start
@@ -437,7 +436,7 @@ class ControllerUI:
                         self.secondary_action_up()
                     else:
                         self.secondary_action_down()
-                elif axis_id == 4:  # Right stick X-axis (custom actions)
+                elif axis_id == 2:  # Right stick X-axis (custom actions)
                     if value < 0:
                         self.secondary_action_left()
                     else:
@@ -447,7 +446,23 @@ class ControllerUI:
 
     def handle_hat_movement(self, hat_id: int, value: tuple, controller: pygame.joystick.Joystick):
         """Handle D-pad movement"""
-        if not self.navigation_enabled or value == (0, 0):
+        if not self.navigation_enabled:
+            return
+
+        # Edge detection: only act when the d-pad CHANGES to a new direction, so
+        # holding it makes a single move instead of fast auto-repeat (which made
+        # it impossible to land on a target). Release to neutral, press again to
+        # move once more.
+        try:
+            cid = controller.get_id()
+        except Exception:
+            cid = 0
+        hat_key = (cid, hat_id)
+        if not hasattr(self, '_last_hat'):
+            self._last_hat = {}
+        last_value = self._last_hat.get(hat_key, (0, 0))
+        self._last_hat[hat_key] = value
+        if value == (0, 0) or value == last_value:
             return
 
         # Check if mode manager handles this hat movement
@@ -583,6 +598,27 @@ class ControllerUI:
         """Set analog stick deadzone (0.0-1.0)"""
         self.axis_deadzone = max(0.0, min(1.0, deadzone))
 
+    def attach_parent_window(self, window: wx.Window):
+        """Attach a wx parent window so SYSTEM-mode navigation works, and switch
+        polling from the background thread to a main-thread wx.Timer.
+
+        Reading the controller from a background thread is unreliable on Windows;
+        a wx.Timer on the GUI thread is the configuration that works. The headless
+        startup poller uses the thread, then the GUI/Klango frame upgrades it here.
+        """
+        self.parent_window = window
+        try:
+            # Stop the background polling loop (if any)...
+            self._polling_active = False
+            # ...and (re)start a main-thread wx.Timer.
+            if self.controller_input_timer is None:
+                self.controller_input_timer = wx.Timer()
+                self.controller_input_timer.Bind(wx.EVT_TIMER, self.poll_controller_input)
+                self.controller_input_timer.Start(self.input_polling_interval)
+                print("[CONTROLLER] Switched to wx.Timer polling (main thread)")
+        except Exception as e:
+            print(f"[CONTROLLER] Could not switch to wx.Timer polling: {e}")
+
     def set_controller_enabled(self, enabled: bool):
         """Enable or disable controller input"""
         self.controller_enabled = enabled
@@ -633,9 +669,19 @@ class ControllerUI:
 _global_controller_ui = None
 
 def initialize_controller_system(parent_window=None):
-    """Initialize the global controller detection system"""
+    """Initialize (once) the global controller detection system.
+
+    Idempotent: if a poller is already running, just attach the given parent
+    window (used by the GUI / Klango frames for SYSTEM-mode wx navigation)
+    instead of starting a second poller.
+    """
     global _global_controller_ui
     try:
+        if _global_controller_ui is not None:
+            if parent_window is not None:
+                _global_controller_ui.attach_parent_window(parent_window)
+                print("Controller system already running - attached parent window")
+            return True
         print("Initializing global controller system...")
         _global_controller_ui = ControllerUI(parent_window=parent_window)
         print("Global controller system initialized successfully")

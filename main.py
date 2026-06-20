@@ -502,6 +502,13 @@ def main(command_line_args=None):
                 except Exception as e:
                     print(f"Warning: Controller modes system failed to initialize: {e}")
 
+                # NOTE: the controller *poller* is intentionally NOT started here.
+                # It must be created on the main (GUI) thread so the joystick is
+                # opened and polled on that same thread - on Windows, SDL does not
+                # update joystick state when it is polled from a different thread
+                # than the one that opened it. Each UI (GUI / Klango / Invisible UI)
+                # starts it via initialize_controller_system(parent_window=...).
+
                 # Odtwarzanie dźwięku w osobnym wątku
                 sound_thread = threading.Thread(target=play_startup_sound, daemon=True)
                 sound_thread.start()

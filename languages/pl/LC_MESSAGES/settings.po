@@ -841,3 +841,31 @@ msgstr "Błąd kalibracji"
 #: src/ui/settingsgui.py:610
 msgid "Calibration profile removed"
 msgstr "Profil kalibracji usunięty"
+
+#: src/ui/settingsgui.py
+msgid "Game controller"
+msgstr "Kontroler do gier"
+
+#: src/ui/settingsgui.py
+msgid "Controller vibration:"
+msgstr "Wibracje kontrolera:"
+
+#: src/ui/settingsgui.py
+msgid "Audio-synced"
+msgstr "Zsynchronizowane z dźwiękiem"
+
+#: src/ui/settingsgui.py
+msgid "Discrete pulses"
+msgstr "Pojedyncze impulsy"
+
+#: src/ui/settingsgui.py
+msgid "Vibration strength:"
+msgstr "Siła wibracji:"
+
+#: src/ui/settingsgui.py
+msgid "Test vibration"
+msgstr "Testuj wibracje"
+
+#: src/ui/settingsgui.py
+msgid "Off"
+msgstr "Wyłączone"

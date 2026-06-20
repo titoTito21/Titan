@@ -1125,6 +1125,17 @@ class InvisibleUI:
     def __init__(self, main_frame, component_manager=None):
         self.main_frame = main_frame
         self.component_manager = component_manager
+
+        # Start the controller poller on the main (GUI) thread, attached to the
+        # IUI frame. The joystick must be opened and polled on the GUI thread -
+        # SDL on Windows will not update joystick state across threads.
+        if main_frame is not None:
+            try:
+                from src.controller.controller_ui import initialize_controller_system
+                initialize_controller_system(parent_window=main_frame)
+                print("Controller poller initialized in InvisibleUI")
+            except Exception as e:
+                print(f"Failed to initialize controller poller in InvisibleUI: {e}")
         self.categories = []
         self._registered_views = []  # Component-registered views (converted to categories)
         self.current_category_index = 0
