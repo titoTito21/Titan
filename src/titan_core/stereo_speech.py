@@ -132,6 +132,16 @@ class ESpeakDLL:
         self.audio_buffer = []
         self.callback_fn = None
         self._play_channel = None  # pygame channel for direct playback in RETRIEVAL mode
+        # Interruption state. eSpeak-NG keeps global synthesis state, so any call
+        # to espeak_Cancel() around espeak_Synth()/Synchronize() can wedge the
+        # engine and make the NEXT synthesis return an empty buffer (the silent
+        # "every other message" during fast navigation). We never call it: an
+        # in-flight synthesis is aborted cleanly by returning non-zero from the
+        # audio callback via this flag, and playback is stopped via the pygame
+        # channel. _state_lock guards _abort/_synthesizing transitions.
+        self._abort = False
+        self._synthesizing = False
+        self._state_lock = threading.Lock()
         self._load_dll()
 
     def _load_dll(self):
@@ -295,9 +305,20 @@ class ESpeakDLL:
                 if interrupt:
                     self.cancel()
 
-                self.audio_buffer = []
+                # Fresh synthesis: clear any abort left by a previous interrupt
+                # and mark synthesis active atomically. Doing it under the state
+                # lock means a concurrent cancel() can't slip an abort in between
+                # clearing the flag and the start of synthesis.
+                with self._state_lock:
+                    self.audio_buffer = []
+                    self._abort = False
+                    self._synthesizing = True
 
                 def audio_callback(wav, numsamples, events):
+                    # Aborting from inside the callback (return non-zero) stops
+                    # synthesis cleanly without corrupting eSpeak's global state.
+                    if self._abort:
+                        return 1
                     if numsamples > 0 and wav:
                         try:
                             addr = ctypes.cast(wav, c_void_p).value
@@ -307,19 +328,24 @@ class ESpeakDLL:
                             pass
                     return 0
 
-                self.callback_fn = t_espeak_callback(audio_callback)
-                self.dll.espeak_SetSynthCallback(self.callback_fn)
+                try:
+                    self.callback_fn = t_espeak_callback(audio_callback)
+                    self.dll.espeak_SetSynthCallback(self.callback_fn)
 
-                text_bytes = text.encode('utf-8')
-                text_buffer = ctypes.create_string_buffer(text_bytes)
-                result = self.dll.espeak_Synth(
-                    text_buffer, len(text_bytes) + 1, 0, 0, 0, espeakCHARS_UTF8, None, None
-                )
-                self.dll.espeak_Synchronize()
-                self.dll.espeak_SetSynthCallback(None)
-                self.callback_fn = None
+                    text_bytes = text.encode('utf-8')
+                    text_buffer = ctypes.create_string_buffer(text_bytes)
+                    result = self.dll.espeak_Synth(
+                        text_buffer, len(text_bytes) + 1, 0, 0, 0, espeakCHARS_UTF8, None, None
+                    )
+                    self.dll.espeak_Synchronize()
+                    self.dll.espeak_SetSynthCallback(None)
+                    self.callback_fn = None
+                finally:
+                    with self._state_lock:
+                        self._synthesizing = False
 
-                if result != 0 or not self.audio_buffer:
+                # Aborted (superseded by a newer message) or no audio produced.
+                if self._abort or result != 0 or not self.audio_buffer:
                     return False
 
                 # Play collected audio via pygame (non-blocking)
@@ -367,12 +393,20 @@ class ESpeakDLL:
             return False
 
     def cancel(self):
-        """Stop synthesis (thread-safe) and stop any pygame channel playing DLL audio."""
-        if self.initialized:
-            try:
-                self.dll.espeak_Cancel()
-            except Exception:
-                pass
+        """Abort any in-flight synthesis and stop pygame playback of DLL audio.
+
+        In RETRIEVAL mode eSpeak only fills our buffer through the callback; it
+        never plays audio itself, so espeak_Cancel() serves no purpose here.
+        Worse, calling espeak_Cancel() anywhere around espeak_Synth() corrupts
+        eSpeak's global synthesis state and makes roughly every other subsequent
+        synthesis return an empty buffer (the "silent every other message"
+        during fast navigation). We therefore never call it: an in-flight synth
+        is aborted cleanly by returning non-zero from the audio callback (via the
+        _abort flag), and playback is interrupted by stopping our pygame channel.
+        """
+        # Signal any in-flight synthesis to abort from within its own callback.
+        with self._state_lock:
+            self._abort = True
         if self._play_channel:
             try:
                 if self._play_channel.get_busy():
@@ -509,13 +543,18 @@ class ESpeakDLL:
 
         try:
             with self._lock:
-                self.audio_buffer = []
+                with self._state_lock:
+                    self.audio_buffer = []
+                    self._abort = False
+                    self._synthesizing = True
 
                 # Apply pitch with offset
                 adjusted_pitch = max(0, min(99, self.pitch + pitch_offset * 5))
                 self._set_parameter(espeakPITCH, adjusted_pitch)
 
                 def audio_callback(wav, numsamples, events):
+                    if self._abort:
+                        return 1
                     if numsamples > 0 and wav:
                         try:
                             addr = ctypes.cast(wav, c_void_p).value
@@ -525,22 +564,26 @@ class ESpeakDLL:
                             pass
                     return 0
 
-                self.callback_fn = t_espeak_callback(audio_callback)
-                self.dll.espeak_SetSynthCallback(self.callback_fn)
+                try:
+                    self.callback_fn = t_espeak_callback(audio_callback)
+                    self.dll.espeak_SetSynthCallback(self.callback_fn)
 
-                text_bytes = text.encode('utf-8')
-                text_buffer = ctypes.create_string_buffer(text_bytes)
-                result = self.dll.espeak_Synth(
-                    text_buffer, len(text_bytes) + 1, 0, 0, 0, espeakCHARS_UTF8, None, None
-                )
-                self.dll.espeak_Synchronize()
-                self.dll.espeak_SetSynthCallback(None)
-                self.callback_fn = None
+                    text_bytes = text.encode('utf-8')
+                    text_buffer = ctypes.create_string_buffer(text_bytes)
+                    result = self.dll.espeak_Synth(
+                        text_buffer, len(text_bytes) + 1, 0, 0, 0, espeakCHARS_UTF8, None, None
+                    )
+                    self.dll.espeak_Synchronize()
+                    self.dll.espeak_SetSynthCallback(None)
+                    self.callback_fn = None
+                finally:
+                    with self._state_lock:
+                        self._synthesizing = False
 
                 # Restore original pitch
                 self._set_parameter(espeakPITCH, self.pitch)
 
-                if result != 0 or not self.audio_buffer:
+                if self._abort or result != 0 or not self.audio_buffer:
                     return None
 
                 import struct
@@ -1475,6 +1518,13 @@ class StereoSpeech:
     def __init__(self):
         self.sapi = None
         self._spatial_src = None  # OpenAL source id for the current 3D TTS playback
+        # Generation counter for 3D playback. OpenAL reuses source ids, so an
+        # old poll thread can otherwise call stop_source() on an id that now
+        # belongs to a newer utterance, cutting it off after a few ms (the
+        # "only the beginning, every other message" bug in fast navigation).
+        # Each playback claims a unique generation so a thread only ever stops
+        # its own source.
+        self._spatial_gen = 0
         self.current_voice = None
         self._sapi_voice_cache = None
         self._espeak_voice_cache = None  # eSpeak voices are static per session
@@ -1497,8 +1547,15 @@ class StereoSpeech:
         # eSpeak EXE subprocess (interruptible generation)
         self._espeak_process = None
 
-        # Sequence counter for speak_async deduplication
+        # Sequence counter for speak_async deduplication. Navigation dispatches
+        # each key on its own thread, so speak_async() can be entered
+        # concurrently. The counter is bumped under _seq_lock so every call gets
+        # a distinct, monotonically increasing sequence number; without this the
+        # non-atomic '+= 1' lets two rapid calls read the same value, both pass
+        # the freshness check, and collide on the TTS channel (one utterance is
+        # silently lost during fast navigation).
         self._speak_seq = 0
+        self._seq_lock = threading.Lock()
 
         # eSpeak parameters (shared by espeak_dll and espeak subprocess)
         self.espeak_rate = 175  # Words per minute (default)
@@ -2501,6 +2558,12 @@ class StereoSpeech:
                             mono = audio.set_channels(1).set_sample_width(2)
                             azimuth = spatial_audio.position_to_azimuth(position)
                             elev_deg = spatial_audio.norm_to_elevation(elevation)
+                            # Claim a new generation while we still hold the
+                            # lock and before we touch OpenAL, so any older poll
+                            # thread sees the bump and backs off instead of
+                            # stopping the source id we are about to (re)use.
+                            self._spatial_gen += 1
+                            my_gen = self._spatial_gen
                             # Stop any previous 3D TTS source before starting a new one
                             if self._spatial_src is not None:
                                 spatial_audio.stop_source(self._spatial_src)
@@ -2525,9 +2588,16 @@ class StereoSpeech:
                                 deadline = time.time() + duration + 1.0
                                 started = False
                                 while True:
+                                    # A newer utterance bumped the generation:
+                                    # it already owns (and may have reused) this
+                                    # source id, so back off without touching it.
+                                    if self._spatial_gen != my_gen:
+                                        break
                                     if (not self.is_speaking
                                             or (_seq is not None and _seq != self._speak_seq)):
-                                        spatial_audio.stop_source(src)
+                                        # Still the current playback - safe to stop our own source.
+                                        if self._spatial_gen == my_gen:
+                                            spatial_audio.stop_source(src)
                                         break
                                     if spatial_audio.is_playing(src):
                                         started = True
@@ -2536,7 +2606,7 @@ class StereoSpeech:
                                         # within the safety window.
                                         break
                                     time.sleep(0.03)
-                                if self._spatial_src == src:
+                                if self._spatial_gen == my_gen:
                                     self._spatial_src = None
                                 return
                         except Exception as e:
@@ -2630,7 +2700,13 @@ class StereoSpeech:
                 if use_fallback:
                     self.fallback_speaker.speak(text)
             finally:
-                self.is_speaking = False
+                # is_speaking is shared across all overlapping speak threads.
+                # A superseded thread finishing must NOT clear it, or it would
+                # cut off the newer utterance that is currently playing (this is
+                # what made every other message stop right after it started). Only
+                # the current sequence owner clears the flag.
+                if _seq is None or _seq == self._speak_seq:
+                    self.is_speaking = False
         finally:
             # Always release the lock if it was acquired
             if lock_acquired:
@@ -2648,8 +2724,9 @@ class StereoSpeech:
             use_fallback (bool): Czy użyć fallback jeśli SAPI5 nie działa
             elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
         """
-        self._speak_seq += 1
-        my_seq = self._speak_seq
+        with self._seq_lock:
+            self._speak_seq += 1
+            my_seq = self._speak_seq
 
         # Signal current speech to stop immediately (without waiting for the lock):
         # sets is_speaking=False, kills EXE subprocess, cancels DLL, stops pygame channel.

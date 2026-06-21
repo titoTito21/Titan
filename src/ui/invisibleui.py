@@ -1,4 +1,5 @@
 import threading
+import queue
 import time
 import sys
 try:
@@ -553,9 +554,40 @@ class PersistentNavigationHotkeys:
         self._stop_event = threading.Event()
         self._fallback_hotkeys = None
         self._registered_ids = []
+        # Keys are processed by a single serial worker so navigation (and the
+        # speech it triggers) stays in key order. Spawning a thread per key let
+        # rapid presses run concurrently, racing on the speech sequence counter
+        # and navigation index - which dropped every other utterance.
+        self._key_queue = queue.Queue()
+        self._key_worker = None
+
+    def _enqueue(self, name):
+        """Queue a key for serial processing on the worker thread."""
+        self._key_queue.put(name)
+
+    def _key_worker_loop(self):
+        while not self._stop_event.is_set():
+            try:
+                name = self._key_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if name is None:  # shutdown sentinel
+                break
+            try:
+                self.on_key(name)
+            except Exception as e:
+                print(f"Error handling nav key '{name}': {e}")
 
     def start(self):
         self._stop_event.clear()
+        # Drain any keys queued before a previous stop.
+        try:
+            while True:
+                self._key_queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._key_worker = threading.Thread(target=self._key_worker_loop, daemon=True)
+        self._key_worker.start()
         if IS_WINDOWS:
             self._thread = threading.Thread(target=self._run_windows, daemon=True)
             self._thread.start()
@@ -564,6 +596,11 @@ class PersistentNavigationHotkeys:
 
     def stop(self):
         self._stop_event.set()
+        # Wake the serial key worker so it exits promptly.
+        try:
+            self._key_queue.put(None)
+        except Exception:
+            pass
         if IS_WINDOWS:
             if self._thread_id:
                 try:
@@ -656,7 +693,7 @@ class PersistentNavigationHotkeys:
                         name = 'titan_enter'
                 except Exception:
                     pass
-            threading.Thread(target=self.on_key, args=(name,), daemon=True).start()
+            self._enqueue(name)
         except Exception as e:
             print(f"Error dispatching nav hotkey '{name}': {e}")
 
@@ -664,28 +701,28 @@ class PersistentNavigationHotkeys:
         """Fallback to keyboard library / pynput on non-Windows or when
         RegisterHotKey fails. Handles tilde+enter chord via keyboard library."""
         fallback_map = {
-            '<up>': lambda: self.on_key('up'),
-            '<down>': lambda: self.on_key('down'),
-            '<left>': lambda: self.on_key('left'),
-            '<right>': lambda: self.on_key('right'),
-            '<enter>': lambda: self.on_key('enter'),
-            '<space>': lambda: self.on_key('space'),
-            '<backspace>': lambda: self.on_key('backspace'),
-            '<esc>': lambda: self.on_key('esc'),
-            '`+<enter>': lambda: self.on_key('titan_enter'),
+            '<up>': lambda: self._enqueue('up'),
+            '<down>': lambda: self._enqueue('down'),
+            '<left>': lambda: self._enqueue('left'),
+            '<right>': lambda: self._enqueue('right'),
+            '<enter>': lambda: self._enqueue('enter'),
+            '<space>': lambda: self._enqueue('space'),
+            '<backspace>': lambda: self._enqueue('backspace'),
+            '<esc>': lambda: self._enqueue('esc'),
+            '`+<enter>': lambda: self._enqueue('titan_enter'),
             # Buffer System keys (best-effort on non-Windows).
-            '-': lambda: self.on_key('buffer:prev_category'),
-            '=': lambda: self.on_key('buffer:next_category'),
-            '<shift>+-': lambda: self.on_key('buffer:first_category'),
-            '<shift>+=': lambda: self.on_key('buffer:last_category'),
-            '[': lambda: self.on_key('buffer:prev_buffer'),
-            ']': lambda: self.on_key('buffer:next_buffer'),
-            '<shift>+[': lambda: self.on_key('buffer:first_buffer'),
-            '<shift>+]': lambda: self.on_key('buffer:last_buffer'),
-            ',': lambda: self.on_key('buffer:prev_element'),
-            '.': lambda: self.on_key('buffer:next_element'),
-            '<shift>+,': lambda: self.on_key('buffer:first_element'),
-            '<shift>+.': lambda: self.on_key('buffer:last_element'),
+            '-': lambda: self._enqueue('buffer:prev_category'),
+            '=': lambda: self._enqueue('buffer:next_category'),
+            '<shift>+-': lambda: self._enqueue('buffer:first_category'),
+            '<shift>+=': lambda: self._enqueue('buffer:last_category'),
+            '[': lambda: self._enqueue('buffer:prev_buffer'),
+            ']': lambda: self._enqueue('buffer:next_buffer'),
+            '<shift>+[': lambda: self._enqueue('buffer:first_buffer'),
+            '<shift>+]': lambda: self._enqueue('buffer:last_buffer'),
+            ',': lambda: self._enqueue('buffer:prev_element'),
+            '.': lambda: self._enqueue('buffer:next_element'),
+            '<shift>+,': lambda: self._enqueue('buffer:first_element'),
+            '<shift>+.': lambda: self._enqueue('buffer:last_element'),
         }
         self._fallback_hotkeys = GlobalHotKeys(fallback_map)
         self._fallback_hotkeys.start()
@@ -1753,28 +1790,20 @@ class InvisibleUI:
                 stereo_enabled = get_setting('stereo_speech', 'False', section='invisible_interface').lower() == 'true'
                 
                 if stereo_enabled:
-                    def speak_with_stereo():
-                        try:
-                            if self._shutdown_in_progress:
-                                return
-                            # Zatrzymaj poprzednią mowę jeśli interrupt=True
-                            if interrupt:
-                                try:
-                                    stereo_speech = get_stereo_speech()
-                                    if stereo_speech:
-                                        stereo_speech.stop()
-                                except Exception as e:
-                                    print(f"Error stopping stereo speech: {e}")
-                            
+                    # Call speak_async directly (no extra wrapper thread, no
+                    # standalone stop()). speak_async is already non-blocking and
+                    # handles interruption atomically via its _speak_seq counter.
+                    # Wrapping each call in its own thread previously let an older
+                    # keypress's thread run its stop() AFTER a newer utterance had
+                    # started, cutting it off (and sometimes replaying a stale
+                    # item) at random during fast navigation.
+                    try:
+                        if not self._shutdown_in_progress:
                             speak_stereo(text, position=position, pitch_offset=pitch_offset, async_mode=True, elevation=elevation)
-                        except Exception as e:
-                            print(f"Error in stereo speech: {e}")
-                            # Fallback to regular TTS
-                            self._speak_fallback(text, interrupt)
-                    
-                    # Use daemon thread with timeout protection
-                    thread = threading.Thread(target=speak_with_stereo, daemon=True)
-                    thread.start()
+                    except Exception as e:
+                        print(f"Error in stereo speech: {e}")
+                        # Fallback to regular TTS
+                        self._speak_fallback(text, interrupt)
                 else:
                     # Standard TTS without stereo
                     def speak_regular():
