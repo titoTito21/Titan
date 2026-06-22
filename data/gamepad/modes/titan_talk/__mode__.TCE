@@ -1,0 +1,9 @@
+[mode]
+name = Titan Talk
+name_pl = Titan Talk
+name_en = Titan Talk
+main = titan_talk.py
+domain = titan_talk
+description = Talking gamepad - a joystick-driven screen reader. Stick arrows move spatially between on-screen controls, A activates, B goes back. Bumpers switch scope: window switcher, window controls (UI Automation) and audio game (Gemini OCR).
+libs = lib
+status = 0

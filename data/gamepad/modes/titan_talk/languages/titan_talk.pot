@@ -1,0 +1,172 @@
+# Titan Talk gamepad mode - translation template.
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: titan_talk 1.0\n"
+"PO-Revision-Date: 2026-06-21 12:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "button"
+msgstr ""
+
+msgid "edit field"
+msgstr ""
+
+msgid "slider"
+msgstr ""
+
+msgid "check box"
+msgstr ""
+
+msgid "radio button"
+msgstr ""
+
+msgid "combo box"
+msgstr ""
+
+msgid "menu item"
+msgstr ""
+
+msgid "list item"
+msgstr ""
+
+msgid "tab"
+msgstr ""
+
+msgid "link"
+msgstr ""
+
+msgid "window"
+msgstr ""
+
+msgid "text"
+msgstr ""
+
+msgid "graphic"
+msgstr ""
+
+msgid "checked"
+msgstr ""
+
+msgid "not checked"
+msgstr ""
+
+msgid "expanded"
+msgstr ""
+
+msgid "collapsed"
+msgstr ""
+
+msgid "selected"
+msgstr ""
+
+msgid "focused"
+msgstr ""
+
+msgid "list"
+msgstr ""
+
+msgid "tree"
+msgstr ""
+
+msgid "grid"
+msgstr ""
+
+msgid "table"
+msgstr ""
+
+msgid "tab list"
+msgstr ""
+
+msgid "toolbar"
+msgstr ""
+
+msgid "menu"
+msgstr ""
+
+msgid "menu bar"
+msgstr ""
+
+msgid "group"
+msgstr ""
+
+msgid "Window switcher"
+msgstr ""
+
+msgid "Titan Talk"
+msgstr ""
+
+msgid "Switched to {title}"
+msgstr ""
+
+msgid "Window controls"
+msgstr ""
+
+msgid "Editing {name}"
+msgstr ""
+
+msgid "Expanded"
+msgstr ""
+
+msgid "Audio game"
+msgstr ""
+
+msgid "Audio game scope needs Pillow and the Gemini library."
+msgstr ""
+
+msgid "Set a Gemini API key in settings to use the audio game scope."
+msgstr ""
+
+msgid "Audio game. Analyzing the screen, please wait."
+msgstr ""
+
+msgid "Could not start Gemini."
+msgstr ""
+
+msgid "{count} items found."
+msgstr ""
+
+msgid "Nothing readable was found on screen."
+msgstr ""
+
+msgid "Screen analysis failed."
+msgstr ""
+
+msgid "Clicked {name}"
+msgstr ""
+
+msgid "Empty"
+msgstr ""
+
+msgid "Unnamed"
+msgstr ""
+
+msgid "out of {name}"
+msgstr ""
+
+msgid "in {name}"
+msgstr ""
+
+msgid "empty"
+msgstr ""
+
+msgid "Titan Talk has no available scopes."
+msgstr ""
+
+msgid ""
+"Titan Talk. Left stick reads controls, A activates, B goes back, bumpers "
+"switch scope. Scope: {name}."
+msgstr ""
+
+msgid "Enter your Gemini API key"
+msgstr ""
+
+msgid "No Gemini API key set."
+msgstr ""

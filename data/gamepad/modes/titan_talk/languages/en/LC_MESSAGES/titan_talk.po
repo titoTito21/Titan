@@ -1,0 +1,176 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# English source strings for the Titan Talk gamepad mode.
+# Translations reviewed with AI assistance.
+# Copyright (C) 2026 titosoft
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: titan_talk 1.0\n"
+"PO-Revision-Date: 2026-06-21 12:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "button"
+msgstr "button"
+
+msgid "edit field"
+msgstr "edit field"
+
+msgid "slider"
+msgstr "slider"
+
+msgid "check box"
+msgstr "check box"
+
+msgid "radio button"
+msgstr "radio button"
+
+msgid "combo box"
+msgstr "combo box"
+
+msgid "menu item"
+msgstr "menu item"
+
+msgid "list item"
+msgstr "list item"
+
+msgid "tab"
+msgstr "tab"
+
+msgid "link"
+msgstr "link"
+
+msgid "window"
+msgstr "window"
+
+msgid "text"
+msgstr "text"
+
+msgid "graphic"
+msgstr "graphic"
+
+msgid "checked"
+msgstr "checked"
+
+msgid "not checked"
+msgstr "not checked"
+
+msgid "expanded"
+msgstr "expanded"
+
+msgid "collapsed"
+msgstr "collapsed"
+
+msgid "selected"
+msgstr "selected"
+
+msgid "focused"
+msgstr "focused"
+
+msgid "list"
+msgstr "list"
+
+msgid "tree"
+msgstr "tree"
+
+msgid "grid"
+msgstr "grid"
+
+msgid "table"
+msgstr "table"
+
+msgid "tab list"
+msgstr "tab list"
+
+msgid "toolbar"
+msgstr "toolbar"
+
+msgid "menu"
+msgstr "menu"
+
+msgid "menu bar"
+msgstr "menu bar"
+
+msgid "group"
+msgstr "group"
+
+msgid "Window switcher"
+msgstr "Window switcher"
+
+msgid "Titan Talk"
+msgstr "Titan Talk"
+
+msgid "Switched to {title}"
+msgstr "Switched to {title}"
+
+msgid "Window controls"
+msgstr "Window controls"
+
+msgid "Editing {name}"
+msgstr "Editing {name}"
+
+msgid "Expanded"
+msgstr "Expanded"
+
+msgid "Audio game"
+msgstr "Audio game"
+
+msgid "Audio game scope needs Pillow and the Gemini library."
+msgstr "Audio game scope needs Pillow and the Gemini library."
+
+msgid "Set a Gemini API key in settings to use the audio game scope."
+msgstr "Set a Gemini API key in settings to use the audio game scope."
+
+msgid "Audio game. Analyzing the screen, please wait."
+msgstr "Audio game. Analyzing the screen, please wait."
+
+msgid "Could not start Gemini."
+msgstr "Could not start Gemini."
+
+msgid "{count} items found."
+msgstr "{count} items found."
+
+msgid "Nothing readable was found on screen."
+msgstr "Nothing readable was found on screen."
+
+msgid "Screen analysis failed."
+msgstr "Screen analysis failed."
+
+msgid "Clicked {name}"
+msgstr "Clicked {name}"
+
+msgid "Empty"
+msgstr "Empty"
+
+msgid "Unnamed"
+msgstr "Unnamed"
+
+msgid "out of {name}"
+msgstr "out of {name}"
+
+msgid "in {name}"
+msgstr "in {name}"
+
+msgid "empty"
+msgstr "empty"
+
+msgid "Titan Talk has no available scopes."
+msgstr "Titan Talk has no available scopes."
+
+msgid ""
+"Titan Talk. Left stick reads controls, A activates, B goes back, bumpers "
+"switch scope. Scope: {name}."
+msgstr ""
+"Titan Talk. Left stick reads controls, A activates, B goes back, bumpers "
+"switch scope. Scope: {name}."
+
+msgid "Enter your Gemini API key"
+msgstr "Enter your Gemini API key"
+
+msgid "No Gemini API key set."
+msgstr "No Gemini API key set."

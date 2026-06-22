@@ -27,9 +27,12 @@ Each custom mode is a *folder*, exactly like a component:
     main = my_mode.py
     domain = my_mode
     description = What the mode does
+    libs = lib
     status = 0
 
 * ``status`` - 0 = enabled (loaded), anything else = disabled.
+* ``libs`` - comma-separated dirs added to ``sys.path`` before the mode loads
+  (default ``lib``), so the package can vendor its dependencies in ``lib/``.
 * ``name`` / ``name_<lang>`` - the label announced when the mode is selected.
 * ``main`` - the Python file defining the mode (defaults to the only ``*.py``).
 * ``domain`` - the gettext domain for the mode's ``languages/`` folder
@@ -238,20 +241,33 @@ def type_text(text):
         tap(ch)
 
 
-def speak(text, position=0.0, interrupt=True):
-    """Speak ``text`` through the active mode manager (stereo aware)."""
+def speak(text, position=0.0, interrupt=True, pitch_offset=0):
+    """Speak ``text`` through the active mode manager (stereo aware).
+
+    ``position`` pans the speech (-1.0 left .. 1.0 right) when stereo / 3D sound
+    positioning is on. ``pitch_offset`` (-10..10) shifts the voice pitch on the
+    Titan TTS / stereo path (ignored by the accessible_output3 fallback) - use a
+    small negative value to speak e.g. a control's name in a lower tone.
+    """
     try:
         from src.controller.controller_modes import get_mode_manager
-        get_mode_manager().speak(text, position=position, interrupt=interrupt)
+        get_mode_manager().speak(text, position=position, interrupt=interrupt,
+                                 pitch_offset=pitch_offset)
     except Exception as e:
         print(f"[GamepadMode] speak failed: {e}")
 
 
-def play_mode_sound(path='joystick/ui2.ogg'):
-    """Play a TCE sound effect (path relative to the active sound theme)."""
+def play_mode_sound(path='joystick/ui2.ogg', pan=None, elevation=0.0):
+    """Play a TCE sound effect (path relative to the active sound theme).
+
+    ``pan`` (-1.0 left .. 1.0 right) and ``elevation`` (-1.0 down .. 1.0 up, 3D
+    only) position the effect; they are honoured only when the host sound mode is
+    stereo / 3D and ignored otherwise (the sound plays centered). This lets a
+    mode pan its UI sounds to match where a control sits on screen.
+    """
     try:
         from src.titan_core.sound import play_sound
-        play_sound(path)
+        play_sound(path, pan=pan, elevation=elevation)
     except Exception as e:
         print(f"[GamepadMode] play_mode_sound failed: {e}")
 
@@ -444,6 +460,25 @@ def _discover_mode_folders():
     return list(entries.items())
 
 
+def _add_mode_paths(folder_path, config):
+    """Add a mode package folder and its bundled lib dirs to sys.path.
+
+    Mirrors ``src/tts/engine_registry.py``: the package folder itself goes on
+    the path (so sibling modules import cleanly) plus every directory listed in
+    ``libs=`` in ``__mode__.TCE`` (comma separated, default ``lib``). A vendored
+    ``lib/`` therefore lets the mode ship its own third-party dependencies
+    (uiautomation, Pillow, ...) without polluting the host environment.
+    """
+    if folder_path not in sys.path:
+        sys.path.insert(0, folder_path)
+    libs_str = (config.get('libs') or 'lib').strip()
+    lib_dirs = [d.strip() for d in libs_str.split(',') if d.strip()] or ['lib']
+    for lib_dir in lib_dirs:
+        full_lib = os.path.join(folder_path, lib_dir)
+        if os.path.isdir(full_lib) and full_lib not in sys.path:
+            sys.path.insert(0, full_lib)
+
+
 def load_custom_modes():
     """Discover and instantiate every custom gamepad mode.
 
@@ -474,6 +509,13 @@ def load_custom_modes():
         if not main_path or not os.path.isfile(main_path):
             print(f"[GamepadMode] mode '{folder_name}': main file not found")
             continue
+
+        # Make the mode self-contained: add the package folder and any bundled
+        # library folders to sys.path BEFORE loading, exactly like the TTS
+        # engine registry (src/tts/engine_registry.py). This lets a mode vendor
+        # its third-party dependencies in `lib/` (configurable via `libs=` in
+        # __mode__.TCE, default `lib`) and import its own sibling modules.
+        _add_mode_paths(folder_path, config)
 
         mode_id = f"custom:{folder_name}"
         try:

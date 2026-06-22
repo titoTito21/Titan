@@ -144,6 +144,10 @@ data/applications/**/%appdata%/
 # ===== Bundled TTS engine binaries (kept locally only — large + licensed) =====
 data/titantts engines/
 
+# ===== Vendored deps for the Titan Talk gamepad mode (large; pip-installed) =====
+data/gamepad/modes/titan_talk/lib/
+data/gamepad/modes/*/__pycache__/
+
 # ===== Sound themes (only ship "default"; other themes are local-only) =====
 sfx/*/
 !sfx/default/
