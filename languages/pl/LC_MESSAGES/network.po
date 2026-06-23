@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:29+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -777,7 +777,7 @@ msgstr ""
 msgid "Błąd WebView"
 msgstr ""
 
-#: src/network/telegram_client.py:169 src/network/telegram_gui.py:749
+#: src/network/telegram_client.py:169 src/network/telegram_gui.py:784
 msgid "Connection error"
 msgstr "Błąd połączenia"
 
@@ -810,61 +810,61 @@ msgid "2FA Password"
 msgstr "Hasło 2FA"
 
 #: src/network/telegram_client.py:348 src/network/telegram_client.py:409
-#: src/network/telegram_client.py:816 src/network/telegram_windows.py:416
+#: src/network/telegram_client.py:841 src/network/telegram_windows.py:416
 #: src/network/telegram_windows.py:977
 msgid "Unknown"
 msgstr "Nieznany"
 
-#: src/network/telegram_client.py:625 src/network/telegram_client.py:630
+#: src/network/telegram_client.py:643 src/network/telegram_client.py:655
 #, python-brace-format
 msgid "Connected to Telegram as {}"
 msgstr ""
 
-#: src/network/telegram_client.py:649
+#: src/network/telegram_client.py:674
 msgid "Telegram Error"
 msgstr ""
 
-#: src/network/telegram_client.py:1019
+#: src/network/telegram_client.py:1044
 msgid "Disconnecting from Telegram..."
 msgstr ""
 
-#: src/network/telegram_client.py:1046
+#: src/network/telegram_client.py:1078
 msgid "Event loop stopped, forcing client cleanup"
 msgstr ""
 
-#: src/network/telegram_client.py:1062
+#: src/network/telegram_client.py:1094
 msgid "Waiting for connection thread to finish..."
 msgstr ""
 
-#: src/network/telegram_client.py:1066
+#: src/network/telegram_client.py:1098
 msgid "Warning: Connection thread did not stop cleanly"
 msgstr ""
 
-#: src/network/telegram_client.py:1068
+#: src/network/telegram_client.py:1100
 msgid "Connection thread stopped"
 msgstr ""
 
-#: src/network/telegram_client.py:1078
+#: src/network/telegram_client.py:1110
 msgid "Successfully disconnected from Telegram"
 msgstr ""
 
-#: src/network/telegram_client.py:1084
+#: src/network/telegram_client.py:1116
 msgid "Disconnected from Telegram (with errors)"
 msgstr "Rozłączono z Telegram (z błędami)"
 
-#: src/network/telegram_client.py:1091
+#: src/network/telegram_client.py:1123
 msgid "Telegram client disconnected"
 msgstr "Klient Telegram rozłączony"
 
-#: src/network/telegram_client.py:1100
+#: src/network/telegram_client.py:1132
 msgid "Start login by providing phone number"
 msgstr "Rozpocznij logowanie podając numer telefonu"
 
-#: src/network/telegram_client.py:1105
+#: src/network/telegram_client.py:1137
 msgid "Phone number is required"
 msgstr "Numer telefonu jest wymagany"
 
-#: src/network/telegram_client.py:1106
+#: src/network/telegram_client.py:1138
 msgid "Preparing connection to Telegram..."
 msgstr "Przygotowywanie połączenia z Telegram..."
 
@@ -890,104 +890,92 @@ msgstr ""
 msgid "2FA Password (optional, leave empty if not set):"
 msgstr ""
 
-#: src/network/telegram_gui.py:232 src/network/telegram_gui.py:266
-#: src/network/telegram_gui.py:444
+#: src/network/telegram_gui.py:259 src/network/telegram_gui.py:292
+#: src/network/telegram_gui.py:479
 msgid "Disconnect"
 msgstr "Rozłącz"
 
-#: src/network/telegram_gui.py:232
+#: src/network/telegram_gui.py:259
 msgid "Disconnect from Telegram"
 msgstr "Rozłącz z Telegram"
 
-#: src/network/telegram_gui.py:240 src/network/telegram_gui.py:610
+#: src/network/telegram_gui.py:267 src/network/telegram_gui.py:645
 msgid "Connected to Telegram"
 msgstr ""
 
-#: src/network/telegram_gui.py:263 src/network/telegram_gui.py:281
-#: src/network/telegram_gui.py:438
+#: src/network/telegram_gui.py:290 src/network/telegram_gui.py:312
+#: src/network/telegram_gui.py:475
 msgid "Contacts"
 msgstr "Kontakty"
 
-#: src/network/telegram_gui.py:264 src/network/telegram_gui.py:304
-#: src/network/telegram_gui.py:440
+#: src/network/telegram_gui.py:291 src/network/telegram_gui.py:338
+#: src/network/telegram_gui.py:477
 msgid "Groups"
 msgstr "Grupy"
 
-#: src/network/telegram_gui.py:265 src/network/telegram_gui.py:442
-msgid "Settings"
-msgstr ""
-
-#: src/network/telegram_gui.py:293 src/network/telegram_gui.py:315
-#: src/network/telegram_gui.py:449 src/network/telegram_gui.py:457
-#: src/network/telegram_gui.py:470 src/network/telegram_gui.py:492
+#: src/network/telegram_gui.py:324 src/network/telegram_gui.py:349
+#: src/network/telegram_gui.py:484 src/network/telegram_gui.py:492
+#: src/network/telegram_gui.py:505 src/network/telegram_gui.py:527
 msgid "Back"
 msgstr ""
 
-#: src/network/telegram_gui.py:443
-msgid "Information"
-msgstr "Informacja"
-
-#: src/network/telegram_gui.py:443
-msgid "Settings - coming soon"
-msgstr ""
-
-#: src/network/telegram_gui.py:474
+#: src/network/telegram_gui.py:509
 msgid "Message"
 msgstr "Wiadomość"
 
-#: src/network/telegram_gui.py:475 src/network/telegram_windows.py:137
+#: src/network/telegram_gui.py:510 src/network/telegram_windows.py:137
 msgid "Voice Call"
 msgstr "Połączenie głosowe"
 
-#: src/network/telegram_gui.py:500 src/network/telegram_voice.py:210
+#: src/network/telegram_gui.py:535 src/network/telegram_voice.py:210
 #: src/network/telegram_voice.py:408 src/network/telegram_windows.py:434
 msgid "Call already in progress"
 msgstr ""
 
-#: src/network/telegram_gui.py:504
+#: src/network/telegram_gui.py:539
 msgid "Voice calls not available - py-tgcalls required"
 msgstr ""
 
-#: src/network/telegram_gui.py:507
+#: src/network/telegram_gui.py:542
 msgid ""
 "Voice calls require py-tgcalls.\n"
 "Install with: pip install py-tgcalls"
 msgstr ""
 
-#: src/network/telegram_gui.py:508
+#: src/network/telegram_gui.py:543
 msgid "Voice calls unavailable"
 msgstr ""
 
-#: src/network/telegram_gui.py:514
+#: src/network/telegram_gui.py:549
 #, python-brace-format
 msgid "Calling {}..."
 msgstr ""
 
-#: src/network/telegram_gui.py:533 src/network/telegram_gui.py:548
+#: src/network/telegram_gui.py:568 src/network/telegram_gui.py:583
 #, python-brace-format
 msgid ""
 "Cannot open chat window.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:534 src/network/telegram_gui.py:549
-#: src/network/telegram_gui.py:733 src/network/telegram_gui.py:751
+#: src/network/telegram_gui.py:569 src/network/telegram_gui.py:584
+#: src/network/telegram_gui.py:768 src/network/telegram_gui.py:786
 #: src/network/telegram_windows.py:604 src/network/telegram_windows.py:900
 msgid "Error"
 msgstr "Błąd"
 
-#: src/network/telegram_gui.py:732
+#: src/network/telegram_gui.py:767
 #, python-brace-format
 msgid ""
 "Error opening Telegram chat window.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:749
+#: src/network/telegram_gui.py:784
 msgid "Failed to connect to Telegram. Check your phone number and try again."
 msgstr ""
 
-#: src/network/telegram_gui.py:751
+#: src/network/telegram_gui.py:786
 msgid "Failed to start connection. Please try again."
 msgstr ""
 
@@ -1581,7 +1569,7 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "Settings"
-#~ msgstr "Ustawienia"
+#~ msgstr ""
 
 #~ msgid "Back to main menu"
 #~ msgstr "Powrót do menu głównego"
@@ -1742,5 +1730,8 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "Message from: {}, {}"
+#~ msgstr ""
+
+#~ msgid "Settings - coming soon"
 #~ msgstr ""
 

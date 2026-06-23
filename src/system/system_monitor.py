@@ -3,7 +3,9 @@ import os
 import threading
 import time
 import platform
+import random
 import subprocess
+import ctypes
 try:
     import accessible_output3.outputs.auto as _ao3_mod
     _ao3_mod_available = True
@@ -86,6 +88,36 @@ except ImportError:
     psutil = None
     print("psutil not found, battery monitoring will be disabled.")
 
+
+class _SYSTEM_POWER_STATUS(ctypes.Structure):
+    """Windows SYSTEM_POWER_STATUS structure for GetSystemPowerStatus."""
+    _fields_ = [
+        ('ACLineStatus', ctypes.c_byte),
+        ('BatteryFlag', ctypes.c_byte),
+        ('BatteryLifePercent', ctypes.c_byte),
+        ('SystemStatusFlag', ctypes.c_byte),
+        ('BatteryLifeTime', ctypes.c_ulong),
+        ('BatteryFullLifeTime', ctypes.c_ulong),
+    ]
+
+
+def is_power_saving_active():
+    """Return True if Windows battery saver (power saving) mode is currently on.
+
+    Uses GetSystemPowerStatus; the low bit of SystemStatusFlag indicates that
+    battery saver is enabled (Windows 10+). Returns False on other platforms
+    or if the status cannot be read.
+    """
+    if not IS_WINDOWS:
+        return False
+    try:
+        status = _SYSTEM_POWER_STATUS()
+        if ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+            return bool(status.SystemStatusFlag & 0x01)
+    except Exception:
+        return False
+    return False
+
 # Attempt to import pycaw for Windows volume monitoring
 try:
     from pycaw.pycaw import AudioUtilities
@@ -139,9 +171,11 @@ class SystemMonitor:
 
             self.running = True
 
-            # Start ChargerMonitor if enabled and available
+            # Start ChargerMonitor if charger monitoring or battery alerts are
+            # enabled and a battery is available
             try:
-                if (get_setting('monitor_charger', True, section='system_monitor') and
+                if ((get_setting('monitor_charger', True, section='system_monitor') or
+                     get_setting('monitor_battery_alerts', True, section='system_monitor')) and
                     psutil and hasattr(psutil, 'sensors_battery') and
                     psutil.sensors_battery() is not None):
                     charger_monitor = ChargerMonitor()
@@ -207,6 +241,9 @@ class ChargerMonitor(threading.Thread):
             self.daemon = True
             self.running = True
             self.charged_notification_sent = False
+            self.low_battery_notified = False
+            self.critical_battery_notified = False
+            self.power_saving_was_active = is_power_saving_active()
             battery = psutil.sensors_battery()
             if battery:
                 self.previous_status = battery.power_plugged
@@ -221,6 +258,9 @@ class ChargerMonitor(threading.Thread):
             self.daemon = True
             self.running = False  # Don't run if initialization failed
             self.charged_notification_sent = False
+            self.low_battery_notified = False
+            self.critical_battery_notified = False
+            self.power_saving_was_active = False
             self.previous_status = None
             self.previous_percentage = None
 
@@ -231,20 +271,22 @@ class ChargerMonitor(threading.Thread):
                 if battery:
                     current_status = battery.power_plugged
                     current_percentage = battery.percent
+                    charger_alerts = get_setting('monitor_charger', True, section='system_monitor')
 
                     # Check for charger connection/disconnection
                     if self.previous_status is not None and current_status != self.previous_status:
-                        if current_status:
-                            self.on_charger_connect(current_percentage)
-                        else:
-                            self.on_charger_disconnect(current_percentage)
+                        if charger_alerts:
+                            if current_status:
+                                self.on_charger_connect(current_percentage)
+                            else:
+                                self.on_charger_disconnect(current_percentage)
                         self.previous_status = current_status
 
                     # Check for battery level changes during charging
                     battery_announce_interval = get_setting('battery_announce_interval', '10%', section='system_monitor')
-                    if (current_status and current_percentage != self.previous_percentage and 
+                    if (charger_alerts and current_status and current_percentage != self.previous_percentage and
                         battery_announce_interval != 'never'):
-                        
+
                         # Parse interval setting
                         interval = 10  # default
                         if battery_announce_interval == '1%':
@@ -255,16 +297,19 @@ class ChargerMonitor(threading.Thread):
                             interval = 15
                         elif battery_announce_interval == '25%':
                             interval = 25
-                        
+
                         if current_percentage % interval == 0:
                             self.on_battery_charging(current_percentage)
 
                     # Check for fully charged battery
-                    if current_status and current_percentage == 100 and not self.charged_notification_sent:
+                    if charger_alerts and current_status and current_percentage == 100 and not self.charged_notification_sent:
                         self.on_battery_charged()
                         self.charged_notification_sent = True
                     elif not current_status:
                         self.charged_notification_sent = False
+
+                    # Check for low / critical battery levels
+                    self.check_battery_alerts(current_status, current_percentage)
 
                     self.previous_percentage = current_percentage
                 else:
@@ -289,6 +334,75 @@ class ChargerMonitor(threading.Thread):
 
     def on_battery_charged(self):
         _speak(_("Battery is fully charged"))
+
+    def check_battery_alerts(self, current_status, current_percentage):
+        """Announce low and critical battery levels.
+
+        Low battery is signalled either when the level drops to the low
+        threshold or when Windows battery saver (power saving) mode turns on.
+        Critical battery is signalled when the level drops to the critical
+        threshold. Notifications fire once and reset when the charger is
+        connected or the level recovers above the threshold.
+        """
+        try:
+            if not get_setting('monitor_battery_alerts', True, section='system_monitor'):
+                return
+
+            power_saving = is_power_saving_active()
+            power_saving_started = power_saving and not self.power_saving_was_active
+            self.power_saving_was_active = power_saving
+
+            # While charging, clear all alert state so they can fire again later
+            if current_status:
+                self.low_battery_notified = False
+                self.critical_battery_notified = False
+                return
+
+            try:
+                low_threshold = int(get_setting('battery_low_threshold', 20, section='system_monitor'))
+            except (TypeError, ValueError):
+                low_threshold = 20
+            try:
+                critical_threshold = int(get_setting('battery_critical_threshold', 5, section='system_monitor'))
+            except (TypeError, ValueError):
+                critical_threshold = 5
+
+            # Critical battery takes priority over low battery
+            if current_percentage <= critical_threshold:
+                if not self.critical_battery_notified:
+                    self.on_critical_battery()
+                    self.critical_battery_notified = True
+                return
+
+            # Recovered above critical level, allow critical to fire again
+            self.critical_battery_notified = False
+
+            if current_percentage <= low_threshold or power_saving_started:
+                if not self.low_battery_notified:
+                    self.on_low_battery()
+                    self.low_battery_notified = True
+            elif not power_saving:
+                # Above low threshold and not in power saving, allow low to fire again
+                self.low_battery_notified = False
+        except Exception as e:
+            print(f"Error in check_battery_alerts: {e}")
+
+    def on_low_battery(self):
+        sound_choice = get_setting('battery_low_sound', 'random', section='system_monitor')
+        if sound_choice == 'external':
+            sound = 'system/low_battery1.ogg'
+        elif sound_choice == 'internal':
+            sound = 'system/low_battery2.ogg'
+        else:
+            sound = random.choice(['system/low_battery1.ogg', 'system/low_battery2.ogg'])
+        play_sound(sound)
+        _speak(_("Low battery, please connect to charger"))
+
+    def on_critical_battery(self):
+        play_sound('system/critical_battery_level.ogg')
+        # Speak one second after the sound so it is not masked by it
+        message = _("Critical battery level, connect to charger now!")
+        threading.Timer(1.0, lambda: _speak(message, interrupt=True)).start()
 
     def stop(self):
         self.running = False

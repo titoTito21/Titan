@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:30+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,134 +20,132 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/controller/controller_ui.py:274
+#: src/controller/controller_ui.py:245
 msgid "Game pad connected"
 msgstr "Kontroler do gier podłączony"
 
-#: src/controller/controller_ui.py:288
+#: src/controller/controller_ui.py:259
 msgid "Game pad disconnected"
 msgstr "Kontroler do gier odłączony"
 
-#: src/controller/controller_ui.py:673
+#: src/controller/controller_ui.py:728
 msgid "Controller Information"
 msgstr "Informacje o kontrolerze"
 
-#: src/controller/controller_ui.py:676 src/controller/controller_ui.py:771
+#: src/controller/controller_ui.py:731 src/controller/controller_ui.py:826
 msgid "Connected controllers"
 msgstr "Podłączone kontrolery"
 
-#: src/controller/controller_ui.py:679 src/controller/controller_ui.py:774
+#: src/controller/controller_ui.py:734 src/controller/controller_ui.py:829
 msgid "Controller names"
 msgstr "Nazwy kontrolerów"
 
-#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
+#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
 msgid "Vibration available"
 msgstr "Wibracje dostępne"
 
-#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
+#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
 msgid "Yes"
 msgstr "Tak"
 
-#: src/controller/controller_ui.py:683 src/controller/controller_ui.py:778
+#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
 msgid "No"
 msgstr "Nie"
 
-#: src/controller/controller_ui.py:689
+#: src/controller/controller_ui.py:744
 msgid "Vibration Settings"
 msgstr "Ustawienia wibracji"
 
-#: src/controller/controller_ui.py:691
+#: src/controller/controller_ui.py:746
 msgid "Enable vibration"
 msgstr "Włącz wibracje"
 
-#: src/controller/controller_ui.py:696
+#: src/controller/controller_ui.py:751
 msgid "Vibration strength"
 msgstr "Siła wibracji"
 
-#: src/controller/controller_ui.py:705 src/controller/controller_ui.py:781
+#: src/controller/controller_ui.py:760 src/controller/controller_ui.py:836
 msgid "Controller Settings"
 msgstr "Ustawienia kontrolera"
 
-#: src/controller/controller_ui.py:707
+#: src/controller/controller_ui.py:762
 msgid "Enable controller input"
 msgstr "Włącz obsługę kontrolera"
 
-#: src/controller/controller_ui.py:712
+#: src/controller/controller_ui.py:767
 msgid "Enable controller navigation"
 msgstr "Włącz nawigację kontrolerem"
 
-#: src/controller/controller_ui.py:717
+#: src/controller/controller_ui.py:772
 msgid "Analog stick deadzone"
 msgstr "Martwa strefa gałki analogowej"
 
-#: src/controller/controller_ui.py:728
+#: src/controller/controller_ui.py:783
 msgid "Refresh Controllers"
 msgstr "Odśwież kontrolery"
 
-#: src/controller/controller_ui.py:732
+#: src/controller/controller_ui.py:787
 msgid "Test Vibration"
 msgstr "Testuj wibracje"
 
-#: src/controller/controller_ui.py:781
+#: src/controller/controller_ui.py:836
 msgid "Controllers refreshed successfully"
 msgstr "Kontrolery odświeżone pomyślnie"
 
-#: src/controller/controller_modes.py:166
-#: src/controller/controller_modes.py:169
+#: src/controller/controller_modes.py:330
+#: src/controller/controller_modes.py:333
 msgid "on"
 msgstr "wł."
 
-#: src/controller/controller_modes.py:166
-#: src/controller/controller_modes.py:169
+#: src/controller/controller_modes.py:330
+#: src/controller/controller_modes.py:333
 msgid "off"
 msgstr "wył."
 
-#: src/controller/controller_modes.py:167
+#: src/controller/controller_modes.py:331
 msgid "Caps Lock"
 msgstr ""
 
-#: src/controller/controller_modes.py:170
+#: src/controller/controller_modes.py:334
 msgid "Shift"
 msgstr ""
 
-#: src/controller/controller_modes.py:172
+#: src/controller/controller_modes.py:336
 msgid "Space"
 msgstr "Spacja"
 
-#: src/controller/controller_modes.py:174
+#: src/controller/controller_modes.py:338
 msgid "Enter"
 msgstr "Enter"
 
-#: src/controller/controller_modes.py:279
+#: src/controller/controller_modes.py:542
 msgid "System mode"
 msgstr "Tryb systemowy"
 
-#: src/controller/controller_modes.py:280
+#: src/controller/controller_modes.py:543
 msgid "Controller mode"
 msgstr "Tryb kontrolera"
 
-#: src/controller/controller_modes.py:281
+#: src/controller/controller_modes.py:544
 msgid "Screen reader mode"
 msgstr "Czytnik ekranu"
 
-#: src/controller/controller_modes.py:282
+#: src/controller/controller_modes.py:545
 msgid "Screen keyboard mode"
 msgstr "Klawiatura ekranowa"
 
-#: src/controller/controller_modes.py:285
+#: src/controller/controller_modes.py:547
 msgid "Unknown mode"
 msgstr "Nieznany tryb"
 
-#: src/controller/controller_modes.py:524
+#: src/controller/controller_modes.py:824
 msgid "Exiting screen reader"
 msgstr "Wyłączanie czytnika ekranu"
 
-#: src/controller/controller_modes.py:560
-#, python-brace-format
-msgid "Typed {}"
-msgstr "Wpisano {}"
-
-#: src/controller/controller_modes.py:567
+#: src/controller/controller_modes.py:868
 msgid "Backspace"
 msgstr "Backspace"
+
+#~ msgid "Typed {}"
+#~ msgstr "Wpisano {}"
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:30+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -206,7 +206,7 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr ""
 
-#: src/system/system_monitor.py:610 src/titan_core/tce_system_net.py:1028
+#: src/system/system_monitor.py:737 src/titan_core/tce_system_net.py:1028
 #: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
 #, python-brace-format
 msgid "Connected to {}"
@@ -399,31 +399,39 @@ msgid ""
 "{}"
 msgstr "Error opening WiFi interface"
 
-#: src/system/system_monitor.py:267
+#: src/system/system_monitor.py:325
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr "Connected to power adapter, battery level is {}%"
 
-#: src/system/system_monitor.py:272
+#: src/system/system_monitor.py:330
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr "Power adapter disconnected, battery level is {}%"
 
-#: src/system/system_monitor.py:275
+#: src/system/system_monitor.py:333
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr "Charging battery, battery level {}%"
 
-#: src/system/system_monitor.py:278
+#: src/system/system_monitor.py:336
 msgid "Battery is fully charged"
 msgstr "Battery is fully charged"
 
-#: src/system/system_monitor.py:373
+#: src/system/system_monitor.py:399
+msgid "Low battery, please connect to charger"
+msgstr "Low battery, please connect to charger"
+
+#: src/system/system_monitor.py:404
+msgid "Critical battery level, connect to charger now!"
+msgstr "Critical battery level, connect to charger now!"
+
+#: src/system/system_monitor.py:500
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr "Volume: {}%"
 
-#: src/system/system_monitor.py:614
+#: src/system/system_monitor.py:741
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr "Disconnected from {}"

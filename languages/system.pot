@@ -1,4 +1,3 @@
-# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
 # Translations template for PROJECT.
 # Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
@@ -9,9 +8,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:30+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
@@ -198,7 +197,7 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr ""
 
-#: src/system/system_monitor.py:610 src/titan_core/tce_system_net.py:1028
+#: src/system/system_monitor.py:737 src/titan_core/tce_system_net.py:1028
 #: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
 #, python-brace-format
 msgid "Connected to {}"
@@ -382,31 +381,39 @@ msgid ""
 "{}"
 msgstr ""
 
-#: src/system/system_monitor.py:267
+#: src/system/system_monitor.py:325
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:272
+#: src/system/system_monitor.py:330
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:275
+#: src/system/system_monitor.py:333
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:278
+#: src/system/system_monitor.py:336
 msgid "Battery is fully charged"
 msgstr ""
 
-#: src/system/system_monitor.py:373
+#: src/system/system_monitor.py:399
+msgid "Low battery, please connect to charger"
+msgstr ""
+
+#: src/system/system_monitor.py:404
+msgid "Critical battery level, connect to charger now!"
+msgstr ""
+
+#: src/system/system_monitor.py:500
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:614
+#: src/system/system_monitor.py:741
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr ""

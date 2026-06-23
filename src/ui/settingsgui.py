@@ -1021,6 +1021,46 @@ class SettingsFrame(wx.Frame):
         self.monitor_charger_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.monitor_charger_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        # Low and critical battery alerts
+        self.monitor_battery_alerts_cb = wx.CheckBox(panel, label=_("Announce low and critical battery levels"))
+        self.monitor_battery_alerts_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.monitor_battery_alerts_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.monitor_battery_alerts_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        battery_low_label = wx.StaticText(panel, label=_("Low battery level:"))
+        vbox.Add(battery_low_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.battery_low_choice = wx.Choice(panel)
+        self.battery_low_options = ['10%', '15%', '20%', '25%', '30%']
+        self.battery_low_choice.AppendItems(self.battery_low_options)
+        self.battery_low_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.battery_low_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Low battery sound selection (previews the sound on selection)
+        battery_low_sound_label = wx.StaticText(panel, label=_("Low battery sound:"))
+        vbox.Add(battery_low_sound_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.battery_low_sound_list = wx.ListBox(panel)
+        # (value, display label, preview sound file)
+        self.battery_low_sound_options = [
+            ('random', _("Random"), None),
+            ('external', _("External"), 'system/low_battery1.ogg'),
+            ('internal', _("Internal"), 'system/low_battery2.ogg'),
+        ]
+        self.battery_low_sound_list.AppendItems([label for _v, label, _s in self.battery_low_sound_options])
+        self.battery_low_sound_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.battery_low_sound_list.Bind(wx.EVT_LISTBOX, self.OnBatteryLowSoundSelect)
+        vbox.Add(self.battery_low_sound_list, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        battery_critical_label = wx.StaticText(panel, label=_("Critical battery level:"))
+        vbox.Add(battery_critical_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.battery_critical_choice = wx.Choice(panel)
+        self.battery_critical_options = ['3%', '5%', '7%', '10%']
+        self.battery_critical_choice.AppendItems(self.battery_critical_options)
+        self.battery_critical_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.battery_critical_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
         panel.SetSizer(vbox)
 
     def InitWindowsPanel(self):
@@ -1497,6 +1537,29 @@ class SettingsFrame(wx.Frame):
         
         # Charger monitoring
         self.monitor_charger_cb.SetValue(str(system_monitor_settings.get('monitor_charger', 'True')).lower() in ['true', '1'])
+
+        # Low and critical battery alerts
+        self.monitor_battery_alerts_cb.SetValue(str(system_monitor_settings.get('monitor_battery_alerts', 'True')).lower() in ['true', '1'])
+
+        low_value = '{}%'.format(system_monitor_settings.get('battery_low_threshold', 20))
+        if low_value in self.battery_low_options:
+            self.battery_low_choice.SetSelection(self.battery_low_options.index(low_value))
+        else:
+            self.battery_low_choice.SetSelection(self.battery_low_options.index('20%'))
+
+        critical_value = '{}%'.format(system_monitor_settings.get('battery_critical_threshold', 5))
+        if critical_value in self.battery_critical_options:
+            self.battery_critical_choice.SetSelection(self.battery_critical_options.index(critical_value))
+        else:
+            self.battery_critical_choice.SetSelection(self.battery_critical_options.index('5%'))
+
+        # Low battery sound selection
+        low_sound_value = str(system_monitor_settings.get('battery_low_sound', 'random'))
+        low_sound_values = [v for v, _l, _s in self.battery_low_sound_options]
+        if low_sound_value in low_sound_values:
+            self.battery_low_sound_list.SetSelection(low_sound_values.index(low_sound_value))
+        else:
+            self.battery_low_sound_list.SetSelection(low_sound_values.index('random'))
 
         # Load stereo speech settings
         self.load_stereo_speech_settings()
@@ -2179,7 +2242,11 @@ class SettingsFrame(wx.Frame):
         self.settings['system_monitor'] = {
             'volume_monitor': volume_monitor_options[self.volume_monitor_choice.GetSelection()],
             'battery_announce_interval': battery_announce_options[self.battery_announce_choice.GetSelection()],
-            'monitor_charger': str(self.monitor_charger_cb.GetValue())
+            'monitor_charger': str(self.monitor_charger_cb.GetValue()),
+            'monitor_battery_alerts': str(self.monitor_battery_alerts_cb.GetValue()),
+            'battery_low_threshold': int(self.battery_low_options[self.battery_low_choice.GetSelection()].rstrip('%')),
+            'battery_critical_threshold': int(self.battery_critical_options[self.battery_critical_choice.GetSelection()].rstrip('%')),
+            'battery_low_sound': self.battery_low_sound_options[self.battery_low_sound_list.GetSelection()][0]
         }
 
         # Save stereo speech settings if enabled
@@ -2346,6 +2413,21 @@ class SettingsFrame(wx.Frame):
     def OnSelect(self, event):
         play_sound('core/SELECT.ogg')
         vibrate_selection()  # Add vibration for selections
+        event.Skip()
+
+    def OnBatteryLowSoundSelect(self, event):
+        """Preview the low battery sound when its list item is selected."""
+        try:
+            index = self.battery_low_sound_list.GetSelection()
+            if 0 <= index < len(self.battery_low_sound_options):
+                _value, _label, sound_file = self.battery_low_sound_options[index]
+                if sound_file is None:
+                    # "Random" entry: preview a random one of the two sounds
+                    import random
+                    sound_file = random.choice(['system/low_battery1.ogg', 'system/low_battery2.ogg'])
+                play_sound(sound_file)
+        except Exception as e:
+            print(f"Error previewing low battery sound: {e}")
         event.Skip()
 
     def OnCheckBox(self, event):

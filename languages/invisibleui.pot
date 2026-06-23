@@ -1,4 +1,3 @@
-# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
 # Translations template for PROJECT.
 # Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
@@ -9,574 +8,577 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:29+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/invisibleui.py:664 src/ui/invisibleui.py:1008
+#: src/ui/invisibleui.py:752 src/ui/invisibleui.py:1097
 msgid "slider"
 msgstr ""
 
-#: src/ui/invisibleui.py:665 src/ui/invisibleui.py:1014
-#: src/ui/invisibleui.py:1019 src/ui/invisibleui.py:1882
+#: src/ui/invisibleui.py:753 src/ui/invisibleui.py:1103
+#: src/ui/invisibleui.py:1108 src/ui/invisibleui.py:2053
 msgid "button"
 msgstr ""
 
-#: src/ui/invisibleui.py:666
+#: src/ui/invisibleui.py:754
 msgid "checkbox"
 msgstr ""
 
-#: src/ui/invisibleui.py:667
+#: src/ui/invisibleui.py:755
 msgid "list item"
 msgstr ""
 
-#: src/ui/invisibleui.py:1008
+#: src/ui/invisibleui.py:1097
 #, python-brace-format
 msgid "Volume {}%, {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1010 src/ui/invisibleui.py:1059
+#: src/ui/invisibleui.py:1099 src/ui/invisibleui.py:1148
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr ""
 
-#: src/ui/invisibleui.py:1014
+#: src/ui/invisibleui.py:1103
 #, python-brace-format
 msgid "Unmute, {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1016
+#: src/ui/invisibleui.py:1105
 msgid "Unmute"
 msgstr ""
 
-#: src/ui/invisibleui.py:1019
+#: src/ui/invisibleui.py:1108
 #, python-brace-format
 msgid "Mute, {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1021
+#: src/ui/invisibleui.py:1110
 msgid "Mute"
 msgstr ""
 
-#: src/ui/invisibleui.py:1067
+#: src/ui/invisibleui.py:1156
 msgid "Muted"
 msgstr ""
 
-#: src/ui/invisibleui.py:1070
+#: src/ui/invisibleui.py:1159
 msgid "Unmuted"
 msgstr ""
 
-#: src/ui/invisibleui.py:1151 src/ui/invisibleui.py:1411
-#: src/ui/invisibleui.py:1739 src/ui/invisibleui.py:1748
+#: src/ui/invisibleui.py:1251 src/ui/invisibleui.py:1531
+#: src/ui/invisibleui.py:1899 src/ui/invisibleui.py:1908
 msgid "Status Bar"
 msgstr ""
 
-#: src/ui/invisibleui.py:1207 src/ui/invisibleui.py:1218
-#: src/ui/invisibleui.py:1957 src/ui/invisibleui.py:2414
+#: src/ui/invisibleui.py:1320 src/ui/invisibleui.py:1331
+#: src/ui/invisibleui.py:2128 src/ui/invisibleui.py:2592
 msgid "No games"
 msgstr ""
 
-#: src/ui/invisibleui.py:1254 src/ui/invisibleui.py:1336
+#: src/ui/invisibleui.py:1367 src/ui/invisibleui.py:1449
 msgid "Component Manager"
 msgstr ""
 
-#: src/ui/invisibleui.py:1262
+#: src/ui/invisibleui.py:1375
 msgid "Component manager is not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:1272
+#: src/ui/invisibleui.py:1385
 msgid "Settings"
 msgstr ""
 
-#: src/ui/invisibleui.py:1338
+#: src/ui/invisibleui.py:1451
 msgid "Program settings"
 msgstr ""
 
-#: src/ui/invisibleui.py:1339
+#: src/ui/invisibleui.py:1452
 msgid "Help"
 msgstr ""
 
-#: src/ui/invisibleui.py:1340 src/ui/invisibleui.py:1990
+#: src/ui/invisibleui.py:1453 src/ui/invisibleui.py:2161
 msgid "Back to graphical interface"
 msgstr ""
 
-#: src/ui/invisibleui.py:1341 src/ui/invisibleui.py:1990
+#: src/ui/invisibleui.py:1454 src/ui/invisibleui.py:2161
 msgid "Exit"
 msgstr ""
 
-#: src/ui/invisibleui.py:1366 src/ui/invisibleui.py:2654
-#: src/ui/invisibleui.py:2735 src/ui/invisibleui.py:2770
-#: src/ui/invisibleui.py:2839 src/ui/invisibleui.py:3027
+#: src/ui/invisibleui.py:1479 src/ui/invisibleui.py:2832
+#: src/ui/invisibleui.py:2913 src/ui/invisibleui.py:2948
+#: src/ui/invisibleui.py:3017 src/ui/invisibleui.py:3205
 msgid "Telegram"
 msgstr ""
 
-#: src/ui/invisibleui.py:1369 src/ui/invisibleui.py:1889
-#: src/ui/invisibleui.py:2636
+#: src/ui/invisibleui.py:1482 src/ui/invisibleui.py:2060
+#: src/ui/invisibleui.py:2814
 msgid "Facebook Messenger"
 msgstr ""
 
-#: src/ui/invisibleui.py:1370 src/ui/invisibleui.py:1889
-#: src/ui/invisibleui.py:2638 src/ui/invisibleui.py:3773
+#: src/ui/invisibleui.py:1483 src/ui/invisibleui.py:2060
+#: src/ui/invisibleui.py:2816 src/ui/invisibleui.py:3960
 msgid "WhatsApp"
 msgstr ""
 
-#: src/ui/invisibleui.py:1371 src/ui/invisibleui.py:2640
+#: src/ui/invisibleui.py:1484 src/ui/invisibleui.py:2818
 msgid "Titan-Net (Beta)"
 msgstr ""
 
-#: src/ui/invisibleui.py:1372 src/ui/invisibleui.py:2642
-#: src/ui/invisibleui.py:4035
+#: src/ui/invisibleui.py:1485 src/ui/invisibleui.py:2820
+#: src/ui/invisibleui.py:4222
 msgid "EltenLink (Beta)"
 msgstr ""
 
-#: src/ui/invisibleui.py:1381 src/ui/invisibleui.py:2631
-#: src/ui/invisibleui.py:2632
+#: src/ui/invisibleui.py:1501 src/ui/invisibleui.py:2809
+#: src/ui/invisibleui.py:2810
 msgid "No IM clients available"
 msgstr ""
 
-#: src/ui/invisibleui.py:1395 src/ui/invisibleui.py:1957
+#: src/ui/invisibleui.py:1515 src/ui/invisibleui.py:2128
 msgid "No widgets found"
 msgstr ""
 
-#: src/ui/invisibleui.py:1403 src/ui/invisibleui.py:1459
+#: src/ui/invisibleui.py:1523 src/ui/invisibleui.py:1565
+#: src/ui/invisibleui.py:1608
 msgid "Applications"
 msgstr ""
 
-#: src/ui/invisibleui.py:1403 src/ui/invisibleui.py:1957
+#: src/ui/invisibleui.py:1523 src/ui/invisibleui.py:2128
 msgid "No applications"
 msgstr ""
 
-#: src/ui/invisibleui.py:1404 src/ui/invisibleui.py:1461
-#: src/ui/invisibleui.py:2433 src/ui/invisibleui.py:2504
+#: src/ui/invisibleui.py:1524 src/ui/invisibleui.py:1567
+#: src/ui/invisibleui.py:1610 src/ui/invisibleui.py:2611
+#: src/ui/invisibleui.py:2682
 msgid "Games"
 msgstr ""
 
-#: src/ui/invisibleui.py:1409 src/ui/invisibleui.py:1878
-#: src/ui/invisibleui.py:1999
+#: src/ui/invisibleui.py:1529 src/ui/invisibleui.py:2049
+#: src/ui/invisibleui.py:2170
 msgid "Widgets"
 msgstr ""
 
-#: src/ui/invisibleui.py:1410 src/ui/invisibleui.py:1888
+#: src/ui/invisibleui.py:1530 src/ui/invisibleui.py:1569
+#: src/ui/invisibleui.py:2059
 msgid "Titan IM"
 msgstr ""
 
-#: src/ui/invisibleui.py:1412
+#: src/ui/invisibleui.py:1532
 msgid "Menu"
 msgstr ""
 
-#: src/ui/invisibleui.py:1426
+#: src/ui/invisibleui.py:1546
 msgid "Components"
 msgstr ""
 
-#: src/ui/invisibleui.py:1426
+#: src/ui/invisibleui.py:1546
 msgid "Component not found"
 msgstr ""
 
-#: src/ui/invisibleui.py:1519 src/ui/invisibleui.py:1546
+#: src/ui/invisibleui.py:1670 src/ui/invisibleui.py:1697
 #, python-brace-format
 msgid "Error loading widget: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1569
+#: src/ui/invisibleui.py:1725
 #, python-brace-format
 msgid "Clock: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1572
+#: src/ui/invisibleui.py:1729
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1573
+#: src/ui/invisibleui.py:1731
 #, python-brace-format
 msgid "Volume: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1588
+#: src/ui/invisibleui.py:1754
 msgid "No status bar data"
 msgstr ""
 
-#: src/ui/invisibleui.py:1875
+#: src/ui/invisibleui.py:2046
 #, python-brace-format
 msgid "{} of {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:1882
+#: src/ui/invisibleui.py:2053
 msgid "widget"
 msgstr ""
 
-#: src/ui/invisibleui.py:1890
+#: src/ui/invisibleui.py:2061
 msgid "web application"
 msgstr ""
 
-#: src/ui/invisibleui.py:1931
+#: src/ui/invisibleui.py:2102
 msgid "Widget activation error"
 msgstr ""
 
-#: src/ui/invisibleui.py:1957 src/ui/invisibleui.py:1958
-#: src/ui/invisibleui.py:2836 src/ui/invisibleui.py:2867
-#: src/ui/invisibleui.py:2877
+#: src/ui/invisibleui.py:2128 src/ui/invisibleui.py:2129
+#: src/ui/invisibleui.py:3014 src/ui/invisibleui.py:3045
+#: src/ui/invisibleui.py:3055
 msgid "Loading messages..."
 msgstr ""
 
-#: src/ui/invisibleui.py:1959 src/ui/invisibleui.py:2868
+#: src/ui/invisibleui.py:2130 src/ui/invisibleui.py:3046
 msgid "Messages are loading, please wait"
 msgstr ""
 
-#: src/ui/invisibleui.py:2010
+#: src/ui/invisibleui.py:2181
 msgid "Error during activation"
 msgstr ""
 
-#: src/ui/invisibleui.py:2017
+#: src/ui/invisibleui.py:2188
 msgid "Activation error"
 msgstr ""
 
-#: src/ui/invisibleui.py:2034 src/ui/invisibleui.py:2045
-#: src/ui/invisibleui.py:2055
+#: src/ui/invisibleui.py:2205 src/ui/invisibleui.py:2216
+#: src/ui/invisibleui.py:2226
 msgid "Error activating widget"
 msgstr ""
 
-#: src/ui/invisibleui.py:2050
+#: src/ui/invisibleui.py:2221
 #, python-brace-format
 msgid "Invalid widget type: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2105
+#: src/ui/invisibleui.py:2276
 msgid "Unknown element"
 msgstr ""
 
-#: src/ui/invisibleui.py:2111 src/ui/invisibleui.py:2119
+#: src/ui/invisibleui.py:2282 src/ui/invisibleui.py:2290
 msgid "In widget"
 msgstr ""
 
-#: src/ui/invisibleui.py:2119
+#: src/ui/invisibleui.py:2290
 msgid "Error getting element"
 msgstr ""
 
-#: src/ui/invisibleui.py:2200
+#: src/ui/invisibleui.py:2371
 msgid "Error entering widget mode"
 msgstr ""
 
-#: src/ui/invisibleui.py:2244
+#: src/ui/invisibleui.py:2415
 msgid "Out of widget"
 msgstr ""
 
-#: src/ui/invisibleui.py:2389
+#: src/ui/invisibleui.py:2567
 #, python-brace-format
 msgid "Application not found: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2408
+#: src/ui/invisibleui.py:2586
 #, python-brace-format
 msgid "Game not found: {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2419 src/ui/invisibleui.py:2424
+#: src/ui/invisibleui.py:2597 src/ui/invisibleui.py:2602
 msgid "Platform not found"
 msgstr ""
 
-#: src/ui/invisibleui.py:2439
+#: src/ui/invisibleui.py:2617
 msgid "Games category not found"
 msgstr ""
 
-#: src/ui/invisibleui.py:2444 src/ui/invisibleui.py:2458
-#: src/ui/invisibleui.py:2469 src/ui/invisibleui.py:2674
-#: src/ui/invisibleui.py:2699 src/ui/invisibleui.py:2739
-#: src/ui/invisibleui.py:2774 src/ui/invisibleui.py:2789
-#: src/ui/invisibleui.py:2798 src/ui/invisibleui.py:2836
-#: src/ui/invisibleui.py:2861 src/ui/invisibleui.py:2877
-#: src/ui/invisibleui.py:3028 src/ui/invisibleui.py:3092
+#: src/ui/invisibleui.py:2622 src/ui/invisibleui.py:2636
+#: src/ui/invisibleui.py:2647 src/ui/invisibleui.py:2852
+#: src/ui/invisibleui.py:2877 src/ui/invisibleui.py:2917
+#: src/ui/invisibleui.py:2952 src/ui/invisibleui.py:2967
+#: src/ui/invisibleui.py:2976 src/ui/invisibleui.py:3014
+#: src/ui/invisibleui.py:3039 src/ui/invisibleui.py:3055
+#: src/ui/invisibleui.py:3206 src/ui/invisibleui.py:3270
 msgid "Back"
 msgstr ""
 
-#: src/ui/invisibleui.py:2464
+#: src/ui/invisibleui.py:2642
 msgid "Error expanding platform"
 msgstr ""
 
-#: src/ui/invisibleui.py:2476
+#: src/ui/invisibleui.py:2654
 msgid "Error"
 msgstr ""
 
-#: src/ui/invisibleui.py:2492 src/ui/invisibleui.py:2510
+#: src/ui/invisibleui.py:2670 src/ui/invisibleui.py:2688
 msgid "Error returning"
 msgstr ""
 
-#: src/ui/invisibleui.py:2514
+#: src/ui/invisibleui.py:2692
 msgid "Clock:"
 msgstr ""
 
-#: src/ui/invisibleui.py:2515
+#: src/ui/invisibleui.py:2693
 msgid "Battery level:"
 msgstr ""
 
-#: src/ui/invisibleui.py:2516 src/ui/invisibleui.py:2520
+#: src/ui/invisibleui.py:2694 src/ui/invisibleui.py:2698
 msgid "Volume:"
 msgstr ""
 
-#: src/ui/invisibleui.py:2557
+#: src/ui/invisibleui.py:2735
 msgid "No action for this item"
 msgstr ""
 
-#: src/ui/invisibleui.py:2562
+#: src/ui/invisibleui.py:2740
 msgid "Volume Panel"
 msgstr ""
 
-#: src/ui/invisibleui.py:2603
+#: src/ui/invisibleui.py:2781
 msgid "Exiting volume panel"
 msgstr ""
 
-#: src/ui/invisibleui.py:2621
+#: src/ui/invisibleui.py:2799
 msgid "Exiting WiFi manager, returning to Titan UI"
 msgstr ""
 
-#: src/ui/invisibleui.py:2640 src/ui/invisibleui.py:3907
-#: src/ui/invisibleui.py:3946
+#: src/ui/invisibleui.py:2818 src/ui/invisibleui.py:4094
+#: src/ui/invisibleui.py:4133
 msgid "Titan-Net"
 msgstr ""
 
-#: src/ui/invisibleui.py:2666
+#: src/ui/invisibleui.py:2844
 #, python-brace-format
 msgid "Error checking connection to {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2670
+#: src/ui/invisibleui.py:2848
 #, python-brace-format
 msgid "Not connected to {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2674 src/ui/invisibleui.py:2711
-#: src/ui/invisibleui.py:3028
+#: src/ui/invisibleui.py:2852 src/ui/invisibleui.py:2889
+#: src/ui/invisibleui.py:3206
 msgid "Contacts"
 msgstr ""
 
-#: src/ui/invisibleui.py:2674 src/ui/invisibleui.py:2713
-#: src/ui/invisibleui.py:3028
+#: src/ui/invisibleui.py:2852 src/ui/invisibleui.py:2891
+#: src/ui/invisibleui.py:3206
 msgid "Groups"
 msgstr ""
 
-#: src/ui/invisibleui.py:2678 src/ui/invisibleui.py:3031
+#: src/ui/invisibleui.py:2856 src/ui/invisibleui.py:3209
 #, python-brace-format
 msgid "{} Menu"
 msgstr ""
 
-#: src/ui/invisibleui.py:2728 src/ui/invisibleui.py:2789
+#: src/ui/invisibleui.py:2906 src/ui/invisibleui.py:2967
 msgid "No contacts"
 msgstr ""
 
-#: src/ui/invisibleui.py:2735 src/ui/invisibleui.py:2770
-#: src/ui/invisibleui.py:2839 src/ui/invisibleui.py:3027
-#: src/ui/invisibleui.py:3654
+#: src/ui/invisibleui.py:2913 src/ui/invisibleui.py:2948
+#: src/ui/invisibleui.py:3017 src/ui/invisibleui.py:3205
+#: src/ui/invisibleui.py:3841
 msgid "Messenger"
 msgstr ""
 
-#: src/ui/invisibleui.py:2737
+#: src/ui/invisibleui.py:2915
 #, python-brace-format
 msgid "{} Contacts"
 msgstr ""
 
-#: src/ui/invisibleui.py:2750
+#: src/ui/invisibleui.py:2928
 msgid "contacts"
 msgstr ""
 
-#: src/ui/invisibleui.py:2763 src/ui/invisibleui.py:2798
+#: src/ui/invisibleui.py:2941 src/ui/invisibleui.py:2976
 msgid "No groups"
 msgstr ""
 
-#: src/ui/invisibleui.py:2772
+#: src/ui/invisibleui.py:2950
 #, python-brace-format
 msgid "{} Groups"
 msgstr ""
 
-#: src/ui/invisibleui.py:2785
+#: src/ui/invisibleui.py:2963
 msgid "groups"
 msgstr ""
 
-#: src/ui/invisibleui.py:2836 src/ui/invisibleui.py:2870
-#: src/ui/invisibleui.py:2877 src/ui/invisibleui.py:3092
+#: src/ui/invisibleui.py:3014 src/ui/invisibleui.py:3048
+#: src/ui/invisibleui.py:3055 src/ui/invisibleui.py:3270
 msgid "Refresh"
 msgstr ""
 
-#: src/ui/invisibleui.py:2836 src/ui/invisibleui.py:2864
-#: src/ui/invisibleui.py:2877 src/ui/invisibleui.py:3092
+#: src/ui/invisibleui.py:3014 src/ui/invisibleui.py:3042
+#: src/ui/invisibleui.py:3055 src/ui/invisibleui.py:3270
 msgid "Send message"
 msgstr ""
 
-#: src/ui/invisibleui.py:2838
+#: src/ui/invisibleui.py:3016
 msgid "Group"
 msgstr ""
 
-#: src/ui/invisibleui.py:2838
+#: src/ui/invisibleui.py:3016
 msgid "Contact"
 msgstr ""
 
-#: src/ui/invisibleui.py:2842
+#: src/ui/invisibleui.py:3020
 #, python-brace-format
 msgid "{} {} - {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:2876
+#: src/ui/invisibleui.py:3054
 msgid "Refreshing messages..."
 msgstr ""
 
-#: src/ui/invisibleui.py:2914 src/ui/invisibleui.py:2922
+#: src/ui/invisibleui.py:3092 src/ui/invisibleui.py:3100
 msgid "Playing voice message"
 msgstr ""
 
-#: src/ui/invisibleui.py:2917
+#: src/ui/invisibleui.py:3095
 msgid "Voice message paused"
 msgstr ""
 
-#: src/ui/invisibleui.py:2925
+#: src/ui/invisibleui.py:3103
 msgid "Error playing voice message"
 msgstr ""
 
-#: src/ui/invisibleui.py:2927
+#: src/ui/invisibleui.py:3105
 msgid "No voice message selected"
 msgstr ""
 
-#: src/ui/invisibleui.py:2991
+#: src/ui/invisibleui.py:3169
 #, python-brace-format
 msgid "Enter message to send to {}:"
 msgstr ""
 
-#: src/ui/invisibleui.py:2992
+#: src/ui/invisibleui.py:3170
 msgid "Send Message"
 msgstr ""
 
-#: src/ui/invisibleui.py:3021
+#: src/ui/invisibleui.py:3199
 #, python-brace-format
 msgid "Message sent to {}"
 msgstr ""
 
-#: src/ui/invisibleui.py:3023
+#: src/ui/invisibleui.py:3201
 msgid "Failed to send message"
 msgstr ""
 
-#: src/ui/invisibleui.py:3077
+#: src/ui/invisibleui.py:3255
 msgid "Voice message"
 msgstr ""
 
-#: src/ui/invisibleui.py:3097
+#: src/ui/invisibleui.py:3275
 #, python-brace-format
 msgid "Chat history loaded, {} messages"
 msgstr ""
 
-#: src/ui/invisibleui.py:3099
+#: src/ui/invisibleui.py:3277
 msgid "No messages in chat history"
 msgstr ""
 
-#: src/ui/invisibleui.py:3127
+#: src/ui/invisibleui.py:3305
 msgid "Invisible interface active"
 msgstr ""
 
-#: src/ui/invisibleui.py:3591
+#: src/ui/invisibleui.py:3778
 msgid "Titan UI on"
 msgstr ""
 
-#: src/ui/invisibleui.py:3594
+#: src/ui/invisibleui.py:3781
 msgid "Titan UI off"
 msgstr ""
 
-#: src/ui/invisibleui.py:3621
+#: src/ui/invisibleui.py:3808
 msgid "Cannot open Messenger - application not ready"
 msgstr ""
 
-#: src/ui/invisibleui.py:3652
+#: src/ui/invisibleui.py:3839
 msgid "Messenger, web application"
 msgstr ""
 
-#: src/ui/invisibleui.py:3666 src/ui/invisibleui.py:3677
-#: src/ui/invisibleui.py:3687
+#: src/ui/invisibleui.py:3853 src/ui/invisibleui.py:3864
+#: src/ui/invisibleui.py:3874
 msgid "Error opening Messenger WebView"
 msgstr ""
 
-#: src/ui/invisibleui.py:3681
+#: src/ui/invisibleui.py:3868
 msgid "Messenger WebView not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:3706
+#: src/ui/invisibleui.py:3893
 msgid ""
 "WiFi functionality requires pywifi library. Install with: pip install "
 "pywifi"
 msgstr ""
 
-#: src/ui/invisibleui.py:3711 src/ui/invisibleui.py:3730
+#: src/ui/invisibleui.py:3898 src/ui/invisibleui.py:3917
 msgid "WiFi Manager"
 msgstr ""
 
-#: src/ui/invisibleui.py:3716
+#: src/ui/invisibleui.py:3903
 msgid "Error opening WiFi interface"
 msgstr ""
 
-#: src/ui/invisibleui.py:3740
+#: src/ui/invisibleui.py:3927
 msgid "Cannot open WhatsApp - application not ready"
 msgstr ""
 
-#: src/ui/invisibleui.py:3771
+#: src/ui/invisibleui.py:3958
 msgid "WhatsApp, web application"
 msgstr ""
 
-#: src/ui/invisibleui.py:3785 src/ui/invisibleui.py:3796
-#: src/ui/invisibleui.py:3806
+#: src/ui/invisibleui.py:3972 src/ui/invisibleui.py:3983
+#: src/ui/invisibleui.py:3993
 msgid "Error opening WhatsApp WebView"
 msgstr ""
 
-#: src/ui/invisibleui.py:3800
+#: src/ui/invisibleui.py:3987
 msgid "WhatsApp WebView not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:3815
+#: src/ui/invisibleui.py:4002
 msgid "Cannot open Titan-Net - application not ready"
 msgstr ""
 
-#: src/ui/invisibleui.py:3820 src/ui/invisibleui.py:3852
+#: src/ui/invisibleui.py:4007 src/ui/invisibleui.py:4039
 msgid "Titan-Net client not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:3905 src/ui/invisibleui.py:3944
+#: src/ui/invisibleui.py:4092 src/ui/invisibleui.py:4131
 msgid "Titan-Net, application"
 msgstr ""
 
-#: src/ui/invisibleui.py:3953
+#: src/ui/invisibleui.py:4140
 msgid "Offline mode selected"
 msgstr ""
 
-#: src/ui/invisibleui.py:3956 src/ui/invisibleui.py:4041
+#: src/ui/invisibleui.py:4143 src/ui/invisibleui.py:4228
 msgid "Login cancelled"
 msgstr ""
 
-#: src/ui/invisibleui.py:3966 src/ui/invisibleui.py:3977
-#: src/ui/invisibleui.py:3991
+#: src/ui/invisibleui.py:4153 src/ui/invisibleui.py:4164
+#: src/ui/invisibleui.py:4178
 msgid "Error opening Titan-Net"
 msgstr ""
 
-#: src/ui/invisibleui.py:3983
+#: src/ui/invisibleui.py:4170
 msgid "Titan-Net not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:4000
+#: src/ui/invisibleui.py:4187
 msgid "Cannot open EltenLink (Beta) - application not ready"
 msgstr ""
 
-#: src/ui/invisibleui.py:4033
+#: src/ui/invisibleui.py:4220
 msgid "EltenLink (Beta), application"
 msgstr ""
 
-#: src/ui/invisibleui.py:4050 src/ui/invisibleui.py:4061
-#: src/ui/invisibleui.py:4075
+#: src/ui/invisibleui.py:4237 src/ui/invisibleui.py:4248
+#: src/ui/invisibleui.py:4262
 msgid "Error opening EltenLink (Beta)"
 msgstr ""
 
-#: src/ui/invisibleui.py:4067
+#: src/ui/invisibleui.py:4254
 msgid "EltenLink (Beta) not available"
 msgstr ""
 
-#: src/ui/invisibleui.py:4087
+#: src/ui/invisibleui.py:4274
 msgid "Menu Start"
 msgstr ""
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:30+0200\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -134,11 +134,11 @@ msgstr "zaznaczone"
 msgid "unchecked"
 msgstr "niezaznaczone"
 
-#: src/accessibility/messages.py:418
+#: src/accessibility/messages.py:422
 msgid "Fn keys enabled"
 msgstr "Klawisze Fn włączone"
 
-#: src/accessibility/messages.py:431
+#: src/accessibility/messages.py:435
 msgid "Fn keys disabled"
 msgstr "Klawisze Fn wyłączone"
 

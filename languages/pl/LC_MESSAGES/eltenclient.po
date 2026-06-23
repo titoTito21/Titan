@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TCE Launcher\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:30+0200\n"
 "PO-Revision-Date: 2026-02-08 15:00+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -35,9 +35,9 @@ msgid "Permission denied"
 msgstr "Brak uprawnień"
 
 #: src/eltenlink_client/elten_client.py:39
-#: src/eltenlink_client/elten_client.py:630
-#: src/eltenlink_client/elten_client.py:1431
-#: src/eltenlink_client/elten_gui.py:3453
+#: src/eltenlink_client/elten_client.py:637
+#: src/eltenlink_client/elten_client.py:1460
+#: src/eltenlink_client/elten_gui.py:3481
 msgid "User not found"
 msgstr "Nie znaleziono użytkownika"
 
@@ -48,12 +48,12 @@ msgid "Two-factor authentication required"
 msgstr "Wymagana autoryzacja dwuskładnikowa"
 
 #: src/eltenlink_client/elten_client.py:41
-#: src/eltenlink_client/elten_client.py:1364
+#: src/eltenlink_client/elten_client.py:1393
 msgid "Incorrect old password"
 msgstr "Nieprawidłowe stare hasło"
 
 #: src/eltenlink_client/elten_client.py:42
-#: src/eltenlink_client/elten_client.py:1382
+#: src/eltenlink_client/elten_client.py:1411
 msgid "Email change not allowed"
 msgstr "Zmiana e-maila niedozwolona"
 
@@ -76,14 +76,14 @@ msgstr "Nie połączono"
 
 #: src/eltenlink_client/elten_client.py:193
 #: src/eltenlink_client/elten_client.py:208
-#: src/eltenlink_client/elten_client.py:608
-#: src/eltenlink_client/elten_client.py:1595
-#: src/eltenlink_client/elten_client.py:1626
-#: src/eltenlink_client/elten_client.py:1677
-#: src/eltenlink_client/elten_client.py:1708
-#: src/eltenlink_client/elten_client.py:1739
-#: src/eltenlink_client/elten_client.py:1790
-#: src/eltenlink_client/elten_client.py:1828
+#: src/eltenlink_client/elten_client.py:615
+#: src/eltenlink_client/elten_client.py:1624
+#: src/eltenlink_client/elten_client.py:1655
+#: src/eltenlink_client/elten_client.py:1706
+#: src/eltenlink_client/elten_client.py:1737
+#: src/eltenlink_client/elten_client.py:1768
+#: src/eltenlink_client/elten_client.py:1819
+#: src/eltenlink_client/elten_client.py:1857
 msgid "Token refresh failed"
 msgstr "Odświeżenie tokenu nie powiodło się"
 
@@ -92,177 +92,177 @@ msgstr "Odświeżenie tokenu nie powiodło się"
 msgid "Empty response from server"
 msgstr "Pusta odpowiedź z serwera"
 
-#: src/eltenlink_client/elten_client.py:334
+#: src/eltenlink_client/elten_client.py:341
 msgid "Login successful"
 msgstr "Logowanie pomyślne"
 
-#: src/eltenlink_client/elten_client.py:356
+#: src/eltenlink_client/elten_client.py:363
 msgid "Invalid code"
 msgstr "Nieprawidłowy kod"
 
-#: src/eltenlink_client/elten_client.py:358
+#: src/eltenlink_client/elten_client.py:365
 msgid "Authentication record not found"
 msgstr "Nie znaleziono rekordu autoryzacji"
 
-#: src/eltenlink_client/elten_client.py:437
+#: src/eltenlink_client/elten_client.py:444
 msgid "Account created successfully"
 msgstr "Konto utworzone pomyślnie"
 
-#: src/eltenlink_client/elten_client.py:439
+#: src/eltenlink_client/elten_client.py:446
 msgid "Username already exists or is invalid"
 msgstr "Nazwa użytkownika już istnieje lub jest nieprawidłowa"
 
-#: src/eltenlink_client/elten_client.py:626
-#: src/eltenlink_client/elten_gui.py:3935
+#: src/eltenlink_client/elten_client.py:633
+#: src/eltenlink_client/elten_gui.py:3963
 msgid "Message sent"
 msgstr "Wiadomość wysłana"
 
-#: src/eltenlink_client/elten_client.py:628
+#: src/eltenlink_client/elten_client.py:635
 msgid "User has blocked you"
 msgstr "Użytkownik cię zablokował"
 
-#: src/eltenlink_client/elten_client.py:709
-#: src/eltenlink_client/elten_gui.py:2812
+#: src/eltenlink_client/elten_client.py:738
+#: src/eltenlink_client/elten_gui.py:2840
 msgid "Contact added"
 msgstr "Kontakt dodany"
 
-#: src/eltenlink_client/elten_client.py:711
+#: src/eltenlink_client/elten_client.py:740
 msgid "Already in contacts"
 msgstr "Już w kontaktach"
 
-#: src/eltenlink_client/elten_client.py:721
-#: src/eltenlink_client/elten_gui.py:2798
+#: src/eltenlink_client/elten_client.py:750
+#: src/eltenlink_client/elten_gui.py:2826
 msgid "Contact removed"
 msgstr "Kontakt usunięty"
 
-#: src/eltenlink_client/elten_client.py:1331
-#: src/eltenlink_client/elten_gui.py:3458
+#: src/eltenlink_client/elten_client.py:1360
+#: src/eltenlink_client/elten_gui.py:3486
 msgid "Username"
 msgstr "Nazwa użytkownika"
 
-#: src/eltenlink_client/elten_client.py:1332
+#: src/eltenlink_client/elten_client.py:1361
 msgid "Registration date"
 msgstr "Data rejestracji"
 
-#: src/eltenlink_client/elten_client.py:1333
+#: src/eltenlink_client/elten_client.py:1362
 msgid "Elten version"
 msgstr "Wersja Eltena"
 
-#: src/eltenlink_client/elten_client.py:1334
-#: src/eltenlink_client/elten_gui.py:3466
+#: src/eltenlink_client/elten_client.py:1363
+#: src/eltenlink_client/elten_gui.py:3494
 msgid "Forum posts"
 msgstr "Posty na forum"
 
-#: src/eltenlink_client/elten_client.py:1335
-#: src/eltenlink_client/elten_gui.py:1219
-#: src/eltenlink_client/elten_gui.py:1625
-#: src/eltenlink_client/elten_gui.py:3468
-#: src/eltenlink_client/elten_gui.py:3522
+#: src/eltenlink_client/elten_client.py:1364
+#: src/eltenlink_client/elten_gui.py:1247
+#: src/eltenlink_client/elten_gui.py:1653
+#: src/eltenlink_client/elten_gui.py:3496
+#: src/eltenlink_client/elten_gui.py:3550
 msgid "Contacts"
 msgstr "Kontakty"
 
-#: src/eltenlink_client/elten_client.py:1336
+#: src/eltenlink_client/elten_client.py:1365
 msgid "Known by"
 msgstr "Znany przez"
 
-#: src/eltenlink_client/elten_client.py:1345
+#: src/eltenlink_client/elten_client.py:1374
 msgid "Email"
 msgstr "E-mail"
 
 #: src/eltenlink_client/accountmanagement.py:779
-#: src/eltenlink_client/elten_client.py:1362
+#: src/eltenlink_client/elten_client.py:1391
 msgid "Password changed successfully"
 msgstr "Hasło zmienione pomyślnie"
 
 #: src/eltenlink_client/accountmanagement.py:829
-#: src/eltenlink_client/elten_client.py:1378
+#: src/eltenlink_client/elten_client.py:1407
 msgid "Email changed successfully"
 msgstr "E-mail zmieniony pomyślnie"
 
-#: src/eltenlink_client/elten_client.py:1380
-#: src/eltenlink_client/elten_client.py:1547
+#: src/eltenlink_client/elten_client.py:1409
+#: src/eltenlink_client/elten_client.py:1576
 msgid "Incorrect password"
 msgstr "Nieprawidłowe hasło"
 
 # ---- API Error Messages (elten_client.py) ----
-#: src/eltenlink_client/elten_client.py:1425
+#: src/eltenlink_client/elten_client.py:1454
 msgid "User added to blacklist"
 msgstr "Użytkownik dodany na czarną listę"
 
-#: src/eltenlink_client/elten_client.py:1427
+#: src/eltenlink_client/elten_client.py:1456
 msgid "You cannot add an administrator to the blacklist"
 msgstr "Nie możesz dodać administratora na czarną listę"
 
-#: src/eltenlink_client/elten_client.py:1429
+#: src/eltenlink_client/elten_client.py:1458
 msgid "This user is already on your blacklist"
 msgstr "Ten użytkownik jest już na twojej czarnej liście"
 
-#: src/eltenlink_client/elten_client.py:1440
+#: src/eltenlink_client/elten_client.py:1469
 msgid "User removed from blacklist"
 msgstr "Użytkownik usunięty z czarnej listy"
 
-#: src/eltenlink_client/elten_client.py:1508
+#: src/eltenlink_client/elten_client.py:1537
 msgid "Two-factor authentication enabled"
 msgstr "Autoryzacja dwuskładnikowa włączona"
 
-#: src/eltenlink_client/elten_client.py:1510
-#: src/eltenlink_client/elten_client.py:1523
+#: src/eltenlink_client/elten_client.py:1539
+#: src/eltenlink_client/elten_client.py:1552
 msgid "Invalid password"
 msgstr "Nieprawidłowe hasło"
 
-#: src/eltenlink_client/elten_client.py:1521
+#: src/eltenlink_client/elten_client.py:1550
 msgid "Two-factor authentication disabled"
 msgstr "Autoryzacja dwuskładnikowa wyłączona"
 
-#: src/eltenlink_client/elten_client.py:1545
+#: src/eltenlink_client/elten_client.py:1574
 msgid "Account archived"
 msgstr "Konto zarchiwizowane"
 
-#: src/eltenlink_client/elten_client.py:1611
-#: src/eltenlink_client/elten_client.py:1722
-#: src/eltenlink_client/elten_gui.py:1525
-#: src/eltenlink_client/elten_gui.py:3958
+#: src/eltenlink_client/elten_client.py:1640
+#: src/eltenlink_client/elten_client.py:1751
+#: src/eltenlink_client/elten_gui.py:1553
+#: src/eltenlink_client/elten_gui.py:3986
 msgid "Reply posted"
 msgstr "Odpowiedź opublikowana"
 
-#: src/eltenlink_client/elten_client.py:1659
-#: src/eltenlink_client/elten_client.py:1693
-#: src/eltenlink_client/elten_gui.py:3100
-#: src/eltenlink_client/elten_gui.py:3123
-#: src/eltenlink_client/elten_gui.py:3177
-#: src/eltenlink_client/elten_gui.py:3194
+#: src/eltenlink_client/elten_client.py:1688
+#: src/eltenlink_client/elten_client.py:1722
+#: src/eltenlink_client/elten_gui.py:3128
+#: src/eltenlink_client/elten_gui.py:3151
+#: src/eltenlink_client/elten_gui.py:3205
+#: src/eltenlink_client/elten_gui.py:3222
 msgid "Thread created"
 msgstr "Wątek utworzony"
 
-#: src/eltenlink_client/elten_client.py:1768
-#: src/eltenlink_client/elten_client.py:1858
-#: src/eltenlink_client/elten_gui.py:3252
-#: src/eltenlink_client/elten_gui.py:3272
+#: src/eltenlink_client/elten_client.py:1797
+#: src/eltenlink_client/elten_client.py:1887
+#: src/eltenlink_client/elten_gui.py:3280
+#: src/eltenlink_client/elten_gui.py:3300
 msgid "Blog post created"
 msgstr "Wpis na blogu utworzony"
 
-#: src/eltenlink_client/elten_client.py:1816
-#: src/eltenlink_client/elten_gui.py:4009
+#: src/eltenlink_client/elten_client.py:1845
+#: src/eltenlink_client/elten_gui.py:4037
 msgid "Comment posted"
 msgstr "Komentarz opublikowany"
 
-#: src/eltenlink_client/elten_client.py:1877
-#: src/eltenlink_client/elten_gui.py:3301
+#: src/eltenlink_client/elten_client.py:1906
+#: src/eltenlink_client/elten_gui.py:3329
 msgid "Category created"
 msgstr "Kategoria utworzona"
 
-#: src/eltenlink_client/elten_client.py:1897
-#: src/eltenlink_client/elten_gui.py:3363
+#: src/eltenlink_client/elten_client.py:1926
+#: src/eltenlink_client/elten_gui.py:3391
 msgid "Category renamed"
 msgstr "Nazwa kategorii zmieniona"
 
-#: src/eltenlink_client/elten_client.py:1916
-#: src/eltenlink_client/elten_gui.py:3381
+#: src/eltenlink_client/elten_client.py:1945
+#: src/eltenlink_client/elten_gui.py:3409
 msgid "Category deleted"
 msgstr "Kategoria usunięta"
 
-#: src/eltenlink_client/elten_client.py:2160
-#: src/eltenlink_client/elten_gui.py:1545
+#: src/eltenlink_client/elten_client.py:2189
+#: src/eltenlink_client/elten_gui.py:1573
 msgid "Post published"
 msgstr "Wpis opublikowany"
 
@@ -299,9 +299,9 @@ msgstr "Połącz"
 #: src/eltenlink_client/accountmanagement.py:803
 #: src/eltenlink_client/accountmanagement.py:912
 #: src/eltenlink_client/accountmanagement.py:1280
-#: src/eltenlink_client/elten_gui.py:207 src/eltenlink_client/elten_gui.py:3674
-#: src/eltenlink_client/elten_gui.py:3800
-#: src/eltenlink_client/elten_gui.py:4343
+#: src/eltenlink_client/elten_gui.py:207 src/eltenlink_client/elten_gui.py:3702
+#: src/eltenlink_client/elten_gui.py:3828
+#: src/eltenlink_client/elten_gui.py:4371
 msgid "Cancel"
 msgstr "Anuluj"
 
@@ -414,106 +414,106 @@ msgstr "Połączono"
 msgid "Menu"
 msgstr "Menu"
 
-#: src/eltenlink_client/elten_gui.py:486
+#: src/eltenlink_client/elten_gui.py:514
 msgid "Nick"
 msgstr "Nick"
 
-#: src/eltenlink_client/elten_gui.py:487 src/eltenlink_client/elten_gui.py:3684
-#: src/eltenlink_client/elten_gui.py:3916
+#: src/eltenlink_client/elten_gui.py:515 src/eltenlink_client/elten_gui.py:3712
+#: src/eltenlink_client/elten_gui.py:3944
 msgid "Message"
 msgstr "Wiadomość"
 
-#: src/eltenlink_client/elten_gui.py:488
+#: src/eltenlink_client/elten_gui.py:516
 msgid "Date"
 msgstr "Data"
 
-#: src/eltenlink_client/elten_gui.py:504 src/eltenlink_client/elten_gui.py:1716
+#: src/eltenlink_client/elten_gui.py:532 src/eltenlink_client/elten_gui.py:1744
 msgid "Message:"
 msgstr "Wiadomość:"
 
-#: src/eltenlink_client/elten_gui.py:515 src/eltenlink_client/elten_gui.py:3799
+#: src/eltenlink_client/elten_gui.py:543 src/eltenlink_client/elten_gui.py:3827
 msgid "Send"
 msgstr "Wyślij"
 
 # ---- Player ----
-#: src/eltenlink_client/elten_gui.py:520
+#: src/eltenlink_client/elten_gui.py:548
 msgid "Audio reply"
 msgstr "Odpowiedź głosowa"
 
-#: src/eltenlink_client/elten_gui.py:529
+#: src/eltenlink_client/elten_gui.py:557
 msgid "Back"
 msgstr "Wstecz"
 
 # ---- Menu Bar ----
-#: src/eltenlink_client/elten_gui.py:661
+#: src/eltenlink_client/elten_gui.py:689
 msgid "Refresh\tF5"
 msgstr "Odśwież\tF5"
 
-#: src/eltenlink_client/elten_gui.py:664
+#: src/eltenlink_client/elten_gui.py:692
 msgid "New Message\tCtrl+N"
 msgstr "Nowa wiadomość\tCtrl+N"
 
-#: src/eltenlink_client/elten_gui.py:667
+#: src/eltenlink_client/elten_gui.py:695
 msgid "Disconnect\tCtrl+Q"
 msgstr "Rozłącz\tCtrl+Q"
 
-#: src/eltenlink_client/elten_gui.py:669
+#: src/eltenlink_client/elten_gui.py:697
 msgid "File"
 msgstr "Plik"
 
-#: src/eltenlink_client/elten_gui.py:673
+#: src/eltenlink_client/elten_gui.py:701
 msgid "Menu\tCtrl+H"
 msgstr "Menu\tCtrl+H"
 
-#: src/eltenlink_client/elten_gui.py:675
+#: src/eltenlink_client/elten_gui.py:703
 msgid "Contacts\tCtrl+1"
 msgstr "Kontakty\tCtrl+1"
 
-#: src/eltenlink_client/elten_gui.py:677
+#: src/eltenlink_client/elten_gui.py:705
 msgid "Conversations\tCtrl+2"
 msgstr "Rozmowy\tCtrl+2"
 
-#: src/eltenlink_client/elten_gui.py:679
+#: src/eltenlink_client/elten_gui.py:707
 msgid "Forum\tCtrl+3"
 msgstr "Forum\tCtrl+3"
 
-#: src/eltenlink_client/elten_gui.py:681
+#: src/eltenlink_client/elten_gui.py:709
 msgid "Blogs\tCtrl+4"
 msgstr "Blogi\tCtrl+4"
 
-#: src/eltenlink_client/elten_gui.py:683
+#: src/eltenlink_client/elten_gui.py:711
 msgid "Online Users\tCtrl+5"
 msgstr "Użytkownicy online\tCtrl+5"
 
-#: src/eltenlink_client/elten_gui.py:685
+#: src/eltenlink_client/elten_gui.py:713
 msgid "View"
 msgstr "Widok"
 
-#: src/eltenlink_client/elten_gui.py:689
+#: src/eltenlink_client/elten_gui.py:717
 msgid "Manage my account\tCtrl+6"
 msgstr "Zarządzaj moim kontem\tCtrl+6"
 
-#: src/eltenlink_client/elten_gui.py:692
+#: src/eltenlink_client/elten_gui.py:720
 msgid "View account info"
 msgstr "Pokaż informacje o koncie"
 
-#: src/eltenlink_client/elten_gui.py:694
+#: src/eltenlink_client/elten_gui.py:722
 msgid "Account"
 msgstr "Konto"
 
-#: src/eltenlink_client/elten_gui.py:698 src/eltenlink_client/elten_gui.py:4111
+#: src/eltenlink_client/elten_gui.py:726 src/eltenlink_client/elten_gui.py:4139
 msgid "About EltenLink (Beta)"
 msgstr "O EltenLink (Beta)"
 
-#: src/eltenlink_client/elten_gui.py:700
+#: src/eltenlink_client/elten_gui.py:728
 msgid "Help"
 msgstr "Pomoc"
 
-#: src/eltenlink_client/elten_gui.py:825
+#: src/eltenlink_client/elten_gui.py:853
 msgid "(no date)"
 msgstr "(brak daty)"
 
-#: src/eltenlink_client/elten_gui.py:826
+#: src/eltenlink_client/elten_gui.py:854
 #, python-brace-format
 msgid "Message from {nick} ({date})"
 msgstr "Wiadomość od {nick} ({date})"
@@ -525,1252 +525,1253 @@ msgstr "Wiadomość od {nick} ({date})"
 #: src/eltenlink_client/accountmanagement.py:1159
 #: src/eltenlink_client/accountmanagement.py:1231
 #: src/eltenlink_client/accountmanagement.py:1344
-#: src/eltenlink_client/elten_gui.py:837
+#: src/eltenlink_client/elten_gui.py:865
 msgid "Close"
 msgstr "Zamknij"
 
 # ---- Posts Panel ----
-#: src/eltenlink_client/elten_gui.py:920 src/eltenlink_client/elten_gui.py:2208
+#: src/eltenlink_client/elten_gui.py:948 src/eltenlink_client/elten_gui.py:2236
 msgid "No content"
 msgstr "Brak treści"
 
-#: src/eltenlink_client/elten_gui.py:945
+#: src/eltenlink_client/elten_gui.py:973
 msgid "(edited)"
 msgstr "(edytowane)"
 
-#: src/eltenlink_client/elten_gui.py:971
+#: src/eltenlink_client/elten_gui.py:999
 msgid "Post"
 msgstr "Wpis"
 
-#: src/eltenlink_client/elten_gui.py:971
+#: src/eltenlink_client/elten_gui.py:999
 msgid "Comment"
 msgstr "Komentarz"
 
-#: src/eltenlink_client/elten_gui.py:980 src/eltenlink_client/elten_gui.py:2155
+#: src/eltenlink_client/elten_gui.py:1008
+#: src/eltenlink_client/elten_gui.py:2183
 msgid "Audio"
 msgstr "Audio"
 
-#: src/eltenlink_client/elten_gui.py:1115
+#: src/eltenlink_client/elten_gui.py:1143
 #, python-brace-format
 msgid "First new post, {count} new"
 msgstr "Pierwszy nowy wpis, {count} nowych"
 
-#: src/eltenlink_client/elten_gui.py:1138
+#: src/eltenlink_client/elten_gui.py:1166
 msgid "No audio available"
 msgstr "Brak dostępnego audio"
 
-#: src/eltenlink_client/elten_gui.py:1159
+#: src/eltenlink_client/elten_gui.py:1187
 msgid "Playing audio post..."
 msgstr "Odtwarzanie wpisu audio..."
 
-#: src/eltenlink_client/elten_gui.py:1161
+#: src/eltenlink_client/elten_gui.py:1189
 msgid "Failed to play audio"
 msgstr "Nie udało się odtworzyć audio"
 
-#: src/eltenlink_client/elten_gui.py:1163
+#: src/eltenlink_client/elten_gui.py:1191
 msgid "Failed to download audio"
 msgstr "Nie udało się pobrać audio"
 
 # ---- User Submenu ----
-#: src/eltenlink_client/elten_gui.py:1186
+#: src/eltenlink_client/elten_gui.py:1214
 msgid "Send Message"
 msgstr "Wyślij wiadomość"
 
-#: src/eltenlink_client/elten_gui.py:1189
+#: src/eltenlink_client/elten_gui.py:1217
 msgid "View Profile"
 msgstr "Zobacz profil"
 
-#: src/eltenlink_client/elten_gui.py:1192
+#: src/eltenlink_client/elten_gui.py:1220
 msgid "Open Blog"
 msgstr "Otwórz blog"
 
-#: src/eltenlink_client/elten_gui.py:1197
+#: src/eltenlink_client/elten_gui.py:1225
 msgid "Call this user"
 msgstr "Zadzwoń do tego użytkownika"
 
-#: src/eltenlink_client/elten_gui.py:1202
+#: src/eltenlink_client/elten_gui.py:1230
 msgid "Add to Contacts"
 msgstr "Dodaj do kontaktów"
 
-#: src/eltenlink_client/elten_gui.py:1205
+#: src/eltenlink_client/elten_gui.py:1233
 #, python-brace-format
 msgid "User: {user}"
 msgstr "{user}"
 
 # ---- Menu Items ----
-#: src/eltenlink_client/elten_gui.py:1211
+#: src/eltenlink_client/elten_gui.py:1239
 msgid "EltenLink (Beta) - Menu"
 msgstr "EltenLink (Beta) - Menu"
 
-#: src/eltenlink_client/elten_gui.py:1220
-#: src/eltenlink_client/elten_gui.py:1664
-#: src/eltenlink_client/elten_gui.py:3524
+#: src/eltenlink_client/elten_gui.py:1248
+#: src/eltenlink_client/elten_gui.py:1692
+#: src/eltenlink_client/elten_gui.py:3552
 msgid "Conversations"
 msgstr "Rozmowy"
 
-#: src/eltenlink_client/elten_gui.py:1221
-#: src/eltenlink_client/elten_gui.py:1857
-#: src/eltenlink_client/elten_gui.py:3526
+#: src/eltenlink_client/elten_gui.py:1249
+#: src/eltenlink_client/elten_gui.py:1885
+#: src/eltenlink_client/elten_gui.py:3554
 msgid "Forum"
 msgstr "Forum"
 
-#: src/eltenlink_client/elten_gui.py:1222
-#: src/eltenlink_client/elten_gui.py:1994
-#: src/eltenlink_client/elten_gui.py:2055
-#: src/eltenlink_client/elten_gui.py:3528
+#: src/eltenlink_client/elten_gui.py:1250
+#: src/eltenlink_client/elten_gui.py:2022
+#: src/eltenlink_client/elten_gui.py:2083
+#: src/eltenlink_client/elten_gui.py:3556
 msgid "Blogs"
 msgstr "Blogi"
 
-#: src/eltenlink_client/elten_gui.py:1223
-#: src/eltenlink_client/elten_gui.py:2224
-#: src/eltenlink_client/elten_gui.py:3530
+#: src/eltenlink_client/elten_gui.py:1251
+#: src/eltenlink_client/elten_gui.py:2252
+#: src/eltenlink_client/elten_gui.py:3558
 msgid "Online Users"
 msgstr "Użytkownicy online"
 
 # ---- What's New ----
-#: src/eltenlink_client/elten_gui.py:1224
-#: src/eltenlink_client/elten_gui.py:2263
-#: src/eltenlink_client/elten_gui.py:2336
-#: src/eltenlink_client/elten_gui.py:3532
-#: src/eltenlink_client/elten_gui.py:4171
+#: src/eltenlink_client/elten_gui.py:1252
+#: src/eltenlink_client/elten_gui.py:2291
+#: src/eltenlink_client/elten_gui.py:2364
+#: src/eltenlink_client/elten_gui.py:3560
+#: src/eltenlink_client/elten_gui.py:4199
 msgid "What's new"
 msgstr "Co nowego"
 
 # ---- Account Management (accountmanagement.py) ----
 #: src/eltenlink_client/accountmanagement.py:128
-#: src/eltenlink_client/elten_gui.py:1225
-#: src/eltenlink_client/elten_gui.py:3534
+#: src/eltenlink_client/elten_gui.py:1253
+#: src/eltenlink_client/elten_gui.py:3562
 msgid "Manage my account"
 msgstr "Zarządzaj moim kontem"
 
-#: src/eltenlink_client/elten_gui.py:1226
-#: src/eltenlink_client/elten_gui.py:3536
-#: src/eltenlink_client/elten_gui.py:4251
+#: src/eltenlink_client/elten_gui.py:1254
+#: src/eltenlink_client/elten_gui.py:3564
+#: src/eltenlink_client/elten_gui.py:4279
 msgid "Disconnect"
 msgstr "Rozłącz"
 
 # ---- Feed ----
-#: src/eltenlink_client/elten_gui.py:1300
+#: src/eltenlink_client/elten_gui.py:1328
 msgid "Feed"
 msgstr "Tablica"
 
-#: src/eltenlink_client/elten_gui.py:1315
-#: src/eltenlink_client/elten_gui.py:1602
+#: src/eltenlink_client/elten_gui.py:1343
+#: src/eltenlink_client/elten_gui.py:1630
 msgid "No feed posts"
 msgstr "Brak wpisów na tablicy"
 
-#: src/eltenlink_client/elten_gui.py:1428
-#: src/eltenlink_client/elten_gui.py:1613
+#: src/eltenlink_client/elten_gui.py:1456
+#: src/eltenlink_client/elten_gui.py:1641
 msgid "likes"
 msgstr "polubień"
 
-#: src/eltenlink_client/elten_gui.py:1430
+#: src/eltenlink_client/elten_gui.py:1458
 msgid "Feed Post"
 msgstr "Wpis na tablicy"
 
-#: src/eltenlink_client/elten_gui.py:1450
+#: src/eltenlink_client/elten_gui.py:1478
 msgid "Read Post"
 msgstr "Czytaj wpis"
 
-#: src/eltenlink_client/elten_gui.py:1455
+#: src/eltenlink_client/elten_gui.py:1483
 msgid "Unlike"
 msgstr "Przestań lubić ten wpis"
 
-#: src/eltenlink_client/elten_gui.py:1458
+#: src/eltenlink_client/elten_gui.py:1486
 msgid "Like"
 msgstr "Lubię"
 
-#: src/eltenlink_client/elten_gui.py:1462
+#: src/eltenlink_client/elten_gui.py:1490
 msgid "Reply"
 msgstr "Odpowiedź"
 
-#: src/eltenlink_client/elten_gui.py:1470
-#: src/eltenlink_client/elten_gui.py:2760
+#: src/eltenlink_client/elten_gui.py:1498
+#: src/eltenlink_client/elten_gui.py:2788
 msgid "Follow Feed"
 msgstr "Obserwuj tablicę"
 
-#: src/eltenlink_client/elten_gui.py:1472
-#: src/eltenlink_client/elten_gui.py:2763
+#: src/eltenlink_client/elten_gui.py:1500
+#: src/eltenlink_client/elten_gui.py:2791
 msgid "Unfollow Feed"
 msgstr "Przestań obserwować tablicę"
 
-#: src/eltenlink_client/elten_gui.py:1478
-#: src/eltenlink_client/elten_gui.py:1556
+#: src/eltenlink_client/elten_gui.py:1506
+#: src/eltenlink_client/elten_gui.py:1584
 msgid "Delete Post"
 msgstr "Usuń wpis"
 
-#: src/eltenlink_client/elten_gui.py:1484
+#: src/eltenlink_client/elten_gui.py:1512
 msgid "New Post"
 msgstr "Nowy wpis"
 
-#: src/eltenlink_client/elten_gui.py:1488
-#: src/eltenlink_client/elten_gui.py:2440
-#: src/eltenlink_client/elten_gui.py:2486
-#: src/eltenlink_client/elten_gui.py:2511
-#: src/eltenlink_client/elten_gui.py:2545
+#: src/eltenlink_client/elten_gui.py:1516
+#: src/eltenlink_client/elten_gui.py:2468
+#: src/eltenlink_client/elten_gui.py:2514
+#: src/eltenlink_client/elten_gui.py:2539
 #: src/eltenlink_client/elten_gui.py:2573
-#: src/eltenlink_client/elten_gui.py:2602
+#: src/eltenlink_client/elten_gui.py:2601
 #: src/eltenlink_client/elten_gui.py:2630
-#: src/eltenlink_client/elten_gui.py:2667
-#: src/eltenlink_client/elten_gui.py:2713
+#: src/eltenlink_client/elten_gui.py:2658
+#: src/eltenlink_client/elten_gui.py:2695
 #: src/eltenlink_client/elten_gui.py:2741
 #: src/eltenlink_client/elten_gui.py:2769
+#: src/eltenlink_client/elten_gui.py:2797
 msgid "Refresh"
 msgstr "Odśwież"
 
-#: src/eltenlink_client/elten_gui.py:1508
+#: src/eltenlink_client/elten_gui.py:1536
 msgid "Post liked"
 msgstr "Polubiono wpis"
 
-#: src/eltenlink_client/elten_gui.py:1508
+#: src/eltenlink_client/elten_gui.py:1536
 msgid "Post unliked"
 msgstr "Cofnięto polubienie"
 
-#: src/eltenlink_client/elten_gui.py:1517
+#: src/eltenlink_client/elten_gui.py:1545
 msgid "Reply (max 300 characters):"
 msgstr "Odpowiedź (maks. 300 znaków):"
 
-#: src/eltenlink_client/elten_gui.py:1517
+#: src/eltenlink_client/elten_gui.py:1545
 msgid "Reply to Post"
 msgstr "Odpowiedź na wpis"
 
-#: src/eltenlink_client/elten_gui.py:1536
+#: src/eltenlink_client/elten_gui.py:1564
 msgid "New post (max 300 characters):"
 msgstr "Nowy wpis (maks. 300 znaków):"
 
-#: src/eltenlink_client/elten_gui.py:1536
+#: src/eltenlink_client/elten_gui.py:1564
 msgid "New Feed Post"
 msgstr "Nowy wpis na tablicy"
 
-#: src/eltenlink_client/elten_gui.py:1556
+#: src/eltenlink_client/elten_gui.py:1584
 msgid "Delete this post?"
 msgstr "Usunąć ten wpis?"
 
-#: src/eltenlink_client/elten_gui.py:1563
+#: src/eltenlink_client/elten_gui.py:1591
 msgid "Post deleted"
 msgstr "Wpis usunięty"
 
-#: src/eltenlink_client/elten_gui.py:1574
+#: src/eltenlink_client/elten_gui.py:1602
 msgid "Feed followed"
 msgstr "Tablica obserwowana"
 
-#: src/eltenlink_client/elten_gui.py:1583
+#: src/eltenlink_client/elten_gui.py:1611
 msgid "Feed unfollowed"
 msgstr "Przerwano obserwowanie tablicy"
 
-#: src/eltenlink_client/elten_gui.py:1590
+#: src/eltenlink_client/elten_gui.py:1618
 msgid "Loading feed..."
 msgstr "Ładowanie tablicy..."
 
-#: src/eltenlink_client/elten_gui.py:1606
-#: src/eltenlink_client/elten_gui.py:1618
+#: src/eltenlink_client/elten_gui.py:1634
+#: src/eltenlink_client/elten_gui.py:1646
 #, python-brace-format
 msgid "Feed: {user}"
 msgstr "Tablica: {user}"
 
-#: src/eltenlink_client/elten_gui.py:1617
-#: src/eltenlink_client/elten_gui.py:1844
-#: src/eltenlink_client/elten_gui.py:1938
-#: src/eltenlink_client/elten_gui.py:1988
-#: src/eltenlink_client/elten_gui.py:2084
+#: src/eltenlink_client/elten_gui.py:1645
+#: src/eltenlink_client/elten_gui.py:1872
+#: src/eltenlink_client/elten_gui.py:1966
+#: src/eltenlink_client/elten_gui.py:2016
+#: src/eltenlink_client/elten_gui.py:2112
 #, python-brace-format
 msgid "{count} posts"
 msgstr "{count} wpisów"
 
 #: src/eltenlink_client/accountmanagement.py:1338
-#: src/eltenlink_client/elten_gui.py:1632
-#: src/eltenlink_client/elten_gui.py:1671
-#: src/eltenlink_client/elten_gui.py:1721
-#: src/eltenlink_client/elten_gui.py:1740
-#: src/eltenlink_client/elten_gui.py:1812
-#: src/eltenlink_client/elten_gui.py:1864
-#: src/eltenlink_client/elten_gui.py:1908
-#: src/eltenlink_client/elten_gui.py:1960
-#: src/eltenlink_client/elten_gui.py:2024
-#: src/eltenlink_client/elten_gui.py:2062
-#: src/eltenlink_client/elten_gui.py:2106
-#: src/eltenlink_client/elten_gui.py:2185
-#: src/eltenlink_client/elten_gui.py:2231
-#: src/eltenlink_client/elten_gui.py:2268
+#: src/eltenlink_client/elten_gui.py:1660
+#: src/eltenlink_client/elten_gui.py:1699
+#: src/eltenlink_client/elten_gui.py:1749
+#: src/eltenlink_client/elten_gui.py:1768
+#: src/eltenlink_client/elten_gui.py:1840
+#: src/eltenlink_client/elten_gui.py:1892
+#: src/eltenlink_client/elten_gui.py:1936
+#: src/eltenlink_client/elten_gui.py:1988
+#: src/eltenlink_client/elten_gui.py:2052
+#: src/eltenlink_client/elten_gui.py:2090
+#: src/eltenlink_client/elten_gui.py:2134
+#: src/eltenlink_client/elten_gui.py:2213
+#: src/eltenlink_client/elten_gui.py:2259
+#: src/eltenlink_client/elten_gui.py:2296
 msgid "Loading..."
 msgstr "Ładowanie..."
 
 # ---- Contacts ----
-#: src/eltenlink_client/elten_gui.py:1646
-#: src/eltenlink_client/elten_gui.py:1647
+#: src/eltenlink_client/elten_gui.py:1674
+#: src/eltenlink_client/elten_gui.py:1675
 msgid "No contacts"
 msgstr "Brak kontaktów"
 
-#: src/eltenlink_client/elten_gui.py:1656
+#: src/eltenlink_client/elten_gui.py:1684
 #, python-brace-format
 msgid "{count} contacts"
 msgstr "{count} kontaktów"
 
 # ---- Conversations ----
-#: src/eltenlink_client/elten_gui.py:1685
-#: src/eltenlink_client/elten_gui.py:1686
+#: src/eltenlink_client/elten_gui.py:1713
+#: src/eltenlink_client/elten_gui.py:1714
 msgid "No conversations"
 msgstr "Brak rozmów"
 
 # ---- User Submenu ----
-#: src/eltenlink_client/elten_gui.py:1696
+#: src/eltenlink_client/elten_gui.py:1724
 msgid "Last message"
 msgstr "Ostatnia wiadomość"
 
-#: src/eltenlink_client/elten_gui.py:1701
-#: src/eltenlink_client/elten_gui.py:1773
+#: src/eltenlink_client/elten_gui.py:1729
+#: src/eltenlink_client/elten_gui.py:1801
 #, python-brace-format
 msgid "{count} conversations"
 msgstr "{count} rozmów"
 
-#: src/eltenlink_client/elten_gui.py:1713
-#: src/eltenlink_client/elten_gui.py:1735
+#: src/eltenlink_client/elten_gui.py:1741
+#: src/eltenlink_client/elten_gui.py:1763
 #, python-brace-format
 msgid "Chat with {user}"
 msgstr "Czat z {user}"
 
-#: src/eltenlink_client/elten_gui.py:1758
-#: src/eltenlink_client/elten_gui.py:1759
-#: src/eltenlink_client/elten_gui.py:1783
+#: src/eltenlink_client/elten_gui.py:1786
+#: src/eltenlink_client/elten_gui.py:1787
+#: src/eltenlink_client/elten_gui.py:1811
 msgid "No messages yet."
 msgstr "Brak wiadomości."
 
 # ---- Forum ----
-#: src/eltenlink_client/elten_gui.py:1805
+#: src/eltenlink_client/elten_gui.py:1833
 msgid "Forum - Groups"
 msgstr "Forum - Grupy"
 
-#: src/eltenlink_client/elten_gui.py:1826
-#: src/eltenlink_client/elten_gui.py:1827
-#: src/eltenlink_client/elten_gui.py:1834
-#: src/eltenlink_client/elten_gui.py:1835
+#: src/eltenlink_client/elten_gui.py:1854
+#: src/eltenlink_client/elten_gui.py:1855
+#: src/eltenlink_client/elten_gui.py:1862
+#: src/eltenlink_client/elten_gui.py:1863
 msgid "No forum groups"
 msgstr "Brak grup forumowych"
 
-#: src/eltenlink_client/elten_gui.py:1844
+#: src/eltenlink_client/elten_gui.py:1872
 #, python-brace-format
 msgid "{count} threads"
 msgstr "{count} wątków"
 
-#: src/eltenlink_client/elten_gui.py:1849
+#: src/eltenlink_client/elten_gui.py:1877
 #, python-brace-format
 msgid "{count} forum groups"
 msgstr "{count} grup forumowych"
 
-#: src/eltenlink_client/elten_gui.py:1882
+#: src/eltenlink_client/elten_gui.py:1910
 msgid "No forums in this group"
 msgstr "Brak forów w tej grupie"
 
-#: src/eltenlink_client/elten_gui.py:1926
+#: src/eltenlink_client/elten_gui.py:1954
 msgid "No threads"
 msgstr "Brak wątków"
 
-#: src/eltenlink_client/elten_gui.py:1937
+#: src/eltenlink_client/elten_gui.py:1965
 #, python-brace-format
 msgid "{count} new"
 msgstr "{count} nowych"
 
-#: src/eltenlink_client/elten_gui.py:1953
+#: src/eltenlink_client/elten_gui.py:1981
 msgid "Reply:"
 msgstr "Odpowiedź:"
 
-#: src/eltenlink_client/elten_gui.py:1981
-#: src/eltenlink_client/elten_gui.py:2136
+#: src/eltenlink_client/elten_gui.py:2009
+#: src/eltenlink_client/elten_gui.py:2164
 msgid "No posts"
 msgstr "Brak wpisów"
 
-#: src/eltenlink_client/elten_gui.py:2002
-#: src/eltenlink_client/elten_gui.py:2019
-#: src/eltenlink_client/elten_gui.py:3570
+#: src/eltenlink_client/elten_gui.py:2030
+#: src/eltenlink_client/elten_gui.py:2047
+#: src/eltenlink_client/elten_gui.py:3598
 msgid "Managed blogs"
 msgstr "Zarządzane blogi"
 
-#: src/eltenlink_client/elten_gui.py:2003
-#: src/eltenlink_client/elten_gui.py:3572
-#: src/eltenlink_client/elten_gui.py:3573
+#: src/eltenlink_client/elten_gui.py:2031
+#: src/eltenlink_client/elten_gui.py:3600
+#: src/eltenlink_client/elten_gui.py:3601
 msgid "Recently updated blogs"
 msgstr "Ostatnio aktualizowane blogi"
 
-#: src/eltenlink_client/elten_gui.py:2004
-#: src/eltenlink_client/elten_gui.py:3574
-#: src/eltenlink_client/elten_gui.py:3575
+#: src/eltenlink_client/elten_gui.py:2032
+#: src/eltenlink_client/elten_gui.py:3602
+#: src/eltenlink_client/elten_gui.py:3603
 msgid "Frequently updated blogs"
 msgstr "Często aktualizowane blogi"
 
-#: src/eltenlink_client/elten_gui.py:2005
-#: src/eltenlink_client/elten_gui.py:3576
-#: src/eltenlink_client/elten_gui.py:3577
+#: src/eltenlink_client/elten_gui.py:2033
+#: src/eltenlink_client/elten_gui.py:3604
+#: src/eltenlink_client/elten_gui.py:3605
 msgid "Frequently commented blogs"
 msgstr "Często komentowane blogi"
 
-#: src/eltenlink_client/elten_gui.py:2006
-#: src/eltenlink_client/elten_gui.py:3578
-#: src/eltenlink_client/elten_gui.py:3579
+#: src/eltenlink_client/elten_gui.py:2034
+#: src/eltenlink_client/elten_gui.py:3606
+#: src/eltenlink_client/elten_gui.py:3607
 msgid "Followed blogs"
 msgstr "Obserwowane blogi"
 
 #: src/eltenlink_client/accountmanagement.py:551
-#: src/eltenlink_client/elten_gui.py:2007
-#: src/eltenlink_client/elten_gui.py:2294
-#: src/eltenlink_client/elten_gui.py:3580
-#: src/eltenlink_client/elten_gui.py:3581
-#: src/eltenlink_client/elten_gui.py:3632
-#: src/eltenlink_client/elten_gui.py:4152
-#: src/eltenlink_client/elten_gui.py:4210
+#: src/eltenlink_client/elten_gui.py:2035
+#: src/eltenlink_client/elten_gui.py:2322
+#: src/eltenlink_client/elten_gui.py:3608
+#: src/eltenlink_client/elten_gui.py:3609
+#: src/eltenlink_client/elten_gui.py:3660
+#: src/eltenlink_client/elten_gui.py:4180
+#: src/eltenlink_client/elten_gui.py:4238
 msgid "Followed blog posts"
 msgstr "Obserwowane posty na blogach"
 
-#: src/eltenlink_client/elten_gui.py:2008
-#: src/eltenlink_client/elten_gui.py:3582
-#: src/eltenlink_client/elten_gui.py:3647
+#: src/eltenlink_client/elten_gui.py:2036
+#: src/eltenlink_client/elten_gui.py:3610
+#: src/eltenlink_client/elten_gui.py:3675
 msgid "Search user's blog"
 msgstr "Szukaj bloga użytkownika"
 
-#: src/eltenlink_client/elten_gui.py:2038
-#: src/eltenlink_client/elten_gui.py:2039
+#: src/eltenlink_client/elten_gui.py:2066
+#: src/eltenlink_client/elten_gui.py:2067
 msgid "No managed blogs found"
 msgstr "Nie znaleziono zarządzanych blogów"
 
-#: src/eltenlink_client/elten_gui.py:2046
+#: src/eltenlink_client/elten_gui.py:2074
 msgid "posts"
 msgstr "wpisów"
 
-#: src/eltenlink_client/elten_gui.py:2049
+#: src/eltenlink_client/elten_gui.py:2077
 #, python-brace-format
 msgid "{count} managed blogs"
 msgstr "{count} zarządzanych blogów"
 
-#: src/eltenlink_client/elten_gui.py:2076
+#: src/eltenlink_client/elten_gui.py:2104
 msgid "No blogs found"
 msgstr "Nie znaleziono blogów"
 
-#: src/eltenlink_client/elten_gui.py:2144
-#: src/eltenlink_client/elten_gui.py:2161
-#: src/eltenlink_client/elten_gui.py:3595
+#: src/eltenlink_client/elten_gui.py:2172
+#: src/eltenlink_client/elten_gui.py:2189
+#: src/eltenlink_client/elten_gui.py:3623
 msgid "Load more"
 msgstr "Załaduj więcej"
 
-#: src/eltenlink_client/elten_gui.py:2156
-#: src/eltenlink_client/elten_gui.py:2217
+#: src/eltenlink_client/elten_gui.py:2184
+#: src/eltenlink_client/elten_gui.py:2245
 #, python-brace-format
 msgid "{count} comments"
 msgstr "{count} komentarzy"
 
-#: src/eltenlink_client/elten_gui.py:2175
+#: src/eltenlink_client/elten_gui.py:2203
 msgid "Blog Post"
 msgstr "Wpis na blogu"
 
-#: src/eltenlink_client/elten_gui.py:2178
+#: src/eltenlink_client/elten_gui.py:2206
 msgid "Comment:"
 msgstr "Komentarz:"
 
 # ---- Online Users ----
-#: src/eltenlink_client/elten_gui.py:2245
-#: src/eltenlink_client/elten_gui.py:2246
+#: src/eltenlink_client/elten_gui.py:2273
+#: src/eltenlink_client/elten_gui.py:2274
 msgid "No users online"
 msgstr "Brak użytkowników online"
 
-#: src/eltenlink_client/elten_gui.py:2255
+#: src/eltenlink_client/elten_gui.py:2283
 #, python-brace-format
 msgid "{count} users online"
 msgstr "{count} użytkowników online"
 
-#: src/eltenlink_client/elten_gui.py:2277
+#: src/eltenlink_client/elten_gui.py:2305
 msgid "Failed to load notifications"
 msgstr "Nie udało się załadować powiadomień"
 
-#: src/eltenlink_client/elten_gui.py:2278
+#: src/eltenlink_client/elten_gui.py:2306
 msgid "Failed to load"
 msgstr "Nie udało się załadować"
 
 #: src/eltenlink_client/accountmanagement.py:542
-#: src/eltenlink_client/elten_gui.py:2285
-#: src/eltenlink_client/elten_gui.py:4143
-#: src/eltenlink_client/elten_gui.py:4201
+#: src/eltenlink_client/elten_gui.py:2313
+#: src/eltenlink_client/elten_gui.py:4171
+#: src/eltenlink_client/elten_gui.py:4229
 msgid "New messages"
 msgstr "Nowe wiadomości"
 
 #: src/eltenlink_client/accountmanagement.py:543
-#: src/eltenlink_client/elten_gui.py:2286
-#: src/eltenlink_client/elten_gui.py:4144
-#: src/eltenlink_client/elten_gui.py:4202
+#: src/eltenlink_client/elten_gui.py:2314
+#: src/eltenlink_client/elten_gui.py:4172
+#: src/eltenlink_client/elten_gui.py:4230
 msgid "New posts in followed threads"
 msgstr "Nowe posty w obserwowanych wątkach"
 
 #: src/eltenlink_client/accountmanagement.py:544
-#: src/eltenlink_client/elten_gui.py:2287
-#: src/eltenlink_client/elten_gui.py:3618
-#: src/eltenlink_client/elten_gui.py:4145
-#: src/eltenlink_client/elten_gui.py:4203
+#: src/eltenlink_client/elten_gui.py:2315
+#: src/eltenlink_client/elten_gui.py:3646
+#: src/eltenlink_client/elten_gui.py:4173
+#: src/eltenlink_client/elten_gui.py:4231
 msgid "New posts on the followed blogs"
 msgstr "Nowe posty na obserwowanych blogach"
 
 #: src/eltenlink_client/accountmanagement.py:545
-#: src/eltenlink_client/elten_gui.py:2288
-#: src/eltenlink_client/elten_gui.py:3620
-#: src/eltenlink_client/elten_gui.py:4146
-#: src/eltenlink_client/elten_gui.py:4204
+#: src/eltenlink_client/elten_gui.py:2316
+#: src/eltenlink_client/elten_gui.py:3648
+#: src/eltenlink_client/elten_gui.py:4174
+#: src/eltenlink_client/elten_gui.py:4232
 msgid "New comments on your blog"
 msgstr "Nowe komentarze na Twoim blogu"
 
 #: src/eltenlink_client/accountmanagement.py:546
-#: src/eltenlink_client/elten_gui.py:2289
-#: src/eltenlink_client/elten_gui.py:4147
-#: src/eltenlink_client/elten_gui.py:4205
+#: src/eltenlink_client/elten_gui.py:2317
+#: src/eltenlink_client/elten_gui.py:4175
+#: src/eltenlink_client/elten_gui.py:4233
 msgid "New threads on followed forums"
 msgstr "Nowe wątki na obserwowanych forach"
 
 #: src/eltenlink_client/accountmanagement.py:547
-#: src/eltenlink_client/elten_gui.py:2290
-#: src/eltenlink_client/elten_gui.py:4148
-#: src/eltenlink_client/elten_gui.py:4206
+#: src/eltenlink_client/elten_gui.py:2318
+#: src/eltenlink_client/elten_gui.py:4176
+#: src/eltenlink_client/elten_gui.py:4234
 msgid "New posts on followed forums"
 msgstr "Nowe posty na obserwowanych forach"
 
 #: src/eltenlink_client/accountmanagement.py:548
-#: src/eltenlink_client/elten_gui.py:2291
-#: src/eltenlink_client/elten_gui.py:4149
-#: src/eltenlink_client/elten_gui.py:4207
+#: src/eltenlink_client/elten_gui.py:2319
+#: src/eltenlink_client/elten_gui.py:4177
+#: src/eltenlink_client/elten_gui.py:4235
 msgid "New friends"
 msgstr "Nowi znajomi"
 
 #: src/eltenlink_client/accountmanagement.py:549
-#: src/eltenlink_client/elten_gui.py:2292
-#: src/eltenlink_client/elten_gui.py:4150
-#: src/eltenlink_client/elten_gui.py:4208
+#: src/eltenlink_client/elten_gui.py:2320
+#: src/eltenlink_client/elten_gui.py:4178
+#: src/eltenlink_client/elten_gui.py:4236
 msgid "Friends' birthday"
 msgstr "Urodziny znajomych"
 
 #: src/eltenlink_client/accountmanagement.py:550
-#: src/eltenlink_client/elten_gui.py:2293
-#: src/eltenlink_client/elten_gui.py:4151
-#: src/eltenlink_client/elten_gui.py:4209
+#: src/eltenlink_client/elten_gui.py:2321
+#: src/eltenlink_client/elten_gui.py:4179
+#: src/eltenlink_client/elten_gui.py:4237
 msgid "Mentions"
 msgstr "Wzmianki"
 
 #: src/eltenlink_client/accountmanagement.py:552
-#: src/eltenlink_client/elten_gui.py:2295
-#: src/eltenlink_client/elten_gui.py:3634
-#: src/eltenlink_client/elten_gui.py:4153
-#: src/eltenlink_client/elten_gui.py:4211
+#: src/eltenlink_client/elten_gui.py:2323
+#: src/eltenlink_client/elten_gui.py:3662
+#: src/eltenlink_client/elten_gui.py:4181
+#: src/eltenlink_client/elten_gui.py:4239
 msgid "Blog followers"
 msgstr "Obserwujący bloga"
 
 #: src/eltenlink_client/accountmanagement.py:553
-#: src/eltenlink_client/elten_gui.py:2296
-#: src/eltenlink_client/elten_gui.py:3636
-#: src/eltenlink_client/elten_gui.py:4154
-#: src/eltenlink_client/elten_gui.py:4212
+#: src/eltenlink_client/elten_gui.py:2324
+#: src/eltenlink_client/elten_gui.py:3664
+#: src/eltenlink_client/elten_gui.py:4182
+#: src/eltenlink_client/elten_gui.py:4240
 msgid "Blog mentions"
 msgstr "Wzmianki na blogach"
 
 #: src/eltenlink_client/accountmanagement.py:554
-#: src/eltenlink_client/elten_gui.py:2297
-#: src/eltenlink_client/elten_gui.py:4155
-#: src/eltenlink_client/elten_gui.py:4213
+#: src/eltenlink_client/elten_gui.py:2325
+#: src/eltenlink_client/elten_gui.py:4183
+#: src/eltenlink_client/elten_gui.py:4241
 msgid "Awaiting group invitations"
 msgstr "Oczekujące zaproszenia do grup"
 
-#: src/eltenlink_client/elten_gui.py:2312
+#: src/eltenlink_client/elten_gui.py:2340
 msgid "There is nothing new."
 msgstr "Nie ma nic nowego."
 
 # ---- Context Menus ----
-#: src/eltenlink_client/elten_gui.py:2428
-#: src/eltenlink_client/elten_gui.py:2777
+#: src/eltenlink_client/elten_gui.py:2456
+#: src/eltenlink_client/elten_gui.py:2805
 msgid "New Contact"
 msgstr "Nowy kontakt"
 
-#: src/eltenlink_client/elten_gui.py:2434
-#: src/eltenlink_client/elten_gui.py:2790
+#: src/eltenlink_client/elten_gui.py:2462
+#: src/eltenlink_client/elten_gui.py:2818
 msgid "Remove Contact"
 msgstr "Usuń kontakt"
 
-#: src/eltenlink_client/elten_gui.py:2451
-#: src/eltenlink_client/elten_gui.py:2496
-#: src/eltenlink_client/elten_gui.py:2521
-#: src/eltenlink_client/elten_gui.py:2555
+#: src/eltenlink_client/elten_gui.py:2479
+#: src/eltenlink_client/elten_gui.py:2524
+#: src/eltenlink_client/elten_gui.py:2549
 #: src/eltenlink_client/elten_gui.py:2583
-#: src/eltenlink_client/elten_gui.py:2644
-#: src/eltenlink_client/elten_gui.py:2678
+#: src/eltenlink_client/elten_gui.py:2611
+#: src/eltenlink_client/elten_gui.py:2672
+#: src/eltenlink_client/elten_gui.py:2706
 msgid "Open"
 msgstr "Otwórz"
 
-#: src/eltenlink_client/elten_gui.py:2460
+#: src/eltenlink_client/elten_gui.py:2488
 msgid "Mark as Read"
 msgstr "Oznacz jako przeczytane"
 
-#: src/eltenlink_client/elten_gui.py:2466
-#: src/eltenlink_client/elten_gui.py:2505
-#: src/eltenlink_client/elten_gui.py:3660
+#: src/eltenlink_client/elten_gui.py:2494
+#: src/eltenlink_client/elten_gui.py:2533
+#: src/eltenlink_client/elten_gui.py:3688
 msgid "New Message"
 msgstr "Nowa wiadomość"
 
-#: src/eltenlink_client/elten_gui.py:2470
+#: src/eltenlink_client/elten_gui.py:2498
 msgid "Mark All as Read"
 msgstr "Oznacz wszystko jako przeczytane"
 
-#: src/eltenlink_client/elten_gui.py:2474
-#: src/eltenlink_client/elten_gui.py:2535
-#: src/eltenlink_client/elten_gui.py:2663
+#: src/eltenlink_client/elten_gui.py:2502
+#: src/eltenlink_client/elten_gui.py:2563
+#: src/eltenlink_client/elten_gui.py:2691
 msgid "Search"
 msgstr "Szukaj"
 
-#: src/eltenlink_client/elten_gui.py:2480
-#: src/eltenlink_client/elten_gui.py:2899
+#: src/eltenlink_client/elten_gui.py:2508
+#: src/eltenlink_client/elten_gui.py:2927
 msgid "Delete Conversation"
 msgstr "Usuń rozmowę"
 
-#: src/eltenlink_client/elten_gui.py:2525
+#: src/eltenlink_client/elten_gui.py:2553
 msgid "Group Info"
 msgstr "Informacje o grupie"
 
-#: src/eltenlink_client/elten_gui.py:2529
+#: src/eltenlink_client/elten_gui.py:2557
 msgid "Group Members"
 msgstr "Członkowie grupy"
 
-#: src/eltenlink_client/elten_gui.py:2539
+#: src/eltenlink_client/elten_gui.py:2567
 msgid "Mark Group as Read"
 msgstr "Oznacz grupę jako przeczytaną"
 
-#: src/eltenlink_client/elten_gui.py:2561
-#: src/eltenlink_client/elten_gui.py:2596
-#: src/eltenlink_client/elten_gui.py:3061
-#: src/eltenlink_client/elten_gui.py:3072
-#: src/eltenlink_client/elten_gui.py:3084
-#: src/eltenlink_client/elten_gui.py:3138
-#: src/eltenlink_client/elten_gui.py:3149
-#: src/eltenlink_client/elten_gui.py:3161
+#: src/eltenlink_client/elten_gui.py:2589
+#: src/eltenlink_client/elten_gui.py:2624
+#: src/eltenlink_client/elten_gui.py:3089
+#: src/eltenlink_client/elten_gui.py:3100
+#: src/eltenlink_client/elten_gui.py:3112
+#: src/eltenlink_client/elten_gui.py:3166
+#: src/eltenlink_client/elten_gui.py:3177
+#: src/eltenlink_client/elten_gui.py:3189
 msgid "New Thread"
 msgstr "Nowy wątek"
 
-#: src/eltenlink_client/elten_gui.py:2567
+#: src/eltenlink_client/elten_gui.py:2595
 msgid "Mark Forum as Read"
 msgstr "Oznacz forum jako przeczytane"
 
-#: src/eltenlink_client/elten_gui.py:2587
+#: src/eltenlink_client/elten_gui.py:2615
 msgid "Follow Thread"
 msgstr "Obserwuj wątek"
 
-#: src/eltenlink_client/elten_gui.py:2590
+#: src/eltenlink_client/elten_gui.py:2618
 msgid "Unfollow Thread"
 msgstr "Przestań obserwować wątek"
 
-#: src/eltenlink_client/elten_gui.py:2619
+#: src/eltenlink_client/elten_gui.py:2647
 msgid "Play Audio"
 msgstr "Odtwórz audio"
 
-#: src/eltenlink_client/elten_gui.py:2624
+#: src/eltenlink_client/elten_gui.py:2652
 msgid "Write Reply"
 msgstr "Napisz odpowiedź"
 
-#: src/eltenlink_client/elten_gui.py:2651
+#: src/eltenlink_client/elten_gui.py:2679
 msgid "Unfollow Blog"
 msgstr "Przestań obserwować blog"
 
-#: src/eltenlink_client/elten_gui.py:2653
+#: src/eltenlink_client/elten_gui.py:2681
 msgid "Follow Blog"
 msgstr "Obserwuj blog"
 
-#: src/eltenlink_client/elten_gui.py:2657
+#: src/eltenlink_client/elten_gui.py:2685
 msgid "Mark Blog as Read"
 msgstr "Oznacz blog jako przeczytany"
 
-#: src/eltenlink_client/elten_gui.py:2683
+#: src/eltenlink_client/elten_gui.py:2711
 msgid "Play Audio Post"
 msgstr "Odtwórz wpis audio"
 
-#: src/eltenlink_client/elten_gui.py:2690
+#: src/eltenlink_client/elten_gui.py:2718
 msgid "Unfollow Post"
 msgstr "Przestań obserwować wpis"
 
-#: src/eltenlink_client/elten_gui.py:2692
+#: src/eltenlink_client/elten_gui.py:2720
 msgid "Follow Post"
 msgstr "Obserwuj wpis"
 
-#: src/eltenlink_client/elten_gui.py:2699
-#: src/eltenlink_client/elten_gui.py:3212
-#: src/eltenlink_client/elten_gui.py:3223
-#: src/eltenlink_client/elten_gui.py:3235
+#: src/eltenlink_client/elten_gui.py:2727
+#: src/eltenlink_client/elten_gui.py:3240
+#: src/eltenlink_client/elten_gui.py:3251
+#: src/eltenlink_client/elten_gui.py:3263
 msgid "New Blog Post"
 msgstr "Nowy wpis na blogu"
 
-#: src/eltenlink_client/elten_gui.py:2704
-#: src/eltenlink_client/elten_gui.py:3285
+#: src/eltenlink_client/elten_gui.py:2732
+#: src/eltenlink_client/elten_gui.py:3313
 msgid "New Category"
 msgstr "Nowa kategoria"
 
-#: src/eltenlink_client/elten_gui.py:2706
+#: src/eltenlink_client/elten_gui.py:2734
 msgid "Manage Categories"
 msgstr "Zarządzaj kategoriami"
 
-#: src/eltenlink_client/elten_gui.py:2708
+#: src/eltenlink_client/elten_gui.py:2736
 msgid "Categories"
 msgstr "Kategorie"
 
-#: src/eltenlink_client/elten_gui.py:2729
+#: src/eltenlink_client/elten_gui.py:2757
 msgid "Write Comment"
 msgstr "Napisz komentarz"
 
-#: src/eltenlink_client/elten_gui.py:2735
+#: src/eltenlink_client/elten_gui.py:2763
 msgid "Delete Comment"
 msgstr "Usuń komentarz"
 
-#: src/eltenlink_client/elten_gui.py:2756
+#: src/eltenlink_client/elten_gui.py:2784
 msgid "Show Feed"
 msgstr "Pokaż tablicę"
 
-#: src/eltenlink_client/elten_gui.py:2777
-#: src/eltenlink_client/elten_gui.py:3647
+#: src/eltenlink_client/elten_gui.py:2805
+#: src/eltenlink_client/elten_gui.py:3675
 msgid "Enter username:"
 msgstr "Wpisz nazwę użytkownika:"
 
-#: src/eltenlink_client/elten_gui.py:2783
-#: src/eltenlink_client/elten_gui.py:3654
-#: src/eltenlink_client/elten_gui.py:3688
+#: src/eltenlink_client/elten_gui.py:2811
+#: src/eltenlink_client/elten_gui.py:3682
+#: src/eltenlink_client/elten_gui.py:3716
 msgid "Please enter a username"
 msgstr "Podaj nazwę użytkownika"
 
-#: src/eltenlink_client/elten_gui.py:2789
+#: src/eltenlink_client/elten_gui.py:2817
 #, python-brace-format
 msgid "Remove {user} from contacts?"
 msgstr "Usunąć {user} z kontaktów?"
 
-#: src/eltenlink_client/elten_gui.py:2822
+#: src/eltenlink_client/elten_gui.py:2850
 msgid "You cannot call yourself"
 msgstr "Nie możesz zadzwonić do siebie"
 
-#: src/eltenlink_client/elten_gui.py:2863
-#: src/eltenlink_client/elten_gui.py:4389
+#: src/eltenlink_client/elten_gui.py:2891
+#: src/eltenlink_client/elten_gui.py:4417
 msgid "Could not connect to voice server"
 msgstr "Nie udało się połączyć z serwerem głosowym"
 
-#: src/eltenlink_client/elten_gui.py:2868
-#: src/eltenlink_client/elten_gui.py:4418
+#: src/eltenlink_client/elten_gui.py:2896
+#: src/eltenlink_client/elten_gui.py:4446
 msgid "Could not join voice channel"
 msgstr "Nie udało się dołączyć do kanału głosowego"
 
-#: src/eltenlink_client/elten_gui.py:2876
-#: src/eltenlink_client/elten_gui.py:4498
+#: src/eltenlink_client/elten_gui.py:2904
+#: src/eltenlink_client/elten_gui.py:4526
 msgid "Call connected"
 msgstr "Połączono"
 
-#: src/eltenlink_client/elten_gui.py:2883
-#: src/eltenlink_client/elten_gui.py:4509
+#: src/eltenlink_client/elten_gui.py:2911
+#: src/eltenlink_client/elten_gui.py:4537
 msgid "Call failed"
 msgstr "Połączenie nie powiodło się"
 
-#: src/eltenlink_client/elten_gui.py:2898
+#: src/eltenlink_client/elten_gui.py:2926
 #, python-brace-format
 msgid "Delete all conversations with {user}?"
 msgstr "Usunąć wszystkie rozmowy z {user}?"
 
-#: src/eltenlink_client/elten_gui.py:2906
+#: src/eltenlink_client/elten_gui.py:2934
 msgid "Conversation deleted"
 msgstr "Rozmowa usunięta"
 
-#: src/eltenlink_client/elten_gui.py:2917
+#: src/eltenlink_client/elten_gui.py:2945
 msgid "Conversation marked as read"
 msgstr "Rozmowa oznaczona jako przeczytana"
 
-#: src/eltenlink_client/elten_gui.py:2926
+#: src/eltenlink_client/elten_gui.py:2954
 msgid "All messages marked as read"
 msgstr "Wszystkie wiadomości oznaczone jako przeczytane"
 
-#: src/eltenlink_client/elten_gui.py:2934
+#: src/eltenlink_client/elten_gui.py:2962
 msgid "Enter username to search:"
 msgstr "Wpisz nazwę użytkownika do wyszukania:"
 
-#: src/eltenlink_client/elten_gui.py:2934
+#: src/eltenlink_client/elten_gui.py:2962
 msgid "Search Conversations"
 msgstr "Szukaj rozmów"
 
 # ---- Forum Group Info ----
-#: src/eltenlink_client/elten_gui.py:2954
+#: src/eltenlink_client/elten_gui.py:2982
 msgid "Group"
 msgstr "Grupa"
 
-#: src/eltenlink_client/elten_gui.py:2955
+#: src/eltenlink_client/elten_gui.py:2983
 msgid "Founder"
 msgstr "Założyciel"
 
-#: src/eltenlink_client/elten_gui.py:2956
+#: src/eltenlink_client/elten_gui.py:2984
 msgid "Language"
 msgstr "Język"
 
-#: src/eltenlink_client/elten_gui.py:2957
+#: src/eltenlink_client/elten_gui.py:2985
 msgid "Forums"
 msgstr "Fora"
 
-#: src/eltenlink_client/elten_gui.py:2958
+#: src/eltenlink_client/elten_gui.py:2986
 msgid "Threads"
 msgstr "Wątki"
 
-#: src/eltenlink_client/elten_gui.py:2959
+#: src/eltenlink_client/elten_gui.py:2987
 msgid "Posts"
 msgstr "Wpisy"
 
-#: src/eltenlink_client/elten_gui.py:2962
+#: src/eltenlink_client/elten_gui.py:2990
 msgid "Description"
 msgstr "Opis"
 
-#: src/eltenlink_client/elten_gui.py:2978
+#: src/eltenlink_client/elten_gui.py:3006
 msgid "No members"
 msgstr "Brak członków"
 
-#: src/eltenlink_client/elten_gui.py:2981
-#: src/eltenlink_client/elten_gui.py:2982
+#: src/eltenlink_client/elten_gui.py:3009
+#: src/eltenlink_client/elten_gui.py:3010
 #, python-brace-format
 msgid "{count} members"
 msgstr "{count} członków"
 
-#: src/eltenlink_client/elten_gui.py:2988
+#: src/eltenlink_client/elten_gui.py:3016
 msgid "Enter search query:"
 msgstr "Wpisz frazę do wyszukania:"
 
-#: src/eltenlink_client/elten_gui.py:2988
+#: src/eltenlink_client/elten_gui.py:3016
 msgid "Search Forum"
 msgstr "Szukaj na forum"
 
-#: src/eltenlink_client/elten_gui.py:2992
+#: src/eltenlink_client/elten_gui.py:3020
 msgid "Searching..."
 msgstr "Wyszukiwanie..."
 
-#: src/eltenlink_client/elten_gui.py:3004
+#: src/eltenlink_client/elten_gui.py:3032
 msgid "No results found"
 msgstr "Nie znaleziono wyników"
 
-#: src/eltenlink_client/elten_gui.py:3008
+#: src/eltenlink_client/elten_gui.py:3036
 msgid "Search Results:"
 msgstr "Wyniki wyszukiwania:"
 
-#: src/eltenlink_client/elten_gui.py:3010
+#: src/eltenlink_client/elten_gui.py:3038
 #, python-brace-format
 msgid "Thread #{thread_id} ({post_count} posts)"
 msgstr "Wątek #{thread_id} ({post_count} wpisów)"
 
-#: src/eltenlink_client/elten_gui.py:3012
+#: src/eltenlink_client/elten_gui.py:3040
 #, python-brace-format
 msgid "{count} results"
 msgstr "{count} wyników"
 
-#: src/eltenlink_client/elten_gui.py:3013
+#: src/eltenlink_client/elten_gui.py:3041
 msgid "Search Results"
 msgstr "Wyniki wyszukiwania"
 
-#: src/eltenlink_client/elten_gui.py:3019
+#: src/eltenlink_client/elten_gui.py:3047
 msgid "Group marked as read"
 msgstr "Grupa oznaczona jako przeczytana"
 
-#: src/eltenlink_client/elten_gui.py:3028
+#: src/eltenlink_client/elten_gui.py:3056
 msgid "Forum marked as read"
 msgstr "Forum oznaczone jako przeczytane"
 
-#: src/eltenlink_client/elten_gui.py:3037
+#: src/eltenlink_client/elten_gui.py:3065
 msgid "Thread followed"
 msgstr "Wątek obserwowany"
 
-#: src/eltenlink_client/elten_gui.py:3046
+#: src/eltenlink_client/elten_gui.py:3074
 msgid "Thread unfollowed"
 msgstr "Przerwano obserwowanie wątku"
 
-#: src/eltenlink_client/elten_gui.py:3059
-#: src/eltenlink_client/elten_gui.py:3136
-#: src/eltenlink_client/elten_gui.py:3210
+#: src/eltenlink_client/elten_gui.py:3087
+#: src/eltenlink_client/elten_gui.py:3164
+#: src/eltenlink_client/elten_gui.py:3238
 msgid "Text post"
 msgstr "Wpis tekstowy"
 
-#: src/eltenlink_client/elten_gui.py:3059
-#: src/eltenlink_client/elten_gui.py:3136
-#: src/eltenlink_client/elten_gui.py:3210
+#: src/eltenlink_client/elten_gui.py:3087
+#: src/eltenlink_client/elten_gui.py:3164
+#: src/eltenlink_client/elten_gui.py:3238
 msgid "Audio post"
 msgstr "Wpis głosowy"
 
-#: src/eltenlink_client/elten_gui.py:3061
-#: src/eltenlink_client/elten_gui.py:3138
+#: src/eltenlink_client/elten_gui.py:3089
+#: src/eltenlink_client/elten_gui.py:3166
 msgid "Select first post type"
 msgstr "Wybierz typ pierwszego wpisu"
 
-#: src/eltenlink_client/elten_gui.py:3072
-#: src/eltenlink_client/elten_gui.py:3149
+#: src/eltenlink_client/elten_gui.py:3100
+#: src/eltenlink_client/elten_gui.py:3177
 msgid "Thread name:"
 msgstr "Nazwa wątku:"
 
-#: src/eltenlink_client/elten_gui.py:3079
-#: src/eltenlink_client/elten_gui.py:3156
-#: src/eltenlink_client/elten_gui.py:3230
+#: src/eltenlink_client/elten_gui.py:3107
+#: src/eltenlink_client/elten_gui.py:3184
+#: src/eltenlink_client/elten_gui.py:3258
 msgid "Title cannot be empty"
 msgstr "Tytuł nie może być pusty"
 
-#: src/eltenlink_client/elten_gui.py:3084
-#: src/eltenlink_client/elten_gui.py:3161
-#: src/eltenlink_client/elten_gui.py:3235
+#: src/eltenlink_client/elten_gui.py:3112
+#: src/eltenlink_client/elten_gui.py:3189
+#: src/eltenlink_client/elten_gui.py:3263
 msgid "Post content:"
 msgstr "Treść wpisu:"
 
-#: src/eltenlink_client/elten_gui.py:3091
-#: src/eltenlink_client/elten_gui.py:3168
-#: src/eltenlink_client/elten_gui.py:3242
+#: src/eltenlink_client/elten_gui.py:3119
+#: src/eltenlink_client/elten_gui.py:3196
+#: src/eltenlink_client/elten_gui.py:3270
 msgid "Content cannot be empty"
 msgstr "Treść nie może być pusta"
 
-#: src/eltenlink_client/elten_gui.py:3094
-#: src/eltenlink_client/elten_gui.py:3117
-#: src/eltenlink_client/elten_gui.py:3171
-#: src/eltenlink_client/elten_gui.py:3189
+#: src/eltenlink_client/elten_gui.py:3122
+#: src/eltenlink_client/elten_gui.py:3145
+#: src/eltenlink_client/elten_gui.py:3199
+#: src/eltenlink_client/elten_gui.py:3217
 msgid "Creating thread..."
 msgstr "Tworzenie wątku..."
 
-#: src/eltenlink_client/elten_gui.py:3111
-#: src/eltenlink_client/elten_gui.py:3203
+#: src/eltenlink_client/elten_gui.py:3139
+#: src/eltenlink_client/elten_gui.py:3231
 msgid "Record audio post"
 msgstr "Nagraj wpis głosowy"
 
-#: src/eltenlink_client/elten_gui.py:3212
+#: src/eltenlink_client/elten_gui.py:3240
 msgid "Select post type"
 msgstr "Wybierz typ wpisu"
 
 # ---- Blog Post Creation ----
-#: src/eltenlink_client/elten_gui.py:3223
+#: src/eltenlink_client/elten_gui.py:3251
 msgid "Post title:"
 msgstr "Tytuł wpisu:"
 
-#: src/eltenlink_client/elten_gui.py:3245
-#: src/eltenlink_client/elten_gui.py:3263
+#: src/eltenlink_client/elten_gui.py:3273
+#: src/eltenlink_client/elten_gui.py:3291
 msgid "Publishing post..."
 msgstr "Publikowanie wpisu..."
 
 # ---- Posts Panel ----
-#: src/eltenlink_client/elten_gui.py:3280
+#: src/eltenlink_client/elten_gui.py:3308
 msgid "Audio content"
 msgstr "Zawartość audio"
 
 # ---- Blog Category Management ----
-#: src/eltenlink_client/elten_gui.py:3285
+#: src/eltenlink_client/elten_gui.py:3313
 msgid "Category name:"
 msgstr "Nazwa kategorii:"
 
-#: src/eltenlink_client/elten_gui.py:3292
+#: src/eltenlink_client/elten_gui.py:3320
 msgid "Name cannot be empty"
 msgstr "Nazwa nie może być pusta"
 
-#: src/eltenlink_client/elten_gui.py:3295
+#: src/eltenlink_client/elten_gui.py:3323
 msgid "Creating category..."
 msgstr "Tworzenie kategorii..."
 
-#: src/eltenlink_client/elten_gui.py:3310
+#: src/eltenlink_client/elten_gui.py:3338
 msgid "Loading categories..."
 msgstr "Ładowanie kategorii..."
 
-#: src/eltenlink_client/elten_gui.py:3323
+#: src/eltenlink_client/elten_gui.py:3351
 msgid "No categories"
 msgstr "Brak kategorii"
 
-#: src/eltenlink_client/elten_gui.py:3329
+#: src/eltenlink_client/elten_gui.py:3357
 msgid "Select a category to manage:"
 msgstr "Wybierz kategorię do zarządzania:"
 
-#: src/eltenlink_client/elten_gui.py:3329
+#: src/eltenlink_client/elten_gui.py:3357
 msgid "Blog Categories"
 msgstr "Kategorie bloga"
 
-#: src/eltenlink_client/elten_gui.py:3340
+#: src/eltenlink_client/elten_gui.py:3368
 msgid "Rename"
 msgstr "Zmień nazwę"
 
-#: src/eltenlink_client/elten_gui.py:3340
+#: src/eltenlink_client/elten_gui.py:3368
 msgid "Delete"
 msgstr "Usuń"
 
-#: src/eltenlink_client/elten_gui.py:3342
+#: src/eltenlink_client/elten_gui.py:3370
 #, python-brace-format
 msgid "Action for category '{name}':"
 msgstr "Akcja dla kategorii '{name}':"
 
-#: src/eltenlink_client/elten_gui.py:3343
+#: src/eltenlink_client/elten_gui.py:3371
 msgid "Category Action"
 msgstr "Akcja kategorii"
 
-#: src/eltenlink_client/elten_gui.py:3354
+#: src/eltenlink_client/elten_gui.py:3382
 msgid "New name:"
 msgstr "Nowa nazwa:"
 
-#: src/eltenlink_client/elten_gui.py:3354
+#: src/eltenlink_client/elten_gui.py:3382
 msgid "Rename Category"
 msgstr "Zmień nazwę kategorii"
 
-#: src/eltenlink_client/elten_gui.py:3373
+#: src/eltenlink_client/elten_gui.py:3401
 #, python-brace-format
 msgid "Delete category '{name}'?"
 msgstr "Usunąć kategorię '{name}'?"
 
-#: src/eltenlink_client/elten_gui.py:3374
+#: src/eltenlink_client/elten_gui.py:3402
 msgid "Delete Category"
 msgstr "Usuń kategorię"
 
 # ---- Blog Actions ----
-#: src/eltenlink_client/elten_gui.py:3397
+#: src/eltenlink_client/elten_gui.py:3425
 msgid "Blog unfollowed"
 msgstr "Przerwano obserwowanie bloga"
 
-#: src/eltenlink_client/elten_gui.py:3400
+#: src/eltenlink_client/elten_gui.py:3428
 msgid "Blog followed"
 msgstr "Blog obserwowany"
 
-#: src/eltenlink_client/elten_gui.py:3411
+#: src/eltenlink_client/elten_gui.py:3439
 msgid "Post unfollowed"
 msgstr "Przerwano obserwowanie wpisu"
 
-#: src/eltenlink_client/elten_gui.py:3414
+#: src/eltenlink_client/elten_gui.py:3442
 msgid "Post followed"
 msgstr "Wpis obserwowany"
 
-#: src/eltenlink_client/elten_gui.py:3421
+#: src/eltenlink_client/elten_gui.py:3449
 msgid "Blog marked as read"
 msgstr "Blog oznaczony jako przeczytany"
 
-#: src/eltenlink_client/elten_gui.py:3425
+#: src/eltenlink_client/elten_gui.py:3453
 msgid "Comment deletion is not yet supported"
 msgstr "Usuwanie komentarzy nie jest jeszcze obsługiwane"
 
-#: src/eltenlink_client/elten_gui.py:3440
+#: src/eltenlink_client/elten_gui.py:3468
 msgid "No audio URL available"
 msgstr "Brak dostępnego adresu URL audio"
 
-#: src/eltenlink_client/elten_gui.py:3462
+#: src/eltenlink_client/elten_gui.py:3490
 msgid "Registered"
 msgstr "Zarejestrowany"
 
 # ---- User Submenu ----
-#: src/eltenlink_client/elten_gui.py:3464
+#: src/eltenlink_client/elten_gui.py:3492
 msgid "Last seen"
 msgstr "Ostatnio widziany"
 
 # ---- Blogs Menu ----
-#: src/eltenlink_client/elten_gui.py:3470
+#: src/eltenlink_client/elten_gui.py:3498
 msgid "Has blog"
 msgstr "Ma bloga"
 
-#: src/eltenlink_client/elten_gui.py:3470
+#: src/eltenlink_client/elten_gui.py:3498
 msgid "Yes"
 msgstr "Tak"
 
-#: src/eltenlink_client/elten_gui.py:3472
+#: src/eltenlink_client/elten_gui.py:3500
 msgid "BANNED"
 msgstr "ZBANOWANY"
 
 #: src/eltenlink_client/accountmanagement.py:334
-#: src/eltenlink_client/elten_gui.py:3476
+#: src/eltenlink_client/elten_gui.py:3504
 msgid "Profile"
 msgstr "Profil"
 
-#: src/eltenlink_client/elten_gui.py:3486
-#: src/eltenlink_client/elten_gui.py:3673
+#: src/eltenlink_client/elten_gui.py:3514
+#: src/eltenlink_client/elten_gui.py:3701
 msgid "OK"
 msgstr "OK"
 
-#: src/eltenlink_client/elten_gui.py:3664
+#: src/eltenlink_client/elten_gui.py:3692
 msgid "Recipient:"
 msgstr "Odbiorca:"
 
-#: src/eltenlink_client/elten_gui.py:3668
+#: src/eltenlink_client/elten_gui.py:3696
 msgid "Subject:"
 msgstr "Temat:"
 
-#: src/eltenlink_client/elten_gui.py:3697
-#: src/eltenlink_client/elten_gui.py:3702
+#: src/eltenlink_client/elten_gui.py:3725
+#: src/eltenlink_client/elten_gui.py:3730
 msgid "Failed to load account info"
 msgstr "Nie udało się załadować informacji o koncie"
 
-#: src/eltenlink_client/elten_gui.py:3706
-#: src/eltenlink_client/elten_gui.py:3713
+#: src/eltenlink_client/elten_gui.py:3734
+#: src/eltenlink_client/elten_gui.py:3741
 msgid "Account Information"
 msgstr "Informacje o koncie"
 
 # ---- Player ----
-#: src/eltenlink_client/elten_gui.py:3734
+#: src/eltenlink_client/elten_gui.py:3762
 msgid "Audio recorder"
 msgstr "Nagrywanie audio"
 
-#: src/eltenlink_client/elten_gui.py:3739
+#: src/eltenlink_client/elten_gui.py:3767
 msgid "Browse..."
 msgstr "Przeglądaj..."
 
-#: src/eltenlink_client/elten_gui.py:3742
+#: src/eltenlink_client/elten_gui.py:3770
 msgid "No file selected"
 msgstr "Nie wybrano pliku"
 
-#: src/eltenlink_client/elten_gui.py:3751
+#: src/eltenlink_client/elten_gui.py:3779
 msgid "Select audio file"
 msgstr "Wybierz plik audio"
 
-#: src/eltenlink_client/elten_gui.py:3752
+#: src/eltenlink_client/elten_gui.py:3780
 msgid "Audio files"
 msgstr "Pliki audio"
 
-#: src/eltenlink_client/elten_gui.py:3753
+#: src/eltenlink_client/elten_gui.py:3781
 msgid "All files"
 msgstr "Wszystkie pliki"
 
-#: src/eltenlink_client/elten_gui.py:3790
+#: src/eltenlink_client/elten_gui.py:3818
 msgid "File selected"
 msgstr "Wybrany plik"
 
-#: src/eltenlink_client/elten_gui.py:3821
+#: src/eltenlink_client/elten_gui.py:3849
 msgid "No audio recorded or selected"
 msgstr "Nie nagrano ani nie wybrano pliku audio"
 
 # ---- Message Sending ----
-#: src/eltenlink_client/elten_gui.py:3903
+#: src/eltenlink_client/elten_gui.py:3931
 msgid "Please enter a message"
 msgstr "Wprowadź wiadomość"
 
-#: src/eltenlink_client/elten_gui.py:3924
+#: src/eltenlink_client/elten_gui.py:3952
 msgid "Failed to send message"
 msgstr "Nie udało się wysłać wiadomości"
 
-#: src/eltenlink_client/elten_gui.py:3942
+#: src/eltenlink_client/elten_gui.py:3970
 msgid "Posting reply..."
 msgstr "Publikowanie odpowiedzi..."
 
-#: src/eltenlink_client/elten_gui.py:3950
+#: src/eltenlink_client/elten_gui.py:3978
 msgid "Failed to post reply"
 msgstr "Nie udało się opublikować odpowiedzi"
 
-#: src/eltenlink_client/elten_gui.py:3967
+#: src/eltenlink_client/elten_gui.py:3995
 msgid "Posting audio reply..."
 msgstr "Publikowanie odpowiedzi głosowej..."
 
-#: src/eltenlink_client/elten_gui.py:3979
+#: src/eltenlink_client/elten_gui.py:4007
 msgid "Failed to post audio reply"
 msgstr "Nie udało się opublikować odpowiedzi głosowej"
 
 # ---- Player ----
-#: src/eltenlink_client/elten_gui.py:3987
+#: src/eltenlink_client/elten_gui.py:4015
 msgid "Audio Reply"
 msgstr "Odpowiedź głosowa"
 
-#: src/eltenlink_client/elten_gui.py:3993
+#: src/eltenlink_client/elten_gui.py:4021
 msgid "Posting comment..."
 msgstr "Publikowanie komentarza..."
 
-#: src/eltenlink_client/elten_gui.py:4001
+#: src/eltenlink_client/elten_gui.py:4029
 msgid "Failed to post comment"
 msgstr "Nie udało się opublikować komentarza"
 
 # ---- Auto-Refresh / Notifications ----
-#: src/eltenlink_client/elten_gui.py:4043
+#: src/eltenlink_client/elten_gui.py:4071
 msgid "New conversation"
 msgstr "Nowa rozmowa"
 
-#: src/eltenlink_client/elten_gui.py:4059
+#: src/eltenlink_client/elten_gui.py:4087
 #, python-brace-format
 msgid "New message from {user}"
 msgstr "Nowa wiadomość od {user}"
 
-#: src/eltenlink_client/elten_gui.py:4089
+#: src/eltenlink_client/elten_gui.py:4117
 msgid "is now online"
 msgstr "jest teraz online"
 
-#: src/eltenlink_client/elten_gui.py:4094
+#: src/eltenlink_client/elten_gui.py:4122
 msgid "is now offline"
 msgstr "jest teraz offline"
 
-#: src/eltenlink_client/elten_gui.py:4099
+#: src/eltenlink_client/elten_gui.py:4127
 msgid "Refreshing..."
 msgstr "Odświeżanie..."
 
-#: src/eltenlink_client/elten_gui.py:4250
+#: src/eltenlink_client/elten_gui.py:4278
 msgid "Are you sure you want to disconnect?"
 msgstr "Czy na pewno chcesz się rozłączyć?"
 
-#: src/eltenlink_client/elten_gui.py:4266
+#: src/eltenlink_client/elten_gui.py:4294
 msgid "Disconnected"
 msgstr "Rozłączono"
 
-#: src/eltenlink_client/elten_gui.py:4324
+#: src/eltenlink_client/elten_gui.py:4352
 msgid "Voice Call"
 msgstr "Rozmowa głosowa"
 
-#: src/eltenlink_client/elten_gui.py:4340
+#: src/eltenlink_client/elten_gui.py:4368
 #, python-brace-format
 msgid "Calling {user}..."
 msgstr "Dzwonię do {user}..."
 
-#: src/eltenlink_client/elten_gui.py:4406
+#: src/eltenlink_client/elten_gui.py:4434
 msgid "Could not create voice channel"
 msgstr "Nie udało się utworzyć kanału głosowego"
 
-#: src/eltenlink_client/elten_gui.py:4431
+#: src/eltenlink_client/elten_gui.py:4459
 msgid "Could not send call invitation"
 msgstr "Nie udało się wysłać zaproszenia do rozmowy"
 
-#: src/eltenlink_client/elten_gui.py:4493
-#: src/eltenlink_client/elten_gui.py:4742
+#: src/eltenlink_client/elten_gui.py:4521
+#: src/eltenlink_client/elten_gui.py:4770
 msgid "Connection lost"
 msgstr "Utracono połączenie"
 
-#: src/eltenlink_client/elten_gui.py:4528
+#: src/eltenlink_client/elten_gui.py:4556
 msgid "Call cancelled"
 msgstr "Połączenie anulowane"
 
-#: src/eltenlink_client/elten_gui.py:4543
+#: src/eltenlink_client/elten_gui.py:4571
 msgid "Incoming Call"
 msgstr "Połączenie przychodzące"
 
-#: src/eltenlink_client/elten_gui.py:4556
+#: src/eltenlink_client/elten_gui.py:4584
 #, python-brace-format
 msgid "{user} is calling you"
 msgstr "{user} dzwoni do Ciebie"
 
-#: src/eltenlink_client/elten_gui.py:4561
+#: src/eltenlink_client/elten_gui.py:4589
 msgid "Answer"
 msgstr "Odbierz"
 
-#: src/eltenlink_client/elten_gui.py:4564
+#: src/eltenlink_client/elten_gui.py:4592
 msgid "Reject"
 msgstr "Odrzuć"
 
-#: src/eltenlink_client/elten_gui.py:4651
+#: src/eltenlink_client/elten_gui.py:4679
 #, python-brace-format
 msgid "Voice Call - {user}"
 msgstr "Rozmowa głosowa - {user}"
 
-#: src/eltenlink_client/elten_gui.py:4661
+#: src/eltenlink_client/elten_gui.py:4689
 msgid "Users in call:"
 msgstr "Użytkownicy w rozmowie:"
 
-#: src/eltenlink_client/elten_gui.py:4671
-#: src/eltenlink_client/elten_gui.py:4752
+#: src/eltenlink_client/elten_gui.py:4699
+#: src/eltenlink_client/elten_gui.py:4780
 msgid "Mute"
 msgstr "Wycisz"
 
-#: src/eltenlink_client/elten_gui.py:4674
+#: src/eltenlink_client/elten_gui.py:4702
 msgid "End Call"
 msgstr "Zakończ rozmowę"
 
-#: src/eltenlink_client/elten_gui.py:4725
+#: src/eltenlink_client/elten_gui.py:4753
 msgid "You"
 msgstr "Ty"
 
-#: src/eltenlink_client/elten_gui.py:4738
+#: src/eltenlink_client/elten_gui.py:4766
 #, python-brace-format
 msgid "{user} ended the call"
 msgstr "{user} zakończył rozmowę"
 
-#: src/eltenlink_client/elten_gui.py:4749
+#: src/eltenlink_client/elten_gui.py:4777
 msgid "Unmute"
 msgstr "Wyłącz wyciszenie"
 
-#: src/eltenlink_client/elten_gui.py:4750
+#: src/eltenlink_client/elten_gui.py:4778
 msgid "Microphone muted"
 msgstr "Mikrofon wyciszony"
 
-#: src/eltenlink_client/elten_gui.py:4753
+#: src/eltenlink_client/elten_gui.py:4781
 msgid "Microphone unmuted"
 msgstr "Mikrofon włączony"
 
-#: src/eltenlink_client/elten_gui.py:4771
+#: src/eltenlink_client/elten_gui.py:4799
 msgid "Call ended"
 msgstr "Rozmowa zakończona"
 

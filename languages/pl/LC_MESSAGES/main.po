@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-14 12:48+0200\n"
+"POT-Creation-Date: 2026-06-23 16:29+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,24 +20,23 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: main.py
-msgid "Titan is starting up..."
-msgstr "Trwa uruchamianie Titana..."
-
-#: main.py:271
+#: main.py:283
 msgid "Restarting Titan..."
 msgstr "Trwa restart Titana..."
 
-#: main.py:487
+#: main.py:524
 #, python-brace-format
 msgid "Welcome to Titan: Version {}"
 msgstr "Witaj w Titan: Wersja {}"
 
-#: main.py:568 main.py:772 main.py:1100
+#: main.py:605 main.py:809 main.py:1175
 msgid "Settings"
 msgstr "Ustawienia"
 
-#: main.py:1119
+#: main.py:1194
 msgid "Titan App Suite"
 msgstr "Pakiet aplikacji Titan"
+
+#~ msgid "Titan is starting up..."
+#~ msgstr "Trwa uruchamianie Titana..."
 
