@@ -1512,6 +1512,28 @@ class TitanNetMainWindow(wx.Frame):
             create_room_item = user_menu.Append(wx.ID_ANY, _("Create New Room"))
             self.Bind(wx.EVT_MENU, lambda e: self._user_create_room(), create_room_item)
             user_menu.AppendSeparator()
+        elif self.current_view == "groups":
+            # Anyone may create a group.
+            create_group_item = user_menu.Append(wx.ID_ANY, _("Create New Group"))
+            self.Bind(wx.EVT_MENU, lambda e: self._user_create_group(), create_group_item)
+            sel = self.main_listbox.GetSelection()
+            grp = self._group_by_id(self.main_listbox.GetClientData(sel)) if sel != wx.NOT_FOUND else None
+            if grp:
+                if grp.get('my_status') == 'active' and grp.get('my_role') != 'owner':
+                    leave_item = user_menu.Append(wx.ID_ANY, _("Leave Group"))
+                    self.Bind(wx.EVT_MENU, lambda e: self._user_leave_group(), leave_item)
+                elif not grp.get('my_status') and grp.get('visibility') != 'hidden':
+                    join_item = user_menu.Append(wx.ID_ANY, _("Join Group"))
+                    self.Bind(wx.EVT_MENU, lambda e: self._user_join_group(), join_item)
+            user_menu.AppendSeparator()
+        elif self.current_view == "group_forums":
+            grp = getattr(self, 'current_group', None)
+            if grp and grp.get('my_role') in ('owner', 'moderator'):
+                create_forum_item = user_menu.Append(wx.ID_ANY, _("Create New Forum"))
+                self.Bind(wx.EVT_MENU, lambda e: self._user_create_forum(), create_forum_item)
+                pending_item = user_menu.Append(wx.ID_ANY, _("Manage Pending Members"))
+                self.Bind(wx.EVT_MENU, lambda e: self._mod_manage_pending_members(), pending_item)
+                user_menu.AppendSeparator()
         elif self.current_view == "forum":
             create_topic_item = user_menu.Append(wx.ID_ANY, _("Create New Thread"))
             self.Bind(wx.EVT_MENU, lambda e: self._user_create_topic(), create_topic_item)
@@ -1528,17 +1550,17 @@ class TitanNetMainWindow(wx.Frame):
 
             # Context-specific moderation options
             if self.current_view == "forum":
-                # Forum topic list view
+                # Forum topic (thread) list view
                 if self.main_listbox.GetSelection() != wx.NOT_FOUND:
-                    mod_delete_topic = moderation_menu.Append(wx.ID_ANY, _("Delete Topic"))
-                    mod_lock_topic = moderation_menu.Append(wx.ID_ANY, _("Lock/Unlock Topic"))
-                    mod_pin_topic = moderation_menu.Append(wx.ID_ANY, _("Pin/Unpin Topic"))
-                    mod_move_topic = moderation_menu.Append(wx.ID_ANY, _("Move Topic to Category"))
+                    mod_delete_topic = moderation_menu.Append(wx.ID_ANY, _("Delete Thread"))
+                    mod_lock_topic = moderation_menu.Append(wx.ID_ANY, _("Lock/Unlock Thread"))
+                    mod_pin_topic = moderation_menu.Append(wx.ID_ANY, _("Pin/Unpin Thread"))
+                    mod_move_topic = moderation_menu.Append(wx.ID_ANY, _("Move Thread to Forum"))
 
                     self.Bind(wx.EVT_MENU, lambda e: self._mod_delete_selected_topic(), mod_delete_topic)
                     self.Bind(wx.EVT_MENU, lambda e: self._mod_toggle_lock_selected_topic(), mod_lock_topic)
                     self.Bind(wx.EVT_MENU, lambda e: self._mod_toggle_pin_selected_topic(), mod_pin_topic)
-                    self.Bind(wx.EVT_MENU, lambda e: self._mod_move_selected_topic(), mod_move_topic)
+                    self.Bind(wx.EVT_MENU, lambda e: self._mod_move_selected_topic_to_forum(), mod_move_topic)
 
             elif self.current_view == "room_chat":
                 # Inside a chat room
@@ -1696,6 +1718,45 @@ class TitanNetMainWindow(wx.Frame):
 
         # New user broadcast callback
         self.titan_client.on_new_user_broadcast = self.on_new_user_broadcast
+
+        # Moderator component runtime (event bus). Loads enabled components so
+        # their hooks (on_message/on_tick/...) fire on live Titan-Net events.
+        try:
+            from src.network.titan_net_mod_components import get_runtime, sync_active_extensions
+            get_runtime(self.titan_client, self)
+            if not getattr(self, '_component_tick_timer', None):
+                self._component_tick_timer = wx.Timer(self)
+                self.Bind(wx.EVT_TIMER, self._on_component_tick, self._component_tick_timer)
+                self._component_tick_timer.Start(30000)  # ~30s on_tick
+
+            # Pull approved network extensions in the background, then refresh
+            # the runtime so their hooks come online.
+            def _sync_ext():
+                try:
+                    sync_active_extensions(self.titan_client)
+                    rt = get_runtime()
+                    if rt is not None:
+                        rt.reload()
+                except Exception as ex:
+                    print(f"Extension sync error: {ex}")
+            threading.Thread(target=_sync_ext, daemon=True).start()
+        except Exception as e:
+            print(f"Error starting component runtime: {e}")
+
+    def _on_component_tick(self, event):
+        try:
+            from src.network.titan_net_mod_components import dispatch_event
+            dispatch_event('tick')
+        except Exception as e:
+            print(f"Component tick error: {e}")
+
+    def _dispatch_component_event(self, event, **payload):
+        """Forward a Titan-Net event to moderator components (never raises)."""
+        try:
+            from src.network.titan_net_mod_components import dispatch_event
+            dispatch_event(event, **payload)
+        except Exception as e:
+            print(f"Component dispatch error: {e}")
 
     def show_menu(self):
         """Show main menu"""
@@ -2005,10 +2066,125 @@ class TitanNetMainWindow(wx.Frame):
         self.panel.Layout()
         play_sound('core/SELECT.ogg')
 
-    def show_forum_view(self):
-        """Show forum topics list"""
+    def _prepare_list_view(self, label):
+        """Common chrome for a main_listbox-based view: hide chat widgets,
+        show the list + back button, set the view label."""
+        self.view_label.SetLabel(label)
+        self.message_display.Hide()
+        self.message_input.Hide()
+        self.send_button.Hide()
+        self.voice_panel.Hide()
+        self.broadcast_panel.Hide()
+        self.main_listbox.Show()
+        self.back_button.Show()
+        self.leave_room_button.Hide()
+
+    # ---------- Groups (Elten-style: groups -> forums -> threads) ----------
+
+    def show_groups_view(self):
+        """Top level of the forum: list of groups."""
+        self.current_view = "groups"
+        self.current_group = None
+        self.current_forum = None
+        self._prepare_list_view(_("Titan-Net - Groups"))
+        self.refresh_groups()
+        self.panel.Layout()
+        self.update_menu_bar()
+        play_sound('core/SELECT.ogg')
+
+    def refresh_groups(self):
+        def _load():
+            result = self.titan_client.list_groups()
+            wx.CallAfter(self._update_groups_list, result)
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _group_status_label(self, g):
+        if g.get('my_status') == 'active':
+            role = g.get('my_role')
+            if role == 'owner':
+                return _("owner")
+            if role == 'moderator':
+                return _("moderator")
+            return _("member")
+        if g.get('my_status') == 'pending':
+            return _("pending")
+        return _("not joined")
+
+    def _update_groups_list(self, result):
+        if not self or self.current_view != "groups":
+            return
+        try:
+            if result.get('success'):
+                self.groups_cache = result.get('groups', [])
+                self.main_listbox.Clear()
+                for g in self.groups_cache:
+                    vis = g.get('visibility', 'public')
+                    display = _("{name} ({visibility}, {count} members) - {status}").format(
+                        name=g['name'], visibility=vis,
+                        count=g.get('member_count', 0), status=self._group_status_label(g))
+                    self.main_listbox.Append(display, clientData=g.get('id'))
+                if self.main_listbox.GetCount() > 0:
+                    self.main_listbox.SetSelection(0)
+        except Exception as e:
+            print(f"Error updating groups list: {e}")
+
+    def _group_by_id(self, group_id):
+        for g in getattr(self, 'groups_cache', []):
+            if g.get('id') == group_id:
+                return g
+        return None
+
+    def show_group_forums_view(self, group):
+        """Second level: the forums of one group."""
+        if not group:
+            return
+        self.current_view = "group_forums"
+        self.current_group = group
+        self.current_forum = None
+        self._prepare_list_view(_("Group: {name}").format(name=group.get('name', '')))
+        self.refresh_group_forums()
+        self.panel.Layout()
+        self.update_menu_bar()
+        play_sound('core/SELECT.ogg')
+
+    def refresh_group_forums(self):
+        group = getattr(self, 'current_group', None)
+        if not group:
+            return
+        def _load():
+            result = self.titan_client.list_group_forums(group['id'])
+            wx.CallAfter(self._update_group_forums_list, result)
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _update_group_forums_list(self, result):
+        if not self or self.current_view != "group_forums":
+            return
+        try:
+            if result.get('success'):
+                self.group_forums_cache = result.get('forums', [])
+                self.main_listbox.Clear()
+                for f in self.group_forums_cache:
+                    display = _("{name} ({count} threads)").format(
+                        name=f['name'], count=f.get('topic_count', 0))
+                    self.main_listbox.Append(display, clientData=f.get('id'))
+                if self.main_listbox.GetCount() > 0:
+                    self.main_listbox.SetSelection(0)
+        except Exception as e:
+            print(f"Error updating group forums list: {e}")
+
+    def _group_forum_by_id(self, forum_id):
+        for f in getattr(self, 'group_forums_cache', []):
+            if f.get('id') == forum_id:
+                return f
+        return None
+
+    def show_forum_view(self, forum=None):
+        """Show forum topics list. When ``forum`` (a group forum dict) is
+        given, the list is scoped to that forum's threads; otherwise it is the
+        legacy flat forum."""
         # Show forum immediately, check ban in background
         self.current_view = "forum"
+        self.current_forum = forum
 
         # Check ban status in background (non-blocking)
         def check_forum_ban():
@@ -2464,7 +2640,7 @@ class TitanNetMainWindow(wx.Frame):
             elif item_text == _("Private Messages"):
                 self.show_private_messages_view()
             elif item_text == _("Forum"):
-                self.show_forum_view()
+                self.show_groups_view()
             elif item_text == _("App Repository"):
                 self.show_repository_view()
             elif item_text == _("Moderation"):
@@ -2496,6 +2672,18 @@ class TitanNetMainWindow(wx.Frame):
             if 0 <= selection < len(self.users_cache):
                 user = self.users_cache[selection]
                 self.show_private_chat(user['id'], user['username'])
+
+        elif self.current_view == "groups":
+            # Open the selected group's forums.
+            group = self._group_by_id(self.main_listbox.GetClientData(selection))
+            if group:
+                self.show_group_forums_view(group)
+
+        elif self.current_view == "group_forums":
+            # Open the selected forum's threads.
+            forum = self._group_forum_by_id(self.main_listbox.GetClientData(selection))
+            if forum:
+                self.show_forum_view(forum)
 
         elif self.current_view == "forum":
             # Open selected forum topic
@@ -2661,6 +2849,14 @@ class TitanNetMainWindow(wx.Frame):
             play_sound('core/SELECT.ogg')
         except Exception:
             pass
+
+        # Hierarchical back-navigation for the groups -> forums -> threads tree.
+        if self.current_view == "forum" and getattr(self, 'current_forum', None):
+            self.show_group_forums_view(getattr(self, 'current_group', None))
+            return
+        if self.current_view == "group_forums":
+            self.show_groups_view()
+            return
 
         room_id = getattr(self, 'current_room', None)
 
@@ -3241,8 +3437,20 @@ class TitanNetMainWindow(wx.Frame):
             if self.current_view == "rooms":
                 self._user_create_room()
                 return
+            elif self.current_view == "groups":
+                self._user_create_group()
+                return
             elif self.current_view == "forum":
                 self._user_create_topic()
+                return
+            elif self.current_view == "menu":
+                # In the main view Ctrl+N is NOT a new room/thread — it opens
+                # the moderator component API, a place to program new
+                # Titan-Net features. Moderators/developers only.
+                if self.is_moderator or self.is_developer:
+                    self.open_moderator_components()
+                else:
+                    speak_titannet(_("Moderator components are available to moderators only"))
                 return
 
         # Ctrl+O - open / reply to the last incoming private message
@@ -3697,9 +3905,12 @@ class TitanNetMainWindow(wx.Frame):
             traceback.print_exc()
 
     def refresh_forum_topics(self):
-        """Refresh forum topics list"""
+        """Refresh forum topics list (scoped to the current group forum when set)."""
+        forum = getattr(self, 'current_forum', None)
+        forum_id = forum['id'] if forum else None
+
         def refresh_thread():
-            result = self.titan_client.get_forum_topics(limit=50)
+            result = self.titan_client.get_forum_topics(limit=50, forum_id=forum_id)
             wx.CallAfter(self._update_forum_topics_list, result)
 
         threading.Thread(target=refresh_thread, daemon=True).start()
@@ -4374,6 +4585,7 @@ class TitanNetMainWindow(wx.Frame):
     # Callbacks from TitanNetClient for real-time updates
     def on_room_message(self, message):
         """Handle incoming room message"""
+        self._dispatch_component_event('message', message=message)
         if message.get('room_id') == self.current_room:
             wx.CallAfter(self._append_room_message, message)
 
@@ -4404,6 +4616,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def on_private_message(self, message):
         """Handle incoming private message"""
+        self._dispatch_component_event('private_message', message=message)
         sender_id = message.get('sender_id')
 
         if sender_id == self.current_private_user:
@@ -4549,6 +4762,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def on_user_online(self, username, has_custom_sounds=False):
         """User came online"""
+        self._dispatch_component_event('user_online', username=username)
         if self.current_view in ["users", "private_messages_select"]:
             wx.CallAfter(self.refresh_users)
         self._play_business_card_sound(username, 'login', 'titannet/online.ogg', has_custom_sounds)
@@ -4556,6 +4770,7 @@ class TitanNetMainWindow(wx.Frame):
 
     def on_user_offline(self, username, has_custom_sounds=False):
         """User went offline"""
+        self._dispatch_component_event('user_offline', username=username)
         if self.current_view in ["users", "private_messages_select"]:
             wx.CallAfter(self.refresh_users)
         self._play_business_card_sound(username, 'logout', 'titannet/offline.ogg', has_custom_sounds)
@@ -5736,21 +5951,11 @@ class TitanNetMainWindow(wx.Frame):
                     title_dlg.Destroy()
                     return
 
-                # Category selection
-                categories = [_("General"), _("Help"), _("Off-Topic"), _("Announcements"), _("Development")]
-                cat_dlg = wx.SingleChoiceDialog(self,
-                    _("Select category:"),
-                    _("Topic Category"),
-                    categories)
-
-                if cat_dlg.ShowModal() == wx.ID_OK:
-                    category_map = {0: "general", 1: "help", 2: "off-topic", 3: "announcements", 4: "development"}
-                    category = category_map.get(cat_dlg.GetSelection(), "general")
-
-                    # Create topic
+                def _start_create(category, forum_id):
                     def create_thread():
                         try:
-                            result = self.titan_client.create_forum_topic(topic_title, topic_content, category)
+                            result = self.titan_client.create_forum_topic(
+                                topic_title, topic_content, category, forum_id=forum_id)
                             if result.get('success'):
                                 wx.CallAfter(speak_titannet, _("Thread created"))
                                 wx.CallAfter(speak_notification, _("Thread created successfully"), 'success')
@@ -5760,14 +5965,184 @@ class TitanNetMainWindow(wx.Frame):
                                 wx.CallAfter(speak_notification, result.get('message', _("Failed to create thread")), 'error')
                         except Exception as e:
                             wx.CallAfter(speak_notification, str(e), 'error')
-
                     threading.Thread(target=create_thread, daemon=True).start()
 
-                cat_dlg.Destroy()
+                forum = getattr(self, 'current_forum', None)
+                if forum:
+                    # Group forum: the thread goes straight into this forum, no
+                    # category picker needed.
+                    _start_create('general', forum['id'])
+                else:
+                    # Legacy flat forum: pick a category.
+                    categories = [_("General"), _("Help"), _("Off-Topic"), _("Announcements"), _("Development")]
+                    cat_dlg = wx.SingleChoiceDialog(self,
+                        _("Select category:"),
+                        _("Topic Category"),
+                        categories)
+                    if cat_dlg.ShowModal() == wx.ID_OK:
+                        category_map = {0: "general", 1: "help", 2: "off-topic", 3: "announcements", 4: "development"}
+                        category = category_map.get(cat_dlg.GetSelection(), "general")
+                        _start_create(category, None)
+                    cat_dlg.Destroy()
 
             content_dlg.Destroy()
 
         title_dlg.Destroy()
+
+    # ---------- Group/forum actions (integrated view) ----------
+
+    def _user_create_group(self):
+        """Create a new group (any logged-in user)."""
+        try:
+            from src.network.titan_net_forum_gui import NewGroupDialog
+            dlg = NewGroupDialog(self, self.titan_client)
+            if dlg.ShowModal() == wx.ID_OK and self.current_view == "groups":
+                self.refresh_groups()
+            dlg.Destroy()
+        except Exception as e:
+            print(f"Error creating group: {e}")
+
+    def _selected_group_in_list(self):
+        sel = self.main_listbox.GetSelection()
+        if sel == wx.NOT_FOUND:
+            return None
+        return self._group_by_id(self.main_listbox.GetClientData(sel))
+
+    def _user_join_group(self):
+        group = self._selected_group_in_list()
+        if not group:
+            return
+        def _join():
+            result = self.titan_client.join_group(group['id'])
+            wx.CallAfter(self._after_membership_change, result)
+        threading.Thread(target=_join, daemon=True).start()
+
+    def _user_leave_group(self):
+        group = self._selected_group_in_list()
+        if not group:
+            return
+        def _leave():
+            result = self.titan_client.leave_group(group['id'])
+            wx.CallAfter(self._after_membership_change, result)
+        threading.Thread(target=_leave, daemon=True).start()
+
+    def _after_membership_change(self, result):
+        if result.get('success'):
+            if result.get('status') == 'pending':
+                speak_notification(_("Join request sent. Awaiting approval."), 'info')
+            if self.current_view == "groups":
+                self.refresh_groups()
+        else:
+            speak_notification(result.get('error', _("Operation failed")), 'error')
+
+    def _user_create_forum(self):
+        """Create a forum inside the current group (owner/moderator only)."""
+        group = getattr(self, 'current_group', None)
+        if not group:
+            return
+        dlg = _new_text_entry_dialog(self, _("Enter forum name:"), _("Create New Forum"))
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue().strip()
+            if name:
+                def _create():
+                    result = self.titan_client.create_group_forum(group['id'], name)
+                    wx.CallAfter(self._after_forum_created, result)
+                threading.Thread(target=_create, daemon=True).start()
+        dlg.Destroy()
+
+    def _after_forum_created(self, result):
+        if result.get('success'):
+            speak_notification(_("Forum created successfully"), 'success')
+            if self.current_view == "group_forums":
+                self.refresh_group_forums()
+        else:
+            speak_notification(result.get('error', _("Failed to create forum")), 'error')
+
+    def _mod_manage_pending_members(self):
+        """Open the pending-members approval dialog for the current group."""
+        group = getattr(self, 'current_group', None)
+        if not group:
+            return
+        try:
+            from src.network.titan_net_forum_gui import GroupMembersDialog
+            dlg = GroupMembersDialog(self, self.titan_client, group['id'])
+            dlg.ShowModal()
+            dlg.Destroy()
+        except Exception as e:
+            print(f"Error managing pending members: {e}")
+
+    def _mod_move_selected_topic_to_forum(self):
+        """Move the selected thread to another forum. Within the same group the
+        move is immediate; to another group it becomes a request the target
+        group's moderators must approve."""
+        sel = self.main_listbox.GetSelection()
+        topic = self._forum_topic_for_selection(sel)
+        if not topic:
+            return
+        topic_id = topic['id']
+
+        def _after_move(res):
+            if res.get('success'):
+                if res.get('status') == 'pending':
+                    speak_notification(_("Move request sent for approval by the target group moderators"), 'info')
+                else:
+                    speak_notification(_("Thread moved"), 'success')
+                    if self.current_view == "forum":
+                        self.refresh_forum_topics()
+            else:
+                speak_notification(res.get('error', _("Failed to move thread")), 'error')
+
+        def _pick_forum(fr):
+            if not fr.get('success'):
+                speak_notification(fr.get('error', _("Failed to load forums")), 'error')
+                return
+            forums = fr.get('forums', [])
+            if not forums:
+                speak_notification(_("This group has no forums"), 'info')
+                return
+            dlg = wx.SingleChoiceDialog(self, _("Select destination forum:"), _("Move Thread to Forum"),
+                                        [f['name'] for f in forums])
+            if dlg.ShowModal() == wx.ID_OK:
+                f = forums[dlg.GetSelection()]
+                dlg.Destroy()
+                threading.Thread(
+                    target=lambda: wx.CallAfter(_after_move, self.titan_client.move_topic_to_forum(topic_id, f['id'])),
+                    daemon=True).start()
+            else:
+                dlg.Destroy()
+
+        def _pick_group(result):
+            if not result.get('success'):
+                speak_notification(result.get('error', _("Failed to load groups")), 'error')
+                return
+            groups = result.get('groups', [])
+            if not groups:
+                return
+            dlg = wx.SingleChoiceDialog(self, _("Select destination group:"), _("Move Thread to Forum"),
+                                        [g['name'] for g in groups])
+            if dlg.ShowModal() == wx.ID_OK:
+                g = groups[dlg.GetSelection()]
+                dlg.Destroy()
+                threading.Thread(
+                    target=lambda: wx.CallAfter(_pick_forum, self.titan_client.list_group_forums(g['id'])),
+                    daemon=True).start()
+            else:
+                dlg.Destroy()
+
+        threading.Thread(
+            target=lambda: wx.CallAfter(_pick_group, self.titan_client.list_groups()),
+            daemon=True).start()
+
+    def open_moderator_components(self):
+        """Open the Titan-Net moderator component API window (Ctrl+N in the
+        main view). Lets moderators program and run their own Titan-Net tools."""
+        try:
+            from src.network.titan_net_mod_components import ModeratorComponentsWindow
+            win = ModeratorComponentsWindow(self, self.titan_client)
+            win.Show()
+        except Exception as e:
+            print(f"Error opening moderator components: {e}")
+            play_sound('core/error.ogg')
 
     def _view_all_users(self):
         """View all users (including offline) for moderation purposes"""

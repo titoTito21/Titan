@@ -1729,26 +1729,31 @@ class TitanNetClient:
 
     # Forum Methods (HTTP API)
 
-    def create_forum_topic(self, title: str, content: str, category: str = 'general') -> Dict:
+    def create_forum_topic(self, title: str, content: str, category: str = 'general', forum_id: Optional[int] = None) -> Dict:
         """
         Create new forum topic
 
         Args:
             title: Topic title
             content: Topic content
-            category: Topic category (default: 'general')
+            category: Topic category (legacy flat forum, default: 'general')
+            forum_id: Group forum id (Elten-style groups). When given, the
+                topic is created inside that forum.
 
         Returns:
             Dict with success status and topic_id if successful
         """
         try:
+            payload = {
+                'title': title,
+                'content': content,
+                'category': category
+            }
+            if forum_id is not None:
+                payload['forum_id'] = forum_id
             response = requests.post(
                 f"{self.http_url}/api/forum/topics",
-                json={
-                    'title': title,
-                    'content': content,
-                    'category': category
-                },
+                json=payload,
                 headers=self._http_headers(),
                 timeout=10
             )
@@ -1756,25 +1761,29 @@ class TitanNetClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def get_forum_topics(self, category: Optional[str] = None, limit: int = 50) -> Dict:
+    def get_forum_topics(self, category: Optional[str] = None, limit: int = 50, forum_id: Optional[int] = None) -> Dict:
         """
         Get forum topics
 
         Args:
-            category: Filter by category (optional)
+            category: Filter by category (legacy, optional)
             limit: Maximum number of topics to return
+            forum_id: List threads of a specific group forum (optional)
 
         Returns:
             Dict with success status and list of topics
         """
         try:
             params = {'limit': limit}
-            if category:
+            if forum_id is not None:
+                params['forum_id'] = forum_id
+            elif category:
                 params['category'] = category
 
             response = requests.get(
                 f"{self.http_url}/api/forum/topics",
                 params=params,
+                headers=self._http_headers(),
                 timeout=10
             )
             return response.json()
@@ -1945,6 +1954,411 @@ class TitanNetClient:
                 headers=self._http_headers(),
                 timeout=10
             )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ==================== Groups -> Forums Methods ====================
+
+    def list_groups(self) -> Dict:
+        """List groups visible to the current user."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/groups",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def create_group(self, name: str, description: Optional[str] = None,
+                     visibility: str = 'public', member_limit: Optional[int] = None) -> Dict:
+        """Create a group (current user becomes owner)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups",
+                json={'name': name, 'description': description,
+                      'visibility': visibility, 'member_limit': member_limit},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_group(self, group_id: int) -> Dict:
+        """Get one group with the caller's membership info."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/groups/{group_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def update_group(self, group_id: int, name: Optional[str] = None,
+                     description: Optional[str] = None, visibility: Optional[str] = None,
+                     member_limit: Optional[int] = None) -> Dict:
+        """Update group settings (owner only)."""
+        try:
+            response = requests.put(
+                f"{self.http_url}/api/groups/{group_id}",
+                json={'name': name, 'description': description,
+                      'visibility': visibility, 'member_limit': member_limit},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_group(self, group_id: int) -> Dict:
+        """Delete a group (owner only)."""
+        try:
+            response = requests.delete(
+                f"{self.http_url}/api/groups/{group_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def join_group(self, group_id: int) -> Dict:
+        """Join a group (active for public, pending for private)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/join",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def leave_group(self, group_id: int) -> Dict:
+        """Leave a group."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/leave",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_group_members(self, group_id: int, status: str = 'active') -> Dict:
+        """List group members ('active') or pending join requests ('pending')."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/groups/{group_id}/members",
+                params={'status': status},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def approve_group_member(self, group_id: int, user_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/members/{user_id}/approve",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reject_group_member(self, group_id: int, user_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/members/{user_id}/reject",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def set_group_moderator(self, group_id: int, user_id: int, make_moderator: bool = True) -> Dict:
+        """Appoint or revoke a group moderator (owner only)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/moderators/{user_id}",
+                json={'make_moderator': make_moderator},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def ban_from_group(self, group_id: int, user_id: int, reason: Optional[str] = None) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/ban/{user_id}",
+                json={'reason': reason},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def unban_from_group(self, group_id: int, user_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/unban/{user_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_group_forums(self, group_id: int) -> Dict:
+        """List the forums (categories) of a group."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/groups/{group_id}/forums",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def create_group_forum(self, group_id: int, name: str, description: Optional[str] = None) -> Dict:
+        """Create a forum inside a group (owner/moderator only)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/forums",
+                json={'name': name, 'description': description},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_group_forum(self, forum_id: int) -> Dict:
+        """Delete a forum and its threads (owner/moderator only)."""
+        try:
+            response = requests.delete(
+                f"{self.http_url}/api/forums/{forum_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def move_topic_to_forum(self, topic_id: int, forum_id: int) -> Dict:
+        """Move a thread to another forum. Same-group is immediate; cross-group
+        returns status 'pending' until a target-group moderator approves."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/forum/topics/{topic_id}/move",
+                json={'forum_id': forum_id},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_move_requests(self) -> Dict:
+        """Pending cross-group move requests the current user can act on."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/forum/move_requests",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def approve_move_request(self, request_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/forum/move_requests/{request_id}/approve",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reject_move_request(self, request_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/forum/move_requests/{request_id}/reject",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ==================== Extension System Methods ====================
+
+    def submit_extension(self, slug: str, name: str, client_code: str,
+                         description: Optional[str] = None, version: str = '1.0',
+                         manifest: Optional[str] = None) -> Dict:
+        """Submit a new extension for approval (status pending)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions",
+                json={'slug': slug, 'name': name, 'description': description,
+                      'version': version, 'client_code': client_code, 'manifest': manifest},
+                headers=self._http_headers(),
+                timeout=15
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_extensions(self, status: Optional[str] = None) -> Dict:
+        """List extensions (active for everyone; staff also sees pending)."""
+        try:
+            params = {}
+            if status:
+                params['status'] = status
+            response = requests.get(
+                f"{self.http_url}/api/extensions",
+                params=params,
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_extension(self, extension_id: int) -> Dict:
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/extensions/{extension_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def approve_extension(self, extension_id: int, note: Optional[str] = None) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions/{extension_id}/approve",
+                json={'note': note},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reject_extension(self, extension_id: int, note: Optional[str] = None) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions/{extension_id}/reject",
+                json={'note': note},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_extension_client(self, slug: str) -> Dict:
+        """Download an active extension's client code."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/extensions/{slug}/client",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def extension_data_get(self, slug: str, key: str) -> Dict:
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/extensions/{slug}/data/{key}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def extension_data_set(self, slug: str, key: str, value) -> Dict:
+        try:
+            response = requests.put(
+                f"{self.http_url}/api/extensions/{slug}/data/{key}",
+                json={'value': value},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ==================== Curated Moderation Capability (jail) ====
+
+    def jail_user(self, user_id: int, minutes: int, reason: Optional[str] = None) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/moderation/jail",
+                json={'user_id': user_id, 'minutes': minutes, 'reason': reason},
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def release_user(self, user_id: int) -> Dict:
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/moderation/release",
+                json={'user_id': user_id}, headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def upload_extension_asset(self, extension_id: int, kind: str, name: str,
+                               content: str, mime: Optional[str] = None) -> Dict:
+        """Attach a sound/tts/lang asset to an extension (content base64 for
+        binary, plain text/JSON otherwise)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions/{extension_id}/assets",
+                json={'kind': kind, 'name': name, 'content': content, 'mime': mime},
+                headers=self._http_headers(), timeout=20)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_extension_assets(self, slug: str) -> Dict:
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/extensions/{slug}/assets",
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_extension_asset(self, slug: str, kind: str, name: str) -> Dict:
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/extensions/{slug}/asset/{kind}/{name}",
+                headers=self._http_headers(), timeout=15)
             return response.json()
         except Exception as e:
             return {"success": False, "error": str(e)}

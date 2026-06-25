@@ -37,6 +37,11 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-this-in-production')
     DATABASE_KEY = os.environ.get('DATABASE_KEY') or _require('DATABASE_KEY')
 
+    # Local development flag. When LOCAL_MODE=1 (set only in the local .env),
+    # the first registered user is automatically promoted to administrator.
+    # Never enable this in production.
+    LOCAL_MODE = os.getenv('LOCAL_MODE', '0') == '1'
+
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_DIR = os.getenv('LOG_DIR', 'logs')

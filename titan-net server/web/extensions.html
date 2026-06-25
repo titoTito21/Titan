@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title data-i18n="forum.title">Forum — Titan-Net</title>
+  <title data-i18n="ext.title">Extensions — Titan-Net</title>
   <link rel="stylesheet" href="css/titan.css?v=20260526a">
 </head>
 <body class="page">
@@ -19,7 +19,7 @@
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
           <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
           <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
-          <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
+          <li><a href="extensions.html" data-i18n="nav.extensions" aria-current="page">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
           <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
           <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
@@ -44,64 +44,59 @@
   </header>
 
   <main id="main">
-    <!-- List view -->
-    <section id="forum-list-view" aria-labelledby="forum-h1">
+    <section aria-labelledby="ext-h1">
       <div class="flex">
-        <h1 id="forum-h1" data-i18n="forum.title">Forum</h1>
+        <h1 id="ext-h1" data-i18n="ext.title">Extensions</h1>
         <span class="spacer"></span>
-        <button id="new-topic-btn" data-auth="in" hidden data-i18n="forum.new_topic">New topic</button>
+        <button id="new-ext-btn" data-auth="in" hidden data-i18n="ext.new">Submit extension</button>
       </div>
+      <p class="muted" data-i18n="ext.lead">Moderator add-ons.</p>
+      <p id="ext-status" class="muted" role="status" aria-live="polite"></p>
 
-      <form id="forum-search" role="search">
-        <div class="field">
-          <label for="forum-q" data-i18n="forum.search_label">Search topics</label>
-          <input id="forum-q" name="q" type="search">
-        </div>
-      </form>
+      <h2 data-i18n="ext.pending" id="ext-pending-h" hidden>Pending review</h2>
+      <ul id="ext-pending" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
 
-      <p id="forum-status" class="muted" role="status" aria-live="polite"></p>
-
-      <ul id="forum-topics" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
+      <h2 data-i18n="ext.active">Active</h2>
+      <ul id="ext-active" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
     </section>
 
-    <!-- Single topic view -->
-    <section id="forum-topic-view" aria-labelledby="topic-title" hidden>
-      <p><a href="#" id="forum-back" data-i18n="forum.back">Back to topics</a></p>
-      <article class="card">
-        <h1 id="topic-title"></h1>
-        <p class="meta" id="topic-meta"></p>
-        <div id="topic-body"></div>
-      </article>
-
-      <h2 data-i18n="forum.replies_heading">Replies</h2>
-      <ul id="topic-replies" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
-
-      <form id="reply-form" data-auth="in" hidden style="margin-top:1rem">
+    <!-- Submit extension dialog -->
+    <dialog id="new-ext-dialog" aria-labelledby="ne-title">
+      <form id="new-ext-form" style="display:grid;gap:1rem;min-width:min(720px,92vw)">
+        <h2 id="ne-title" data-i18n="ext.new" style="margin:0">Submit extension</h2>
         <div class="field">
-          <label for="reply-content" data-i18n="forum.reply_label">Write a reply</label>
-          <textarea id="reply-content" required aria-required="true" minlength="1"></textarea>
-        </div>
-        <p><button type="submit" data-i18n="forum.reply_submit">Post reply</button></p>
-      </form>
-    </section>
-
-    <!-- New topic dialog -->
-    <dialog id="new-topic-dialog" aria-labelledby="nt-title">
-      <form id="new-topic-form" style="display:grid;gap:1rem;min-width:min(640px,92vw)">
-        <h2 id="nt-title" data-i18n="forum.new_topic" style="margin:0">New topic</h2>
-        <div class="field">
-          <label for="nt-title-input" data-i18n="forum.new.title">Topic title</label>
-          <input id="nt-title-input" required aria-required="true" maxlength="200">
+          <label for="ne-name" data-i18n="ext.new.name">Name</label>
+          <input id="ne-name" required aria-required="true" maxlength="120">
         </div>
         <div class="field">
-          <label for="nt-content" data-i18n="forum.new.content">Topic content</label>
-          <textarea id="nt-content" required aria-required="true" rows="8"></textarea>
+          <label for="ne-slug" data-i18n="ext.new.slug">Slug</label>
+          <input id="ne-slug" required aria-required="true" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="ne-desc" data-i18n="ext.new.description">Description</label>
+          <textarea id="ne-desc" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label for="ne-code" data-i18n="ext.new.code">Component Python code</label>
+          <textarea id="ne-code" required aria-required="true" rows="12"
+                    style="font-family:monospace"></textarea>
         </div>
         <p style="text-align:right">
-          <button type="button" id="nt-cancel" class="btn btn-secondary" data-i18n="forum.new.cancel">Cancel</button>
-          <button type="submit" data-i18n="forum.new.submit">Post topic</button>
+          <button type="button" id="ne-cancel" class="btn btn-secondary" data-i18n="ext.new.cancel">Cancel</button>
+          <button type="submit" data-i18n="ext.new.submit">Submit for approval</button>
         </p>
       </form>
+    </dialog>
+
+    <!-- View code dialog -->
+    <dialog id="ext-code-dialog" aria-labelledby="ec-title">
+      <div style="display:grid;gap:1rem;min-width:min(720px,92vw)">
+        <h2 id="ec-title" data-i18n="ext.code_title" style="margin:0">Extension code</h2>
+        <pre id="ext-code-pre" style="max-height:60vh;overflow:auto;white-space:pre-wrap"></pre>
+        <p style="text-align:right">
+          <button type="button" id="ec-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
+        </p>
+      </div>
     </dialog>
   </main>
 
@@ -115,6 +110,6 @@
   <script src="js/app.js?v=20260526a"></script>
   <script src="js/sounds.js?v=20260526a"></script>
   <script src="js/api.js?v=20260526a"></script>
-  <script src="js/forum.js?v=20260526a"></script>
+  <script src="js/extensions.js?v=20260526a"></script>
 </body>
 </html>

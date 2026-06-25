@@ -25,7 +25,7 @@ DOMAIN_FILES = {
         'src/settings/titan_im_config.py', 'src/network/run_messenger.py'
     ],
     'titannet': [
-        'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/feedback_hub.py', 'src/system/klangomode.py'
+        'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/titan_net_mod_components.py', 'src/network/feedback_hub.py', 'src/system/klangomode.py'
     ],
     'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py'],
     'controller': ['src/controller/controller_ui.py', 'src/controller/controller_modes.py', 'src/controller/controller_vibrations.py'],

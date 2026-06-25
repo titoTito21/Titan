@@ -164,6 +164,47 @@ class TitanNetHTTPServer:
         self.app.router.add_get('/api/forum/search', self.handle_search_forum)
         self.app.router.add_get('/api/forum/my_topics', self.handle_get_my_topics)
 
+        # Groups -> Forums -> Threads (Elten-style)
+        self.app.router.add_get('/api/groups', self.handle_list_groups)
+        self.app.router.add_post('/api/groups', self.handle_create_group)
+        self.app.router.add_get('/api/groups/{group_id}', self.handle_get_group)
+        self.app.router.add_put('/api/groups/{group_id}', self.handle_update_group)
+        self.app.router.add_delete('/api/groups/{group_id}', self.handle_delete_group)
+        self.app.router.add_post('/api/groups/{group_id}/join', self.handle_join_group)
+        self.app.router.add_post('/api/groups/{group_id}/leave', self.handle_leave_group)
+        self.app.router.add_get('/api/groups/{group_id}/members', self.handle_group_members)
+        self.app.router.add_post('/api/groups/{group_id}/members/{user_id}/approve', self.handle_approve_member)
+        self.app.router.add_post('/api/groups/{group_id}/members/{user_id}/reject', self.handle_reject_member)
+        self.app.router.add_post('/api/groups/{group_id}/moderators/{user_id}', self.handle_set_group_moderator)
+        self.app.router.add_post('/api/groups/{group_id}/ban/{user_id}', self.handle_ban_from_group)
+        self.app.router.add_post('/api/groups/{group_id}/unban/{user_id}', self.handle_unban_from_group)
+        # Forums within a group
+        self.app.router.add_get('/api/groups/{group_id}/forums', self.handle_list_group_forums)
+        self.app.router.add_post('/api/groups/{group_id}/forums', self.handle_create_group_forum)
+        self.app.router.add_delete('/api/forums/{forum_id}', self.handle_delete_group_forum)
+        # Cross-group thread move requests
+        self.app.router.add_get('/api/forum/move_requests', self.handle_list_move_requests)
+        self.app.router.add_post('/api/forum/move_requests/{request_id}/approve', self.handle_approve_move)
+        self.app.router.add_post('/api/forum/move_requests/{request_id}/reject', self.handle_reject_move)
+
+        # Titan-Net Extension System (moderator add-ons + two-person approval)
+        self.app.router.add_get('/api/extensions', self.handle_list_extensions)
+        self.app.router.add_post('/api/extensions', self.handle_submit_extension)
+        self.app.router.add_get('/api/extensions/{ext_id}', self.handle_get_extension)
+        self.app.router.add_post('/api/extensions/{ext_id}/approve', self.handle_approve_extension)
+        self.app.router.add_post('/api/extensions/{ext_id}/reject', self.handle_reject_extension)
+        self.app.router.add_get('/api/extensions/{slug}/client', self.handle_extension_client)
+        self.app.router.add_get('/api/extensions/{slug}/data/{key}', self.handle_extension_data_get)
+        self.app.router.add_put('/api/extensions/{slug}/data/{key}', self.handle_extension_data_set)
+        # Extension assets (server-streamed sounds / TTS / languages)
+        self.app.router.add_post('/api/extensions/{ext_id}/assets', self.handle_add_extension_asset)
+        self.app.router.add_get('/api/extensions/{slug}/assets', self.handle_list_extension_assets)
+        self.app.router.add_get('/api/extensions/{slug}/asset/{kind}/{name}', self.handle_get_extension_asset)
+
+        # Curated moderation capability extensions build on (server-enforced).
+        self.app.router.add_post('/api/moderation/jail', self.handle_jail_user)
+        self.app.router.add_post('/api/moderation/release', self.handle_release_user)
+
         # User role management routes
         # NOTE: '/api/users/set_developer' was REMOVED (privilege-escalation
         # vulnerability — any authenticated user could self-promote to the
@@ -1011,6 +1052,11 @@ class TitanNetHTTPServer:
             title = data.get('title', '').strip()
             content = data.get('content', '').strip()
             category = data.get('category', 'general')
+            forum_id = data.get('forum_id')
+            try:
+                forum_id = int(forum_id) if forum_id is not None else None
+            except (ValueError, TypeError):
+                forum_id = None
 
             if not title or not content:
                 return web.json_response({
@@ -1018,9 +1064,25 @@ class TitanNetHTTPServer:
                     'error': 'Title and content required'
                 }, status=400)
 
+            # When posting into a group forum, ensure the author is allowed to
+            # (active member and not banned from that group).
+            if forum_id is not None:
+                loop = asyncio.get_event_loop()
+                forum = await loop.run_in_executor(None, self.db.get_group_forum, forum_id)
+                if not forum:
+                    return web.json_response({'success': False, 'error': 'Forum not found'}, status=404)
+                group_id = forum['group_id']
+                banned = await loop.run_in_executor(None, self.db.is_user_banned_from_group, group_id, user['id'])
+                if banned:
+                    return web.json_response({'success': False, 'error': 'You are banned from this group'}, status=403)
+                role = await loop.run_in_executor(None, self.db.get_group_role, group_id, user['id'])
+                is_admin = user.get('is_admin')
+                if not role and not is_admin:
+                    return web.json_response({'success': False, 'error': 'Join the group to post'}, status=403)
+
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
-                None, self.db.create_forum_topic, title, content, user['id'], category
+                None, self.db.create_forum_topic, title, content, user['id'], category, forum_id
             )
 
             logger.info(f"Forum topic created: '{title}' by {user['username']}")
@@ -1038,6 +1100,11 @@ class TitanNetHTTPServer:
         """Get forum topics - non-blocking DB"""
         try:
             category = request.query.get('category')
+            forum_id = request.query.get('forum_id')
+            try:
+                forum_id = int(forum_id) if forum_id is not None else None
+            except (ValueError, TypeError):
+                forum_id = None
 
             # Validate limit parameter
             try:
@@ -1053,7 +1120,7 @@ class TitanNetHTTPServer:
             user_id = user['id'] if user else None
 
             topics = await loop.run_in_executor(
-                None, self.db.get_forum_topics, category, limit, user_id
+                None, self.db.get_forum_topics, category, limit, user_id, forum_id
             )
 
             return web.json_response({
@@ -1267,6 +1334,585 @@ class TitanNetHTTPServer:
                 'success': False,
                 'error': str(e)
             }, status=500)
+
+    # =====================================================================
+    # Groups -> Forums -> Threads (Elten-style) Handlers
+    # =====================================================================
+
+    def _require_auth(self, request: web.Request):
+        """Return the authenticated user dict or None."""
+        return self.verify_token(request)
+
+    @staticmethod
+    def _auth_required_response():
+        return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+
+    async def handle_list_groups(self, request: web.Request) -> web.Response:
+        """List groups visible to the authenticated user."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            groups = await loop.run_in_executor(None, self.db.list_groups, user['id'])
+            return web.json_response({'success': True, 'groups': groups})
+        except Exception as e:
+            logger.error(f"List groups error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_create_group(self, request: web.Request) -> web.Response:
+        """Create a group (any authenticated user; becomes owner)."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            data = await request.json()
+            name = (data.get('name') or '').strip()
+            description = data.get('description')
+            visibility = data.get('visibility', 'public')
+            member_limit = data.get('member_limit')
+            try:
+                member_limit = int(member_limit) if member_limit not in (None, '') else None
+            except (ValueError, TypeError):
+                member_limit = None
+            if not name:
+                return web.json_response({'success': False, 'error': 'Group name required'}, status=400)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.create_group, name, description, user['id'], visibility, member_limit
+            )
+            status = 200 if result.get('success') else 400
+            if result.get('success'):
+                logger.info(f"Group created: '{name}' by {user['username']}")
+            return web.json_response(result, status=status)
+        except Exception as e:
+            logger.error(f"Create group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_get_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            loop = asyncio.get_event_loop()
+            group = await loop.run_in_executor(None, self.db.get_group, group_id, user['id'])
+            if not group:
+                return web.json_response({'success': False, 'error': 'Group not found'}, status=404)
+            return web.json_response({'success': True, 'group': group})
+        except Exception as e:
+            logger.error(f"Get group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_update_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            data = await request.json()
+            member_limit = data.get('member_limit')
+            if member_limit not in (None, ''):
+                try:
+                    member_limit = int(member_limit)
+                except (ValueError, TypeError):
+                    member_limit = None
+            else:
+                member_limit = None
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.update_group, group_id, user['id'],
+                data.get('name'), data.get('description'), data.get('visibility'), member_limit
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Update group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_delete_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.delete_group, group_id, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Delete group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_join_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.join_group, group_id, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Join group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_leave_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.leave_group, group_id, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Leave group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_group_members(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            status = request.query.get('status', 'active')
+            if status not in ('active', 'pending'):
+                status = 'active'
+            loop = asyncio.get_event_loop()
+            # Only moderators may list pending join requests.
+            if status == 'pending':
+                is_mod = await loop.run_in_executor(None, self.db.is_group_moderator, group_id, user['id'])
+                if not is_mod:
+                    return web.json_response({'success': False, 'error': 'Moderators only'}, status=403)
+            members = await loop.run_in_executor(None, self.db.list_group_members, group_id, status)
+            return web.json_response({'success': True, 'members': members})
+        except Exception as e:
+            logger.error(f"Group members error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_approve_member(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.approve_member, group_id, target, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Approve member error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_reject_member(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.reject_member, group_id, target, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Reject member error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_set_group_moderator(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            data = await request.json() if request.can_read_body else {}
+            make = bool(data.get('make_moderator', True))
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.set_group_moderator, group_id, target, user['id'], make
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Set group moderator error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_ban_from_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            data = await request.json() if request.can_read_body else {}
+            reason = data.get('reason')
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.ban_user_from_group, group_id, target, user['id'], reason
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Ban from group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_unban_from_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.unban_user_from_group, group_id, target, user['id']
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Unban from group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_list_group_forums(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            loop = asyncio.get_event_loop()
+            # Respect hidden-group privacy: get_group returns None for hidden
+            # groups the caller cannot see.
+            group = await loop.run_in_executor(None, self.db.get_group, group_id, user['id'])
+            if not group:
+                return web.json_response({'success': False, 'error': 'Group not found'}, status=404)
+            forums = await loop.run_in_executor(None, self.db.list_group_forums, group_id)
+            return web.json_response({'success': True, 'forums': forums})
+        except Exception as e:
+            logger.error(f"List group forums error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_create_group_forum(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            data = await request.json()
+            name = (data.get('name') or '').strip()
+            description = data.get('description')
+            if not name:
+                return web.json_response({'success': False, 'error': 'Forum name required'}, status=400)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.create_group_forum, group_id, name, description, user['id']
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Create group forum error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_delete_group_forum(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            forum_id = int(request.match_info['forum_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.delete_group_forum, forum_id, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Delete group forum error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_list_move_requests(self, request: web.Request) -> web.Response:
+        """Pending cross-group move requests the caller can act on."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            requests = await loop.run_in_executor(None, self.db.list_pending_moves_for_user, user['id'])
+            return web.json_response({'success': True, 'requests': requests})
+        except Exception as e:
+            logger.error(f"List move requests error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_approve_move(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            request_id = int(request.match_info['request_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.approve_topic_move, request_id, user['id'])
+            # Notify the thread author that their thread was moved.
+            if result.get('success') and result.get('author_id'):
+                forum = await loop.run_in_executor(None, self.db.get_group_forum, result.get('to_forum_id'))
+                forum_name = forum['name'] if forum else 'another forum'
+                group_name = forum['group_name'] if forum else ''
+                title = result.get('title') or 'your thread'
+                msg = (f"Your thread '{title}' was moved to forum "
+                       f"'{forum_name}' in group '{group_name}'.")
+                try:
+                    await loop.run_in_executor(
+                        None, self.db.send_private_message, user['id'], result['author_id'], msg
+                    )
+                except Exception as notify_err:
+                    logger.warning(f"Move-approval notify failed: {notify_err}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Approve move error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_reject_move(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            request_id = int(request.match_info['request_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.reject_topic_move, request_id, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Reject move error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    # =====================================================================
+    # Titan-Net Extension System Handlers
+    # =====================================================================
+
+    async def _is_staff(self, user, loop):
+        if not user:
+            return False
+        if user.get('is_admin'):
+            return True
+        return await loop.run_in_executor(None, self.db.is_moderator, user['id'])
+
+    async def handle_submit_extension(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            if not await self._is_staff(user, loop):
+                return web.json_response({'success': False, 'error': 'Moderators only'}, status=403)
+            data = await request.json()
+            slug = (data.get('slug') or '').strip()
+            name = (data.get('name') or '').strip()
+            if not slug or not name:
+                return web.json_response({'success': False, 'error': 'Slug and name required'}, status=400)
+            result = await loop.run_in_executor(
+                None, self.db.submit_extension, user['id'], slug, name, data.get('description'),
+                data.get('version', '1.0'), data.get('client_code', ''), data.get('manifest')
+            )
+            if result.get('success'):
+                logger.info(f"Extension submitted: '{slug}' by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Submit extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_list_extensions(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            status = request.query.get('status')
+            include_pending = await self._is_staff(user, loop)
+            extensions = await loop.run_in_executor(
+                None, self.db.list_extensions, status, user['id'], include_pending
+            )
+            return web.json_response({'success': True, 'extensions': extensions})
+        except Exception as e:
+            logger.error(f"List extensions error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_get_extension(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            loop = asyncio.get_event_loop()
+            ext = await loop.run_in_executor(None, self.db.get_extension, ext_id, None)
+            if not ext:
+                return web.json_response({'success': False, 'error': 'Extension not found'}, status=404)
+            # Only staff or the author may see pending/rejected code bodies.
+            if ext.get('status') != 'active':
+                if not (await self._is_staff(user, loop) or ext.get('author_id') == user['id']):
+                    return web.json_response({'success': False, 'error': 'Not allowed'}, status=403)
+            return web.json_response({'success': True, 'extension': ext})
+        except Exception as e:
+            logger.error(f"Get extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_approve_extension(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            data = await request.json() if request.can_read_body else {}
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.review_extension, ext_id, user['id'], True, data.get('note')
+            )
+            if result.get('success'):
+                logger.info(f"Extension {ext_id} approved by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Approve extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_reject_extension(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            data = await request.json() if request.can_read_body else {}
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.review_extension, ext_id, user['id'], False, data.get('note')
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Reject extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_extension_client(self, request: web.Request) -> web.Response:
+        """Download an ACTIVE extension's client code (for clients to load)."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            slug = request.match_info['slug']
+            loop = asyncio.get_event_loop()
+            ext = await loop.run_in_executor(None, self.db.get_active_extension_client, slug)
+            if not ext:
+                return web.json_response({'success': False, 'error': 'Active extension not found'}, status=404)
+            return web.json_response({'success': True, 'extension': ext})
+        except Exception as e:
+            logger.error(f"Extension client error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_extension_data_get(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            slug = request.match_info['slug']
+            key = request.match_info['key']
+            loop = asyncio.get_event_loop()
+            ext = await loop.run_in_executor(None, self.db.get_extension, None, slug)
+            if not ext or ext.get('status') != 'active':
+                return web.json_response({'success': False, 'error': 'Active extension not found'}, status=404)
+            value = await loop.run_in_executor(None, self.db.ext_storage_get, ext['id'], key)
+            return web.json_response({'success': True, 'key': key, 'value': value})
+        except Exception as e:
+            logger.error(f"Extension data get error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_extension_data_set(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            slug = request.match_info['slug']
+            key = request.match_info['key']
+            data = await request.json()
+            loop = asyncio.get_event_loop()
+            ext = await loop.run_in_executor(None, self.db.get_extension, None, slug)
+            if not ext or ext.get('status') != 'active':
+                return web.json_response({'success': False, 'error': 'Active extension not found'}, status=404)
+            result = await loop.run_in_executor(
+                None, self.db.ext_storage_set, ext['id'], key, data.get('value')
+            )
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Extension data set error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_add_extension_asset(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            data = await request.json()
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.add_extension_asset, ext_id, user['id'],
+                data.get('kind'), data.get('name'), data.get('content', ''), data.get('mime')
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Add extension asset error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_list_extension_assets(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            slug = request.match_info['slug']
+            loop = asyncio.get_event_loop()
+            assets = await loop.run_in_executor(None, self.db.list_extension_assets, slug)
+            return web.json_response({'success': True, 'assets': assets})
+        except Exception as e:
+            logger.error(f"List extension assets error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_get_extension_asset(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            slug = request.match_info['slug']
+            kind = request.match_info['kind']
+            name = request.match_info['name']
+            loop = asyncio.get_event_loop()
+            asset = await loop.run_in_executor(None, self.db.get_extension_asset, slug, kind, name)
+            if not asset:
+                return web.json_response({'success': False, 'error': 'Asset not found'}, status=404)
+            return web.json_response({'success': True, 'asset': asset})
+        except Exception as e:
+            logger.error(f"Get extension asset error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    # =====================================================================
+    # Curated moderation capability (timed jail / release)
+    # =====================================================================
+
+    async def handle_jail_user(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            data = await request.json()
+            target = int(data.get('user_id'))
+            minutes = int(data.get('minutes', 0))
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.jail_user, target, user['id'], minutes, data.get('reason')
+            )
+            if result.get('success'):
+                logger.info(f"User {target} jailed for {minutes}m by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Jail user error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_release_user(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            data = await request.json()
+            target = int(data.get('user_id'))
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.release_user, target, user['id'])
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Release user error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
 
     # Role Management Handlers
 
@@ -1935,10 +2581,27 @@ class TitanNetHTTPServer:
 
             topic_id = int(request.match_info['topic_id'])
             data = await request.json()
+            forum_id = data.get('forum_id')
             category = data.get('category')
 
+            # Preferred path: move to a group forum by id. Same-group moves are
+            # immediate; cross-group moves create a request the target group's
+            # moderators must approve (status 'pending').
+            if forum_id is not None:
+                try:
+                    forum_id = int(forum_id)
+                except (ValueError, TypeError):
+                    return web.json_response({'success': False, 'error': 'Invalid forum_id'}, status=400)
+                result = await self.db.run_write_async(
+                    self.db.request_topic_move, topic_id, forum_id, user['id']
+                )
+                if result.get('success'):
+                    logger.info(f"Topic {topic_id} move ({result.get('status')}) by {user['username']}")
+                return web.json_response(result, status=200 if result.get('success') else 403)
+
+            # Legacy path: move within the flat forum by category text.
             if not category:
-                return web.json_response({'success': False, 'error': 'Category required'}, status=400)
+                return web.json_response({'success': False, 'error': 'forum_id or category required'}, status=400)
 
             result = await self.db.run_write_async(
                 self.db.move_forum_topic, topic_id, category, user['id']

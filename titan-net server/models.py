@@ -1127,6 +1127,157 @@ class Database:
             )
             """)
 
+            # =========================================================
+            # Elten-style Groups -> Forums -> Threads
+            # =========================================================
+            # A group (e.g. "Polska spolecznosc TCE") owns a set of forums
+            # (categories). Visibility: public (anyone sees + self-joins),
+            # private (visible, join needs approval), hidden (not listed,
+            # invite-only). member_limit is set by the OWNER (NULL/0 =
+            # unlimited); join is refused once active members reach it.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                owner_id INTEGER NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'public',
+                member_limit INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (owner_id) REFERENCES users(id)
+            )
+            """)
+
+            # Group membership with per-group role and join status.
+            # role: 'owner' | 'moderator' | 'member'
+            # status: 'active' | 'pending' (pending = awaiting approval for a
+            # private group)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                status TEXT NOT NULL DEFAULT 'active',
+                joined_at TEXT NOT NULL,
+                PRIMARY KEY (group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """)
+
+            # Forums (categories) inside a group. Created by the group's
+            # owner or moderators. 'position' orders them in the UI.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_forums (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                position INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (group_id) REFERENCES groups(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+            """)
+
+            # Cross-group thread move requests. Moving a thread to a forum in
+            # ANOTHER group requires approval by a moderator of the TARGET
+            # group. Within-group moves are immediate and do not create a row
+            # here. status: 'pending' | 'approved' | 'rejected'.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_topic_move_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic_id INTEGER NOT NULL,
+                from_forum_id INTEGER,
+                to_forum_id INTEGER NOT NULL,
+                requested_by INTEGER NOT NULL,
+                target_approved_by INTEGER,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                resolved_at TEXT,
+                FOREIGN KEY (topic_id) REFERENCES forum_topics(id),
+                FOREIGN KEY (to_forum_id) REFERENCES group_forums(id),
+                FOREIGN KEY (requested_by) REFERENCES users(id),
+                FOREIGN KEY (target_approved_by) REFERENCES users(id)
+            )
+            """)
+
+            # =========================================================
+            # Titan-Net Extension System (moderator-authored add-ons)
+            # =========================================================
+            # An extension is authored by a moderator and only goes live after
+            # a DIFFERENT moderator/admin approves it (two-person rule). Once
+            # 'active' its client code is downloadable by every client. The
+            # server NEVER execs author code: server-side effects go through a
+            # curated API + the namespaced extension_storage KV below.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extensions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                author_id INTEGER NOT NULL,
+                version TEXT DEFAULT '1.0',
+                client_code TEXT,
+                manifest TEXT,
+                code_hash TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                approved_by INTEGER,
+                approved_at TEXT,
+                FOREIGN KEY (author_id) REFERENCES users(id),
+                FOREIGN KEY (approved_by) REFERENCES users(id)
+            )
+            """)
+
+            # Review audit trail (one row per approve/reject decision).
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extension_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                extension_id INTEGER NOT NULL,
+                reviewer_id INTEGER NOT NULL,
+                decision TEXT NOT NULL,
+                note TEXT,
+                reviewed_at TEXT NOT NULL,
+                FOREIGN KEY (extension_id) REFERENCES extensions(id),
+                FOREIGN KEY (reviewer_id) REFERENCES users(id)
+            )
+            """)
+
+            # Curated namespaced key/value store the server exposes to ACTIVE
+            # extensions (the only server-side persistence an extension gets —
+            # no raw DB/table access).
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extension_storage (
+                extension_id INTEGER NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (extension_id, key),
+                FOREIGN KEY (extension_id) REFERENCES extensions(id)
+            )
+            """)
+
+            # Extension assets streamed from the server: a component's own
+            # sounds, TTS messages, and language strings travel WITH the
+            # extension (not invented theme paths). kind: 'sound'|'tts'|'lang'.
+            # content is base64 for binary (sounds) or plain text/JSON.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extension_assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                extension_id INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                mime TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE(extension_id, kind, name),
+                FOREIGN KEY (extension_id) REFERENCES extensions(id)
+            )
+            """)
+
             # Room bans table (extended with ban types)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS room_bans (
@@ -1190,7 +1341,9 @@ class Database:
             )
             """)
 
-            # Forum bans table
+            # Forum bans table. group_id scopes a ban to one group; NULL means
+            # a server-wide forum ban (legacy behaviour). UNIQUE(group_id,
+            # user_id) lets a user be banned independently in several groups.
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS forum_bans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1200,9 +1353,11 @@ class Database:
                 expires_at TEXT,
                 ban_type TEXT DEFAULT 'permanent',
                 reason TEXT,
-                UNIQUE(user_id),
+                group_id INTEGER,
+                UNIQUE(group_id, user_id),
                 FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (banned_by) REFERENCES users(id)
+                FOREIGN KEY (banned_by) REFERENCES users(id),
+                FOREIGN KEY (group_id) REFERENCES groups(id)
             )
             """)
 
@@ -1239,6 +1394,53 @@ class Database:
             except sqlite3.OperationalError:
                 cursor.execute("ALTER TABLE global_bans ADD COLUMN hardware_id TEXT")
                 print("Migration: Added 'hardware_id' column to global_bans table")
+
+            # Migration: Add forum_id column to forum_topics (Elten-style
+            # groups). Old topics keep their free-text 'category' until the
+            # default-group backfill (run below in _migrate_forum_to_groups)
+            # assigns a forum_id.
+            try:
+                cursor.execute("SELECT forum_id FROM forum_topics LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE forum_topics ADD COLUMN forum_id INTEGER")
+                print("Migration: Added 'forum_id' column to forum_topics table")
+
+            # Migration: rebuild forum_bans to scope bans per-group. The old
+            # schema had UNIQUE(user_id) (one ban per user, server-wide). The
+            # new schema adds group_id and UNIQUE(group_id, user_id) so a user
+            # can be banned independently in several groups while group_id NULL
+            # keeps the legacy server-wide forum ban. A plain ALTER cannot drop
+            # the old UNIQUE constraint, so we rebuild the table. The fresh
+            # CREATE above already produces the new schema; this only fires on
+            # pre-existing databases (group_id column absent).
+            cursor.execute("PRAGMA table_info(forum_bans)")
+            _forum_bans_cols = [r[1] for r in cursor.fetchall()]
+            if 'group_id' not in _forum_bans_cols:
+                cursor.execute("ALTER TABLE forum_bans RENAME TO forum_bans_old")
+                cursor.execute("""
+                CREATE TABLE forum_bans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    banned_by INTEGER NOT NULL,
+                    banned_at TEXT NOT NULL,
+                    expires_at TEXT,
+                    ban_type TEXT DEFAULT 'permanent',
+                    reason TEXT,
+                    group_id INTEGER,
+                    UNIQUE(group_id, user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (banned_by) REFERENCES users(id),
+                    FOREIGN KEY (group_id) REFERENCES groups(id)
+                )
+                """)
+                cursor.execute("""
+                    INSERT INTO forum_bans
+                        (id, user_id, banned_by, banned_at, expires_at, ban_type, reason, group_id)
+                    SELECT id, user_id, banned_by, banned_at, expires_at, ban_type, reason, NULL
+                    FROM forum_bans_old
+                """)
+                cursor.execute("DROP TABLE forum_bans_old")
+                print("Migration: rebuilt forum_bans with per-group scope (UNIQUE(group_id, user_id))")
 
             # Forum read status table - tracks which topics user has read
             cursor.execute("""
@@ -1304,7 +1506,16 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_room_messages_room ON room_messages(room_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_topics_category ON forum_topics(category)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_topics_forum ON forum_topics(forum_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_replies_topic ON forum_replies(topic_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_group_forums_group ON group_forums(group_id, position)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_groups_visibility ON groups(visibility)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_move_requests_status ON forum_topic_move_requests(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_extensions_status ON extensions(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_extension_reviews_ext ON extension_reviews(extension_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_bans_group_user ON forum_bans(group_id, user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_room_bans_room_user ON room_bans(room_id, user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_global_bans_user ON global_bans(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_bans_user ON forum_bans(user_id)")
@@ -1454,6 +1665,86 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_session_players_user ON game_session_players(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_session_log_session ON game_session_log(session_id, id)")
 
+            # ---------------------------------------------------------
+            # Backfill: migrate the legacy flat forum into the Elten-style
+            # group/forum model. Idempotent — only legacy topics whose
+            # forum_id is still NULL are touched, so this is a no-op on a
+            # fresh install (no topics) and after the first successful run.
+            # ---------------------------------------------------------
+            try:
+                cursor.execute("SELECT COUNT(*) FROM forum_topics WHERE forum_id IS NULL")
+                legacy_count = cursor.fetchone()[0]
+            except sqlite3.OperationalError:
+                legacy_count = 0
+            if legacy_count:
+                # Owner of the default group: lowest-id admin, else lowest-id user.
+                cursor.execute(
+                    "SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1"
+                )
+                row = cursor.fetchone()
+                if not row:
+                    cursor.execute("SELECT id FROM users ORDER BY id ASC LIMIT 1")
+                    row = cursor.fetchone()
+                if row:
+                    owner_id = row['id'] if not isinstance(row, tuple) else row[0]
+                    now = datetime.now().isoformat()
+                    default_group_name = "Polska spolecznosc TCE"
+                    # Find or create the default group.
+                    cursor.execute(
+                        "SELECT id FROM groups WHERE name = ? LIMIT 1", (default_group_name,)
+                    )
+                    grow = cursor.fetchone()
+                    if grow:
+                        group_id = grow['id'] if not isinstance(grow, tuple) else grow[0]
+                    else:
+                        cursor.execute(
+                            "INSERT INTO groups (name, description, owner_id, visibility, member_limit, created_at) "
+                            "VALUES (?, ?, ?, 'public', NULL, ?)",
+                            (default_group_name, "Default community group", owner_id, now),
+                        )
+                        group_id = cursor.lastrowid
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO group_members (group_id, user_id, role, status, joined_at) "
+                            "VALUES (?, ?, 'owner', 'active', ?)",
+                            (group_id, owner_id, now),
+                        )
+                    # One forum per distinct legacy category (NULL/'' -> 'general').
+                    cursor.execute(
+                        "SELECT DISTINCT COALESCE(NULLIF(TRIM(category), ''), 'general') AS cat "
+                        "FROM forum_topics WHERE forum_id IS NULL"
+                    )
+                    categories = [
+                        (r['cat'] if not isinstance(r, tuple) else r[0])
+                        for r in cursor.fetchall()
+                    ]
+                    position = 0
+                    for cat in categories:
+                        cursor.execute(
+                            "SELECT id FROM group_forums WHERE group_id = ? AND name = ? LIMIT 1",
+                            (group_id, cat),
+                        )
+                        frow = cursor.fetchone()
+                        if frow:
+                            forum_id = frow['id'] if not isinstance(frow, tuple) else frow[0]
+                        else:
+                            cursor.execute(
+                                "INSERT INTO group_forums (group_id, name, description, position, created_by, created_at) "
+                                "VALUES (?, ?, NULL, ?, ?, ?)",
+                                (group_id, cat, position, owner_id, now),
+                            )
+                            forum_id = cursor.lastrowid
+                            position += 1
+                        # Reassign legacy topics of this category to the new forum.
+                        cursor.execute(
+                            "UPDATE forum_topics SET forum_id = ? "
+                            "WHERE forum_id IS NULL AND COALESCE(NULLIF(TRIM(category), ''), 'general') = ?",
+                            (forum_id, cat),
+                        )
+                    print(
+                        f"Migration: moved {legacy_count} legacy forum topic(s) into "
+                        f"group '{default_group_name}' across {len(categories)} forum(s)"
+                    )
+
             conn.commit()
             conn.close()
 
@@ -1575,20 +1866,43 @@ class Database:
             password_hash = self.hash_password(password)
             created_at = datetime.now().isoformat()
 
+            # Local-mode bootstrap: when running a local/dev server
+            # (Config.LOCAL_MODE, set via LOCAL_MODE=1 in the local .env) the
+            # very first registered user is automatically made an administrator
+            # so there is always an admin to test moderation features with.
+            # Never triggers in production where LOCAL_MODE is unset.
+            make_admin = False
+            try:
+                from config import Config
+                if Config.LOCAL_MODE:
+                    cursor.execute("SELECT COUNT(*) AS n FROM users")
+                    if cursor.fetchone()['n'] == 0:
+                        make_admin = True
+            except Exception:
+                make_admin = False
+
             cursor.execute("""
-                INSERT INTO users (username, password_hash, titan_number, full_name, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (username, password_hash, titan_number, full_name, created_at))
+                INSERT INTO users (username, password_hash, titan_number, full_name, created_at, is_admin, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (username, password_hash, titan_number, full_name, created_at,
+                  1 if make_admin else 0, 'admin' if make_admin else 'user'))
 
             user_id = cursor.lastrowid
             conn.commit()
+
+            if make_admin:
+                logger.info(
+                    "[LOCAL_MODE] First user '%s' (id=%s) promoted to administrator",
+                    username, user_id,
+                )
 
             return {
                 "success": True,
                 "user_id": user_id,
                 "username": username,
                 "titan_number": titan_number,
-                "created_at": created_at
+                "created_at": created_at,
+                "is_admin": make_admin
             }
         except sqlite3.IntegrityError as e:
             conn.rollback()
@@ -2258,16 +2572,29 @@ class Database:
     # Forum Methods
 
     @_serialized_write
-    def create_forum_topic(self, title: str, content: str, author_id: int, category: str = 'general') -> Dict[str, Any]:
-        """Create new forum topic"""
+    def create_forum_topic(self, title: str, content: str, author_id: int, category: str = 'general', forum_id: Optional[int] = None) -> Dict[str, Any]:
+        """Create new forum topic.
+
+        Elten-style topics belong to a forum (``forum_id``) inside a group.
+        ``category`` is kept for backward compatibility (the legacy flat
+        forum) and is derived from the forum's name when a forum_id is given.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # When a forum is supplied, mirror its name into the legacy category
+        # column so old read paths / search keep working during the transition.
+        if forum_id is not None:
+            cursor.execute("SELECT name FROM group_forums WHERE id = ?", (forum_id,))
+            frow = cursor.fetchone()
+            if frow:
+                category = frow['name'] if not isinstance(frow, tuple) else frow[0]
+
         created_at = datetime.now().isoformat()
         cursor.execute("""
-            INSERT INTO forum_topics (title, content, author_id, category, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (title, content, author_id, category, created_at, created_at))
+            INSERT INTO forum_topics (title, content, author_id, category, forum_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (title, content, author_id, category, forum_id, created_at, created_at))
 
         topic_id = cursor.lastrowid
         conn.commit()
@@ -2277,15 +2604,35 @@ class Database:
             "success": True,
             "topic_id": topic_id,
             "title": title,
+            "forum_id": forum_id,
             "created_at": created_at
         }
 
-    def get_forum_topics(self, category: Optional[str] = None, limit: int = 50, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get forum topics - optimized with LEFT JOIN and new replies detection"""
+    def get_forum_topics(self, category: Optional[str] = None, limit: int = 50, user_id: Optional[int] = None, forum_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get forum topics - optimized with LEFT JOIN and new replies detection.
+
+        When ``forum_id`` is given, list the threads of that forum (the
+        Elten-style path). Otherwise fall back to the legacy ``category``
+        filter so existing callers keep working.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        if category and category != 'all':
+        if forum_id is not None:
+            cursor.execute("""
+                SELECT ft.*, u.username as author_username, u.titan_number as author_titan_number,
+                       COALESCE(COUNT(fr.id), 0) as reply_count,
+                       COALESCE(frs.last_known_reply_count, 0) as last_known_reply_count
+                FROM forum_topics ft
+                JOIN users u ON ft.author_id = u.id
+                LEFT JOIN forum_replies fr ON fr.topic_id = ft.id
+                LEFT JOIN forum_read_status frs ON frs.topic_id = ft.id AND frs.user_id = ?
+                WHERE ft.forum_id = ?
+                GROUP BY ft.id
+                ORDER BY ft.is_pinned DESC, ft.updated_at DESC
+                LIMIT ?
+            """, (user_id, forum_id, limit))
+        elif category and category != 'all':
             cursor.execute("""
                 SELECT ft.*, u.username as author_username, u.titan_number as author_titan_number,
                        COALESCE(COUNT(fr.id), 0) as reply_count,
@@ -2615,6 +2962,944 @@ class Database:
         topics = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return topics
+
+    # =========================================================
+    # Groups -> Forums -> Threads (Elten-style)
+    # =========================================================
+
+    # Limits. Overridable via config.py; sensible anti-spam defaults.
+    MAX_GROUPS_PER_USER = 10
+    MAX_FORUMS_PER_GROUP = 30
+
+    def _limit(self, name: str, default: int) -> int:
+        try:
+            from config import Config
+            return int(getattr(Config, name, default))
+        except Exception:
+            return default
+
+    @staticmethod
+    def _row_get(row, key, idx=0):
+        if row is None:
+            return None
+        try:
+            return row[key]
+        except (KeyError, IndexError, TypeError):
+            try:
+                return row[idx]
+            except Exception:
+                return None
+
+    def get_group_role(self, group_id: int, user_id: int) -> Optional[str]:
+        """Return the user's ACTIVE role in a group ('owner'|'moderator'|
+        'member') or None if not an active member."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'active'",
+            (group_id, user_id),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return (row['role'] if row else None)
+
+    def is_group_moderator(self, group_id: int, user_id: int) -> bool:
+        """Owner or moderator of the group, OR a server admin."""
+        role = self.get_group_role(group_id, user_id)
+        if role in ('owner', 'moderator'):
+            return True
+        user = self.get_user_by_id(user_id)
+        return bool(user and user.get('is_admin'))
+
+    @_serialized_write
+    def create_group(self, name: str, description: Optional[str], owner_id: int,
+                      visibility: str = 'public', member_limit: Optional[int] = None) -> Dict[str, Any]:
+        """Create a group. Any logged-in user may create one and becomes its
+        owner. ``visibility`` is one of public/private/hidden. ``member_limit``
+        (NULL/0 = unlimited) is chosen by the owner."""
+        if visibility not in ('public', 'private', 'hidden'):
+            return {"success": False, "error": "Invalid visibility"}
+        name = (name or '').strip()
+        if not name:
+            return {"success": False, "error": "Group name is required"}
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Anti-spam: cap how many groups one user may own.
+        cursor.execute("SELECT COUNT(*) FROM groups WHERE owner_id = ?", (owner_id,))
+        owned = cursor.fetchone()[0]
+        if owned >= self._limit('MAX_GROUPS_PER_USER', self.MAX_GROUPS_PER_USER):
+            conn.close()
+            return {"success": False, "error": "You have reached the maximum number of groups you can own"}
+
+        if member_limit is not None and member_limit <= 0:
+            member_limit = None
+
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT INTO groups (name, description, owner_id, visibility, member_limit, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (name, description, owner_id, visibility, member_limit, now),
+        )
+        group_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO group_members (group_id, user_id, role, status, joined_at) "
+            "VALUES (?, ?, 'owner', 'active', ?)",
+            (group_id, owner_id, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "group_id": group_id, "name": name}
+
+    def list_groups(self, user_id: int) -> List[Dict[str, Any]]:
+        """List groups visible to the user. Public and private groups are
+        always listed; hidden groups appear only if the user is a member.
+        Each row carries the caller's membership role/status and the active
+        member count."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT g.*, u.username AS owner_username,
+                   (SELECT COUNT(*) FROM group_members gm2
+                    WHERE gm2.group_id = g.id AND gm2.status = 'active') AS member_count,
+                   gm.role AS my_role, gm.status AS my_status
+            FROM groups g
+            JOIN users u ON u.id = g.owner_id
+            LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+            WHERE g.visibility != 'hidden' OR gm.user_id IS NOT NULL
+            ORDER BY g.name COLLATE NOCASE ASC
+        """, (user_id,))
+        groups = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return groups
+
+    def get_group(self, group_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get one group with the caller's membership info. Returns None if it
+        does not exist or is hidden and the caller is not a member."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT g.*, u.username AS owner_username,
+                   (SELECT COUNT(*) FROM group_members gm2
+                    WHERE gm2.group_id = g.id AND gm2.status = 'active') AS member_count,
+                   gm.role AS my_role, gm.status AS my_status
+            FROM groups g
+            JOIN users u ON u.id = g.owner_id
+            LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+            WHERE g.id = ?
+        """, (user_id, group_id))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        group = dict(row)
+        if group.get('visibility') == 'hidden' and not group.get('my_status'):
+            user = self.get_user_by_id(user_id)
+            if not (user and user.get('is_admin')):
+                return None
+        return group
+
+    @_serialized_write
+    def update_group(self, group_id: int, user_id: int, name: Optional[str] = None,
+                     description: Optional[str] = None, visibility: Optional[str] = None,
+                     member_limit: Optional[int] = None) -> Dict[str, Any]:
+        """Update group settings. Owner (or admin) only."""
+        if not self._is_group_owner_or_admin(group_id, user_id):
+            return {"success": False, "error": "Only the group owner can change settings"}
+        if visibility is not None and visibility not in ('public', 'private', 'hidden'):
+            return {"success": False, "error": "Invalid visibility"}
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        fields, params = [], []
+        if name is not None and name.strip():
+            fields.append("name = ?"); params.append(name.strip())
+        if description is not None:
+            fields.append("description = ?"); params.append(description)
+        if visibility is not None:
+            fields.append("visibility = ?"); params.append(visibility)
+        if member_limit is not None:
+            fields.append("member_limit = ?"); params.append(member_limit if member_limit > 0 else None)
+        if not fields:
+            conn.close()
+            return {"success": True, "group_id": group_id}
+        params.append(group_id)
+        cursor.execute(f"UPDATE groups SET {', '.join(fields)} WHERE id = ?", params)
+        conn.commit()
+        conn.close()
+        return {"success": True, "group_id": group_id}
+
+    def _is_group_owner_or_admin(self, group_id: int, user_id: int) -> bool:
+        if self.get_group_role(group_id, user_id) == 'owner':
+            return True
+        user = self.get_user_by_id(user_id)
+        return bool(user and user.get('is_admin'))
+
+    @_serialized_write
+    def delete_group(self, group_id: int, user_id: int) -> Dict[str, Any]:
+        """Delete a group and its forums/threads. Owner (or admin) only."""
+        if not self._is_group_owner_or_admin(group_id, user_id):
+            return {"success": False, "error": "Only the group owner can delete the group"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        # Remove threads + replies of every forum in this group.
+        cursor.execute("SELECT id FROM group_forums WHERE group_id = ?", (group_id,))
+        forum_ids = [self._row_get(r, 'id') for r in cursor.fetchall()]
+        for fid in forum_ids:
+            cursor.execute("SELECT id FROM forum_topics WHERE forum_id = ?", (fid,))
+            for trow in cursor.fetchall():
+                tid = self._row_get(trow, 'id')
+                cursor.execute("DELETE FROM forum_replies WHERE topic_id = ?", (tid,))
+            cursor.execute("DELETE FROM forum_topics WHERE forum_id = ?", (fid,))
+        cursor.execute("DELETE FROM group_forums WHERE group_id = ?", (group_id,))
+        cursor.execute("DELETE FROM group_members WHERE group_id = ?", (group_id,))
+        cursor.execute("DELETE FROM forum_bans WHERE group_id = ?", (group_id,))
+        cursor.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    @_serialized_write
+    def join_group(self, group_id: int, user_id: int) -> Dict[str, Any]:
+        """Join a group. Public -> active immediately; private -> pending
+        approval; hidden -> refused (invite only). Honours member_limit and
+        per-group bans."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT visibility, member_limit FROM groups WHERE id = ?", (group_id,))
+        g = cursor.fetchone()
+        if not g:
+            conn.close()
+            return {"success": False, "error": "Group not found"}
+        visibility = self._row_get(g, 'visibility')
+        member_limit = self._row_get(g, 'member_limit', 1)
+
+        # Per-group ban check.
+        cursor.execute(
+            "SELECT 1 FROM forum_bans WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id),
+        )
+        if cursor.fetchone():
+            conn.close()
+            return {"success": False, "error": "You are banned from this group"}
+
+        cursor.execute(
+            "SELECT status FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            status = self._row_get(existing, 'status')
+            conn.close()
+            if status == 'active':
+                return {"success": True, "status": "active", "message": "Already a member"}
+            return {"success": True, "status": "pending", "message": "Join request already pending"}
+
+        if visibility == 'hidden':
+            conn.close()
+            return {"success": False, "error": "This group is invite-only"}
+
+        now = datetime.now().isoformat()
+        if visibility == 'private':
+            cursor.execute(
+                "INSERT INTO group_members (group_id, user_id, role, status, joined_at) "
+                "VALUES (?, ?, 'member', 'pending', ?)",
+                (group_id, user_id, now),
+            )
+            conn.commit()
+            conn.close()
+            return {"success": True, "status": "pending"}
+
+        # public: check the member cap before admitting.
+        if member_limit:
+            cursor.execute(
+                "SELECT COUNT(*) FROM group_members WHERE group_id = ? AND status = 'active'",
+                (group_id,),
+            )
+            if cursor.fetchone()[0] >= member_limit:
+                conn.close()
+                return {"success": False, "error": "This group is full"}
+        cursor.execute(
+            "INSERT INTO group_members (group_id, user_id, role, status, joined_at) "
+            "VALUES (?, ?, 'member', 'active', ?)",
+            (group_id, user_id, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "status": "active"}
+
+    @_serialized_write
+    def leave_group(self, group_id: int, user_id: int) -> Dict[str, Any]:
+        """Leave a group. The owner cannot leave (must delete or transfer)."""
+        if self.get_group_role(group_id, user_id) == 'owner':
+            return {"success": False, "error": "The owner cannot leave; delete the group instead"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def list_group_members(self, group_id: int, status: str = 'active') -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT gm.user_id, gm.role, gm.status, gm.joined_at,
+                   u.username, u.titan_number
+            FROM group_members gm JOIN users u ON u.id = gm.user_id
+            WHERE gm.group_id = ? AND gm.status = ?
+            ORDER BY gm.role = 'owner' DESC, gm.role = 'moderator' DESC, u.username COLLATE NOCASE ASC
+        """, (group_id, status))
+        members = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return members
+
+    @_serialized_write
+    def approve_member(self, group_id: int, target_user_id: int, approver_id: int) -> Dict[str, Any]:
+        """Approve a pending join request. Moderator/owner only. Honours the
+        member cap."""
+        if not self.is_group_moderator(group_id, approver_id):
+            return {"success": False, "error": "Only group moderators can approve members"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT member_limit FROM groups WHERE id = ?", (group_id,))
+        g = cursor.fetchone()
+        if not g:
+            conn.close()
+            return {"success": False, "error": "Group not found"}
+        member_limit = self._row_get(g, 'member_limit')
+        if member_limit:
+            cursor.execute(
+                "SELECT COUNT(*) FROM group_members WHERE group_id = ? AND status = 'active'",
+                (group_id,),
+            )
+            if cursor.fetchone()[0] >= member_limit:
+                conn.close()
+                return {"success": False, "error": "This group is full"}
+        cursor.execute(
+            "UPDATE group_members SET status = 'active' "
+            "WHERE group_id = ? AND user_id = ? AND status = 'pending'",
+            (group_id, target_user_id),
+        )
+        changed = cursor.rowcount
+        conn.commit()
+        conn.close()
+        if not changed:
+            return {"success": False, "error": "No pending request for this user"}
+        return {"success": True}
+
+    @_serialized_write
+    def reject_member(self, group_id: int, target_user_id: int, approver_id: int) -> Dict[str, Any]:
+        """Reject (remove) a pending join request. Moderator/owner only."""
+        if not self.is_group_moderator(group_id, approver_id):
+            return {"success": False, "error": "Only group moderators can reject members"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'pending'",
+            (group_id, target_user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    @_serialized_write
+    def set_group_moderator(self, group_id: int, target_user_id: int, owner_id: int, make_moderator: bool = True) -> Dict[str, Any]:
+        """Appoint or revoke a group moderator. Owner (or admin) only. The
+        owner role itself cannot be changed here."""
+        if not self._is_group_owner_or_admin(group_id, owner_id):
+            return {"success": False, "error": "Only the group owner can manage moderators"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'active'",
+            (group_id, target_user_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return {"success": False, "error": "User is not an active member of this group"}
+        if self._row_get(row, 'role') == 'owner':
+            conn.close()
+            return {"success": False, "error": "Cannot change the owner's role"}
+        new_role = 'moderator' if make_moderator else 'member'
+        cursor.execute(
+            "UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?",
+            (new_role, group_id, target_user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "role": new_role}
+
+    # ----- Forums (categories within a group) -----
+
+    @_serialized_write
+    def create_group_forum(self, group_id: int, name: str, description: Optional[str], creator_id: int) -> Dict[str, Any]:
+        """Create a forum (category) inside a group. Owner or moderator only."""
+        if not self.is_group_moderator(group_id, creator_id):
+            return {"success": False, "error": "Only group moderators can create forums"}
+        name = (name or '').strip()
+        if not name:
+            return {"success": False, "error": "Forum name is required"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM group_forums WHERE group_id = ?", (group_id,))
+        if cursor.fetchone()[0] >= self._limit('MAX_FORUMS_PER_GROUP', self.MAX_FORUMS_PER_GROUP):
+            conn.close()
+            return {"success": False, "error": "This group has reached the maximum number of forums"}
+        cursor.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM group_forums WHERE group_id = ?", (group_id,))
+        position = cursor.fetchone()[0]
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT INTO group_forums (group_id, name, description, position, created_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (group_id, name, description, position, creator_id, now),
+        )
+        forum_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "forum_id": forum_id, "name": name}
+
+    @_serialized_write
+    def delete_group_forum(self, forum_id: int, user_id: int) -> Dict[str, Any]:
+        """Delete a forum and its threads. Owner or moderator of the owning
+        group only."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT group_id FROM group_forums WHERE id = ?", (forum_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return {"success": False, "error": "Forum not found"}
+        group_id = self._row_get(row, 'group_id')
+        if not self.is_group_moderator(group_id, user_id):
+            conn.close()
+            return {"success": False, "error": "Only group moderators can delete forums"}
+        cursor.execute("SELECT id FROM forum_topics WHERE forum_id = ?", (forum_id,))
+        for trow in cursor.fetchall():
+            tid = self._row_get(trow, 'id')
+            cursor.execute("DELETE FROM forum_replies WHERE topic_id = ?", (tid,))
+        cursor.execute("DELETE FROM forum_topics WHERE forum_id = ?", (forum_id,))
+        cursor.execute("DELETE FROM group_forums WHERE id = ?", (forum_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def list_group_forums(self, group_id: int) -> List[Dict[str, Any]]:
+        """List the forums of a group with per-forum thread counts."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT gf.*,
+                   (SELECT COUNT(*) FROM forum_topics ft WHERE ft.forum_id = gf.id) AS topic_count
+            FROM group_forums gf
+            WHERE gf.group_id = ?
+            ORDER BY gf.position ASC, gf.id ASC
+        """, (group_id,))
+        forums = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return forums
+
+    def get_group_forum(self, forum_id: int) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT gf.*, g.name AS group_name, g.visibility AS group_visibility
+            FROM group_forums gf JOIN groups g ON g.id = gf.group_id
+            WHERE gf.id = ?
+        """, (forum_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    # ----- Cross-group thread moves (with target-mod approval) -----
+
+    @_serialized_write
+    def request_topic_move(self, topic_id: int, to_forum_id: int, requested_by: int) -> Dict[str, Any]:
+        """Move a thread to another forum.
+
+        Within the SAME group the move is immediate (requester must moderate
+        that group). To a forum in ANOTHER group it creates a PENDING request
+        that a moderator of the TARGET group must approve. Returns a dict with
+        ``status`` 'moved' or 'pending'."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT forum_id FROM forum_topics WHERE id = ?", (topic_id,))
+        trow = cursor.fetchone()
+        if not trow:
+            conn.close()
+            return {"success": False, "error": "Topic not found"}
+        from_forum_id = self._row_get(trow, 'forum_id')
+
+        cursor.execute("SELECT group_id, name FROM group_forums WHERE id = ?", (to_forum_id,))
+        dest = cursor.fetchone()
+        if not dest:
+            conn.close()
+            return {"success": False, "error": "Destination forum not found"}
+        dest_group = self._row_get(dest, 'group_id')
+        dest_name = self._row_get(dest, 'name', 1)
+
+        src_group = None
+        if from_forum_id is not None:
+            cursor.execute("SELECT group_id FROM group_forums WHERE id = ?", (from_forum_id,))
+            srow = cursor.fetchone()
+            src_group = self._row_get(srow, 'group_id') if srow else None
+
+        # The requester must moderate the SOURCE group (or be admin).
+        if src_group is not None and not self.is_group_moderator(src_group, requested_by):
+            conn.close()
+            return {"success": False, "error": "Only a moderator of the source group can move this thread"}
+
+        now = datetime.now().isoformat()
+        same_group = (src_group is not None and src_group == dest_group)
+        if same_group:
+            cursor.execute(
+                "UPDATE forum_topics SET forum_id = ?, category = ?, updated_at = ? WHERE id = ?",
+                (to_forum_id, dest_name, now, topic_id),
+            )
+            conn.commit()
+            conn.close()
+            return {"success": True, "status": "moved"}
+
+        # Cross-group: create a pending request for the target group's mods.
+        cursor.execute(
+            "INSERT INTO forum_topic_move_requests "
+            "(topic_id, from_forum_id, to_forum_id, requested_by, status, created_at) "
+            "VALUES (?, ?, ?, ?, 'pending', ?)",
+            (topic_id, from_forum_id, to_forum_id, requested_by, now),
+        )
+        req_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "status": "pending", "request_id": req_id}
+
+    @_serialized_write
+    def approve_topic_move(self, request_id: int, approver_id: int) -> Dict[str, Any]:
+        """Approve a pending cross-group move. Approver must moderate the
+        TARGET group. Reassigns the topic and returns the thread author id so
+        the caller can notify them."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT topic_id, to_forum_id, status FROM forum_topic_move_requests WHERE id = ?",
+            (request_id,),
+        )
+        req = cursor.fetchone()
+        if not req:
+            conn.close()
+            return {"success": False, "error": "Move request not found"}
+        if self._row_get(req, 'status', 2) != 'pending':
+            conn.close()
+            return {"success": False, "error": "Move request already resolved"}
+        topic_id = self._row_get(req, 'topic_id')
+        to_forum_id = self._row_get(req, 'to_forum_id', 1)
+
+        cursor.execute("SELECT group_id, name FROM group_forums WHERE id = ?", (to_forum_id,))
+        dest = cursor.fetchone()
+        if not dest:
+            conn.close()
+            return {"success": False, "error": "Destination forum no longer exists"}
+        dest_group = self._row_get(dest, 'group_id')
+        dest_name = self._row_get(dest, 'name', 1)
+        if not self.is_group_moderator(dest_group, approver_id):
+            conn.close()
+            return {"success": False, "error": "Only a moderator of the target group can approve this move"}
+
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "UPDATE forum_topics SET forum_id = ?, category = ?, updated_at = ? WHERE id = ?",
+            (to_forum_id, dest_name, now, topic_id),
+        )
+        cursor.execute("SELECT author_id, title FROM forum_topics WHERE id = ?", (topic_id,))
+        trow = cursor.fetchone()
+        author_id = self._row_get(trow, 'author_id') if trow else None
+        title = self._row_get(trow, 'title', 1) if trow else None
+        cursor.execute(
+            "UPDATE forum_topic_move_requests SET status = 'approved', target_approved_by = ?, resolved_at = ? WHERE id = ?",
+            (approver_id, now, request_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "topic_id": topic_id, "author_id": author_id,
+                "title": title, "to_forum_id": to_forum_id}
+
+    @_serialized_write
+    def reject_topic_move(self, request_id: int, approver_id: int) -> Dict[str, Any]:
+        """Reject a pending cross-group move. Approver must moderate the
+        target group."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT to_forum_id, status FROM forum_topic_move_requests WHERE id = ?",
+            (request_id,),
+        )
+        req = cursor.fetchone()
+        if not req:
+            conn.close()
+            return {"success": False, "error": "Move request not found"}
+        if self._row_get(req, 'status', 1) != 'pending':
+            conn.close()
+            return {"success": False, "error": "Move request already resolved"}
+        to_forum_id = self._row_get(req, 'to_forum_id')
+        cursor.execute("SELECT group_id FROM group_forums WHERE id = ?", (to_forum_id,))
+        dest = cursor.fetchone()
+        dest_group = self._row_get(dest, 'group_id') if dest else None
+        if dest_group is None or not self.is_group_moderator(dest_group, approver_id):
+            conn.close()
+            return {"success": False, "error": "Only a moderator of the target group can reject this move"}
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "UPDATE forum_topic_move_requests SET status = 'rejected', target_approved_by = ?, resolved_at = ? WHERE id = ?",
+            (approver_id, now, request_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def list_pending_moves_for_user(self, user_id: int) -> List[Dict[str, Any]]:
+        """Pending cross-group move requests awaiting approval in groups the
+        user moderates (owner/moderator), plus all of them for admins."""
+        user = self.get_user_by_id(user_id)
+        is_admin = bool(user and user.get('is_admin'))
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT mr.*, ft.title AS topic_title,
+                   gf.name AS to_forum_name, g.id AS to_group_id, g.name AS to_group_name,
+                   u.username AS requested_by_username
+            FROM forum_topic_move_requests mr
+            JOIN forum_topics ft ON ft.id = mr.topic_id
+            JOIN group_forums gf ON gf.id = mr.to_forum_id
+            JOIN groups g ON g.id = gf.group_id
+            JOIN users u ON u.id = mr.requested_by
+            WHERE mr.status = 'pending'
+            ORDER BY mr.created_at ASC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        if is_admin:
+            return rows
+        return [r for r in rows if self.is_group_moderator(r['to_group_id'], user_id)]
+
+    # ----- Per-group bans -----
+
+    @_serialized_write
+    def ban_user_from_group(self, group_id: int, target_user_id: int, banned_by: int,
+                            reason: Optional[str] = None, ban_type: str = 'permanent',
+                            expires_at: Optional[str] = None) -> Dict[str, Any]:
+        """Ban a user from one group. Moderator/owner of that group only.
+        Also removes their membership."""
+        if not self.is_group_moderator(group_id, banned_by):
+            return {"success": False, "error": "Only group moderators can ban members"}
+        if self.get_group_role(group_id, target_user_id) == 'owner':
+            return {"success": False, "error": "Cannot ban the group owner"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT OR REPLACE INTO forum_bans "
+            "(user_id, banned_by, banned_at, expires_at, ban_type, reason, group_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (target_user_id, banned_by, now, expires_at, ban_type, reason, group_id),
+        )
+        cursor.execute(
+            "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+            (group_id, target_user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    @_serialized_write
+    def unban_user_from_group(self, group_id: int, target_user_id: int, moderator_id: int) -> Dict[str, Any]:
+        if not self.is_group_moderator(group_id, moderator_id):
+            return {"success": False, "error": "Only group moderators can unban members"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM forum_bans WHERE group_id = ? AND user_id = ?",
+            (group_id, target_user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def is_user_banned_from_group(self, group_id: int, user_id: int) -> bool:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT expires_at FROM forum_bans WHERE group_id = ? AND user_id = ?",
+            (group_id, user_id),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return False
+        expires_at = self._row_get(row, 'expires_at')
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) < datetime.now():
+                    return False
+            except Exception:
+                pass
+        return True
+
+    # =========================================================
+    # Titan-Net Extension System
+    # =========================================================
+
+    def _is_staff(self, user_id: int) -> bool:
+        """Moderator, developer, or admin — may author/approve extensions."""
+        if self.is_moderator(user_id):
+            return True
+        user = self.get_user_by_id(user_id)
+        return bool(user and user.get('is_admin'))
+
+    @_serialized_write
+    def submit_extension(self, author_id: int, slug: str, name: str, description: Optional[str],
+                         version: str, client_code: str, manifest: Optional[str] = None) -> Dict[str, Any]:
+        """Submit a new extension (status 'pending'). slug must be unique."""
+        slug = (slug or '').strip().lower().replace(' ', '-')
+        name = (name or '').strip()
+        if not slug or not name:
+            return {"success": False, "error": "Slug and name are required"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM extensions WHERE slug = ?", (slug,))
+        if cursor.fetchone():
+            conn.close()
+            return {"success": False, "error": "An extension with this slug already exists"}
+        now = datetime.now().isoformat()
+        code_hash = hashlib.sha256((client_code or '').encode('utf-8')).hexdigest()
+        cursor.execute(
+            "INSERT INTO extensions (slug, name, description, author_id, version, client_code, "
+            "manifest, code_hash, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+            (slug, name, description, author_id, version or '1.0', client_code, manifest, code_hash, now, now),
+        )
+        ext_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "extension_id": ext_id, "slug": slug}
+
+    def list_extensions(self, status: Optional[str] = None, viewer_id: Optional[int] = None,
+                        include_pending: bool = False) -> List[Dict[str, Any]]:
+        """List extensions. Everyone sees 'active'; only staff (include_pending)
+        sees pending/rejected. Code bodies are omitted from the list."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        base = ("SELECT e.id, e.slug, e.name, e.description, e.author_id, e.version, "
+                "e.status, e.created_at, e.updated_at, e.approved_by, e.approved_at, "
+                "u.username AS author_username "
+                "FROM extensions e JOIN users u ON u.id = e.author_id ")
+        if status:
+            cursor.execute(base + "WHERE e.status = ? ORDER BY e.updated_at DESC", (status,))
+        elif include_pending:
+            cursor.execute(base + "ORDER BY e.status='pending' DESC, e.updated_at DESC")
+        else:
+            cursor.execute(base + "WHERE e.status = 'active' ORDER BY e.updated_at DESC")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def get_extension(self, extension_id: Optional[int] = None, slug: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        if extension_id is not None:
+            cursor.execute("SELECT e.*, u.username AS author_username FROM extensions e "
+                           "JOIN users u ON u.id = e.author_id WHERE e.id = ?", (extension_id,))
+        elif slug is not None:
+            cursor.execute("SELECT e.*, u.username AS author_username FROM extensions e "
+                           "JOIN users u ON u.id = e.author_id WHERE e.slug = ?", (slug,))
+        else:
+            conn.close()
+            return None
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @_serialized_write
+    def review_extension(self, extension_id: int, reviewer_id: int, approve: bool,
+                         note: Optional[str] = None) -> Dict[str, Any]:
+        """Approve or reject an extension. The reviewer MUST be staff and MUST
+        NOT be the author (two-person rule). Approving makes it active."""
+        if not self._is_staff(reviewer_id):
+            return {"success": False, "error": "Only moderators can review extensions"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT author_id, status FROM extensions WHERE id = ?", (extension_id,))
+        ext = cursor.fetchone()
+        if not ext:
+            conn.close()
+            return {"success": False, "error": "Extension not found"}
+        author_id = self._row_get(ext, 'author_id')
+        if author_id == reviewer_id:
+            conn.close()
+            return {"success": False, "error": "You cannot review your own extension (two-person rule)"}
+        if self._row_get(ext, 'status', 1) != 'pending':
+            conn.close()
+            return {"success": False, "error": "Extension is not pending"}
+        now = datetime.now().isoformat()
+        decision = 'approved' if approve else 'rejected'
+        new_status = 'active' if approve else 'rejected'
+        cursor.execute(
+            "UPDATE extensions SET status = ?, approved_by = ?, approved_at = ?, updated_at = ? WHERE id = ?",
+            (new_status, reviewer_id if approve else None, now if approve else None, now, extension_id),
+        )
+        cursor.execute(
+            "INSERT INTO extension_reviews (extension_id, reviewer_id, decision, note, reviewed_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (extension_id, reviewer_id, decision, note, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "status": new_status}
+
+    def get_active_extension_client(self, slug: str) -> Optional[Dict[str, Any]]:
+        """Return the client code + hash for an ACTIVE extension (for download)."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT slug, name, version, client_code, code_hash FROM extensions "
+                       "WHERE slug = ? AND status = 'active'", (slug,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    # ----- Curated server-side KV store for active extensions -----
+
+    @_serialized_write
+    def ext_storage_set(self, extension_id: int, key: str, value: str) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT OR REPLACE INTO extension_storage (extension_id, key, value, updated_at) "
+            "VALUES (?, ?, ?, ?)",
+            (extension_id, key, value, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def ext_storage_get(self, extension_id: int, key: str) -> Optional[str]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM extension_storage WHERE extension_id = ? AND key = ?",
+                       (extension_id, key))
+        row = cursor.fetchone()
+        conn.close()
+        return self._row_get(row, 'value') if row else None
+
+    def ext_storage_all(self, extension_id: int) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM extension_storage WHERE extension_id = ?", (extension_id,))
+        data = {self._row_get(r, 'key'): self._row_get(r, 'value', 1) for r in cursor.fetchall()}
+        conn.close()
+        return data
+
+    # ----- Curated capability: timed jail (server-enforced, whole network) -----
+
+    @_serialized_write
+    def jail_user(self, target_user_id: int, banned_by: int, minutes: int,
+                  reason: Optional[str] = None) -> Dict[str, Any]:
+        """Temporarily ban (jail) a user network-wide for ``minutes``. Staff
+        only. Built on the existing global_bans table (expires_at + ban_type)."""
+        if not self._is_staff(banned_by):
+            return {"success": False, "error": "Only moderators can jail users"}
+        try:
+            minutes = int(minutes)
+        except (ValueError, TypeError):
+            return {"success": False, "error": "Invalid duration"}
+        if minutes <= 0:
+            return {"success": False, "error": "Duration must be positive"}
+        from datetime import timedelta
+        now = datetime.now()
+        expires_at = (now + timedelta(minutes=minutes)).isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO global_bans "
+            "(user_id, banned_by, banned_at, expires_at, ban_type, reason) "
+            "VALUES (?, ?, ?, ?, 'jail', ?)",
+            (target_user_id, banned_by, now.isoformat(), expires_at, reason),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "expires_at": expires_at}
+
+    @_serialized_write
+    def release_user(self, target_user_id: int, moderator_id: int) -> Dict[str, Any]:
+        """Release a jailed user (removes the 'jail' global ban). Staff only."""
+        if not self._is_staff(moderator_id):
+            return {"success": False, "error": "Only moderators can release users"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM global_bans WHERE user_id = ? AND ban_type = 'jail'",
+                       (target_user_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    # ----- Extension assets (server-streamed sounds / TTS / languages) -----
+
+    @_serialized_write
+    def add_extension_asset(self, extension_id: int, user_id: int, kind: str, name: str,
+                            content: str, mime: Optional[str] = None) -> Dict[str, Any]:
+        """Attach an asset to an extension. Author (or staff) only. kind is
+        one of 'sound' | 'tts' | 'lang'."""
+        if kind not in ('sound', 'tts', 'lang'):
+            return {"success": False, "error": "Invalid asset kind"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT author_id FROM extensions WHERE id = ?", (extension_id,))
+        ext = cursor.fetchone()
+        if not ext:
+            conn.close()
+            return {"success": False, "error": "Extension not found"}
+        author_id = self._row_get(ext, 'author_id')
+        if author_id != user_id and not self._is_staff(user_id):
+            conn.close()
+            return {"success": False, "error": "Not allowed"}
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT OR REPLACE INTO extension_assets (extension_id, kind, name, content, mime, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (extension_id, kind, name, content, mime, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def get_extension_asset(self, slug: str, kind: str, name: str) -> Optional[Dict[str, Any]]:
+        """Fetch an asset of an ACTIVE extension by slug."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT a.kind, a.name, a.content, a.mime FROM extension_assets a "
+            "JOIN extensions e ON e.id = a.extension_id "
+            "WHERE e.slug = ? AND e.status = 'active' AND a.kind = ? AND a.name = ?",
+            (slug, kind, name),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def list_extension_assets(self, slug: str) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT a.kind, a.name, a.mime FROM extension_assets a "
+            "JOIN extensions e ON e.id = a.extension_id WHERE e.slug = ?",
+            (slug,),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
 
     # Role Management Methods
 

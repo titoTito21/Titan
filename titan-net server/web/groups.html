@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="groups.title">Groups — Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css?v=20260526a">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
+          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
+          <li><a href="groups.html" data-i18n="nav.groups" aria-current="page">Groups</a></li>
+          <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
+          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
+          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
+          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Groups list view -->
+    <section id="groups-view" aria-labelledby="groups-h1">
+      <div class="flex">
+        <h1 id="groups-h1" data-i18n="groups.title">Groups</h1>
+        <span class="spacer"></span>
+        <button id="new-group-btn" data-auth="in" hidden data-i18n="groups.new">New group</button>
+      </div>
+      <p id="groups-status" class="muted" role="status" aria-live="polite"></p>
+      <ul id="groups-list" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
+    </section>
+
+    <!-- Single group view: its forums -->
+    <section id="group-view" aria-labelledby="group-title" hidden>
+      <p><a href="#" id="group-back" data-i18n="groups.back">Back to groups</a></p>
+      <div class="flex">
+        <h1 id="group-title"></h1>
+        <span class="spacer"></span>
+        <button id="new-forum-btn" hidden data-i18n="groups.new_forum">New forum</button>
+        <button id="pending-members-btn" hidden data-i18n="groups.pending_members">Pending members</button>
+      </div>
+      <h2 data-i18n="groups.forums_heading">Forums</h2>
+      <p id="group-status" class="muted" role="status" aria-live="polite"></p>
+      <ul id="forums-list" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
+    </section>
+
+    <!-- Forum threads view -->
+    <section id="threads-view" aria-labelledby="threads-title" hidden>
+      <p><a href="#" id="threads-back" data-i18n="groups.forum.back">Back to forums</a></p>
+      <div class="flex">
+        <h1 id="threads-title"></h1>
+        <span class="spacer"></span>
+        <button id="new-thread-btn" data-auth="in" hidden data-i18n="groups.forum.new_thread">New thread</button>
+      </div>
+      <p id="threads-status" class="muted" role="status" aria-live="polite"></p>
+      <ul id="threads-list" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
+    </section>
+
+    <!-- Single topic view -->
+    <section id="topic-view" aria-labelledby="topic-title" hidden>
+      <p><a href="#" id="topic-back" data-i18n="groups.forum.back">Back</a></p>
+      <article class="card">
+        <h1 id="topic-title"></h1>
+        <p class="meta" id="topic-meta"></p>
+        <div id="topic-body"></div>
+      </article>
+      <h2 data-i18n="forum.replies_heading">Replies</h2>
+      <ul id="topic-replies" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
+      <form id="reply-form" data-auth="in" hidden style="margin-top:1rem">
+        <div class="field">
+          <label for="reply-content" data-i18n="forum.reply_label">Write a reply</label>
+          <textarea id="reply-content" required aria-required="true" minlength="1"></textarea>
+        </div>
+        <p><button type="submit" data-i18n="forum.reply_submit">Post reply</button></p>
+      </form>
+    </section>
+
+    <!-- New group dialog -->
+    <dialog id="new-group-dialog" aria-labelledby="ng-title">
+      <form id="new-group-form" style="display:grid;gap:1rem;min-width:min(640px,92vw)">
+        <h2 id="ng-title" data-i18n="groups.new" style="margin:0">New group</h2>
+        <div class="field">
+          <label for="ng-name" data-i18n="groups.new.name">Group name</label>
+          <input id="ng-name" required aria-required="true" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="ng-desc" data-i18n="groups.new.description">Description</label>
+          <textarea id="ng-desc" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label for="ng-visibility" data-i18n="groups.new.visibility">Visibility</label>
+          <select id="ng-visibility">
+            <option value="public" data-i18n="groups.new.vis_public">Public</option>
+            <option value="private" data-i18n="groups.new.vis_private">Private</option>
+            <option value="hidden" data-i18n="groups.new.vis_hidden">Hidden</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="ng-limit" data-i18n="groups.new.limit">Member limit (0 = unlimited)</label>
+          <input id="ng-limit" type="number" min="0" value="0">
+        </div>
+        <p style="text-align:right">
+          <button type="button" id="ng-cancel" class="btn btn-secondary" data-i18n="groups.new.cancel">Cancel</button>
+          <button type="submit" data-i18n="groups.new.submit">Create group</button>
+        </p>
+      </form>
+    </dialog>
+
+    <!-- New forum dialog -->
+    <dialog id="new-forum-dialog" aria-labelledby="nf-title">
+      <form id="new-forum-form" style="display:grid;gap:1rem;min-width:min(560px,92vw)">
+        <h2 id="nf-title" data-i18n="groups.new_forum" style="margin:0">New forum</h2>
+        <div class="field">
+          <label for="nf-name" data-i18n="groups.new_forum.name">Forum name</label>
+          <input id="nf-name" required aria-required="true" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="nf-desc" data-i18n="forum.new.content">Description</label>
+          <textarea id="nf-desc" rows="3"></textarea>
+        </div>
+        <p style="text-align:right">
+          <button type="button" id="nf-cancel" class="btn btn-secondary" data-i18n="groups.new.cancel">Cancel</button>
+          <button type="submit" data-i18n="groups.new_forum.submit">Create forum</button>
+        </p>
+      </form>
+    </dialog>
+
+    <!-- New thread dialog -->
+    <dialog id="new-thread-dialog" aria-labelledby="nt-title">
+      <form id="new-thread-form" style="display:grid;gap:1rem;min-width:min(640px,92vw)">
+        <h2 id="nt-title" data-i18n="groups.forum.new_thread" style="margin:0">New thread</h2>
+        <div class="field">
+          <label for="nt-title-input" data-i18n="forum.new.title">Topic title</label>
+          <input id="nt-title-input" required aria-required="true" maxlength="200">
+        </div>
+        <div class="field">
+          <label for="nt-content" data-i18n="forum.new.content">Topic content</label>
+          <textarea id="nt-content" required aria-required="true" rows="8"></textarea>
+        </div>
+        <p style="text-align:right">
+          <button type="button" id="nt-cancel" class="btn btn-secondary" data-i18n="forum.new.cancel">Cancel</button>
+          <button type="submit" data-i18n="forum.new.submit">Post topic</button>
+        </p>
+      </form>
+    </dialog>
+
+    <!-- Pending members dialog -->
+    <dialog id="pending-dialog" aria-labelledby="pm-title">
+      <div style="display:grid;gap:1rem;min-width:min(560px,92vw)">
+        <h2 id="pm-title" data-i18n="groups.pending_members" style="margin:0">Pending members</h2>
+        <p id="pending-status" class="muted" role="status" aria-live="polite"></p>
+        <ul id="pending-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
+        <p style="text-align:right">
+          <button type="button" id="pm-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
+        </p>
+      </div>
+    </dialog>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="js/i18n.js?v=20260526a"></script>
+  <script src="js/app.js?v=20260526a"></script>
+  <script src="js/sounds.js?v=20260526a"></script>
+  <script src="js/api.js?v=20260526a"></script>
+  <script src="js/groups.js?v=20260526a"></script>
+</body>
+</html>
