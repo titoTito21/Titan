@@ -46,6 +46,7 @@ import base64
 import json
 import os
 import importlib.util
+import threading
 import traceback
 
 import wx
@@ -121,6 +122,10 @@ COMPONENT = {
     "description": "What this component does.",
     "author": "",
     "version": "1.0",
+    # Optional audience gates (omit for everyone, everywhere):
+    # "moderators_only": True,
+    # "allowed_regions": ["PL"],   # regional lock (allow-list)
+    # "blocked_regions": ["RU"],
 }
 
 MENU_ITEMS = [
@@ -130,8 +135,10 @@ MENU_ITEMS = [
 
 def run(api):
     # Entry point. Use api.groups / api.forum / api.moderation / api.users,
-    # api.storage for persistence, and api.message / api.prompt / api.choose /
-    # api.announce for accessible UI.
+    # api.storage (local) or api.cloud (per-user, server-side), and
+    # api.message / api.prompt / api.choose / api.announce for accessible UI.
+    # Tip: a component can also be a FOLDER with several files (entry file
+    # component.py importing sibling modules).
     api.message("Hello from my component!")
 
 
@@ -143,11 +150,28 @@ def run(api):
 API_REFERENCE_TEXT = """TITAN-NET MODERATOR COMPONENT API
 =================================
 
-A component is a .py file defining:
+A component is EITHER a single .py file OR a FOLDER (a package with several
+files; its entry file is component.py / __init__.py / main.py and may import
+the sibling modules normally). Either way it defines:
   COMPONENT = {"name", "description", "author", "version"}   (required dict)
   run(api)                                                   (required function)
   MENU_ITEMS = [{"label", "callback"}]                       (optional actions)
   named callback functions referenced by MENU_ITEMS          (optional)
+
+COMPONENT may also carry optional AUDIENCE GATES that apply everywhere the
+component runs (main view, Alt menu, hooks):
+  "moderators_only": True            only moderators/developers see & run it
+  "allowed_regions": ["PL", "US"]    regional LOCK: only these regions
+  "blocked_regions": ["RU"]          regional block-list
+Omit them (or leave empty) for "everyone, everywhere" — e.g. a cloud-notes
+component for all users.
+
+WHERE A COMPONENT APPEARS
+-------------------------
+An enabled component contributes to the Titan-Net MAIN VIEW (its name + each
+MENU_ITEMS action become list entries) and to the Titan-Net MENU BAR under Alt
+(a "Components" menu). This is how a moderator adds a whole new feature for
+users without touching the core.
 
 Components run on the UI thread and may open their own wx windows/dialogs
 (custom GUI is allowed).
@@ -182,7 +206,15 @@ api.moderation  ban_from_group(group_id, user_id, reason=None)
 api.users       all()
 
 api.storage     get(key, default=None)  set(key, value)  delete(key)  all()
-                Persistent JSON per component.
+                Persistent JSON per component, LOCAL to this client only.
+
+api.cloud       get(key, default=None)  set(key, value)        per-user
+                get_shared(key, default=None)  set_shared(key, value)  global
+                SERVER-side storage shared across every user's client (the same
+                approved component runs everywhere). Per-user keys are
+                namespaced by username — use this for e.g. cloud notes. Note:
+                the server does not yet ENFORCE per-user isolation, so treat
+                per-user data as private-by-convention, not secret.
 
 UI HELPERS
 ----------
@@ -332,6 +364,57 @@ def run(api):
 '''
 
 
+_NOTES_EXAMPLE_COMPONENT = '''"""Example: cloud notes for EVERYONE.
+
+A moderator builds this once and submits it to the network; after approval it
+runs in every user's client and each user gets their own notes that follow them
+across devices (stored server-side via api.cloud, namespaced per user).
+
+This component is for everyone (no moderators_only / region lock). To make a
+moderators-only or region-locked feature, add to COMPONENT, e.g.:
+    "moderators_only": True,
+    "allowed_regions": ["PL"],
+"""
+
+COMPONENT = {
+    "name": "Cloud notes",
+    "description": "Personal notes saved in the cloud, available to every user.",
+    "author": "Titan-Net",
+    "version": "1.0",
+}
+
+MENU_ITEMS = [
+    {"label": "Add a note", "callback": "add_note"},
+]
+
+
+def _load(api):
+    notes = api.cloud.get("notes", [])
+    return notes if isinstance(notes, list) else []
+
+
+def run(api):
+    notes = _load(api)
+    if not notes:
+        api.message("You have no notes yet. Use 'Add a note'.")
+        return
+    api.message("\\n".join("- " + str(n) for n in notes), caption="Your notes")
+
+
+def add_note(api):
+    text = api.prompt("Write your note:")
+    if not text:
+        return
+    notes = _load(api)
+    notes.append(text)
+    result = api.cloud.set("notes", notes)
+    if result.get("success"):
+        api.announce("Note saved to the cloud")
+    else:
+        api.message(result.get("error", "Could not save the note"))
+'''
+
+
 def _seed_example(components_dir):
     """Drop a README + example component the first time the folder is empty."""
     try:
@@ -341,21 +424,29 @@ def _seed_example(components_dir):
                 f.write(
                     "Titan-Net moderator components\n"
                     "==============================\n\n"
-                    "Drop *.py files here. Each must define a COMPONENT dict "
-                    "(name, description, author, version) and a run(api) "
-                    "function. Optionally MENU_ITEMS (extra actions) and "
-                    "named callback functions.\n\n"
+                    "Drop *.py files OR folders here. Each component must "
+                    "define a COMPONENT dict (name, description, author, "
+                    "version) and a run(api) function. A FOLDER component has "
+                    "several files; its entry file is component.py / "
+                    "__init__.py / main.py and may import the sibling modules. "
+                    "Optionally MENU_ITEMS (extra actions) and named callbacks.\n\n"
+                    "COMPONENT optional gates: moderators_only=True, "
+                    "allowed_regions=[...], blocked_regions=[...].\n\n"
                     "api.client      - live TitanNetClient (full access)\n"
                     "api.groups      - list/get/create/join/leave/members/...\n"
                     "api.forum       - topics/replies/create/move/search\n"
                     "api.moderation  - ban/unban/move-requests approve/reject\n"
                     "api.users       - all()\n"
-                    "api.storage     - persistent JSON get/set per component\n"
+                    "api.storage     - persistent JSON per component (LOCAL)\n"
+                    "api.cloud       - server-side storage (per-user + shared)\n"
                     "api.message/prompt/choose/announce - accessible UI\n"
                     "api.play_sound / api.play_component_sound / api.tts_message\n"
                     "api.apply_skin(window) - theme your own wx dialogs\n\n"
+                    "Enabled components also appear in the Titan-Net main view "
+                    "and the Alt menu (Components).\n\n"
                     "Examples: example_component.py (basic), "
-                    "gui_example_component.py (own GUI + sound + speech).\n"
+                    "gui_example_component.py (own GUI + sound + speech), "
+                    "cloud_notes_component.py (cloud storage for everyone).\n"
                     "Full reference with a GUI-building walkthrough: the "
                     "Documentation button in the Moderator Components window.\n"
                 )
@@ -367,6 +458,10 @@ def _seed_example(components_dir):
         if not os.path.exists(gui_example):
             with open(gui_example, 'w', encoding='utf-8') as f:
                 f.write(_GUI_EXAMPLE_COMPONENT)
+        notes_example = os.path.join(components_dir, 'cloud_notes_component.py')
+        if not os.path.exists(notes_example):
+            with open(notes_example, 'w', encoding='utf-8') as f:
+                f.write(_NOTES_EXAMPLE_COMPONENT)
     except Exception as e:
         print(f"[mod-components] could not seed example: {e}")
 
@@ -517,6 +612,49 @@ class _ComponentsAPI:
         return [k for k, _ in _EXTENSION_POINTS.get(point_name, [])]
 
 
+class _CloudStorage:
+    """Per-component storage that lives on the SERVER (shared across every
+    user's client), backed by the extension data KV.
+
+    ``get``/``set`` are scoped to the CURRENT user (keys namespaced by username)
+    so a component like cloud notes gives each user their own data. The
+    ``*_shared`` variants are visible to everyone (e.g. a global announcement
+    board). Distribution is the same as a network extension: an approved
+    component's storage is reachable from any client.
+
+    NOTE: the server authenticates the request but does not yet ENFORCE
+    per-user isolation, so treat namespaced data as private-by-convention, not
+    secret. Returns plain dicts ({'success': ...})."""
+
+    def __init__(self, client, slug):
+        self._client = client
+        self._slug = slug
+
+    def _user_key(self, key):
+        uname = getattr(self._client, 'username', '') or '?'
+        return f"u:{uname}:{key}"
+
+    def get(self, key, default=None):
+        r = self._client.extension_data_get(self._slug, self._user_key(key))
+        if isinstance(r, dict) and r.get('success'):
+            val = r.get('value')
+            return default if val is None else val
+        return default
+
+    def set(self, key, value):
+        return self._client.extension_data_set(self._slug, self._user_key(key), value)
+
+    def get_shared(self, key, default=None):
+        r = self._client.extension_data_get(self._slug, f"g:{key}")
+        if isinstance(r, dict) and r.get('success'):
+            val = r.get('value')
+            return default if val is None else val
+        return default
+
+    def set_shared(self, key, value):
+        return self._client.extension_data_set(self._slug, f"g:{key}", value)
+
+
 class ModeratorComponentAPI:
     """Surface handed to a component's ``run(api)`` / menu callbacks."""
 
@@ -532,6 +670,7 @@ class ModeratorComponentAPI:
         self.components = _ComponentsAPI(component_key)
         self.storage = ComponentStorage(components_dir, component_key)
         self._buffers = None
+        self._cloud = None
 
     @property
     def buffers(self):
@@ -545,6 +684,15 @@ class ModeratorComponentAPI:
             except Exception:
                 self._buffers = None
         return self._buffers
+
+    @property
+    def cloud(self):
+        """Server-side storage shared across all clients (the same approved
+        component runs everywhere). api.cloud.get/set are per-user; api.cloud
+        .get_shared/set_shared are global. Backs features like cloud notes."""
+        if self._cloud is None:
+            self._cloud = _CloudStorage(self.client, self._slug())
+        return self._cloud
 
     # --- accessible UI helpers ---
     def message(self, text, caption=None):
@@ -670,12 +818,41 @@ def save_enabled_state(components_dir, state):
         print(f"[mod-components] enabled-state save failed: {e}")
 
 
-def sync_active_extensions(titan_client, components_dir=None):
-    """Download every ACTIVE approved extension's client code into the
-    components folder so the runtime loads them like local components.
+def _unpack_extension_bundle(b64_zip, dest_dir):
+    """Replace ``dest_dir`` with the contents of a base64-encoded zip bundle.
+    Zip-slip safe: entries that escape dest_dir are skipped."""
+    import io
+    import shutil
+    import zipfile
+    if os.path.isdir(dest_dir):
+        shutil.rmtree(dest_dir, ignore_errors=True)
+    os.makedirs(dest_dir, exist_ok=True)
+    raw = base64.b64decode(b64_zip)
+    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+        dest_abs = os.path.abspath(dest_dir)
+        for member in zf.namelist():
+            target = os.path.abspath(os.path.join(dest_dir, member))
+            if not (target == dest_abs or target.startswith(dest_abs + os.sep)):
+                print(f"[mod-components] skipped unsafe zip entry: {member}")
+                continue
+            if member.endswith('/'):
+                os.makedirs(target, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with zf.open(member) as src, open(target, 'wb') as out:
+                out.write(src.read())
 
-    Files are written as ``ext_<slug>.py`` and refreshed only when the server
-    hash differs from what we cached. Returns the number of files written."""
+
+def sync_active_extensions(titan_client, components_dir=None):
+    """Download every ACTIVE approved extension into the components folder so
+    the runtime loads them like local components — THIS is how Titan-Net runs a
+    component on every user's client: each client pulls the approved code from
+    the server, caches it locally, and the runtime executes it.
+
+    A 'single' extension is written as ``ext_<slug>.py``; a 'folder' extension
+    has its base64 zip unpacked into ``ext_<slug>/``. Each is refreshed only
+    when the server hash differs from the cached one. Returns the number of
+    extensions written/updated."""
     if components_dir is None:
         components_dir = get_components_dir()
     written = 0
@@ -697,14 +874,26 @@ def sync_active_extensions(titan_client, components_dir=None):
             if not detail.get('success'):
                 continue
             body = detail.get('extension', {})
-            code = body.get('client_code') or ''
             code_hash = body.get('code_hash') or ''
-            target = os.path.join(components_dir, f'ext_{slug}.py')
-            if known.get(slug) == code_hash and os.path.exists(target):
+            kind = body.get('kind') or 'single'
+            file_target = os.path.join(components_dir, f'ext_{slug}.py')
+            dir_target = os.path.join(components_dir, f'ext_{slug}')
+            already = (
+                known.get(slug) == code_hash
+                and (os.path.exists(dir_target) if kind == 'folder' else os.path.exists(file_target))
+            )
+            if already:
                 continue
             try:
-                with open(target, 'w', encoding='utf-8') as f:
-                    f.write(code)
+                if kind == 'folder' and body.get('bundle'):
+                    # Drop any stale single-file form, then unpack the bundle.
+                    if os.path.exists(file_target):
+                        os.remove(file_target)
+                    _unpack_extension_bundle(body['bundle'], dir_target)
+                else:
+                    code = body.get('client_code') or ''
+                    with open(file_target, 'w', encoding='utf-8') as f:
+                        f.write(code)
                 known[slug] = code_hash
                 written += 1
             except Exception as e:
@@ -719,23 +908,140 @@ def sync_active_extensions(titan_client, components_dir=None):
     return written
 
 
+# ----------------------------------------------------------------------------
+# Audience gating — moderators-only flag and regional lock
+# ----------------------------------------------------------------------------
+
+def _current_region():
+    """Best-effort 2-letter region code for the current user (upper-case).
+
+    An explicit ``region`` setting wins; otherwise the system locale's country
+    (``pl_PL`` -> ``PL``); otherwise the UI language (``pl`` -> ``PL``)."""
+    try:
+        r = (get_setting('region', '') or '').strip().upper()
+        if r:
+            return r
+    except Exception:
+        pass
+    try:
+        import locale
+        loc = locale.getlocale()[0] or (locale.getdefaultlocale() or [''])[0] or ''
+        if '_' in loc:
+            return loc.split('_')[1].upper()
+    except Exception:
+        pass
+    try:
+        return (get_setting('language', 'pl') or 'pl').upper()
+    except Exception:
+        return ''
+
+
+def _user_is_moderator(titan_client):
+    role = getattr(titan_client, 'user_role', 'user') if titan_client is not None else 'user'
+    return role in ('moderator', 'developer')
+
+
+def is_component_accessible(component, titan_client=None, region=None):
+    """Whether a component should be visible/run for THIS user, honouring its
+    manifest audience gates::
+
+        COMPONENT = {..., "moderators_only": True,
+                     "allowed_regions": ["PL", "US"],   # allow-list (lock)
+                     "blocked_regions": ["RU"]}          # block-list
+
+    Missing/empty gates mean "everyone, everywhere"."""
+    if component.get('moderators_only') and not _user_is_moderator(titan_client):
+        return False
+    if region is None:
+        region = _current_region()
+    allowed = [str(a).upper() for a in (component.get('allowed_regions') or [])]
+    blocked = [str(b).upper() for b in (component.get('blocked_regions') or [])]
+    if allowed and region not in allowed:
+        return False
+    if blocked and region in blocked:
+        return False
+    return True
+
+
+# A folder component is a directory holding several files; its entry point is
+# the first of these that exists (it defines COMPONENT + run and may import the
+# sibling modules).
+_COMPONENT_ENTRY_NAMES = ('component.py', '__init__.py', 'main.py')
+
+
+def _component_entry_file(folder):
+    for cand in _COMPONENT_ENTRY_NAMES:
+        p = os.path.join(folder, cand)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _load_component_module(path, key):
+    """Load a component from either a single ``.py`` file or a FOLDER (package).
+
+    For a folder, the entry file (``component.py`` / ``__init__.py`` / ``main.py``)
+    is executed as a package so its sibling modules import normally (``from . import
+    x`` and plain ``import x`` both work). Returns the loaded module or None."""
+    import sys
+    mod_name = 'titan_mod_component_' + key
+    if os.path.isdir(path):
+        entry = _component_entry_file(path)
+        if entry is None:
+            return None
+        spec = importlib.util.spec_from_file_location(
+            mod_name, entry, submodule_search_locations=[path])
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = module  # let submodules resolve the package
+        added = path not in sys.path
+        if added:
+            sys.path.insert(0, path)
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if added:
+                try:
+                    sys.path.remove(path)
+                except ValueError:
+                    pass
+        return module
+    spec = importlib.util.spec_from_file_location(mod_name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def discover_components(components_dir):
-    """Load every valid component file. Returns a list of dicts with keys:
-    key (file basename), name, description, author, version, run, menu_items
-    (list of {label, callback_fn}), module, path, enabled."""
+    """Load every valid component. A component is either a single ``.py`` file
+    or a FOLDER (package) with an entry file and any number of sibling modules.
+    Returns a list of dicts with keys: key, name, description, author, version,
+    run, menu_items (list of {label, callback_fn}), module, path, entry,
+    is_package, enabled, moderators_only, allowed_regions, blocked_regions."""
     components = []
     if not os.path.isdir(components_dir):
         return components
     enabled_state = load_enabled_state(components_dir)
     for name in sorted(os.listdir(components_dir)):
-        if not name.endswith('.py') or name.startswith('_'):
-            continue
-        path = os.path.join(components_dir, name)
-        key = name[:-3]
+        if name.startswith('_'):
+            continue  # _state, _assets, _enabled.json, _ext_hashes.json, ...
+        full = os.path.join(components_dir, name)
+        is_package = os.path.isdir(full)
+        if is_package:
+            if _component_entry_file(full) is None:
+                continue
+            key = name
+            path = full
+            entry = _component_entry_file(full)
+        else:
+            if not name.endswith('.py'):
+                continue
+            key = name[:-3]
+            path = full
+            entry = full
         try:
-            spec = importlib.util.spec_from_file_location('titan_mod_component_' + key, path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = _load_component_module(path, key)
+            if module is None:
+                continue
             meta = getattr(module, 'COMPONENT', None)
             run = getattr(module, 'run', None)
             if not isinstance(meta, dict) or not callable(run):
@@ -755,7 +1061,12 @@ def discover_components(components_dir):
                 'menu_items': menu_items,
                 'module': module,
                 'path': path,
+                'entry': entry,
+                'is_package': is_package,
                 'enabled': enabled_state.get(key, True),
+                'moderators_only': bool(meta.get('moderators_only', False)),
+                'allowed_regions': meta.get('allowed_regions') or meta.get('regions') or [],
+                'blocked_regions': meta.get('blocked_regions') or [],
             })
         except Exception as e:
             print(f"[mod-components] failed to load {name}: {e}")
@@ -791,7 +1102,12 @@ class ComponentRuntime:
 
     def reload(self):
         try:
-            self.components = [c for c in discover_components(self.components_dir) if c['enabled']]
+            # Only ENABLED components that this user is allowed to see/run
+            # (moderators-only flag + regional lock) feed hooks and the menu.
+            self.components = [
+                c for c in discover_components(self.components_dir)
+                if c['enabled'] and is_component_accessible(c, self.titan_client)
+            ]
         except Exception as e:
             print(f"[mod-components] runtime reload failed: {e}")
             self.components = []
@@ -843,6 +1159,41 @@ def dispatch_event(event, **payload):
         rt.dispatch(event, **payload)
 
 
+def get_menu_contributions():
+    """Contributions from every ENABLED component, so the host can surface them
+    in the Titan-Net main view AND the menu bar (Alt menu).
+
+    Returns a list of dicts grouped per component::
+
+        {'component': <display name>,
+         'actions': [(label, run_callable_no_args), ...]}
+
+    Each ``run_callable`` takes no arguments and runs the component action with
+    a fresh API parented to the runtime's window; a failing action is caught so
+    it never breaks Titan-Net. Returns ``[]`` if the runtime isn't up yet."""
+    rt = _RUNTIME
+    if rt is None:
+        return []
+
+    def _make(comp, fn):
+        def _run():
+            api = rt._api_for(comp)
+            try:
+                fn(api)
+            except Exception as e:
+                print(f"[mod-components] menu action error: {e}")
+                traceback.print_exc()
+        return _run
+
+    contributions = []
+    for component in rt.components:
+        actions = [(_("Run"), _make(component, component['run']))]
+        for mi in component.get('menu_items', []):
+            actions.append((mi['label'], _make(component, mi['callback'])))
+        contributions.append({'component': component['name'], 'actions': actions})
+    return contributions
+
+
 class ComponentDocsDialog(wx.Dialog):
     """Read-only API reference for component authors (no-AI path)."""
 
@@ -886,6 +1237,12 @@ def build_system_prompt():
         "- User-facing text in English; keep any GUI keyboard-accessible.\n"
         "- The file MUST define COMPONENT (dict: name, description, author, "
         "version) and run(api). MENU_ITEMS and on_* hooks are optional.\n"
+        "- COMPONENT may include optional audience gates: moderators_only "
+        "(bool), allowed_regions (list of region codes, a lock) and "
+        "blocked_regions (list). Use them only if the user asks to restrict the "
+        "audience; otherwise omit them so everyone can use it.\n"
+        "- For data that must follow the user across devices use api.cloud "
+        "(per-user) or api.cloud.*_shared (global); api.storage is local only.\n"
         "- The file MUST compile.\n\n"
         "API REFERENCE (the only surface you may use):\n"
         + API_REFERENCE_TEXT
@@ -893,18 +1250,46 @@ def build_system_prompt():
     )
 
 
-def generate_component_code(conversation, api_key, provider='anthropic', model='claude-opus-4-8'):
+# AI providers the component creator accepts (id, display label). Mirrors the
+# interactive-games BYOK provider list so a moderator can reuse the same key.
+PROVIDERS = (
+    ('anthropic', 'Anthropic Claude'),
+    ('gemini', 'Google Gemini'),
+    ('openai', 'OpenAI'),
+)
+
+# Sensible default model per provider (the user can override per provider via a
+# '<provider>_model' setting).
+_DEFAULT_MODELS = {
+    'anthropic': 'claude-opus-4-8',
+    'gemini': 'gemini-2.0-flash',
+    'openai': 'gpt-4o',
+}
+
+
+def provider_label(provider_id):
+    for pid, label in PROVIDERS:
+        if pid == provider_id:
+            return label
+    return provider_id or '?'
+
+
+def generate_component_code(conversation, api_key, provider='anthropic', model=None):
     """Call the model to generate component code. Returns code (str).
 
     ``conversation`` is either a single description string (one-shot) or a list
     of ``{"role": "user"|"assistant", "content": str}`` messages for multi-turn
-    refinement. Default provider/model: Anthropic Claude Opus 4.8 (latest).
-    Raises on failure (missing SDK, bad key, network)."""
+    refinement. ``provider`` is one of 'anthropic', 'gemini' or 'openai'; the
+    user supplies the matching API key. Default provider: Anthropic Claude Opus
+    4.8 (latest). Raises on failure (missing SDK, bad key, network)."""
     system = build_system_prompt()
     if isinstance(conversation, str):
         messages = [{"role": "user", "content": conversation}]
     else:
         messages = list(conversation)
+    if not model:
+        model = _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS['anthropic'])
+
     if provider == 'anthropic':
         import anthropic  # may raise ImportError -> surfaced to caller
         client = anthropic.Anthropic(api_key=api_key)
@@ -915,6 +1300,27 @@ def generate_component_code(conversation, api_key, provider='anthropic', model='
             messages=messages,
         )
         text = ''.join(getattr(b, 'text', '') for b in msg.content if getattr(b, 'type', '') == 'text')
+    elif provider == 'gemini':
+        import google.generativeai as genai  # may raise ImportError
+        genai.configure(api_key=api_key)
+        gmodel = genai.GenerativeModel(model, system_instruction=system)
+        # Gemini uses 'user'/'model' roles; map the assistant turns across.
+        contents = [
+            {'role': 'model' if m['role'] == 'assistant' else 'user',
+             'parts': [m['content']]}
+            for m in messages
+        ]
+        resp = gmodel.generate_content(contents)
+        text = getattr(resp, 'text', '') or ''
+    elif provider == 'openai':
+        import openai  # may raise ImportError
+        client = openai.OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=4000,
+            messages=[{"role": "system", "content": system}] + messages,
+        )
+        text = resp.choices[0].message.content or ''
     else:
         raise RuntimeError(f"Unsupported provider: {provider}")
     # Strip markdown fences if the model added them despite instructions.
@@ -933,7 +1339,13 @@ class ComponentAIWizardDialog(wx.Dialog):
     """Textual AI creator: the moderator precisely describes the add-on they
     want; the model returns component code, shown in the editor for review."""
 
+    # Legacy single-key setting (Anthropic only). Kept for back-compat; new
+    # keys are stored per provider via _key_setting().
     AI_KEY_SETTING = 'titannet_component_ai_key'
+
+    @staticmethod
+    def _key_setting(provider):
+        return 'titannet_component_ai_key_' + provider
 
     def __init__(self, parent, components_dir):
         super().__init__(parent, title=_("Create Component with AI"), size=(720, 560))
@@ -952,6 +1364,15 @@ class ComponentAIWizardDialog(wx.Dialog):
             "Describe precisely the Titan-Net add-on you want, then Generate. "
             "After the first result you can keep refining in the same box."
         )), flag=wx.ALL, border=10)
+
+        # AI provider — accepts Anthropic, Google Gemini or OpenAI keys.
+        prov_box = wx.BoxSizer(wx.HORIZONTAL)
+        prov_box.Add(wx.StaticText(panel, label=_("AI provider:")),
+                     flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        self.provider_choice = wx.Choice(panel, choices=[label for _id, label in PROVIDERS])
+        self.provider_choice.SetSelection(0)
+        prov_box.Add(self.provider_choice, flag=wx.ALIGN_CENTER_VERTICAL)
+        vbox.Add(prov_box, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
         # Conversation transcript (read-only) so the multi-turn refinement is
         # visible to screen-reader users.
@@ -985,22 +1406,30 @@ class ComponentAIWizardDialog(wx.Dialog):
         # Multi-turn conversation history (list of {role, content}).
         self.messages = []
 
-    def _get_key(self):
+    def _current_provider(self):
+        idx = self.provider_choice.GetSelection()
+        return PROVIDERS[idx][0] if idx >= 0 else 'anthropic'
+
+    def _get_key(self, provider):
+        setting = self._key_setting(provider)
         try:
-            key = get_setting(self.AI_KEY_SETTING, '')
+            key = get_setting(setting, '')
+            # Back-compat: fall back to the old single-key setting for Anthropic.
+            if not key and provider == 'anthropic':
+                key = get_setting(self.AI_KEY_SETTING, '')
         except Exception:
             key = ''
         if key:
             return key
         dlg = wx.TextEntryDialog(self, _(
-            "Enter your AI API key (Anthropic). It is stored locally for future use."
-        ), _("AI API key"))
+            "Enter your {provider} API key. It is stored locally for future use."
+        ).format(provider=provider_label(provider)), _("AI API key"))
         key = dlg.GetValue().strip() if dlg.ShowModal() == wx.ID_OK else ''
         dlg.Destroy()
         if key:
             try:
                 from src.settings.settings import set_setting
-                set_setting(self.AI_KEY_SETTING, key)
+                set_setting(setting, key)
             except Exception:
                 pass
         return key
@@ -1010,7 +1439,8 @@ class ComponentAIWizardDialog(wx.Dialog):
         if not text:
             wx.MessageBox(_("Please type a request"), _("Error"), wx.OK | wx.ICON_WARNING, self)
             return
-        key = self._get_key()
+        provider = self._current_provider()
+        key = self._get_key(provider)
         if not key:
             return
         play_sound('core/SELECT.ogg')
@@ -1029,7 +1459,7 @@ class ComponentAIWizardDialog(wx.Dialog):
 
         def _work():
             try:
-                code = generate_component_code(convo, key)
+                code = generate_component_code(convo, key, provider=provider)
                 wx.CallAfter(self._on_generated, code, None)
             except Exception as e:
                 wx.CallAfter(self._on_generated, None, str(e))
@@ -1231,11 +1661,42 @@ class ExtensionReviewDialog(wx.Dialog):
             wx.CallAfter(self._show_code, detail)
         threading.Thread(target=_load, daemon=True).start()
 
+    def _bundle_to_text(self, ext):
+        """Render a folder extension's bundle as readable text (file list +
+        each file's contents) so a reviewer can actually review it."""
+        try:
+            import io
+            import zipfile
+            raw = base64.b64decode(ext.get('bundle') or '')
+            parts = [_("Folder extension. Entry: {entry}").format(entry=ext.get('entry') or '?'), ""]
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                names = zf.namelist()
+                parts.append(_("Files: {files}").format(files=", ".join(names)))
+                parts.append("")
+                for name in names:
+                    if name.endswith('/'):
+                        continue
+                    parts.append("=" * 60)
+                    parts.append(name)
+                    parts.append("=" * 60)
+                    try:
+                        parts.append(zf.read(name).decode('utf-8', 'replace'))
+                    except Exception:
+                        parts.append(_("(binary file, not shown)"))
+                    parts.append("")
+            return "\n".join(parts)
+        except Exception as e:
+            return _("Could not read bundle: {error}").format(error=str(e))
+
     def _show_code(self, detail):
         if not detail.get('success'):
             wx.MessageBox(detail.get('error', _("Failed to load")), _("Error"), wx.OK | wx.ICON_ERROR, self)
             return
-        code = detail.get('extension', {}).get('client_code', '')
+        ext = detail.get('extension', {})
+        if ext.get('kind') == 'folder' and ext.get('bundle'):
+            code = self._bundle_to_text(ext)
+        else:
+            code = ext.get('client_code', '')
         dlg = wx.Dialog(self, title=_("Extension Code"), size=(720, 560))
         p = wx.Panel(dlg)
         s = wx.BoxSizer(wx.VERTICAL)
@@ -1291,7 +1752,24 @@ class ModeratorComponentsWindow(wx.Frame):
             register_window("Titan-Net Moderator Components", window=self, category='messenger')
         except Exception:
             pass
+        # Escape and Alt+F4 must close the window (they did not before).
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyDown)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         wx.CallAfter(self.reload)
+
+    def OnKeyDown(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.Close()
+            return
+        event.Skip()
+
+    def OnClose(self, event):
+        try:
+            from src.ui.window_switcher import unregister_window
+            unregister_window("Titan-Net Moderator Components")
+        except Exception:
+            pass
+        self.Destroy()
 
     def InitUI(self):
         panel = wx.Panel(self)
@@ -1424,6 +1902,10 @@ class ModeratorComponentsWindow(wx.Frame):
                 btn.Bind(wx.EVT_BUTTON, lambda e, c=component, f=cb: self._run_callable(c, f))
                 self.actions_sizer.Add(btn, flag=wx.RIGHT, border=5)
         self.actions_panel.Layout()
+        # Re-layout the whole frame so freshly added action buttons are sized
+        # and clickable without needing a manual resize.
+        if getattr(self, '_panel', None):
+            self._panel.Layout()
 
     def OnNewComponent(self, event):
         play_sound('core/SELECT.ogg')
@@ -1457,18 +1939,46 @@ class ModeratorComponentsWindow(wx.Frame):
 
     def OnSubmitToNetwork(self, event):
         """Submit the selected local component for two-person approval so it can
-        affect the whole Titan-Net once approved."""
+        affect the whole Titan-Net once approved. Single-file components are sent
+        as code; folder components are zipped and sent as a bundle. The manifest
+        audience gates (moderators_only / regions) travel with the submission."""
         play_sound('core/SELECT.ogg')
         component = self._selected()
         if not component:
             return
+
+        kind = 'folder' if component.get('is_package') else 'single'
+        code = ''
+        bundle = None
+        entry = None
         try:
-            with open(component['path'], 'r', encoding='utf-8') as f:
-                code = f.read()
+            if kind == 'folder':
+                import base64 as _b64
+                import io
+                import zipfile
+                folder = component['path']
+                entry = os.path.basename(component.get('entry') or 'component.py')
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for root, _dirs, files in os.walk(folder):
+                        # Skip caches/state so bundles stay clean and small.
+                        if '__pycache__' in root or os.sep + '_' in (root + os.sep):
+                            continue
+                        for fn in files:
+                            if fn.endswith('.pyc'):
+                                continue
+                            full = os.path.join(root, fn)
+                            arc = os.path.relpath(full, folder)
+                            zf.write(full, arc)
+                bundle = _b64.b64encode(buf.getvalue()).decode('ascii')
+            else:
+                with open(component['path'], 'r', encoding='utf-8') as f:
+                    code = f.read()
         except Exception as e:
             wx.MessageBox(_("Could not read component: {error}").format(error=str(e)),
                           _("Error"), wx.OK | wx.ICON_ERROR, self)
             return
+
         slug = component['key'].replace('_', '-')
         confirm = wx.MessageBox(
             _("Submit '{name}' to the network? Another moderator/admin must "
@@ -1480,7 +1990,10 @@ class ModeratorComponentsWindow(wx.Frame):
         def _submit():
             result = self.titan_client.submit_extension(
                 slug, component['name'], code, component.get('description'),
-                component.get('version', '1.0'))
+                component.get('version', '1.0'), kind=kind, bundle=bundle, entry=entry,
+                moderators_only=component.get('moderators_only', False),
+                allowed_regions=component.get('allowed_regions') or [],
+                blocked_regions=component.get('blocked_regions') or [])
             wx.CallAfter(self._on_submitted, result)
         threading.Thread(target=_submit, daemon=True).start()
 

@@ -1222,6 +1222,12 @@ class Database:
                 client_code TEXT,
                 manifest TEXT,
                 code_hash TEXT,
+                kind TEXT NOT NULL DEFAULT 'single',
+                bundle TEXT,
+                entry TEXT,
+                moderators_only INTEGER NOT NULL DEFAULT 0,
+                allowed_regions TEXT,
+                blocked_regions TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -1231,6 +1237,26 @@ class Database:
                 FOREIGN KEY (approved_by) REFERENCES users(id)
             )
             """)
+
+            # Migration: add the folder-bundle + audience-gating columns to
+            # pre-existing extensions tables. 'kind' is 'single' (one .py via
+            # client_code) or 'folder' (a base64 zip in 'bundle' unpacked into
+            # ext_<slug>/ on clients, 'entry' = entry file). moderators_only +
+            # allowed_regions/blocked_regions (JSON arrays) gate who sees/runs
+            # an approved extension network-wide. All idempotent.
+            for _col, _ddl in (
+                ('kind', "ALTER TABLE extensions ADD COLUMN kind TEXT NOT NULL DEFAULT 'single'"),
+                ('bundle', "ALTER TABLE extensions ADD COLUMN bundle TEXT"),
+                ('entry', "ALTER TABLE extensions ADD COLUMN entry TEXT"),
+                ('moderators_only', "ALTER TABLE extensions ADD COLUMN moderators_only INTEGER NOT NULL DEFAULT 0"),
+                ('allowed_regions', "ALTER TABLE extensions ADD COLUMN allowed_regions TEXT"),
+                ('blocked_regions', "ALTER TABLE extensions ADD COLUMN blocked_regions TEXT"),
+            ):
+                try:
+                    cursor.execute(f"SELECT {_col} FROM extensions LIMIT 1")
+                except sqlite3.OperationalError:
+                    cursor.execute(_ddl)
+                    print(f"Migration: Added '{_col}' column to extensions table")
 
             # Review audit trail (one row per approve/reject decision).
             cursor.execute("""
@@ -3661,12 +3687,22 @@ class Database:
 
     @_serialized_write
     def submit_extension(self, author_id: int, slug: str, name: str, description: Optional[str],
-                         version: str, client_code: str, manifest: Optional[str] = None) -> Dict[str, Any]:
-        """Submit a new extension (status 'pending'). slug must be unique."""
+                         version: str, client_code: str, manifest: Optional[str] = None,
+                         kind: str = 'single', bundle: Optional[str] = None,
+                         entry: Optional[str] = None, moderators_only: bool = False,
+                         allowed_regions=None, blocked_regions=None) -> Dict[str, Any]:
+        """Submit a new extension (status 'pending'). slug must be unique.
+
+        A 'single' extension ships one .py via ``client_code``; a 'folder'
+        extension ships a base64 zip in ``bundle`` (``entry`` = entry file)
+        unpacked into ext_<slug>/ on clients. ``moderators_only`` +
+        ``allowed_regions``/``blocked_regions`` (lists) gate the audience."""
         slug = (slug or '').strip().lower().replace(' ', '-')
         name = (name or '').strip()
         if not slug or not name:
             return {"success": False, "error": "Slug and name are required"}
+        if kind not in ('single', 'folder'):
+            kind = 'single'
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM extensions WHERE slug = ?", (slug,))
@@ -3674,12 +3710,20 @@ class Database:
             conn.close()
             return {"success": False, "error": "An extension with this slug already exists"}
         now = datetime.now().isoformat()
-        code_hash = hashlib.sha256((client_code or '').encode('utf-8')).hexdigest()
+        # Hash whichever payload actually carries the code, so client caches
+        # refresh when either the single file or the bundle changes.
+        hash_src = bundle if kind == 'folder' else (client_code or '')
+        code_hash = hashlib.sha256((hash_src or '').encode('utf-8')).hexdigest()
+        allowed_json = json.dumps([str(r).upper() for r in (allowed_regions or [])])
+        blocked_json = json.dumps([str(r).upper() for r in (blocked_regions or [])])
         cursor.execute(
             "INSERT INTO extensions (slug, name, description, author_id, version, client_code, "
-            "manifest, code_hash, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
-            (slug, name, description, author_id, version or '1.0', client_code, manifest, code_hash, now, now),
+            "manifest, code_hash, kind, bundle, entry, moderators_only, allowed_regions, "
+            "blocked_regions, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+            (slug, name, description, author_id, version or '1.0', client_code, manifest,
+             code_hash, kind, bundle, entry, 1 if moderators_only else 0,
+             allowed_json, blocked_json, now, now),
         )
         ext_id = cursor.lastrowid
         conn.commit()
@@ -3694,6 +3738,7 @@ class Database:
         cursor = conn.cursor()
         base = ("SELECT e.id, e.slug, e.name, e.description, e.author_id, e.version, "
                 "e.status, e.created_at, e.updated_at, e.approved_by, e.approved_at, "
+                "e.kind, e.entry, e.moderators_only, e.allowed_regions, e.blocked_regions, "
                 "u.username AS author_username "
                 "FROM extensions e JOIN users u ON u.id = e.author_id ")
         if status:
@@ -3760,10 +3805,13 @@ class Database:
         return {"success": True, "status": new_status}
 
     def get_active_extension_client(self, slug: str) -> Optional[Dict[str, Any]]:
-        """Return the client code + hash for an ACTIVE extension (for download)."""
+        """Return the downloadable payload for an ACTIVE extension: for a
+        'single' extension the client_code; for a 'folder' extension the base64
+        bundle + entry. Includes the audience gates so clients enforce them."""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT slug, name, version, client_code, code_hash FROM extensions "
+        cursor.execute("SELECT slug, name, version, client_code, code_hash, kind, bundle, "
+                       "entry, moderators_only, allowed_regions, blocked_regions FROM extensions "
                        "WHERE slug = ? AND status = 'active'", (slug,))
         row = cursor.fetchone()
         conn.close()

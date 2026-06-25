@@ -1612,6 +1612,31 @@ class TitanNetMainWindow(wx.Frame):
 
             menubar.Append(admin_menu, _("Administration"))
 
+        # Components menu — enabled Titan-Net components contribute their
+        # actions to the Alt menu (and to the main view via show_menu).
+        try:
+            from src.network.titan_net_mod_components import get_menu_contributions
+            contributions = get_menu_contributions()
+        except Exception as e:
+            print(f"Error loading component menu contributions: {e}")
+            contributions = []
+        if contributions:
+            components_menu = wx.Menu()
+            for contrib in contributions:
+                name = contrib['component']
+                actions = contrib['actions']
+                if len(actions) == 1:
+                    _label, run = actions[0]
+                    item = components_menu.Append(wx.ID_ANY, name)
+                    self.Bind(wx.EVT_MENU, lambda e, r=run: r(), item)
+                else:
+                    submenu = wx.Menu()
+                    for label, run in actions:
+                        sub_item = submenu.Append(wx.ID_ANY, label)
+                        self.Bind(wx.EVT_MENU, lambda e, r=run: r(), sub_item)
+                    components_menu.AppendSubMenu(submenu, name)
+            menubar.Append(components_menu, _("Components"))
+
         self.SetMenuBar(menubar)
 
     def apply_skin(self):
@@ -1737,6 +1762,8 @@ class TitanNetMainWindow(wx.Frame):
                     rt = get_runtime()
                     if rt is not None:
                         rt.reload()
+                    # Surface freshly synced components in the main view + menu.
+                    wx.CallAfter(self._refresh_component_surfaces)
                 except Exception as ex:
                     print(f"Extension sync error: {ex}")
             threading.Thread(target=_sync_ext, daemon=True).start()
@@ -1812,11 +1839,48 @@ class TitanNetMainWindow(wx.Frame):
         if getattr(self, '_main_listbox_dnd', None) is not None:
             self._main_listbox_dnd.apply_saved_order()
 
+        # Component contributions — enabled Titan-Net components add their
+        # actions to the main view. Appended after the saved DnD order so they
+        # always sit at the bottom and keep their (callable) client data.
+        self._append_component_menu_entries()
+
         self.main_listbox.SetSelection(0)
         self.main_listbox.SetFocus()
         self.panel.Layout()
+        # Refresh the menu bar so the Components menu (Alt) reflects the
+        # currently enabled components.
+        self.update_menu_bar()
 
         play_sound('core/SELECT.ogg')
+
+    def _refresh_component_surfaces(self):
+        """Re-surface component contributions after the runtime (re)loads —
+        rebuilds the main-view list when shown and always the Alt menu."""
+        try:
+            if self.current_view == "menu":
+                self.show_menu()
+            else:
+                self.update_menu_bar()
+        except Exception as e:
+            print(f"Error refreshing component surfaces: {e}")
+
+    def _append_component_menu_entries(self):
+        """Append enabled components' actions to the main-view list. Each entry
+        carries its run callable as client data so OnListActivate can invoke
+        it directly (see [[titannet-moderator-components]])."""
+        try:
+            from src.network.titan_net_mod_components import get_menu_contributions
+            contributions = get_menu_contributions()
+        except Exception as e:
+            print(f"Error loading component menu entries: {e}")
+            return
+        for contrib in contributions:
+            name = contrib['component']
+            for label, run in contrib['actions']:
+                display = name if label == _("Run") else _("{component} - {action}").format(
+                    component=name, action=label)
+                idx = self.main_listbox.Append(display)
+                self.main_listbox.SetClientData(idx, run)
 
     def show_whats_new_view(self):
         """Show What's New - unread messages, forum posts, new apps, updates"""
@@ -2628,6 +2692,14 @@ class TitanNetMainWindow(wx.Frame):
         play_sound('core/SELECT.ogg')
 
         if self.current_view == "menu":
+            # Component contributions carry their run callable as client data;
+            # run it directly so enabled components act from the main view.
+            data = self.main_listbox.GetClientData(selection)
+            if callable(data):
+                play_sound('core/SELECT.ogg')
+                data()
+                return
+
             # Main menu selection - use item text instead of index
             item_text = self.main_listbox.GetString(selection)
 
@@ -5996,11 +6068,14 @@ class TitanNetMainWindow(wx.Frame):
         try:
             from src.network.titan_net_forum_gui import NewGroupDialog
             dlg = NewGroupDialog(self, self.titan_client)
-            if dlg.ShowModal() == wx.ID_OK and self.current_view == "groups":
-                self.refresh_groups()
+            result = dlg.ShowModal()
             dlg.Destroy()
+            if result == wx.ID_OK and self.current_view == "groups":
+                self.refresh_groups()
         except Exception as e:
-            print(f"Error creating group: {e}")
+            import traceback
+            traceback.print_exc()
+            speak_notification(_("Could not open the new group dialog: {error}").format(error=str(e)), 'error')
 
     def _selected_group_in_list(self):
         sel = self.main_listbox.GetSelection()

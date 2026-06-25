@@ -665,6 +665,9 @@ class NewGroupDialog(wx.Dialog):
         vbox.Add(btn_box, flag=wx.ALIGN_RIGHT | wx.ALL, border=10)
 
         panel.SetSizer(vbox)
+        # Move focus into the dialog so screen-reader users land on the first
+        # field instead of staying on the parent list.
+        self.name_input.SetFocus()
 
     def OnFocus(self, event):
         play_sound('core/FOCUS.ogg', position=0.5)

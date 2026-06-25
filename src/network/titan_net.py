@@ -2211,15 +2211,26 @@ class TitanNetClient:
 
     def submit_extension(self, slug: str, name: str, client_code: str,
                          description: Optional[str] = None, version: str = '1.0',
-                         manifest: Optional[str] = None) -> Dict:
-        """Submit a new extension for approval (status pending)."""
+                         manifest: Optional[str] = None, kind: str = 'single',
+                         bundle: Optional[str] = None, entry: Optional[str] = None,
+                         moderators_only: bool = False, allowed_regions=None,
+                         blocked_regions=None) -> Dict:
+        """Submit a new extension for approval (status pending).
+
+        A 'single' extension passes ``client_code``; a 'folder' extension passes
+        a base64 zip in ``bundle`` (with ``entry`` = entry file). The audience
+        gates (moderators_only, allowed/blocked regions) travel with it."""
         try:
             response = requests.post(
                 f"{self.http_url}/api/extensions",
                 json={'slug': slug, 'name': name, 'description': description,
-                      'version': version, 'client_code': client_code, 'manifest': manifest},
+                      'version': version, 'client_code': client_code, 'manifest': manifest,
+                      'kind': kind, 'bundle': bundle, 'entry': entry,
+                      'moderators_only': moderators_only,
+                      'allowed_regions': allowed_regions or [],
+                      'blocked_regions': blocked_regions or []},
                 headers=self._http_headers(),
-                timeout=15
+                timeout=30
             )
             return response.json()
         except Exception as e:

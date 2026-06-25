@@ -6,6 +6,7 @@ Handles file uploads, downloads, and repository management
 from aiohttp import web, MultipartReader
 import aiohttp_cors
 import asyncio
+import functools
 import logging
 import os
 import ssl
@@ -1697,9 +1698,20 @@ class TitanNetHTTPServer:
             name = (data.get('name') or '').strip()
             if not slug or not name:
                 return web.json_response({'success': False, 'error': 'Slug and name required'}, status=400)
+            kind = data.get('kind', 'single')
+            bundle = data.get('bundle')
+            entry = data.get('entry')
+            moderators_only = bool(data.get('moderators_only', False))
+            allowed_regions = data.get('allowed_regions') or []
+            blocked_regions = data.get('blocked_regions') or []
             result = await loop.run_in_executor(
-                None, self.db.submit_extension, user['id'], slug, name, data.get('description'),
-                data.get('version', '1.0'), data.get('client_code', ''), data.get('manifest')
+                None,
+                functools.partial(
+                    self.db.submit_extension, user['id'], slug, name, data.get('description'),
+                    data.get('version', '1.0'), data.get('client_code', ''), data.get('manifest'),
+                    kind=kind, bundle=bundle, entry=entry, moderators_only=moderators_only,
+                    allowed_regions=allowed_regions, blocked_regions=blocked_regions,
+                )
             )
             if result.get('success'):
                 logger.info(f"Extension submitted: '{slug}' by {user['username']}")

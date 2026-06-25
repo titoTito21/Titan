@@ -28,3 +28,7 @@ argon2-cffi>=23.1.0
 # Server falls back to stub mode if this is missing, so the rest of the
 # Titan-Net server still boots cleanly.
 google-genai>=1.0.0
+
+# Anthropic Claude SDK (server-side AI; also used by the moderator-component
+# AI creator). Optional at runtime — imported lazily where needed.
+anthropic>=0.40.0
