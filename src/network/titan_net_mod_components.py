@@ -1616,6 +1616,7 @@ class ExtensionReviewDialog(wx.Dialog):
         btn_box = wx.BoxSizer(wx.HORIZONTAL)
         for label, handler in (
             (_("View Code"), self.OnViewCode),
+            (_("Run (preview)"), self.OnRunPreview),
             (_("Approve"), lambda e: self._review(True)),
             (_("Reject"), lambda e: self._review(False)),
             (_("Refresh"), lambda e: self.reload()),
@@ -1651,6 +1652,73 @@ class ExtensionReviewDialog(wx.Dialog):
         if sel == -1 or sel >= len(self.pending):
             return None
         return self.pending[sel]
+
+    def OnRunPreview(self, event):
+        """Run the selected PENDING extension locally, exactly as if it were
+        installed in this reviewer's own Titan-Net, so they can judge its effect
+        on the GUI/menu before approving. Nothing is enabled network-wide."""
+        ext = self._selected()
+        if not ext:
+            return
+        play_sound('core/SELECT.ogg')
+
+        def _load():
+            detail = self.titan_client.get_extension(ext['id'])
+            wx.CallAfter(self._run_preview, detail)
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _run_preview(self, detail):
+        if not detail.get('success'):
+            wx.MessageBox(detail.get('error', _("Failed to load")), _("Error"), wx.OK | wx.ICON_ERROR, self)
+            return
+        ext = detail.get('extension', {})
+        slug = ext.get('slug') or 'preview'
+        key = 'ext_' + slug
+        try:
+            components_dir = get_components_dir()
+            preview_root = os.path.join(components_dir, '_preview')
+            os.makedirs(preview_root, exist_ok=True)
+            if ext.get('kind') == 'folder' and ext.get('bundle'):
+                dest = os.path.join(preview_root, key)
+                _unpack_extension_bundle(ext['bundle'], dest)
+                module = _load_component_module(dest, key)
+            else:
+                dest = os.path.join(preview_root, key + '.py')
+                with open(dest, 'w', encoding='utf-8') as f:
+                    f.write(ext.get('client_code', ''))
+                module = _load_component_module(dest, key)
+            run = getattr(module, 'run', None)
+            meta = getattr(module, 'COMPONENT', None)
+            if not isinstance(meta, dict) or not callable(run):
+                wx.MessageBox(_("This extension has no runnable component."),
+                              _("Run (preview)"), wx.OK | wx.ICON_WARNING, self)
+                return
+            # Build the same API a real install would get, parented here.
+            api = ModeratorComponentAPI(self.titan_client, self, components_dir, key)
+            # Offer run() plus any MENU_ITEMS, so the reviewer can try each
+            # action the component would add to the Titan-Net menu.
+            actions = [(_("Run"), run)]
+            for item in (getattr(module, 'MENU_ITEMS', None) or []):
+                cb = getattr(module, item.get('callback', ''), None)
+                if item.get('label') and callable(cb):
+                    actions.append((item['label'], cb))
+            if len(actions) == 1:
+                fn = run
+            else:
+                dlg = wx.SingleChoiceDialog(
+                    self, _("Choose what to run (as it would appear in the menu):"),
+                    _("Run (preview)"), [lbl for lbl, _fn in actions])
+                if dlg.ShowModal() != wx.ID_OK:
+                    dlg.Destroy()
+                    return
+                fn = actions[dlg.GetSelection()][1]
+                dlg.Destroy()
+            fn(api)
+        except Exception as e:
+            play_sound('core/error.ogg')
+            wx.MessageBox(_("Preview failed: {error}").format(error=str(e)),
+                          _("Error"), wx.OK | wx.ICON_ERROR, self)
+            traceback.print_exc()
 
     def OnViewCode(self, event):
         ext = self._selected()
