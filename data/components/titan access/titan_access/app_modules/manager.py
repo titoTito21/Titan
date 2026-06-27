@@ -1,0 +1,122 @@
+# -*- coding: utf-8 -*-
+"""Application module manager.
+
+Python port of ``ScreenReader/AppModules/AppModuleManager.cs`` (NVDA
+``appModuleHandler``). Resolves the foreground process for each focus event and
+delegates to the matching :class:`AppModuleBase`, caching the active module and
+firing lose/gain transitions when the foreground application changes.
+
+The engine calls :meth:`on_gain_focus` from ``engine.on_focus`` *before* it
+announces the element, so :meth:`AppModuleBase.customize_object` can mutate the
+:class:`AccessibleObject` in place and influence the announcement.
+"""
+
+import ctypes
+import os
+
+from titan_access.app_modules.explorer import ExplorerModule
+from titan_access.app_modules.notepad import NotepadModule
+from titan_access.app_modules.calculator import CalculatorModule
+
+# Module classes registered with the manager. Add new modules here.
+_MODULE_CLASSES = (ExplorerModule, NotepadModule, CalculatorModule)
+
+
+class AppModuleManager:
+    """Selects and drives the active per-application module."""
+
+    def __init__(self, engine):
+        self.engine = engine
+        # process name -> module instance
+        self._modules = {}
+        for cls in _MODULE_CLASSES:
+            try:
+                inst = cls(engine)
+                self._modules[inst.process_name] = inst
+            except Exception as e:
+                print(f"[TitanAccess] app module init failed ({cls.__name__}): {e}")
+        self._current = None
+        self._current_process = None
+
+    # ==================================================================== #
+    # Focus delegation
+    # ==================================================================== #
+    def on_gain_focus(self, obj):
+        """Resolve the active module for ``obj`` and let it customise it."""
+        process = self._process_for_object(obj)
+        if process != self._current_process:
+            self._switch_module(process, obj)
+        if self._current is not None:
+            try:
+                self._current.customize_object(obj)
+            except Exception as e:
+                print(f"[TitanAccess] customize_object error "
+                      f"({self._current_process}): {e}")
+            try:
+                self._current.on_gain_focus(obj)
+            except Exception as e:
+                print(f"[TitanAccess] on_gain_focus error "
+                      f"({self._current_process}): {e}")
+
+    def _switch_module(self, process, obj):
+        if self._current is not None:
+            try:
+                self._current.on_lose_focus(obj)
+            except Exception:
+                pass
+        self._current_process = process
+        self._current = self._modules.get(process) if process else None
+
+    @property
+    def current_module(self):
+        return self._current
+
+    def has_module_for(self, process_name):
+        return bool(process_name) and process_name.lower() in self._modules
+
+    # ==================================================================== #
+    # Process resolution
+    # ==================================================================== #
+    def _process_for_object(self, obj):
+        """Foreground process name (lower-case, no ``.exe``)."""
+        pid = getattr(obj, "process_id", 0) if obj is not None else 0
+        name = _process_name_for_pid(pid) if pid else ""
+        if not name:
+            name = _process_name_for_pid(_foreground_pid())
+        return name
+
+
+# =========================================================================== #
+# Win32 helpers (defensive; never raise)
+# =========================================================================== #
+def _foreground_pid() -> int:
+    try:
+        import ctypes.wintypes as wt
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        pid = wt.DWORD()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return int(pid.value)
+    except Exception:
+        return 0
+
+
+def _process_name_for_pid(pid: int) -> str:
+    if not pid:
+        return ""
+    try:
+        import ctypes.wintypes as wt
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(512)
+            size = wt.DWORD(512)
+            if k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                return os.path.splitext(os.path.basename(buf.value))[0].lower()
+        finally:
+            k.CloseHandle(h)
+    except Exception:
+        pass
+    return ""

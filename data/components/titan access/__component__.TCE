@@ -1,0 +1,4 @@
+[component]
+name = Titan Access
+status = 0
+libs = lib

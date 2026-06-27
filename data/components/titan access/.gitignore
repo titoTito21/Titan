@@ -1,0 +1,14 @@
+# C# reference project build artifacts (kept locally as reference, never committed)
+ScreenReader/bin/
+ScreenReader/obj/
+ScreenReader/.auto-claude/
+ScreenReader/.claude/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+init.pyc
+
+# Per-user runtime
+component_debug.log

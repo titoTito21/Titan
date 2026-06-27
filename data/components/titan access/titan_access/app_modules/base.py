@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+"""Base class for application modules.
+
+Python port of ``ScreenReader/AppModules/AppModuleBase.cs`` (NVDA
+``appModuleHandler.AppModule``). A module customises the screen reader for one
+application, identified by :attr:`process_name` (lower-case, no ``.exe``).
+
+The manager calls, in order, for each focus change inside the owning app:
+
+    1. :meth:`on_gain_focus` once when the app first becomes active (welcome /
+       one-time setup) — guarded by an internal "activated" flag.
+    2. :meth:`customize_object` on every focused element, to mutate the
+       :class:`~titan_access.contracts.AccessibleObject` *in place* before the
+       engine announces it (e.g. append a file type or document statistics).
+
+When the app loses foreground, :meth:`on_lose_focus` is called so the module can
+reset transient state. Modules read the live UIA element through
+``obj.native`` (a vendored ``uiautomation`` Control) and may use ``self.engine``
+to speak or play sounds directly.
+"""
+
+
+class AppModuleBase:
+    """Base for per-application behaviour. Subclass and set ``process_name``."""
+
+    #: Process name this module handles (lower-case, without ``.exe``).
+    process_name = ""
+
+    def __init__(self, engine):
+        self.engine = engine
+        self._activated = False
+
+    # -- identity ---------------------------------------------------------- #
+    @property
+    def app_name(self):
+        """Friendly application name (defaults to the process name)."""
+        return self.process_name
+
+    def matches(self, process_name):
+        """True if this module handles ``process_name`` (case-insensitive)."""
+        return bool(process_name) and process_name.lower() == self.process_name
+
+    # -- lifecycle hooks --------------------------------------------------- #
+    def on_gain_focus(self, obj):
+        """Called when the app becomes active and on each element focus.
+
+        Subclasses that want a one-time welcome should call
+        :meth:`_announce_welcome_once`. ``obj`` is the focused
+        :class:`AccessibleObject` (may be ``None``).
+        """
+        # Default: nothing. Subclasses override.
+
+    def on_lose_focus(self, obj):
+        """Called when the application loses the foreground."""
+        self._activated = False
+
+    def customize_object(self, obj):
+        """Mutate and return ``obj`` before it is announced.
+
+        Default returns ``obj`` unchanged. Subclasses append details to
+        ``obj.description`` / adjust ``obj.value`` so the standard announcer
+        picks them up.
+        """
+        return obj
+
+    # -- helpers ----------------------------------------------------------- #
+    def _announce_welcome_once(self, text):
+        """Speak ``text`` the first time the app gains focus this session."""
+        if not self._activated and text:
+            self.engine.speak(text)
+        self._activated = True

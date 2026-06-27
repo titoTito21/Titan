@@ -1,0 +1,13 @@
+﻿  Trwa okre┼Ťlanie projekt├│w do przywr├│cenia...
+  Wszystkie projekty s─ů aktualne na potrzeby przywr├│cenia.
+C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ESpeakEngine.cs(98,13): error CS1501: ┼╗adne prze┼éadowanie metody ÔÇ×SetVoiceÔÇŁ nie pobiera nast─Öpuj─ůcej liczby argument├│w: ÔÇ×2ÔÇŁ [C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ScreenReader.csproj]
+C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\SettingsDialog.cs(235,25): warning CS8602: Wy┼éuskanie odwo┼éania, kt├│re mo┼╝e mie─ç warto┼Ť─ç null. [C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ScreenReader.csproj]
+
+Kompilacja NIE POWIOD┼üA SI─ś.
+
+C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\SettingsDialog.cs(235,25): warning CS8602: Wy┼éuskanie odwo┼éania, kt├│re mo┼╝e mie─ç warto┼Ť─ç null. [C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ScreenReader.csproj]
+C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ESpeakEngine.cs(98,13): error CS1501: ┼╗adne prze┼éadowanie metody ÔÇ×SetVoiceÔÇŁ nie pobiera nast─Öpuj─ůcej liczby argument├│w: ÔÇ×2ÔÇŁ [C:\Users\win8k\.gemini\antigravity\scratch\ScreenReader\ScreenReader\ScreenReader.csproj]
+    Ostrze┼╝enia: 1
+    Liczba b┼é─Öd├│w: 1
+
+Czas, kt├│ry up┼éyn─ů┼é: 00:00:01.36

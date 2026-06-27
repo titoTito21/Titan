@@ -1,0 +1,99 @@
+wyjaśnienie: Tylko dla ai
+x - pole wyboru
+b - przycisk
+r = przycisk opcji
+cat, lista kategorii jest jako pierwsza pozycja w ustawieniach, nie będzie trzeba naciskać entera, między kategoriami przełącza się strzałkami w górę i w dół
+cat - kategoria ustawień
+cat głos
+tak jak do tej pory, syntezator, głos, głośność, prędkość, wysokość
+cat ogólne
+x milcz poza środowiskiem TCE 
+combo oznajmiaj uruchamianie i zamykanie czytnika ekranu przy pomocy
+o brak
+o dźwięk
+o mowa
+o mowa i dźwięk
+/combo
+x oznajmiaj dźwiękiem wejście i wyjście z Titana
+combo modyfikator czytnika ekranu
+op insert
+op capslock
+op insert i capslock
+/combo
+edit komunikat powitalny (w trakcie uruchamiania czytnika ekranu)
+x mów podpowiedzi 
+wyjaśnienie: Podpowiedzi są to komunikaty 2 sekundy po określonej kontrolce, trochę z niższym tonem TTS
+przycisk - naciśnij enter lub spację, aby aktywować
+pole wyboru - aby zaznaczyć lub odznaczyć, naciśnij spację
+edycja/dokument - zacznij pisać, aby edytować
+TCE/lista aplikacji/gier - aby przełączyć na pasek stanu, naciśnij tabulator. Aby przełączyć między listami, naciśnij control plus tabulator
+pasek stanu - aby przełączyć do listy aplikacji, naciśnij tabulator
+cat szczegółowość
+x oznajmiaj typy kontrolek podstawowych
+wyjaśnienie: przycisk, pole edycji, pole wyboru
+x oznajmiaj typy kontrolek blokowych
+wyjaśnienie: element listy, element menu, etc etc
+x oznajmiaj pozycję elementu listy
+combo informacja o menu
+o x liczba elementów
+o x nazwa menu
+o x dźwięki otwierania i zamykania menu
+/combo
+combo informacja o elementach
+wyjaśnienie: elementy przeciągalne przez shift strzałki
+o x nazwa
+o x typ
+o x stan kontrolki
+o x parametr kontrolki
+wyjaśnienie: tak jak url do którego prowadzi link
+/combo
+combo oznajmiaj informacje o stanie klawiszy capslock, numlock, ITD
+op brak (niezalecane
+op dźwięk
+op mowa
+op mowa i dźwięk
+/combo
+jak jest mowa, to niech mówi np.: Włączono capslock, Wyłączono capslock
+cat nawigacja
+x nawigacja zaawansowana
+wyjaśnienie: jak ma być domyślnie w ustawieniach i w screenreaderze, czy ma być włączona czy nie
+combo elementy pokrętła
+o x znaki
+o x słowa
+o x przyciski
+o x nagłówki
+o x głośność
+o x szybkość
+o x głos
+o x syntezator
+o x ważne miejsca
+wyjaśnienie: ważne miejsca dla niektórych aplikacji typu przejście na pulpit, przejście na pasek stanu w TCE: Przejście do paska menu: etc etc: te opcje klikałoby się numeryczną piątką, we włączonym pokrętle i przy wybranej kategorii ważne miejsca
+przykłady ważnych miejsc w systemie
+pasek menu
+menu start
+pulpit
+zasobnik systemowy
+ważne miejsca w TCE
+pasek stanu
+i reszta
+/combo
+x oznajmiaj typy kontrolek w trakcie nawigacji
+x oznajmiaj poziom w chierarchii nawigacji obiektowej
+combo oznajmianie początku i końca okna w trakcie nawigacji
+o brak
+o dźwięk
+o mowa
+o mowa i dźwięk
+/combo
+x ogłaszaj przykład fonetyczny w trakcie nawigacji przy pomocy pokrętła
+wyjaśnienie: Tak jak do tej pory, kiedy jest to wyłączone, jak przemieszczam się po pokrętle, wtedy nie ma A, adam tylko samo A
+cat edycja tekstu
+x oznajmiaj litery fonetycznie
+wyjaśnienie: Tak jak do tej pory, ale kiedy to jest wyłączone, same litery są oznajmiane, a nie fonetycznie
+combo echo klawiatury
+o brak
+o znaki
+o słowa
+o znaki i słowa
+/combo
+x oznajmiaj początek i koniec tekstu
