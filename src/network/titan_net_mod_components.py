@@ -126,6 +126,7 @@ COMPONENT = {
     # "moderators_only": True,
     # "allowed_regions": ["PL"],   # regional lock (allow-list)
     # "blocked_regions": ["RU"],
+    # "requires_server": True,     # server add-on: only runs where it is active
 }
 
 MENU_ITEMS = [
@@ -163,6 +164,14 @@ component runs (main view, Alt menu, hooks):
   "moderators_only": True            only moderators/developers see & run it
   "allowed_regions": ["PL", "US"]    regional LOCK: only these regions
   "blocked_regions": ["RU"]          regional block-list
+  "requires_server": True            SERVER ADD-ON: needs the server side (e.g.
+                                     api.cloud) so it only runs on a Titan-Net
+                                     server that has it installed/active. On a
+                                     server that does not have it, it does not
+                                     run at all. The author can switch on local
+                                     testing (Moderator Components window) to
+                                     try it first; api.cloud then falls back to
+                                     a local store.
 Omit them (or leave empty) for "everyone, everywhere" — e.g. a cloud-notes
 component for all users.
 
@@ -370,7 +379,13 @@ A moderator builds this once and submits it to the network; after approval it
 runs in every user's client and each user gets their own notes that follow them
 across devices (stored server-side via api.cloud, namespaced per user).
 
-This component is for everyone (no moderators_only / region lock). To make a
+This component is a SERVER ADD-ON: it stores data on the server (api.cloud), so
+it only runs once approved and active on the Titan-Net server you connect to
+("requires_server"). On a server that does not have it, it simply does not run.
+Its author can still switch on local testing in the Moderator Components window
+to try it first (api.cloud then falls back to a local store).
+
+It is for everyone (no moderators_only / region lock). To make a
 moderators-only or region-locked feature, add to COMPONENT, e.g.:
     "moderators_only": True,
     "allowed_regions": ["PL"],
@@ -381,6 +396,8 @@ COMPONENT = {
     "description": "Personal notes saved in the cloud, available to every user.",
     "author": "Titan-Net",
     "version": "1.0",
+    # Needs the server side (api.cloud) -> only runs where it is active.
+    "requires_server": True,
 }
 
 MENU_ITEMS = [
@@ -431,7 +448,10 @@ def _seed_example(components_dir):
                     "__init__.py / main.py and may import the sibling modules. "
                     "Optionally MENU_ITEMS (extra actions) and named callbacks.\n\n"
                     "COMPONENT optional gates: moderators_only=True, "
-                    "allowed_regions=[...], blocked_regions=[...].\n\n"
+                    "allowed_regions=[...], blocked_regions=[...], "
+                    "requires_server=True (server add-on: only runs where it "
+                    "is active on the server; the author can switch on local "
+                    "testing in the Moderator Components window).\n\n"
                     "api.client      - live TitanNetClient (full access)\n"
                     "api.groups      - list/get/create/join/leave/members/...\n"
                     "api.forum       - topics/replies/create/move/search\n"
@@ -622,37 +642,66 @@ class _CloudStorage:
     board). Distribution is the same as a network extension: an approved
     component's storage is reachable from any client.
 
+    LOCAL FALLBACK: the server only accepts data for an ACTIVE network
+    extension. A component the author is still developing locally (or one used
+    while offline) is not active server-side, so the server replies "active
+    extension not found". Rather than failing, this store then transparently
+    persists to a LOCAL JSON file, so cloud-backed components (e.g. cloud notes)
+    work end-to-end while testing locally and switch to the real server store
+    once the component is approved and active. The local copy is per-user and
+    per-component, mirroring the server's namespacing.
+
     NOTE: the server authenticates the request but does not yet ENFORCE
     per-user isolation, so treat namespaced data as private-by-convention, not
     secret. Returns plain dicts ({'success': ...})."""
 
-    def __init__(self, client, slug):
+    def __init__(self, client, slug, components_dir=None):
         self._client = client
         self._slug = slug
+        # A local store used whenever the server has no active extension for
+        # this slug (local testing / offline). Keyed by '_cloud_<slug>'.
+        self._local = None
+        if components_dir:
+            try:
+                self._local = ComponentStorage(components_dir, '_cloud_' + slug)
+            except Exception:
+                self._local = None
 
     def _user_key(self, key):
         uname = getattr(self._client, 'username', '') or '?'
         return f"u:{uname}:{key}"
 
-    def get(self, key, default=None):
-        r = self._client.extension_data_get(self._slug, self._user_key(key))
+    def _get(self, full_key, default):
+        r = self._client.extension_data_get(self._slug, full_key)
         if isinstance(r, dict) and r.get('success'):
             val = r.get('value')
             return default if val is None else val
+        # Server has no active extension for this slug -> local fallback.
+        if self._local is not None:
+            return self._local.get(full_key, default)
         return default
+
+    def _set(self, full_key, value):
+        r = self._client.extension_data_set(self._slug, full_key, value)
+        if isinstance(r, dict) and r.get('success'):
+            return r
+        # Not active server-side -> persist locally so the component still works.
+        if self._local is not None:
+            self._local.set(full_key, value)
+            return {'success': True, 'local': True}
+        return r if isinstance(r, dict) else {'success': False, 'error': 'cloud unavailable'}
+
+    def get(self, key, default=None):
+        return self._get(self._user_key(key), default)
 
     def set(self, key, value):
-        return self._client.extension_data_set(self._slug, self._user_key(key), value)
+        return self._set(self._user_key(key), value)
 
     def get_shared(self, key, default=None):
-        r = self._client.extension_data_get(self._slug, f"g:{key}")
-        if isinstance(r, dict) and r.get('success'):
-            val = r.get('value')
-            return default if val is None else val
-        return default
+        return self._get(f"g:{key}", default)
 
     def set_shared(self, key, value):
-        return self._client.extension_data_set(self._slug, f"g:{key}", value)
+        return self._set(f"g:{key}", value)
 
 
 class ModeratorComponentAPI:
@@ -691,7 +740,7 @@ class ModeratorComponentAPI:
         component runs everywhere). api.cloud.get/set are per-user; api.cloud
         .get_shared/set_shared are global. Backs features like cloud notes."""
         if self._cloud is None:
-            self._cloud = _CloudStorage(self.client, self._slug())
+            self._cloud = _CloudStorage(self.client, self._slug(), self.component_dir)
         return self._cloud
 
     # --- accessible UI helpers ---
@@ -818,6 +867,35 @@ def save_enabled_state(components_dir, state):
         print(f"[mod-components] enabled-state save failed: {e}")
 
 
+def _local_test_path(components_dir):
+    return os.path.join(components_dir, '_local_test.json')
+
+
+def load_local_test_state(components_dir):
+    """Keys of components the AUTHOR has switched on for LOCAL testing. A
+    server add-on component (requires_server) normally only surfaces once it is
+    active on the connected server; listing it here lets its author run it in
+    their own client first to see how it really behaves in Titan-Net."""
+    try:
+        path = _local_test_path(components_dir)
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return set(data)
+    except Exception:
+        pass
+    return set()
+
+
+def save_local_test_state(components_dir, keys):
+    try:
+        with open(_local_test_path(components_dir), 'w', encoding='utf-8') as f:
+            json.dump(sorted(keys), f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[mod-components] local-test-state save failed: {e}")
+
+
 def _unpack_extension_bundle(b64_zip, dest_dir):
     """Replace ``dest_dir`` with the contents of a base64-encoded zip bundle.
     Zip-slip safe: entries that escape dest_dir are skipped."""
@@ -860,6 +938,12 @@ def sync_active_extensions(titan_client, components_dir=None):
         listing = titan_client.list_extensions(status='active')
         if not listing.get('success'):
             return 0
+        # Record which extensions this server actually has active, so the
+        # runtime can gate server add-on components (requires_server): a
+        # component the connected server does not have simply does not run.
+        active_slugs = {ext.get('slug') for ext in listing.get('extensions', []) if ext.get('slug')}
+        if _RUNTIME is not None:
+            _RUNTIME.active_slugs = active_slugs
         hashes_path = os.path.join(components_dir, '_ext_hashes.json')
         try:
             with open(hashes_path, 'r', encoding='utf-8') as f:
@@ -941,15 +1025,36 @@ def _user_is_moderator(titan_client):
     return role in ('moderator', 'developer')
 
 
-def is_component_accessible(component, titan_client=None, region=None):
+def _component_server_slug(component):
+    """The network slug a component maps to: a synced extension keeps its slug
+    after the ``ext_`` prefix; a local file uses its key with dashes (matching
+    how Submit-to-Network derives the slug)."""
+    key = component.get('key', '')
+    if key.startswith('ext_'):
+        return key[4:]
+    return key.replace('_', '-')
+
+
+def is_component_accessible(component, titan_client=None, region=None,
+                            active_slugs=None):
     """Whether a component should be visible/run for THIS user, honouring its
     manifest audience gates::
 
         COMPONENT = {..., "moderators_only": True,
                      "allowed_regions": ["PL", "US"],   # allow-list (lock)
-                     "blocked_regions": ["RU"]}          # block-list
+                     "blocked_regions": ["RU"],          # block-list
+                     "requires_server": True}            # server add-on
 
-    Missing/empty gates mean "everyone, everywhere"."""
+    Missing/empty gates mean "everyone, everywhere".
+
+    ``requires_server`` marks a SERVER ADD-ON: the component depends on the
+    server side (e.g. api.cloud) and must NOT run on a Titan-Net server that
+    does not have it installed/active. ``active_slugs`` is the set of slugs the
+    connected server currently has active; when the component's slug is not in
+    it the component is inaccessible. (The author can still test it via the
+    local-test override — handled by the runtime, not here.) When
+    ``active_slugs`` is unknown (None) a server add-on is treated as not
+    accessible, so it never runs against a server that has not confirmed it."""
     if component.get('moderators_only') and not _user_is_moderator(titan_client):
         return False
     if region is None:
@@ -960,6 +1065,10 @@ def is_component_accessible(component, titan_client=None, region=None):
         return False
     if blocked and region in blocked:
         return False
+    if component.get('requires_server'):
+        slugs = active_slugs if active_slugs is not None else set()
+        if _component_server_slug(component) not in slugs:
+            return False
     return True
 
 
@@ -1067,6 +1176,7 @@ def discover_components(components_dir):
                 'moderators_only': bool(meta.get('moderators_only', False)),
                 'allowed_regions': meta.get('allowed_regions') or meta.get('regions') or [],
                 'blocked_regions': meta.get('blocked_regions') or [],
+                'requires_server': bool(meta.get('requires_server', False)),
             })
         except Exception as e:
             print(f"[mod-components] failed to load {name}: {e}")
@@ -1098,15 +1208,26 @@ class ComponentRuntime:
         self.window = window
         self.components_dir = get_components_dir()
         self.components = []
+        # Slugs the connected server currently has active (filled by
+        # sync_active_extensions); gates server add-on components.
+        self.active_slugs = set()
         self.reload()
 
     def reload(self):
         try:
+            # Author's local-test overrides: keys allowed to run locally even
+            # when they are server add-ons not (yet) active on this server, so
+            # the author can see how the component really behaves in Titan-Net.
+            local_test = load_local_test_state(self.components_dir)
             # Only ENABLED components that this user is allowed to see/run
-            # (moderators-only flag + regional lock) feed hooks and the menu.
+            # (moderators-only flag + regional lock + server add-on presence)
+            # feed hooks and the menu.
             self.components = [
                 c for c in discover_components(self.components_dir)
-                if c['enabled'] and is_component_accessible(c, self.titan_client)
+                if c['enabled'] and (
+                    is_component_accessible(c, self.titan_client,
+                                            active_slugs=self.active_slugs)
+                    or c['key'] in local_test)
             ]
         except Exception as e:
             print(f"[mod-components] runtime reload failed: {e}")
@@ -1121,6 +1242,21 @@ class ComponentRuntime:
                     on_load(self._api_for(component))
                 except Exception as e:
                     print(f"[mod-components] {component['key']}.on_load error: {e}")
+
+    def shutdown(self):
+        """Tear the runtime down on logout: call each loaded component's
+        on_unload(api) (best effort), drop the composition registry and forget
+        the loaded components so no hook/tick can touch a dead client and hang
+        the UI. Never raises."""
+        for component in self.components:
+            on_unload = getattr(component['module'], 'on_unload', None)
+            if callable(on_unload):
+                try:
+                    on_unload(self._api_for(component))
+                except Exception as e:
+                    print(f"[mod-components] {component['key']}.on_unload error: {e}")
+        self.components = []
+        _clear_extension_points()
 
     def _api_for(self, component):
         return ModeratorComponentAPI(self.titan_client, self.window, self.components_dir, component['key'])
@@ -1157,6 +1293,20 @@ def dispatch_event(event, **payload):
     rt = _RUNTIME
     if rt is not None:
         rt.dispatch(event, **payload)
+
+
+def shutdown_runtime():
+    """Tear down and forget the process-wide runtime (called on Titan-Net
+    logout). Unloads components cleanly so nothing keeps firing against a
+    disconnected client. Safe to call when no runtime exists."""
+    global _RUNTIME
+    rt = _RUNTIME
+    _RUNTIME = None
+    if rt is not None:
+        try:
+            rt.shutdown()
+        except Exception as e:
+            print(f"[mod-components] runtime shutdown error: {e}")
 
 
 def get_menu_contributions():
@@ -1242,7 +1392,10 @@ def build_system_prompt():
         "blocked_regions (list). Use them only if the user asks to restrict the "
         "audience; otherwise omit them so everyone can use it.\n"
         "- For data that must follow the user across devices use api.cloud "
-        "(per-user) or api.cloud.*_shared (global); api.storage is local only.\n"
+        "(per-user) or api.cloud.*_shared (global); api.storage is local only. "
+        "If you use api.cloud, set COMPONENT['requires_server'] = True so the "
+        "component is treated as a server add-on (it only runs where it is "
+        "active on the server). Plain local components must NOT set it.\n"
         "- The file MUST compile.\n\n"
         "API REFERENCE (the only surface you may use):\n"
         + API_REFERENCE_TEXT
@@ -1258,13 +1411,17 @@ PROVIDERS = (
     ('openai', 'OpenAI'),
 )
 
-# Sensible default model per provider (the user can override per provider via a
-# '<provider>_model' setting).
+# Fallback model per provider, used only when the latest model cannot be
+# resolved from the provider (offline, old SDK, etc.). The user can also force
+# one with a '<provider>_model' setting.
 _DEFAULT_MODELS = {
     'anthropic': 'claude-opus-4-8',
     'gemini': 'gemini-2.0-flash',
     'openai': 'gpt-4o',
 }
+
+# Resolved newest-model cache (per provider) so we hit the listing API once.
+_MODEL_CACHE = {}
 
 
 def provider_label(provider_id):
@@ -1274,21 +1431,99 @@ def provider_label(provider_id):
     return provider_id or '?'
 
 
+def _gemini_version_key(name):
+    """Sort key for a gemini model name so newer versions rank higher
+    (e.g. 'gemini-2.5-flash' > 'gemini-2.0-flash' > 'gemini-1.5-pro')."""
+    import re
+    m = re.search(r'gemini-(\d+)(?:\.(\d+))?', name)
+    major = int(m.group(1)) if m else 0
+    minor = int(m.group(2)) if (m and m.group(2)) else 0
+    # Prefer non-preview/-exp stable names slightly when versions tie.
+    stable = 0 if any(t in name for t in ('preview', 'exp', 'latest')) else 1
+    return (major, minor, stable)
+
+
+def resolve_latest_model(provider, api_key):
+    """Query the provider for its newest suitable model so the AI creator always
+    uses the latest available model without hard-coding versions. Cached per
+    provider for the session; falls back to ``_DEFAULT_MODELS`` on any error.
+
+    - anthropic: ``client.models.list()`` (newest first) -> newest Claude,
+      preferring an Opus model.
+    - openai: ``client.models.list()`` -> newest chat-capable ``gpt-*`` by
+      creation time (skips non-chat audio/image/embedding/realtime variants).
+    - gemini: ``genai.list_models()`` -> highest gemini version that supports
+      generateContent.
+    """
+    if provider in _MODEL_CACHE:
+        return _MODEL_CACHE[provider]
+    model = None
+    try:
+        if provider == 'anthropic':
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            data = getattr(client.models.list(limit=100), 'data', []) or []
+            ids = [str(getattr(m, 'id', '')) for m in data]
+            ids = [i for i in ids if i.startswith('claude')]
+            opus = [i for i in ids if 'opus' in i]
+            model = (opus or ids or [None])[0]
+        elif provider == 'openai':
+            import openai
+            client = openai.OpenAI(api_key=api_key)
+            data = list(client.models.list().data)
+            skip = ('audio', 'realtime', 'image', 'tts', 'transcribe',
+                    'embedding', 'instruct', 'moderation', 'search')
+            cand = [m for m in data
+                    if str(m.id).startswith('gpt-')
+                    and not any(s in str(m.id) for s in skip)]
+            cand.sort(key=lambda m: getattr(m, 'created', 0), reverse=True)
+            model = str(cand[0].id) if cand else None
+        elif provider == 'gemini':
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            names = []
+            for m in genai.list_models():
+                methods = getattr(m, 'supported_generation_methods', []) or []
+                nm = getattr(m, 'name', '') or ''
+                short = nm.split('/')[-1]
+                if 'generateContent' in methods and short.startswith('gemini') \
+                        and not any(t in short for t in ('vision', 'embedding', 'aqa')):
+                    names.append(short)
+            if names:
+                names.sort(key=_gemini_version_key, reverse=True)
+                model = names[0]
+    except Exception as e:
+        print(f"[mod-components] could not resolve latest model for {provider}: {e}")
+    if not model:
+        model = _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS['anthropic'])
+    _MODEL_CACHE[provider] = model
+    return model
+
+
 def generate_component_code(conversation, api_key, provider='anthropic', model=None):
     """Call the model to generate component code. Returns code (str).
 
     ``conversation`` is either a single description string (one-shot) or a list
     of ``{"role": "user"|"assistant", "content": str}`` messages for multi-turn
     refinement. ``provider`` is one of 'anthropic', 'gemini' or 'openai'; the
-    user supplies the matching API key. Default provider: Anthropic Claude Opus
-    4.8 (latest). Raises on failure (missing SDK, bad key, network)."""
+    user supplies the matching API key. When ``model`` is omitted the newest
+    suitable model is resolved automatically from the provider (see
+    resolve_latest_model), so the creator always uses the latest available
+    model. Raises on failure (missing SDK, bad key, network)."""
     system = build_system_prompt()
     if isinstance(conversation, str):
         messages = [{"role": "user", "content": conversation}]
     else:
         messages = list(conversation)
+    # Model precedence: explicit arg > user '<provider>_model' override >
+    # auto-resolved newest model from the provider > hard-coded fallback.
     if not model:
-        model = _DEFAULT_MODELS.get(provider, _DEFAULT_MODELS['anthropic'])
+        try:
+            model = (get_setting(provider + '_model', '') or '').strip() or None
+        except Exception:
+            model = None
+    if not model:
+        model = resolve_latest_model(provider, api_key)
 
     if provider == 'anthropic':
         import anthropic  # may raise ImportError -> surfaced to caller
@@ -1868,6 +2103,9 @@ class ModeratorComponentsWindow(wx.Frame):
         self.toggle_btn = wx.Button(panel, label=_("Enable/Disable"))
         self.toggle_btn.Bind(wx.EVT_BUTTON, self.OnToggleEnabled)
         btn_box.Add(self.toggle_btn, flag=wx.RIGHT, border=5)
+        self.local_test_btn = wx.Button(panel, label=_("Test Locally"))
+        self.local_test_btn.Bind(wx.EVT_BUTTON, self.OnToggleLocalTest)
+        btn_box.Add(self.local_test_btn, flag=wx.RIGHT, border=5)
         new_btn = wx.Button(panel, label=_("New Component"))
         new_btn.Bind(wx.EVT_BUTTON, self.OnNewComponent)
         btn_box.Add(new_btn, flag=wx.RIGHT, border=5)
@@ -1911,11 +2149,18 @@ class ModeratorComponentsWindow(wx.Frame):
 
     def reload(self):
         self.components = discover_components(self.components_dir)
+        local_test = load_local_test_state(self.components_dir)
         self.list.DeleteAllItems()
         for c in self.components:
             idx = self.list.InsertItem(self.list.GetItemCount(), c['name'])
             self.list.SetItem(idx, 1, _("Yes") if c['enabled'] else _("No"))
-            self.list.SetItem(idx, 2, c['description'])
+            desc = c['description']
+            # Flag server add-ons so the author knows they only run where active
+            # on the server (or under a local-test override).
+            if c.get('requires_server'):
+                tag = _("[local test]") if c['key'] in local_test else _("[server add-on]")
+                desc = (tag + " " + desc).strip()
+            self.list.SetItem(idx, 2, desc)
         if self.list.GetItemCount() > 0:
             self.list.Select(0)
         self._rebuild_actions()
@@ -1958,6 +2203,42 @@ class ModeratorComponentsWindow(wx.Frame):
         save_enabled_state(self.components_dir, state)
         play_sound('core/SELECT.ogg')
         self.reload()
+
+    def OnToggleLocalTest(self, event):
+        """Switch a SERVER ADD-ON component on/off for LOCAL testing in this
+        client only. Lets its author see how it really behaves in Titan-Net
+        before it is approved and active on the server; api.cloud falls back to
+        a local store while testing. No effect on plain (non-server) components,
+        which already run locally."""
+        component = self._selected()
+        if not component:
+            return
+        if not component.get('requires_server'):
+            wx.MessageBox(
+                _("This component is not a server add-on; it already runs "
+                  "locally."),
+                _("Test Locally"), wx.OK | wx.ICON_INFORMATION, self)
+            return
+        keys = load_local_test_state(self.components_dir)
+        if component['key'] in keys:
+            keys.discard(component['key'])
+            msg = _("Local testing turned off for '{name}'.")
+        else:
+            keys.add(component['key'])
+            msg = _("Local testing turned on for '{name}'. It now runs in your "
+                    "client as it would on the server.")
+        save_local_test_state(self.components_dir, keys)
+        play_sound('core/SELECT.ogg')
+        self.reload()
+        # Keep the live runtime in sync and announce the change.
+        rt = get_runtime()
+        if rt is not None:
+            rt.reload()
+        try:
+            from src.network.titan_net_gui import speak_notification
+            speak_notification(msg.format(name=component['name']), 'info')
+        except Exception:
+            pass
 
     def _rebuild_actions(self):
         # Clear existing dynamic buttons.

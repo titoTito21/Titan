@@ -4192,6 +4192,36 @@ msgstr "Nie można otworzyć ustawień sieci"
 msgid "Titan App Suite"
 msgstr "Titan App Suite"
 
+#: src/network/titan_net_mod_components.py
+msgid "Test Locally"
+msgstr "Testuj lokalnie"
+
+#: src/network/titan_net_mod_components.py
+msgid "[local test]"
+msgstr "[test lokalny]"
+
+#: src/network/titan_net_mod_components.py
+msgid "[server add-on]"
+msgstr "[dodatek serwera]"
+
+#: src/network/titan_net_mod_components.py
+msgid "This component is not a server add-on; it already runs locally."
+msgstr "Ten komponent nie jest dodatkiem serwera; już działa lokalnie."
+
+#: src/network/titan_net_mod_components.py
+#, python-brace-format
+msgid "Local testing turned off for '{name}'."
+msgstr "Testowanie lokalne wyłączone dla „{name}”."
+
+#: src/network/titan_net_mod_components.py
+#, python-brace-format
+msgid ""
+"Local testing turned on for '{name}'. It now runs in your client as it would "
+"on the server."
+msgstr ""
+"Testowanie lokalne włączone dla „{name}”. Działa teraz w Twoim kliencie tak, "
+"jak działałby na serwerze."
+
 #~ msgid "Welcome user {username}, Titan ID: {titan_number}"
 #~ msgstr "Witaj użytkowniku {username}, ID Titan: {titan_number}"
 

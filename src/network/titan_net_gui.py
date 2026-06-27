@@ -3845,11 +3845,31 @@ class TitanNetMainWindow(wx.Frame):
         # Hide voice controls before closing
         self._hide_voice_controls()
 
+        # Stop and tear down moderator components BEFORE logging out, so no
+        # on_tick / hook can fire against a disconnecting client and hang the UI.
+        self._shutdown_component_runtime()
+
         # Set force_close flag to actually close the window
         self.force_close = True
 
         self.titan_client.logout()
         self.Close()
+
+    def _shutdown_component_runtime(self):
+        """Stop the component tick timer and tear down the runtime cleanly.
+        Safe to call repeatedly; never raises."""
+        try:
+            timer = getattr(self, '_component_tick_timer', None)
+            if timer is not None:
+                timer.Stop()
+                self._component_tick_timer = None
+        except Exception as e:
+            print(f"Error stopping component tick timer: {e}")
+        try:
+            from src.network.titan_net_mod_components import shutdown_runtime
+            shutdown_runtime()
+        except Exception as e:
+            print(f"Error shutting down component runtime: {e}")
 
     def _save_main_listbox_selection(self):
         """Capture current main_listbox selection as (index, text) for refresh-preservation."""
@@ -4531,6 +4551,9 @@ class TitanNetMainWindow(wx.Frame):
             # Check if user wants to force close (disconnect)
             if self.force_close:
                 print("[TITAN-NET GUI] Force close - disconnecting")
+                # Tear down moderator components (timer + runtime) so nothing
+                # keeps firing after disconnect. Idempotent if already done.
+                self._shutdown_component_runtime()
                 # Stop refresh timer
                 try:
                     if self.refresh_timer:

@@ -100,6 +100,8 @@ class TitanAccessEngine:
         self.editable = None
         self.app_modules = None
         self.important_places = None
+        self.menu_tracker = None
+        self.dial = None
 
         TitanAccessEngine.__dict__  # noqa - keep linters calm
 
@@ -240,6 +242,12 @@ class TitanAccessEngine:
         self.important_places = _try(lambda: __import__(
             "titan_access.important_places", fromlist=["ImportantPlacesManager"]
         ).ImportantPlacesManager(self), "important_places")
+        self.menu_tracker = _try(lambda: __import__(
+            "titan_access.menu_tracker", fromlist=["MenuTracker"]
+        ).MenuTracker(self), "menu_tracker")
+        self.dial = _try(lambda: __import__(
+            "titan_access.dial", fromlist=["DialManager"]
+        ).DialManager(self), "dial")
 
         # Keyboard hook last — it starts feeding events immediately.
         def _mk_kbd():
@@ -417,6 +425,12 @@ class TitanAccessEngine:
         # Enter/leave TCE environment cue (port of the process-change branch in
         # the C# OnFocusChanged).
         self._handle_tce_transition(obj)
+        # Menu bar / menu announcements take over when focus is in a menu.
+        try:
+            if self.menu_tracker is not None and self.menu_tracker.handle_focus(obj):
+                return
+        except Exception as e:
+            print(f"[TitanAccess] menu tracker error: {e}")
         # Let the active app module customise / suppress.
         try:
             if self.app_modules is not None:
@@ -498,6 +512,14 @@ class TitanAccessEngine:
     # Keyboard callbacks (invoked by KeyboardHook)
     # ==================================================================== #
     def on_modifier_gesture(self, vk, key_name, ctrl, alt, shift) -> bool:
+        # Dial ("TPad"): NumPad Minus toggles it; while active, NumPad 4/6/8/2
+        # drive the dial instead of object navigation.
+        if self.dial is not None:
+            if key_name == "numpadsubtract":
+                return self.dial.toggle()
+            if self.dial.enabled and key_name in ("numpad4", "numpad6",
+                                                  "numpad8", "numpad2"):
+                return self.dial.handle_key(key_name)
         if self.gestures is None:
             return False
         try:

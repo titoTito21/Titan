@@ -365,5 +365,20 @@
   "file.generic": "{0} file",
   "calculator.appName": "Calculator",
   "calculator.display": "Display: {0}",
-  "settings.speech.inheritNote": "Speech uses the engine and voice configured in Titan TTS (Titan settings)."
+  "settings.speech.inheritNote": "Speech uses the engine and voice configured in Titan TTS (Titan settings).",
+  "dial.tpad": "TPad",
+  "dial.objectNav": "Object navigation",
+  "dial.noCategories": "No categories",
+  "dial.noVoices": "No voices",
+  "dial.speed": "Speed {0} percent",
+  "dial.volume": "Volume {0} percent",
+  "dial.cat.characters": "Characters",
+  "dial.cat.words": "Words",
+  "dial.cat.buttons": "Buttons",
+  "dial.cat.headings": "Headings",
+  "dial.cat.voice": "Voice",
+  "dial.cat.speed": "Speed",
+  "dial.cat.volume": "Volume",
+  "dial.cat.synthesizer": "Synthesizer",
+  "dial.cat.importantPlaces": "Important places"
 }

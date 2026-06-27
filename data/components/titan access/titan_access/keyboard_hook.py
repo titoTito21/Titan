@@ -334,8 +334,11 @@ class KeyboardHook:
             # Modifier held but unhandled: do not echo, do not block.
             return False
 
-        # ---- 3. NumPad object navigation (NumLock off, no reader mod) -- #
-        if is_numpad_nav and not self._ctrl and not self._alt:
+        # ---- 3. NumPad object navigation + dial (NumLock off, no reader mod) -- #
+        # NumPad Minus toggles the dial; NumPad 4/6/8/2/5/Enter drive object
+        # navigation (or the dial when it is active). All route through the
+        # engine's modifier-gesture handler.
+        if (is_numpad_nav or key_name == "numpadsubtract") and not self._ctrl and not self._alt:
             try:
                 if self.engine.on_modifier_gesture(vk, key_name, self._ctrl,
                                                    self._alt, self._shift):
