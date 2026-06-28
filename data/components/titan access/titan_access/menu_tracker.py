@@ -48,7 +48,10 @@ class MenuTracker:
         # --- entered the menu bar ----------------------------------------- #
         if in_menu_bar_now and not self.in_menu_bar:
             self.in_menu_bar = True
-            self.engine.speak(L("menu.readerMenu") + ": " + (obj.name or ""),
+            # Port of C# ScreenReaderEngine.HandleMenuFocusChange: announce the
+            # "Menu bar" prefix followed by the FULL element description (name +
+            # type + state), not just the bare name.
+            self.engine.speak(L("menu.menuBar") + ": " + self._describe(obj),
                               obj=obj, interrupt=True)
             return True
         if (not in_menu_bar_now) and self.in_menu_bar and not in_menu_now:
@@ -98,9 +101,23 @@ class MenuTracker:
             count = self._count_items(menu_parent)
             if count > 0:
                 parts.append(L("menu.itemCount", count))
-        if obj.name:
-            parts.append(obj.name)
+        first = self._describe(obj)
+        if first:
+            parts.append(first)
         self.engine.speak(", ".join(p for p in parts if p), obj=obj, interrupt=True)
+
+    def _describe(self, obj):
+        """Full element description (name + type + state), like the C#
+        ``UIAutomationHelper.GetElementDescription``. Falls back to the bare
+        name if the describer is unavailable."""
+        try:
+            from titan_access import accessible
+            text = accessible.describe_line(obj, self.engine.settings)
+            if text:
+                return text
+        except Exception as e:
+            print(f"[TitanAccess] menu_tracker describe error: {e}")
+        return obj.name or ""
 
     # ------------------------------------------------------------------ #
     # UIA tree helpers (operate on a vendored uiautomation.Control)

@@ -46,12 +46,17 @@ from titan_access.contracts import (
     AccessibleObject, pan_for_object, elevation_for_object,
     SND_SR_ON, SND_SR_OFF, SND_CURSOR, SND_SR_CURSOR_ITEM, SND_LIST_ITEM,
     SND_WINDOW, SND_ERROR, SND_VSCREEN_ON, SND_VSCREEN_OFF,
+    SND_CONTROLLER_INIT, SND_CONTROLLER_UNINIT,
 )
 
 # Pitches for the three-part announcement (name / type / state), like titan_talk.
 NAME_PITCH = 0
 ROLE_PITCH = -4
 STATE_PITCH = 4
+
+# Custom thread message used to marshal a callable onto the worker thread's
+# Win32 message loop (WM_APP + 1). Posted with hwnd == NULL via PostThreadMessage.
+WM_TA_INVOKE = 0x8000 + 1
 
 # Roles that get the "cursor" (interactive) cue; everything else that is not a
 # list/tree item gets "cursor_static". Mirrors the C# IsInteractiveElement split.
@@ -61,6 +66,14 @@ _INTERACTIVE_ROLES = {
     "scrollbar", "tabcontrol",
 }
 _LIST_ITEM_ROLES = {"listitem", "treeitem", "griditem"}
+# Roles whose focus enables edit-field caret tracking (arrow keys read text).
+_EDIT_ROLES = {"edit", "password", "document", "combobox"}
+# Pure-container roles that often receive a transient focus event right before
+# a real control inside them does (e.g. a dialog window focuses, then its OK
+# button). Announcing the container immediately would consume the "newly entered
+# dialog" context, so the follow-up control read loses the dialog's message. We
+# defer these briefly; a real control focusing next supersedes them.
+_CONTAINER_FOCUS_ROLES = {"window", "dialog", "pane", "group"}
 
 
 def _try(import_callable, label):
@@ -87,7 +100,31 @@ class TitanAccessEngine:
 
         self.current_object: Optional[AccessibleObject] = None
         self._last_focus_key = None
+        self._last_focus_time = 0.0
         self._was_in_tce = None        # None until the first focus establishes it
+        self._in_controller_app = False  # focus is in an NVDA-controller client
+        self._announce_token = 0         # coalesces rapid focus bursts
+
+        # Cross-thread "run this on the worker (COM-initialised) thread" queue.
+        # Used so TextPattern caret reads happen on the same apartment that owns
+        # the UIA elements (no cross-apartment marshalling -> no ~500 ms stall).
+        self._invoke_lock = threading.Lock()
+        self._invoke_queue: List = []
+
+        # Dedicated background worker (NOT the keyboard-hook thread!). Blocking
+        # work -- TextPattern caret reads, speech.stop() -- runs here so it can
+        # never stall the global WH_KEYBOARD_LL hook (which froze the whole app).
+        self._bg_lock = threading.Lock()
+        self._bg_event = threading.Event()
+        self._bg_read = None        # latest pending caret read (latest wins)
+        self._bg_stop = False       # a stop-speech request is pending
+        self._bg_alive = False
+        self._bg_thread: Optional[threading.Thread] = None
+
+        # Host-app announcement hooks (TCE pushes these for widgets whose meaning
+        # UIA cannot convey -- the virtual tab bar, wx.CheckListBox check state).
+        self._override_until = 0.0       # suppress our next auto announce until
+        self._state_suffix = None        # (text, expiry) appended to next announce
 
         # Subsystems (populated in _build_subsystems on the worker thread).
         self.speech = None
@@ -102,6 +139,8 @@ class TitanAccessEngine:
         self.important_places = None
         self.menu_tracker = None
         self.dial = None
+        self.context = None
+        self.nvda_ctl = None
 
         TitanAccessEngine.__dict__  # noqa - keep linters calm
 
@@ -153,6 +192,12 @@ class TitanAccessEngine:
         except Exception:
             pass
 
+        # Tell Windows a screen reader is active. Chromium (Chrome/Edge/WebView2),
+        # Firefox/Gecko and Office only build their accessibility tree when an AT
+        # is detected; without this flag a web document exposes no children and
+        # browse mode has nothing to read.
+        self._set_screen_reader_flag(True)
+
         self._build_subsystems()
         self._ready.set()
 
@@ -185,20 +230,43 @@ class TitanAccessEngine:
                 r = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
                 if r == 0 or r == -1:  # WM_QUIT or error
                     break
+                # Callables posted from other threads run here, on the COM
+                # apartment that owns the UIA elements (see post_to_worker).
+                if msg.message == WM_TA_INVOKE and not msg.hwnd:
+                    self._drain_invokes()
+                    continue
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
         except Exception as e:
             print(f"[TitanAccess] message loop error: {e}")
         finally:
             self._teardown_subsystems()
+            self._set_screen_reader_flag(False)
             try:
                 ctypes.windll.ole32.CoUninitialize()
             except Exception:
                 pass
 
+    @staticmethod
+    def _set_screen_reader_flag(on):
+        """Set/clear the system SPI_SETSCREENREADER flag so applications that gate
+        their accessibility tree on AT presence (Chromium, Firefox, Office) build
+        and expose it. Best-effort; never fatal."""
+        try:
+            SPI_SETSCREENREADER = 0x0047
+            SPIF_SENDCHANGE = 0x0002
+            ctypes.windll.user32.SystemParametersInfoW(
+                SPI_SETSCREENREADER, 1 if on else 0, None, SPIF_SENDCHANGE)
+        except Exception as e:
+            print(f"[TitanAccess] screen reader flag error: {e}")
+
     def _build_subsystems(self):
         from titan_access.settings_store import get_settings as _gs
         self.settings = _gs()
+
+        # Background worker first: caret reads / stop-speech offload to it so the
+        # keyboard-hook thread never blocks.
+        self._start_bg_worker()
 
         # --- audio -------------------------------------------------------- #
         def _mk_speech():
@@ -215,13 +283,23 @@ class TitanAccessEngine:
         self.sound = _try(_mk_sound, "sound_manager")
 
         # --- accessibility provider -------------------------------------- #
+        # UIA primary + MSAA fallback, auto-switching per focus (NVDA-style).
+        # Falls back to the bare UIA provider if the manager cannot be built.
         def _mk_provider():
-            from titan_access.uia_focus import UIAProvider
-            p = UIAProvider()
+            from titan_access.provider_manager import ProviderManager
+            p = ProviderManager()
             p.add_focus_listener(self.on_focus)
             p.start()
             return p
-        self.provider = _try(_mk_provider, "uia_focus")
+        self.provider = _try(_mk_provider, "provider_manager")
+        if self.provider is None:
+            def _mk_uia():
+                from titan_access.uia_focus import UIAProvider
+                p = UIAProvider()
+                p.add_focus_listener(self.on_focus)
+                p.start()
+                return p
+            self.provider = _try(_mk_uia, "uia_focus")
 
         # --- input ------------------------------------------------------- #
         self.object_nav = _try(lambda: __import__(
@@ -248,6 +326,16 @@ class TitanAccessEngine:
         self.dial = _try(lambda: __import__(
             "titan_access.dial", fromlist=["DialManager"]
         ).DialManager(self), "dial")
+        self.context = _try(lambda: __import__(
+            "titan_access.context_presenter", fromlist=["ContextPresenter"]
+        ).ContextPresenter(self), "context_presenter")
+
+        # NVDA controller server: lets external apps (and accessible_output3's
+        # NVDA backend) speak through Titan Access. Needs the native helper DLL;
+        # degrades to a no-op when it is not present.
+        self.nvda_ctl = _try(lambda: __import__(
+            "titan_access.nvda_controller_server", fromlist=["NvdaControllerServer"]
+        ).NvdaControllerServer(self).start(), "nvda_controller_server")
 
         # Keyboard hook last — it starts feeding events immediately.
         def _mk_kbd():
@@ -264,7 +352,8 @@ class TitanAccessEngine:
                 print(f"[TitanAccess] gesture registration error: {e}")
 
     def _teardown_subsystems(self):
-        for name in ("keyboard", "provider"):
+        self._stop_bg_worker()
+        for name in ("keyboard", "provider", "nvda_ctl"):
             obj = getattr(self, name, None)
             if obj is not None and hasattr(obj, "stop"):
                 try:
@@ -342,6 +431,130 @@ class TitanAccessEngine:
             return False
 
     # ==================================================================== #
+    # Worker-thread invocation (run COM work on the apartment that owns it)
+    # ==================================================================== #
+    def post_to_worker(self, fn):
+        """Queue ``fn`` to run on the engine worker thread's message loop.
+
+        The worker thread is the COM apartment that created the UIA provider and
+        owns the focused elements, so reading TextPattern / properties there is
+        in-apartment and fast. Calling the same work from an arbitrary thread
+        marshals every COM access across apartments, which is what made arrow
+        navigation in edit fields lag by hundreds of milliseconds."""
+        with self._invoke_lock:
+            self._invoke_queue.append(fn)
+        if self._thread_id:
+            try:
+                ctypes.windll.user32.PostThreadMessageW(
+                    self._thread_id, WM_TA_INVOKE, 0, 0)
+            except Exception as e:
+                print(f"[TitanAccess] post_to_worker error: {e}")
+
+    def _drain_invokes(self):
+        while True:
+            with self._invoke_lock:
+                if not self._invoke_queue:
+                    return
+                fn = self._invoke_queue.pop(0)
+            try:
+                fn()
+            except Exception as e:
+                print(f"[TitanAccess] worker invoke error: {e}")
+
+    # ------------------------------------------------------------------ #
+    # Background worker (off the keyboard-hook thread)
+    # ------------------------------------------------------------------ #
+    def _start_bg_worker(self):
+        if self._bg_alive:
+            return
+        self._bg_alive = True
+        self._bg_thread = threading.Thread(
+            target=self._bg_loop, name="TitanAccessBg", daemon=True)
+        self._bg_thread.start()
+
+    def _stop_bg_worker(self):
+        self._bg_alive = False
+        self._bg_event.set()
+
+    def _bg_loop(self):
+        # COM (MTA) so this thread can make UIA calls itself. UIA elements are
+        # agile, so reading the focused element here does not need the apartment
+        # that created it. MTA needs no message pump for outgoing calls.
+        try:
+            ctypes.windll.ole32.CoInitializeEx(None, 0x0)  # COINIT_MULTITHREADED
+        except Exception:
+            pass
+        while self._bg_alive:
+            self._bg_event.wait()
+            self._bg_event.clear()
+            if not self._bg_alive:
+                break
+            if self._bg_stop:
+                self._bg_stop = False
+                try:
+                    if self.speech is not None:
+                        self.speech.stop()
+                except Exception:
+                    pass
+            with self._bg_lock:
+                fn = self._bg_read
+                self._bg_read = None
+            if fn is not None:
+                try:
+                    fn()
+                except Exception as e:
+                    print(f"[TitanAccess] bg read error: {e}")
+        try:
+            ctypes.windll.ole32.CoUninitialize()
+        except Exception:
+            pass
+
+    def submit_read(self, fn):
+        """Queue a (possibly blocking) caret read on the background thread.
+        Only the latest read is kept, so holding an arrow key never backs up."""
+        with self._bg_lock:
+            self._bg_read = fn
+        self._bg_event.set()
+
+    def request_stop_speech(self):
+        """Ask the background thread to stop speech (safe from the hook thread)."""
+        self._bg_stop = True
+        self._bg_event.set()
+
+    # ==================================================================== #
+    # Host-app announcement hooks (called by TCE through host_bridge)
+    # ==================================================================== #
+    def announce_override(self, text, interrupt=True):
+        """Speak an exact phrase supplied by the host application for a control
+        whose meaning UIA cannot convey (the virtual tab bar). Suppresses our own
+        next focus announcement for a brief window so the two never double up."""
+        if not text:
+            return
+        self._override_until = time.time() + 0.7
+        self.speak(text, interrupt=interrupt)
+
+    def set_state_suffix(self, text):
+        """Queue a state word (e.g. "checked") to append to our next focus
+        announcement, for host widgets whose state is invisible to UIA
+        (wx.CheckListBox). Consumed by the next :meth:`announce_object`."""
+        if text:
+            self._state_suffix = (text, time.time() + 0.7)
+
+    def _consume_override(self) -> bool:
+        if self._override_until > time.time():
+            self._override_until = 0.0
+            return True
+        return False
+
+    def _consume_state_suffix(self):
+        s = self._state_suffix
+        if s and s[1] > time.time():
+            self._state_suffix = None
+            return s[0]
+        self._state_suffix = None
+        return None
+
+    # ==================================================================== #
     # Output convenience
     # ==================================================================== #
     def _pan_for_speech(self, obj) -> float:
@@ -394,6 +607,12 @@ class TitanAccessEngine:
         """
         if self.sound is None or obj is None:
             return
+        # Inside the Titan environment's own windows (the launcher, its settings,
+        # component views and applets share our PID) the TCE shell already plays
+        # its own navigation sounds; our cursor cues on top of those just clutter,
+        # so suppress them there. Speech is unaffected.
+        if (obj.process_id or self._foreground_pid()) == os.getpid():
+            return
         pan = pan_for_object(obj)
         role = obj.role
         try:
@@ -422,9 +641,19 @@ class TitanAccessEngine:
         if obj is None:
             return
         self.current_object = obj
+        # Bind edit-field caret tracking to the newly focused control.
+        self._update_edit_context(obj)
+        # Auto browse/focus mode for web documents (NVDA-style).
+        if self.browse is not None:
+            try:
+                self.browse.update_for_focus(obj)
+            except Exception as e:
+                print(f"[TitanAccess] browse update error: {e}")
         # Enter/leave TCE environment cue (port of the process-change branch in
         # the C# OnFocusChanged).
         self._handle_tce_transition(obj)
+        # Enter/leave an app that drives us through the NVDA controller.
+        self._handle_controller_transition(obj)
         # Menu bar / menu announcements take over when focus is in a menu.
         try:
             if self.menu_tracker is not None and self.menu_tracker.handle_focus(obj):
@@ -435,9 +664,99 @@ class TitanAccessEngine:
         try:
             if self.app_modules is not None:
                 self.app_modules.on_gain_focus(obj)
+                if not self.app_modules.should_announce(obj):
+                    return
         except Exception:
             pass
-        self.announce_object(obj)
+        self._announce_focus(obj)
+
+    def _announce_focus(self, obj):
+        """Announce a focus change, coalescing rapid bursts.
+
+        A real control (button, edit, list item, ...) is announced immediately
+        and cancels any pending container announcement. A pure container
+        (dialog window / pane / group) is deferred briefly: if a control inside
+        it focuses next, that control wins and carries the container context
+        (so e.g. a dialog's message is read with its OK button, not lost to a
+        transient window-focus event that already "used up" the context)."""
+        # Drop a duplicate focus burst for the same element (some controls fire
+        # the focus event twice; the second carries no new context and would
+        # otherwise cut off the first announcement before its dialog/group
+        # context is spoken).
+        key = (obj.role, obj.name, obj.bounds, obj.automation_id)
+        now = time.time()
+        if key == self._last_focus_key and (now - self._last_focus_time) < 0.35:
+            return
+        self._last_focus_key = key
+        self._last_focus_time = now
+
+        self._announce_token += 1
+        tok = self._announce_token
+        if obj.role in _CONTAINER_FOCUS_ROLES:
+            def _fire():
+                if tok == self._announce_token:
+                    self.announce_object(obj)
+            threading.Timer(0.12, _fire).start()
+        else:
+            self.announce_object(obj)
+
+    def _update_edit_context(self, obj):
+        """Tell the keyboard hook and editable handler whether focus is now in
+        an editable control, so arrow movements read the caret."""
+        is_edit = obj is not None and obj.role in _EDIT_ROLES
+        # A web document in active browse mode is driven by the virtual buffer,
+        # not caret tracking -- otherwise arrows would be hijacked for text
+        # review instead of browse navigation.
+        if is_edit and obj.role == "document" and self.browse is not None:
+            try:
+                if self.browse.is_active and not self.browse.pass_through:
+                    is_edit = False
+            except Exception:
+                pass
+        if self.keyboard is not None:
+            try:
+                self.keyboard.is_in_edit_field = is_edit
+            except Exception:
+                pass
+        if self.editable is not None:
+            try:
+                self.editable.set_element(obj if is_edit else None)
+            except Exception:
+                pass
+
+    def on_edit_caret_move(self, key, ctrl):
+        """Called by the keyboard hook after a non-swallowed caret movement in an
+        edit field. Reads the new position once the app has moved the caret.
+
+        A short delay lets the focused application apply the caret move before we
+        query ``TextPattern.GetSelection`` (the keypress is processed only after
+        the hook returns). Mirrors the C# non-blocking arrow navigation.
+        """
+        if self.editable is None or self._muted_for_foreground():
+            return
+
+        def _do():
+            # Small settle so the app applies the caret move before we read
+            # TextPattern.GetSelection (the keypress is processed only after the
+            # hook returns). Runs on the background reader thread, so sleeping
+            # here is fine -- it must NOT happen on the keyboard-hook thread.
+            time.sleep(0.02)
+            try:
+                if ctrl and key in ("left", "right"):
+                    self.editable.read_caret_word()
+                elif key in ("up", "down", "home", "end"):
+                    self.editable.read_caret_line()
+                else:  # left / right by character
+                    self.editable.read_caret_char()
+            except Exception as e:
+                print(f"[TitanAccess] caret move read error: {e}")
+
+        # CRITICAL: never run the read on the keyboard-hook thread. That thread
+        # services the global WH_KEYBOARD_LL hook through its message loop, so a
+        # blocking UIA/TextPattern call there stalls ALL keyboard input system
+        # wide (this previously froze the whole app). Hand it to the dedicated
+        # background reader thread instead (latest-keystroke wins).
+        self.submit_read(_do)
 
     def _handle_tce_transition(self, obj):
         """Play enter_TCE / leave_TCE when focus crosses the TCE boundary."""
@@ -467,6 +786,39 @@ class TitanAccessEngine:
         except Exception as e:
             print(f"[TitanAccess] tce transition error: {e}")
 
+    def on_stop_speech_key(self):
+        """Ctrl pressed: silence current speech (standard screen-reader key).
+
+        Called on the keyboard-hook thread, so it must return immediately --
+        ``speech.stop()`` can block, which would stall the global hook. Offload
+        it to the background worker."""
+        self.request_stop_speech()
+
+    def _handle_controller_transition(self, obj):
+        """Play controller_initialize / controller_uninitialize when focus moves
+        into or out of an application that drives Titan Access through the NVDA
+        controller (i.e. a process that has called us via the controller)."""
+        nc = self.nvda_ctl
+        pids = getattr(nc, "client_pids", None) if nc is not None else None
+        if not pids:
+            if self._in_controller_app:
+                self._in_controller_app = False
+            return
+        try:
+            pid = (obj.process_id if obj is not None else 0) or self._foreground_pid()
+            # TCE itself drives the controller (accessible_output3), but inside
+            # TCE we already play enter_TCE/leave_TCE -- so never play the
+            # controller earcons there, or the two cues collide.
+            inside = (pid in pids) and not self._pid_is_tce(pid)
+            if inside and not self._in_controller_app:
+                self.play(SND_CONTROLLER_INIT)
+                self._in_controller_app = True
+            elif (not inside) and self._in_controller_app:
+                self.play(SND_CONTROLLER_UNINIT)
+                self._in_controller_app = False
+        except Exception as e:
+            print(f"[TitanAccess] controller transition error: {e}")
+
     def announce_object(self, obj: AccessibleObject, for_navigation=False,
                         play_cursor=True):
         """Speak an element (3-part pitched announcement) and play its cursor sound."""
@@ -479,6 +831,13 @@ class TitanAccessEngine:
         # settings still count as TCE and are NOT muted).
         if self._muted_for_foreground():
             return
+        # The host app (TCE) may have just spoken an exact phrase for this
+        # element via announce_override (e.g. the virtual tab bar). Honour it:
+        # play the cursor cue but skip our own speech so we don't double up.
+        if self._consume_override():
+            if play_cursor:
+                self._play_element_cue(obj, for_navigation)
+            return
         if play_cursor:
             self._play_element_cue(obj, for_navigation)
         try:
@@ -488,6 +847,22 @@ class TitanAccessEngine:
         except Exception as e:
             print(f"[TitanAccess] describe error: {e}")
             segments = [(obj.name or loc.role_label(obj.role), NAME_PITCH)]
+        # Prepend any newly-entered container context (dialog / group / list /
+        # toolbar), NVDA-style focus context presentation, as leading segments
+        # so it is spoken as one utterance with the control's description.
+        if self.context is not None:
+            try:
+                ctx = self.context.context_segments(
+                    obj, for_navigation=for_navigation)
+                if ctx:
+                    segments = ctx + segments
+            except Exception as e:
+                print(f"[TitanAccess] context segments error: {e}")
+        # Append a host-supplied state word (e.g. a wx.CheckListBox item's
+        # checked/unchecked state, which UIA does not expose) at the state pitch.
+        suffix = self._consume_state_suffix()
+        if suffix:
+            segments = segments + [(suffix, STATE_PITCH)]
         # If the active TTS path has no pitch control, flatten to one line.
         if self.speech is not None and not getattr(self.speech, "supports_pitch", True):
             self.speak(" ".join(t for t, _p in segments if t), obj=obj)
@@ -587,6 +962,11 @@ class TitanAccessEngine:
         g.register("readDate", "shift+f12", self.action_read_date)
         g.register("readWindowTitle", "t", self.action_read_window_title)
         g.register("cycleKeyEcho", "s", self.action_cycle_key_echo)
+        g.register("sayAll", "a", self.action_say_all)
+
+        # (Ctrl+Alt+C/W/L/P review shortcuts removed: on a Polish keyboard
+        # Ctrl+Alt == AltGr, so they collided with typing diacritics. Caret
+        # tracking on the arrow keys already reads char/word/line live.)
 
         # Object navigation (NumPad, with the reader modifier held) — wired only
         # when the object navigator subsystem is available.
@@ -657,6 +1037,19 @@ class TitanAccessEngine:
             self.speak(buf.value or L("engine.windowNotFound"))
         except Exception:
             self.speak(L("engine.windowNotFound"))
+        return True
+
+    def action_say_all(self, *a):
+        """Insert+A: in a web document read continuously (say all); elsewhere
+        re-read the focused element."""
+        if (self.browse is not None and self.browse.is_active
+                and not self.browse.pass_through):
+            try:
+                if self.browse.say_all():
+                    return True
+            except Exception as e:
+                print(f"[TitanAccess] say all error: {e}")
+        self.announce_object(self.current_object, play_cursor=False)
         return True
 
     def action_cycle_key_echo(self, *a):

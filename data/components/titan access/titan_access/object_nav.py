@@ -74,7 +74,34 @@ class ObjectNavigator:
     # ------------------------------------------------------------------ #
     # Tree stepping
     # ------------------------------------------------------------------ #
+    def _simple_review(self) -> bool:
+        try:
+            return self.engine.settings.get_bool(
+                "Navigation", "SimpleReviewMode", True)
+        except Exception:
+            return True
+
     def _step(self, native, direction):
+        # NVDA-style "simple review": flatten the tree, skipping layout-only
+        # containers, so the user lands only on meaningful (content) elements.
+        # Disable via Navigation/SimpleReviewMode to walk the raw UIA tree.
+        if self._simple_review():
+            try:
+                from titan_access import presentation as pres
+                if direction == "prev":
+                    return pres.simple_previous(native)
+                if direction == "next":
+                    return pres.simple_next(native)
+                if direction == "parent":
+                    parent = pres.simple_parent(native)
+                    if parent is not None and self._is_boundary(parent):
+                        return None
+                    return parent
+                if direction == "child":
+                    return pres.simple_first_child(native)
+            except Exception as e:
+                print(f"[TitanAccess] object_nav: simple step '{direction}' "
+                      f"error: {e}")
         try:
             if direction == "prev":
                 return native.GetPreviousSiblingControl()
@@ -106,8 +133,10 @@ class ObjectNavigator:
             self.engine.speak(L("engine.noCurrentElement"))
             return True
         ok = False
-        # Try the action patterns in turn (Invoke -> Select -> Expand).
+        # Try the action patterns in turn, like NVDA's doDefaultAction
+        # (Invoke -> Toggle -> Select -> Expand).
         for getter, call in (("GetInvokePattern", "Invoke"),
+                             ("GetTogglePattern", "Toggle"),
                              ("GetSelectionItemPattern", "Select"),
                              ("GetExpandCollapsePattern", "Expand")):
             try:

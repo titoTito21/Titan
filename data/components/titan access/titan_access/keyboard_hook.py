@@ -121,6 +121,9 @@ _OBJNAV_NUMPAD = {"numpad2", "numpad4", "numpad5", "numpad6", "numpad8", "numpad
 _ARROW_TO_NUMPAD = {
     "left": "numpad4", "right": "numpad6", "up": "numpad8", "down": "numpad2",
 }
+# Real (extended) caret-movement keys that trigger reading inside an edit field.
+_EDIT_CARET_KEYS = {"left", "right", "up", "down", "home", "end"}
+VK_RMENU = 0xA5  # right Alt (AltGr)
 
 
 if _IS_WINDOWS:
@@ -189,6 +192,9 @@ class KeyboardHook:
         self.engine = engine
         # Set by the engine/browse subsystem; lets on_plain_key intercept arrows.
         self.is_in_browse_mode = False
+        # Set by the engine on focus: True when the focused control is an edit /
+        # document / combobox, so arrow movements trigger caret reading.
+        self.is_in_edit_field = False
 
         self._hook = None
         self._proc = None          # strong ref to the CFUNCTYPE (avoid GC!)
@@ -197,6 +203,7 @@ class KeyboardHook:
         # Modifier hold-state (updated on every key event).
         self._ctrl = False
         self._alt = False
+        self._ralt = False         # right Alt == AltGr (Polish diacritics)
         self._shift = False
         self._reader_mod = False   # NVDA reader modifier (Insert / CapsLock) held
         self._mod_used = False     # another key was pressed while the modifier was held
@@ -300,9 +307,21 @@ class KeyboardHook:
 
         if vk in _CTRL_KEYS:
             self._ctrl = is_down
+            # Pressing either Ctrl silences speech (standard screen-reader
+            # behaviour). EXCEPT the synthetic left-Ctrl that AltGr injects: it
+            # arrives with scanCode 0x21D (real Ctrl is 0x1D), and swallowing it
+            # for speech would cut off speech every time the user types a Polish
+            # diacritic (AltGr + letter).
+            if is_down and scan != 0x21D:
+                try:
+                    self.engine.on_stop_speech_key()
+                except Exception as e:
+                    print(f"[TitanAccess] keyboard_hook: stop-speech error: {e}")
             return False
         if vk in _ALT_KEYS:
             self._alt = is_down
+            if vk == VK_RMENU:
+                self._ralt = is_down
             return False
         if vk in _SHIFT_KEYS:
             self._shift = is_down
@@ -346,6 +365,9 @@ class KeyboardHook:
             except Exception as e:
                 print(f"[TitanAccess] keyboard_hook: numpad nav error: {e}")
 
+        # (Ctrl+Alt review shortcuts removed -- they clashed with AltGr typing on
+        # a Polish keyboard, so Ctrl+Alt combos now pass straight through.)
+
         # ---- 4. Plain key (browse mode quick-nav / arrows) ------------ #
         try:
             if self.engine.on_plain_key(vk, key_name, self._ctrl,
@@ -353,6 +375,21 @@ class KeyboardHook:
                 return True
         except Exception as e:
             print(f"[TitanAccess] keyboard_hook: plain key error: {e}")
+
+        # ---- 4b. Edit-field caret tracking (read after the caret moves) --- #
+        # In an edit / document control, arrow / Home / End movements are NOT
+        # swallowed (the app moves the caret); we schedule a read of the new
+        # position. Ctrl+Left/Right read by word; Ctrl+Up/Down/Home/End are left
+        # to the app without a special read. Port of the C# non-blocking
+        # ProcessArrowNavigation / ProcessCtrlArrowNavigation.
+        if (self.is_in_edit_field and not self._alt and not self._reader_mod
+                and key_name in _EDIT_CARET_KEYS):
+            if not (self._ctrl and key_name not in ("left", "right")):
+                try:
+                    self.engine.on_edit_caret_move(key_name, self._ctrl)
+                except Exception as e:
+                    print(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
+            return False  # never swallow caret movement
 
         # ---- 5. Character / word echo --------------------------------- #
         # Only echo ordinary typing: no Ctrl/Alt, no reader modifier.

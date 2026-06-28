@@ -133,6 +133,14 @@ msgstr "checked"
 msgid "unchecked"
 msgstr "unchecked"
 
+#: src/accessibility/messages.py
+msgid "tab"
+msgstr "tab"
+
+#: src/accessibility/messages.py
+msgid "{}, {} of {}"
+msgstr "{}, {} of {}"
+
 #: src/accessibility/messages.py:422
 msgid "Fn keys enabled"
 msgstr "Fn keys enabled"

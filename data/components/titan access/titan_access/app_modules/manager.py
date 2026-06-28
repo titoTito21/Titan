@@ -35,8 +35,15 @@ class AppModuleManager:
                 self._modules[inst.process_name] = inst
             except Exception as e:
                 print(f"[TitanAccess] app module init failed ({cls.__name__}): {e}")
+        # External / downloaded modules (override built-ins for the same exe).
+        try:
+            from titan_access.app_modules.loader import load_external_modules
+            self._modules.update(load_external_modules(engine))
+        except Exception as e:
+            print(f"[TitanAccess] external app module load failed: {e}")
         self._current = None
         self._current_process = None
+        self._app_gesture_ids = []   # gesture action ids registered for the app
 
     # ==================================================================== #
     # Focus delegation
@@ -64,8 +71,50 @@ class AppModuleManager:
                 self._current.on_lose_focus(obj)
             except Exception:
                 pass
+            self._unregister_app_gestures()
         self._current_process = process
         self._current = self._modules.get(process) if process else None
+        if self._current is not None:
+            self._register_app_gestures(self._current)
+
+    def should_announce(self, obj):
+        """False if the active module wants the standard announcement suppressed."""
+        if self._current is None:
+            return True
+        try:
+            return bool(self._current.should_announce(obj))
+        except Exception:
+            return True
+
+    # ==================================================================== #
+    # Per-application gestures
+    # ==================================================================== #
+    def _register_app_gestures(self, module):
+        gestures = getattr(self.engine, "gestures", None)
+        if gestures is None:
+            return
+        try:
+            mapping = module.get_gestures() or {}
+        except Exception as e:
+            print(f"[TitanAccess] app gestures error ({module.process_name}): {e}")
+            return
+        for i, (spec, handler) in enumerate(mapping.items()):
+            action_id = f"app:{module.process_name}:{i}"
+            try:
+                gestures.register(action_id, spec, handler)
+                self._app_gesture_ids.append(action_id)
+            except Exception as e:
+                print(f"[TitanAccess] app gesture register error: {e}")
+
+    def _unregister_app_gestures(self):
+        gestures = getattr(self.engine, "gestures", None)
+        if gestures is not None:
+            for action_id in self._app_gesture_ids:
+                try:
+                    gestures.unregister(action_id)
+                except Exception:
+                    pass
+        self._app_gesture_ids = []
 
     @property
     def current_module(self):

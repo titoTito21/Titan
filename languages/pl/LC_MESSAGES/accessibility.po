@@ -134,6 +134,14 @@ msgstr "zaznaczone"
 msgid "unchecked"
 msgstr "niezaznaczone"
 
+#: src/accessibility/messages.py
+msgid "tab"
+msgstr "zakładka"
+
+#: src/accessibility/messages.py
+msgid "{}, {} of {}"
+msgstr "{}, {} z {}"
+
 #: src/accessibility/messages.py:422
 msgid "Fn keys enabled"
 msgstr "Klawisze Fn włączone"

@@ -63,6 +63,35 @@ class AppModuleBase:
         """
         return obj
 
+    def should_announce(self, obj):
+        """Return ``False`` to SUPPRESS the standard announcement for ``obj``.
+
+        Lets a module silence noise (e.g. a busy status pane) or take over the
+        announcement itself (speak in :meth:`customize_object` / event hooks and
+        suppress here). Default announces everything.
+        """
+        return True
+
+    # -- optional event hooks (NVDA-style; called by the engine when wired) -- #
+    def event_value_change(self, obj):
+        """The focused element's value changed (e.g. a slider moved)."""
+
+    def event_name_change(self, obj):
+        """The focused element's name/label changed."""
+
+    def event_alert(self, obj):
+        """An alert / notification surfaced in the application."""
+
+    # -- per-app gestures -------------------------------------------------- #
+    def get_gestures(self):
+        """Return a dict ``{key_spec: callable}`` of gestures active only while
+        this application is in the foreground (e.g. ``{"control+r": self.read}``).
+
+        ``key_spec`` uses the same syntax as the global gesture manager
+        (:mod:`titan_access.gestures`). Default: no app-specific gestures.
+        """
+        return {}
+
     # -- helpers ----------------------------------------------------------- #
     def _announce_welcome_once(self, text):
         """Speak ``text`` the first time the app gains focus this session."""

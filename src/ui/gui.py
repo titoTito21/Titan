@@ -2255,17 +2255,23 @@ class TitanApp(wx.Frame):
             print(f"[GUI] announce_tab_bar error: {e}")
 
     def _announce_view_switched(self, view, idx, total):
-        """Play the switch-list sound when cycling views via Left/Right.
+        """Announce the view reached by cycling the tab bar (Left/Right).
 
-        Like ``_announce_tab_bar`` above, we intentionally do not speak here:
-        the new list's tab bar row already reads as "Name, N of M" when focus
-        lands on it, so speaking would produce the duplicate announcement
-        (e.g., "Titan IM, 3 of 4, Titan IM, 3 of 4") the user asked to fix.
+        Delegates to ``src.accessibility.messages.announce_view_switched`` which
+        plays the switch-list earcon and, when the in-process Titan Access reader
+        is active, speaks "<view>, N of M, tab" (replacing the reader's own read
+        of the list row). For an external SR it stays silent and lets that SR
+        read the row text, avoiding the duplicate announcement.
         """
         try:
-            play_sound('ui/switch_list.ogg')
-        except Exception:
-            pass
+            from src.accessibility.messages import announce_view_switched
+            announce_view_switched(self._view_short_name(view), idx, total)
+        except Exception as e:
+            print(f"[GUI] announce_view_switched error: {e}")
+            try:
+                play_sound('ui/switch_list.ogg')
+            except Exception:
+                pass
 
     def _schedule_tab_bar_tip(self):
         """Start the 4-second accessibility tip when focus sits on the tab bar item."""

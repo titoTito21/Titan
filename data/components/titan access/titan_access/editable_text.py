@@ -43,6 +43,57 @@ class EditableTextHandler:
         self._review_owner = None  # id() of the native element it belongs to
 
     # ================================================================== #
+    # Focus binding + live-caret reading (caret tracking)
+    # ================================================================== #
+    def set_element(self, obj):
+        """Bind to a newly focused control. Drops the cached review cursor so
+        the next review / caret read re-seeds from the live caret. ``obj`` may
+        be ``None`` when focus left every editable control."""
+        self._review = None
+        self._review_owner = None
+
+    def read_caret_char(self):
+        """Read the character at the LIVE caret (not the review cursor).
+
+        Used by caret tracking after an arrow keypress and by the Ctrl+Alt+C
+        review command. Port of C# ``EditableTextHandler.GetCharacterAtCaret``.
+        """
+        return self._read_caret_unit(_UNIT_CHAR, is_char=True)
+
+    def read_caret_word(self):
+        return self._read_caret_unit(_UNIT_WORD, is_char=False)
+
+    def read_caret_line(self):
+        return self._read_caret_unit(_UNIT_LINE, is_char=False)
+
+    def _read_caret_unit(self, unit, is_char):
+        tp = self._text_pattern()
+        if tp is None:
+            return False
+        caret = self._caret_range(tp)
+        if caret is None:
+            return False
+        text = self._unit_text(caret, unit)
+        if is_char:
+            if not text:
+                # Caret sits past the last character.
+                if self._announce_bounds():
+                    self.engine.speak(L("edit.endOfText"))
+                return True
+            self._speak_char(text)
+        else:
+            stripped = text.strip()
+            empty = L("edit.emptyWord") if unit is _UNIT_WORD else L("edit.emptyLine")
+            self.engine.speak(stripped or empty, obj=self.engine.current_object)
+        return True
+
+    def _announce_bounds(self):
+        try:
+            return bool(self.engine.settings.announce_text_bounds)
+        except Exception:
+            return False
+
+    # ================================================================== #
     # Reading at the review cursor
     # ================================================================== #
     def read_current_char(self):

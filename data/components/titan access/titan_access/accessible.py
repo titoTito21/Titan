@@ -34,7 +34,7 @@ from titan_access.contracts import (
     ROLE_LISTBOX, ROLE_TREE, ROLE_TABLE, ROLE_GRID, ROLE_GROUP, ROLE_TOOLBAR,
     ROLE_STATUSBAR, ROLE_MENU, ROLE_MENUBAR, ROLE_TABCONTROL, ROLE_DIALOG,
     ROLE_WINDOW, ROLE_PANE, ROLE_DOCUMENT, ROLE_SEPARATOR,
-    STATE_SELECTED, STATE_CHECKED, STATE_PARTIAL, STATE_EXPANDED,
+    STATE_SELECTED, STATE_CHECKED, STATE_UNCHECKED, STATE_PARTIAL, STATE_EXPANDED,
     STATE_COLLAPSED, STATE_PRESSED, STATE_UNAVAILABLE, STATE_READONLY,
     STATE_REQUIRED, STATE_PROTECTED, STATE_BUSY, STATE_HASPOPUP,
 )
@@ -101,6 +101,14 @@ def _name_segment(obj: AccessibleObject) -> str:
 def _state_segment(obj: AccessibleObject) -> str:
     """Comma-joined localized state labels (focus is implied, so omitted)."""
     parts = [state_label(s) for s in _STATE_ORDER if obj.has(s)]
+    # A check box that is neither checked nor indeterminate carries no state from
+    # the provider, so its state would be silent. Announce it explicitly as
+    # "unchecked" so the user always hears the box's state.
+    if obj.role == ROLE_CHECKBOX and not (
+            obj.has(STATE_CHECKED) or obj.has(STATE_PARTIAL)):
+        unchecked = state_label(STATE_UNCHECKED)
+        if unchecked:
+            parts.append(unchecked)
     return ", ".join(p for p in parts if p)
 
 

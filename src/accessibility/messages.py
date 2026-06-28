@@ -287,6 +287,51 @@ def cancel_tab_bar_tip():
 # extractor runs.
 
 
+# --- Titan Access (in-process screen reader) bridge ---------------------
+# When the user's own Titan Access reader is running it is NOT detected by
+# accessible_output3 (it is not a system AT like NVDA/JAWS), so the
+# is_screen_reader_running() check below returns False and the SR-only hints
+# would stay silent. These helpers route the hint straight to Titan Access,
+# immediately and without the 500 ms AO3 work-around delay. Each returns True
+# when Titan Access handled it, so callers can skip their fallback path.
+
+
+def _ta_announce(text, interrupt=True):
+    """Replace Titan Access's next focus announcement with ``text``."""
+    try:
+        from titan_access.host_bridge import announce
+        return announce(text, interrupt=interrupt)
+    except Exception:
+        return False
+
+
+def _ta_speak(text, interrupt=True):
+    """Speak ``text`` immediately through Titan Access (no focus suppression)."""
+    try:
+        from titan_access.host_bridge import speak
+        return speak(text, interrupt=interrupt)
+    except Exception:
+        return False
+
+
+def _ta_state_suffix(text):
+    """Append ``text`` to Titan Access's next focus announcement."""
+    try:
+        from titan_access.host_bridge import state_suffix
+        return state_suffix(text)
+    except Exception:
+        return False
+
+
+def is_titan_access_running():
+    """True when the in-process Titan Access reader is active."""
+    try:
+        from titan_access.host_bridge import is_active
+        return is_active()
+    except Exception:
+        return False
+
+
 def is_screen_reader_running():
     """Return True only when a real screen reader is active.
 
@@ -334,7 +379,35 @@ def announce_tab_bar():
         play_sound('ui/tapbar.ogg')
     except Exception:
         pass
-    speak_sr_only(_("Tab bar"), interrupt=True)
+    # Prefer the in-process Titan Access reader (immediate, and it suppresses its
+    # own duplicate read of the underlying list row); otherwise fall back to the
+    # external-SR path.
+    if not _ta_announce(_("Tab bar"), interrupt=True):
+        speak_sr_only(_("Tab bar"), interrupt=True)
+
+
+def announce_view_switched(view_name, idx, total):
+    """Announce the view reached by cycling the tab bar (Left/Right arrows).
+
+    Spoken as "<view>, <n> of <total>, <tab>" — e.g. "Applications, 1 of 4,
+    tab". Routed to Titan Access so it replaces the reader's own read of the
+    list row (which would otherwise say only the row text). When Titan Access
+    is not the active reader this stays silent on purpose: the row text itself
+    is read by whatever SR is running, so speaking here would duplicate it.
+
+    ``idx`` is 0-based.
+    """
+    try:
+        play_sound('ui/switch_list.ogg')
+    except Exception:
+        pass
+    if total and total > 0:
+        phrase = _("{}, {} of {}").format(view_name, idx + 1, total)
+    else:
+        phrase = view_name or _("Tab bar")
+    # Append the control-type word ("tab" / pl "zakładka") at the end.
+    phrase = "{}, {}".format(phrase, _("tab"))
+    _ta_announce(phrase, interrupt=True)
 
 
 _checklist_announce_timer = None
@@ -391,7 +464,11 @@ def announce_checklist_item_toggle(checked, delay_ms=500):
         play_sound('ui/X.ogg' if checked else 'core/FOCUS.ogg')
     except Exception:
         pass
-    _speak_checklist_state_after(checked, delay_ms)
+    message = _("checked") if checked else _("unchecked")
+    # Toggling fires no focus change, so speak the new state straight away
+    # through Titan Access; only fall back to the delayed AO3 path otherwise.
+    if not _ta_speak(message, interrupt=True):
+        _speak_checklist_state_after(checked, delay_ms)
 
 
 def announce_checklist_item_navigation(checked, delay_ms=500):
@@ -406,7 +483,12 @@ def announce_checklist_item_navigation(checked, delay_ms=500):
         play_sound('ui/cb_listitem_checked.ogg')
     except Exception:
         pass
-    _speak_checklist_state_after(checked, delay_ms)
+    message = _("checked") if checked else _("unchecked")
+    # Arrowing onto a row fires a focus change, so let Titan Access append the
+    # state to the item name it is about to read; only fall back to the delayed
+    # AO3 path when Titan Access is not the active reader.
+    if not _ta_state_suffix(message):
+        _speak_checklist_state_after(checked, delay_ms)
 
 
 # --- Fn (function) key state ---------------------------------------------

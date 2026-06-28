@@ -1,0 +1,30 @@
+/* Titan Access -- NVDA controller server interface.
+ *
+ * This replicates NV Access's public "NvdaController" RPC interface so that any
+ * application built against the unmodified nvdaControllerClient*.dll (including
+ * accessible_output3's NVDA backend) can drive Titan Access exactly as it would
+ * drive NVDA: speakText / cancelSpeech / brailleMessage / testIfRunning.
+ *
+ * The UUID, version, method names, signatures and implicit-handle MUST match
+ * NVDA's nvdaController.idl byte-for-byte, otherwise the client's marshalling
+ * (which is fixed inside its DLL) will not line up with our server stub.
+ * Source of truth: nvaccess/nvda nvdaHelper/interfaces/nvdaController.
+ *
+ * Only the v1.0 NvdaController interface is implemented here -- that is what the
+ * controller client and accessible_output3 use for speech. The newer
+ * NvdaController2 (SSML) interface can be added later as a second interface.
+ */
+
+[
+    uuid(DFF50B99-F7FD-4ca7-A82C-DAEB3E025295),
+    version(1.0),
+    implicit_handle(handle_t nvdaControllerBindingHandle),
+    pointer_default(unique)
+]
+interface NvdaController
+{
+    error_status_t nvdaController_testIfRunning();
+    error_status_t nvdaController_speakText([in, string] const wchar_t* text);
+    error_status_t nvdaController_cancelSpeech();
+    error_status_t nvdaController_brailleMessage([in, string] const wchar_t* message);
+}

@@ -124,6 +124,10 @@ DEFAULTS = {
     # Sounds are always stereo-panned; speech is centered unless VirtualScreen
     # is on, then speech is panned to the element position too.
     (SEC_GENERAL, "VirtualScreen"): "false",
+    (SEC_GENERAL, "EnableMSAA"): "true",
+    # NVDA controller server: when true (and the native helper DLL is present),
+    # apps using nvdaControllerClient.dll speak through Titan Access.
+    (SEC_GENERAL, "NvdaControllerServer"): "true",
     # Verbosity
     (SEC_VERBOSITY, "AnnounceBasicControls"): "true",
     (SEC_VERBOSITY, "AnnounceBlockControls"): "true",
@@ -142,6 +146,9 @@ DEFAULTS = {
     (SEC_NAVIGATION, "AnnounceHierarchyLevel"): "true",
     (SEC_NAVIGATION, "WindowBoundsMode"): "SpeechAndSound",
     (SEC_NAVIGATION, "PhoneticInDial"): "true",
+    # Simple review mode (NVDA-style flattened object navigation: skip
+    # layout-only containers while walking the UIA tree).
+    (SEC_NAVIGATION, "SimpleReviewMode"): "true",
     # Dial
     (SEC_DIAL, "DialCharacters"): "true",
     (SEC_DIAL, "DialWords"): "true",
@@ -174,6 +181,16 @@ def _config_path():
     else:
         base = os.path.join(os.path.expanduser("~"), ".config", "titosoft", "Titan")
     return os.path.join(base, "screenreader", "screenReader.ini")
+
+
+def config_dir():
+    """Return the screen reader's settings directory.
+
+    This is where ``screenReader.ini`` lives (``…/titosoft/Titan/screenreader``);
+    user data such as downloaded application modules is kept in subfolders here so
+    everything stays inside the Titan screen reader's own settings location.
+    """
+    return os.path.dirname(_config_path())
 
 
 class SettingsStore:

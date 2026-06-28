@@ -132,12 +132,15 @@ class DialManager:
             self.engine.important_places.navigate(nxt)
             return True
         if cat in (BUTTONS, HEADINGS) and self.engine.browse is not None:
-            # Quick-nav by type when a browse buffer is available.
+            # Quick-nav by type when a browse buffer is available (web document).
+            key = "b" if cat == BUTTONS else "h"
+            ok = False
             try:
-                key = "b" if cat == BUTTONS else "h"
-                self.engine.browse.handle_quick_nav(key, not nxt)
-            except Exception:
-                pass
+                ok = self.engine.browse.quick_nav_by_char(key, backward=not nxt)
+            except Exception as e:
+                print(f"[TitanAccess] dial quick-nav error: {e}")
+            if not ok:
+                self.engine.speak(L("dial.notAvailableHere"), interrupt=True)
             return True
         return True
 
