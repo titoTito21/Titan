@@ -150,3 +150,11 @@ msgstr "Klawisze Fn włączone"
 msgid "Fn keys disabled"
 msgstr "Klawisze Fn wyłączone"
 
+
+#: src/accessibility/messages.py
+msgid "status bar item"
+msgstr "element paska stanu"
+
+#: src/accessibility/messages.py
+msgid "at position {}"
+msgstr "na pozycji {}"

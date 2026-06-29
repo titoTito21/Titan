@@ -1,0 +1,17 @@
+[launcher]
+name = Tkinter Launcher
+description = A minimal example launcher using Tkinter, made accessible to Titan Access via the bundled tk_access module
+author = TCE Team
+version = 1.0
+status = 0
+
+[features]
+applications = true
+games = true
+titan_im = true
+help = true
+components = true
+system_hooks = true
+notifications = true
+sound = true
+invisible_ui = true

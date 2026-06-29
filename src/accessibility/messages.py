@@ -296,11 +296,23 @@ def cancel_tab_bar_tip():
 # when Titan Access handled it, so callers can skip their fallback path.
 
 
-def _ta_announce(text, interrupt=True):
-    """Replace Titan Access's next focus announcement with ``text``."""
+def _ta_announce(text, interrupt=True, pitch=0):
+    """Replace Titan Access's next focus announcement with ``text``.
+
+    ``pitch`` shifts the tone (negative = a little lower, used for region names).
+    """
     try:
         from titan_access.host_bridge import announce
-        return announce(text, interrupt=interrupt)
+        return announce(text, interrupt=interrupt, pitch=pitch)
+    except Exception:
+        return False
+
+
+def _ta_announce_segments(segments, interrupt=True):
+    """Replace Titan Access's next announcement with a mixed-tone phrase."""
+    try:
+        from titan_access.host_bridge import announce_segments
+        return announce_segments(segments, interrupt=interrupt)
     except Exception:
         return False
 
@@ -408,6 +420,29 @@ def announce_view_switched(view_name, idx, total):
     # Append the control-type word ("tab" / pl "zakładka") at the end.
     phrase = "{}, {}".format(phrase, _("tab"))
     _ta_announce(phrase, interrupt=True)
+
+
+# --- Drag-and-drop announcement ------------------------------------------
+# Reading the region name a little lower and relabelling status-bar rows as
+# "status bar item" is done by Titan Access itself (it recognises the container
+# from the UIA tree), so there is no host-side helper for that here. The tab-bar
+# card drag, however, is a host-only interaction with no UIA signal the reader
+# could interpret, so the launcher pushes its announcement through this helper.
+
+# A little higher than neutral -> the item being dragged.
+DRAG_NAME_PITCH = 4
+
+
+def announce_drag_move(name, position):
+    """Announce a drag-and-drop move: the item name a little higher, then
+    "at position N" at the neutral pitch -- replacing Titan Access's plain
+    "selected, N of M". Returns True when Titan Access handled it; the caller
+    should keep its own non-screen-reader feedback as a fallback."""
+    segments = [
+        (name, DRAG_NAME_PITCH),
+        (_("at position {}").format(position), 0),
+    ]
+    return _ta_announce_segments(segments, interrupt=True)
 
 
 _checklist_announce_timer = None

@@ -73,6 +73,10 @@ class SpeechAdapter(object):
         # Fallback "still speaking" estimate when the engine cannot report it.
         self._speaking_until = 0.0
 
+        # Cached getter for the dedicated pygame TTS channel (see
+        # :meth:`_tts_channel`). None = not resolved yet, False = unavailable.
+        self._tts_channel_getter = None
+
         self._init_backend()
         # NOTE: the screen reader intentionally does NOT impose its own speech
         # parameters. It speaks through whatever engine / voice / rate / pitch /
@@ -251,64 +255,122 @@ class SpeechAdapter(object):
                              pitch_offset=pitch)
             self._wait_for_segment(text, my_id)
 
+    def _tts_channel(self):
+        """The dedicated pygame channel Titan TTS plays speech on, or None.
+
+        Polling ``channel.get_busy()`` is the only RELIABLE "is speech still
+        playing" signal: on the fast eSpeak DLL path ``is_speaking`` flips back to
+        False ~20 ms in while the audio plays for seconds, but this channel
+        tracks the real playback exactly -- and, being the reserved TTS channel,
+        it excludes the cursor / list-item cues (they play on other channels), so
+        we pace on speech alone. Resolved lazily; ``False`` once we know the host
+        has no such channel (standalone reader / non-pygame backend)."""
+        getter = self._tts_channel_getter
+        if getter is False:
+            return None
+        if getter is None:
+            try:
+                from src.titan_core.sound import get_tts_channel
+                getter = get_tts_channel
+                self._tts_channel_getter = getter
+            except Exception:
+                self._tts_channel_getter = False
+                return None
+        try:
+            return getter()
+        except Exception:
+            return None
+
     def _wait_for_segment(self, text, my_id):
-        """Wait for a segment to finish, then return immediately (no dead air).
+        """Block until a segment's audio has finished, then return at once.
 
-        Like ``titan_talk``: as soon as segment X stops, segment Y starts. We
-        poll the engine's ``is_speaking`` flag so there is no fixed pause. The
-        one subtlety that previously made titan access *skip* segments is that
-        right after ``speak_async`` the flag is still False (playback has not
-        started yet) -- a naive poll would see "not speaking" and fire the next
-        segment instantly. So we wait in two phases: first until playback has
-        actually STARTED (flag goes True), then until it has ENDED (flag goes
-        False). Both phases are capped so we never hang, and a newer announcement
-        (bumped sequence id) supersedes us at once.
+        CRITICAL: every segment is spoken with ``interrupt=True`` so that the
+        FIRST segment of a new announcement cuts off the previous one. That makes
+        the inter-segment wait load-bearing: if it returns too early, the *next*
+        segment's interrupt cuts the *current* one mid-word. The element name is
+        the first segment, so an early return here is exactly what made the name
+        come out as silence or a clipped syllable ("element listy" with no name).
 
-        When the engine cannot report ``is_speaking`` we fall back to a fixed,
-        length-derived estimate.
+        We pace on the real audio: poll the dedicated TTS channel's
+        ``get_busy()`` (see :meth:`_tts_channel`) and move on the instant the clip
+        ends -- so pauses are exactly as long as the speech, no dead air, and the
+        segment is never cut. We do NOT trust ``is_speaking`` (it lies on the
+        eSpeak DLL path). When no channel signal is available (standalone reader)
+        we fall back to a fixed length-derived estimate, never shortened by a
+        playback flag.
+
+        A newer announcement (bumped sequence id) supersedes us within one poll,
+        so rapid navigation stays responsive (each keypress interrupts).
         """
         est = _estimate_duration(text)
-        sp = self._underlying_speaker()
-        has_flag = sp is not None and hasattr(sp, "is_speaking")
 
         def _superseded():
             with self._seq_lock:
                 return my_id != self._seq_id
 
-        if not has_flag:
-            slept = 0.0
+        def _ch_busy():
+            ch = self._tts_channel()
+            if ch is None:
+                return None
+            try:
+                return bool(ch.get_busy())
+            except Exception:
+                return None
+
+        # Let the new utterance take over the channel: interrupt stops the old
+        # sound, then synthesis hands the new clip to the channel (~10-20 ms on
+        # the eSpeak DLL path).
+        t0 = time.time()
+        time.sleep(0.04)
+
+        probe = _ch_busy()
+        if probe is None:
+            # No playback signal (standalone / non-pygame backend): fixed
+            # length-derived estimate. NEVER gate on is_speaking here.
+            slept = 0.04
             while slept < est:
                 if _superseded():
                     return
-                time.sleep(0.04)
-                slept += 0.04
+                time.sleep(0.03)
+                slept += 0.03
             return
 
-        def _speaking():
-            try:
-                return bool(getattr(sp, "is_speaking"))
-            except Exception:
-                return False
+        # A short floor before we trust "channel idle". The element cue (a
+        # high/low earcon) can briefly grab the TTS channel just before the first
+        # segment, so right after dispatch the channel may read busy-from-the-cue
+        # and then idle in the gap before speech actually starts -- without this
+        # floor phase 2 would see that gap, return, and the next segment's
+        # interrupt would cut the NAME (heard as: cue tone, short pause, then only
+        # the control type). Speech audio is contiguous once it starts, so a
+        # floor that outlasts the cue gap is enough; bounded by the estimate so a
+        # genuinely short clip adds no real dead air.
+        floor = min(est, 0.22)
 
-        # Phase 1: wait for playback to START (cap ~0.3 s so a missed flag does
-        # not stall the whole announcement).
-        start_deadline = time.time() + 0.3
-        while time.time() < start_deadline:
+        # Phase 1: wait for the clip to actually START on the TTS channel (cap so
+        # a missed start never hangs us).
+        started = bool(probe)
+        start_deadline = time.time() + max(0.5, est)
+        while not started and time.time() < start_deadline:
             if _superseded():
                 return
-            if _speaking():
+            b = _ch_busy()
+            if b:
+                started = True
+                break
+            if b is None:
                 break
             time.sleep(0.01)
 
-        # Phase 2: wait for playback to END -> then the next segment plays at
-        # once. Capped at est + 1.5 s as a safety net.
-        end_deadline = time.time() + est + 1.5
+        # Phase 2: wait for the clip to END (and the floor to pass), then the next
+        # segment plays at once. Generous cap as a safety net (long line read).
+        end_deadline = time.time() + est + 2.0
         while time.time() < end_deadline:
             if _superseded():
                 return
-            if not _speaking():
+            b = _ch_busy()
+            if (b is None or not b) and (time.time() - t0) >= floor:
                 return
-            time.sleep(0.015)
+            time.sleep(0.012)
 
     # ------------------------------------------------------------------ #
     # Configuration (mirrors C# SpeechManager setters)

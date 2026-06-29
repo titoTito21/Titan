@@ -68,6 +68,12 @@ _INTERACTIVE_ROLES = {
 _LIST_ITEM_ROLES = {"listitem", "treeitem", "griditem"}
 # Roles whose focus enables edit-field caret tracking (arrow keys read text).
 _EDIT_ROLES = {"edit", "password", "document", "combobox"}
+# UIA FrameworkId values that mark a "document" as WEB content (Chromium / Gecko
+# / WebView). A web document is driven by browse mode, NEVER by edit-caret
+# tracking -- otherwise arrows would read the page linearly instead of
+# navigating it. (A Word / Notepad document has a non-web framework id and keeps
+# caret tracking.)
+_WEB_DOC_FRAMEWORKS = {"chrome", "gecko", "webview", "edge", "blink"}
 # Pure-container roles that often receive a transient focus event right before
 # a real control inside them does (e.g. a dialog window focuses, then its OK
 # button). Announcing the container immediately would consume the "newly entered
@@ -101,7 +107,8 @@ class TitanAccessEngine:
         self.current_object: Optional[AccessibleObject] = None
         self._last_focus_key = None
         self._last_focus_time = 0.0
-        self._was_in_tce = None        # None until the first focus establishes it
+        self._had_focus = False        # False until the first focus is processed
+                                       # (lets the TCE app module skip a startup cue)
         self._in_controller_app = False  # focus is in an NVDA-controller client
         self._announce_token = 0         # coalesces rapid focus bursts
 
@@ -125,6 +132,7 @@ class TitanAccessEngine:
         # UIA cannot convey -- the virtual tab bar, wx.CheckListBox check state).
         self._override_until = 0.0       # suppress our next auto announce until
         self._state_suffix = None        # (text, expiry) appended to next announce
+        self._role_label_override = None  # (text, expiry) replaces next role label
 
         # Subsystems (populated in _build_subsystems on the worker thread).
         self.speech = None
@@ -524,14 +532,33 @@ class TitanAccessEngine:
     # ==================================================================== #
     # Host-app announcement hooks (called by TCE through host_bridge)
     # ==================================================================== #
-    def announce_override(self, text, interrupt=True):
+    def announce_override(self, text, interrupt=True, pitch_offset=0):
         """Speak an exact phrase supplied by the host application for a control
         whose meaning UIA cannot convey (the virtual tab bar). Suppresses our own
-        next focus announcement for a brief window so the two never double up."""
+        next focus announcement for a brief window so the two never double up.
+
+        ``pitch_offset`` lets the host ask for a non-neutral tone -- e.g. the
+        launcher announces a region name ("Application list") a little lower so
+        it is clearly a container, not a list row."""
         if not text:
             return
         self._override_until = time.time() + 0.7
-        self.speak(text, interrupt=interrupt)
+        self.speak(text, interrupt=interrupt, pitch_offset=pitch_offset)
+
+    def announce_segments(self, segments, interrupt=True):
+        """Speak host-supplied ``(text, pitch_offset)`` parts as one pitched
+        utterance and suppress our own next focus announcement.
+
+        Used when the host wants to mix tones in a single phrase -- e.g. during
+        a tab-bar drag: the view name a little higher, then "at position N" at
+        the neutral pitch (replacing the reader's plain "selected, N of M")."""
+        parts = [(t, p) for (t, p) in (segments or []) if t]
+        if not parts:
+            return
+        self._override_until = time.time() + 0.7
+        # ``speak_segments`` interrupts whatever is playing with its first
+        # segment, so an explicit stop is unnecessary here.
+        self.speak_segments(parts)
 
     def set_state_suffix(self, text):
         """Queue a state word (e.g. "checked") to append to our next focus
@@ -539,6 +566,15 @@ class TitanAccessEngine:
         (wx.CheckListBox). Consumed by the next :meth:`announce_object`."""
         if text:
             self._state_suffix = (text, time.time() + 0.7)
+
+    def set_role_label(self, text):
+        """Queue a control-type label that REPLACES the role word in our next
+        focus announcement. For host widgets whose UIA role is too generic --
+        e.g. a status-bar slot is just a "list item" to UIA, but the launcher
+        wants it read as "status bar item". Consumed by the next
+        :meth:`announce_object`."""
+        if text:
+            self._role_label_override = (text, time.time() + 0.7)
 
     def _consume_override(self) -> bool:
         if self._override_until > time.time():
@@ -552,6 +588,14 @@ class TitanAccessEngine:
             self._state_suffix = None
             return s[0]
         self._state_suffix = None
+        return None
+
+    def _consume_role_label(self):
+        r = self._role_label_override
+        if r and r[1] > time.time():
+            self._role_label_override = None
+            return r[0]
+        self._role_label_override = None
         return None
 
     # ==================================================================== #
@@ -641,17 +685,20 @@ class TitanAccessEngine:
         if obj is None:
             return
         self.current_object = obj
-        # Bind edit-field caret tracking to the newly focused control.
-        self._update_edit_context(obj)
-        # Auto browse/focus mode for web documents (NVDA-style).
+        # Auto browse/focus mode for web documents (NVDA-style). MUST run BEFORE
+        # _update_edit_context: that method decides whether arrows do edit-caret
+        # tracking or browse navigation based on browse.pass_through, so the mode
+        # has to be updated for THIS focus first. Doing it after left the edit
+        # context reading the PREVIOUS focus's mode -- so after tabbing through a
+        # form field and back to page content, arrows stayed in caret-tracking
+        # mode and browse navigation appeared dead.
         if self.browse is not None:
             try:
                 self.browse.update_for_focus(obj)
             except Exception as e:
                 print(f"[TitanAccess] browse update error: {e}")
-        # Enter/leave TCE environment cue (port of the process-change branch in
-        # the C# OnFocusChanged).
-        self._handle_tce_transition(obj)
+        # Bind edit-field caret tracking to the newly focused control.
+        self._update_edit_context(obj)
         # Enter/leave an app that drives us through the NVDA controller.
         self._handle_controller_transition(obj)
         # Menu bar / menu announcements take over when focus is in a menu.
@@ -664,6 +711,9 @@ class TitanAccessEngine:
         try:
             if self.app_modules is not None:
                 self.app_modules.on_gain_focus(obj)
+                # Mark the baseline established AFTER the first delegation, so the
+                # TCE app module can tell a real boundary-cross from startup.
+                self._had_focus = True
                 if not self.app_modules.should_announce(obj):
                     return
         except Exception:
@@ -704,15 +754,21 @@ class TitanAccessEngine:
         """Tell the keyboard hook and editable handler whether focus is now in
         an editable control, so arrow movements read the caret."""
         is_edit = obj is not None and obj.role in _EDIT_ROLES
-        # A web document in active browse mode is driven by the virtual buffer,
-        # not caret tracking -- otherwise arrows would be hijacked for text
-        # review instead of browse navigation.
-        if is_edit and obj.role == "document" and self.browse is not None:
-            try:
-                if self.browse.is_active and not self.browse.pass_through:
-                    is_edit = False
-            except Exception:
-                pass
+        # A web document is driven by browse mode (its virtual buffer), NEVER by
+        # edit-caret tracking -- otherwise arrows read the page linearly instead
+        # of navigating it. Detect it by the web framework id FIRST (reliable and
+        # timing-independent), falling back to the browse handler being active,
+        # so a momentary is_active=False can't leave web arrows in caret mode.
+        if is_edit and obj.role == "document":
+            fw = (getattr(obj, "framework_id", "") or "").lower()
+            is_web = fw in _WEB_DOC_FRAMEWORKS
+            if not is_web and self.browse is not None:
+                try:
+                    is_web = bool(self.browse.is_active)
+                except Exception:
+                    is_web = False
+            if is_web:
+                is_edit = False
         if self.keyboard is not None:
             try:
                 self.keyboard.is_in_edit_field = is_edit
@@ -736,11 +792,10 @@ class TitanAccessEngine:
             return
 
         def _do():
-            # Small settle so the app applies the caret move before we read
-            # TextPattern.GetSelection (the keypress is processed only after the
-            # hook returns). Runs on the background reader thread, so sleeping
-            # here is fine -- it must NOT happen on the keyboard-hook thread.
-            time.sleep(0.02)
+            # The read itself waits for the caret to actually move before reading
+            # (see EditableTextHandler._wait_caret_moved): the app applies the
+            # keypress only after the hook returns, so reading on a fixed delay
+            # used to announce the line/char being LEFT, not the one arrived at.
             try:
                 if ctrl and key in ("left", "right"):
                     self.editable.read_caret_word()
@@ -757,34 +812,6 @@ class TitanAccessEngine:
         # wide (this previously froze the whole app). Hand it to the dedicated
         # background reader thread instead (latest-keystroke wins).
         self.submit_read(_do)
-
-    def _handle_tce_transition(self, obj):
-        """Play enter_TCE / leave_TCE when focus crosses the TCE boundary."""
-        try:
-            pid = obj.process_id or self._foreground_pid()
-            is_tce = self._pid_is_tce(pid)
-            was = self._was_in_tce
-            if was is None:
-                self._was_in_tce = is_tce
-                return
-            if is_tce and not was:
-                if self.settings.tce_entry_sound and self.sound is not None:
-                    try:
-                        self.sound.play_enter_tce()
-                    except Exception:
-                        pass
-                self.speak("Titan", interrupt=False)
-            elif (not is_tce) and was:
-                if self.settings.tce_entry_sound and self.sound is not None:
-                    try:
-                        self.sound.play_leave_tce()
-                    except Exception:
-                        pass
-                if not self.settings.mute_outside_tce:
-                    self.speak(L("engine.unsupportedApp"), interrupt=False)
-            self._was_in_tce = is_tce
-        except Exception as e:
-            print(f"[TitanAccess] tce transition error: {e}")
 
     def on_stop_speech_key(self):
         """Ctrl pressed: silence current speech (standard screen-reader key).
@@ -840,24 +867,36 @@ class TitanAccessEngine:
             return
         if play_cursor:
             self._play_element_cue(obj, for_navigation)
-        try:
-            from titan_access import accessible
-            segments = accessible.describe(obj, self.settings,
-                                           for_navigation=for_navigation)
-        except Exception as e:
-            print(f"[TitanAccess] describe error: {e}")
-            segments = [(obj.name or loc.role_label(obj.role), NAME_PITCH)]
-        # Prepend any newly-entered container context (dialog / group / list /
-        # toolbar), NVDA-style focus context presentation, as leading segments
-        # so it is spoken as one utterance with the control's description.
+        # Newly-entered container context (dialog / group / list / toolbar),
+        # NVDA-style focus-context presentation. This single ancestor walk ALSO
+        # records whether the focused row is a status-bar slot (on the presenter)
+        # so we never walk the UIA tree a second time -- a second in-process walk
+        # per list row was what stalled reads inside the TCE window.
+        ctx = []
         if self.context is not None:
             try:
                 ctx = self.context.context_segments(
                     obj, for_navigation=for_navigation)
-                if ctx:
-                    segments = ctx + segments
             except Exception as e:
                 print(f"[TitanAccess] context segments error: {e}")
+        # Relabel the control type for this announcement when warranted: a host
+        # may pin a label via set_role_label (highest priority); otherwise the
+        # context walk may have found this list row to be a status-bar slot.
+        role_label_override = self._consume_role_label()
+        if not role_label_override and self.context is not None:
+            role_label_override = getattr(self.context, "last_status_item_label", None)
+        try:
+            from titan_access import accessible
+            segments = accessible.describe(obj, self.settings,
+                                           for_navigation=for_navigation,
+                                           role_label_override=role_label_override)
+        except Exception as e:
+            print(f"[TitanAccess] describe error: {e}")
+            segments = [(obj.name or loc.role_label(obj.role), NAME_PITCH)]
+        # Prepend the container context as leading segments so it is spoken as
+        # one utterance with the control's description.
+        if ctx:
+            segments = ctx + segments
         # Append a host-supplied state word (e.g. a wx.CheckListBox item's
         # checked/unchecked state, which UIA does not expose) at the state pitch.
         suffix = self._consume_state_suffix()

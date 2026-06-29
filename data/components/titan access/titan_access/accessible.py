@@ -116,13 +116,20 @@ def _state_segment(obj: AccessibleObject) -> str:
 # Public API
 # --------------------------------------------------------------------------- #
 def describe(obj: Optional[AccessibleObject], settings,
-             for_navigation: bool = False) -> List[Tuple[str, int]]:
+             for_navigation: bool = False,
+             role_label_override: Optional[str] = None
+             ) -> List[Tuple[str, int]]:
     """Build the pitched announcement for ``obj``.
 
     Returns a list of ``(text, pitch_offset)`` segments. ``for_navigation`` is
     set when the user moved here with object navigation; with the
     ``Navigation/AnnounceControlTypesNavigation`` setting on, that forces the
     control type to be spoken even if ``ElementType`` is otherwise off.
+
+    ``role_label_override``, when given, replaces the spoken control type (and
+    forces it to be spoken even if the type segment is otherwise off). The host
+    app supplies it for widgets whose UIA role is too generic -- e.g. a
+    status-bar slot read as "status bar item" rather than "list item".
     """
     if obj is None:
         return [(L("element.none"), NAME_PITCH)]
@@ -133,29 +140,46 @@ def describe(obj: Optional[AccessibleObject], settings,
     want_type = settings.get_bool("Verbosity", "ElementType", True)
     want_state = settings.get_bool("Verbosity", "ElementState", True)
     want_param = settings.get_bool("Verbosity", "ElementParameter", True)
+    want_desc = settings.get_bool("Verbosity", "ElementDescription", True)
     want_position = settings.get_bool("Verbosity", "AnnounceListPosition", True)
     want_level = settings.get_bool("Navigation", "AnnounceHierarchyLevel", True)
 
     # 1) Name (+ value) at the neutral pitch.
-    if want_name:
-        name = _name_segment(obj)
-        if name:
-            segments.append((name, NAME_PITCH))
+    name = _name_segment(obj)
+    if want_name and name:
+        segments.append((name, NAME_PITCH))
 
     # 2) Control type at a lower pitch.
-    type_forced = (for_navigation and
-                   settings.get_bool("Navigation",
-                                     "AnnounceControlTypesNavigation", True))
-    if (want_type or type_forced) and _role_class_enabled(obj.role, settings):
-        role_text = role_label(obj.role)
-        if role_text:
-            segments.append((role_text, ROLE_PITCH))
+    if role_label_override:
+        # The host pinned an exact control-type label for this announcement;
+        # speak it regardless of the verbosity flags.
+        segments.append((role_label_override, ROLE_PITCH))
+    else:
+        type_forced = (for_navigation and
+                       settings.get_bool("Navigation",
+                                         "AnnounceControlTypesNavigation", True))
+        if (want_type or type_forced) and _role_class_enabled(obj.role, settings):
+            role_text = role_label(obj.role)
+            if role_text:
+                segments.append((role_text, ROLE_PITCH))
 
     # 3) States at a higher pitch.
     if want_state:
         state_text = _state_segment(obj)
         if state_text:
             segments.append((state_text, STATE_PITCH))
+
+    # 3b) Description at the neutral pitch. Carries the UIA full description AND
+    # any enrichment an app module appended in ``customize_object`` (the file
+    # type in Explorer, the document statistics in Notepad, the calculator
+    # display, ...). NVDA reads object descriptions by default; without this the
+    # whole app-module customisation layer was silently dropped. Skipped when it
+    # merely repeats the name or value so we never say the same thing twice.
+    if want_desc:
+        desc = (obj.description or "").strip()
+        value = (obj.value or "").strip()
+        if desc and desc != name and desc != value:
+            segments.append((desc, NAME_PITCH))
 
     # 4) List / collection position ("3 of 10").
     if want_position and obj.pos_in_set > 0 and obj.size_of_set > 0:

@@ -39,14 +39,30 @@ def is_active() -> bool:
     return _engine() is not None
 
 
-def announce(text, interrupt=True) -> bool:
+def announce(text, interrupt=True, pitch=0) -> bool:
     """Speak ``text`` as an exact phrase, replacing the reader's own next focus
-    announcement for the element. Returns True if Titan Access handled it."""
+    announcement for the element. ``pitch`` shifts the tone (negative = lower,
+    e.g. for a region name). Returns True if Titan Access handled it."""
     eng = _engine()
     if eng is None:
         return False
     try:
-        eng.announce_override(text, interrupt=interrupt)
+        eng.announce_override(text, interrupt=interrupt, pitch_offset=pitch)
+        return True
+    except Exception:
+        return False
+
+
+def announce_segments(segments, interrupt=True) -> bool:
+    """Speak ``[(text, pitch), ...]`` as one mixed-tone phrase, replacing the
+    reader's own next focus announcement. For phrases that need more than one
+    tone -- e.g. a dragged item name a little higher, then "at position N" at
+    the neutral pitch. Returns True if Titan Access handled it."""
+    eng = _engine()
+    if eng is None:
+        return False
+    try:
+        eng.announce_segments(segments, interrupt=interrupt)
         return True
     except Exception:
         return False
@@ -74,6 +90,55 @@ def state_suffix(text) -> bool:
         return False
     try:
         eng.set_state_suffix(text)
+        return True
+    except Exception:
+        return False
+
+
+def role_label(text) -> bool:
+    """Replace the control-type word in the reader's next focus announcement
+    with ``text`` (e.g. "status bar item" instead of the generic "list item").
+    Returns True if Titan Access handled it."""
+    eng = _engine()
+    if eng is None:
+        return False
+    try:
+        eng.set_role_label(text)
+        return True
+    except Exception:
+        return False
+
+
+def push_focus(role="unknown", name="", value="", description="", help_text="",
+               states=None, level=0, pos_in_set=0, size_of_set=0,
+               automation_id="", class_name="", process_id=0, hwnd=0) -> bool:
+    """Inject a focus event from a toolkit the platform a11y APIs cannot see.
+
+    Tkinter (and similar) draw their widgets inside a single HWND, so UI
+    Automation / MSAA expose nothing readable. An in-process Tk app describes
+    its focused widget here; we build an :class:`AccessibleObject` (provider
+    ``"tk"``) and run it through the engine's normal focus pipeline, so it flows
+    through the **app-modules** layer and the standard announcer exactly like a
+    UIA focus -- no Tk logic lives in the core reader. Returns True if Titan
+    Access handled it (a standalone caller falls back to accessible_output3).
+    """
+    eng = _engine()
+    if eng is None:
+        return False
+    try:
+        from titan_access.contracts import AccessibleObject
+        obj = AccessibleObject(
+            name=name or "", role=role or "unknown", value=value or "",
+            description=description or "", help_text=help_text or "",
+            states=set(states or ()), level=int(level or 0),
+            pos_in_set=int(pos_in_set or 0), size_of_set=int(size_of_set or 0),
+            automation_id=automation_id or "", class_name=class_name or "",
+            framework_id="tk", process_id=int(process_id or 0),
+            hwnd=int(hwnd or 0), native=None, provider="tk",
+        )
+        # Run on the engine worker thread (its COM apartment / serialised state),
+        # matching how UIA focus snapshots are handled.
+        eng.post_to_worker(lambda: eng.on_focus(obj))
         return True
     except Exception:
         return False

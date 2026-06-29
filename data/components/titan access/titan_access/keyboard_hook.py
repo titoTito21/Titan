@@ -531,20 +531,15 @@ class KeyboardHook:
     # Character / word echo (ToUnicodeEx + word buffer)
     # ==================================================================== #
     def _echo(self, vk, scan):
-        # Word terminators: space / enter / tab flush the pending word, then the
-        # whitespace itself is echoed as a character (engine gates on the echo
-        # setting and speaks "space" / "new line").
+        # Word terminators flush the pending word. Space is echoed as a
+        # character ("space"); Enter and Tab only flush the word -- the user
+        # does not want them spoken as "new line" / "tab" on every keystroke.
         if vk == VK_SPACE:
             self._flush_word()
             self.engine.on_char_typed(" ")
             return
-        if vk == VK_RETURN:
+        if vk in (VK_RETURN, VK_TAB):
             self._flush_word()
-            self.engine.on_char_typed("\n")
-            return
-        if vk == VK_TAB:
-            self._flush_word()
-            self.engine.on_char_typed("\t")
             return
         if vk == VK_BACK:
             if self._word:

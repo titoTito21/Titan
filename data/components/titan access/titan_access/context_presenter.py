@@ -58,6 +58,15 @@ _GROUPABLE_ROLES = {
 # Pitch for the context segments: neutral (same as the name pitch).
 _CONTEXT_PITCH = 0
 
+# Region containers (the application list, status bar, a toolbar, a tab strip)
+# are announced as just their name, a little lower, so entering one reads
+# "Application list" rather than the noisier "Application list, list". The lower
+# tone marks it as a container, not a row. This is a Titan-specific touch, so it
+# only applies inside the TCE environment (its own windows + the apps it spawns);
+# other applications keep the standard "<name>, list" context.
+_REGION_PITCH = -4
+_REGION_NAME_ONLY_ROLES = {"list", "tree", "toolbar", "tabcontrol"}
+
 _MAX_DEPTH = 14
 
 # UIA property id: UIA_IsDialogPropertyId. Plus the Win32 standard-dialog class
@@ -78,10 +87,16 @@ class ContextPresenter:
         self.engine = engine
         self._seen = set()         # runtime ids of containers announced for focus
         self._seen_dialogs = set()  # dialog ids whose content we already read
+        # "status bar item" label for the most recent focus, or None. Computed
+        # during the single ancestor walk in _compute so the engine never has to
+        # walk the UIA tree a second time (an extra in-process walk per list row
+        # was stalling reads inside the TCE window).
+        self.last_status_item_label = None
 
     def reset(self):
         self._seen = set()
         self._seen_dialogs = set()
+        self.last_status_item_label = None
 
     def context_segments(self, obj, for_navigation=False):
         """Return ``[(text, pitch_offset), ...]`` for containers newly entered by
@@ -94,11 +109,20 @@ class ContextPresenter:
 
     # ------------------------------------------------------------------ #
     def _compute(self, obj, for_navigation):
+        # Cleared every focus so a stale "status bar item" can never leak.
+        self.last_status_item_label = None
         if obj is None or for_navigation:
             return []
         settings = self.engine.settings
         if not settings.get_bool("Verbosity", "AnnounceBlockControls", True):
             return []
+        # The lower-tone region read and the "status bar item" relabel are
+        # Titan-only touches. Use the engine's CACHED foreground check (0.3s) so
+        # we never pay a per-focus process-tree walk here.
+        try:
+            is_tce = self.engine._is_tce_foreground()
+        except Exception:
+            is_tce = False
         native = getattr(obj, "native", None)
         if native is None:
             # Focus arrived without a UIA element (e.g. the MSAA path, which is
@@ -106,11 +130,21 @@ class ContextPresenter:
             # content by resolving the foreground window through UIA.
             return self._foreground_dialog_segments(obj)
 
+        # Whether this focus is a collection item that could live in a status bar.
+        item_in_tce = is_tce and obj.role in ("listitem", "treeitem")
+
         # Nearest ancestor per container role (walking up from the focus). We
-        # keep the live node for the window so we can read dialog content.
+        # keep the live node for the window so we can read dialog content. The
+        # same single pass also detects a status-bar container, so the engine
+        # does not need a second walk.
         nearest = {}
         nodes = {}
         for ct, name, rid, node in self._walk_up(native):
+            if item_in_tce and self.last_status_item_label is None and (
+                    ct == "StatusBarControl"
+                    or (ct in ("ListControl", "PaneControl", "ToolBarControl")
+                        and self._name_is_status_bar(name))):
+                self.last_status_item_label = L("element.statusBarItem")
             role = _CT_TO_ROLE.get(ct)
             if role and role not in nearest:
                 nearest[role] = (name, rid)
@@ -143,16 +177,20 @@ class ContextPresenter:
                 segments.extend(self._dialog_segments(
                     name, rid, nodes.get("window"), native))
                 continue
-            seg = self._segment_for(role, name)
+            seg = self._segment_for(role, name, is_tce)
             if seg:
                 segments.append(seg)
         self._seen = current_ids
         return segments
 
     @staticmethod
-    def _segment_for(role, name):
+    def _segment_for(role, name, is_tce=False):
         label = role_label(role)
-        name = (name or "").strip()
+        name = (name or "").strip().rstrip(":").strip()
+        if is_tce and role in _REGION_NAME_ONLY_ROLES and name:
+            # Region container inside Titan: just the name, a little lower (no
+            # "list" word). Other apps keep the standard "<name>, list".
+            return (name, _REGION_PITCH)
         if role == "group":
             # "{name}, group" (named) or just "group".
             text = L("engine.namedGroup", name) if name else label
@@ -165,6 +203,30 @@ class ContextPresenter:
                 return None
             text = label
         return (text, _CONTEXT_PITCH) if text else None
+
+    # ------------------------------------------------------------------ #
+    # Status-bar item detection (reader-driven, no host cooperation needed)
+    # ------------------------------------------------------------------ #
+    _status_bar_names_cache = None
+
+    @classmethod
+    def _status_bar_names(cls):
+        """Casefolded names that mark a container as a status bar. Includes the
+        reader's localized term plus the literal pl/en labels (the container's
+        name follows the app's language, which usually matches the reader's)."""
+        if cls._status_bar_names_cache is None:
+            names = {"status bar", "statusbar", "pasek stanu"}
+            try:
+                names.add((role_label("statusbar") or "").strip().casefold())
+            except Exception:
+                pass
+            cls._status_bar_names_cache = {n for n in names if n}
+        return cls._status_bar_names_cache
+
+    @classmethod
+    def _name_is_status_bar(cls, name):
+        n = (name or "").strip().rstrip(":").strip().casefold()
+        return bool(n) and n in cls._status_bar_names()
 
     # ------------------------------------------------------------------ #
     @staticmethod

@@ -24,16 +24,60 @@ import threading
 _api = None
 _window = None
 _qt_app = None
+_wx_pump_timer = None    # keeps wx (Settings/dialogs) alive while Qt owns the main thread
 
 
 def start(api):
-    """Start the example launcher in a separate thread (PyQt5 has its own event loop)."""
+    """Start the example launcher. Runs the Qt event loop on the MAIN thread and
+    blocks until the launcher exits (the launcher manager calls start() on the
+    main thread)."""
     global _api
     _api = api
 
-    # Start PyQt5 UI in a daemon thread
-    ui_thread = threading.Thread(target=_run_pyqt_ui, daemon=True)
-    ui_thread.start()
+    # PyQt5 is this example launcher's one hard dependency. Check it up front so
+    # a missing install is reported clearly -- otherwise the UI would raise
+    # ImportError and die silently, which just looks like "the launcher never
+    # appears". Install it with: pip install PyQt5
+    try:
+        import PyQt5  # noqa: F401
+    except ImportError:
+        try:
+            msg = _api._("Example Launcher requires PyQt5, which is not installed. "
+                         "Install it with: pip install PyQt5")
+        except Exception:
+            msg = "Example Launcher requires PyQt5 (pip install PyQt5)."
+        print(f"[example_launcher] {msg}")
+        _notify_failure(msg)
+        return
+
+    # Run the Qt UI on the MAIN thread. This blocks until the launcher exits.
+    #
+    # Why not a background thread? A Qt event loop on a non-main thread cannot be
+    # read safely by UI Automation: when Titan Access reads the focused control
+    # it marshals the call onto the Qt thread and deadlocks -- that is the "press
+    # Tab and the program freezes" bug. On the main thread the launcher is an
+    # ordinary Qt app that screen readers read exactly like the wx GUI.
+    _run_ui_guarded()
+
+
+def _run_ui_guarded():
+    """Run the Qt UI, reporting any startup failure instead of dying silently."""
+    try:
+        _run_pyqt_ui()
+    except Exception:
+        import traceback
+        print("[example_launcher] UI crashed:\n" + traceback.format_exc())
+        _notify_failure("The example launcher failed to start. See the console for details.")
+
+
+def _notify_failure(message):
+    """Best-effort spoken feedback when the launcher cannot start."""
+    try:
+        speaker = getattr(_api, 'speaker', None)
+        if speaker is not None:
+            speaker.speak(message)
+    except Exception:
+        pass
 
 
 def _run_pyqt_ui():
@@ -49,8 +93,42 @@ def _run_pyqt_ui():
 
     _ = _api._  # Translation function
 
+    # --- Titan Access integration ------------------------------------------
+    # Qt exposes its widgets to UI Automation, so the in-process Titan Access
+    # reader reads this launcher directly. All it needs from us is an accessible
+    # NAME on each list, so it can announce the region ("Applications", "Status
+    # bar") and recognise the status bar by name (it then reads those rows as
+    # "status bar item"). The reader supplies the lower region tone and the row
+    # relabelling itself -- no host-side announcement code lives here.
+    def _wire_region(widget, region_name):
+        try:
+            widget.setAccessibleName(region_name)
+        except Exception:
+            pass
+
     _qt_app = QApplication(sys.argv)
     _qt_app.setQuitOnLastWindowClosed(False)
+
+    # Qt now owns the main thread, but wx is still used for Settings, component
+    # dialogs and IM windows. Qt's event loop already dispatches Win32 messages
+    # to the wx windows (they share this thread's message queue), but wx's own
+    # CallAfter/idle/pending events need wx to be ticked -- this timer does that
+    # so those dialogs stay responsive.
+    global _wx_pump_timer
+
+    def _pump_wx():
+        try:
+            import wx
+            app = wx.GetApp()
+            if app is not None:
+                app.ProcessPendingEvents()
+                wx.YieldIfNeeded()
+        except Exception:
+            pass
+
+    _wx_pump_timer = QTimer()
+    _wx_pump_timer.timeout.connect(_pump_wx)
+    _wx_pump_timer.start(40)
 
     window = QMainWindow()
     _window = window
@@ -79,6 +157,7 @@ def _run_pyqt_ui():
 
             app_listwidget = QListWidget()
             app_listwidget.setSelectionMode(QAbstractItemView.SingleSelection)
+            _wire_region(app_listwidget, _("Applications"))
             for app in apps:
                 name = app.get('name', app.get('name_en', 'Unknown'))
                 app_listwidget.addItem(name)
@@ -108,6 +187,7 @@ def _run_pyqt_ui():
 
             game_listwidget = QListWidget()
             game_listwidget.setSelectionMode(QAbstractItemView.SingleSelection)
+            _wire_region(game_listwidget, _("Games"))
             for game in games:
                 name = game.get('name', 'Unknown')
                 platform = game.get('platform', '')
@@ -137,6 +217,7 @@ def _run_pyqt_ui():
 
         im_listwidget = QListWidget()
         im_listwidget.setSelectionMode(QAbstractItemView.SingleSelection)
+        _wire_region(im_listwidget, _("Titan IM"))
 
         # Built-in communicators (same as GUI and IUI)
         if _api.titan_net_client:
@@ -205,6 +286,7 @@ def _run_pyqt_ui():
 
         statusbar_listwidget = QListWidget()
         statusbar_listwidget.setSelectionMode(QAbstractItemView.SingleSelection)
+        _wire_region(statusbar_listwidget, _("Status Bar"))
 
         # Populate with all items (built-in + applets)
         for text in _api.statusbar_applet_manager.get_statusbar_items():

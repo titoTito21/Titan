@@ -30,6 +30,7 @@ through unchanged.
 
 import ctypes
 import os
+_DBG = bool(os.environ.get("TITAN_ACCESS_DEBUG"))
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
@@ -200,7 +201,13 @@ class BrowseModeHandler:
         document, mirroring NVDA: editable / form controls => focus mode, other
         content => browse mode. A manual toggle pauses auto-switching until focus
         moves to a control of the opposite kind."""
-        if not _UIA or not self.is_active:
+        active = self.is_active
+        if _DBG:
+            print(f"[TitanAccess][browse] update_for_focus role="
+                  f"{getattr(obj,'role',None)!r} active={active} "
+                  f"pass_through={self._pass_through} was_web={self._was_web}",
+                  flush=True)
+        if not _UIA or not active:
             self._manual_override = False
             self._was_web = False
             return
@@ -252,6 +259,10 @@ class BrowseModeHandler:
         the buffer caret and single letters perform quick navigation. If the
         buffer cannot be built we return False so the key reaches the page.
         """
+        if _DBG and key_name in ("up", "down", "left", "right") and not ctrl and not alt:
+            print(f"[TitanAccess][browse] handle_key {key_name} "
+                  f"pass_through={self._pass_through} active={self.is_active} "
+                  f"nodes={len(self._nodes)}", flush=True)
         if self._pass_through or not _UIA:
             return False
 
@@ -525,6 +536,13 @@ class BrowseModeHandler:
     def _ensure_buffer(self) -> bool:
         """(Re)build the buffer if the document changed or it is empty."""
         root = self._document_root()
+        if _DBG:
+            try:
+                rn = None if root is None else (root.ControlTypeName, (root.Name or "")[:30])
+            except Exception:
+                rn = "?"
+            print(f"[TitanAccess][browse] ensure_buffer root={rn} "
+                  f"nodes={len(self._nodes)}", flush=True)
         if root is None:
             return False
         rid = _runtime_id(root)

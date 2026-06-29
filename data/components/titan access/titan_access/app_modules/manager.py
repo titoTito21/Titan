@@ -17,9 +17,15 @@ import os
 from titan_access.app_modules.explorer import ExplorerModule
 from titan_access.app_modules.notepad import NotepadModule
 from titan_access.app_modules.calculator import CalculatorModule
+from titan_access.app_modules.tce import TCEModule
+from titan_access.app_modules.chromium import ChromiumModule, EdgeModule
+from titan_access.app_modules.firefox import FirefoxModule
 
 # Module classes registered with the manager. Add new modules here.
-_MODULE_CLASSES = (ExplorerModule, NotepadModule, CalculatorModule)
+_MODULE_CLASSES = (
+    ExplorerModule, NotepadModule, CalculatorModule, TCEModule,
+    ChromiumModule, EdgeModule, FirefoxModule,
+)
 
 
 class AppModuleManager:
@@ -127,12 +133,20 @@ class AppModuleManager:
     # Process resolution
     # ==================================================================== #
     def _process_for_object(self, obj):
-        """Foreground process name (lower-case, no ``.exe``)."""
+        """Foreground process name (lower-case, no ``.exe``).
+
+        The TCE process group -- the launcher and anything it spawned -- collapses
+        to the synthetic key ``"tce"`` so the TCE app module sees one logical app
+        (no enter/leave cue when moving between TCE-launched windows)."""
         pid = getattr(obj, "process_id", 0) if obj is not None else 0
-        name = _process_name_for_pid(pid) if pid else ""
-        if not name:
-            name = _process_name_for_pid(_foreground_pid())
-        return name
+        if not pid:
+            pid = _foreground_pid()
+        try:
+            if pid and self.engine._pid_is_tce(pid):
+                return "tce"
+        except Exception:
+            pass
+        return _process_name_for_pid(pid) if pid else ""
 
 
 # =========================================================================== #

@@ -149,3 +149,11 @@ msgstr "Fn keys enabled"
 msgid "Fn keys disabled"
 msgstr "Fn keys disabled"
 
+
+#: src/accessibility/messages.py
+msgid "status bar item"
+msgstr "status bar item"
+
+#: src/accessibility/messages.py
+msgid "at position {}"
+msgstr "at position {}"

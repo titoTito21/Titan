@@ -2529,13 +2529,23 @@ class TitanApp(wx.Frame):
                     ctrl.SetFocus()
         except Exception as e:
             print(f"[GUI] tab bar drag focus error: {e}")
-        # ``suppress_if_sr=True``: SR users already heard the new row text
-        # ("<View>, N of M") auto-announced when SetString refreshed row 0.
-        # Speaking it again here was the source of the doubled / tripled
-        # "Titan-Net, 1 of 4" announcement during tab bar drag.
-        self._speak_drag(_("{}, {} of {}").format(
-            self._view_short_name(view), new_idx + 1, len(self.registered_views)),
-            suppress_if_sr=True)
+        # Titan Access: while a card is being dragged we don't want the reader
+        # to read the focused row as "<View>, selected, N of M". Instead say
+        # the view name a little higher, then "at position N" at the neutral
+        # pitch (and it suppresses its own row read for a moment). For an
+        # external SR we keep the previous behaviour (it already reads the row;
+        # ``suppress_if_sr=True`` stops us from doubling it).
+        name = self._view_short_name(view)
+        pos = new_idx + 1
+        handled = False
+        try:
+            from src.accessibility.messages import announce_drag_move
+            handled = announce_drag_move(name, pos)
+        except Exception as e:
+            print(f"[GUI] drag move announce error: {e}")
+        if not handled:
+            self._speak_drag(_("{}, {} of {}").format(
+                name, pos, len(self.registered_views)), suppress_if_sr=True)
         vibrate_cursor_move()
 
     def _drop_tab_bar_drag(self):
@@ -2558,8 +2568,16 @@ class TitanApp(wx.Frame):
         idx = self._get_view_index(view_id)
         if idx >= 0:
             view = self.registered_views[idx]
-            self._speak_drag(_("Dropped {} at position {}").format(
-                self._view_short_name(view), idx + 1))
+            name = self._view_short_name(view)
+            handled = False
+            try:
+                from src.accessibility.messages import announce_drag_move
+                handled = announce_drag_move(name, idx + 1)
+            except Exception as e:
+                print(f"[GUI] drag drop announce error: {e}")
+            if not handled:
+                self._speak_drag(_("Dropped {} at position {}").format(
+                    name, idx + 1))
         vibrate_selection()
 
     def _cancel_tab_bar_drag(self):
