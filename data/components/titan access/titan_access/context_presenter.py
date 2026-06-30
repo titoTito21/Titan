@@ -26,8 +26,12 @@ snapshots without one (e.g. MSAA) it returns no context and degrades silently.
 """
 
 import ctypes
+from ctypes import wintypes
 
 from titan_access.localization import L, role_label
+from titan_access.contracts import (
+    SND_QUESTION_DIALOG, SND_INFO_DIALOG, SND_WARNING_DIALOG, SND_ERROR_DIALOG,
+)
 
 try:  # vendored uiautomation (its lib dir is put on sys.path by uia_focus)
     import uiautomation as _auto
@@ -78,6 +82,248 @@ _DIALOG_CLASSES = {"#32770"}
 # Bounds for the dialog content scan (so a huge window can never stall us).
 _DIALOG_SCAN_MAX_NODES = 250
 _DIALOG_SCAN_MAX_DEPTH = 8
+
+# --------------------------------------------------------------------------- #
+# Dialog *kind* detection (question / information / warning / error).
+#
+# UI Automation does not expose the icon STYLE of a message box, and the icon
+# HANDLE can't be matched to LoadIconW's (modern Windows scales the icon per-DPI,
+# so the handles differ) -- verified empirically. What IS robust: render the
+# dialog's icon AND the four system icons (LoadIconW(IDI_*)) to the same fixed
+# size and compare the pixels. The references are computed live on the SAME
+# machine, so the match survives any Windows version / theme. This splits icons
+# into three visual groups reliably (blue circle = question/information, yellow
+# triangle = warning, red = error). Question vs information are near-identical
+# blue circles, so we split THAT group by button set: a real choice (>=2 standard
+# dialog buttons, e.g. OK/Cancel, Yes/No) is a question; a lone OK is information.
+#
+# Works for native message boxes (wx.MessageDialog / MessageBoxW carry the
+# classic Static icon, control id 20). A custom wx.Dialog / TaskDialog with no
+# such icon yields no kind and stays the generic "dialog".
+_ICON_SIZE = 32
+_STM_GETICON = 0x0171
+_STM_GETIMAGE = 0x0173
+_IMAGE_ICON = 1
+_DI_NORMAL = 0x0003
+_GWL_ID = -12
+_GWL_STYLE = -16
+_SS_TYPEMASK = 0x0000001F
+_SS_ICON = 0x03
+_WM_GETICON = 0x007F
+# IDI_* system icon resource ids.
+_SYS_ICON_IDS = {
+    "question": 32514, "information": 32516, "warning": 32515, "error": 32513,
+}
+# Standard dialog button command ids (OK, Cancel, Yes, No, Retry, Ignore, ...).
+_STD_BUTTON_IDS = {1, 2, 4, 6, 7, 8, 9, 10, 11}
+# Max average pixel difference (over the sampled signature) to still count as a
+# match to a system icon; above this the dialog has a custom icon -> generic.
+_ICON_MATCH_THRESHOLD = 42000
+
+try:
+    _user32 = ctypes.windll.user32
+    _gdi32 = ctypes.windll.gdi32
+    _user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    _user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    _user32.GetDlgItem.restype = wintypes.HWND
+    _user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+    _user32.SendMessageW.restype = ctypes.c_void_p
+    _user32.SendMessageW.argtypes = [wintypes.HWND, ctypes.c_uint,
+                                     ctypes.c_void_p, ctypes.c_void_p]
+    _user32.LoadIconW.restype = wintypes.HICON
+    _user32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
+    _user32.DrawIconEx.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int,
+                                   wintypes.HICON, ctypes.c_int, ctypes.c_int,
+                                   wintypes.UINT, wintypes.HBRUSH, wintypes.UINT]
+    _gdi32.CreateCompatibleDC.restype = wintypes.HDC
+    _gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+    _gdi32.CreateDIBSection.restype = wintypes.HBITMAP
+    _gdi32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
+                                        ctypes.POINTER(ctypes.c_void_p),
+                                        wintypes.HANDLE, wintypes.DWORD]
+    _gdi32.SelectObject.restype = wintypes.HGDIOBJ
+    _gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+    _gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+    _gdi32.DeleteDC.argtypes = [wintypes.HDC]
+    _ENUM_CHILD_PROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND,
+                                          wintypes.LPARAM)
+    _ICON_DETECT_OK = True
+except Exception:  # pragma: no cover - non-Windows / no user32
+    _user32 = None
+    _gdi32 = None
+    _ENUM_CHILD_PROC = None
+    _ICON_DETECT_OK = False
+
+
+class _BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG), ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
+
+
+def _classname(hwnd):
+    buf = ctypes.create_unicode_buffer(64)
+    _user32.GetClassNameW(hwnd, buf, 64)
+    return buf.value
+
+
+def _icon_signature(hicon):
+    """Render ``hicon`` to a fixed-size BGRA bitmap over a flat background and
+    return its bytes (a comparable pixel signature), or None."""
+    if not hicon:
+        return None
+    hdc = _gdi32.CreateCompatibleDC(None)
+    if not hdc:
+        return None
+    try:
+        bmi = _BITMAPINFOHEADER()
+        bmi.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
+        bmi.biWidth = _ICON_SIZE
+        bmi.biHeight = -_ICON_SIZE   # top-down
+        bmi.biPlanes = 1
+        bmi.biBitCount = 32
+        bmi.biCompression = 0        # BI_RGB
+        bits = ctypes.c_void_p()
+        hbm = _gdi32.CreateDIBSection(hdc, ctypes.byref(bmi), 0,
+                                      ctypes.byref(bits), None, 0)
+        if not hbm or not bits.value:
+            return None
+        old = _gdi32.SelectObject(hdc, hbm)
+        try:
+            n = _ICON_SIZE * _ICON_SIZE * 4
+            ctypes.memset(bits, 0x80, n)   # flat gray so transparency is uniform
+            _user32.DrawIconEx(hdc, 0, 0, ctypes.c_void_p(int(hicon)),
+                               _ICON_SIZE, _ICON_SIZE, 0, None, _DI_NORMAL)
+            return bytes((ctypes.c_ubyte * n).from_address(bits.value))
+        finally:
+            _gdi32.SelectObject(hdc, old)
+            _gdi32.DeleteObject(hbm)
+    finally:
+        _gdi32.DeleteDC(hdc)
+
+
+_sys_icon_sigs = None
+
+
+def _system_icon_signatures():
+    """Signatures of the four system icons, computed once on this machine."""
+    global _sys_icon_sigs
+    if _sys_icon_sigs is None:
+        _sys_icon_sigs = {}
+        for kind, idi in _SYS_ICON_IDS.items():
+            try:
+                sig = _icon_signature(_user32.LoadIconW(None, ctypes.c_wchar_p(idi)))
+                if sig:
+                    _sys_icon_sigs[kind] = sig
+            except Exception:
+                pass
+    return _sys_icon_sigs
+
+
+def _sig_diff(a, b):
+    return sum(abs(a[i] - b[i]) for i in range(0, len(a), 8))
+
+
+def _dialog_icon_handle(hwnd):
+    """The HICON shown by a message box: its static icon (classic control id 20,
+    else the first SS_ICON static), or the window icon as a last resort."""
+    ic = _user32.GetDlgItem(hwnd, 20)
+    statics = []
+
+    def _cb(child, _lparam):
+        try:
+            if _classname(child).lower() == "static":
+                style = _user32.GetWindowLongW(child, _GWL_STYLE)
+                if (style & _SS_TYPEMASK) == _SS_ICON:
+                    statics.append(child)
+        except Exception:
+            pass
+        return True
+
+    candidates = [ic] if ic else []
+    try:
+        _user32.EnumChildWindows(hwnd, _ENUM_CHILD_PROC(_cb), 0)
+    except Exception:
+        pass
+    candidates.extend(statics)
+    for st in candidates:
+        if not st:
+            continue
+        for msg, wp in ((_STM_GETICON, 0), (_STM_GETIMAGE, _IMAGE_ICON)):
+            h = _user32.SendMessageW(st, msg, ctypes.c_void_p(wp), None)
+            if h:
+                return int(h)
+    return 0
+
+
+def _count_choice_buttons(hwnd):
+    """Number of standard dialog push buttons (OK/Cancel/Yes/No/...)."""
+    n = [0]
+
+    def _cb(child, _lparam):
+        try:
+            if (_classname(child) == "Button"
+                    and _user32.GetWindowLongW(child, _GWL_ID) in _STD_BUTTON_IDS):
+                n[0] += 1
+        except Exception:
+            pass
+        return True
+
+    try:
+        _user32.EnumChildWindows(hwnd, _ENUM_CHILD_PROC(_cb), 0)
+    except Exception:
+        pass
+    return n[0]
+
+
+def _dialog_icon_kind(hwnd):
+    """Return 'question' / 'information' / 'warning' / 'error' for a message-box
+    ``hwnd`` by matching its icon pixels to the system icons (+ button set to
+    split question from information), or None for a custom / iconless dialog."""
+    if not _ICON_DETECT_OK or not hwnd:
+        return None
+    try:
+        refs = _system_icon_signatures()
+        if not refs:
+            return None
+        sig = _icon_signature(_dialog_icon_handle(hwnd))
+        if sig is None:
+            return None
+        scores = {k: _sig_diff(sig, r) for k, r in refs.items()}
+        best = min(scores, key=scores.get)
+        if scores[best] > _ICON_MATCH_THRESHOLD:
+            return None  # custom icon -> generic dialog
+        if best in ("warning", "error"):
+            return best
+        # Blue-circle group: a real choice is a question, a lone OK is info.
+        return "question" if _count_choice_buttons(hwnd) >= 2 else "information"
+    except Exception as e:
+        print(f"[TitanAccess] dialog kind detect error: {e}")
+        return None
+
+
+# Dialog kinds we give a distinct earcon + lower-tone type word to (instead of
+# the generic "dialog"). Any other dialog stays the generic "<title>, dialog".
+_DIALOG_KIND_SOUND = {
+    "question": SND_QUESTION_DIALOG,
+    "information": SND_INFO_DIALOG,
+    "warning": SND_WARNING_DIALOG,
+    "error": SND_ERROR_DIALOG,
+}
+_DIALOG_KIND_LABEL_KEY = {
+    "question": "dialog.question",
+    "information": "dialog.information",
+    "warning": "dialog.warning",
+    "error": "dialog.error",
+}
+# Warning leads with the type word ("Uwaga!") spoken first (low), THEN the title;
+# the others read the title first and then the lower-tone type word.
+_DIALOG_KIND_TYPE_FIRST = {"warning"}
 
 
 class ContextPresenter:
@@ -269,15 +515,11 @@ class ContextPresenter:
         return False
 
     def _dialog_segments(self, name, rid, window_node, focused_native):
-        """Segments for a newly entered dialog: its title (as a dialog) plus its
-        message text. Returns an empty list once the dialog has been read."""
-        segs = []
-        label = role_label("dialog")
-        title = (name or "").strip()
-        if title:
-            segs.append((f"{title}, {label}", _CONTEXT_PITCH))
-        elif label:
-            segs.append((label, _CONTEXT_PITCH))
+        """Segments for a newly entered dialog: its typed header (question /
+        information / warning / error / generic) plus its message text. Returns an
+        empty list once the dialog has been read."""
+        kind = self._declared_or_detected_kind(self._node_hwnd(window_node))
+        segs = self._build_dialog_header(name, kind)
         # Read the body text only the first time focus enters this dialog.
         if rid and rid not in self._seen_dialogs:
             self._seen_dialogs.add(rid)
@@ -285,6 +527,61 @@ class ContextPresenter:
             if body:
                 segs.append((body, _CONTEXT_PITCH))
         return segs
+
+    def _declared_or_detected_kind(self, hwnd):
+        """The dialog kind a host explicitly declared (``host_bridge.dialog_kind``,
+        skin-independent), else the icon-detected kind, else None. The declared
+        value wins so Titan's own dialogs (e.g. the exit confirmation) read as
+        their true type no matter how they are skinned/drawn."""
+        try:
+            declared = self.engine.consume_dialog_kind()
+        except Exception:
+            declared = None
+        if declared:
+            return declared
+        return _dialog_icon_kind(hwnd)
+
+    def _build_dialog_header(self, title, kind):
+        """Header segments for a dialog of detected ``kind`` (None = generic) and,
+        for typed kinds, play its earcon.
+
+        * question / information / error -> "<title>" then the lower-tone type
+          word ("Pytanie" / "Informacja" / "Blad").
+        * warning -> the type word first ("Uwaga!", lower tone), THEN the title.
+        * generic -> the unchanged "<title>, dialog".
+        """
+        title = (title or "").strip()
+        if kind in _DIALOG_KIND_LABEL_KEY:
+            snd = _DIALOG_KIND_SOUND.get(kind)
+            if snd:
+                try:
+                    self.engine.play(snd)
+                except Exception:
+                    pass
+            label = L(_DIALOG_KIND_LABEL_KEY[kind])
+            if kind in _DIALOG_KIND_TYPE_FIRST:
+                segs = [(label, _REGION_PITCH)]
+                if title:
+                    segs.append((title, _CONTEXT_PITCH))
+                return segs
+            segs = []
+            if title:
+                segs.append((title, _CONTEXT_PITCH))
+            segs.append((label, _REGION_PITCH))
+            return segs
+        # Generic dialog: unchanged "<title>, dialog".
+        label = role_label("dialog")
+        if title:
+            return [(f"{title}, {label}", _CONTEXT_PITCH)]
+        return [(label, _CONTEXT_PITCH)] if label else []
+
+    @staticmethod
+    def _node_hwnd(node):
+        """Top-level window handle behind a uiautomation node, or 0."""
+        try:
+            return int(node.NativeWindowHandle or 0)
+        except Exception:
+            return 0
 
     def _foreground_dialog_segments(self, obj):
         """When focus has no UIA element (MSAA path), resolve the foreground
@@ -309,16 +606,12 @@ class ContextPresenter:
         if ctrl is None or not self._is_dialog(ctrl):
             return []
         self._seen_dialogs.add(key)
-        segs = []
         try:
             title = (ctrl.Name or "").strip()
         except Exception:
             title = ""
-        label = role_label("dialog")
-        if title:
-            segs.append((f"{title}, {label}", _CONTEXT_PITCH))
-        elif label:
-            segs.append((label, _CONTEXT_PITCH))
+        kind = self._declared_or_detected_kind(hwnd)
+        segs = self._build_dialog_header(title, kind)
         body = self._dialog_body_text(ctrl, None)
         if body:
             segs.append((body, _CONTEXT_PITCH))

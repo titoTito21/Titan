@@ -615,6 +615,33 @@ class SettingsFrame(wx.Frame):
             category_name = self.category_order[selection]
             self.ShowCategory(category_name)
 
+    def open_at_category(self, category_name):
+        """Show the settings window pre-selected on ``category_name``.
+
+        Used by components (e.g. the Titan Access screen-reader menu) that want
+        to jump the user straight to their own settings category. Falls back to
+        simply showing the window if the category is not registered. Must be
+        called on the GUI thread (wrap with wx.CallAfter from worker threads).
+        """
+        if not self.Show(True):
+            return False
+        try:
+            self.Raise()
+        except Exception:
+            pass
+        # force_rebuild_categories() ran inside Show(); the category list is now
+        # in sync with category_order, so select by index and show the panel.
+        try:
+            if category_name in self.category_order:
+                idx = self.category_order.index(category_name)
+                self.category_list.SetSelection(idx)
+                self.ShowCategory(category_name)
+                self.category_list.SetFocus()
+                return True
+        except Exception as e:
+            print(f"[SettingsFrame] open_at_category error: {e}")
+        return True
+
     def InitSoundPanel(self):
         panel = self.sound_panel
         vbox = wx.BoxSizer(wx.VERTICAL)

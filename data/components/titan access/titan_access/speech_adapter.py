@@ -317,17 +317,23 @@ class SpeechAdapter(object):
             except Exception:
                 return None
 
-        # Let the new utterance take over the channel: interrupt stops the old
-        # sound, then synthesis hands the new clip to the channel (~10-20 ms on
-        # the eSpeak DLL path).
+        # Let the new utterance take over the channel: the dispatch first stops
+        # the old clip, then synthesis hands the new one to the channel. That
+        # synthesis is NOT instant -- the pitched (role/state) segments render
+        # through a slower generate-to-memory / subprocess path that can lag well
+        # past `est` -- so the channel reads idle for a while *before* this
+        # segment starts. The whole bug ("only the beginning", clipped words) was
+        # treating that pre-start idle as "finished" and returning, which let the
+        # NEXT segment's interrupt cut this one. The fix: never return on idle
+        # until we have CONFIRMED the clip actually started.
         t0 = time.time()
-        time.sleep(0.04)
+        time.sleep(0.03)
 
         probe = _ch_busy()
         if probe is None:
             # No playback signal (standalone / non-pygame backend): fixed
             # length-derived estimate. NEVER gate on is_speaking here.
-            slept = 0.04
+            slept = 0.03
             while slept < est:
                 if _superseded():
                     return
@@ -335,22 +341,14 @@ class SpeechAdapter(object):
                 slept += 0.03
             return
 
-        # A short floor before we trust "channel idle". The element cue (a
-        # high/low earcon) can briefly grab the TTS channel just before the first
-        # segment, so right after dispatch the channel may read busy-from-the-cue
-        # and then idle in the gap before speech actually starts -- without this
-        # floor phase 2 would see that gap, return, and the next segment's
-        # interrupt would cut the NAME (heard as: cue tone, short pause, then only
-        # the control type). Speech audio is contiguous once it starts, so a
-        # floor that outlasts the cue gap is enough; bounded by the estimate so a
-        # genuinely short clip adds no real dead air.
-        floor = min(est, 0.22)
-
-        # Phase 1: wait for the clip to actually START on the TTS channel (cap so
-        # a missed start never hangs us).
+        # Phase 1: wait until THIS segment's audio actually STARTS on the TTS
+        # channel. Generous cap covers slow synthesis; if it never starts (synth
+        # produced nothing, or we were superseded) we bail rather than hang. Now
+        # that UI cues are reserved off the TTS channel, a busy reading here is
+        # always real speech, so no "floor" workaround is needed.
         started = bool(probe)
-        start_deadline = time.time() + max(0.5, est)
-        while not started and time.time() < start_deadline:
+        start_cap = t0 + est + 2.5
+        while not started and time.time() < start_cap:
             if _superseded():
                 return
             b = _ch_busy()
@@ -358,17 +356,20 @@ class SpeechAdapter(object):
                 started = True
                 break
             if b is None:
-                break
+                break  # signal vanished; bail to avoid hanging
             time.sleep(0.01)
+        if not started:
+            return  # no audio for this segment
 
-        # Phase 2: wait for the clip to END (and the floor to pass), then the next
-        # segment plays at once. Generous cap as a safety net (long line read).
-        end_deadline = time.time() + est + 2.0
-        while time.time() < end_deadline:
+        # Phase 2: the clip is playing -- wait for it to END, then the next
+        # segment plays at once (no dead air). The cap is only a hang guard; a
+        # newer announcement supersedes us within one poll.
+        end_cap = time.time() + est + 6.0
+        while time.time() < end_cap:
             if _superseded():
                 return
             b = _ch_busy()
-            if (b is None or not b) and (time.time() - t0) >= floor:
+            if b is None or not b:
                 return
             time.sleep(0.012)
 

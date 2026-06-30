@@ -133,6 +133,14 @@ class TitanAccessEngine:
         self._override_until = 0.0       # suppress our next auto announce until
         self._state_suffix = None        # (text, expiry) appended to next announce
         self._role_label_override = None  # (text, expiry) replaces next role label
+        # HWND of the throwaway frame that hosts our own popup menu (Insert+C).
+        # Its focus must NOT be announced ("panel"/"window") -- but the popup's
+        # menu / menu items (different role) still are. 0 = no menu host active.
+        self._menu_host_hwnd = 0
+        # Host-declared kind for the NEXT dialog ("question"/"information"/...),
+        # used when the reader cannot detect the icon (e.g. a generic wx dialog).
+        # (kind, expiry); consumed by the context presenter. See host_bridge.
+        self._dialog_kind_override = None
 
         # Subsystems (populated in _build_subsystems on the worker thread).
         self.speech = None
@@ -576,6 +584,23 @@ class TitanAccessEngine:
         if text:
             self._role_label_override = (text, time.time() + 0.7)
 
+    def set_dialog_kind(self, kind):
+        """Declare the kind of the NEXT dialog ("question" / "information" /
+        "warning" / "error"), for dialogs whose icon the reader cannot detect
+        (e.g. a skinned / generic wx dialog). The context presenter prefers this
+        over icon detection, so a host-declared dialog is classified reliably
+        regardless of the active skin. Consumed by the next dialog announcement."""
+        if kind:
+            self._dialog_kind_override = (kind, time.time() + 5.0)
+
+    def consume_dialog_kind(self):
+        o = self._dialog_kind_override
+        if o and o[1] > time.time():
+            self._dialog_kind_override = None
+            return o[0]
+        self._dialog_kind_override = None
+        return None
+
     def _consume_override(self) -> bool:
         if self._override_until > time.time():
             self._override_until = 0.0
@@ -683,6 +708,14 @@ class TitanAccessEngine:
     def on_focus(self, obj: AccessibleObject):
         """UIA focus listener. Marshalled onto our thread by the provider."""
         if obj is None:
+            return
+        # Swallow focus on our own popup-menu host frame (Insert+C). Without this
+        # the empty hosting window is announced as "panel" / "window" right before
+        # the menu opens. The popup's menu and menu items live in a different
+        # window (role menu/menuitem) so they are still announced normally.
+        if (self._menu_host_hwnd
+                and getattr(obj, "hwnd", 0) == self._menu_host_hwnd
+                and obj.role not in ("menu", "menuitem")):
             return
         self.current_object = obj
         # Auto browse/focus mode for web documents (NVDA-style). MUST run BEFORE
@@ -1002,6 +1035,7 @@ class TitanAccessEngine:
         g.register("readWindowTitle", "t", self.action_read_window_title)
         g.register("cycleKeyEcho", "s", self.action_cycle_key_echo)
         g.register("sayAll", "a", self.action_say_all)
+        g.register("readerMenu", "c", self.action_screen_reader_menu)
 
         # (Ctrl+Alt+C/W/L/P review shortcuts removed: on a Polish keyboard
         # Ctrl+Alt == AltGr, so they collided with typing diacritics. Caret
@@ -1089,6 +1123,21 @@ class TitanAccessEngine:
             except Exception as e:
                 print(f"[TitanAccess] say all error: {e}")
         self.announce_object(self.current_object, play_cursor=False)
+        return True
+
+    def action_screen_reader_menu(self, *a):
+        """Insert+C: announce and open the NVDA-style screen-reader menu.
+
+        The menu offers reader-level actions (screen reader settings, and -- when
+        the launcher is minimised to the tray -- returning to the Titan
+        environment). Building / showing the wx popup is marshalled onto the GUI
+        thread inside the helper.
+        """
+        try:
+            from titan_access import reader_menu
+            reader_menu.show(self)
+        except Exception as e:
+            print(f"[TitanAccess] screen reader menu error: {e}")
         return True
 
     def action_cycle_key_echo(self, *a):

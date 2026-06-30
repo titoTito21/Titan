@@ -23,15 +23,27 @@ atexit.register(_cleanup_com)
 # ---------------------------------------------------------------------------
 # Channel layout (pygame.mixer channels)
 # ---------------------------------------------------------------------------
-#  0   – free for find_channel() UI sounds (default pygame slot)
+#  0   – reserved (not auto-allocated; see set_reserved below)
 #  1   – background_channel   (background music loop)
 #  2   – voice_message_channel (voice messages / recordings)
 #  3   – ai_tts_channel        (AI chat TTS)
 #  4   – tts_speech_channel    (Titan TTS: eSpeak / SAPI5 / ElevenLabs / say)
-#  5–15 – free for UI sounds (find_channel won't steal 1-4)
+#  5+  – free for UI sounds (Titan shell cues, Titan Access cursor/list earcons,
+#        app/game sounds) — find_channel() draws only from here.
+#
+# CRITICAL: pygame.mixer.find_channel() ignores our "dedicated" labelling — it
+# returns the first idle channel from 0 upward unless those channels are
+# reserved. Without a set_reserved() call a UI cue (e.g. Titan Access's list/
+# cursor earcon, played via find_channel()) could land on the TTS channel (4)
+# while speech was queued there and cut the speech to just its first syllable.
+# initialize_sound() therefore reserves channels 0..TTS_CHANNEL_ID so the
+# dedicated channels are never auto-stolen, and allocates a generous free pool
+# so many cues / TTS streams (Titan, Titan TTS, Titan Access, apps) can play
+# concurrently without contention.
 # ---------------------------------------------------------------------------
 TTS_CHANNEL_ID = 4          # Dedicated channel for Titan TTS speech
-_TOTAL_CHANNELS = 16        # Total channels to allocate
+_RESERVED_CHANNELS = TTS_CHANNEL_ID + 1   # channels 0..4 never auto-allocated
+_TOTAL_CHANNELS = 32        # Total channels to allocate (lots of free UI slots)
 
 # Inicjalizacja zmiennych globalnych
 current_theme = 'default'
@@ -235,6 +247,16 @@ def initialize_sound():
                 print(f"[Sound] Channels expanded: {current_count} -> {_TOTAL_CHANNELS}")
         except pygame.error as e:
             print(f"[Sound] Could not set channel count: {e}")
+
+        # Reserve the dedicated channels (0..TTS) so find_channel()/Sound.play()
+        # never auto-steal them for UI cues. This is what keeps Titan Access's
+        # cursor/list earcons (played through find_channel) off the TTS channel,
+        # so speech is no longer clipped mid-word. Applies process-wide, so the
+        # component's own SoundManager benefits from the same protection.
+        try:
+            pygame.mixer.set_reserved(_RESERVED_CHANNELS)
+        except pygame.error as e:
+            print(f"[Sound] Could not reserve channels: {e}")
 
         # Safely get reserved channels
         try:
@@ -823,7 +845,11 @@ def get_tts_channel():
         if tts_speech_channel is None:
             # Ensure channel slot exists
             if pygame.mixer.get_num_channels() <= TTS_CHANNEL_ID:
-                pygame.mixer.set_num_channels(TTS_CHANNEL_ID + 4)
+                pygame.mixer.set_num_channels(_TOTAL_CHANNELS)
+                try:
+                    pygame.mixer.set_reserved(_RESERVED_CHANNELS)
+                except pygame.error:
+                    pass
             tts_speech_channel = pygame.mixer.Channel(TTS_CHANNEL_ID)
         return tts_speech_channel
     except Exception as e:

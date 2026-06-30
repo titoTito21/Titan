@@ -95,6 +95,24 @@ def state_suffix(text) -> bool:
         return False
 
 
+def dialog_kind(kind) -> bool:
+    """Declare the kind of the dialog about to be shown so Titan Access reads it
+    as that type (e.g. "question") regardless of skin or icon detectability.
+
+    ``kind`` is one of "question" / "information" / "warning" / "error". Call this
+    immediately before showing a wx.MessageDialog whose icon a screen reader
+    cannot reliably classify (skinned / generic dialogs). Returns True if Titan
+    Access is running and took the hint; a no-op otherwise."""
+    eng = _engine()
+    if eng is None:
+        return False
+    try:
+        eng.set_dialog_kind(kind)
+        return True
+    except Exception:
+        return False
+
+
 def role_label(text) -> bool:
     """Replace the control-type word in the reader's next focus announcement
     with ``text`` (e.g. "status bar item" instead of the generic "list item").

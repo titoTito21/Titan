@@ -66,6 +66,15 @@ class MenuTracker:
                     self.engine.play(SND_MENU_EXPANDED, obj)
                 self._last_menu_id = menu_id
                 self.in_menu = True
+                # Our own Insert+C reader menu: announce the reader-menu title and
+                # the first option as ONE utterance ("Czytnik ekranu. Menu.
+                # Ustawienia czytnika ekranu") so nothing cuts the title, instead
+                # of the generic "menu, N items, ...".
+                if getattr(self.engine, "_menu_host_hwnd", 0):
+                    self.engine.speak(
+                        L("readerMenu.title") + " " + self._describe(obj),
+                        obj=obj, interrupt=True)
+                    return True
                 self._announce_menu(obj, menu_parent, settings)
                 return True
             # Still moving within the same menu -> let the normal announcer run.

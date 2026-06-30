@@ -272,3 +272,9 @@ SND_VSCREEN_ON = "vscreenOn.ogg"
 SND_VSCREEN_OFF = "vscreenOff.ogg"
 SND_ZOOM_IN = "zoomin.ogg"
 SND_ZOOM_OUT = "zoomout.ogg"
+# Played when a typed dialog is entered, by detected icon kind (see
+# context_presenter._dialog_kind). Other dialogs stay silent / generic.
+SND_QUESTION_DIALOG = "question_dialog.ogg"
+SND_INFO_DIALOG = "information_dialog.ogg"
+SND_WARNING_DIALOG = "warning_dialog.ogg"
+SND_ERROR_DIALOG = "error_dialog.ogg"

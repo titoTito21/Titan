@@ -2670,10 +2670,20 @@ class StereoSpeech:
                                 lock_acquired = False
 
                             while tts_channel.get_busy():
+                                # A newer utterance bumped the sequence: it now
+                                # owns the (shared) TTS channel, so stop polling
+                                # WITHOUT touching the channel. Otherwise this
+                                # already-finished segment's lingering loop would
+                                # call stop() on the NEXT segment's audio -- the
+                                # intermittent "only the beginning" / clipped
+                                # last-word bug when a pitched (slow-path) segment
+                                # is followed by another segment on channel 4.
+                                if _seq is not None and _seq != self._speak_seq:
+                                    break
                                 if not self.is_speaking:
                                     tts_channel.stop()
                                     break
-                                time.sleep(0.05)
+                                time.sleep(0.02)
 
                             self.current_tts_channel = None
                         except Exception as e:
