@@ -264,6 +264,50 @@ def _init():
         _initialized = True
 
 
+_reader_speaker = None
+
+
+def get_reader_engine():
+    """Return a real Titan ``StereoSpeech`` engine dedicated to Titan Access.
+
+    Titan Access must ALWAYS speak through Titan's own engine and NEVER through
+    accessible_output3 -- even when the ``invisible_interface.stereo_speech``
+    setting is off (that setting only governs stereo *positioning*, not which
+    engine speaks). But this is scoped to the READER ONLY: it does NOT change the
+    shared global ``_speaker`` that apps/games get from ``speak()`` etc., so they
+    keep honouring the setting. Other code that wants the reader's voice goes
+    through the NVDA controller server, not this engine.
+
+    If the global speaker already IS a ``StereoSpeech`` (stereo enabled) we reuse
+    that single instance so there is never a duplicate engine fighting over the
+    shared pygame TTS channel. Otherwise a private ``StereoSpeech`` is built just
+    for the reader. Returns the engine, or ``None`` if it could not be loaded (in
+    which case the reader must degrade to print -- never to ao3).
+    """
+    global _reader_speaker
+    if _reader_speaker is not None:
+        return _reader_speaker
+    # Resolve the shared global first (idempotent; uses its own lock) so we can
+    # reuse it when stereo is enabled instead of building a duplicate engine.
+    _init()
+    with _init_lock:
+        if _reader_speaker is not None:
+            return _reader_speaker
+        # Reuse the shared engine if it is already the real Titan TTS.
+        if _uses_stereo and _speaker is not None and not isinstance(_speaker, _BasicEngine):
+            _reader_speaker = _speaker
+            return _reader_speaker
+        try:
+            from src.titan_core.stereo_speech import StereoSpeech
+            speaker = StereoSpeech()
+            _apply_stereo_settings(speaker)
+            _reader_speaker = speaker
+            return _reader_speaker
+        except Exception as e:
+            print(f"[tce_speech] get_reader_engine failed: {e}")
+            return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------

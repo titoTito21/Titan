@@ -783,14 +783,24 @@ def detect_trailing_silence(sound, silence_threshold=-50.0, chunk_size=50):
     return min(trim_ms, duration)
 
 
-def trim_silence(sound, silence_threshold=-50.0, chunk_size=50):
+def trim_silence(sound, silence_threshold=-50.0, chunk_size=10,
+                 lead_guard_ms=8, trail_guard_ms=6):
     """
     Trim leading and trailing silence from audio - FAST version without reverse().
+
+    Trims tight to the clear speech at BOTH ends so segments play back-to-back
+    with only a short natural gap (no long dead air before/after a word). A small
+    guard is kept either side so a quiet onset (soft s/f/h) or fricative tail is
+    never clipped -- the leading guard is a touch larger because a chopped first
+    phoneme is more damaging than a slightly cropped tail.
 
     Args:
         sound: pydub.AudioSegment
         silence_threshold: Threshold in dB (default -50.0)
-        chunk_size: Size of chunks to analyze in ms (default 50)
+        chunk_size: Size of chunks to analyze in ms (default 10 -- fine grained so
+            the cut sits close to the real speech boundary, not rounded to 50ms)
+        lead_guard_ms: Margin kept BEFORE the first non-silent chunk.
+        trail_guard_ms: Margin kept AFTER the last non-silent chunk.
 
     Returns:
         pydub.AudioSegment: Trimmed audio, or original if trimming would result in empty audio
@@ -808,6 +818,16 @@ def trim_silence(sound, silence_threshold=-50.0, chunk_size=50):
         # Use fast custom functions (no reverse!)
         start_trim = detect_leading_silence(sound, silence_threshold, chunk_size)
         end_trim = detect_trailing_silence(sound, silence_threshold, chunk_size)
+
+        # Detection works on whole chunks at a dB threshold, so the boundary chunk
+        # that holds a quiet onset/tail reads as "silent" and would be cut -- the
+        # "quiet start/end gets clipped" problem on SAPI voices. Back each cut
+        # point off by its guard so the soft edge of speech is preserved while the
+        # bulk of the dead air is still removed.
+        if start_trim > 0:
+            start_trim = max(0, start_trim - lead_guard_ms)
+        if end_trim > 0:
+            end_trim = max(0, end_trim - trail_guard_ms)
 
         # Ensure we don't trim everything
         if start_trim + end_trim >= duration:
@@ -2342,12 +2362,16 @@ class StereoSpeech:
                     elif self.engine == 'spd':
                         if self._speak_native_spd(text):
                             return
-                    elif self.engine == 'sapi5' and self._sapi_worker:
-                        try:
-                            self._sapi_worker.speak(text, 3)
-                            return
-                        except Exception as e:
-                            print(f"[StereoSpeech] SAPI5 direct error: {e}")
+                    # NOTE: sapi5 deliberately has NO fast direct path. SAPI's own
+                    # audio output bypasses the dedicated pygame TTS channel, which
+                    # is the only reliable "still speaking" signal the screen
+                    # reader paces its pitched name/type/state segments on. Letting
+                    # SAPI play off-channel left that pacer spinning on a channel
+                    # that never goes busy (long dead pauses) and the next segment's
+                    # interrupt then purged SAPI mid-word ("after a pause, nothing").
+                    # So SAPI always falls through to the generate-to-WAV + channel
+                    # path below, giving exact, short inter-segment pauses with no
+                    # clipped or dropped segments.
 
                 # Check if pydub is available for audio processing (needed for stereo/trim)
                 if not PYDUB_AVAILABLE:
@@ -2821,7 +2845,147 @@ class StereoSpeech:
 
         except Exception as e:
             print(f"[StereoSpeech] Error stopping speech: {e}")
-    
+
+    def speak_concat(self, segments, gap_ms=40):
+        """Speak several ``(text, pitch_offset, position)`` parts as ONE clip.
+
+        Each part is synthesized separately so it keeps its OWN pitch, but the
+        parts are trimmed, joined with an exact ``gap_ms`` of silence and played
+        as a single utterance on the TTS channel. That removes the per-segment
+        generate -> load -> process -> play handoff (~100 ms) that otherwise sits
+        between the name / type / state of a screen-reader announcement, leaving
+        only the short, controllable pause we insert. The pitch is baked into the
+        audio during synthesis, so nothing is read aloud as SSML and voices that
+        ignore pitch (e.g. ScanSoft Agata) still get a clean separation.
+
+        SAPI5 only (the screen reader's engine); returns False if it cannot
+        handle the request so the caller can fall back to the paced per-segment
+        path.
+        """
+        if (not segments or not PYDUB_AVAILABLE or self.engine != 'sapi5'
+                or not getattr(self, '_sapi_worker', None)):
+            return False
+
+        with self._seq_lock:
+            self._speak_seq += 1
+            my_seq = self._speak_seq
+        self.stop()
+        # Mark speaking up front so is_speaking stays True through the (brief)
+        # upfront synthesis, not just during playback -- otherwise a caller
+        # polling between speak_concat() and the first audio would see "idle".
+        self.is_speaking = True
+
+        def worker():
+            if my_seq != self._speak_seq:
+                return
+            played = False
+            try:
+                clip = None
+                for seg in segments:
+                    if my_seq != self._speak_seq:
+                        return
+                    text = seg[0]
+                    pitch = int(seg[1]) if len(seg) > 1 and seg[1] is not None else 0
+                    position = float(seg[2]) if len(seg) > 2 and seg[2] is not None else 0.0
+                    if not text:
+                        continue
+                    tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                    tmp_path = os.path.abspath(tmp.name)
+                    tmp.close()
+                    path = self._sapi_worker.generate_to_file(
+                        text, tmp_path, pitch + self.default_pitch)
+                    if not path:
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
+                        continue
+                    try:
+                        seg_audio = AudioSegment.from_wav(path)
+                    except Exception:
+                        seg_audio = None
+                    finally:
+                        try:
+                            os.unlink(path)
+                        except Exception:
+                            pass
+                    if seg_audio is None:
+                        continue
+                    try:
+                        seg_audio = trim_silence(
+                            seg_audio, silence_threshold=self.get_silence_threshold())
+                    except Exception:
+                        pass
+                    if position and self.is_stereo_enabled():
+                        try:
+                            seg_audio = seg_audio.set_channels(2).pan(
+                                max(-1.0, min(1.0, position)))
+                        except Exception:
+                            pass
+                    if clip is None:
+                        clip = seg_audio
+                    else:
+                        gap = AudioSegment.silent(
+                            duration=gap_ms, frame_rate=clip.frame_rate)
+                        if gap.channels != clip.channels:
+                            gap = gap.set_channels(clip.channels)
+                        if seg_audio.channels != clip.channels:
+                            seg_audio = seg_audio.set_channels(clip.channels)
+                        clip = clip + gap + seg_audio
+                if clip is None or my_seq != self._speak_seq:
+                    return
+                self._play_clip(clip, my_seq)
+            except Exception as e:
+                print(f"[StereoSpeech] speak_concat error: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def _play_clip(self, audio, my_seq):
+        """Play an already-built AudioSegment on the dedicated TTS channel.
+
+        Interruptible: a newer utterance (bumped ``_speak_seq``) or ``stop`` ends
+        playback at once. Mirrors the channel-play tail of :meth:`speak`.
+        """
+        try:
+            import pygame
+            if not pygame.mixer.get_init():
+                try:
+                    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=1024)
+                    pygame.mixer.init()
+                except Exception as e:
+                    print(f"[StereoSpeech] _play_clip mixer init error: {e}")
+                    return
+            buf = io.BytesIO()
+            audio.export(buf, format="wav")
+            buf.seek(0)
+            try:
+                from src.titan_core.sound import get_tts_channel
+                ch = get_tts_channel()
+            except Exception:
+                ch = None
+            if ch is None:
+                ch = pygame.mixer.find_channel()
+            if not ch or my_seq != self._speak_seq:
+                return
+            self.is_speaking = True
+            sound = pygame.mixer.Sound(buf)
+            ch.play(sound)
+            self.current_tts_channel = ch
+            while ch.get_busy():
+                if my_seq != self._speak_seq:
+                    break
+                if not self.is_speaking:
+                    ch.stop()
+                    break
+                time.sleep(0.02)
+            self.current_tts_channel = None
+        except Exception as e:
+            print(f"[StereoSpeech] _play_clip error: {e}")
+        finally:
+            if my_seq == self._speak_seq:
+                self.is_speaking = False
+
     def set_engine(self, engine):
         """
         Sets the TTS engine.

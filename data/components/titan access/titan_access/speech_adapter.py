@@ -10,10 +10,13 @@ which already provides:
 * true stereo positioning (``position`` -1.0 left .. 1.0 right), and
 * additive pitch control (``pitch_offset`` -10 .. 10),
 
-mirroring exactly what ``SpeechManager.SpeakStereo`` did by hand. When Titan TTS
-is unavailable (running the reader standalone, or Titan's stereo speech disabled)
-it degrades to ``accessible_output3`` and finally to a plain ``print`` so the
-screen reader never hard-crashes on a missing dependency.
+mirroring exactly what ``SpeechManager.SpeakStereo`` did by hand. The reader
+speaks ONLY through Titan TTS -- the engine is forced on (via
+``tce_speech.ensure_titan_engine``) even when Titan's "stereo speech" setting is
+disabled, because that setting only governs stereo positioning, not which engine
+speaks. Titan Access NEVER speaks through ``accessible_output3``; if Titan TTS is
+genuinely unavailable (e.g. running the reader standalone) it degrades straight
+to a plain ``print`` so the screen reader never hard-crashes.
 
 ``supports_pitch`` reports whether the active path honours ``pitch_offset``. The
 orchestrator uses it to decide between the three-part pitched announcement
@@ -50,20 +53,28 @@ def _estimate_duration(text):
 class SpeechAdapter(object):
     """Speech backend implementing :class:`titan_access.contracts.SpeechLike`.
 
-    Prefers Titan's ``tce_speech`` (stereo + pitch). Falls back to
-    ``accessible_output3`` (no pitch), then to ``print``.
+    Titan Access speaks ONLY through Titan's own TTS engine (``tce_speech`` ->
+    ``StereoSpeech``), with stereo positioning and pitch. It NEVER speaks through
+    ``accessible_output3`` -- regardless of whether stereo speech is enabled in
+    settings (that setting only governs positioning, not which engine speaks).
+    If Titan TTS is genuinely unavailable it degrades to a plain ``print`` rather
+    than ever using ao3.
     """
 
     # Backend modes.
     _MODE_TCE = "tce"
-    _MODE_AO3 = "ao3"
     _MODE_PRINT = "print"
+
+    # Silence (ms) inserted between parts of a single concatenated announcement
+    # (name / type / state). Short but enough to keep the parts distinct on
+    # voices that ignore pitch.
+    _SEGMENT_GAP_MS = 40
 
     def __init__(self, settings):
         self._settings = settings
         self._mode = self._MODE_PRINT
-        self._tce = None
-        self._ao3 = None
+        # A StereoSpeech instance dedicated to the reader (see _init_backend).
+        self._engine = None
 
         # Sequence id for :meth:`speak_segments` (a newer call supersedes an
         # in-flight one) — same pattern as titan_talk.
@@ -88,36 +99,32 @@ class SpeechAdapter(object):
     # Backend selection
     # ------------------------------------------------------------------ #
     def _init_backend(self):
-        """Pick the best available speech backend, most capable first."""
-        # 1) Titan's configured TTS engine.
+        """Use Titan's own TTS engine -- and ONLY that.
+
+        The reader gets a dedicated ``StereoSpeech`` via
+        :func:`tce_speech.get_reader_engine`, which loads the real engine even
+        when the ``stereo_speech`` setting is off, WITHOUT changing what engine
+        apps/games get (the force is scoped to the reader only). If Titan TTS
+        cannot be loaded at all we degrade to console ``print`` -- never ao3.
+        """
         try:
             from src.titan_core import tce_speech
-            self._tce = tce_speech
-            self._mode = self._MODE_TCE
-            return
+            self._engine = tce_speech.get_reader_engine()
+            if self._engine is not None:
+                self._mode = self._MODE_TCE
+                return
         except Exception as e:  # pragma: no cover - depends on host
-            print(f"[TitanAccess] tce_speech unavailable: {e}")
+            print(f"[TitanAccess] Titan TTS unavailable: {e}")
 
-        # 2) accessible_output3 (screen-reader / SAPI bridge, no pitch).
-        try:
-            import accessible_output3.outputs.auto
-            self._ao3 = accessible_output3.outputs.auto.Auto()
-            self._mode = self._MODE_AO3
-            return
-        except Exception as e:  # pragma: no cover
-            print(f"[TitanAccess] accessible_output3 unavailable: {e}")
-
-        # 3) Last resort: print to the console.
+        # No ao3 fallback by design: speak only through Titan TTS, else print.
         self._mode = self._MODE_PRINT
 
     def _underlying_speaker(self):
-        """Return Titan's live speaker object (StereoSpeech) when present.
+        """Return the reader's live ``StereoSpeech`` engine, or None.
 
-        Used only to read :attr:`is_speaking`; ``None`` for the other backends.
+        Used only to read :attr:`is_speaking`.
         """
-        if self._mode == self._MODE_TCE and self._tce is not None:
-            return getattr(self._tce, "_speaker", None)
-        return None
+        return self._engine if self._mode == self._MODE_TCE else None
 
     # ------------------------------------------------------------------ #
     # Capability flags
@@ -126,13 +133,12 @@ class SpeechAdapter(object):
     def supports_pitch(self):
         """True whenever the active path honours ``pitch_offset``.
 
-        That is the whole Titan TTS path: ``tce_speech.speak`` applies the pitch
+        That is the whole Titan TTS path: ``StereoSpeech.speak`` applies the pitch
         offset via the generate path regardless of whether stereo positioning is
         available, so controls are always read with the titan_talk-style
-        name/type/state pitch variation. Only ``accessible_output3`` and the
-        print fallback have no pitch control.
+        name/type/state pitch variation. Only the print fallback has no pitch.
         """
-        return self._mode == self._MODE_TCE and self._tce is not None
+        return self._mode == self._MODE_TCE and self._engine is not None
 
     @property
     def is_speaking(self):
@@ -163,36 +169,34 @@ class SpeechAdapter(object):
         """
         if not text:
             return
-        if self._mode == self._MODE_TCE:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.speak(text, position=position, interrupt=interrupt,
-                                pitch_offset=pitch_offset)
+                if interrupt:
+                    self._engine.stop()
+                self._engine.speak(text, position=position,
+                                   pitch_offset=pitch_offset)
                 self._mark_speaking(text)
                 return
             except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] tce_speech.speak error: {e}")
-        if self._mode == self._MODE_AO3 and self._ao3 is not None:
-            try:
-                self._ao3.speak(text, interrupt=interrupt)
-                self._mark_speaking(text)
-                return
-            except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] ao3.speak error: {e}")
+                print(f"[TitanAccess] StereoSpeech.speak error: {e}")
         print(f"[TitanAccess] (speech) {text}")
 
     def speak_async(self, text, position=0.0, interrupt=True, pitch_offset=0):
         """Non-blocking variant of :meth:`speak`."""
         if not text:
             return
-        if self._mode == self._MODE_TCE:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.speak_async(text, position=position, interrupt=interrupt,
-                                      pitch_offset=pitch_offset)
+                # StereoSpeech.speak_async always interrupts (it stops current
+                # speech at the top), which is exactly the segment-pipeline
+                # contract, so ``interrupt`` needs no special handling here.
+                self._engine.speak_async(text, position=position,
+                                         pitch_offset=pitch_offset)
                 self._mark_speaking(text)
                 return
             except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] tce_speech.speak_async error: {e}")
-        # ao3 / print fallbacks have no async API; spawn a thread.
+                print(f"[TitanAccess] StereoSpeech.speak_async error: {e}")
+        # print fallback has no async API; spawn a thread.
         threading.Thread(
             target=self.speak,
             args=(text, position, interrupt, pitch_offset),
@@ -204,22 +208,12 @@ class SpeechAdapter(object):
         with self._seq_lock:
             self._seq_id += 1  # invalidate in-flight speak_segments
         self._speaking_until = 0.0
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.stop()
+                self._engine.stop()
                 return
             except Exception:
                 pass
-        if self._mode == self._MODE_AO3 and self._ao3 is not None:
-            # accessible_output3 outputs expose silence(); guard for safety.
-            for attr in ("silence", "stop"):
-                fn = getattr(self._ao3, attr, None)
-                if callable(fn):
-                    try:
-                        fn()
-                        return
-                    except Exception:
-                        pass
 
     # ------------------------------------------------------------------ #
     # Sequential pitched announcement (name / type / state)
@@ -238,6 +232,21 @@ class SpeechAdapter(object):
         with self._seq_lock:
             self._seq_id += 1
             my_id = self._seq_id
+        # Preferred path: let the engine synthesize the whole pitched
+        # announcement and play it as ONE concatenated clip with a short fixed
+        # silence between parts. This collapses the ~100 ms per-segment handoff
+        # (generate/load/process/play) into a single playback, so the only pause
+        # left is the tiny gap we ask for -- far shorter than the paced pipeline,
+        # while each part keeps its own pitch and nothing is read as SSML. SAPI
+        # supports it; other engines return False and we use the paced fallback.
+        eng = self._engine
+        if eng is not None and hasattr(eng, "speak_concat"):
+            try:
+                if eng.speak_concat(segments, gap_ms=self._SEGMENT_GAP_MS):
+                    self._mark_speaking(" ".join(s[0] for s in segments if s[0]))
+                    return
+            except Exception as e:  # pragma: no cover
+                print(f"[TitanAccess] speak_concat error: {e}")
         threading.Thread(target=self._run_segments, args=(my_id, segments),
                          daemon=True).start()
 
@@ -378,25 +387,25 @@ class SpeechAdapter(object):
     # ------------------------------------------------------------------ #
     def set_rate(self, rate):
         """Set speech rate (-10 slow .. 10 fast)."""
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.set_rate(int(rate))
+                self._engine.set_rate(int(rate))
             except Exception:
                 pass
 
     def set_volume(self, volume):
         """Set speech volume (0 .. 100)."""
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.set_volume(int(volume))
+                self._engine.set_volume(int(volume))
             except Exception:
                 pass
 
     def set_pitch(self, pitch):
         """Set base voice pitch (-10 .. 10). Honoured only on the Titan path."""
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                self._tce.set_pitch(int(pitch))
+                self._engine.set_pitch(int(pitch))
             except Exception:
                 pass
 
@@ -407,50 +416,50 @@ class SpeechAdapter(object):
         screen reader's ``Synthesizer`` names (``SAPI5``/``OneCore``/...), which
         are mapped to the nearest Titan engine.
         """
-        if self._mode != self._MODE_TCE or self._tce is None or not name:
+        if self._mode != self._MODE_TCE or self._engine is None or not name:
             return
         key = str(name).strip().lower()
         engine = _SYNTH_TO_ENGINE.get(key, key)
         try:
-            self._tce.set_engine(engine)
+            self._engine.set_engine(engine)
         except Exception:
             pass
 
     def set_voice(self, voice):
         """Select a voice by index (int) or by id / display name (str)."""
-        if self._mode != self._MODE_TCE or self._tce is None or voice in (None, ""):
+        if self._mode != self._MODE_TCE or self._engine is None or voice in (None, ""):
             return
         try:
             if isinstance(voice, int):
-                self._tce.set_voice(voice)
+                self._engine.set_voice(voice)
                 return
             # Resolve a name / id against the available voice list.
-            voices = self._tce.get_available_voices() or []
+            voices = self._engine.get_available_voices() or []
             for i, v in enumerate(voices):
                 if isinstance(v, dict):
                     if voice in (v.get("id"), v.get("display_name"), v.get("name")):
-                        self._tce.set_voice(i)
+                        self._engine.set_voice(i)
                         return
                 elif str(v) == str(voice):
-                    self._tce.set_voice(i)
+                    self._engine.set_voice(i)
                     return
         except Exception:
             pass
 
     def get_voices(self):
         """Return the available voices for the current engine (names or dicts)."""
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                return list(self._tce.get_available_voices() or [])
+                return list(self._engine.get_available_voices() or [])
             except Exception:
                 pass
         return []
 
     def get_engines(self):
         """Return the TTS engines Titan exposes (empty on the ao3 fallback)."""
-        if self._mode == self._MODE_TCE and self._tce is not None:
+        if self._mode == self._MODE_TCE and self._engine is not None:
             try:
-                return list(self._tce.get_available_engines() or [])
+                return list(self._engine.get_available_engines() or [])
             except Exception:
                 pass
         return []
