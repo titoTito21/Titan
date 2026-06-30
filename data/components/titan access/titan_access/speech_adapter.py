@@ -68,7 +68,7 @@ class SpeechAdapter(object):
     # Silence (ms) inserted between parts of a single concatenated announcement
     # (name / type / state). Short but enough to keep the parts distinct on
     # voices that ignore pitch.
-    _SEGMENT_GAP_MS = 40
+    _SEGMENT_GAP_MS = 30
 
     def __init__(self, settings):
         self._settings = settings

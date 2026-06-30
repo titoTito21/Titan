@@ -969,6 +969,13 @@ Loop
         self._volume = 100
         self._error_count = 0
         self._max_errors = 3
+        # True only while SAPI is playing to its OWN audio output (the live
+        # speak() fallback). The normal path generates to a WAV file (played via
+        # pygame), where SAPI's live output is idle. stop() uses this to skip the
+        # SAPI purge in the file-gen case -- the purge re-initialises the voice
+        # and stalls the very next generate_to_file by ~70-110 ms, which was the
+        # whole "SAPI feels laggy" latency. Caller-thread only (no worker race).
+        self._live_speaking = False
         # Subprocess bridge state
         self._use_subprocess = False
         self._subprocess_cscript = None
@@ -1461,15 +1468,24 @@ Loop
             return
         self._clear_pending()
         self._cancel.clear()
+        self._live_speaking = True  # SAPI will play to its own output
         self._cmd_queue.put(('speak', text, flags))
 
     def stop(self):
-        """Stop current and pending speech immediately."""
+        """Stop current and pending speech immediately.
+
+        Only issues the SAPI purge when SAPI is actually playing live; in the
+        normal generate-to-file flow the purge is unnecessary AND harmful (it
+        re-inits the voice and stalls the next generate by ~70-110 ms). We always
+        cancel any in-progress generation and drop pending speak/stop commands.
+        """
         if not self.available:
             return
         self._cancel.set()
         self._clear_pending()
-        self._cmd_queue.put(('stop',))
+        if self._live_speaking:
+            self._live_speaking = False
+            self._cmd_queue.put(('stop',))
 
     def set_voice(self, voice_id):
         self._cmd_queue.put(('set_voice', voice_id))
@@ -1484,6 +1500,9 @@ Loop
         """Generate speech to WAV file (blocking).  Returns path or None."""
         if not self.available:
             return None
+        # File generation leaves SAPI's live output idle, so a following stop()
+        # need not (and must not) purge the voice.
+        self._live_speaking = False
         event = threading.Event()
         result = {}
         self._cmd_queue.put((
@@ -2934,9 +2953,16 @@ class StereoSpeech:
                         clip = clip + gap + seg_audio
                 if clip is None or my_seq != self._speak_seq:
                     return
+                played = True
                 self._play_clip(clip, my_seq)
             except Exception as e:
                 print(f"[StereoSpeech] speak_concat error: {e}")
+            finally:
+                # If we never reached playback (superseded, or synthesis yielded
+                # nothing) clear the flag we raised up front -- but only if we are
+                # still the current utterance, so we don't cancel a newer one.
+                if not played and my_seq == self._speak_seq:
+                    self.is_speaking = False
 
         threading.Thread(target=worker, daemon=True).start()
         return True
