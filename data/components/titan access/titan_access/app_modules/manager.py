@@ -20,11 +20,12 @@ from titan_access.app_modules.calculator import CalculatorModule
 from titan_access.app_modules.tce import TCEModule
 from titan_access.app_modules.chromium import ChromiumModule, EdgeModule
 from titan_access.app_modules.firefox import FirefoxModule
+from titan_access.app_modules.terminal import TerminalModule
 
 # Module classes registered with the manager. Add new modules here.
 _MODULE_CLASSES = (
     ExplorerModule, NotepadModule, CalculatorModule, TCEModule,
-    ChromiumModule, EdgeModule, FirefoxModule,
+    ChromiumModule, EdgeModule, FirefoxModule, TerminalModule,
 )
 
 
@@ -38,7 +39,14 @@ class AppModuleManager:
         for cls in _MODULE_CLASSES:
             try:
                 inst = cls(engine)
-                self._modules[inst.process_name] = inst
+                # A module may serve several executables (e.g. the terminal
+                # module handles cmd / powershell / putty / ...). It declares
+                # them in ``process_names``; register the one instance under
+                # each so the manager resolves it for any of them.
+                names = getattr(cls, "process_names", None) or [inst.process_name]
+                for name in names:
+                    if name:
+                        self._modules[name.lower()] = inst
             except Exception as e:
                 print(f"[TitanAccess] app module init failed ({cls.__name__}): {e}")
         # External / downloaded modules (override built-ins for the same exe).
@@ -91,6 +99,27 @@ class AppModuleManager:
             return bool(self._current.should_announce(obj))
         except Exception:
             return True
+
+    def handle_plain_key(self, vk, key_name, ctrl, alt, shift):
+        """Let the active app module intercept a plain key. True = swallow.
+
+        Resolves the module for the *current foreground* process even when no
+        focus event has fired yet (a bare terminal fires no UIA focus changes),
+        so the terminal review layer still receives keys."""
+        module = self._current
+        if module is None:
+            process = self._process_for_object(None)
+            if process != self._current_process:
+                self._switch_module(process, None)
+            module = self._current
+        if module is None:
+            return False
+        try:
+            return bool(module.handle_plain_key(vk, key_name, ctrl, alt, shift))
+        except Exception as e:
+            print(f"[TitanAccess] handle_plain_key error "
+                  f"({self._current_process}): {e}")
+            return False
 
     # ==================================================================== #
     # Per-application gestures

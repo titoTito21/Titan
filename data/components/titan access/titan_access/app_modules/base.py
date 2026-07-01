@@ -72,6 +72,22 @@ class AppModuleBase:
         """
         return True
 
+    # -- plain-key interception (NVDA-style app command layer) ------------- #
+    def handle_plain_key(self, vk, key_name, ctrl, alt, shift):
+        """Intercept a *plain* key press while this app is in the foreground.
+
+        Called by the engine (via the manager) for every non-gesture key that
+        was not consumed by browse mode, BEFORE edit-caret tracking / echo.
+        Return ``True`` to swallow the key (it never reaches the application),
+        ``False`` to let it through untouched.
+
+        This is the hook a module uses to add its own review / navigation layer
+        that does not require the reader modifier -- e.g. the terminal module's
+        screen-review cursor (minus toggles it; arrows / PageUp / PageDown drive
+        it). Default: handle nothing.
+        """
+        return False
+
     # -- optional event hooks (NVDA-style; called by the engine when wired) -- #
     def event_value_change(self, obj):
         """The focused element's value changed (e.g. a slider moved)."""

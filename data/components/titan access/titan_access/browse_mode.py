@@ -218,6 +218,10 @@ class BrowseModeHandler:
         if not self._was_web:
             self._was_web = True
             self._announce_web_entry(obj)
+            # Warm the virtual buffer off the hook/focus thread so the first
+            # arrow / quick-nav key finds it ready instead of paying for the
+            # whole UIA walk on the first keystroke (NVDA builds on load too).
+            self._dispatch(self._ensure_buffer)
         want_focus = obj is not None and obj.role in self._FOCUS_MODE_ROLES
         if want_focus == self._pass_through:
             # Already in the right mode; a matching focus clears the manual hold.
@@ -256,8 +260,18 @@ class BrowseModeHandler:
         """Handle a plain key in browse mode. Return True to consume it.
 
         In focus (pass-through) mode nothing is consumed. Otherwise: arrows step
-        the buffer caret and single letters perform quick navigation. If the
-        buffer cannot be built we return False so the key reaches the page.
+        the buffer caret and single letters perform quick navigation.
+
+        CRITICAL: this runs on the keyboard-hook thread, whose message loop
+        services the global ``WH_KEYBOARD_LL`` hook. Building / walking the UIA
+        virtual buffer here (thousands of cross-process COM calls) blocks that
+        loop, and once a low-level hook callback exceeds Windows'
+        ``LowLevelHooksTimeout`` (~300 ms) Windows silently drops key events and
+        may unhook us -- which is exactly the "arrows / quick-nav do nothing"
+        failure. So every command that may touch the buffer is dispatched to the
+        engine's background reader thread (COM-initialised, off the hook path);
+        we only decide *here* whether the key is ours and swallow it. Mirrors
+        NVDA, which builds and reads its virtual buffer off the input thread.
         """
         if _DBG and key_name in ("up", "down", "left", "right") and not ctrl and not alt:
             print(f"[TitanAccess][browse] handle_key {key_name} "
@@ -269,15 +283,20 @@ class BrowseModeHandler:
         # Arrow navigation (no modifiers other than handled here).
         if not ctrl and not alt:
             if key_name == "enter":
-                return self._activate_current()
+                self._dispatch(self._activate_current)
+                return True
             if vk == _VK_UP:
-                return self._move_line(-1)
+                self._dispatch(lambda: self._move_line(-1))
+                return True
             if vk == _VK_DOWN:
-                return self._move_line(+1)
+                self._dispatch(lambda: self._move_line(+1))
+                return True
             if vk == _VK_LEFT:
-                return self._move_char(-1)
+                self._dispatch(lambda: self._move_char(-1))
+                return True
             if vk == _VK_RIGHT:
-                return self._move_char(+1)
+                self._dispatch(lambda: self._move_char(+1))
+                return True
 
         # Single-letter / digit quick navigation (Ctrl/Alt are app shortcuts).
         if ctrl or alt:
@@ -288,10 +307,25 @@ class BrowseModeHandler:
         qn_type = qn.type_for_key(ch)
         if qn_type == qn.QuickNavType.NONE:
             return False
-        if not self._ensure_buffer():
-            return False
-        self._quick_nav(qn_type, backward=shift)
+        # A recognised quick-nav letter IS a browse-mode command: swallow it and
+        # do the (buffer-building) work off the hook thread.
+        self._dispatch(lambda: self._quick_nav(qn_type, backward=shift)
+                       if self._ensure_buffer() else None)
         return True
+
+    def _dispatch(self, fn):
+        """Run buffer work off the keyboard-hook thread.
+
+        Uses the engine's background reader thread (latest-wins, COM-initialised)
+        when available, so a slow UIA walk never stalls the global keyboard hook;
+        falls back to a throwaway thread if the engine exposes no reader queue."""
+        engine = self.engine
+        submit = getattr(engine, "submit_read", None)
+        if callable(submit):
+            submit(fn)
+            return
+        import threading
+        threading.Thread(target=fn, daemon=True).start()
 
     def quick_nav_by_char(self, ch, backward=False) -> bool:
         """Public entry used by the dial: jump to the next/previous element of
@@ -553,10 +587,15 @@ class BrowseModeHandler:
         except Exception as e:
             print(f"[TitanAccess] browse_mode: buffer build failed: {e}")
             self._nodes = []
-        # IA2 fallback: when UIA exposed nothing (common for Chromium/Gecko,
-        # whose richest tree is IAccessible2), build the buffer from the IA2
-        # document tree instead.
-        if not self._nodes:
+        # IA2 fallback: when UIA exposed nothing usable, build the buffer from
+        # the IAccessible2 document tree instead. Common for Chromium/Gecko,
+        # whose page content lives in a separate render fragment that a plain
+        # downward UIA walk of the window does not reach -- there the walk yields
+        # just the empty outer document wrapper (a single Pane/Document node), so
+        # treat "<= 1 node" as empty and fall back, not only a literally empty
+        # buffer (the old ``not self._nodes`` test left that wrapper in place and
+        # never fell back, so browse mode had nothing to navigate).
+        if len(self._nodes) <= 1:
             self._build_ia2_buffer()
         self._root_runtime_id = rid
         self._index = 0 if self._nodes else -1

@@ -170,6 +170,13 @@ class _BSTBridge:
                 cwd=self._engine_dir,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000),
             )
+            # Register the bridge so Titan kills it on close/crash rather than
+            # leaving an orphaned process behind.
+            try:
+                from src.titan_core.process_tracker import track_process
+                track_process(self._proc)
+            except Exception:
+                pass
             resp = self._read_response(timeout=10)
             if resp and resp.get('ready'):
                 print("[BeSTspeech] Bridge started")

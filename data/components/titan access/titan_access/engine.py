@@ -959,6 +959,17 @@ class TitanAccessEngine:
     # Keyboard callbacks (invoked by KeyboardHook)
     # ==================================================================== #
     def on_modifier_gesture(self, vk, key_name, ctrl, alt, shift) -> bool:
+        # NumPad Minus: the active app module gets first claim (the terminal
+        # module toggles its screen review with it, just like the dial's own
+        # toggle), and only if no module wants it does it toggle the dial. This
+        # lets NumPad Minus mean "review" inside a terminal and "dial" everywhere
+        # else, without either shadowing the other.
+        if key_name == "numpadsubtract" and self.app_modules is not None:
+            try:
+                if self.app_modules.handle_plain_key(vk, key_name, ctrl, alt, shift):
+                    return True
+            except Exception as e:
+                print(f"[TitanAccess] app modifier claim error: {e}")
         # Dial ("TPad"): NumPad Minus toggles it; while active, NumPad 4/6/8/2
         # drive the dial instead of object navigation.
         if self.dial is not None:
@@ -983,6 +994,15 @@ class TitanAccessEngine:
                     return True
         except Exception:
             pass
+        # Active application module's own plain-key layer (e.g. the terminal
+        # screen-review cursor: minus toggles it, arrows / PageUp / PageDown
+        # drive it). Runs on the hook thread, so a module MUST keep this fast.
+        try:
+            if self.app_modules is not None:
+                if self.app_modules.handle_plain_key(vk, key_name, ctrl, alt, shift):
+                    return True
+        except Exception as e:
+            print(f"[TitanAccess] app plain-key error: {e}")
         return False
 
     def on_char_typed(self, ch):

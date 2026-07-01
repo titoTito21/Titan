@@ -4819,6 +4819,17 @@ class TitanApp(wx.Frame):
                 except Exception:
                     pass
 
+                # Kill TTS engine bridge subprocesses so they don't outlive
+                # Titan as orphans. os._exit(0) below bypasses atexit, so the
+                # bridges must be torn down explicitly here. (A Windows Job
+                # Object is the crash-safe backstop; see process_tracker.)
+                try:
+                    from src.titan_core.process_tracker import terminate_all
+                    terminate_all()
+                    print("INFO: TTS engine bridges terminated")
+                except Exception as e:
+                    print(f"Warning: Error terminating TTS bridges: {e}")
+
                 # Quit pygame mixer cleanly so audio device handles are
                 # released before the process dies.
                 try:

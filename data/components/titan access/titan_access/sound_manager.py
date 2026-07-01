@@ -195,6 +195,90 @@ class SoundManager(object):
         elevation = elevation_for_object(obj)
         self.play(name, pan=pan, elevation=elevation)
 
+    # ------------------------------------------------------------------ #
+    # Synthetic tone (screen-review line-position beep)
+    # ------------------------------------------------------------------ #
+    def play_tone(self, frequency=880.0, duration_ms=25, pan=0.0, gain=0.5):
+        """Play a short synthesised sine beep at ``frequency`` Hz.
+
+        Used by the terminal screen-review cursor: each line move plays a beep
+        whose pitch encodes the line's vertical position (top = high, bottom =
+        low), like an audio game. Short (~20-30 ms) so it never masks speech.
+        Generated with numpy and cached per (frequency, duration); when numpy /
+        pygame are unavailable it falls back to ``winsound.Beep`` on a thread so
+        it still never blocks the caller.
+        """
+        if not SoundManager.GlobalSoundsEnabled or not self.enabled:
+            return
+        freq = _clamp(float(frequency), 50.0, 8000.0)
+        dur = int(_clamp(float(duration_ms), 5, 400))
+        snd = self._tone_sound(freq, dur, _clamp(float(gain), 0.0, 1.0))
+        if snd is None:
+            self._winsound_beep(int(freq), dur)
+            return
+        pan = _clamp(float(pan), -1.0, 1.0)
+        try:
+            with self._lock:
+                channel = pygame.mixer.find_channel()
+                if channel is None:
+                    return
+                left = _clamp(min(1.0, 1.0 - pan), 0.0, 1.0)
+                right = _clamp(min(1.0, 1.0 + pan), 0.0, 1.0)
+                channel.set_volume(left, right)
+                channel.play(snd)
+                self._active_channels.append(channel)
+                self._active_channels = [c for c in self._active_channels
+                                         if c is channel or c.get_busy()]
+        except Exception as e:  # pragma: no cover
+            print(f"[TitanAccess] play_tone error: {e}")
+
+    def _tone_sound(self, freq, dur_ms, gain):
+        """Return a cached pygame Sound holding a sine beep, or None on failure."""
+        if pygame is None or (not self._mixer_ok and not self._ensure_mixer()):
+            return None
+        key = ("__tone__", round(freq, 1), dur_ms, round(gain, 2))
+        with self._lock:
+            cached = self._pitch_cache.get(key)
+            if cached is not None:
+                return cached
+        try:
+            import numpy as np
+            init = pygame.mixer.get_init()
+            rate = init[0] if init else 44100
+            channels = init[2] if init else 2
+            n = max(1, int(rate * dur_ms / 1000.0))
+            t = np.arange(n, dtype=np.float32) / float(rate)
+            wave = np.sin(2.0 * np.pi * freq * t)
+            # Short raised-cosine fade in/out to kill click artefacts (~2 ms).
+            fade = max(1, int(rate * 0.002))
+            if 2 * fade < n:
+                ramp = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, fade,
+                                                        dtype=np.float32)))
+                wave[:fade] *= ramp
+                wave[-fade:] *= ramp[::-1]
+            samples = (wave * gain * 32767.0).astype(np.int16)
+            if channels >= 2:
+                samples = np.column_stack([samples, samples])
+            samples = np.ascontiguousarray(samples)
+            snd = pygame.sndarray.make_sound(samples)
+            with self._lock:
+                self._pitch_cache[key] = snd
+            return snd
+        except Exception as e:
+            print(f"[TitanAccess] tone synth failed: {e}")
+            return None
+
+    @staticmethod
+    def _winsound_beep(freq, dur_ms):
+        """Last-resort beep via winsound (own thread; Beep is blocking)."""
+        try:
+            import winsound
+            threading.Thread(
+                target=lambda: winsound.Beep(max(37, min(32767, freq)), dur_ms),
+                daemon=True).start()
+        except Exception:
+            pass
+
     def stop_all(self):
         """Stop every cue this manager started (leaves other channels alone)."""
         with self._lock:

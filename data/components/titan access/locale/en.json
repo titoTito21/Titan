@@ -395,5 +395,13 @@
   "dial.cat.speed": "Speed",
   "dial.cat.volume": "Volume",
   "dial.cat.synthesizer": "Synthesizer",
-  "dial.cat.importantPlaces": "Important places"
+  "dial.cat.importantPlaces": "Important places",
+  "terminal.appName": "Terminal",
+  "terminal.reviewOn": "Screen review on",
+  "terminal.reviewOff": "Screen review off",
+  "terminal.top": "Top",
+  "terminal.bottom": "Bottom",
+  "terminal.empty": "Empty",
+  "terminal.blankLine": "Blank line",
+  "terminal.noText": "No terminal text"
 }

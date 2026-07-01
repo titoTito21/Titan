@@ -1469,6 +1469,16 @@ if __name__ == "__main__":
         # Ensure proper cleanup
         print("Performing final cleanup...")
 
+        # Kill any TTS engine bridge subprocesses so a crash doesn't leave them
+        # orphaned. (The Windows Job Object in process_tracker is the crash-safe
+        # backstop; this makes teardown prompt and deterministic.)
+        try:
+            from src.titan_core.process_tracker import terminate_all
+            terminate_all()
+            print("TTS engine bridges terminated")
+        except Exception as e:
+            print(f"Warning: Error terminating TTS bridges: {e}")
+
         # Stop all daemon threads gracefully by signaling them
         # All daemon threads should check their stop events and exit
         print("Signaling all daemon threads to stop...")

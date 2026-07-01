@@ -395,5 +395,13 @@
   "dial.cat.speed": "Szybkość",
   "dial.cat.volume": "Głośność",
   "dial.cat.synthesizer": "Syntezator",
-  "dial.cat.importantPlaces": "Ważne miejsca"
+  "dial.cat.importantPlaces": "Ważne miejsca",
+  "terminal.appName": "Terminal",
+  "terminal.reviewOn": "Przeglądanie ekranu włączone",
+  "terminal.reviewOff": "Przeglądanie ekranu wyłączone",
+  "terminal.top": "Początek",
+  "terminal.bottom": "Koniec",
+  "terminal.empty": "Pusto",
+  "terminal.blankLine": "Pusta linia",
+  "terminal.noText": "Brak tekstu w terminalu"
 }

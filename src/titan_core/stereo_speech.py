@@ -1134,6 +1134,13 @@ Loop
                 stderr=subprocess.PIPE,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
             )
+            # Register the bridge so Titan kills it on close/crash rather than
+            # leaving an orphaned cscript process behind.
+            try:
+                from src.titan_core.process_tracker import track_process
+                track_process(self._subprocess_process)
+            except Exception:
+                pass
             # Wait for READY signal
             ready_line = self._subprocess_process.stdout.readline()
             ready_str = ready_line.decode('utf-8', errors='replace').strip()
