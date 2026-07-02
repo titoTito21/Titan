@@ -2904,17 +2904,68 @@ class StereoSpeech:
         def worker():
             if my_seq != self._speak_seq:
                 return
+
+            # Merge consecutive parts that share pitch AND position into a single
+            # SAPI call. On a busy Explorer announcement the trailing same-pitch
+            # parts (description / "3 of 10" / level / url) collapse into ONE
+            # synth instead of several, cutting the number of generate -> load
+            # handoffs the announcement has to pay for before it can be heard.
+            groups = []
+            for seg in segments:
+                text = (seg[0] or "").strip() if seg and seg[0] else ""
+                if not text:
+                    continue
+                pitch = int(seg[1]) if len(seg) > 1 and seg[1] is not None else 0
+                position = float(seg[2]) if len(seg) > 2 and seg[2] is not None else 0.0
+                if groups and groups[-1][1] == pitch and groups[-1][2] == position:
+                    groups[-1][0] += ", " + text
+                else:
+                    groups.append([text, pitch, position])
+            if not groups or my_seq != self._speak_seq:
+                if my_seq == self._speak_seq:
+                    self.is_speaking = False
+                return
+
+            # PIPELINE the parts: play the first the instant it is synthesized and
+            # queue each later part behind the one still speaking, synthesizing it
+            # in parallel with playback. Perceived latency drops to the synth time
+            # of the FIRST part (~one SAPI call) instead of the sum over every
+            # part -- the old code built the entire clip before any audio, which is
+            # the ~1 s stall on messages with many pitched segments.
+            try:
+                import pygame
+                if not pygame.mixer.get_init():
+                    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2,
+                                          buffer=1024)
+                    pygame.mixer.init()
+            except Exception as e:
+                print(f"[StereoSpeech] speak_concat mixer init error: {e}")
+                if my_seq == self._speak_seq:
+                    self.is_speaking = False
+                return
+            try:
+                from src.titan_core.sound import get_tts_channel
+                ch = get_tts_channel()
+            except Exception:
+                ch = None
+            if ch is None:
+                try:
+                    ch = pygame.mixer.find_channel()
+                except Exception:
+                    ch = None
+            if ch is None:
+                if my_seq == self._speak_seq:
+                    self.is_speaking = False
+                return
+
+            stereo = self.is_stereo_enabled()
+            threshold = self.get_silence_threshold()
+            last = len(groups) - 1
             played = False
             try:
-                clip = None
-                for seg in segments:
+                for idx, (text, pitch, position) in enumerate(groups):
                     if my_seq != self._speak_seq:
-                        return
-                    text = seg[0]
-                    pitch = int(seg[1]) if len(seg) > 1 and seg[1] is not None else 0
-                    position = float(seg[2]) if len(seg) > 2 and seg[2] is not None else 0.0
-                    if not text:
-                        continue
+                        break
                     tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                     tmp_path = os.path.abspath(tmp.name)
                     tmp.close()
@@ -2939,37 +2990,75 @@ class StereoSpeech:
                         continue
                     try:
                         seg_audio = trim_silence(
-                            seg_audio, silence_threshold=self.get_silence_threshold())
+                            seg_audio, silence_threshold=threshold)
                     except Exception:
                         pass
-                    if position and self.is_stereo_enabled():
+                    if position and stereo:
                         try:
                             seg_audio = seg_audio.set_channels(2).pan(
                                 max(-1.0, min(1.0, position)))
                         except Exception:
                             pass
-                    if clip is None:
-                        clip = seg_audio
+                    # Bake the inter-part gap onto every part except the last so the
+                    # queued parts stay audibly separate without a real handoff.
+                    if idx != last and gap_ms > 0:
+                        try:
+                            seg_audio = seg_audio + AudioSegment.silent(
+                                duration=gap_ms, frame_rate=seg_audio.frame_rate)
+                        except Exception:
+                            pass
+                    if my_seq != self._speak_seq:
+                        break
+                    try:
+                        buf = io.BytesIO()
+                        seg_audio.export(buf, format="wav")
+                        buf.seek(0)
+                        sound = pygame.mixer.Sound(buf)
+                    except Exception:
+                        continue
+                    if not played:
+                        ch.play(sound)
+                        self.current_tts_channel = ch
+                        self.is_speaking = True
+                        played = True
                     else:
-                        gap = AudioSegment.silent(
-                            duration=gap_ms, frame_rate=clip.frame_rate)
-                        if gap.channels != clip.channels:
-                            gap = gap.set_channels(clip.channels)
-                        if seg_audio.channels != clip.channels:
-                            seg_audio = seg_audio.set_channels(clip.channels)
-                        clip = clip + gap + seg_audio
-                if clip is None or my_seq != self._speak_seq:
-                    return
-                played = True
-                self._play_clip(clip, my_seq)
+                        # Wait for the queue slot to free (the previously queued
+                        # part has started playing), then queue this one behind the
+                        # part still speaking so they run back-to-back.
+                        while my_seq == self._speak_seq:
+                            try:
+                                if ch.get_queue() is None:
+                                    break
+                            except Exception:
+                                break
+                            time.sleep(0.005)
+                        if my_seq != self._speak_seq:
+                            break
+                        try:
+                            if ch.get_busy():
+                                ch.queue(sound)
+                            else:
+                                ch.play(sound)
+                        except Exception:
+                            try:
+                                ch.play(sound)
+                            except Exception:
+                                pass
+                # Wait out playback so is_speaking mirrors the real audio.
+                if played:
+                    while my_seq == self._speak_seq:
+                        try:
+                            if not ch.get_busy():
+                                break
+                        except Exception:
+                            break
+                        time.sleep(0.02)
             except Exception as e:
                 print(f"[StereoSpeech] speak_concat error: {e}")
             finally:
-                # If we never reached playback (superseded, or synthesis yielded
-                # nothing) clear the flag we raised up front -- but only if we are
-                # still the current utterance, so we don't cancel a newer one.
-                if not played and my_seq == self._speak_seq:
+                if my_seq == self._speak_seq:
                     self.is_speaking = False
+                    self.current_tts_channel = None
 
         threading.Thread(target=worker, daemon=True).start()
         return True

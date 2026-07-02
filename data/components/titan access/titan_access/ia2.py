@@ -253,6 +253,16 @@ _CONTENT_MSAA_ROLES = {
     0x2D, 0x2E, 0x2F, 0x30, 0x33, 0x34, 0x0F, 0x12, 0x14,
 }
 
+# Titan role keys that are pure grouping / layout WRAPPERS, not real content.
+# NVDA presents the web buffer flat -- you arrow through the actual links,
+# headings, list items, etc., NOT through the anonymous <div>/section/landmark
+# groups that merely contain them. Emitting those wrappers as their own buffer
+# stops made navigation land "in groups", which the user found unintuitive, so
+# they are dropped from the buffer while their content still flows through. Their
+# children are walked as usual, so nothing real is lost. (Structural containers
+# with dedicated quick-nav -- lists / tables / trees -- are intentionally kept.)
+_SKIP_ROLES = {"group", "document", "dialog", "pane", "window"}
+
 _MAX_DEPTH = 30
 _MAX_NODES = 3000
 
@@ -406,7 +416,11 @@ def build_document_nodes(hwnd):
             node["level"] = tmp.level
         except Exception:
             pass
-        if name or role_int in _CONTENT_MSAA_ROLES:
+        # Flat, NVDA-style buffer: skip anonymous grouping / layout wrappers so
+        # navigation lands on real content, never "inside a group". Their
+        # children are still walked below, so their content is preserved.
+        if node["role"] not in _SKIP_ROLES and (
+                name or role_int in _CONTENT_MSAA_ROLES):
             nodes.append(node)
         for child in _children(acc):
             _walk(child, depth + 1)

@@ -76,6 +76,17 @@ _WEB_WINDOW_CLASSES = {
 _MAX_DEPTH = 25
 _MAX_NODES = 4000
 
+# UIA ControlTypeNames that are pure grouping / layout WRAPPERS. NVDA presents
+# the web buffer flat -- the user arrows through the actual links / headings /
+# controls, not through the anonymous group / pane containers that merely hold
+# them. Emitting those as their own buffer stops made navigation feel like it was
+# "inside groups" (unintuitive), so they are skipped; their descendants are still
+# walked, so no real content is lost.
+_SKIP_CONTROL_TYPES = {
+    "GroupControl", "PaneControl", "DocumentControl", "WindowControl",
+    "TitleBarControl",
+}
+
 # Minimum bounding-rectangle area (px^2) for a DocumentControl to count as a web
 # *content* viewport rather than a small browser-chrome document (omnibox list,
 # etc.). ~316x316; the page viewport is far larger, chrome documents far smaller.
@@ -642,6 +653,12 @@ class BrowseModeHandler:
                 name = (control.Name or "").strip()
                 localized = (_localized(control) or "").lower()
             except Exception:
+                continue
+            # Flat, NVDA-style buffer: never stop on an anonymous grouping /
+            # layout wrapper. The walk still descends into it, so its real
+            # content (links, headings, ...) is kept -- only the wrapper node
+            # itself is dropped, so navigation never lands "inside a group".
+            if ctype in _SKIP_CONTROL_TYPES:
                 continue
             # Keep interactive controls always; keep text only if it has content.
             interactive = ctype not in ("TextControl", "")

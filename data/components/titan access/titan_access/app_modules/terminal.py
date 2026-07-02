@@ -38,7 +38,7 @@ from titan_access.localization import L
 from titan_access import localization as loc
 from titan_access.app_modules.base import AppModuleBase
 from titan_access.contracts import (
-    SND_VSCREEN_ON, SND_VSCREEN_OFF, SND_EDGE, SND_CURSOR,
+    SND_KEY_ON, SND_KEY_OFF, SND_EDGE, SND_CURSOR,
 )
 
 # --- defensive UIA import (module must import even without UIA) ------------- #
@@ -190,7 +190,7 @@ class TerminalModule(AppModuleBase):
         if not announce:
             return
         if on:
-            self.engine.play(SND_VSCREEN_ON)
+            self.engine.play(SND_KEY_ON)
             self.engine.speak(L("terminal.reviewOn"))
             with self._lock:
                 lines, row = self._lines, self._row
@@ -199,7 +199,7 @@ class TerminalModule(AppModuleBase):
             else:
                 self.engine.speak(L("terminal.noText"), interrupt=False)
         else:
-            self.engine.play(SND_VSCREEN_OFF)
+            self.engine.play(SND_KEY_OFF)
             self.engine.speak(L("terminal.reviewOff"))
 
     # ------------------------------------------------------------------ #
