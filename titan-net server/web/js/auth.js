@@ -170,6 +170,8 @@
       const p2 = document.getElementById('reg-password2').value;
       const firstname = document.getElementById('reg-firstname').value.trim();
       const lastname = document.getElementById('reg-lastname').value.trim();
+      const emailEl = document.getElementById('reg-email');
+      const email = emailEl ? emailEl.value.trim() : '';
       const fullName = [firstname, lastname].filter(Boolean).join(' ');
       let bad = false;
       if (!u || u.length < 3) { setFieldError('reg-username', 'reg-username-err', t('err.required')); bad = true; }
@@ -186,7 +188,7 @@
           ws.connect();
           setTimeout(() => rej(new Error(t('err.network'))), 10000);
         });
-        const resp = await ws.register(u, p, fullName);
+        const resp = await ws.register(u, p, fullName, email);
         if (!resp.success) {
           showAlert(resp.error || t('err.generic'), 'error');
           submit.disabled = false;

@@ -127,6 +127,32 @@
         method: 'POST', body: { make_moderator: makeModerator !== false },
       });
     },
+    transferGroupOwnership(groupId, userId) {
+      return request('/groups/' + encodeURIComponent(groupId) + '/transfer/' + encodeURIComponent(userId), { method: 'POST' });
+    },
+    banFromGroup(groupId, userId, reason) {
+      return request('/groups/' + encodeURIComponent(groupId) + '/ban/' + encodeURIComponent(userId), {
+        method: 'POST', body: { reason: reason || null },
+      });
+    },
+    unbanFromGroup(groupId, userId) {
+      return request('/groups/' + encodeURIComponent(groupId) + '/unban/' + encodeURIComponent(userId), { method: 'POST' });
+    },
+
+    // Account email + password recovery
+    getAccountEmail() { return request('/account/email'); },
+    setAccountEmail(email) { return request('/account/email', { method: 'POST', body: { email } }); },
+    verifyEmail(token) { return request('/account/verify_email', { method: 'POST', body: { token } }); },
+    forgotPassword(identifier) { return request('/auth/forgot_password', { method: 'POST', body: { identifier } }); },
+    resetPassword(token, newPassword) {
+      return request('/auth/reset_password', { method: 'POST', body: { token, new_password: newPassword } });
+    },
+
+    // User mailbox
+    mailbox(folder) { return request('/mail/' + (folder === 'sent' ? 'sent' : 'inbox')); },
+    getMail(mailId) { return request('/mail/' + encodeURIComponent(mailId)); },
+    deleteMail(mailId) { return request('/mail/' + encodeURIComponent(mailId), { method: 'DELETE' }); },
+    sendMail(to, subject, body) { return request('/mail/send', { method: 'POST', body: { to, subject, body } }); },
     listGroupForums(groupId) {
       return request('/groups/' + encodeURIComponent(groupId) + '/forums');
     },

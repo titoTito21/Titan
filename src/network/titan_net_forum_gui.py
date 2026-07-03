@@ -923,6 +923,156 @@ class GroupMembersDialog(wx.Dialog):
             _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
 
 
+class ManageGroupMembersDialog(wx.Dialog):
+    """Owner/moderator view of ACTIVE members. The owner can appoint or
+    revoke moderators and transfer ownership; owner and moderators can ban or
+    unban members. Which actions are shown depends on the caller's own role
+    in the group (``my_role``)."""
+
+    def __init__(self, parent, titan_client: TitanNetClient, group_id: int, my_role: str = 'moderator'):
+        super().__init__(parent, title=_("Manage Members"), size=(560, 440))
+        self.titan_client = titan_client
+        self.group_id = group_id
+        self.my_role = my_role
+        self.is_owner = (my_role == 'owner')
+        self.InitUI()
+        self.Centre()
+        play_sound('ui/dialog.ogg')
+        wx.CallAfter(self.load_members)
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        self.members_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.members_list.AppendColumn(_("User"), width=240)
+        self.members_list.AppendColumn(_("Role"), width=120)
+        self.members_list.AppendColumn(_("Titan number"), width=120)
+        vbox.Add(self.members_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+
+        btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        # Owner-only actions.
+        if self.is_owner:
+            self.mod_btn = wx.Button(panel, label=_("Make/Remove Moderator"))
+            self.mod_btn.Bind(wx.EVT_BUTTON, self._on_toggle_moderator)
+            btn_box.Add(self.mod_btn, flag=wx.RIGHT, border=5)
+            self.transfer_btn = wx.Button(panel, label=_("Transfer Ownership"))
+            self.transfer_btn.Bind(wx.EVT_BUTTON, self._on_transfer_ownership)
+            btn_box.Add(self.transfer_btn, flag=wx.RIGHT, border=5)
+        # Owner + moderator actions.
+        ban_btn = wx.Button(panel, label=_("Ban"))
+        ban_btn.Bind(wx.EVT_BUTTON, lambda e: self._on_ban(True))
+        btn_box.Add(ban_btn, flag=wx.RIGHT, border=5)
+        unban_btn = wx.Button(panel, label=_("Unban"))
+        unban_btn.Bind(wx.EVT_BUTTON, lambda e: self._on_ban(False))
+        btn_box.Add(unban_btn, flag=wx.RIGHT, border=5)
+        close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        btn_box.Add(close_btn)
+        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
+        panel.SetSizer(vbox)
+
+    def load_members(self):
+        def _load():
+            result = self.titan_client.get_group_members(self.group_id, status='active')
+            wx.CallAfter(self._display, result)
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _display(self, result):
+        self.members_list.DeleteAllItems()
+        if not result.get('success'):
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Failed to load members')), _("Error"), wx.OK | wx.ICON_ERROR)
+            return
+        self._roles = {}
+        for m in result.get('members', []):
+            idx = self.members_list.InsertItem(self.members_list.GetItemCount(), m['username'])
+            role = m.get('role', 'member')
+            self.members_list.SetItem(idx, 1, self._role_label(role))
+            self.members_list.SetItem(idx, 2, str(m.get('titan_number', '')))
+            self.members_list.SetItemData(idx, m['user_id'])
+            self._roles[m['user_id']] = role
+
+    def _role_label(self, role):
+        return {'owner': _("Owner"), 'moderator': _("Moderator")}.get(role, _("Member"))
+
+    def _selected(self):
+        sel = self.members_list.GetFirstSelected()
+        if sel == -1:
+            return None, None
+        user_id = self.members_list.GetItemData(sel)
+        return user_id, self._roles.get(user_id, 'member')
+
+    def _on_toggle_moderator(self, event):
+        play_sound('core/SELECT.ogg')
+        user_id, role = self._selected()
+        if user_id is None:
+            return
+        if role == 'owner':
+            _show_skinned_message(_("You cannot change the owner's role."), _("Manage Members"), wx.OK | wx.ICON_INFORMATION)
+            return
+        make = (role != 'moderator')
+
+        def _do():
+            result = self.titan_client.set_group_moderator(self.group_id, user_id, make)
+            wx.CallAfter(self._on_done, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_transfer_ownership(self, event):
+        play_sound('core/SELECT.ogg')
+        user_id, role = self._selected()
+        if user_id is None:
+            return
+        if role == 'owner':
+            return
+        confirm = _show_skinned_message(
+            _("Transfer ownership of this group to the selected member? "
+              "You will become a moderator and can no longer manage moderators "
+              "or delete the group."),
+            _("Transfer Ownership"), wx.YES_NO | wx.ICON_WARNING)
+        if confirm != wx.ID_YES:
+            return
+
+        def _do():
+            result = self.titan_client.transfer_group_ownership(self.group_id, user_id)
+            wx.CallAfter(self._on_transfer_done, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_transfer_done(self, result):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            _show_skinned_message(_("Ownership transferred."), _("Manage Members"), wx.OK | wx.ICON_INFORMATION)
+            # The caller is no longer the owner; close the dialog so the stale
+            # owner-only buttons disappear.
+            self.EndModal(wx.ID_OK)
+        else:
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
+
+    def _on_ban(self, ban):
+        play_sound('core/SELECT.ogg')
+        user_id, role = self._selected()
+        if user_id is None:
+            return
+        if ban and role == 'owner':
+            _show_skinned_message(_("You cannot ban the group owner."), _("Manage Members"), wx.OK | wx.ICON_INFORMATION)
+            return
+
+        def _do():
+            if ban:
+                result = self.titan_client.ban_from_group(self.group_id, user_id)
+            else:
+                result = self.titan_client.unban_from_group(self.group_id, user_id)
+            wx.CallAfter(self._on_done, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_done(self, result):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            self.load_members()
+        else:
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
+
+
 class ForumGroupsWindow(wx.Frame):
     """Top-level Elten-style entry: browse groups, then open a group's forums."""
 

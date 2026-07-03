@@ -177,6 +177,7 @@ class TitanNetHTTPServer:
         self.app.router.add_post('/api/groups/{group_id}/members/{user_id}/approve', self.handle_approve_member)
         self.app.router.add_post('/api/groups/{group_id}/members/{user_id}/reject', self.handle_reject_member)
         self.app.router.add_post('/api/groups/{group_id}/moderators/{user_id}', self.handle_set_group_moderator)
+        self.app.router.add_post('/api/groups/{group_id}/transfer/{user_id}', self.handle_transfer_group_ownership)
         self.app.router.add_post('/api/groups/{group_id}/ban/{user_id}', self.handle_ban_from_group)
         self.app.router.add_post('/api/groups/{group_id}/unban/{user_id}', self.handle_unban_from_group)
         # Forums within a group
@@ -219,6 +220,23 @@ class TitanNetHTTPServer:
         self.app.router.add_post('/api/moderation/demote', self.handle_demote_moderator)
         self.app.router.add_get('/api/moderation/moderators', self.handle_get_moderators)
         self.app.router.add_post('/api/moderation/change_password', self.handle_admin_change_password)
+
+        # Account email + password recovery routes
+        self.app.router.add_post('/api/account/email', self.handle_set_account_email)
+        self.app.router.add_get('/api/account/email', self.handle_get_account_email)
+        self.app.router.add_post('/api/account/verify_email', self.handle_verify_email)
+        self.app.router.add_post('/api/auth/forgot_password', self.handle_forgot_password)
+        self.app.router.add_post('/api/auth/reset_password', self.handle_reset_password)
+
+        # User mailbox routes
+        self.app.router.add_get('/api/mail/inbox', self.handle_mail_inbox)
+        self.app.router.add_get('/api/mail/sent', self.handle_mail_sent)
+        self.app.router.add_get('/api/mail/{mail_id}', self.handle_mail_get)
+        self.app.router.add_post('/api/mail/{mail_id}/read', self.handle_mail_mark_read)
+        self.app.router.add_delete('/api/mail/{mail_id}', self.handle_mail_delete)
+        self.app.router.add_post('/api/mail/send', self.handle_mail_send)
+        # Internal: Postfix delivery pipe ingests inbound mail here.
+        self.app.router.add_post('/api/mail/incoming', self.handle_mail_incoming)
 
         # Ban system routes
         self.app.router.add_post('/api/moderation/ban/room', self.handle_ban_from_room)
@@ -1340,6 +1358,237 @@ class TitanNetHTTPServer:
     # Groups -> Forums -> Threads (Elten-style) Handlers
     # =====================================================================
 
+    # ----- Account email + password recovery -----
+
+    async def handle_get_account_email(self, request: web.Request) -> web.Response:
+        """Return the authenticated user's recovery email + verification state."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            full = await loop.run_in_executor(None, self.db.get_user_by_id, user['id'])
+            return web.json_response({
+                'success': True,
+                'email': (full or {}).get('email'),
+                'email_verified': bool((full or {}).get('email_verified')),
+            })
+        except Exception as e:
+            logger.error(f"Get account email error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_set_account_email(self, request: web.Request) -> web.Response:
+        """Set/replace the authenticated user's recovery email and send a
+        verification link to it."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            data = await request.json() if request.can_read_body else {}
+            email = (data.get('email') or '').strip()
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.set_user_email, user['id'], email)
+            if result.get('success') and result.get('token'):
+                try:
+                    import mailer
+                    await loop.run_in_executor(
+                        None, mailer.send_verification, email, user.get('username', ''), result['token']
+                    )
+                except Exception as me:
+                    logger.error(f"Verification email send failed: {me}", exc_info=True)
+                # Do not leak the token to the client.
+                result = {'success': True, 'email': email, 'email_verified': False}
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Set account email error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_verify_email(self, request: web.Request) -> web.Response:
+        """Consume an email-verification token (from the emailed link)."""
+        try:
+            data = await request.json() if request.can_read_body else {}
+            token = (data.get('token') or '').strip()
+            if not token:
+                return web.json_response({'success': False, 'error': 'Missing token'}, status=400)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.verify_email, token)
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Verify email error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_forgot_password(self, request: web.Request) -> web.Response:
+        """Start a password reset. Always answers 200 with a generic message so
+        an attacker cannot tell whether an account/email exists."""
+        try:
+            data = await request.json() if request.can_read_body else {}
+            identifier = (data.get('identifier') or '').strip()
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.create_password_reset, identifier)
+            if result.get('success') and result.get('found') and result.get('token'):
+                try:
+                    import mailer
+                    await loop.run_in_executor(
+                        None, mailer.send_password_reset,
+                        result['email'], result.get('username', ''), result['token'],
+                    )
+                except Exception as me:
+                    logger.error(f"Password reset email send failed: {me}", exc_info=True)
+            # Generic response regardless of whether an account matched.
+            return web.json_response({
+                'success': True,
+                'message': 'If an account with a verified email matches, a reset link has been sent.',
+            })
+        except Exception as e:
+            logger.error(f"Forgot password error: {e}", exc_info=True)
+            # Still avoid leaking; report generic success.
+            return web.json_response({
+                'success': True,
+                'message': 'If an account with a verified email matches, a reset link has been sent.',
+            })
+
+    async def handle_reset_password(self, request: web.Request) -> web.Response:
+        """Complete a password reset with a token + new password."""
+        try:
+            data = await request.json() if request.can_read_body else {}
+            token = (data.get('token') or '').strip()
+            new_password = data.get('new_password') or ''
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.reset_password_with_token, token, new_password
+            )
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Reset password error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    # ----- User mailboxes -----
+
+    async def handle_mail_inbox(self, request: web.Request) -> web.Response:
+        return await self._mail_list(request, 'inbox')
+
+    async def handle_mail_sent(self, request: web.Request) -> web.Response:
+        return await self._mail_list(request, 'sent')
+
+    async def _mail_list(self, request: web.Request, folder: str) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            loop = asyncio.get_event_loop()
+            messages = await loop.run_in_executor(None, self.db.list_mailbox, user['id'], folder)
+            address = await loop.run_in_executor(None, self.db.user_mail_address, user['username'])
+            return web.json_response({'success': True, 'messages': messages, 'address': address})
+        except Exception as e:
+            logger.error(f"Mail list error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_mail_get(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            mail_id = int(request.match_info['mail_id'])
+            loop = asyncio.get_event_loop()
+            msg = await loop.run_in_executor(None, self.db.get_mail, mail_id, user['id'])
+            if not msg:
+                return web.json_response({'success': False, 'error': 'Not found'}, status=404)
+            # Reading marks it read.
+            await loop.run_in_executor(None, self.db.mark_mail_read, mail_id, user['id'])
+            return web.json_response({'success': True, 'message': msg})
+        except Exception as e:
+            logger.error(f"Mail get error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_mail_mark_read(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            mail_id = int(request.match_info['mail_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.mark_mail_read, mail_id, user['id'])
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Mail mark read error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_mail_delete(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            mail_id = int(request.match_info['mail_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, self.db.delete_mail, mail_id, user['id'])
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Mail delete error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_mail_send(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            data = await request.json() if request.can_read_body else {}
+            to_addr = (data.get('to') or '').strip()
+            subject = (data.get('subject') or '').strip()
+            body = data.get('body') or ''
+            if not to_addr:
+                return web.json_response({'success': False, 'error': 'Recipient is required'}, status=400)
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.send_user_mail, user['id'], to_addr, subject, body
+            )
+            # If the recipient is remote, hand the message to the outbound mailer.
+            if result.get('success') and result.get('external_recipient'):
+                try:
+                    import mailer
+                    from email.message import EmailMessage
+                    msg = EmailMessage()
+                    msg['Subject'] = subject
+                    msg['From'] = result.get('from_addr')
+                    msg['To'] = result['external_recipient']
+                    msg.set_content(body)
+                    await loop.run_in_executor(
+                        None, mailer.send_message, msg, result.get('from_addr'),
+                        [result['external_recipient']],
+                    )
+                except Exception as me:
+                    logger.error(f"Outbound mail send failed: {me}", exc_info=True)
+            return web.json_response(result, status=200 if result.get('success') else 400)
+        except Exception as e:
+            logger.error(f"Mail send error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_mail_incoming(self, request: web.Request) -> web.Response:
+        """Ingest a message delivered by the Postfix pipe (mail_delivery.py).
+        Authenticated by a shared secret so the delivery script never opens the
+        SQLCipher DB directly (single-writer safety)."""
+        try:
+            from config import Config
+            token = request.headers.get('X-Titan-Mail-Token', '')
+            if not Config.MAIL_INGEST_TOKEN or token != Config.MAIL_INGEST_TOKEN:
+                return web.json_response({'success': False, 'error': 'Forbidden'}, status=403)
+            data = await request.json() if request.can_read_body else {}
+            recipient = (data.get('recipient') or '').strip()
+            sender = (data.get('sender') or '').strip()
+            subject = (data.get('subject') or '').strip()
+            body = data.get('body') or ''
+            loop = asyncio.get_event_loop()
+            local = await loop.run_in_executor(None, self.db.resolve_local_user_by_address, recipient)
+            if not local:
+                # Unknown mailbox: accept and drop (avoids Postfix retry loops).
+                return web.json_response({'success': True, 'delivered': False})
+            result = await loop.run_in_executor(
+                None, self.db.store_incoming_mail, local['id'], sender, recipient, subject, body
+            )
+            return web.json_response({'success': True, 'delivered': True, 'mail_id': result.get('mail_id')})
+        except Exception as e:
+            logger.error(f"Mail incoming error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
     def _require_auth(self, request: web.Request):
         """Return the authenticated user dict or None."""
         return self.verify_token(request)
@@ -1534,6 +1783,22 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Set group moderator error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_transfer_group_ownership(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            target = int(request.match_info['user_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.transfer_group_ownership, group_id, target, user['id']
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Transfer group ownership error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
     async def handle_ban_from_group(self, request: web.Request) -> web.Response:

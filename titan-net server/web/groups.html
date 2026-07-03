@@ -63,6 +63,7 @@
         <span class="spacer"></span>
         <button id="new-forum-btn" hidden data-i18n="groups.new_forum">New forum</button>
         <button id="pending-members-btn" hidden data-i18n="groups.pending_members">Pending members</button>
+        <button id="manage-members-btn" hidden data-i18n="groups.manage_members">Manage members</button>
       </div>
       <h2 data-i18n="groups.forums_heading">Forums</h2>
       <p id="group-status" class="muted" role="status" aria-live="polite"></p>
@@ -177,6 +178,18 @@
         <ul id="pending-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
         <p style="text-align:right">
           <button type="button" id="pm-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
+        </p>
+      </div>
+    </dialog>
+
+    <!-- Manage active members dialog -->
+    <dialog id="manage-dialog" aria-labelledby="mm-title">
+      <div style="display:grid;gap:1rem;min-width:min(600px,92vw)">
+        <h2 id="mm-title" data-i18n="groups.manage_members" style="margin:0">Manage members</h2>
+        <p id="manage-status" class="muted" role="status" aria-live="polite"></p>
+        <ul id="manage-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
+        <p style="text-align:right">
+          <button type="button" id="mm-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
         </p>
       </div>
     </dialog>

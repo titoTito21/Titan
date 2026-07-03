@@ -46,6 +46,24 @@ class Config:
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_DIR = os.getenv('LOG_DIR', 'logs')
 
+    # Mail (email verification, password recovery, user mailboxes).
+    # Outbound mail is handed to a local Postfix relay by default; point
+    # SMTP_* at an external relay to send without self-hosting Postfix.
+    MAIL_ENABLED = os.getenv('MAIL_ENABLED', '0') == '1'
+    MAIL_DOMAIN = os.getenv('MAIL_DOMAIN', 'titosofttitan.com')
+    MAIL_FROM = os.getenv('MAIL_FROM', 'no-reply@titosofttitan.com')
+    MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'Titan-Net')
+    MAIL_PUBLIC_URL = os.getenv('MAIL_PUBLIC_URL', 'https://titosofttitan.com')
+    SMTP_HOST = os.getenv('SMTP_HOST', '127.0.0.1')
+    SMTP_PORT = int(os.getenv('SMTP_PORT', 25))
+    SMTP_USER = os.getenv('SMTP_USER', '')
+    SMTP_PASS = os.getenv('SMTP_PASS', '')
+    SMTP_TLS = os.getenv('SMTP_TLS', '0') == '1'
+    # Shared secret the Postfix delivery pipe (mail_delivery.py) presents to the
+    # internal /api/mail/incoming endpoint. Inbound mail is ingested via the
+    # running server so the SQLCipher DB is never opened by a second process.
+    MAIL_INGEST_TOKEN = os.getenv('MAIL_INGEST_TOKEN', '')
+
     # OAuth proxy
     # Public base URL Spotify/Allegro will redirect back to. MUST be HTTPS for
     # Allegro and for Spotify production apps. Override via env var.

@@ -115,11 +115,11 @@
         15000,
       );
     }
-    register(username, password, full_name) {
-      // The server only consumes username / password / full_name — matches
-      // the desktop titan_net_gui registration (no email field).
+    register(username, password, full_name, email) {
+      // The server consumes username / password / full_name and an optional
+      // recovery email — matches the desktop titan_net_gui registration.
       return this.request(
-        { type: 'register', username, password, full_name: full_name || '' },
+        { type: 'register', username, password, full_name: full_name || '', email: email || '' },
         'register_response',
         15000,
       );

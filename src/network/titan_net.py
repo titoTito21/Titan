@@ -360,7 +360,7 @@ class TitanNetClient:
             traceback.print_exc()
             return False
 
-    def register(self, username: str, password: str, full_name: str = "") -> Dict:
+    def register(self, username: str, password: str, full_name: str = "", email: str = "") -> Dict:
         """
         Register a new account on Titan-Net
 
@@ -368,6 +368,7 @@ class TitanNetClient:
             username: Desired username
             password: Account password
             full_name: Optional full name
+            email: Optional recovery email (a verification link is sent to it)
 
         Returns:
             Dict with 'success' (bool), 'message' (str), 'user_id', and 'titan_number' (5-digit)
@@ -400,6 +401,7 @@ class TitanNetClient:
                         "username": username,
                         "password": password,
                         "full_name": full_name,
+                        "email": email or "",
                         "language": current_language
                     }
 
@@ -2099,6 +2101,19 @@ class TitanNetClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def transfer_group_ownership(self, group_id: int, user_id: int) -> Dict:
+        """Hand the group over to another active member (current owner only).
+        The outgoing owner becomes a moderator."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/transfer/{user_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def ban_from_group(self, group_id: int, user_id: int, reason: Optional[str] = None) -> Dict:
         try:
             response = requests.post(
@@ -2107,6 +2122,105 @@ class TitanNetClient:
                 headers=self._http_headers(),
                 timeout=10
             )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ----- Account email + password recovery -----
+
+    def get_account_email(self) -> Dict:
+        """Return the logged-in user's recovery email + verification state."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/account/email",
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def set_account_email(self, email: str) -> Dict:
+        """Set/replace the recovery email; a verification link is emailed to it."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/account/email",
+                json={'email': email}, headers=self._http_headers(), timeout=15)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def verify_email(self, token: str) -> Dict:
+        """Consume an email-verification token (from the emailed link)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/account/verify_email",
+                json={'token': token}, headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def forgot_password(self, identifier: str) -> Dict:
+        """Request a password-reset link for a username or verified email. The
+        server always answers generically (no account enumeration)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/auth/forgot_password",
+                json={'identifier': identifier},
+                headers=self._http_headers(), timeout=15)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reset_password(self, token: str, new_password: str) -> Dict:
+        """Complete a password reset with the emailed token + a new password."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/auth/reset_password",
+                json={'token': token, 'new_password': new_password},
+                headers=self._http_headers(), timeout=15)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ----- User mailbox (username@domain) -----
+
+    def get_mailbox(self, folder: str = 'inbox') -> Dict:
+        """List messages in the given folder ('inbox' or 'sent')."""
+        try:
+            path = 'sent' if folder == 'sent' else 'inbox'
+            response = requests.get(
+                f"{self.http_url}/api/mail/{path}",
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_mail(self, mail_id: int) -> Dict:
+        """Fetch a single message (marks it read)."""
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/mail/{mail_id}",
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_mail(self, mail_id: int) -> Dict:
+        try:
+            response = requests.delete(
+                f"{self.http_url}/api/mail/{mail_id}",
+                headers=self._http_headers(), timeout=10)
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def send_mail(self, to_addr: str, subject: str, body: str) -> Dict:
+        """Send mail from the user's username@domain identity. Local recipients
+        are delivered internally; remote ones go out via the server's mailer."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/mail/send",
+                json={'to': to_addr, 'subject': subject, 'body': body},
+                headers=self._http_headers(), timeout=15)
             return response.json()
         except Exception as e:
             return {"success": False, "error": str(e)}

@@ -19,7 +19,7 @@ import random
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 import json
 import logging
@@ -1431,6 +1431,71 @@ class Database:
                 cursor.execute("ALTER TABLE forum_topics ADD COLUMN forum_id INTEGER")
                 print("Migration: Added 'forum_id' column to forum_topics table")
 
+            # Migration: recovery email columns on users. `email` is the user's
+            # OWN external address (e.g. gmail) used for account verification and
+            # password recovery; `email_verified` flips to 1 once they confirm it.
+            try:
+                cursor.execute("SELECT email FROM users LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
+                print("Migration: Added 'email' column to users table")
+            try:
+                cursor.execute("SELECT email_verified FROM users LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+                print("Migration: Added 'email_verified' column to users table")
+
+            # Single-use, time-limited tokens for email verification and
+            # password reset. Both are consumed on first use and expire (~1h).
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS email_verifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token TEXT UNIQUE NOT NULL,
+                    email TEXT NOT NULL,
+                    purpose TEXT NOT NULL DEFAULT 'verify',
+                    expires_at TEXT NOT NULL,
+                    used INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email_verifications_token ON email_verifications(token)")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS password_resets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token TEXT UNIQUE NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)")
+
+            # User mailboxes. Each Titan-Net user has the identity
+            # username@MAIL_DOMAIN. Delivered mail (inbound from Postfix, or an
+            # internal user-to-user message) is stored here; the in-app Mail
+            # client reads/sends via the REST API. direction 'in'/'out',
+            # folder 'inbox'/'sent'.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mail_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_user_id INTEGER NOT NULL,
+                    direction TEXT NOT NULL DEFAULT 'in',
+                    folder TEXT NOT NULL DEFAULT 'inbox',
+                    from_addr TEXT,
+                    to_addr TEXT,
+                    subject TEXT,
+                    body TEXT,
+                    received_at TEXT NOT NULL,
+                    read INTEGER DEFAULT 0,
+                    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mail_owner ON mail_messages(owner_user_id, folder)")
+
             # Migration: rebuild forum_bans to scope bans per-group. The old
             # schema had UNIQUE(user_id) (one ban per user, server-wide). The
             # new schema adds group_id and UNIQUE(group_id, user_id) so a user
@@ -1871,11 +1936,19 @@ class Database:
 
     @_serialized_write
     def create_user(self, username: str, password: str, full_name: Optional[str] = None,
-                    ip_address: Optional[str] = None, hardware_id: Optional[str] = None) -> Dict[str, Any]:
+                    ip_address: Optional[str] = None, hardware_id: Optional[str] = None,
+                    email: Optional[str] = None) -> Dict[str, Any]:
         """
         Create new user account
         Checks for hard bans (IP/hardware) before allowing registration
+
+        ``email`` is the optional external recovery address. It is stored
+        unverified; the caller issues a verification token separately via
+        ``set_user_email`` / ``create_email_verification``.
         """
+        email = (email or '').strip() or None
+        if email and not self._is_valid_email(email):
+            return {"success": False, "error": "Invalid email address"}
         # Check if IP or hardware ID is hard banned
         if ip_address or hardware_id:
             if self.is_ip_hardware_banned(ip_address, hardware_id):
@@ -1908,10 +1981,10 @@ class Database:
                 make_admin = False
 
             cursor.execute("""
-                INSERT INTO users (username, password_hash, titan_number, full_name, created_at, is_admin, role)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (username, password_hash, titan_number, full_name, created_at, is_admin, role, email, email_verified)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
             """, (username, password_hash, titan_number, full_name, created_at,
-                  1 if make_admin else 0, 'admin' if make_admin else 'user'))
+                  1 if make_admin else 0, 'admin' if make_admin else 'user', email))
 
             user_id = cursor.lastrowid
             conn.commit()
@@ -1928,7 +2001,8 @@ class Database:
                 "username": username,
                 "titan_number": titan_number,
                 "created_at": created_at,
-                "is_admin": make_admin
+                "is_admin": make_admin,
+                "email": email
             }
         except sqlite3.IntegrityError as e:
             conn.rollback()
@@ -1974,6 +2048,343 @@ class Database:
         finally:
             conn.close()
 
+    # ----- Email verification & password recovery -----
+
+    @staticmethod
+    def _is_valid_email(email: str) -> bool:
+        """Very small sanity check - the real validation is the user clicking
+        the verification link, so we only reject obvious garbage."""
+        import re
+        if not email or len(email) > 254:
+            return False
+        return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()))
+
+    def _new_token(self) -> str:
+        return secrets.token_urlsafe(32)
+
+    def create_email_verification(self, user_id: int, email: str, purpose: str = 'verify',
+                                  ttl_hours: int = 24) -> Dict[str, Any]:
+        """Issue a single-use verification token for ``email``. Returns the raw
+        token so the caller (HTTP layer) can email it. Invalidates older unused
+        tokens for the same user+purpose first."""
+        if not self._is_valid_email(email):
+            return {"success": False, "error": "Invalid email address"}
+        token = self._new_token()
+        now = datetime.now()
+        expires = (now + timedelta(hours=ttl_hours)).isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE email_verifications SET used = 1 WHERE user_id = ? AND purpose = ? AND used = 0",
+                (user_id, purpose),
+            )
+            cursor.execute(
+                "INSERT INTO email_verifications (user_id, token, email, purpose, expires_at, used, created_at) "
+                "VALUES (?, ?, ?, ?, ?, 0, ?)",
+                (user_id, token, email, purpose, expires, now.isoformat()),
+            )
+            conn.commit()
+            return {"success": True, "token": token, "email": email, "expires_at": expires}
+        finally:
+            conn.close()
+
+    @_serialized_write
+    def set_user_email(self, user_id: int, email: str) -> Dict[str, Any]:
+        """Set/replace a user's external recovery email (marks it unverified)
+        and issue a verification token. Rejects an address already verified on
+        another account."""
+        email = (email or '').strip()
+        if not self._is_valid_email(email):
+            return {"success": False, "error": "Invalid email address"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT id FROM users WHERE lower(email) = lower(?) AND email_verified = 1 AND id != ?",
+                (email, user_id),
+            )
+            if cursor.fetchone():
+                return {"success": False, "error": "That email is already in use"}
+            cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+            if not cursor.fetchone():
+                return {"success": False, "error": "User not found"}
+            cursor.execute(
+                "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
+                (email, user_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return self.create_email_verification(user_id, email, 'verify')
+
+    def verify_email(self, token: str) -> Dict[str, Any]:
+        """Consume a verification token and mark the user's email verified."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT id, user_id, email, expires_at, used FROM email_verifications WHERE token = ?",
+                (token,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "error": "Invalid or expired token"}
+            if self._row_get(row, 'used', 4):
+                return {"success": False, "error": "This link has already been used"}
+            expires = self._row_get(row, 'expires_at', 3)
+            if datetime.fromisoformat(expires) < datetime.now():
+                return {"success": False, "error": "This link has expired"}
+            uid = self._row_get(row, 'user_id', 1)
+            email = self._row_get(row, 'email', 2)
+            cursor.execute(
+                "UPDATE users SET email = ?, email_verified = 1 WHERE id = ?",
+                (email, uid),
+            )
+            cursor.execute(
+                "UPDATE email_verifications SET used = 1 WHERE id = ?",
+                (self._row_get(row, 'id', 0),),
+            )
+            conn.commit()
+            return {"success": True, "user_id": uid, "email": email}
+        finally:
+            conn.close()
+
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, username, titan_number, email, email_verified FROM users WHERE lower(email) = lower(?)",
+            ((email or '').strip(),),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def create_password_reset(self, identifier: str, ttl_hours: int = 1,
+                              max_active: int = 3) -> Dict[str, Any]:
+        """Create a single-use password-reset token for the account matching
+        ``identifier`` (username OR verified email). Rate-limited per user. The
+        result carries ``found`` so the HTTP layer can always answer 200 and
+        avoid account enumeration; the token/email are only present when a
+        matching account with a verified email exists."""
+        identifier = (identifier or '').strip()
+        if not identifier:
+            return {"success": True, "found": False}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            if '@' in identifier:
+                cursor.execute(
+                    "SELECT id, username, email, email_verified FROM users WHERE lower(email) = lower(?)",
+                    (identifier,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, username, email, email_verified FROM users WHERE username = ?",
+                    (identifier,),
+                )
+            user = cursor.fetchone()
+            if not user:
+                return {"success": True, "found": False}
+            email = self._row_get(user, 'email', 2)
+            verified = self._row_get(user, 'email_verified', 3)
+            if not email or not verified:
+                # No usable recovery address on file.
+                return {"success": True, "found": False}
+            uid = self._row_get(user, 'id', 0)
+            username = self._row_get(user, 'username', 1)
+            # Rate limit: cap active (unused, unexpired) tokens per user.
+            now = datetime.now()
+            cursor.execute(
+                "SELECT COUNT(*) FROM password_resets WHERE user_id = ? AND used = 0 AND expires_at > ?",
+                (uid, now.isoformat()),
+            )
+            if cursor.fetchone()[0] >= max_active:
+                return {"success": False, "error": "Too many reset requests; try again later"}
+            token = self._new_token()
+            expires = (now + timedelta(hours=ttl_hours)).isoformat()
+            cursor.execute(
+                "INSERT INTO password_resets (user_id, token, expires_at, used, created_at) "
+                "VALUES (?, ?, ?, 0, ?)",
+                (uid, token, expires, now.isoformat()),
+            )
+            conn.commit()
+            return {"success": True, "found": True, "token": token,
+                    "email": email, "username": username, "user_id": uid}
+        finally:
+            conn.close()
+
+    def reset_password_with_token(self, token: str, new_password: str) -> Dict[str, Any]:
+        """Consume a reset token and set a new password via the existing
+        argon2id recovery path (``change_user_password``)."""
+        if not token:
+            return {"success": False, "error": "Missing token"}
+        if not new_password or len(new_password) < 8:
+            return {"success": False, "error": "Password must be at least 8 characters"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT pr.id, pr.user_id, pr.expires_at, pr.used, u.username "
+                "FROM password_resets pr JOIN users u ON u.id = pr.user_id WHERE pr.token = ?",
+                (token,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "error": "Invalid or expired token"}
+            if self._row_get(row, 'used', 3):
+                return {"success": False, "error": "This reset link has already been used"}
+            if datetime.fromisoformat(self._row_get(row, 'expires_at', 2)) < datetime.now():
+                return {"success": False, "error": "This reset link has expired"}
+            username = self._row_get(row, 'username', 4)
+            reset_id = self._row_get(row, 'id', 0)
+        finally:
+            conn.close()
+        # change_user_password is @_serialized_write and opens its own connection.
+        result = self.change_user_password(username, new_password)
+        if not result.get('success'):
+            return result
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (reset_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return {"success": True, "username": username}
+
+    # ----- User mailboxes (username@MAIL_DOMAIN) -----
+
+    @staticmethod
+    def _mail_domain() -> str:
+        try:
+            from config import Config
+            return (Config.MAIL_DOMAIN or '').strip().lower()
+        except Exception:
+            return ''
+
+    def user_mail_address(self, username: str) -> str:
+        """The mailbox identity for a username."""
+        domain = self._mail_domain()
+        return f"{username}@{domain}" if domain else username
+
+    def resolve_local_user_by_address(self, address: str) -> Optional[Dict[str, Any]]:
+        """Return the local user a mailbox address belongs to, or None. Matches
+        local-part (case-insensitive) to a username when the domain is ours."""
+        address = (address or '').strip().lower()
+        if '@' not in address:
+            return None
+        local, _, domain = address.partition('@')
+        if domain != self._mail_domain():
+            return None
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, username FROM users WHERE lower(username) = ?",
+            (local,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @_serialized_write
+    def store_incoming_mail(self, owner_user_id: int, from_addr: str, to_addr: str,
+                            subject: str, body: str, received_at: Optional[str] = None) -> Dict[str, Any]:
+        """Persist a delivered message into a user's inbox."""
+        received_at = received_at or datetime.now().isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read) "
+            "VALUES (?, 'in', 'inbox', ?, ?, ?, ?, ?, 0)",
+            (owner_user_id, from_addr, to_addr, subject, body, received_at),
+        )
+        mail_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "mail_id": mail_id}
+
+    def list_mailbox(self, user_id: int, folder: str = 'inbox', limit: int = 100) -> List[Dict[str, Any]]:
+        folder = folder if folder in ('inbox', 'sent') else 'inbox'
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, direction, folder, from_addr, to_addr, subject, received_at, read "
+            "FROM mail_messages WHERE owner_user_id = ? AND folder = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (user_id, folder, limit),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def get_mail(self, mail_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM mail_messages WHERE id = ? AND owner_user_id = ?",
+            (mail_id, user_id),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @_serialized_write
+    def mark_mail_read(self, mail_id: int, user_id: int) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE mail_messages SET read = 1 WHERE id = ? AND owner_user_id = ?",
+            (mail_id, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    @_serialized_write
+    def delete_mail(self, mail_id: int, user_id: int) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM mail_messages WHERE id = ? AND owner_user_id = ?",
+            (mail_id, user_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def send_user_mail(self, user_id: int, to_addr: str, subject: str, body: str) -> Dict[str, Any]:
+        """Persist an outgoing message to the sender's 'sent' folder. If the
+        recipient is a local Titan-Net user, also deposit it in their inbox.
+        Returns ``external_recipient`` so the caller (HTTP layer) knows whether
+        it must also hand the message to the outbound mailer for a remote
+        address (models does not import the mailer)."""
+        to_addr = (to_addr or '').strip()
+        subject = (subject or '').strip()
+        if not to_addr:
+            return {"success": False, "error": "Recipient is required"}
+        sender = self.get_user_by_id(user_id)
+        if not sender:
+            return {"success": False, "error": "User not found"}
+        from_addr = self.user_mail_address(sender['username'])
+        now = datetime.now().isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read) "
+            "VALUES (?, 'out', 'sent', ?, ?, ?, ?, ?, 1)",
+            (user_id, from_addr, to_addr, subject, body, now),
+        )
+        conn.commit()
+        conn.close()
+        # Internal delivery to a local mailbox.
+        local = self.resolve_local_user_by_address(to_addr)
+        if local:
+            self.store_incoming_mail(local['id'], from_addr, to_addr, subject, body, now)
+        return {"success": True, "from_addr": from_addr,
+                "external_recipient": None if local else to_addr}
+
     @_serialized_write
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Authenticate user and return user data.
@@ -1987,7 +2398,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, username, password_hash, titan_number, full_name, is_admin, blog_url, role
+            SELECT id, username, password_hash, titan_number, full_name, is_admin, blog_url, role, email, email_verified
             FROM users WHERE username = ?
         """, (username,))
 
@@ -2049,7 +2460,9 @@ class Database:
             "full_name": user['full_name'],
             "is_admin": bool(user['is_admin']),
             "blog_url": user['blog_url'],
-            "role": user['role'] or 'user'
+            "role": user['role'] or 'user',
+            "email": self._row_get(user, 'email', 8),
+            "email_verified": bool(self._row_get(user, 'email_verified', 9)),
         }
 
     def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
@@ -2058,7 +2471,7 @@ class Database:
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id, username, titan_number, full_name, is_admin, blog_url, status
+            SELECT id, username, titan_number, full_name, is_admin, blog_url, status, email, email_verified
             FROM users WHERE id = ?
         """, (user_id,))
 
@@ -3360,6 +3773,58 @@ class Database:
         conn.commit()
         conn.close()
         return {"success": True, "role": new_role}
+
+    @_serialized_write
+    def transfer_group_ownership(self, group_id: int, new_owner_user_id: int, current_owner_id: int) -> Dict[str, Any]:
+        """Hand the group over to another active member. Only the current
+        owner (or a server admin) may do this. The outgoing owner is demoted
+        to 'moderator'; the target is promoted to 'owner' and recorded as the
+        group's owner. Done in a single serialized write so the group never
+        ends up with zero or two owners."""
+        if not self._is_group_owner_or_admin(group_id, current_owner_id):
+            return {"success": False, "error": "Only the group owner can transfer ownership"}
+        if new_owner_user_id == current_owner_id:
+            return {"success": False, "error": "That member is already the owner"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        # The target must be an active member of the group.
+        cursor.execute(
+            "SELECT role FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'active'",
+            (group_id, new_owner_user_id),
+        )
+        target = cursor.fetchone()
+        if not target:
+            conn.close()
+            return {"success": False, "error": "The new owner must be an active member of this group"}
+        # Identify the group's real owner row (the caller may be an admin who
+        # is not themselves the owner).
+        cursor.execute("SELECT owner_id FROM groups WHERE id = ?", (group_id,))
+        grow = cursor.fetchone()
+        if not grow:
+            conn.close()
+            return {"success": False, "error": "Group not found"}
+        old_owner_id = self._row_get(grow, 'owner_id')
+        if new_owner_user_id == old_owner_id:
+            conn.close()
+            return {"success": False, "error": "That member is already the owner"}
+        # Demote the outgoing owner to moderator (keep them in the group).
+        cursor.execute(
+            "UPDATE group_members SET role = 'moderator' WHERE group_id = ? AND user_id = ?",
+            (group_id, old_owner_id),
+        )
+        # Promote the target to owner.
+        cursor.execute(
+            "UPDATE group_members SET role = 'owner' WHERE group_id = ? AND user_id = ?",
+            (group_id, new_owner_user_id),
+        )
+        # Record the new owner on the group itself.
+        cursor.execute(
+            "UPDATE groups SET owner_id = ? WHERE id = ?",
+            (new_owner_user_id, group_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "new_owner_id": new_owner_user_id, "old_owner_id": old_owner_id}
 
     # ----- Forums (categories within a group) -----
 

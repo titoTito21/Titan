@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title data-i18n="forum.title">Forum — Titan-Net</title>
+  <title data-i18n="mail.title">Mail — Titan-Net</title>
   <link rel="stylesheet" href="css/titan.css?v=20260526a">
 </head>
 <body class="page">
@@ -24,7 +24,6 @@
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
           <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
           <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
-          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
           <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
         </ul>
       </nav>
@@ -45,62 +44,64 @@
   </header>
 
   <main id="main">
-    <!-- List view -->
-    <section id="forum-list-view" aria-labelledby="forum-h1">
+    <div id="mail-not-logged-in" class="alert alert-warning" hidden>
+      <p data-i18n="err.login_first">Please log in to use this feature.</p>
+      <p><a class="btn" href="login.html" data-i18n="nav.login">Log in</a></p>
+    </div>
+
+    <div id="mail-app" hidden>
       <div class="flex">
-        <h1 id="forum-h1" data-i18n="forum.title">Forum</h1>
+        <h1 data-i18n="mail.title">Mail</h1>
         <span class="spacer"></span>
-        <button id="new-topic-btn" data-auth="in" hidden data-i18n="forum.new_topic">New topic</button>
+        <button id="mail-compose" data-i18n="mail.compose">Compose</button>
+      </div>
+      <p class="muted" id="mail-address"></p>
+
+      <div class="field" style="max-width:220px">
+        <label for="mail-folder" data-i18n="mail.folder">Folder</label>
+        <select id="mail-folder">
+          <option value="inbox" data-i18n="mail.inbox">Inbox</option>
+          <option value="sent" data-i18n="mail.sent_folder">Sent</option>
+        </select>
       </div>
 
-      <form id="forum-search" role="search">
+      <p id="mail-status" class="muted" role="status" aria-live="polite"></p>
+      <ul id="mail-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
+    </div>
+
+    <!-- Read dialog -->
+    <dialog id="read-dialog" aria-labelledby="read-subject">
+      <div style="display:grid;gap:.75rem;min-width:min(620px,92vw)">
+        <h2 id="read-subject" style="margin:0"></h2>
+        <p class="muted" id="read-meta"></p>
+        <pre id="read-body" style="white-space:pre-wrap;max-height:50vh;overflow:auto"></pre>
+        <p style="text-align:right">
+          <button type="button" id="read-reply" data-i18n="mail.reply">Reply</button>
+          <button type="button" id="read-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
+        </p>
+      </div>
+    </dialog>
+
+    <!-- Compose dialog -->
+    <dialog id="compose-dialog" aria-labelledby="compose-title">
+      <form id="compose-form" style="display:grid;gap:.75rem;min-width:min(620px,92vw)">
+        <h2 id="compose-title" data-i18n="mail.compose" style="margin:0">Compose</h2>
+        <div id="compose-alert" role="alert" aria-live="assertive" hidden></div>
         <div class="field">
-          <label for="forum-q" data-i18n="forum.search_label">Search topics</label>
-          <input id="forum-q" name="q" type="search">
-        </div>
-      </form>
-
-      <p id="forum-status" class="muted" role="status" aria-live="polite"></p>
-
-      <ul id="forum-topics" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
-    </section>
-
-    <!-- Single topic view -->
-    <section id="forum-topic-view" aria-labelledby="topic-title" hidden>
-      <p><a href="#" id="forum-back" data-i18n="forum.back">Back to topics</a></p>
-      <article class="card">
-        <h1 id="topic-title"></h1>
-        <p class="meta" id="topic-meta"></p>
-        <div id="topic-body"></div>
-      </article>
-
-      <h2 data-i18n="forum.replies_heading">Replies</h2>
-      <ul id="topic-replies" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
-
-      <form id="reply-form" data-auth="in" hidden style="margin-top:1rem">
-        <div class="field">
-          <label for="reply-content" data-i18n="forum.reply_label">Write a reply</label>
-          <textarea id="reply-content" required aria-required="true" minlength="1"></textarea>
-        </div>
-        <p><button type="submit" data-i18n="forum.reply_submit">Post reply</button></p>
-      </form>
-    </section>
-
-    <!-- New topic dialog -->
-    <dialog id="new-topic-dialog" aria-labelledby="nt-title">
-      <form id="new-topic-form" style="display:grid;gap:1rem;min-width:min(640px,92vw)">
-        <h2 id="nt-title" data-i18n="forum.new_topic" style="margin:0">New topic</h2>
-        <div class="field">
-          <label for="nt-title-input" data-i18n="forum.new.title">Topic title</label>
-          <input id="nt-title-input" required aria-required="true" maxlength="200">
+          <label for="compose-to" data-i18n="mail.to">To (username@domain or email)</label>
+          <input id="compose-to" type="text" required aria-required="true">
         </div>
         <div class="field">
-          <label for="nt-content" data-i18n="forum.new.content">Topic content</label>
-          <textarea id="nt-content" required aria-required="true" rows="8"></textarea>
+          <label for="compose-subject" data-i18n="mail.subject">Subject</label>
+          <input id="compose-subject" type="text">
+        </div>
+        <div class="field">
+          <label for="compose-body" data-i18n="mail.message">Message</label>
+          <textarea id="compose-body" rows="8"></textarea>
         </div>
         <p style="text-align:right">
-          <button type="button" id="nt-cancel" class="btn btn-secondary" data-i18n="forum.new.cancel">Cancel</button>
-          <button type="submit" data-i18n="forum.new.submit">Post topic</button>
+          <button type="submit" id="compose-send" data-i18n="mail.send">Send</button>
+          <button type="button" id="compose-cancel" class="btn btn-secondary" data-i18n="mail.cancel">Cancel</button>
         </p>
       </form>
     </dialog>
@@ -116,6 +117,6 @@
   <script src="js/app.js?v=20260526a"></script>
   <script src="js/sounds.js?v=20260526a"></script>
   <script src="js/api.js?v=20260526a"></script>
-  <script src="js/forum.js?v=20260526a"></script>
+  <script src="js/mail.js?v=20260526a"></script>
 </body>
 </html>

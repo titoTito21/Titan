@@ -23,6 +23,7 @@
   const $groupBack = document.getElementById('group-back');
   const $newForumBtn = document.getElementById('new-forum-btn');
   const $pendingBtn = document.getElementById('pending-members-btn');
+  const $manageBtn = document.getElementById('manage-members-btn');
 
   // Threads
   const $threadsTitle = document.getElementById('threads-title');
@@ -173,6 +174,7 @@
     $groupTitle.textContent = group.name;
     $newForumBtn.hidden = !isMod(group);
     $pendingBtn.hidden = !isMod(group);
+    $manageBtn.hidden = !isMod(group);
     await loadForums();
   }
 
@@ -492,6 +494,93 @@
         : await API.rejectMember(currentGroup.id, userId);
       if (resp.success) loadPending();
       else Titan.announce(resp.error || t('err.generic'));
+    } catch (e) { Titan.announce(e.message || t('err.generic')); }
+  }
+
+  // ---------- Manage active members ----------
+  const $manageDialog = document.getElementById('manage-dialog');
+  const $manageStatus = document.getElementById('manage-status');
+  const $manageList = document.getElementById('manage-list');
+  document.getElementById('mm-close').addEventListener('click', () => dialogClose($manageDialog));
+  $manageBtn.addEventListener('click', () => {
+    if (!currentGroup) return;
+    dialogOpen($manageDialog);
+    loadManage();
+  });
+
+  async function loadManage() {
+    $manageStatus.textContent = t('groups.loading');
+    $manageList.innerHTML = '';
+    try {
+      const data = await API.groupMembers(currentGroup.id, 'active');
+      renderManage(data.members || []);
+    } catch (e) {
+      $manageStatus.textContent = e.message || t('err.generic');
+    }
+  }
+
+  function roleLabel(role) {
+    if (role === 'owner') return t('groups.status.owner');
+    if (role === 'moderator') return t('groups.status.moderator');
+    return t('groups.status.member');
+  }
+
+  function renderManage(members) {
+    $manageList.innerHTML = '';
+    if (!members.length) { $manageStatus.textContent = t('groups.no_members'); return; }
+    $manageStatus.textContent = '';
+    const isOwner = currentGroup.my_role === 'owner';
+    members.forEach((m) => {
+      const li = document.createElement('li');
+      const card = document.createElement('article');
+      card.className = 'card';
+      const name = document.createElement('span');
+      name.textContent = m.username + (m.titan_number ? ' (#' + m.titan_number + ')' : '') + ' — ' + roleLabel(m.role);
+      card.appendChild(name);
+      if (m.role !== 'owner') {
+        if (isOwner) {
+          const modBtn = document.createElement('button');
+          modBtn.style.marginLeft = '.5rem';
+          modBtn.textContent = m.role === 'moderator' ? t('groups.remove_moderator') : t('groups.make_moderator');
+          modBtn.addEventListener('click', () => manageAct(() => API.setGroupModerator(currentGroup.id, m.user_id, m.role !== 'moderator')));
+          card.appendChild(modBtn);
+          const transferBtn = document.createElement('button');
+          transferBtn.className = 'btn btn-secondary';
+          transferBtn.style.marginLeft = '.5rem';
+          transferBtn.textContent = t('groups.transfer_ownership');
+          transferBtn.addEventListener('click', () => {
+            if (!window.confirm(t('groups.transfer_confirm'))) return;
+            manageAct(() => API.transferGroupOwnership(currentGroup.id, m.user_id), true);
+          });
+          card.appendChild(transferBtn);
+        }
+        const banBtn = document.createElement('button');
+        banBtn.className = 'btn btn-secondary';
+        banBtn.style.marginLeft = '.5rem';
+        banBtn.textContent = t('groups.ban');
+        banBtn.addEventListener('click', () => manageAct(() => API.banFromGroup(currentGroup.id, m.user_id)));
+        card.appendChild(banBtn);
+      }
+      li.appendChild(card);
+      $manageList.appendChild(li);
+    });
+  }
+
+  async function manageAct(fn, reloadGroup) {
+    try {
+      const resp = await fn();
+      if (resp.success) {
+        Titan.announce(t('groups.done'));
+        if (reloadGroup) {
+          // Ownership changed hands — refresh the group so roles/menus update.
+          dialogClose($manageDialog);
+          loadGroups();
+        } else {
+          loadManage();
+        }
+      } else {
+        Titan.announce(resp.error || t('err.generic'));
+      }
     } catch (e) { Titan.announce(e.message || t('err.generic')); }
   }
 

@@ -19,6 +19,7 @@
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
           <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
           <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
+          <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
           <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
@@ -62,6 +63,18 @@
       </dl>
       <p><button id="acc-logout" class="btn btn-danger" data-i18n="account.logout">Log out</button></p>
     </div>
+
+    <div id="acc-email-card" class="card" hidden>
+      <h2 data-i18n="account.email_heading">Recovery email</h2>
+      <p class="muted" data-i18n="account.email_help">A recovery email lets you reset your password if you forget it. We send a link to verify the address is yours.</p>
+      <p id="acc-email-status" role="status" aria-live="polite"></p>
+      <div id="acc-email-alert" role="alert" aria-live="assertive" hidden></div>
+      <div class="field" style="max-width:420px">
+        <label for="acc-email-input" data-i18n="account.email_label">Email</label>
+        <input id="acc-email-input" type="email" autocomplete="email" maxlength="254">
+      </div>
+      <p><button id="acc-email-save" class="btn" data-i18n="account.email_save">Save and verify</button></p>
+    </div>
   </main>
 
   <footer class="site-footer" role="contentinfo">
@@ -95,6 +108,43 @@
         try { localStorage.removeItem('titan.remember'); } catch (er) {}
         setTimeout(() => { location.href = 'index.html'; }, 120);
       });
+
+      // ----- Recovery email -----
+      const t = Titan.t;
+      const emailCard = document.getElementById('acc-email-card');
+      const emailStatus = document.getElementById('acc-email-status');
+      const emailInput = document.getElementById('acc-email-input');
+      const emailAlert = document.getElementById('acc-email-alert');
+      const emailSave = document.getElementById('acc-email-save');
+      emailCard.hidden = false;
+
+      function emailShowAlert(msg, kind) {
+        emailAlert.hidden = false;
+        emailAlert.textContent = msg;
+        emailAlert.className = 'alert ' + (kind === 'ok' ? 'alert-success' : 'alert-error');
+        Titan.announce(msg);
+      }
+      async function loadEmail() {
+        try {
+          const r = await Titan.API.getAccountEmail();
+          if (!r || !r.success) { emailStatus.textContent = t('account.email_load_error'); return; }
+          if (!r.email) { emailStatus.textContent = t('account.email_none'); }
+          else if (r.email_verified) { emailStatus.textContent = t('account.email_verified').replace('{email}', r.email); emailInput.value = r.email; }
+          else { emailStatus.textContent = t('account.email_unverified').replace('{email}', r.email); emailInput.value = r.email; }
+        } catch (e) { emailStatus.textContent = t('account.email_load_error'); }
+      }
+      emailSave.addEventListener('click', async () => {
+        const email = emailInput.value.trim();
+        if (!email) { emailShowAlert(t('err.required')); return; }
+        emailSave.disabled = true;
+        try {
+          const r = await Titan.API.setAccountEmail(email);
+          if (r && r.success) { emailShowAlert(t('account.email_saved'), 'ok'); loadEmail(); }
+          else { emailShowAlert((r && r.error) || t('err.generic')); }
+        } catch (e) { emailShowAlert(e.message || t('err.generic')); }
+        emailSave.disabled = false;
+      });
+      loadEmail();
     });
   </script>
 </body>

@@ -62,6 +62,14 @@ def _new_message_dialog(*args, **kwargs):
     return dlg
 
 
+def _show_titannet_message(parent, message, caption, style=wx.OK | wx.ICON_INFORMATION):
+    """Show a skinned, screen-reader-friendly message box."""
+    dlg = _new_message_dialog(parent, message, caption, style)
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
+
+
 def speak_titannet(text, position=0.0, pitch_offset=0, interrupt=True):
     """
     Speak text using the same method as Klango Mode and IUI.
@@ -246,6 +254,12 @@ class LoginDialog(wx.Dialog):
 
         vbox.Add(button_box, flag=wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, border=20)
 
+        # Forgot-password entry point.
+        self.forgot_button = wx.Button(panel, wx.ID_ANY, _("Forgot password?"))
+        self.forgot_button.Bind(wx.EVT_BUTTON, self.OnForgotPassword)
+        self.forgot_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.forgot_button, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+
         panel.SetSizer(vbox)
 
     def apply_skin(self):
@@ -288,6 +302,13 @@ class LoginDialog(wx.Dialog):
 
             speak_titannet(_("Account created. You can now login."))
 
+        dialog.Destroy()
+
+    def OnForgotPassword(self, event):
+        """Open the password-recovery dialog."""
+        play_sound('core/SELECT.ogg')
+        dialog = ForgotPasswordDialog(self, self.titan_client)
+        dialog.ShowModal()
         dialog.Destroy()
 
     def OnLogin(self, event):
@@ -535,11 +556,521 @@ class LoginDialog(wx.Dialog):
                 return _("You have {msg}").format(msg=msg)
 
 
+class ForgotPasswordDialog(wx.Dialog):
+    """Two-step password recovery: request a reset link by username/email, then
+    enter the emailed token together with a new password."""
+
+    def __init__(self, parent, titan_client: TitanNetClient):
+        super().__init__(parent, title=_("Recover Password"), size=(440, 420))
+        self.titan_client = titan_client
+        self.InitUI()
+        self.Centre()
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
+        play_sound('ui/dialog.ogg')
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        intro = wx.StaticText(panel, label=_(
+            "Enter your username or the email on your account. If a verified "
+            "email is on file, we will send a reset link to it."))
+        intro.Wrap(400)
+        vbox.Add(intro, flag=wx.ALL, border=10)
+
+        id_label = wx.StaticText(panel, label=_("Username or email:"))
+        vbox.Add(id_label, flag=wx.LEFT | wx.TOP, border=10)
+        self.identifier_text = wx.TextCtrl(panel)
+        self.identifier_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.identifier_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        self.send_button = wx.Button(panel, wx.ID_ANY, _("Send reset link"))
+        self.send_button.Bind(wx.EVT_BUTTON, self.OnSend)
+        self.send_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.send_button, flag=wx.ALL, border=10)
+
+        sep = wx.StaticText(panel, label=_(
+            "Already have the reset link/token from your email? Paste it below "
+            "with a new password."))
+        sep.Wrap(400)
+        vbox.Add(sep, flag=wx.ALL, border=10)
+
+        token_label = wx.StaticText(panel, label=_("Reset token:"))
+        vbox.Add(token_label, flag=wx.LEFT | wx.TOP, border=10)
+        self.token_text = wx.TextCtrl(panel)
+        self.token_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.token_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        pw_label = wx.StaticText(panel, label=_("New password:"))
+        vbox.Add(pw_label, flag=wx.LEFT | wx.TOP, border=10)
+        self.password_text = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        self.password_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.password_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        self.reset_button = wx.Button(panel, wx.ID_ANY, _("Reset password"))
+        self.reset_button.Bind(wx.EVT_BUTTON, self.OnReset)
+        self.reset_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        btn_box.Add(self.reset_button, flag=wx.RIGHT, border=10)
+        close_button = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        btn_box.Add(close_button)
+        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
+
+        panel.SetSizer(vbox)
+
+    def OnFocus(self, event):
+        play_sound('core/FOCUS.ogg', pan=0.5)
+        event.Skip()
+
+    def OnKeyPress(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            play_sound('core/SELECT.ogg')
+            self.EndModal(wx.ID_CANCEL)
+        else:
+            event.Skip()
+
+    def OnSend(self, event):
+        play_sound('core/SELECT.ogg')
+        identifier = self.identifier_text.GetValue().strip()
+        if not identifier:
+            speak_titannet(_("Please enter a username or email"))
+            play_sound('core/error.ogg')
+            return
+        self.send_button.Enable(False)
+        speak_titannet(_("Sending..."))
+
+        def _do():
+            result = self.titan_client.forgot_password(identifier)
+            wx.CallAfter(self._on_sent, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_sent(self, result):
+        self.send_button.Enable(True)
+        # Always a generic message (no account enumeration).
+        msg = _("If an account with a verified email matches, a reset link has been sent. "
+                "Check your inbox, then paste the token below.")
+        speak_titannet(msg)
+        _show_titannet_message(self, msg, _("Recover Password"))
+        self.token_text.SetFocus()
+
+    def OnReset(self, event):
+        play_sound('core/SELECT.ogg')
+        token = self.token_text.GetValue().strip()
+        password = self.password_text.GetValue()
+        if not token or not password:
+            speak_titannet(_("Enter the reset token and a new password"))
+            play_sound('core/error.ogg')
+            return
+        if len(password) < 8:
+            speak_titannet(_("Password must be at least 8 characters"))
+            play_sound('core/error.ogg')
+            return
+        self.reset_button.Enable(False)
+        speak_titannet(_("Resetting password..."))
+
+        def _do():
+            result = self.titan_client.reset_password(token, password)
+            wx.CallAfter(self._on_reset, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_reset(self, result):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            speak_titannet(_("Password changed. You can now log in with your new password."))
+            _show_titannet_message(self, _("Password changed. You can now log in with your new password."),
+                                   _("Recover Password"))
+            self.EndModal(wx.ID_OK)
+        else:
+            self.reset_button.Enable(True)
+            play_sound('core/error.ogg')
+            speak_titannet(result.get('error', _('Reset failed')))
+            _show_titannet_message(self, result.get('error', _('Reset failed')), _("Recover Password"),
+                                   wx.OK | wx.ICON_ERROR)
+
+
+class AccountEmailDialog(wx.Dialog):
+    """View and set the account's recovery email. Setting a new address emails a
+    verification link to it; recovery only works once the address is verified."""
+
+    def __init__(self, parent, titan_client: TitanNetClient):
+        super().__init__(parent, title=_("Recovery Email"), size=(440, 300))
+        self.titan_client = titan_client
+        self.InitUI()
+        self.Centre()
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
+        play_sound('ui/dialog.ogg')
+        wx.CallAfter(self.load_current)
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        intro = wx.StaticText(panel, label=_(
+            "A recovery email lets you reset your password if you forget it. "
+            "We send a verification link to confirm the address is yours."))
+        intro.Wrap(400)
+        vbox.Add(intro, flag=wx.ALL, border=10)
+
+        self.status_label = wx.StaticText(panel, label=_("Loading..."))
+        vbox.Add(self.status_label, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
+
+        email_label = wx.StaticText(panel, label=_("Email:"))
+        vbox.Add(email_label, flag=wx.LEFT | wx.TOP, border=10)
+        self.email_text = wx.TextCtrl(panel)
+        self.email_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.email_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        self.save_button = wx.Button(panel, wx.ID_ANY, _("Save and verify"))
+        self.save_button.Bind(wx.EVT_BUTTON, self.OnSave)
+        self.save_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        btn_box.Add(self.save_button, flag=wx.RIGHT, border=10)
+        close_button = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        btn_box.Add(close_button)
+        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
+
+        panel.SetSizer(vbox)
+
+    def OnFocus(self, event):
+        play_sound('core/FOCUS.ogg', pan=0.5)
+        event.Skip()
+
+    def OnKeyPress(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            play_sound('core/SELECT.ogg')
+            self.EndModal(wx.ID_CANCEL)
+        else:
+            event.Skip()
+
+    def load_current(self):
+        def _do():
+            result = self.titan_client.get_account_email()
+            wx.CallAfter(self._show_current, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _show_current(self, result):
+        if not result.get('success'):
+            self.status_label.SetLabel(_("Could not load your email."))
+            return
+        email = result.get('email')
+        if not email:
+            self.status_label.SetLabel(_("No recovery email is set."))
+        elif result.get('email_verified'):
+            self.status_label.SetLabel(_("Current: {email} (verified)").format(email=email))
+            self.email_text.SetValue(email)
+        else:
+            self.status_label.SetLabel(_("Current: {email} (not verified)").format(email=email))
+            self.email_text.SetValue(email)
+
+    def OnSave(self, event):
+        play_sound('core/SELECT.ogg')
+        email = self.email_text.GetValue().strip()
+        if not email:
+            speak_titannet(_("Please enter an email address"))
+            play_sound('core/error.ogg')
+            return
+        self.save_button.Enable(False)
+        speak_titannet(_("Saving..."))
+
+        def _do():
+            result = self.titan_client.set_account_email(email)
+            wx.CallAfter(self._on_saved, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_saved(self, result):
+        self.save_button.Enable(True)
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            msg = _("Saved. Check your inbox for a verification link.")
+            speak_titannet(msg)
+            _show_titannet_message(self, msg, _("Recovery Email"))
+            self.load_current()
+        else:
+            play_sound('core/error.ogg')
+            speak_titannet(result.get('error', _('Save failed')))
+            _show_titannet_message(self, result.get('error', _('Save failed')), _("Recovery Email"),
+                                   wx.OK | wx.ICON_ERROR)
+
+
+class ComposeMailDialog(wx.Dialog):
+    """Compose a new message from the user's username@domain identity."""
+
+    def __init__(self, parent, titan_client: TitanNetClient, to_addr: str = "",
+                 subject: str = "", body: str = ""):
+        super().__init__(parent, title=_("Compose Mail"), size=(560, 460))
+        self.titan_client = titan_client
+        self.sent = False
+        self.InitUI(to_addr, subject, body)
+        self.Centre()
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
+        play_sound('ui/dialog.ogg')
+
+    def InitUI(self, to_addr, subject, body):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        vbox.Add(wx.StaticText(panel, label=_("To (username@domain or email):")), flag=wx.LEFT | wx.TOP, border=10)
+        self.to_text = wx.TextCtrl(panel, value=to_addr)
+        self.to_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.to_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        vbox.Add(wx.StaticText(panel, label=_("Subject:")), flag=wx.LEFT | wx.TOP, border=10)
+        self.subject_text = wx.TextCtrl(panel, value=subject)
+        self.subject_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.subject_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        vbox.Add(wx.StaticText(panel, label=_("Message:")), flag=wx.LEFT | wx.TOP, border=10)
+        self.body_text = wx.TextCtrl(panel, value=body, style=wx.TE_MULTILINE)
+        self.body_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.body_text, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+
+        btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        self.send_button = wx.Button(panel, wx.ID_ANY, _("Send"))
+        self.send_button.Bind(wx.EVT_BUTTON, self.OnSend)
+        self.send_button.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        btn_box.Add(self.send_button, flag=wx.RIGHT, border=10)
+        btn_box.Add(wx.Button(panel, wx.ID_CANCEL, _("Cancel")))
+        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
+
+        panel.SetSizer(vbox)
+
+    def OnFocus(self, event):
+        play_sound('core/FOCUS.ogg', pan=0.5)
+        event.Skip()
+
+    def OnKeyPress(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            play_sound('core/SELECT.ogg')
+            self.EndModal(wx.ID_CANCEL)
+        else:
+            event.Skip()
+
+    def OnSend(self, event):
+        play_sound('core/SELECT.ogg')
+        to_addr = self.to_text.GetValue().strip()
+        subject = self.subject_text.GetValue().strip()
+        body = self.body_text.GetValue()
+        if not to_addr:
+            speak_titannet(_("Please enter a recipient"))
+            play_sound('core/error.ogg')
+            return
+        self.send_button.Enable(False)
+        speak_titannet(_("Sending..."))
+
+        def _do():
+            result = self.titan_client.send_mail(to_addr, subject, body)
+            wx.CallAfter(self._on_sent, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_sent(self, result):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            speak_titannet(_("Message sent"))
+            self.sent = True
+            self.EndModal(wx.ID_OK)
+        else:
+            self.send_button.Enable(True)
+            play_sound('core/error.ogg')
+            speak_titannet(result.get('error', _('Send failed')))
+            _show_titannet_message(self, result.get('error', _('Send failed')), _("Compose Mail"),
+                                   wx.OK | wx.ICON_ERROR)
+
+
+class MailWindow(wx.Frame):
+    """The user's mailbox (username@domain): inbox, sent folder, compose."""
+
+    def __init__(self, parent, titan_client: TitanNetClient):
+        super().__init__(parent, title=_("Titan-Net Mail"), size=(760, 520))
+        self.titan_client = titan_client
+        self.folder = 'inbox'
+        self._messages = []
+        self.address = ''
+        self.InitUI()
+        self.Centre()
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+        try:
+            from src.ui.window_switcher import register_window
+            register_window("Titan-Net Mail", window=self, category='messenger')
+        except Exception:
+            pass
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
+        play_sound('ui/window_open.ogg')
+        wx.CallAfter(self.load_messages)
+
+    def InitUI(self):
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        self.address_label = wx.StaticText(panel, label=_("Your address: loading..."))
+        vbox.Add(self.address_label, flag=wx.ALL, border=8)
+
+        folder_box = wx.BoxSizer(wx.HORIZONTAL)
+        folder_box.Add(wx.StaticText(panel, label=_("Folder:")), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=6)
+        self.folder_choice = wx.Choice(panel, choices=[_("Inbox"), _("Sent")])
+        self.folder_choice.SetSelection(0)
+        self.folder_choice.Bind(wx.EVT_CHOICE, self.OnFolderChange)
+        folder_box.Add(self.folder_choice)
+        vbox.Add(folder_box, flag=wx.LEFT | wx.BOTTOM, border=8)
+
+        self.mail_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self.mail_list.AppendColumn(_("From/To"), width=240)
+        self.mail_list.AppendColumn(_("Subject"), width=320)
+        self.mail_list.AppendColumn(_("Date"), width=150)
+        self.mail_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, lambda e: self.OnRead())
+        vbox.Add(self.mail_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=8)
+
+        btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        for label, handler in (
+            (_("Read"), lambda e: self.OnRead()),
+            (_("Compose"), lambda e: self.OnCompose()),
+            (_("Delete"), lambda e: self.OnDelete()),
+            (_("Refresh"), lambda e: self.load_messages()),
+            (_("Close"), lambda e: self.Close()),
+        ):
+            btn = wx.Button(panel, label=label)
+            btn.Bind(wx.EVT_BUTTON, handler)
+            btn_box.Add(btn, flag=wx.RIGHT, border=6)
+        vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=8)
+
+        panel.SetSizer(vbox)
+
+    def OnKeyPress(self, event):
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE or (keycode == wx.WXK_F4 and event.AltDown()):
+            self.Close()
+        else:
+            event.Skip()
+
+    def OnFolderChange(self, event):
+        self.folder = 'sent' if self.folder_choice.GetSelection() == 1 else 'inbox'
+        self.load_messages()
+
+    def load_messages(self):
+        play_sound('core/SELECT.ogg')
+
+        def _do():
+            result = self.titan_client.get_mailbox(self.folder)
+            wx.CallAfter(self._display, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _display(self, result):
+        self.mail_list.DeleteAllItems()
+        if not result.get('success'):
+            play_sound('core/error.ogg')
+            speak_titannet(result.get('error', _('Could not load mail')))
+            return
+        self.address = result.get('address', '')
+        self.address_label.SetLabel(_("Your address: {address}").format(address=self.address))
+        self._messages = result.get('messages', [])
+        for m in self._messages:
+            who = m.get('from_addr') if self.folder == 'inbox' else m.get('to_addr')
+            subject = m.get('subject') or _("(no subject)")
+            if self.folder == 'inbox' and not m.get('read'):
+                subject = "* " + subject
+            idx = self.mail_list.InsertItem(self.mail_list.GetItemCount(), who or '')
+            self.mail_list.SetItem(idx, 1, subject)
+            self.mail_list.SetItem(idx, 2, (m.get('received_at') or '')[:16].replace('T', ' '))
+            self.mail_list.SetItemData(idx, m.get('id', 0))
+        if self._messages:
+            self.mail_list.SetItemState(0, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
+
+    def _selected_id(self):
+        sel = self.mail_list.GetFirstSelected()
+        if sel == -1:
+            return None
+        return self.mail_list.GetItemData(sel)
+
+    def OnRead(self):
+        mail_id = self._selected_id()
+        if mail_id is None:
+            return
+        play_sound('core/SELECT.ogg')
+
+        def _do():
+            result = self.titan_client.get_mail(mail_id)
+            wx.CallAfter(self._show_message, result)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _show_message(self, result):
+        if not result.get('success'):
+            play_sound('core/error.ogg')
+            speak_titannet(result.get('error', _('Could not open message')))
+            return
+        m = result.get('message', {})
+        text = "{}: {}\n{}: {}\n{}: {}\n\n{}".format(
+            _("From"), m.get('from_addr', ''),
+            _("To"), m.get('to_addr', ''),
+            _("Subject"), m.get('subject', ''),
+            m.get('body', ''))
+        dlg = wx.Dialog(self, title=m.get('subject') or _("Message"), size=(600, 460))
+        panel = wx.Panel(dlg)
+        v = wx.BoxSizer(wx.VERTICAL)
+        tc = wx.TextCtrl(panel, value=text, style=wx.TE_MULTILINE | wx.TE_READONLY)
+        v.Add(tc, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+        reply_btn = wx.Button(panel, wx.ID_ANY, _("Reply"))
+        reply_btn.Bind(wx.EVT_BUTTON, lambda e: (dlg.EndModal(wx.ID_OK), self._reply(m)))
+        v.Add(reply_btn, flag=wx.ALIGN_CENTER | wx.BOTTOM, border=6)
+        v.Add(wx.Button(panel, wx.ID_CANCEL, _("Close")), flag=wx.ALIGN_CENTER | wx.BOTTOM, border=10)
+        panel.SetSizer(v)
+        try:
+            _apply_skin_recursive(dlg)
+        except Exception:
+            pass
+        tc.SetInsertionPoint(0)
+        dlg.ShowModal()
+        dlg.Destroy()
+        # Refresh so the read marker clears.
+        self.load_messages()
+
+    def _reply(self, m):
+        to_addr = m.get('from_addr', '')
+        subject = m.get('subject', '')
+        if subject and not subject.lower().startswith('re:'):
+            subject = "Re: " + subject
+        quoted = "\n\n> " + (m.get('body', '') or '').replace("\n", "\n> ")
+        dlg = ComposeMailDialog(self, self.titan_client, to_addr, subject, quoted)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def OnCompose(self):
+        play_sound('core/SELECT.ogg')
+        dlg = ComposeMailDialog(self, self.titan_client)
+        if dlg.ShowModal() == wx.ID_OK and dlg.sent:
+            self.load_messages()
+        dlg.Destroy()
+
+    def OnDelete(self):
+        mail_id = self._selected_id()
+        if mail_id is None:
+            return
+        play_sound('core/SELECT.ogg')
+
+        def _do():
+            result = self.titan_client.delete_mail(mail_id)
+            wx.CallAfter(lambda: self.load_messages() if result.get('success') else None)
+        threading.Thread(target=_do, daemon=True).start()
+
+
 class CreateAccountDialog(wx.Dialog):
     """Create account dialog for Titan-Net"""
 
     def __init__(self, parent, titan_client: TitanNetClient):
-        super().__init__(parent, title=_("Create Titan-Net Account"), size=(400, 350))
+        super().__init__(parent, title=_("Create Titan-Net Account"), size=(400, 430))
 
         self.titan_client = titan_client
         self.username = None
@@ -589,6 +1120,15 @@ class CreateAccountDialog(wx.Dialog):
         self.lastname_text = wx.TextCtrl(panel)
         self.lastname_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.lastname_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        # Email field (optional recovery address). A verification link is
+        # emailed if provided; needed to recover a lost password later.
+        email_label = wx.StaticText(panel, label=_("Email:") + " (" + _("optional") + ")")
+        vbox.Add(email_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.email_text = wx.TextCtrl(panel)
+        self.email_text.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.email_text, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
         # Buttons
         button_box = wx.BoxSizer(wx.HORIZONTAL)
@@ -641,6 +1181,7 @@ class CreateAccountDialog(wx.Dialog):
         password = self.password_text.GetValue()
         firstname = self.firstname_text.GetValue().strip()
         lastname = self.lastname_text.GetValue().strip()
+        email = self.email_text.GetValue().strip()
 
         if not username or not password:
             speak_titannet(_("Username and password are required"))
@@ -656,7 +1197,7 @@ class CreateAccountDialog(wx.Dialog):
 
         def register_thread():
             try:
-                result = self.titan_client.register(username, password, full_name)
+                result = self.titan_client.register(username, password, full_name, email)
                 wx.CallAfter(self.OnRegistrationComplete, result, username, password)
             except Exception as e:
                 wx.CallAfter(self.OnRegistrationComplete, {
@@ -1533,6 +2074,8 @@ class TitanNetMainWindow(wx.Frame):
                 self.Bind(wx.EVT_MENU, lambda e: self._user_create_forum(), create_forum_item)
                 pending_item = user_menu.Append(wx.ID_ANY, _("Manage Pending Members"))
                 self.Bind(wx.EVT_MENU, lambda e: self._mod_manage_pending_members(), pending_item)
+                manage_item = user_menu.Append(wx.ID_ANY, _("Manage Members"))
+                self.Bind(wx.EVT_MENU, lambda e: self._mod_manage_members(), manage_item)
                 user_menu.AppendSeparator()
         elif self.current_view == "forum":
             create_topic_item = user_menu.Append(wx.ID_ANY, _("Create New Thread"))
@@ -1541,6 +2084,9 @@ class TitanNetMainWindow(wx.Frame):
 
         view_all_users_item = user_menu.Append(wx.ID_ANY, _("View All Users"))
         self.Bind(wx.EVT_MENU, lambda e: self._view_all_users(), view_all_users_item)
+
+        recovery_email_item = user_menu.Append(wx.ID_ANY, _("Recovery Email"))
+        self.Bind(wx.EVT_MENU, lambda e: self._manage_recovery_email(), recovery_email_item)
 
         menubar.Append(user_menu, _("Actions"))
 
@@ -1810,6 +2356,7 @@ class TitanNetMainWindow(wx.Frame):
             _("Chat Rooms"),
             _("Online Users"),
             _("Private Messages"),
+            _("Mail"),
             _("Forum"),
             _("App Repository"),
         ]
@@ -1852,6 +2399,28 @@ class TitanNetMainWindow(wx.Frame):
         self.update_menu_bar()
 
         play_sound('core/SELECT.ogg')
+
+        # One-time-per-session nudge: invite users without a recovery email to
+        # add one, so they can recover a lost password later. Non-blocking and
+        # only spoken once.
+        if not getattr(self, '_email_nudge_done', False):
+            self._email_nudge_done = True
+            self._maybe_nudge_recovery_email()
+
+    def _maybe_nudge_recovery_email(self):
+        """If the logged-in user has no recovery email on file, gently suggest
+        adding one via Actions -> Recovery Email. Runs in the background."""
+        def _do():
+            try:
+                result = self.titan_client.get_account_email()
+            except Exception:
+                return
+            if result.get('success') and not result.get('email'):
+                wx.CallAfter(
+                    speak_titannet,
+                    _("Tip: add a recovery email in Actions, Recovery Email, "
+                      "so you can reset your password if you forget it."))
+        threading.Thread(target=_do, daemon=True).start()
 
     def _refresh_component_surfaces(self):
         """Re-surface component contributions after the runtime (re)loads —
@@ -2711,6 +3280,8 @@ class TitanNetMainWindow(wx.Frame):
                 self.show_users_view()
             elif item_text == _("Private Messages"):
                 self.show_private_messages_view()
+            elif item_text == _("Mail"):
+                self.open_mail_window()
             elif item_text == _("Forum"):
                 self.show_groups_view()
             elif item_text == _("App Repository"):
@@ -6168,6 +6739,44 @@ class TitanNetMainWindow(wx.Frame):
             dlg.Destroy()
         except Exception as e:
             print(f"Error managing pending members: {e}")
+
+    def open_mail_window(self):
+        """Open the user's mailbox (username@domain) - inbox, sent, compose."""
+        try:
+            win = MailWindow(self, self.titan_client)
+            win.Show()
+        except Exception as e:
+            print(f"Error opening mail window: {e}")
+            speak_titannet(_("Could not open Mail"))
+
+    def _manage_recovery_email(self):
+        """Open the recovery-email dialog: view/set the account's external
+        email used for password recovery."""
+        try:
+            dlg = AccountEmailDialog(self, self.titan_client)
+            dlg.ShowModal()
+            dlg.Destroy()
+        except Exception as e:
+            print(f"Error managing recovery email: {e}")
+
+    def _mod_manage_members(self):
+        """Open the active-member management dialog for the current group.
+        Owners can appoint/revoke moderators and transfer ownership; moderators
+        can ban/unban. After the dialog closes (e.g. an ownership transfer) the
+        group list is refreshed so the caller's role is up to date."""
+        group = getattr(self, 'current_group', None)
+        if not group:
+            return
+        try:
+            from src.network.titan_net_forum_gui import ManageGroupMembersDialog
+            my_role = group.get('my_role', 'moderator')
+            dlg = ManageGroupMembersDialog(self, self.titan_client, group['id'], my_role)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # Ownership may have changed hands; refresh so menus reflect it.
+            self.refresh_groups()
+        except Exception as e:
+            print(f"Error managing members: {e}")
 
     def _mod_move_selected_topic_to_forum(self):
         """Move the selected thread to another forum. Within the same group the

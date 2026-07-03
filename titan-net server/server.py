@@ -624,6 +624,7 @@ class TitanNetServer:
         username = data.get('username')
         password = data.get('password')
         full_name = data.get('full_name')
+        email = (data.get('email') or '').strip() or None  # Optional recovery email
         language = data.get('language', 'en')  # Get user's language, default to English
 
         if not username or not password:
@@ -649,7 +650,7 @@ class TitanNetServer:
                 loop.run_in_executor(
                     self._auth_executor,
                     self.db.create_user,
-                    username, password, full_name, ip_for_db, hardware_id,
+                    username, password, full_name, ip_for_db, hardware_id, email,
                 ),
                 timeout=self._auth_timeout_seconds,
             )
@@ -675,6 +676,22 @@ class TitanNetServer:
         if result.get('success'):
             titan_number = result.get('titan_number')
             logger.info(f"[REGISTER] User {username} registered successfully with Titan #{titan_number}")
+
+            # Issue an email-verification token and send it, if the user gave a
+            # recovery address. Best-effort: a mail failure must not fail signup.
+            if email and result.get('user_id'):
+                try:
+                    import mailer
+                    ver = await loop.run_in_executor(
+                        None, self.db.create_email_verification,
+                        result['user_id'], email, 'verify',
+                    )
+                    if ver.get('success'):
+                        await loop.run_in_executor(
+                            None, mailer.send_verification, email, username, ver['token']
+                        )
+                except Exception as e:
+                    logger.error(f"[REGISTER] Failed to send verification email: {e}", exc_info=True)
 
             # Broadcast new user message to all clients in multiple languages
             for lang in ['en', 'pl']:
