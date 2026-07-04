@@ -37,6 +37,13 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'change-this-in-production')
     DATABASE_KEY = os.environ.get('DATABASE_KEY') or _require('DATABASE_KEY')
 
+    # Authentication tokens. The HTTP API uses HMAC-signed, role-bound tokens
+    # (auth_tokens.py). LEGACY_TOKENS=1 temporarily also accepts the old
+    # base64("id:username") tokens so already-deployed desktop clients keep
+    # working during a rollout; set it to 0 to fully close the impersonation
+    # hole once all clients issue signed tokens.
+    LEGACY_TOKENS = os.getenv('LEGACY_TOKENS', '0') == '1'
+
     # Local development flag. When LOCAL_MODE=1 (set only in the local .env),
     # the first registered user is automatically promoted to administrator.
     # Never enable this in production.
@@ -45,6 +52,14 @@ class Config:
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_DIR = os.getenv('LOG_DIR', 'logs')
+
+    # Cerberus AI (optional LLM security analyst, "Cerberus"). Uses Google
+    # Gemini. Leave the key empty to keep it disabled; the behavioral risk
+    # engine still runs without it.
+    CERBERUS_AI_KEY = os.getenv('CERBERUS_AI_KEY', '') or os.getenv('GEMINI_API_KEY', '')
+    # Default to the most capable Gemini model - this analyst runs on demand, so
+    # depth matters more than latency.
+    CERBERUS_AI_MODEL = os.getenv('CERBERUS_AI_MODEL', 'gemini-2.5-pro')
 
     # Mail (email verification, password recovery, user mailboxes).
     # Outbound mail is handed to a local Postfix relay by default; point

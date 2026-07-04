@@ -309,37 +309,82 @@ class TitanNetHTTPServer:
             self.app.router.add_static('/titannet/', self.web_root, show_index=False)
 
     def verify_token(self, request: web.Request) -> Optional[Dict]:
-        """Verify authentication token with database lookup"""
+        """Authenticate a request via its Bearer token.
+
+        Tokens are HMAC-signed and role-bound (auth_tokens). A signed token that
+        fails verification is a forgery/tamper attempt and is reported to
+        Cerberus. Legacy base64("id:username") tokens are accepted ONLY while
+        Config.LEGACY_TOKENS is on (rollout grace); otherwise they are treated
+        as forged. The user's role/is_admin is always taken from the DATABASE,
+        never from the token, so privileges cannot be spoofed and demotions
+        take effect immediately.
+        """
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return None
-
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        token = auth_header[7:]
+        ip = None
+        try:
+            ip = self._get_client_ip(request)
+        except Exception:
+            ip = None
 
         try:
-            # Token format: base64(user_id:username)
+            import auth_tokens
+            from config import Config
+
+            if auth_tokens.looks_like_signed(token):
+                payload = auth_tokens.verify(token)
+                if not payload:
+                    # Valid-looking signed token that fails signature/expiry =
+                    # tamper/forgery attempt.
+                    self._note_forged_token(ip, "invalid signed token")
+                    return None
+                user = self.db.get_user_by_id(int(payload['uid']))
+                if not user or user['username'] != payload.get('un'):
+                    self._note_forged_token(ip, "signed token user mismatch")
+                    return None
+                return self._auth_user_dict(user)
+
+            # --- Legacy base64("id:username") token ---
+            if not Config.LEGACY_TOKENS:
+                # Signed tokens are mandatory: a legacy token is now an
+                # impersonation attempt (anyone can craft one).
+                self._note_forged_token(ip, "legacy token rejected (strict mode)")
+                return None
             import base64
             decoded = base64.b64decode(token).decode('utf-8')
             user_id_str, username = decoded.split(':', 1)
             user_id = int(user_id_str)
-
-            # CRITICAL FIX: Verify user exists in database
             user = self.db.get_user_by_id(user_id)
             if not user or user['username'] != username:
-                logger.warning(f"Token verification failed: invalid user {user_id}:{username}")
+                self._note_forged_token(ip, f"legacy token invalid user {user_id}")
                 return None
-
-            return {
-                'id': user['id'],
-                'username': user['username'],
-                'is_admin': user.get('is_admin', False)
-            }
-        except (ValueError, TypeError, KeyError) as e:
-            logger.warning(f"Token verification failed: {e}")
+            return self._auth_user_dict(user)
+        except (ValueError, TypeError, KeyError):
+            self._note_forged_token(ip, "malformed token")
             return None
         except Exception as e:
             logger.error(f"Token verification error: {e}")
             return None
+
+    def _auth_user_dict(self, user: Dict) -> Dict:
+        """Normalize an authenticated user, with role/is_admin from the DB."""
+        return {
+            'id': user['id'],
+            'username': user['username'],
+            'is_admin': bool(user.get('is_admin', False)),
+            'role': user.get('role') or ('admin' if user.get('is_admin') else 'user'),
+        }
+
+    def _note_forged_token(self, ip: Optional[str], reason: str):
+        """Report a forged/invalid token to Cerberus (impersonation signal)."""
+        logger.warning(f"Token verification failed from {ip}: {reason}")
+        try:
+            if self.cerberus is not None and ip:
+                self.cerberus.record_forged_token(ip, reason)
+        except Exception as e:
+            logger.error(f"record_forged_token failed: {e}")
 
     def verify_admin(self, user_id: int) -> bool:
         """Verify if user is admin"""
@@ -1417,10 +1462,34 @@ class TitanNetHTTPServer:
             logger.error(f"Verify email error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
+    def _note_authz_violation(self, request: web.Request, user: Dict, resource: str):
+        """Report a cross-user (IDOR) access attempt to Cerberus."""
+        try:
+            if self.cerberus is not None:
+                ip = self._get_client_ip(request)
+                self.cerberus.record_authz_violation(ip, (user or {}).get('id'), resource)
+        except Exception as e:
+            logger.error(f"record_authz_violation failed: {e}")
+
+    def _note_privilege_escalation(self, request: web.Request, user: Dict, resource: str):
+        """Report an attempt to use a moderator/admin capability without the role."""
+        try:
+            if self.cerberus is not None:
+                ip = self._get_client_ip(request)
+                self.cerberus.record_privilege_escalation(ip, (user or {}).get('id'), resource)
+        except Exception as e:
+            logger.error(f"record_privilege_escalation failed: {e}")
+
     async def handle_forgot_password(self, request: web.Request) -> web.Response:
         """Start a password reset. Always answers 200 with a generic message so
         an attacker cannot tell whether an account/email exists."""
         try:
+            # Rate-limit / escalate reset abuse per source IP.
+            try:
+                if self.cerberus is not None:
+                    self.cerberus.record_password_reset_request(self._get_client_ip(request))
+            except Exception:
+                pass
             data = await request.json() if request.can_read_body else {}
             identifier = (data.get('identifier') or '').strip()
             loop = asyncio.get_event_loop()
@@ -1492,6 +1561,12 @@ class TitanNetHTTPServer:
             loop = asyncio.get_event_loop()
             msg = await loop.run_in_executor(None, self.db.get_mail, mail_id, user['id'])
             if not msg:
+                # Either the id does not exist or it belongs to another user.
+                # If it exists but is owned by someone else, that is a cross-user
+                # access attempt -> tell Cerberus.
+                exists = await loop.run_in_executor(None, self.db.mail_exists, mail_id)
+                if exists:
+                    self._note_authz_violation(request, user, f"mail/{mail_id}")
                 return web.json_response({'success': False, 'error': 'Not found'}, status=404)
             # Reading marks it read.
             await loop.run_in_executor(None, self.db.mark_mail_read, mail_id, user['id'])
@@ -2276,12 +2351,19 @@ class TitanNetHTTPServer:
 
     # Moderation Handlers
 
+    def _is_privileged(self, user: Dict) -> bool:
+        """Staff role check used to gate + detect privilege escalation."""
+        return bool(user and (user.get('is_admin') or user.get('role') in ('developer', 'admin')))
+
     async def handle_promote_moderator(self, request: web.Request) -> web.Response:
         """Promote user to moderator (developer only)"""
         try:
             user = self.verify_token(request)
             if not user:
                 return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+            if not self._is_privileged(user):
+                self._note_privilege_escalation(request, user, '/api/moderation/promote')
+                return web.json_response({'success': False, 'error': 'Not allowed'}, status=403)
 
             data = await request.json()
             username = data.get('username')
@@ -2321,6 +2403,9 @@ class TitanNetHTTPServer:
             user = self.verify_token(request)
             if not user:
                 return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+            if not self._is_privileged(user):
+                self._note_privilege_escalation(request, user, '/api/moderation/demote')
+                return web.json_response({'success': False, 'error': 'Not allowed'}, status=403)
 
             data = await request.json()
             username = data.get('username')

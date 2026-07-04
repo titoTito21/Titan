@@ -146,6 +146,39 @@ class TitanNetServer:
         self.cerberus.on_disconnect_ip = self._cerberus_disconnect_ip
         self.cerberus.on_ban_ip = self._cerberus_ban_ip
 
+        # --- Cerberus AI: behavioral risk engine + optional Gemini analyst ---
+        try:
+            from cerberus_ai import RiskEngine, CerberusAI
+            from config import Config
+
+            def _risk_escalate(ip, reason):
+                # Correlated multi-signal risk crossed the ban line -> ban the IP.
+                try:
+                    self.cerberus.ban_ip(ip, permanent=False)
+                    if self.cerberus.on_disconnect_ip:
+                        self.cerberus.on_disconnect_ip(ip)
+                    self.cerberus._log_intrusion("RISK_ESCALATION", ip, reason)
+                except Exception as e:
+                    logger.error(f"[CERBERUS-AI] risk escalate failed: {e}")
+
+            self.risk_engine = RiskEngine(on_escalate=_risk_escalate)
+            self.cerberus.risk_engine = self.risk_engine
+            self.cerberus_ai = CerberusAI(
+                self.risk_engine,
+                status_provider=self.cerberus.get_status,
+                log_path=self.cerberus._intrusion_log,
+                api_key=getattr(Config, 'CERBERUS_AI_KEY', '') or '',
+                model=getattr(Config, 'CERBERUS_AI_MODEL', 'gemini-2.5-pro'),
+            )
+            logger.info(
+                "[CERBERUS-AI] Risk engine online; AI analyst %s",
+                "enabled" if self.cerberus_ai.enabled else "disabled (no Gemini key)",
+            )
+        except Exception as e:
+            logger.error(f"[CERBERUS-AI] init failed: {e}", exc_info=True)
+            self.risk_engine = None
+            self.cerberus_ai = None
+
         # --- HackBack Protocol (Active Defense) ---
         self.hackback = HackBackProtocol(cerberus=self.cerberus, log_dir='logs')
         # Store event loop reference for thread-safe countermeasure scheduling
@@ -596,11 +629,25 @@ class TitanNetServer:
 
             online_users, unread_summary, has_custom_sounds, motd = await _fetch_login_data()
 
+            # Mint an HMAC-signed, role-bound HTTP token (auth_tokens). The
+            # client carries this for REST calls; it cannot be forged and its
+            # role is re-checked server-side, so no user/mod/admin impersonation.
+            try:
+                import auth_tokens
+                http_token = auth_tokens.mint(
+                    user['id'], user['username'],
+                    user.get('role') or ('admin' if user.get('is_admin') else 'user'),
+                )
+            except Exception as e:
+                logger.error(f"[LOGIN] http_token mint failed: {e}")
+                http_token = None
+
             response = {
                 "type": "login_response",
                 "success": True,
                 "session_id": session_id,
                 "user": user,
+                "http_token": http_token,
                 "online_users": online_users,
                 "unread_messages_summary": unread_summary,
                 "has_custom_sounds": has_custom_sounds,
@@ -3260,6 +3307,19 @@ class TitanNetServer:
                             # during lockdown, eventually getting them banned.
                             continue
 
+                        # --- Cerberus Account-Guard: protective lock on a
+                        # targeted account. Reject before burning an auth-pool
+                        # slot; this shields the real owner while under attack.
+                        _login_user = (data.get('username') or '').strip()
+                        if _login_user and self.cerberus.is_account_locked(_login_user):
+                            logger.warning(f"[CERBERUS] Login blocked - account '{_login_user}' temporarily locked")
+                            await websocket.send(json.dumps({
+                                "type": "login_response",
+                                "success": False,
+                                "error": "This account is temporarily locked after repeated failed logins. Try again later or reset your password.",
+                            }))
+                            continue
+
                         response = await self.handle_login(websocket, data)
 
                         # --- Cerberus: Track failed logins ---
@@ -3283,8 +3343,17 @@ class TitanNetServer:
                                 )
                                 return
                         else:
-                            # Successful login - clear failed attempts
+                            # Successful login - clear failed attempts + any
+                            # protective account lock for this username.
                             self.cerberus.record_successful_login(client_ip)
+                            self.cerberus.note_successful_login(client_ip, _login_user)
+                            # Feed the risk engine so it learns this account's
+                            # usual IPs and flags future logins from new ones.
+                            if getattr(self, 'risk_engine', None) is not None:
+                                try:
+                                    self.risk_engine.record_login(_login_user, client_ip, True)
+                                except Exception:
+                                    pass
                             session_id = response['session_id']
                             # Track IP -> session
                             self._ip_sessions.setdefault(client_ip, set()).add(session_id)
@@ -3551,6 +3620,10 @@ class TitanNetServer:
                             response = await self._handle_cerberus_clear_logs(session_id)
                             await websocket.send(json.dumps(response))
 
+                        elif msg_type == 'cerberus_ai_assessment':
+                            response = await self._handle_cerberus_ai_assessment(session_id)
+                            await websocket.send(json.dumps(response))
+
                     else:
                         await websocket.send(json.dumps({
                             "type": "error",
@@ -3595,6 +3668,31 @@ class TitanNetServer:
         return {
             "type": "cerberus_status",
             **status
+        }
+
+    async def _handle_cerberus_ai_assessment(self, session_id: str) -> Dict:
+        """Run the optional Cerberus AI analyst (Gemini) on demand. Moderator or
+        admin only. Runs off the event loop; advisory output, never blocks
+        traffic. Always includes the risk-engine snapshot even if AI is off."""
+        client = self.clients.get(session_id)
+        if not client:
+            return {"type": "error", "error": "Not authenticated"}
+        loop = asyncio.get_event_loop()
+        user = await loop.run_in_executor(None, self.db.get_user_by_id, client['user_id'])
+        is_admin = user and (user.get('is_admin') or user.get('role') == 'admin')
+        is_mod = user and await loop.run_in_executor(None, self.db.is_moderator, client['user_id'])
+        if not is_admin and not is_mod:
+            return {"type": "error", "error": "Moderator or admin access required"}
+
+        risk = self.risk_engine.snapshot() if getattr(self, 'risk_engine', None) else {}
+        assessment = {"enabled": False, "error": "Cerberus AI not initialized."}
+        if getattr(self, 'cerberus_ai', None) is not None:
+            # The Gemini call is blocking network I/O -> run in a worker.
+            assessment = await loop.run_in_executor(None, self.cerberus_ai.assess)
+        return {
+            "type": "cerberus_ai_assessment",
+            "risk": risk,
+            "assessment": assessment,
         }
 
     async def _handle_cerberus_activate(self, session_id: str, data: Dict) -> Dict:

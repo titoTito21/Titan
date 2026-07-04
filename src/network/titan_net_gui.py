@@ -3401,6 +3401,8 @@ class TitanNetMainWindow(wx.Frame):
 
             if item_text == _("Refresh Status"):
                 self.show_cerberus_protocol()
+            elif item_text == _("AI Threat Analysis"):
+                self._cerberus_ai_assessment()
             elif item_text == _("View Intrusion Logs"):
                 self._cerberus_show_logs()
             elif item_text == _("View Honeypot Logs"):
@@ -6001,11 +6003,24 @@ class TitanNetMainWindow(wx.Frame):
             )
         )
 
+        # Account Guard summary (cross-user / impersonation protection).
+        guard = status.get('account_guard', {}) or {}
+        locked = guard.get('locked_accounts', {}) or {}
+        forged = guard.get('forged_token_ips', {}) or {}
+        idor = guard.get('idor_ips', {}) or {}
+        privesc = guard.get('privesc_ips', {}) or {}
+        self.main_listbox.Append(
+            _("Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | IDOR: {idor} | Privilege-escalation: {privesc}").format(
+                locked=len(locked), forged=len(forged), idor=len(idor), privesc=len(privesc)
+            )
+        )
+
         # Separator
         self.main_listbox.Append("---")
 
         # Actions (read-only for moderators)
         self.main_listbox.Append(_("Refresh Status"))
+        self.main_listbox.Append(_("AI Threat Analysis"))
         self.main_listbox.Append(_("View Intrusion Logs"))
         self.main_listbox.Append(_("View Honeypot Logs"))
         self.main_listbox.Append(_("Banned IPs"))
@@ -6034,6 +6049,96 @@ class TitanNetMainWindow(wx.Frame):
                 level=threat_name, blocked=intrusions_blocked, banned=banned_count
             )
         )
+
+    def _cerberus_ai_assessment(self):
+        """Run the Cerberus AI analyst (Gemini) and show its assessment."""
+        speak_titannet(_("Running Cerberus AI threat analysis. This can take a few seconds..."))
+
+        def load_thread():
+            try:
+                result = self.titan_client.get_cerberus_ai_assessment()
+                wx.CallAfter(self._display_cerberus_ai, result)
+            except Exception as e:
+                wx.CallAfter(speak_notification, str(e), 'error')
+
+        threading.Thread(target=load_thread, daemon=True).start()
+
+    def _display_cerberus_ai(self, result):
+        """Render the Cerberus AI assessment + risk snapshot in a dialog."""
+        if not result or result.get('type') == 'error':
+            error_msg = result.get('error', 'Unknown error') if result else 'No response'
+            speak_notification(_("Could not run AI analysis: {error}").format(error=error_msg), 'error')
+            return
+
+        assessment = result.get('assessment', {}) or {}
+        risk = result.get('risk', {}) or {}
+
+        if not assessment.get('enabled', False):
+            msg = assessment.get('error') or _(
+                "Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the server to enable it.")
+            speak_notification(msg, 'info')
+            _show_titannet_message(self, msg, _("Cerberus AI"))
+            return
+
+        lines = []
+        if assessment.get('error'):
+            lines.append(_("Analysis error: {err}").format(err=assessment['error']))
+        else:
+            sev = assessment.get('severity', 'unknown')
+            lines.append(_("Severity: {sev}").format(sev=str(sev).upper()))
+            lines.append("")
+            lines.append(_("Summary:"))
+            lines.append(str(assessment.get('summary', '')))
+            actors = assessment.get('notable_actors') or []
+            if actors:
+                lines.append("")
+                lines.append(_("Notable actors:"))
+                for a in actors:
+                    if isinstance(a, dict):
+                        lines.append(f"  - {a.get('ip', '?')}: {a.get('why', '')}")
+                    else:
+                        lines.append(f"  - {a}")
+            actions = assessment.get('recommended_actions') or []
+            if actions:
+                lines.append("")
+                lines.append(_("Recommended actions:"))
+                for act in actions:
+                    lines.append(f"  - {act}")
+        # Risk-engine snapshot
+        top = risk.get('top_risks') or []
+        if top:
+            lines.append("")
+            lines.append(_("Top risk IPs (score):"))
+            for item in top:
+                try:
+                    lines.append(f"  - {item[0]}: {item[1]}")
+                except Exception:
+                    lines.append(f"  - {item}")
+        if assessment.get('model'):
+            lines.append("")
+            lines.append(_("Model: {m}").format(m=assessment['model']))
+
+        text = '\n'.join(lines)
+        speak_titannet(_("Analysis ready. Severity {sev}.").format(
+            sev=str(assessment.get('severity', 'unknown')).upper()))
+
+        dlg = wx.Dialog(self, title=_("Cerberus AI Threat Analysis"), size=wx.Size(720, 560))
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        text_ctrl = wx.TextCtrl(panel, value=text,
+                                style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP)
+        sizer.Add(text_ctrl, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+        close_btn = wx.Button(panel, wx.ID_CLOSE, _("Close"))
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        sizer.Add(close_btn, flag=wx.ALL | wx.ALIGN_CENTER, border=5)
+        panel.SetSizer(sizer)
+        try:
+            _apply_skin_recursive(dlg)
+        except Exception:
+            pass
+        text_ctrl.SetInsertionPoint(0)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def _cerberus_show_logs(self):
         """Show Cerberus intrusion logs in a dialog"""

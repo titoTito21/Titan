@@ -90,6 +90,45 @@ class CerberusProtocol:
         self.max_messages_per_second = 250  # Internal ALERT tracking only
         self.message_window = 5             # Seconds window
 
+        # --- Account Guard: cross-user / privilege-abuse detection ---
+        # These defend Titan-Net ACCOUNTS (not just IPs) against one user
+        # trying to break into another user / moderator / admin.
+        # Forged or tampered auth tokens (impersonation attempts), per source IP.
+        self._forged_tokens: Dict[str, List[float]] = defaultdict(list)
+        self.forged_token_alert = 3
+        self.forged_token_lockdown = 8
+        self.forged_token_window = 300
+        # IDOR: authenticated user reaching for a resource they do not own.
+        self._authz_violations: Dict[str, List[float]] = defaultdict(list)
+        self.authz_alert = 4
+        self.authz_lockdown = 12
+        self.authz_window = 300
+        # Privilege escalation: a non-mod/admin poking privileged endpoints, or
+        # a token whose role does not match the database.
+        self._privesc_attempts: Dict[str, List[float]] = defaultdict(list)
+        self.privesc_alert = 2
+        self.privesc_lockdown = 6
+        self.privesc_window = 300
+        # Credential stuffing: many DISTINCT usernames tried from one IP.
+        self._usernames_by_ip: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self.cred_stuffing_distinct = 8
+        self.cred_stuffing_window = 600
+        # Targeted account attack: many failures against ONE username (from any
+        # IPs) -> temporarily lock that account so the real owner is protected.
+        self._account_failures: Dict[str, List[float]] = defaultdict(list)
+        self.account_lock_failures = 10
+        self.account_lock_window = 600
+        self.account_lock_seconds = 900   # 15 min protective lock
+        self._locked_accounts: Dict[str, float] = {}   # username -> unlock ts
+        # Password-reset / sensitive-action abuse per IP.
+        self._reset_requests: Dict[str, List[float]] = defaultdict(list)
+        self.reset_alert = 5
+        self.reset_lockdown = 15
+        self.reset_window = 600
+        # Optional risk engine + AI analyst (wired by server.py if enabled).
+        self.risk_engine: Optional[Any] = None
+        self.on_account_event: Optional[Callable] = None
+
         # --- Banned IPs (auto-banned by Cerberus) ---
         self._banned_ips: Set[str] = set()
         self._permanent_banned_ips: Set[str] = set()
@@ -354,6 +393,10 @@ class CerberusProtocol:
         Returns True if IP should be blocked NOW.
         Only affects THIS IP - other users are NOT impacted.
         """
+        # Account-guard runs even for whitelisted IPs' *targeted-account*
+        # tracking is skipped inside; credential-stuffing is IP-gated there.
+        self.account_guard_on_failed_login(ip, username)
+
         if self.is_whitelisted(ip):
             return False
 
@@ -609,6 +652,181 @@ class CerberusProtocol:
             )
 
     # ================================================================
+    # ACCOUNT GUARD - cross-user / privilege abuse
+    # ================================================================
+
+    @staticmethod
+    def _prune(lst: List[float], window: float, now: float) -> List[float]:
+        cutoff = now - window
+        return [t for t in lst if t > cutoff]
+
+    def _emit_account_event(self, kind: str, ip: str, detail: str, **extra):
+        """Feed an account-level security event to the risk engine / analyst."""
+        if self.risk_engine is not None:
+            try:
+                self.risk_engine.record_event(kind, ip=ip, detail=detail, **extra)
+            except Exception as e:
+                logger.error(f"risk_engine.record_event error: {e}")
+        if self.on_account_event:
+            try:
+                self.on_account_event(kind, ip, detail, extra)
+            except Exception as e:
+                logger.error(f"on_account_event error: {e}")
+
+    def record_forged_token(self, ip: str, reason: str = "") -> bool:
+        """An invalid/forged/legacy auth token was presented from ``ip`` - i.e.
+        someone tried to impersonate an account. Escalates that IP. Returns True
+        if the IP is now blocked."""
+        if not ip or self.is_whitelisted(ip):
+            return False
+        now = time.time()
+        self._forged_tokens[ip] = self._prune(self._forged_tokens[ip], self.forged_token_window, now)
+        self._forged_tokens[ip].append(now)
+        n = len(self._forged_tokens[ip])
+        self._emit_account_event("forged_token", ip, reason or f"count={n}", count=n)
+        if n >= self.forged_token_lockdown:
+            self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                f"Impersonation: {n} forged auth tokens in {self.forged_token_window}s")
+            return True
+        if n >= self.forged_token_alert:
+            self._set_ip_threat(ip, THREAT_ALERT,
+                                f"Repeated forged auth tokens ({n}) - possible impersonation")
+        return False
+
+    def record_authz_violation(self, ip: str, actor_user_id: Any = None, resource: str = "") -> bool:
+        """An authenticated user tried to access a resource they do not own
+        (IDOR / cross-user access). Escalates the source IP."""
+        if not ip or self.is_whitelisted(ip):
+            return False
+        now = time.time()
+        self._authz_violations[ip] = self._prune(self._authz_violations[ip], self.authz_window, now)
+        self._authz_violations[ip].append(now)
+        n = len(self._authz_violations[ip])
+        self._emit_account_event("authz_violation", ip,
+                                 f"user={actor_user_id} resource={resource} count={n}", count=n)
+        if n >= self.authz_lockdown:
+            self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                f"Cross-user access abuse: {n} IDOR attempts (user={actor_user_id})")
+            return True
+        if n >= self.authz_alert:
+            self._set_ip_threat(ip, THREAT_ALERT,
+                                f"Cross-user access attempts ({n}) by user={actor_user_id}")
+        return False
+
+    def record_privilege_escalation(self, ip: str, actor_user_id: Any = None, resource: str = "") -> bool:
+        """A non-privileged user tried to use a moderator/admin capability, or a
+        token's role diverged from the database. Treated more severely than a
+        plain IDOR because it targets mod/admin powers."""
+        if not ip or self.is_whitelisted(ip):
+            return False
+        now = time.time()
+        self._privesc_attempts[ip] = self._prune(self._privesc_attempts[ip], self.privesc_window, now)
+        self._privesc_attempts[ip].append(now)
+        n = len(self._privesc_attempts[ip])
+        self._emit_account_event("privilege_escalation", ip,
+                                 f"user={actor_user_id} resource={resource} count={n}", count=n)
+        if n >= self.privesc_lockdown:
+            self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                f"Privilege escalation: {n} attempts to use admin/mod powers (user={actor_user_id})")
+            return True
+        if n >= self.privesc_alert:
+            self._set_ip_threat(ip, THREAT_ALERT,
+                                f"Privilege escalation attempt(s) ({n}) by user={actor_user_id} on {resource}")
+        return False
+
+    def account_guard_on_failed_login(self, ip: str, username: str):
+        """Called on each failed login. Detects credential stuffing (many
+        usernames from one IP) and targeted attacks on a single account (which
+        triggers a protective, temporary account lock)."""
+        if not username or username == "unknown":
+            return
+        now = time.time()
+        # Credential stuffing: distinct usernames from this IP.
+        if ip and not self.is_whitelisted(ip):
+            users = self._usernames_by_ip[ip]
+            users[username.lower()] = now
+            for u in [u for u, ts in users.items() if ts < now - self.cred_stuffing_window]:
+                users.pop(u, None)
+            if len(users) >= self.cred_stuffing_distinct:
+                self._emit_account_event("credential_stuffing", ip,
+                                         f"{len(users)} distinct usernames", count=len(users))
+                self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                    f"Credential stuffing: {len(users)} distinct usernames from one IP")
+        # Targeted account attack -> protective lock on that username.
+        key = username.lower()
+        self._account_failures[key] = self._prune(self._account_failures[key], self.account_lock_window, now)
+        self._account_failures[key].append(now)
+        if len(self._account_failures[key]) >= self.account_lock_failures:
+            self._locked_accounts[key] = now + self.account_lock_seconds
+            self._emit_account_event("account_locked", ip or "?",
+                                     f"account '{username}' locked for {self.account_lock_seconds}s")
+            logger.warning(
+                f"CERBERUS: account '{username}' temporarily locked "
+                f"({len(self._account_failures[key])} failures) to protect the owner"
+            )
+            self._log_intrusion("ACCOUNT_LOCK", ip or "?",
+                                f"account '{username}' locked after brute force")
+
+    def is_account_locked(self, username: str) -> bool:
+        """True if this account is under a temporary protective lock."""
+        if not username:
+            return False
+        key = username.lower()
+        unlock = self._locked_accounts.get(key)
+        if not unlock:
+            return False
+        if time.time() >= unlock:
+            self._locked_accounts.pop(key, None)
+            self._account_failures.pop(key, None)
+            return False
+        return True
+
+    def note_successful_login(self, ip: str, username: str):
+        """Clear per-account failure state and any lock after a real login."""
+        if not username:
+            return
+        key = username.lower()
+        self._account_failures.pop(key, None)
+        self._locked_accounts.pop(key, None)
+        if ip in self._usernames_by_ip:
+            self._usernames_by_ip[ip].pop(key, None)
+
+    def record_password_reset_request(self, ip: str) -> bool:
+        """Rate-limit / escalate password-reset (and similar sensitive) requests
+        from one IP, which are otherwise a channel for harassment / probing."""
+        if not ip or self.is_whitelisted(ip):
+            return False
+        now = time.time()
+        self._reset_requests[ip] = self._prune(self._reset_requests[ip], self.reset_window, now)
+        self._reset_requests[ip].append(now)
+        n = len(self._reset_requests[ip])
+        if n >= self.reset_lockdown:
+            self._emit_account_event("reset_abuse", ip, f"{n} reset requests", count=n)
+            self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                f"Password-reset abuse: {n} requests in {self.reset_window}s")
+            return True
+        if n >= self.reset_alert:
+            self._set_ip_threat(ip, THREAT_ALERT, f"High password-reset rate ({n})")
+        return False
+
+    def get_account_guard_status(self) -> Dict[str, Any]:
+        """Summary of account-guard state for the moderator dashboard."""
+        now = time.time()
+        return {
+            "locked_accounts": {
+                u: int(unlock - now)
+                for u, unlock in self._locked_accounts.items() if unlock > now
+            },
+            "forged_token_ips": {ip: len(v) for ip, v in self._forged_tokens.items() if v},
+            "idor_ips": {ip: len(v) for ip, v in self._authz_violations.items() if v},
+            "privesc_ips": {ip: len(v) for ip, v in self._privesc_attempts.items() if v},
+            "credential_stuffing_ips": {
+                ip: len(users) for ip, users in self._usernames_by_ip.items()
+                if len(users) >= max(3, self.cred_stuffing_distinct // 2)
+            },
+        }
+
+    # ================================================================
     # ADMIN CONTROLS
     # ================================================================
 
@@ -680,7 +898,8 @@ class CerberusProtocol:
             "stats": {
                 "intrusions_blocked": self._total_intrusions_blocked,
                 "ddos_blocked": self._total_ddos_blocked,
-            }
+            },
+            "account_guard": self.get_account_guard_status(),
         }
 
     def get_logs(self, max_lines: int = 100) -> List[Dict[str, str]]:

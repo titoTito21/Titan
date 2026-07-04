@@ -2319,6 +2319,16 @@ class Database:
         conn.close()
         return rows
 
+    def mail_exists(self, mail_id: int) -> bool:
+        """Whether a mail row exists at all (any owner). Used to distinguish a
+        cross-user access attempt from a plain not-found."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM mail_messages WHERE id = ?", (mail_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return row is not None
+
     def get_mail(self, mail_id: int, user_id: int) -> Optional[Dict[str, Any]]:
         conn = self.get_connection()
         cursor = conn.cursor()

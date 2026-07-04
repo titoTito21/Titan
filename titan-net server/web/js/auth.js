@@ -85,7 +85,9 @@
     }
     if (window.Titan && Titan.sounds) Titan.sounds.play('login_welcome');
     const userData = resp.user;
-    const token = btoa(userData.id + ':' + userData.username);
+    // Prefer the server-minted HMAC-signed token; fall back to the legacy
+    // format only for an older server that doesn't issue one.
+    const token = resp.http_token || btoa(userData.id + ':' + userData.username);
     Titan.saveSession({
       token,
       user: {
@@ -201,7 +203,7 @@
         if (loginResp.success) {
           if (window.Titan && Titan.sounds) Titan.sounds.play('login_welcome');
           const userData = loginResp.user;
-          const token = btoa(userData.id + ':' + userData.username);
+          const token = loginResp.http_token || btoa(userData.id + ':' + userData.username);
           Titan.saveSession({
             token,
             user: {

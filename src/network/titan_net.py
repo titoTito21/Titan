@@ -104,6 +104,7 @@ class TitanNetClient:
 
         self.websocket = None
         self.session_id: Optional[str] = None
+        self._http_token: Optional[str] = None  # server-issued signed HTTP token
         self.username: Optional[str] = None
         self.user_id: Optional[int] = None
         self.titan_number: Optional[int] = None
@@ -508,6 +509,9 @@ class TitanNetClient:
                         # Store the websocket for persistent connection
                         self.websocket = ws
                         self.session_id = response.get('session_id')
+                        # HMAC-signed, role-bound HTTP token minted by the
+                        # server; preferred over the legacy self-built token.
+                        self._http_token = response.get('http_token')
                         user_data = response.get('user', {})
                         self.username = user_data.get('username', username)
                         self.user_id = user_data.get('id')
@@ -614,6 +618,7 @@ class TitanNetClient:
 
             # Clear session data
             self.session_id = None
+            self._http_token = None
             self.username = None
             self.user_id = None
             self.titan_number = None
@@ -628,6 +633,7 @@ class TitanNetClient:
         except Exception as e:
             # Even if logout fails, clear local session
             self.session_id = None
+            self._http_token = None
             self.username = None
             self.user_id = None
             self.titan_number = None
@@ -1708,10 +1714,19 @@ class TitanNetClient:
             print(f"[CERBERUS] Shutdown failed: {e}")
 
     def _get_auth_token(self) -> str:
-        """Generate authentication token for HTTP API"""
+        """Return the HTTP API auth token.
+
+        Prefer the HMAC-signed, role-bound token the server issued at login
+        (``self._http_token``) - it cannot be forged. Fall back to the legacy
+        base64 format only if no signed token is available (e.g. talking to an
+        older server), which the server accepts solely while it runs in
+        LEGACY_TOKENS grace mode.
+        """
+        token = getattr(self, '_http_token', None)
+        if token:
+            return token
         if not self.user_id or not self.username:
             return ""
-        # Simple token format: base64(user_id:username)
         token_str = f"{self.user_id}:{self.username}"
         return base64.b64encode(token_str.encode()).decode()
 
@@ -2888,6 +2903,21 @@ class TitanNetClient:
             return self._run_async(_request())
         except Exception as e:
             print(f"Cerberus status error: {e}")
+            return None
+
+    def get_cerberus_ai_assessment(self) -> Optional[Dict]:
+        """Run the Cerberus AI analyst (Gemini) + risk snapshot (mod/admin).
+        May take a few seconds while the model responds."""
+        try:
+            async def _request():
+                return await self._send_and_wait(
+                    {"type": "cerberus_ai_assessment"},
+                    "cerberus_ai_assessment",
+                    timeout=45
+                )
+            return self._run_async(_request())
+        except Exception as e:
+            print(f"Cerberus AI assessment error: {e}")
             return None
 
     def get_cerberus_logs(self, max_lines: int = 100) -> Optional[Dict]:
