@@ -78,21 +78,40 @@ if IS_WINDOWS:
         warnings.filterwarnings("ignore", category=UserWarning, module="comtypes")
 
         class COMErrorSuppressor:
+            """Suppress noisy COM/screen-reader stderr output without hiding
+            real application errors.
+
+            Only output that contains a COM-specific keyword AND originates
+            from a known noisy module (comtypes, pythoncom, gwspeak, jfwapi,
+            comtypes.client, etc.) is suppressed.  Generic Python errors
+            (ValueError, SystemError, full tracebacks) are always forwarded."""
             def __init__(self):
                 self.original_stderr = sys.stderr
                 self.buffer = ""
                 self.suppress_until_newline = 0
+
+            # COM / screen-reader keywords that indicate noise, not real bugs.
+            _COM_KEYWORDS = frozenset([
+                "comtypes", "com method", "unknwn", "iunknown",
+                "win32 exception", "releasing iunknown",
+                "__del__", "gwspeak", "jfwapi",
+            ])
+
+            # Modules whose tracebacks are always noise (screen-reader drivers).
+            _NOISY_MODULES = frozenset([
+                "comtypes", "pythoncom", "gwspeak", "jfwapi",
+                "comtypes.client", "comtypes._commeta",
+            ])
 
             def write(self, text):
                 if text.strip() in [':', '', ' ']:
                     return
                 self.buffer += text
                 buffer_lower = self.buffer.lower()
-                if any(keyword in buffer_lower for keyword in [
-                    "systemerror", "valueerror", "comtypes", "com method",
-                    "__del__", "unknwn", "iunknown", "traceback", "gwspeak", "jfwapi",
-                    "win32 exception", "releasing iunknown", "exception occurred"
-                ]):
+                # Suppress only if a COM-specific keyword is present.
+                # Never suppress generic Python error terms (ValueError,
+                # SystemError, traceback) on their own.
+                if any(keyword in buffer_lower for keyword in self._COM_KEYWORDS):
                     self.suppress_until_newline = 100
                     self.buffer = ""
                     return
@@ -136,7 +155,6 @@ try:
     if not IS_MACOS:
         # On macOS, keyboard import can hang without Accessibility permissions
         import keyboard
-    import speech_recognition as sr
     import pygame
     import random
     import psutil
@@ -160,10 +178,6 @@ try:
     import threading
     import os
     import sys
-    try:
-        from bg5reader import bg5reader
-    except ImportError:
-        pass
 
     # Import libraries used by widgets (applets) for compilation compatibility
     import gettext
@@ -179,6 +193,41 @@ try:
 
 except ImportError as e:
     print(f"Warning: Could not import component/widget library: {e}")
+
+# Heavy modules deferred to background -- keeps startup fast.
+# These are imported lazily so components that need them can trigger the
+# load, but the main thread is never blocked by their init.
+_heavy_imports_done = False
+_heavy_imports_lock = threading.Lock()
+
+def _load_heavy_imports():
+    """Import heavy optional modules in a background thread.
+
+    Safe to call multiple times; only the first call does the work.
+    Components that depend on these modules should call this and then
+    access them via the module globals (``sr``, ``bg5reader``).
+    """
+    global _heavy_imports_done
+    if _heavy_imports_done:
+        return
+    with _heavy_imports_lock:
+        if _heavy_imports_done:
+            return
+        try:
+            import speech_recognition as sr  # noqa: F401,F811
+            globals()['sr'] = sr
+        except ImportError:
+            pass
+        try:
+            from bg5reader import bg5reader  # noqa: F401,F811
+            globals()['bg5reader'] = bg5reader
+        except ImportError:
+            pass
+        _heavy_imports_done = True
+
+# Fire the deferred import in the background so it's ready by the time
+# any component actually needs it.
+threading.Thread(target=_load_heavy_imports, daemon=True).start()
 
 # Fix COM errors early (Windows only)
 if IS_WINDOWS:
@@ -200,7 +249,7 @@ from src.controller.controller_modes import initialize_controller_modes
 from src.ui.notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
 from src.ui.shutdown_question import show_shutdown_dialog
 from src.titan_core.app_manager import find_application_by_shortname, open_application
-from src.titan_core.game_manager import *
+from src.titan_core.game_manager import get_games, open_game, get_games_by_platform
 from src.titan_core.component_manager import ComponentManager
 from src.ui.menu import MenuBar
 if IS_WINDOWS:

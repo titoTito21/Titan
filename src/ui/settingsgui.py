@@ -1514,7 +1514,10 @@ class SettingsFrame(wx.Frame):
         self.general_panel.Layout()
 
         interface_settings = self.settings.get('interface', {})
-        current_skin = interface_settings.get('skin', 'Domyślna')
+        current_skin = interface_settings.get('skin', _('Default'))
+        # Also accept legacy Polish skin name
+        if current_skin == 'Domyślna':
+            current_skin = _('Default')
         if self.skin_choice.FindString(current_skin) != wx.NOT_FOUND:
              self.skin_choice.SetStringSelection(current_skin)
         elif self.skin_choice.GetCount() > 0:

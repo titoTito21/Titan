@@ -5192,7 +5192,7 @@ class TitanApp(wx.Frame):
             
             if with_user == self.current_chat_user and self.current_list == "messages":
                 self.chat_display.Clear()
-                self.chat_display.AppendText(f"--- Historia rozmowy z {with_user} ---\n\n")
+                self.chat_display.AppendText(_("--- Chat history with %s ---") % with_user + "\n\n")
                 
                 for msg in messages:
                     timestamp = msg.get('timestamp', '')
@@ -5210,7 +5210,7 @@ class TitanApp(wx.Frame):
                     message = msg.get('message', '')
                     self.chat_display.AppendText(f"[{time_str}] {sender}: {message}\n")
                 
-                self.chat_display.AppendText("\n--- Koniec historii ---\n\n")
+                self.chat_display.AppendText("\n" + _("--- End of history ---") + "\n\n")
                 self.chat_display.SetInsertionPointEnd()
         
         elif msg_type == 'message_sent':

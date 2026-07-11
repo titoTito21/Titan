@@ -5,10 +5,10 @@ import configparser
 import threading
 import subprocess
 from pygame import mixer
-from MediaCatalog import MediaCatalog  # Importowanie MediaCatalog z oddzielnego pliku
+from MediaCatalog import MediaCatalog
 from Settings import SettingsWindow
-from player import Player  # Import wbudowanego odtwarzacza
-from YoutubeSearch import YoutubeSearchApp  # Importowanie modułu YoutubeSearch
+from player import Player
+from YoutubeSearch import YoutubeSearchApp
 
 try:
     from src.titan_core.skin_manager import apply_skin_to_window
@@ -26,14 +26,12 @@ def _apply_skin_to_tree(window):
     for child in window.GetChildren():
         _apply_skin_to_tree(child)
 
-# TCE Speech: use Titan TTS engine (stereo speech) when available
 try:
     from src.titan_core.tce_speech import speak as _tce_speak
 except ImportError:
     _tce_speak = None
 
 if _tce_speak is None:
-    # Standalone fallback (outside Titan environment)
     try:
         import accessible_output3.outputs.auto as _ao3
         _ao3_speaker = _ao3.Auto()
@@ -66,7 +64,6 @@ class TTSThread(threading.Thread):
                 return
         except Exception:
             pass
-        # Fallback when accessible_output3 unavailable
         try:
             import sys as _sys
             if _sys.platform == 'win32':
@@ -104,10 +101,10 @@ class TMediaApp(wx.Frame):
 
         menubar = wx.MenuBar()
         fileMenu = wx.Menu()
-        settings_item = fileMenu.Append(wx.ID_ANY, 'Ustawienia...')
-        menubar.Append(fileMenu, '&Aplikacja')
+        settings_item = fileMenu.Append(wx.ID_ANY, _('Settings...'))
+        menubar.Append(fileMenu, _('&Application'))
         self.SetMenuBar(menubar)
-        
+
         self.Bind(wx.EVT_MENU, self.open_settings, settings_item)
 
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -140,12 +137,12 @@ class TMediaApp(wx.Frame):
         return config
 
     def get_config_path(self):
-        if os.name == 'nt':  # Windows
+        if os.name == 'nt':
             return os.path.join(os.getenv('APPDATA'), 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-        elif os.name == 'posix':  # Linux, macOS
-            if 'darwin' in os.sys.platform:  # macOS
+        elif os.name == 'posix':
+            if 'darwin' in os.sys.platform:
                 return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-            else:  # Linux
+            else:
                 return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
 
     def init_sounds(self):
@@ -165,10 +162,10 @@ class TMediaApp(wx.Frame):
             sound = self.sounds.get(sound_name)
             if sound:
                 if loop:
-                    return sound.play(-1) # -1 oznacza odtwarzanie w pętli
+                    return sound.play(-1)
                 else:
-                    return sound.play() # Zwraca obiekt Channel
-        return None # Zwraca None, jeśli efekty dźwiękowe są wyłączone lub dźwięk nie został znaleziony
+                    return sound.play()
+        return None
 
     def stop_sound(self, sound_name=None, channel=None):
         if self.config.getboolean('DEFAULT', 'sound_effects', fallback=True):
@@ -188,7 +185,7 @@ class TMediaApp(wx.Frame):
         if selection != wx.NOT_FOUND:
             self.play_sound('enter')
             if selection == 0:
-                self.speak_message("Ładowanie katalogu mediów")
+                self.speak_message(_("Loading media catalog"))
                 self.load_media_catalog()
             elif selection == 1:
                 self.open_youtube_search()
