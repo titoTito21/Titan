@@ -48,16 +48,19 @@ class ForumTopicsWindow(wx.Frame):
         Choice is hidden and new topics post into that forum.
     """
 
-    def __init__(self, parent, titan_client: TitanNetClient, forum_id=None, forum_name=None, can_post=True):
+    def __init__(self, parent, titan_client: TitanNetClient, forum_id=None, forum_name=None, can_post=True,
+                 can_moderate=False):
         self.forum_id = forum_id
         self.forum_name = forum_name
         self.can_post = can_post
+        self.can_moderate = can_moderate
         win_title = forum_name if forum_name else _("Titan-Net Forum")
         super().__init__(parent, title=win_title, size=(900, 650))
         self.titan_client = titan_client
         self.InitUI()
         self.Centre()
 
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
         play_sound('ui/window_open.ogg')
 
         # Register in window switcher
@@ -66,6 +69,14 @@ class ForumTopicsWindow(wx.Frame):
 
         # Load initial topics
         wx.CallAfter(self.load_topics)
+
+    def OnKeyPress(self, event):
+        """Escape goes back one level (to the still-open forum/group window)"""
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE or (keycode == wx.WXK_F4 and event.AltDown()):
+            self.Close()
+        else:
+            event.Skip()
 
     def InitUI(self):
         """Initialize UI"""
@@ -127,6 +138,12 @@ class ForumTopicsWindow(wx.Frame):
         self.search_btn.Bind(wx.EVT_BUTTON, self.OnSearch)
         self.search_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         btn_box.Add(self.search_btn, flag=wx.RIGHT, border=5)
+
+        if self.can_moderate:
+            self.delete_topic_btn = wx.Button(panel, label=_("Delete Topic"))
+            self.delete_topic_btn.Bind(wx.EVT_BUTTON, self.OnDeleteTopic)
+            self.delete_topic_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+            btn_box.Add(self.delete_topic_btn, flag=wx.RIGHT, border=5)
 
         vbox.Add(btn_box, flag=wx.ALIGN_CENTER | wx.ALL, border=10)
 
@@ -254,6 +271,32 @@ class ForumTopicsWindow(wx.Frame):
 
         dlg.Destroy()
 
+    def OnDeleteTopic(self, event):
+        """Delete the selected topic (group moderator/owner only)"""
+        play_sound('core/SELECT.ogg')
+        selected = self.topics_list.GetFirstSelected()
+        if selected == -1:
+            return
+        topic_id = self.topics_list.GetItemData(selected)
+        title = self.topics_list.GetItemText(selected)
+        confirm = _show_skinned_message(
+            _("Delete topic '{title}' and all its replies?").format(title=title),
+            _("Confirm"), wx.YES_NO | wx.ICON_WARNING
+        )
+        if confirm == wx.ID_YES:
+            def _delete():
+                result = self.titan_client.delete_forum_topic(topic_id)
+                wx.CallAfter(self._on_topic_deleted, result)
+            threading.Thread(target=_delete, daemon=True).start()
+
+    def _on_topic_deleted(self, result):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            self.load_topics()
+        else:
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
+
 
 class ForumTopicWindow(wx.Frame):
     """Window showing single topic with replies"""
@@ -347,6 +390,11 @@ class ForumTopicWindow(wx.Frame):
         """Handle keyboard shortcuts for post navigation"""
         keycode = event.GetKeyCode()
         focused = self.FindFocus()
+
+        if keycode == wx.WXK_ESCAPE or (keycode == wx.WXK_F4 and event.AltDown()):
+            # Go back one level to the still-open topics list window
+            self.Close()
+            return
 
         if event.ControlDown() and focused != self.reply_input:
             if keycode == ord('U'):
@@ -710,10 +758,19 @@ class GroupForumsWindow(wx.Frame):
         self.titan_client = titan_client
         self.InitUI()
         self.Centre()
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
         play_sound('ui/window_open.ogg')
         from src.ui.window_switcher import register_window
         register_window(title, window=self, category='messenger')
         wx.CallAfter(self.load_forums)
+
+    def OnKeyPress(self, event):
+        """Escape goes back one level (to the still-open groups window)"""
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE or (keycode == wx.WXK_F4 and event.AltDown()):
+            self.Close()
+        else:
+            event.Skip()
 
     def _is_moderator(self):
         return self.group.get('my_role') in ('owner', 'moderator')
@@ -725,10 +782,10 @@ class GroupForumsWindow(wx.Frame):
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        title_label = wx.StaticText(panel, label=self.group.get('name', ''))
-        font = title_label.GetFont(); font.PointSize += 4; font = font.Bold()
-        title_label.SetFont(font)
-        vbox.Add(title_label, flag=wx.ALL | wx.ALIGN_CENTER, border=10)
+        self.title_label = wx.StaticText(panel, label=self.group.get('name', ''))
+        font = self.title_label.GetFont(); font.PointSize += 4; font = font.Bold()
+        self.title_label.SetFont(font)
+        vbox.Add(self.title_label, flag=wx.ALL | wx.ALIGN_CENTER, border=10)
 
         self.forums_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.forums_list.AppendColumn(_("Forum"), width=300)
@@ -745,6 +802,11 @@ class GroupForumsWindow(wx.Frame):
         btn_box.Add(open_btn, flag=wx.RIGHT, border=5)
 
         if self._is_moderator():
+            rename_group_btn = wx.Button(panel, label=_("Rename Group"))
+            rename_group_btn.Bind(wx.EVT_BUTTON, self.OnRenameGroup)
+            rename_group_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+            btn_box.Add(rename_group_btn, flag=wx.RIGHT, border=5)
+
             new_forum_btn = wx.Button(panel, label=_("New Forum"))
             new_forum_btn.Bind(wx.EVT_BUTTON, self.OnNewForum)
             new_forum_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -805,8 +867,35 @@ class GroupForumsWindow(wx.Frame):
         if forum_id is None:
             return
         win = ForumTopicsWindow(self, self.titan_client, forum_id=forum_id,
-                                forum_name=forum_name, can_post=self._is_member())
+                                forum_name=forum_name, can_post=self._is_member(),
+                                can_moderate=self._is_moderator())
         win.Show()
+
+    def OnRenameGroup(self, event):
+        play_sound('core/SELECT.ogg')
+        dlg = _new_text_entry_dialog(self, _("New group name:"), _("Rename Group"),
+                                      value=self.group.get('name', ''))
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue().strip()
+            if name:
+                def _rename():
+                    result = self.titan_client.rename_group(self.group_id, name)
+                    wx.CallAfter(self._on_group_renamed, result, name)
+                threading.Thread(target=_rename, daemon=True).start()
+        dlg.Destroy()
+
+    def _on_group_renamed(self, result, name):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            self.group['name'] = name
+            self.SetTitle(_("Group: {name}").format(name=name))
+            self.title_label.SetLabel(name)
+            parent = self.GetParent()
+            if isinstance(parent, ForumGroupsWindow):
+                parent.load_groups()
+        else:
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
 
     def OnNewForum(self, event):
         play_sound('core/SELECT.ogg')
@@ -929,12 +1018,15 @@ class ManageGroupMembersDialog(wx.Dialog):
     unban members. Which actions are shown depends on the caller's own role
     in the group (``my_role``)."""
 
-    def __init__(self, parent, titan_client: TitanNetClient, group_id: int, my_role: str = 'moderator'):
-        super().__init__(parent, title=_("Manage Members"), size=(560, 440))
+    def __init__(self, parent, titan_client: TitanNetClient, group_id: int, my_role: str = 'moderator',
+                 group_name: str = None):
+        title = _("Manage Group: {name}").format(name=group_name) if group_name else _("Manage Group")
+        super().__init__(parent, title=title, size=(560, 440))
         self.titan_client = titan_client
         self.group_id = group_id
         self.my_role = my_role
         self.is_owner = (my_role == 'owner')
+        self.group_name = group_name
         self.InitUI()
         self.Centre()
         play_sound('ui/dialog.ogg')
@@ -950,6 +1042,10 @@ class ManageGroupMembersDialog(wx.Dialog):
         vbox.Add(self.members_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
 
         btn_box = wx.BoxSizer(wx.HORIZONTAL)
+        # Owner + moderator actions (renaming is allowed for moderators too).
+        rename_btn = wx.Button(panel, label=_("Rename Group"))
+        rename_btn.Bind(wx.EVT_BUTTON, self._on_rename_group)
+        btn_box.Add(rename_btn, flag=wx.RIGHT, border=5)
         # Owner-only actions.
         if self.is_owner:
             self.mod_btn = wx.Button(panel, label=_("Make/Remove Moderator"))
@@ -1047,6 +1143,28 @@ class ManageGroupMembersDialog(wx.Dialog):
             play_sound('core/error.ogg')
             _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
 
+    def _on_rename_group(self, event):
+        play_sound('core/SELECT.ogg')
+        dlg = _new_text_entry_dialog(self, _("New group name:"), _("Rename Group"),
+                                      value=self.group_name or '')
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue().strip()
+            if name:
+                def _rename():
+                    result = self.titan_client.rename_group(self.group_id, name)
+                    wx.CallAfter(self._on_group_renamed, result, name)
+                threading.Thread(target=_rename, daemon=True).start()
+        dlg.Destroy()
+
+    def _on_group_renamed(self, result, name):
+        if result.get('success'):
+            play_sound('core/SELECT.ogg')
+            self.group_name = name
+            self.SetTitle(_("Manage Group: {name}").format(name=name))
+        else:
+            play_sound('core/error.ogg')
+            _show_skinned_message(result.get('error', _('Operation failed')), _("Error"), wx.OK | wx.ICON_ERROR)
+
     def _on_ban(self, ban):
         play_sound('core/SELECT.ogg')
         user_id, role = self._selected()
@@ -1082,10 +1200,18 @@ class ForumGroupsWindow(wx.Frame):
         self._groups = []
         self.InitUI()
         self.Centre()
+        self.Bind(wx.EVT_CHAR_HOOK, self.OnKeyPress)
         play_sound('ui/window_open.ogg')
         from src.ui.window_switcher import register_window
         register_window("Titan-Net Groups", window=self, category='messenger')
         wx.CallAfter(self.load_groups)
+
+    def OnKeyPress(self, event):
+        keycode = event.GetKeyCode()
+        if keycode == wx.WXK_ESCAPE or (keycode == wx.WXK_F4 and event.AltDown()):
+            self.Close()
+        else:
+            event.Skip()
 
     def InitUI(self):
         panel = wx.Panel(self)

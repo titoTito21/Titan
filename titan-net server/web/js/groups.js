@@ -502,10 +502,20 @@
   const $manageStatus = document.getElementById('manage-status');
   const $manageList = document.getElementById('manage-list');
   document.getElementById('mm-close').addEventListener('click', () => dialogClose($manageDialog));
+  const $renameForm = document.getElementById('mm-rename-form');
+  const $renameInput = document.getElementById('mm-rename-input');
   $manageBtn.addEventListener('click', () => {
     if (!currentGroup) return;
+    $renameInput.value = currentGroup.name || '';
     dialogOpen($manageDialog);
     loadManage();
+  });
+  $renameForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!currentGroup) return;
+    const name = $renameInput.value.trim();
+    if (!name) return;
+    manageAct(() => API.renameGroup(currentGroup.id, name), true);
   });
 
   async function loadManage() {

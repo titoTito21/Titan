@@ -101,6 +101,9 @@
     updateGroup(groupId, fields) {
       return request('/groups/' + encodeURIComponent(groupId), { method: 'PUT', body: fields || {} });
     },
+    renameGroup(groupId, name) {
+      return request('/groups/' + encodeURIComponent(groupId) + '/rename', { method: 'POST', body: { name } });
+    },
     deleteGroup(groupId) {
       return request('/groups/' + encodeURIComponent(groupId), { method: 'DELETE' });
     },

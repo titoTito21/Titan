@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-06-23 16:30+0200\n"
+"POT-Creation-Date: 2026-07-11 11:47+0200\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -121,39 +121,43 @@ msgstr "Please disable Titan UI"
 msgid "To switch between lists, use left or right arrow keys"
 msgstr "To switch between lists, use left or right arrow keys"
 
-#: src/accessibility/messages.py:337
+#: src/accessibility/messages.py:397 src/accessibility/messages.py:398
+#: src/accessibility/messages.py:419
 msgid "Tab bar"
 msgstr "Tab bar"
 
-#: src/accessibility/messages.py:353
-msgid "checked"
-msgstr "checked"
-
-#: src/accessibility/messages.py:353
-msgid "unchecked"
-msgstr "unchecked"
-
-#: src/accessibility/messages.py
-msgid "tab"
-msgstr "tab"
-
-#: src/accessibility/messages.py
+#: src/accessibility/messages.py:417
+#, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} of {}"
 
-#: src/accessibility/messages.py:422
+#: src/accessibility/messages.py:421
+msgid "tab"
+msgstr "tab"
+
+#: src/accessibility/messages.py:443
+#, python-brace-format
+msgid "at position {}"
+msgstr "at position {}"
+
+#: src/accessibility/messages.py:461 src/accessibility/messages.py:502
+#: src/accessibility/messages.py:521
+msgid "checked"
+msgstr "checked"
+
+#: src/accessibility/messages.py:461 src/accessibility/messages.py:502
+#: src/accessibility/messages.py:521
+msgid "unchecked"
+msgstr "unchecked"
+
+#: src/accessibility/messages.py:539
 msgid "Fn keys enabled"
 msgstr "Fn keys enabled"
 
-#: src/accessibility/messages.py:435
+#: src/accessibility/messages.py:552
 msgid "Fn keys disabled"
 msgstr "Fn keys disabled"
 
+#~ msgid "status bar item"
+#~ msgstr "status bar item"
 
-#: src/accessibility/messages.py
-msgid "status bar item"
-msgstr "status bar item"
-
-#: src/accessibility/messages.py
-msgid "at position {}"
-msgstr "at position {}"

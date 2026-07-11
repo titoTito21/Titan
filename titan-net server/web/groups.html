@@ -186,6 +186,13 @@
     <dialog id="manage-dialog" aria-labelledby="mm-title">
       <div style="display:grid;gap:1rem;min-width:min(600px,92vw)">
         <h2 id="mm-title" data-i18n="groups.manage_members" style="margin:0">Manage members</h2>
+        <form id="mm-rename-form" style="display:flex;gap:.5rem;align-items:flex-end">
+          <label style="flex:1">
+            <span data-i18n="groups.rename_group">Rename group</span>
+            <input type="text" id="mm-rename-input" required>
+          </label>
+          <button type="submit" class="btn btn-secondary" data-i18n="groups.rename">Rename</button>
+        </form>
         <p id="manage-status" class="muted" role="status" aria-live="polite"></p>
         <ul id="manage-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
         <p style="text-align:right">

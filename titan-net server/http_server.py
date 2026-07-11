@@ -170,6 +170,7 @@ class TitanNetHTTPServer:
         self.app.router.add_post('/api/groups', self.handle_create_group)
         self.app.router.add_get('/api/groups/{group_id}', self.handle_get_group)
         self.app.router.add_put('/api/groups/{group_id}', self.handle_update_group)
+        self.app.router.add_post('/api/groups/{group_id}/rename', self.handle_rename_group)
         self.app.router.add_delete('/api/groups/{group_id}', self.handle_delete_group)
         self.app.router.add_post('/api/groups/{group_id}/join', self.handle_join_group)
         self.app.router.add_post('/api/groups/{group_id}/leave', self.handle_leave_group)
@@ -1752,6 +1753,22 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Update group error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_rename_group(self, request: web.Request) -> web.Response:
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            group_id = int(request.match_info['group_id'])
+            data = await request.json()
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.rename_group, group_id, data.get('name'), user['id']
+            )
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Rename group error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
     async def handle_delete_group(self, request: web.Request) -> web.Response:

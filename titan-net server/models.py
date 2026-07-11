@@ -3344,28 +3344,35 @@ class Database:
 
     @_serialized_write
     def delete_forum_topic(self, topic_id: int, user_id: int) -> bool:
-        """Delete forum topic (author or admin only)"""
+        """Delete forum topic. Allowed for the author, a server admin/moderator,
+        or — for topics inside a group's forum — a moderator/owner of that
+        group."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Check if user is author or admin
-        cursor.execute("""
-            SELECT author_id FROM forum_topics WHERE id = ?
-        """, (topic_id,))
+        cursor.execute("SELECT author_id, forum_id FROM forum_topics WHERE id = ?", (topic_id,))
         topic = cursor.fetchone()
 
         if not topic:
             conn.close()
             return False
 
-        # Get user info
+        author_id = self._row_get(topic, 'author_id')
+        forum_id = self._row_get(topic, 'forum_id')
+
         user = self.get_user_by_id(user_id)
         if not user:
             conn.close()
             return False
 
-        # Only author or admin can delete
-        if topic['author_id'] != user_id and not user.get('is_admin', False):
+        allowed = (author_id == user_id) or bool(user.get('is_admin')) or self.is_moderator(user_id)
+        if not allowed and forum_id is not None:
+            cursor.execute("SELECT group_id FROM group_forums WHERE id = ?", (forum_id,))
+            grow = cursor.fetchone()
+            if grow:
+                allowed = self.is_group_moderator(self._row_get(grow, 'group_id'), user_id)
+
+        if not allowed:
             conn.close()
             return False
 
@@ -3584,6 +3591,26 @@ class Database:
             return True
         user = self.get_user_by_id(user_id)
         return bool(user and user.get('is_admin'))
+
+    @_serialized_write
+    def rename_group(self, group_id: int, new_name: str, user_id: int) -> Dict[str, Any]:
+        """Rename a group. Unlike other group settings (owner-only via
+        update_group), renaming is also allowed for group moderators."""
+        if not self.is_group_moderator(group_id, user_id):
+            return {"success": False, "error": "Only a group moderator or owner can rename the group"}
+        new_name = (new_name or '').strip()
+        if not new_name:
+            return {"success": False, "error": "Group name is required"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM groups WHERE id = ?", (group_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return {"success": False, "error": "Group not found"}
+        cursor.execute("UPDATE groups SET name = ? WHERE id = ?", (new_name, group_id))
+        conn.commit()
+        conn.close()
+        return {"success": True, "group_id": group_id, "name": new_name}
 
     @_serialized_write
     def delete_group(self, group_id: int, user_id: int) -> Dict[str, Any]:

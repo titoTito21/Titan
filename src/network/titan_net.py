@@ -1910,7 +1910,8 @@ class TitanNetClient:
 
     def delete_forum_topic(self, topic_id: int) -> Dict:
         """
-        Delete forum topic (author or admin only)
+        Delete forum topic (author, server moderator/admin, or a
+        moderator/owner of the topic's group)
 
         Args:
             topic_id: Topic ID
@@ -2025,6 +2026,19 @@ class TitanNetClient:
                 f"{self.http_url}/api/groups/{group_id}",
                 json={'name': name, 'description': description,
                       'visibility': visibility, 'member_limit': member_limit},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def rename_group(self, group_id: int, name: str) -> Dict:
+        """Rename a group (owner or moderator)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/groups/{group_id}/rename",
+                json={'name': name},
                 headers=self._http_headers(),
                 timeout=10
             )

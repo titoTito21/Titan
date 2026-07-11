@@ -2060,6 +2060,9 @@ class TitanNetMainWindow(wx.Frame):
             sel = self.main_listbox.GetSelection()
             grp = self._group_by_id(self.main_listbox.GetClientData(sel)) if sel != wx.NOT_FOUND else None
             if grp:
+                if grp.get('my_role') in ('owner', 'moderator'):
+                    manage_group_item = user_menu.Append(wx.ID_ANY, _("Manage Group"))
+                    self.Bind(wx.EVT_MENU, lambda e, g=grp: self._mod_manage_group(g), manage_group_item)
                 if grp.get('my_status') == 'active' and grp.get('my_role') != 'owner':
                     leave_item = user_menu.Append(wx.ID_ANY, _("Leave Group"))
                     self.Bind(wx.EVT_MENU, lambda e: self._user_leave_group(), leave_item)
@@ -2074,12 +2077,19 @@ class TitanNetMainWindow(wx.Frame):
                 self.Bind(wx.EVT_MENU, lambda e: self._user_create_forum(), create_forum_item)
                 pending_item = user_menu.Append(wx.ID_ANY, _("Manage Pending Members"))
                 self.Bind(wx.EVT_MENU, lambda e: self._mod_manage_pending_members(), pending_item)
-                manage_item = user_menu.Append(wx.ID_ANY, _("Manage Members"))
+                manage_item = user_menu.Append(wx.ID_ANY, _("Manage Group"))
                 self.Bind(wx.EVT_MENU, lambda e: self._mod_manage_members(), manage_item)
                 user_menu.AppendSeparator()
         elif self.current_view == "forum":
             create_topic_item = user_menu.Append(wx.ID_ANY, _("Create New Thread"))
             self.Bind(wx.EVT_MENU, lambda e: self._user_create_topic(), create_topic_item)
+            grp = getattr(self, 'current_group', None)
+            if (grp and grp.get('my_role') in ('owner', 'moderator')
+                    and self.main_listbox.GetSelection() != wx.NOT_FOUND):
+                # Group moderators/owners may delete threads in their own
+                # group's forums even without server-wide moderator rights.
+                delete_topic_item = user_menu.Append(wx.ID_ANY, _("Delete Thread"))
+                self.Bind(wx.EVT_MENU, lambda e: self._mod_delete_selected_topic(), delete_topic_item)
             user_menu.AppendSeparator()
 
         view_all_users_item = user_menu.Append(wx.ID_ANY, _("View All Users"))
@@ -2253,10 +2263,11 @@ class TitanNetMainWindow(wx.Frame):
             # text-only rooms when the multiline message_input had focus.
             if self.current_view == "menu":
                 wx.CallAfter(self.Hide)
-            elif self.current_view in ["room_chat", "private_chat"]:
-                wx.CallAfter(self.OnBack, None)
             else:
-                wx.CallAfter(self.show_menu)
+                # OnBack already knows the hierarchical route (e.g.
+                # forum -> group_forums -> groups -> menu) and falls back to
+                # show_menu() itself for flat views.
+                wx.CallAfter(self.OnBack, None)
         else:
             event.Skip()
 
@@ -2757,7 +2768,12 @@ class TitanNetMainWindow(wx.Frame):
                         count=g.get('member_count', 0), status=self._group_status_label(g))
                     self.main_listbox.Append(display, clientData=g.get('id'))
                 if self.main_listbox.GetCount() > 0:
+                    # SetSelection() does not fire EVT_LISTBOX, so the Actions
+                    # menu (which depends on the selected group's role) would
+                    # otherwise stay stale until the user manually changes
+                    # the selection. Refresh it explicitly here.
                     self.main_listbox.SetSelection(0)
+                    self.update_menu_bar()
         except Exception as e:
             print(f"Error updating groups list: {e}")
 
@@ -3189,6 +3205,13 @@ class TitanNetMainWindow(wx.Frame):
             pan = selection / (count - 1)
         play_sound('core/FOCUS.ogg', pan=pan)
 
+        # The Actions/Moderation menus are built from the currently selected
+        # item (e.g. "Manage Group" only for the selected group's role), so
+        # they must be refreshed on every selection change, not just when the
+        # view is first entered.
+        if listbox is self.main_listbox:
+            self.update_menu_bar()
+
         # Check if current view is forum and if selected topic has new replies
         if listbox is self.main_listbox and self.current_view == "forum":
             topic = self._forum_topic_for_selection(selection)
@@ -3222,12 +3245,10 @@ class TitanNetMainWindow(wx.Frame):
             # Backup Escape route from any list (room users, etc.). Routes the
             # same as the Frame-level OnKeyPress handler so users can always
             # leave a room even if the Frame's EVT_CHAR_HOOK is bypassed.
-            if self.current_view in ["room_chat", "private_chat"]:
-                wx.CallAfter(self.OnBack, None)
-            elif self.current_view == "menu":
+            if self.current_view == "menu":
                 wx.CallAfter(self.Hide)
             else:
-                wx.CallAfter(self.show_menu)
+                wx.CallAfter(self.OnBack, None)
             return
         elif keycode in (wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT):
             # Navigation keys - check for edge
@@ -3645,14 +3666,14 @@ class TitanNetMainWindow(wx.Frame):
             current_view = getattr(self, 'current_view', None)
             if current_view == "menu":
                 self.Hide()
-            elif current_view in ["room_chat", "private_chat"]:
-                self.OnBack(None)
             else:
-                # Any other view (rooms list, forum, etc.) - back to menu.
+                # OnBack knows the hierarchical route (forum -> group_forums
+                # -> groups -> menu) and falls back to show_menu() itself for
+                # flat views (rooms list, room_chat, private_chat, etc.).
                 try:
-                    self.show_menu()
+                    self.OnBack(None)
                 except Exception as e:
-                    print(f"_on_force_back: show_menu failed: {e}")
+                    print(f"_on_force_back: OnBack failed: {e}")
         except Exception as e:
             print(f"_on_force_back error: {e}")
 
@@ -6872,16 +6893,25 @@ class TitanNetMainWindow(wx.Frame):
         group = getattr(self, 'current_group', None)
         if not group:
             return
+        self._open_manage_group_dialog(group)
+
+    def _mod_manage_group(self, group):
+        """Open the manage dialog (rename, moderators, ban) for a group
+        selected directly from the main groups list, without opening it
+        first."""
+        self._open_manage_group_dialog(group)
+
+    def _open_manage_group_dialog(self, group):
         try:
             from src.network.titan_net_forum_gui import ManageGroupMembersDialog
             my_role = group.get('my_role', 'moderator')
-            dlg = ManageGroupMembersDialog(self, self.titan_client, group['id'], my_role)
+            dlg = ManageGroupMembersDialog(self, self.titan_client, group['id'], my_role, group.get('name'))
             dlg.ShowModal()
             dlg.Destroy()
-            # Ownership may have changed hands; refresh so menus reflect it.
+            # Ownership/name may have changed; refresh so menus/labels reflect it.
             self.refresh_groups()
         except Exception as e:
-            print(f"Error managing members: {e}")
+            print(f"Error managing group: {e}")
 
     def _mod_move_selected_topic_to_forum(self):
         """Move the selected thread to another forum. Within the same group the

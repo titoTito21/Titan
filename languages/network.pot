@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-06-23 16:29+0200\n"
+"POT-Creation-Date: 2026-07-11 11:47+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -476,7 +476,7 @@ msgstr ""
 msgid "Przetestuj dźwięk zakończenia połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:354 src/network/messenger_webview.py:2177
+#: src/network/messenger_webview.py:354
 msgid "Debug połączeń głosowych"
 msgstr ""
 
@@ -534,13 +534,19 @@ msgstr ""
 msgid "Połączono z Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:1232
-#, python-brace-format
-msgid "{} pisze"
+#: src/network/messenger_webview.py:1216 src/network/messenger_webview.py:1231
+msgid "Someone"
 msgstr ""
 
-#: src/network/messenger_webview.py:1234
-msgid "Ktoś pisze"
+#: src/network/messenger_webview.py:1232 src/network/whatsapp_webview.py:580
+#: src/network/whatsapp_webview.py:590 src/network/whatsapp_webview.py:597
+#, python-brace-format
+msgid "{} is typing"
+msgstr ""
+
+#: src/network/messenger_webview.py:1234 src/network/whatsapp_webview.py:582
+#: src/network/whatsapp_webview.py:592 src/network/whatsapp_webview.py:599
+msgid "Someone is typing"
 msgstr ""
 
 #: src/network/messenger_webview.py:1255 src/network/messenger_webview.py:1257
@@ -628,7 +634,7 @@ msgid "Test dźwięku zakończenia połączenia"
 msgstr ""
 
 #: src/network/messenger_webview.py:2141
-msgid "Błąd pobierania informacji debug"
+msgid "Error fetching debug info"
 msgstr ""
 
 #: src/network/messenger_webview.py:2141 src/network/messenger_webview.py:2186
@@ -637,8 +643,95 @@ msgstr ""
 
 #: src/network/messenger_webview.py:2146
 msgid ""
-"Informacje debug połączeń głosowych:\n"
+"Voice Call Debug Info:\n"
 "\n"
+msgstr ""
+
+#: src/network/messenger_webview.py:2149 src/network/telegram_gui.py:569
+#: src/network/telegram_gui.py:584 src/network/telegram_gui.py:768
+#: src/network/telegram_gui.py:786 src/network/telegram_windows.py:604
+#: src/network/telegram_windows.py:900
+msgid "Error"
+msgstr ""
+
+#: src/network/messenger_webview.py:2151
+msgid "Monitoring configured"
+msgstr ""
+
+#: src/network/messenger_webview.py:2152
+msgid "RTCPeerConnection available"
+msgstr ""
+
+#: src/network/messenger_webview.py:2153
+msgid "getUserMedia available"
+msgstr ""
+
+#: src/network/messenger_webview.py:2154
+msgid "Observer active"
+msgstr ""
+
+#: src/network/messenger_webview.py:2157
+msgid "Call state"
+msgstr ""
+
+#: src/network/messenger_webview.py:2158 src/network/telegram_windows.py:702
+msgid "Active"
+msgstr ""
+
+#: src/network/messenger_webview.py:2159
+msgid "Type"
+msgstr ""
+
+#: src/network/messenger_webview.py:2159
+msgid "none"
+msgstr ""
+
+#: src/network/messenger_webview.py:2160
+msgid "UI visible"
+msgstr ""
+
+#: src/network/messenger_webview.py:2161
+msgid "Streams"
+msgstr ""
+
+#: src/network/messenger_webview.py:2163
+msgid "DOM elements"
+msgstr ""
+
+#: src/network/messenger_webview.py:2164
+msgid "Call elements"
+msgstr ""
+
+#: src/network/messenger_webview.py:2165
+msgid "Voice elements"
+msgstr ""
+
+#: src/network/messenger_webview.py:2166
+msgid "Messenger elements"
+msgstr ""
+
+#: src/network/messenger_webview.py:2168
+msgid "Local settings"
+msgstr ""
+
+#: src/network/messenger_webview.py:2169
+msgid "Calls enabled"
+msgstr ""
+
+#: src/network/messenger_webview.py:2170
+msgid "Notifications"
+msgstr ""
+
+#: src/network/messenger_webview.py:2172
+msgid "Logged in"
+msgstr ""
+
+#: src/network/messenger_webview.py:2173
+msgid "Local call active"
+msgstr ""
+
+#: src/network/messenger_webview.py:2177
+msgid "Voice Call Debug"
 msgstr ""
 
 #: src/network/messenger_webview.py:2185
@@ -946,12 +1039,6 @@ msgid ""
 "Error: {error}"
 msgstr ""
 
-#: src/network/telegram_gui.py:569 src/network/telegram_gui.py:584
-#: src/network/telegram_gui.py:768 src/network/telegram_gui.py:786
-#: src/network/telegram_windows.py:604 src/network/telegram_windows.py:900
-msgid "Error"
-msgstr ""
-
 #: src/network/telegram_gui.py:767
 #, python-brace-format
 msgid ""
@@ -1088,10 +1175,6 @@ msgstr ""
 msgid "Group chat"
 msgstr ""
 
-#: src/network/telegram_windows.py:702
-msgid "Active"
-msgstr ""
-
 #: src/network/telegram_windows.py:895
 msgid "Me"
 msgstr ""
@@ -1223,17 +1306,6 @@ msgstr ""
 
 #: src/network/whatsapp_webview.py:380
 msgid "Połączono z WhatsApp"
-msgstr ""
-
-#: src/network/whatsapp_webview.py:580 src/network/whatsapp_webview.py:590
-#: src/network/whatsapp_webview.py:597
-#, python-brace-format
-msgid "{} is typing"
-msgstr ""
-
-#: src/network/whatsapp_webview.py:582 src/network/whatsapp_webview.py:592
-#: src/network/whatsapp_webview.py:599
-msgid "Someone is typing"
 msgstr ""
 
 #: src/network/whatsapp_webview.py:673 src/network/whatsapp_webview.py:683
