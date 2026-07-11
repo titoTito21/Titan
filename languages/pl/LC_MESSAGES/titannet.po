@@ -1087,9 +1087,9 @@ msgid "Run"
 msgstr "Uruchom"
 
 #: src/network/titan_net_gui.py:2449
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{component} - {action}"
-msgstr "Akcje komponentu:"
+msgstr "{component} - {action}"
 
 #: src/network/titan_net_gui.py:2457
 msgid "Titan-Net - What's New"
@@ -3308,13 +3308,16 @@ msgstr "Nie udało się zapisać pliku broadcastu"
 msgid ""
 "Titan-Net server is not available. Would you like to continue in offline "
 "mode?"
-msgstr "Pakiet: {name}"
+msgstr ""
+"Serwer Titan-Net jest niedostępny. Czy chcesz kontynuować w trybie offline?"
 
 #: src/network/titan_net_gui.py:8870
 msgid ""
 "Titan-Net server is not available.\n"
 "You can continue in offline mode without messaging features."
-msgstr "Akcja dla: {name}"
+msgstr ""
+"Serwer Titan-Net jest niedostępny.\n"
+"Możesz kontynuować w trybie offline bez funkcji wiadomości."
 
 #: src/network/titan_net_gui.py:8871
 msgid "Server Not Available"
@@ -3692,10 +3695,10 @@ msgid "Open in Editor"
 msgstr "Otwórz w edytorze"
 
 #: src/network/titan_net_mod_components.py:1660
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Enter your {provider} API key. It is stored locally for future use."
 msgstr ""
-"Wprowadź swój klucz API AI (Anthropic). Zostanie zapisany lokalnie do "
+"Wprowadź swój klucz API {provider}. Zostanie zapisany lokalnie do "
 "przyszłego użytku."
 
 #: src/network/titan_net_mod_components.py:1661
@@ -3813,20 +3816,20 @@ msgstr ""
 
 # #, python-brace-format
 #: src/network/titan_net_mod_components.py:1954
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Preview failed: {error}"
-msgstr "Błąd: {error}"
+msgstr "Podgląd nie powiódł się: {error}"
 
 #: src/network/titan_net_mod_components.py:1974
 #, python-brace-format
 msgid "Folder extension. Entry: {entry}"
-msgstr ""
+msgstr "Rozszerzenie folderowe. Punkt wejścia: {entry}"
 
 # #, python-brace-format
 #: src/network/titan_net_mod_components.py:1977
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Files: {files}"
-msgstr "Błąd: {error}"
+msgstr "Pliki: {files}"
 
 #: src/network/titan_net_mod_components.py:1988
 msgid "(binary file, not shown)"

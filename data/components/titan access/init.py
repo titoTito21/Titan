@@ -59,15 +59,29 @@ def stop_reader():
 
 
 def toggle_reader():
-    """Turn the screen reader on if off, or off if on (Ctrl+Shift+Alt+T)."""
+    """Turn the screen reader on if off, or off if on (Ctrl+Shift+Alt+T).
+
+    Persists the resulting state to General/Enabled, same as the settings
+    checkbox, so a restart of Titan respects whatever the hotkey last left it
+    at instead of only remembering the settings panel's choice.
+    """
     with _toggle_lock:
         try:
             if is_active():
                 print("[TitanAccess] toggling OFF")
                 stop_reader()
+                new_state = False
             else:
                 print("[TitanAccess] toggling ON")
                 start_reader()
+                new_state = True
+            try:
+                from titan_access.settings_store import get_settings
+                st = get_settings()
+                st.enabled = new_state
+                st.save()
+            except Exception as e:
+                print(f"[TitanAccess] toggle persist error: {e}")
         except Exception as e:
             print(f"[TitanAccess] toggle error: {e}")
             import traceback
