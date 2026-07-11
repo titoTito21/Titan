@@ -1213,7 +1213,7 @@ class MessengerWebViewFrame(wx.Frame):
                     
                     # Handle typing indicators
                     if result.get('typing') and self.notifications_item.IsChecked():
-                        typing_user = result.get('typingUser', 'Ktoś')
+                        typing_user = result.get('typingUser', _('Someone'))
                         
                         # Only play typing sound if different user or enough time passed
                         if (not self.last_typing_user or 
@@ -1228,10 +1228,10 @@ class MessengerWebViewFrame(wx.Frame):
                             
                             # TTS announcement
                             if self.tts_item.IsChecked():
-                                if typing_user and typing_user != 'Ktoś':
-                                    speaker.speak(_("{} pisze").format(typing_user))
+                                if typing_user and typing_user != _('Someone'):
+                                    speaker.speak(_("{} is typing").format(typing_user))
                                 else:
-                                    speaker.speak(_("Ktoś pisze"))
+                                    speaker.speak(_("Someone is typing"))
                             
                             self.last_typing_user = typing_user
                             self.last_typing_time = time.time()
@@ -2138,43 +2138,43 @@ class MessengerWebViewFrame(wx.Frame):
                     if success:
                         result_str = actual_result
                     else:
-                        _show_skinned_message(_("Błąd pobierania informacji debug"), _("Debug"), wx.OK | wx.ICON_ERROR)
+                        _show_skinned_message(_("Error fetching debug info"), _("Debug"), wx.OK | wx.ICON_ERROR)
                         return
                 
                 debug_info = json.loads(result_str)
                 
-                debug_text = _("Informacje debug połączeń głosowych:\n\n")
+                debug_text = _("Voice Call Debug Info:\n\n")
                 
                 if debug_info.get('error'):
-                    debug_text += f"❌ Błąd: {debug_info['error']}\n"
+                    debug_text += f"❌ {_('Error')}: {debug_info['error']}\n"
                 else:
-                    debug_text += f"✅ Monitoring skonfigurowany: {debug_info.get('setup', False)}\n"
-                    debug_text += f"🔌 RTCPeerConnection dostępne: {debug_info.get('hasRTCPeerConnection', False)}\n"
-                    debug_text += f"🎤 getUserMedia dostępne: {debug_info.get('hasGetUserMedia', False)}\n"
-                    debug_text += f"👁️ Observer aktywny: {debug_info.get('hasObserver', False)}\n\n"
+                    debug_text += f"✅ {_('Monitoring configured')}: {debug_info.get('setup', False)}\n"
+                    debug_text += f"🔌 {_('RTCPeerConnection available')}: {debug_info.get('hasRTCPeerConnection', False)}\n"
+                    debug_text += f"🎤 {_('getUserMedia available')}: {debug_info.get('hasGetUserMedia', False)}\n"
+                    debug_text += f"👁️ {_('Observer active')}: {debug_info.get('hasObserver', False)}\n\n"
                     
                     call_state = debug_info.get('callState', {})
-                    debug_text += f"📞 Stan połączenia:\n"
-                    debug_text += f"  - Aktywne: {call_state.get('isCallActive', False)}\n"
-                    debug_text += f"  - Typ: {call_state.get('callType', 'brak')}\n"
-                    debug_text += f"  - UI widoczne: {call_state.get('callUIVisible', False)}\n"
-                    debug_text += f"  - Strumienie: {len(call_state.get('mediaStreams', []))}\n\n"
+                    debug_text += f"📞 {_('Call state')}:\n"
+                    debug_text += f"  - {_('Active')}: {call_state.get('isCallActive', False)}\n"
+                    debug_text += f"  - {_('Type')}: {call_state.get('callType', _('none'))}\n"
+                    debug_text += f"  - {_('UI visible')}: {call_state.get('callUIVisible', False)}\n"
+                    debug_text += f"  - {_('Streams')}: {len(call_state.get('mediaStreams', []))}\n\n"
                     
-                    debug_text += f"🔍 Elementy DOM:\n"
-                    debug_text += f"  - Elementy call: {debug_info.get('currentCallElements', 0)}\n"
-                    debug_text += f"  - Elementy voice: {debug_info.get('currentVoiceElements', 0)}\n"
-                    debug_text += f"  - Elementy Messenger: {debug_info.get('messengerElements', 0)}\n\n"
+                    debug_text += f"🔍 {_('DOM elements')}:\n"
+                    debug_text += f"  - {_('Call elements')}: {debug_info.get('currentCallElements', 0)}\n"
+                    debug_text += f"  - {_('Voice elements')}: {debug_info.get('currentVoiceElements', 0)}\n"
+                    debug_text += f"  - {_('Messenger elements')}: {debug_info.get('messengerElements', 0)}\n\n"
                     
-                    debug_text += f"🎛️ Lokalne ustawienia:\n"
-                    debug_text += f"  - Połączenia włączone: {self.voice_enabled_item.IsChecked()}\n"
-                    debug_text += f"  - Powiadomienia: {self.notifications_item.IsChecked()}\n"
+                    debug_text += f"🎛️ {_('Local settings')}:\n"
+                    debug_text += f"  - {_('Calls enabled')}: {self.voice_enabled_item.IsChecked()}\n"
+                    debug_text += f"  - {_('Notifications')}: {self.notifications_item.IsChecked()}\n"
                     debug_text += f"  - TTS: {self.tts_item.IsChecked()}\n"
-                    debug_text += f"  - Zalogowany: {self.messenger_logged_in}\n"
-                    debug_text += f"  - Lokalne połączenie aktywne: {self.is_call_active}\n"
+                    debug_text += f"  - {_('Logged in')}: {self.messenger_logged_in}\n"
+                    debug_text += f"  - {_('Local call active')}: {self.is_call_active}\n"
                 
                 # Show in scrollable dialog
                 dlg = wx.lib.dialogs.ScrolledMessageDialog(
-                    self, debug_text, _("Debug połączeń głosowych"), 
+                    self, debug_text, _("Voice Call Debug"), 
                     style=wx.OK | wx.ICON_INFORMATION
                 )
                 dlg.ShowModal()

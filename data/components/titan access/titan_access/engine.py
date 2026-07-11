@@ -847,11 +847,20 @@ class TitanAccessEngine:
         self.submit_read(_do)
 
     def on_stop_speech_key(self):
-        """Ctrl pressed: silence current speech (standard screen-reader key).
+        """Ctrl / Tab pressed: silence current speech immediately.
 
-        Called on the keyboard-hook thread, so it must return immediately --
-        ``speech.stop()`` can block, which would stall the global hook. Offload
-        it to the background worker."""
+        Called on the keyboard-hook thread.  ``speech.stop()`` is fast
+        (stops the pygame channel and sets a flag), so calling it directly
+        gives the most responsive interrupt.  We also set the background
+        worker flag so the segment-pipeline thread (if running) notices
+        the stop and exits its wait loop."""
+        # Direct stop for immediate silence.
+        if self.speech is not None:
+            try:
+                self.speech.stop()
+            except Exception:
+                pass
+        # Also signal the background worker so segment pacing exits.
         self.request_stop_speech()
 
     def _handle_controller_transition(self, obj):

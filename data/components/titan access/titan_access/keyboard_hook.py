@@ -369,6 +369,14 @@ class KeyboardHook:
         # a Polish keyboard, so Ctrl+Alt combos now pass straight through.)
 
         # ---- 4. Plain key (browse mode quick-nav / arrows) ------------ #
+        # Tab / Shift+Tab: interrupt current speech immediately so the next
+        # element is read without waiting for the current announcement to
+        # finish (standard screen-reader behaviour: JAWS, NVDA, etc.).
+        if key_name == "tab" and is_down:
+            try:
+                self.engine.on_stop_speech_key()
+            except Exception:
+                pass
         try:
             if self.engine.on_plain_key(vk, key_name, self._ctrl,
                                         self._alt, self._shift):

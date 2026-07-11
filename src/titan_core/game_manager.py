@@ -17,6 +17,7 @@ from src.platform_utils import (
 if IS_WINDOWS:
     import winreg
 
+__all__ = ['get_games', 'open_game', 'get_games_by_platform']
 
 PROJECT_ROOT = get_base_path()
 GAME_DIR = os.path.join(PROJECT_ROOT, 'data', 'games')
