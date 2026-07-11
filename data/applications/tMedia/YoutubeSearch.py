@@ -1,7 +1,9 @@
 import wx
 import yt_dlp
 import webbrowser
+import threading
 from translation import _
+from player import Player
 
 try:
     from src.titan_core.skin_manager import apply_skin_to_window
@@ -164,21 +166,18 @@ class YoutubeSearchApp(wx.Frame):
     def _show_selection_context_menu(self, event=None):
         selection = self.results_list.GetSelection()
         if selection != wx.NOT_FOUND:
-            self.results_list.SetSelection(selection) # Ensure the item is selected
+            self.results_list.SetSelection(selection)
 
             menu = wx.Menu()
+            play_item = menu.Append(wx.ID_ANY, _("Play"))
             open_browser_item = menu.Append(wx.ID_ANY, _("Open in Browser"))
 
+            self.Bind(wx.EVT_MENU, self.on_play_video, play_item)
             self.Bind(wx.EVT_MENU, self.on_open_in_browser, open_browser_item)
 
-            # Determine position for the context menu
-            if event and hasattr(event, 'GetPosition'): # Check if it's a mouse event
+            if event and hasattr(event, 'GetPosition'):
                 pos = event.GetPosition()
-            else: # For keyboard events (Enter)
-                # For ListBox, we can't get item rect directly.
-                # Instead, we'll show the menu at the current mouse position or a default position.
-                # A simple approach is to show it at the center of the listbox or at the top-left.
-                # For now, let's use the current mouse position if available, otherwise a default.
+            else:
                 pos = self.results_list.GetPosition()
                 pos = self.results_list.ClientToScreen(pos)
 
@@ -195,15 +194,78 @@ class YoutubeSearchApp(wx.Frame):
     def on_right_click(self, event):
         selection = self.results_list.GetSelection()
         if selection != wx.NOT_FOUND:
-            self.results_list.SetSelection(selection) # Select the item that was right-clicked
+            self.results_list.SetSelection(selection)
             menu = wx.Menu()
+            play_item = menu.Append(wx.ID_ANY, _("Play"))
             open_browser_item = menu.Append(wx.ID_ANY, _("Open in Browser"))
 
+            self.Bind(wx.EVT_MENU, self.on_play_video, play_item)
             self.Bind(wx.EVT_MENU, self.on_open_in_browser, open_browser_item)
 
             self.PopupMenu(menu, event.GetPosition())
             menu.Destroy()
 
+
+    def on_play_video(self, event):
+        selection = self.results_list.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+
+        video = self.videos[selection]
+        video_id = video.get('id', '')
+        if not video_id:
+            self.GetParent().speak_message(_("No valid video found"))
+            return
+
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        title = video.get('title', video_id)
+
+        self.GetParent().play_sound('loading')
+        self.GetParent().speak_message(_("Extracting stream for: %s") % title)
+
+        threading.Thread(target=self._extract_and_play, args=(video_url, title), daemon=True).start()
+
+    def _extract_and_play(self, video_url, title):
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'no_check_certificate': True,
+            'geo_bypass': True,
+            'socket_timeout': 15,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
+        }
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                if not info:
+                    wx.CallAfter(self.GetParent().speak_message, _("Failed to extract video info"))
+                    return
+
+                stream_url = info.get('url')
+                if not stream_url:
+                    formats = info.get('formats', [])
+                    for fmt in reversed(formats):
+                        if fmt.get('url'):
+                            stream_url = fmt['url']
+                            break
+
+                if not stream_url:
+                    wx.CallAfter(self.GetParent().speak_message, _("No playable stream found"))
+                    return
+
+                wx.CallAfter(self._open_vlc_player, stream_url, title)
+
+        except Exception as e:
+            wx.CallAfter(self.GetParent().speak_message, _("Playback error: %s") % str(e))
+
+    def _open_vlc_player(self, stream_url, title):
+        player = Player(self)
+        player.play_file(stream_url)
+        player.Show()
+        self.GetParent().play_sound('enteringtplayer')
+        self.GetParent().speak_message(_("Playing: %s") % title)
 
     def on_open_in_browser(self, event):
         selection = self.results_list.GetSelection()

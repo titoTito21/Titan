@@ -73,7 +73,7 @@ def play_sound(sound_file):
             pygame.mixer.Channel(0).play(pygame.mixer.Sound(theme_sound_path))
             # print(f"Playing sound: {theme_sound_path}") # Debugging sound playback
         except pygame.error as e:
-            print(f"Nie udało się odtworzyć dźwięku {theme_sound_path}: {e}")
+            print(f"Failed to play sound {theme_sound_path}: {e}")
         except Exception as e:
              print(f"An unexpected error occurred while playing sound {theme_sound_path}: {e}")
     else:
@@ -129,7 +129,7 @@ def play_loop_sound():
                  print("Background channel not available.")
 
         except pygame.error as e:
-            print(f"Nie udało się odtworzyć dźwięku tła {loop_path}: {e}")
+            print(f"Failed to play background sound {loop_path}: {e}")
         except Exception as e:
              print(f"An unexpected error occurred while playing loop sound {loop_path}: {e}")
     else:

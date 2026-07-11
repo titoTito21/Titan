@@ -1,79 +1,293 @@
 # Polish translations for TMedia.
 # Copyright (C) 2025 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: PROJECT VERSION\n"
-"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-23 08:38+0100\n"
-"PO-Revision-Date: 2026-02-23 09:00+0100\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Project-Id-Version: TMedia 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-10 12:00+0200\n"
+"PO-Revision-Date: 2026-07-10 12:00+0200\n"
+"Last-Translator: \n"
 "Language: pl\n"
-"Language-Team: pl <LL@li.org>\n"
+"Language-Team: pl\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
 "(n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.18.0\n"
 
-#: data/applications/tMedia/YoutubeSearch.py:10
-#: data/applications/tMedia/tmedia.py:99
+#: MediaCatalog.py
+msgid "Select Radio Language"
+msgstr "Wybierz język radia"
+
+#: MediaCatalog.py
+msgid "Loading available languages..."
+msgstr "Ładowanie dostępnych języków..."
+
+#: MediaCatalog.py
+#, python-format
+msgid "stations"
+msgstr "stacji"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Failed to load languages (HTTP %d)"
+msgstr "Nie udało się załadować języków (HTTP %d)"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Network error: %s"
+msgstr "Błąd sieci: %s"
+
+#: MediaCatalog.py
+msgid "Select a language and press OK"
+msgstr "Wybierz język i naciśnij OK"
+
+#: MediaCatalog.py
+msgid "Media Catalog"
+msgstr "Katalog mediów"
+
+#: MediaCatalog.py
+msgid "Radio Stations"
+msgstr "Stacje radiowe"
+
+#: MediaCatalog.py
+msgid "Podcasts"
+msgstr "Podcasty"
+
+#: MediaCatalog.py
+msgid "Media Library"
+msgstr "Biblioteka mediów"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error loading radio stations (%s): %s"
+msgstr "Błąd ładowania stacji radiowych (%s): %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error loading podcasts from %s: %s"
+msgstr "Błąd ładowania podcastów z %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Podcast file not found: %s"
+msgstr "Nie znaleziono pliku podcastów: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error loading URL catalogs from %s: %s"
+msgstr "Błąd ładowania katalogów URL z %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "URL catalog file not found: %s"
+msgstr "Nie znaleziono pliku katalogów URL: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error parsing RSS feed for %s: %s"
+msgstr "Błąd parsowania kanału RSS dla %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error loading podcast episodes from %s: %s"
+msgstr "Błąd ładowania odcinków podcastu z %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Connection error loading catalog %s: %s"
+msgstr "Błąd połączenia podczas ładowania katalogu %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Error loading catalog %s: %s"
+msgstr "Błąd ładowania katalogu %s: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Playing: %s"
+msgstr "Odtwarzanie: %s"
+
+#: MediaCatalog.py
+#, python-format
+msgid "Player: %s"
+msgstr "Odtwarzacz: %s"
+
+#: MediaCatalog.py
+msgid "Loading Error"
+msgstr "Błąd ładowania"
+
+#: player.py
+msgid "Player"
+msgstr "Odtwarzacz"
+
+#: player.py
+msgid "Paused"
+msgstr "Wstrzymano"
+
+#: player.py
+msgid "Streaming"
+msgstr "Odtwarzanie strumienia"
+
+#: player.py
+msgid "Playing: "
+msgstr "Odtwarzanie: "
+
+#: player.py
+msgid "Stream loaded"
+msgstr "Strumień został załadowany"
+
+#: player.py
+msgid "Playing"
+msgstr "Odtwarzanie"
+
+#: player.py
+msgid "Rewind 10s"
+msgstr "Przewijanie w lewo"
+
+#: player.py
+msgid "Rewind 10 seconds"
+msgstr "Przewijanie w lewo o 10 sekund"
+
+#: player.py
+msgid "Forward 10s"
+msgstr "Przewijanie w prawo"
+
+#: player.py
+msgid "Forward 10 seconds"
+msgstr "Przewijanie w prawo o 10 sekund"
+
+#: player.py
+#, python-format
+msgid "Volume: %d%%"
+msgstr "Głośność: %d%%"
+
+#: player.py
+#, python-format
+msgid "Volume: %d percent"
+msgstr "Głośność: %d procent"
+
+#: player.py
+msgid "Player closed"
+msgstr "Zamknięto odtwarzacz"
+
+#: Settings.py
+msgid "Settings"
+msgstr "Ustawienia"
+
+#: Settings.py
+msgid "Sound feedback"
+msgstr "Informowanie przy pomocy dźwięków"
+
+#: Settings.py
+msgid "Speech output"
+msgstr "Oznajmianie za pomocą mowy"
+
+#: Settings.py
+msgid "Built-in player"
+msgstr "Wbudowany odtwarzacz"
+
+#: Settings.py
+msgid "Save"
+msgstr "Zapisz"
+
+#: Settings.py
+msgid "Cancel"
+msgstr "Anuluj"
+
+#: tmedia.py
+msgid "Settings..."
+msgstr "Ustawienia..."
+
+#: tmedia.py
+msgid "&Application"
+msgstr "&Aplikacja"
+
+#: tmedia.py
+msgid "Loading media catalog"
+msgstr "Ładowanie katalogu mediów"
+
+#: tmedia.py
+msgid "TMedia functions"
+msgstr "Funkcje TMedia"
+
+#: YoutubeSearch.py
 msgid "YouTube Search"
 msgstr "Wyszukiwarka YouTube"
 
-#: data/applications/tMedia/YoutubeSearch.py:20
+#: YoutubeSearch.py
 msgid "Search"
 msgstr "Szukaj"
 
-#: data/applications/tMedia/YoutubeSearch.py:73
+#: YoutubeSearch.py
 #, python-format
 msgid "Found %d cached results for: %s"
 msgstr "Znaleziono %d wyników z pamięci podręcznej dla: %s"
 
-#: data/applications/tMedia/YoutubeSearch.py:75
+#: YoutubeSearch.py
 msgid "No cached results found"
 msgstr "Nie znaleziono wyników w pamięci podręcznej"
 
-#: data/applications/tMedia/YoutubeSearch.py:131
+#: YoutubeSearch.py
 #, python-format
 msgid "Found %d results for: %s"
 msgstr "Znaleziono %d wyników dla: %s"
 
-#: data/applications/tMedia/YoutubeSearch.py:133
-#: data/applications/tMedia/YoutubeSearch.py:135
+#: YoutubeSearch.py
 #, python-format
 msgid "No results found for: %s"
 msgstr "Nie znaleziono wyników dla: %s"
 
-#: data/applications/tMedia/YoutubeSearch.py:141
+#: YoutubeSearch.py
 msgid "Network connection error. Check your internet connection."
 msgstr "Błąd połączenia sieciowego. Sprawdź swoje połączenie internetowe."
 
-#: data/applications/tMedia/YoutubeSearch.py:143
+#: YoutubeSearch.py
 msgid "Search timed out. Please try again."
 msgstr "Wyszukiwanie przekroczyło limit czasu. Spróbuj ponownie."
 
-#: data/applications/tMedia/YoutubeSearch.py:145
+#: YoutubeSearch.py
 #, python-format
 msgid "Search error: %s"
 msgstr "Błąd wyszukiwania: %s"
 
-#: data/applications/tMedia/YoutubeSearch.py:153
-#: data/applications/tMedia/YoutubeSearch.py:183
+#: YoutubeSearch.py
+msgid "Play"
+msgstr "Odtwórz"
+
+#: YoutubeSearch.py
 msgid "Open in Browser"
 msgstr "Otwórz w przeglądarce"
 
-#: data/applications/tMedia/YoutubeSearch.py:208
+#: YoutubeSearch.py
+msgid "No valid video found"
+msgstr "Nie znaleziono prawidłowego filmu"
+
+#: YoutubeSearch.py
+#, python-format
+msgid "Extracting stream for: %s"
+msgstr "Pobieranie strumienia dla: %s"
+
+#: YoutubeSearch.py
+msgid "Failed to extract video info"
+msgstr "Nie udało się pobrać informacji o filmie"
+
+#: YoutubeSearch.py
+msgid "No playable stream found"
+msgstr "Nie znaleziono odtwarzalnego strumienia"
+
+#: YoutubeSearch.py
+#, python-format
+msgid "Playback error: %s"
+msgstr "Błąd odtwarzania: %s"
+
+#: YoutubeSearch.py
+#, python-format
+msgid "Playing: %s"
+msgstr "Odtwarzanie: %s"
+
+#: YoutubeSearch.py
 msgid "No valid video URL found"
 msgstr "Nie znaleziono prawidłowego adresu URL filmu"
-
-#: data/applications/tMedia/tmedia.py:99
-msgid "Media Catalog"
-msgstr "Katalog mediów"
-
-#: data/applications/tMedia/tmedia.py:100
-msgid "TMedia functions"
-msgstr "Funkcje TMedia"
