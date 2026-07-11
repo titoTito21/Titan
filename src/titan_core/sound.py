@@ -1,6 +1,7 @@
 import pygame
 import os
 import sys
+import time
 import platform
 import subprocess
 import atexit
@@ -520,6 +521,32 @@ def play_sound_file(file_path, pan=None, elevation=0.0):
 # Funkcje odtwarzania dźwięków
 def play_startup_sound():
     play_sound('core/startup.ogg')
+
+def play_shutdown_sound():
+    """Play the shutdown sound and block until it has played almost to the
+    end, so callers can wait for it before terminating the process without
+    lingering in silence after it actually finishes."""
+    sound_file = 'core/shutdown.ogg'
+    duration = 0.0
+    try:
+        if not _mixer_initialized or pygame.mixer.get_init() is None:
+            initialize_sound()
+
+        from src.platform_utils import find_resource
+        sound_path = find_resource(os.path.join('sfx', current_theme, sound_file))
+        if not sound_path or not os.path.exists(sound_path):
+            sound_path = os.path.join(resource_path(os.path.join('sfx', 'default')), sound_file)
+        if sound_path and os.path.exists(sound_path):
+            duration = pygame.mixer.Sound(sound_path).get_length()
+    except Exception as e:
+        print(f"Error measuring shutdown sound duration: {e}")
+
+    play_sound(sound_file)
+
+    # Wait almost the full length of the clip (small margin so the process
+    # doesn't need to wait for the tail to fully decay), falling back to a
+    # fixed delay if the duration couldn't be determined.
+    time.sleep(max(0.0, duration - 0.2) if duration > 0 else 2.5)
 
 def play_connecting_sound():
     play_sound('system/connecting.ogg')

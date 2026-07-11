@@ -7,7 +7,7 @@ import accessible_output3.outputs.auto
 from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
 from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
-from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_sound, is_3d_enabled
+from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_sound, is_3d_enabled, play_shutdown_sound
 from src.controller.controller_vibrations import (
     vibrate_cursor_move, vibrate_menu_open, vibrate_menu_close, vibrate_selection,
     vibrate_focus_change, vibrate_error, vibrate_notification
@@ -1233,6 +1233,15 @@ class KlangoMode:
         # Safely disconnect from Telegram if connected
         def safe_shutdown():
             try:
+                # Quick start skips the shutdown sound/delay, same as it skips
+                # the startup sound/delay in main.py.
+                try:
+                    quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
+                except Exception:
+                    quick_start = False
+                if not quick_start:
+                    play_shutdown_sound()
+
                 # Stop system hooks before shutdown
                 try:
                     from src.titan_core.tce_system import stop_system_hooks
@@ -1240,7 +1249,7 @@ class KlangoMode:
                     print("INFO: System hooks stopped")
                 except Exception as e:
                     print(f"Warning: Error stopping system hooks: {e}")
-                
+
                 print("INFO: Application terminating now.")
                 os._exit(0)
                 
@@ -2457,6 +2466,15 @@ class KlangoFrame(wx.Frame):
         # Safely disconnect from Telegram if connected
         def safe_shutdown():
             try:
+                # Quick start skips the shutdown sound/delay, same as it skips
+                # the startup sound/delay in main.py.
+                try:
+                    quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
+                except Exception:
+                    quick_start = False
+                if not quick_start:
+                    play_shutdown_sound()
+
                 # Stop system hooks before shutdown
                 try:
                     from src.titan_core.tce_system import stop_system_hooks
@@ -2464,7 +2482,7 @@ class KlangoFrame(wx.Frame):
                     print("INFO: System hooks stopped")
                 except Exception as e:
                     print(f"Warning: Error stopping system hooks: {e}")
-                
+
                 print("INFO: Application terminating now.")
                 os._exit(0)
                 

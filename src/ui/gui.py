@@ -18,7 +18,7 @@ from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
 from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
-from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound, play_endoflist_sound, play_sound
+from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound, play_endoflist_sound, play_sound, play_shutdown_sound
 import accessible_output3.outputs.auto
 from src.ui.menu import MenuBar
 from src.ui.invisibleui import InvisibleUI
@@ -4766,6 +4766,15 @@ class TitanApp(wx.Frame):
         # Safely disconnect from Telegram if connected
         def safe_shutdown():
             try:
+                # Quick start skips the shutdown sound/delay, same as it skips
+                # the startup sound/delay in main.py.
+                try:
+                    quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
+                except Exception:
+                    quick_start = False
+                if not quick_start:
+                    play_shutdown_sound()
+
                 # Stop status update thread immediately
                 print("INFO: Stopping status update thread...")
                 self.status_thread_running = False

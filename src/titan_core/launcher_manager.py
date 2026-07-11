@@ -744,6 +744,20 @@ class LauncherAPI:
 
         def _shutdown():
             try:
+                # Quick start skips the shutdown sound/delay, same as it skips
+                # the startup sound/delay in main.py.
+                try:
+                    from src.settings.settings import get_setting
+                    quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
+                except Exception:
+                    quick_start = False
+                if not quick_start:
+                    try:
+                        from src.titan_core.sound import play_shutdown_sound
+                        play_shutdown_sound()
+                    except Exception:
+                        pass
+
                 # Stop invisible UI
                 try:
                     self.stop_invisible_ui()
