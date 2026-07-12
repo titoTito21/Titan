@@ -1,6 +1,7 @@
 import wx
 import requests
 import os
+import html
 import feedparser
 import subprocess
 from urllib.parse import unquote, quote, urljoin
@@ -305,8 +306,8 @@ class MediaCatalog(wx.Frame):
                         if 'href="' in line:
                             start = line.find('href="') + len('href="')
                             end = line.find('"', start)
-                            link = line[start:end]
-                            full_url = urljoin(base_url, link)
+                            link = html.unescape(line[start:end])
+                            full_url = urljoin(base_url, quote(link, safe='%/'))
                             display_name = unquote(link).replace('%20', ' ').strip('/')
 
                             if link.endswith('/'):
