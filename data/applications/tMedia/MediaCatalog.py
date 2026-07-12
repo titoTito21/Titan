@@ -28,7 +28,7 @@ def _apply_skin_to_tree(window):
 
 
 RADIO_BROWSER_COUNTRIES_URL = "https://de1.api.radio-browser.info/json/countries"
-RADIO_BROWSER_STATIONS_URL = "https://de1.api.radio-browser.info/json/stations"
+RADIO_BROWSER_STATIONS_URL = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/"
 
 
 class LanguagePickerDialog(wx.Dialog):
@@ -97,7 +97,7 @@ class LanguagePickerDialog(wx.Dialog):
     def get_selected_code(self):
         sel = self.country_list.GetSelection()
         if sel != wx.NOT_FOUND and sel < len(self.countries):
-            return self.countries[sel].get("code")
+            return self.countries[sel].get("iso_3166_1")
         return None
 
 
@@ -128,6 +128,7 @@ class MediaCatalog(wx.Frame):
         self.loading_sound_channel = None
         self.root_node = root
         self._selected_country_code = None
+        self.podcast_node = None
 
         wx.CallAfter(self._show_language_picker)
 
@@ -181,13 +182,9 @@ class MediaCatalog(wx.Frame):
 
     def _get_radio_stations(self, country_code):
         try:
-            response = requests.get(RADIO_BROWSER_STATIONS_URL, timeout=15)
+            response = requests.get(RADIO_BROWSER_STATIONS_URL + quote(country_code), timeout=15)
             if response.status_code == 200:
-                all_stations = response.json()
-                return [
-                    station for station in all_stations
-                    if station.get("countrycode") == country_code
-                ]
+                return response.json()
         except requests.RequestException as e:
             wx.CallAfter(self.show_error_message, _("Error loading radio stations (%s): %s") % (country_code, e))
         return []
@@ -236,6 +233,7 @@ class MediaCatalog(wx.Frame):
 
         self.update_progress(40)
         podcast_node = self.media_tree.AppendItem(root_node, _("Podcasts"))
+        self.podcast_node = podcast_node
         for name, rss_url in podcasts_data:
             item = self.media_tree.AppendItem(podcast_node, name)
             self.media_tree.SetItemData(item, rss_url)
@@ -253,6 +251,7 @@ class MediaCatalog(wx.Frame):
     def _populate_tree_no_radio(self, root_node, podcasts_data, url_catalogs_data):
         self.update_progress(20)
         podcast_node = self.media_tree.AppendItem(root_node, _("Podcasts"))
+        self.podcast_node = podcast_node
         for name, rss_url in podcasts_data:
             item = self.media_tree.AppendItem(podcast_node, name)
             self.media_tree.SetItemData(item, rss_url)
@@ -271,16 +270,17 @@ class MediaCatalog(wx.Frame):
         def _load_and_populate():
             try:
                 feed = feedparser.parse(rss_url)
-                if feed.bozo:
+                if feed.bozo and not feed.entries:
                     wx.CallAfter(self.show_error_message, _("Error parsing RSS feed for %s: %s") % (rss_url, feed.bozo_exception))
                     return
                 for entry in feed.entries:
-                    title = entry.title
-                    if hasattr(entry, 'published'):
+                    title = entry.get('title', rss_url)
+                    if entry.get('published'):
                         title += f" ({entry.published})"
                     episode_node = self.media_tree.AppendItem(podcast_node, title)
-                    if entry.enclosures and len(entry.enclosures) > 0:
-                        audio_url = entry.enclosures[0].href
+                    enclosures = entry.get('enclosures') or []
+                    audio_url = enclosures[0].get('href') if enclosures else None
+                    if audio_url:
                         self.media_tree.SetItemData(episode_node, (audio_url, title))
             except Exception as e:
                 wx.CallAfter(self.show_error_message, _("Error loading podcast episodes from %s: %s") % (rss_url, e))
@@ -290,10 +290,10 @@ class MediaCatalog(wx.Frame):
         item = event.GetItem()
         url = self.media_tree.GetItemData(item)
         if url and self.media_tree.GetChildrenCount(item) == 0:
-            if isinstance(url, str) and 'http' in url:
-                self.load_directory(item, url)
-            elif isinstance(url, str):
+            if isinstance(url, str) and self.podcast_node is not None and self.media_tree.GetItemParent(item) == self.podcast_node:
                 self._load_podcast_episodes(item, url)
+            elif isinstance(url, str) and 'http' in url:
+                self.load_directory(item, url)
 
     def load_directory(self, parent_node, base_url):
         def list_files_threaded():
@@ -354,9 +354,9 @@ class MediaCatalog(wx.Frame):
                     display_title = media_url[1]
                 else:
                     url_to_play = media_url
-                    display_title = unquote(url_to_play).split('/')[-1]
+                    display_title = self.media_tree.GetItemText(item)
 
-                self.play_media(url_to_play)
+                self.play_media(url_to_play, display_title)
                 self.GetParent().play_sound('done')
                 self.GetParent().speak_message(_("Playing: %s") % display_title)
 
@@ -368,7 +368,7 @@ class MediaCatalog(wx.Frame):
         else:
             event.Skip()
 
-    def play_media(self, url):
+    def play_media(self, url, title=None):
         player = self.GetParent().config.get('DEFAULT', 'player', fallback='tplayer')
 
         if player == 'vlc':
@@ -378,11 +378,12 @@ class MediaCatalog(wx.Frame):
             elif os.name == 'posix':
                 subprocess.Popen(["vlc", url])
         else:
+            display_title = title or unquote(url).split('/')[-1]
             tplayer = Player(self)
-            tplayer.play_file(url)
+            tplayer.play_file(url, title)
             tplayer.Show()
             self.GetParent().play_sound('enteringtplayer')
-            self.GetParent().speak_message(_("Player: %s") % unquote(url).split('/')[-1])
+            self.GetParent().speak_message(_("Player: %s") % display_title)
 
     def show_error_message(self, message):
         wx.MessageBox(message, _("Loading Error"), wx.OK | wx.ICON_ERROR)

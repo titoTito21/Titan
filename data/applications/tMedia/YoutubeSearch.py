@@ -262,7 +262,7 @@ class YoutubeSearchApp(wx.Frame):
 
     def _open_vlc_player(self, stream_url, title):
         player = Player(self)
-        player.play_file(stream_url)
+        player.play_file(stream_url, title)
         player.Show()
         self.GetParent().play_sound('enteringtplayer')
         self.GetParent().speak_message(_("Playing: %s") % title)

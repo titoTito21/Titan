@@ -111,24 +111,26 @@ class Player(wx.Frame):
             self.player.audio_set_volume(current_volume)
             wx.MilliSleep(50)
 
-    def play_file(self, filepath: str):
+    def play_file(self, filepath: str, title: str = None):
         media = self.instance.media_new(filepath)
         self.player.set_media(media)
         self.player.play()
         threading.Thread(target=self.fade_in_volume).start()
 
-        title = (
-            filepath.split('/')[-1]
-            if not filepath.startswith("http")
-            else _("Streaming")
-        )
+        has_explicit_title = title is not None
+        if not has_explicit_title:
+            title = (
+                filepath.split('/')[-1]
+                if not filepath.startswith("http")
+                else _("Streaming")
+            )
         self.SetTitle(title)
         self.status.SetLabel(_("Playing: ") + title)
         self.speak_message(_("Playing: %s") % title)
 
         self.is_playing = True
 
-        if filepath.startswith("http"):
+        if filepath.startswith("http") and not has_explicit_title:
             monitor_thread = threading.Thread(target=self.monitor_stream, args=(filepath,))
             monitor_thread.start()
 
