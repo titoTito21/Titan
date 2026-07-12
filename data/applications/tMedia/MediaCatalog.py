@@ -2,9 +2,12 @@ import wx
 import requests
 import os
 import html
+import platform
 import feedparser
 import subprocess
-from urllib.parse import unquote, quote, urljoin
+from pathlib import Path
+from urllib.parse import unquote, quote, urljoin, urlparse
+from urllib.request import url2pathname
 
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +18,41 @@ try:
     from src.titan_core.skin_manager import apply_skin_to_window
 except ImportError:
     apply_skin_to_window = None
+
+try:
+    import win32api
+except ImportError:
+    win32api = None
+
+MEDIA_FILE_EXTENSIONS = ('.mp3', '.wav', '.ogg', '.wma', '.flac', '.aac',
+                          '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv',
+                          '.webm', '.m4a')
+
+GOOGLE_DRIVE_MARKER = 'googledrive://'
+
+
+def _detect_google_drive_path():
+    """Finds the drive letter Google Drive for Desktop is mounted on (Windows only)."""
+    if platform.system() != 'Windows' or win32api is None:
+        return None
+    try:
+        drives = win32api.GetLogicalDriveStrings().split('\x00')
+    except Exception:
+        return None
+    for drive in drives:
+        if not drive:
+            continue
+        try:
+            volume_name = win32api.GetVolumeInformation(drive)[0]
+        except Exception:
+            continue
+        if 'google drive' in volume_name.strip().lower():
+            return drive
+    return None
+
+
+def _file_uri_to_path(uri):
+    return url2pathname(urlparse(uri).path)
 
 
 def _apply_skin_to_tree(window):
@@ -215,6 +253,11 @@ class MediaCatalog(wx.Frame):
                     for line in f:
                         if '=' in line:
                             name, url = line.strip().split('=', 1)
+                            if url.strip().lower() == GOOGLE_DRIVE_MARKER:
+                                drive_path = _detect_google_drive_path()
+                                if not drive_path:
+                                    continue
+                                url = Path(drive_path).as_uri()
                             data.append((name, url))
             except Exception as e:
                 wx.CallAfter(self.show_error_message, _("Error loading URL catalogs from %s: %s") % (urls_file, e))
@@ -293,6 +336,8 @@ class MediaCatalog(wx.Frame):
         if url and self.media_tree.GetChildrenCount(item) == 0:
             if isinstance(url, str) and self.podcast_node is not None and self.media_tree.GetItemParent(item) == self.podcast_node:
                 self._load_podcast_episodes(item, url)
+            elif isinstance(url, str) and url.startswith('file://'):
+                self.load_local_directory(item, url)
             elif isinstance(url, str) and 'http' in url:
                 self.load_directory(item, url)
 
@@ -314,13 +359,34 @@ class MediaCatalog(wx.Frame):
                                 folder_node = self.media_tree.AppendItem(parent_node, display_name)
                                 self.media_tree.SetItemData(folder_node, full_url)
                                 self.media_tree.SetItemHasChildren(folder_node, True)
-                            elif link.endswith(('.mp3', '.wav', '.ogg', '.wma', '.flac', '.aac',
-                                                '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv',
-                                                '.webm', '.m4a')):
+                            elif link.lower().endswith(MEDIA_FILE_EXTENSIONS):
                                 file_node = self.media_tree.AppendItem(parent_node, display_name)
                                 self.media_tree.SetItemData(file_node, full_url)
             except requests.ConnectionError as e:
                 wx.CallAfter(self.show_error_message, _("Connection error loading catalog %s: %s") % (base_url, e))
+            except Exception as e:
+                wx.CallAfter(self.show_error_message, _("Error loading catalog %s: %s") % (base_url, e))
+            finally:
+                wx.CallAfter(self.loading_complete, parent_node)
+
+        thread = Thread(target=list_files_threaded, daemon=True)
+        thread.start()
+
+    def load_local_directory(self, parent_node, base_url):
+        def list_files_threaded():
+            try:
+                base_path = _file_uri_to_path(base_url)
+                entries = sorted(os.scandir(base_path), key=lambda e: e.name.lower())
+                for entry in entries:
+                    if entry.is_dir():
+                        full_url = Path(entry.path).as_uri()
+                        folder_node = self.media_tree.AppendItem(parent_node, entry.name)
+                        self.media_tree.SetItemData(folder_node, full_url)
+                        self.media_tree.SetItemHasChildren(folder_node, True)
+                    elif entry.name.lower().endswith(MEDIA_FILE_EXTENSIONS):
+                        full_url = Path(entry.path).as_uri()
+                        file_node = self.media_tree.AppendItem(parent_node, entry.name)
+                        self.media_tree.SetItemData(file_node, full_url)
             except Exception as e:
                 wx.CallAfter(self.show_error_message, _("Error loading catalog %s: %s") % (base_url, e))
             finally:

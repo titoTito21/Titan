@@ -652,10 +652,11 @@ class NetworkMonitor(threading.Thread):
         self.daemon = True
         self.running = True
         self.previous_ssid = None
+        self.previous_wifi_state = None
         self.previous_interfaces = set()
 
-    def _get_wifi_ssid(self):
-        """Return current WiFi SSID via netsh, or None if not connected"""
+    def _get_wifi_status(self):
+        """Return (state, ssid) for the WiFi interface via netsh, or (None, None) if unavailable"""
         try:
             result = subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
@@ -663,6 +664,8 @@ class NetworkMonitor(threading.Thread):
                 encoding='utf-8', errors='replace', timeout=5,
                 **get_subprocess_kwargs()
             )
+            state = None
+            ssid = None
             for line in result.stdout.splitlines():
                 line = line.strip()
                 # "SSID" line but NOT "BSSID" line
@@ -670,11 +673,14 @@ class NetworkMonitor(threading.Thread):
                     key, _, val = line.partition(':')
                     key = key.strip()
                     val = val.strip()
-                    if key.upper() == 'SSID' and val:
-                        return val
+                    if key.upper() == 'STATE' and val:
+                        state = val.lower()
+                    elif key.upper() == 'SSID' and val:
+                        ssid = val
+            return state, ssid
         except Exception:
             pass
-        return None
+        return None, None
 
     def _get_active_ethernet(self):
         """Return set of active non-WiFi interfaces that have an IPv4 address"""
@@ -702,8 +708,10 @@ class NetworkMonitor(threading.Thread):
         return active
 
     def _init_state(self):
-        self.previous_ssid = self._get_wifi_ssid()
+        self.previous_wifi_state, self.previous_ssid = self._get_wifi_status()
         self.previous_interfaces = self._get_active_ethernet()
+
+    WIFI_CONNECTING_STATES = {'connecting', 'associating', 'authenticating'}
 
     def run(self):
         # Wait for system to settle before monitoring
@@ -712,7 +720,11 @@ class NetworkMonitor(threading.Thread):
         while self.running:
             try:
                 # --- WiFi ---
-                current_ssid = self._get_wifi_ssid()
+                current_wifi_state, current_ssid = self._get_wifi_status()
+                if current_wifi_state in self.WIFI_CONNECTING_STATES and self.previous_wifi_state not in self.WIFI_CONNECTING_STATES:
+                    self.on_connecting()
+                self.previous_wifi_state = current_wifi_state
+
                 if current_ssid != self.previous_ssid:
                     if current_ssid:
                         self.on_connected(current_ssid)
@@ -730,7 +742,10 @@ class NetworkMonitor(threading.Thread):
 
             except Exception as e:
                 print(f"NetworkMonitor error: {e}")
-            time.sleep(5)
+            time.sleep(1)
+
+    def on_connecting(self):
+        play_sound('system/network_connecting.ogg')
 
     def on_connected(self, name):
         play_sound('system/network_connect.ogg')
