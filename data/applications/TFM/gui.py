@@ -531,12 +531,34 @@ class FileManager(wx.Frame):
     def on_exit(self, event):
         self.Close()
 
+    def _active_directory(self):
+        """The directory the active panel is actually showing. In commander
+        mode self.current_path is stale (only single-list mode updates it),
+        so callers that need "the directory to create/rename in" must go
+        through this instead of reading self.current_path directly."""
+        path = self.current_path
+        if self.settings.get_explorer_view_mode() == 'commander':
+            if self.active_panel == 'left':
+                path = self.left_path
+            else:
+                path = self.right_path
+        return path
+
+    def _active_selected_items(self):
+        """The selected-names set the active panel actually writes to.
+        Commander mode's Space-select (on_key_down_commander) uses
+        left_selected_items/right_selected_items, never self.selected_items,
+        so any handler that reads/mutates selection must go through this."""
+        if self.settings.get_explorer_view_mode() == 'commander':
+            return self.left_selected_items if self.active_panel == 'left' else self.right_selected_items
+        return self.selected_items
+
     def on_new_file(self, event):
         dlg = wx.TextEntryDialog(self, _('Enter new file name:'), _('New File'))
         if dlg.ShowModal() == wx.ID_OK:
             file_name = dlg.GetValue()
             if file_name:
-                new_file_path = os.path.join(self.current_path, file_name)
+                new_file_path = os.path.join(self._active_directory(), file_name)
                 try:
                     open(new_file_path, 'w').close()
                     self.populate_file_list()
@@ -551,7 +573,7 @@ class FileManager(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK:
             folder_name = dlg.GetValue()
             if folder_name:
-                new_folder_path = os.path.join(self.current_path, folder_name)
+                new_folder_path = os.path.join(self._active_directory(), folder_name)
                 try:
                     os.makedirs(new_folder_path, exist_ok=True)
                     self.populate_file_list()
@@ -575,9 +597,11 @@ class FileManager(wx.Frame):
                 self.announce(_("Cannot rename this entry."))
                 return
 
+            rename_dir = self._active_directory()
+
             real_old_name = old_name
             if not self.show_extensions and os.path.splitext(old_name)[1] == '':
-                matches = [entry for entry in os.listdir(self.current_path) if os.path.splitext(entry)[0] == old_name]
+                matches = [entry for entry in os.listdir(rename_dir) if os.path.splitext(entry)[0] == old_name]
                 if matches:
                     real_old_name = matches[0]
 
@@ -585,13 +609,14 @@ class FileManager(wx.Frame):
             if dlg.ShowModal() == wx.ID_OK:
                 new_name = dlg.GetValue()
                 if new_name and new_name != real_old_name:
-                    old_path = os.path.join(self.current_path, real_old_name)
-                    new_path = os.path.join(self.current_path, new_name)
+                    old_path = os.path.join(rename_dir, real_old_name)
+                    new_path = os.path.join(rename_dir, new_name)
                     try:
                         os.rename(old_path, new_path)
-                        if real_old_name in self.selected_items:
-                            self.selected_items.remove(real_old_name)
-                            self.selected_items.add(new_name)
+                        selected_items = self._active_selected_items()
+                        if real_old_name in selected_items:
+                            selected_items.remove(real_old_name)
+                            selected_items.add(new_name)
                         self.populate_file_list(ctrl=ctrl)
                         self.announce(_("Renamed {} to {}").format(real_old_name, new_name))
                     except Exception as e:
@@ -705,12 +730,14 @@ class FileManager(wx.Frame):
             self.announce(_("Paste operation complete."))
 
         else:
+            refresh_dst = lambda: self.populate_file_list(ctrl=ctrl_to_refresh)
+
             if copy_files:
-                copy_files_with_progress(self, copy_files, dst_folder)
+                copy_files_with_progress(self, copy_files, dst_folder, on_complete=refresh_dst)
                 self.clipboard = []
 
             if move_files:
-                move_files_with_progress(self, move_files, dst_folder)
+                move_files_with_progress(self, move_files, dst_folder, on_complete=refresh_dst)
                 self.clipboard = []
 
             if not copy_files and not move_files:
@@ -723,12 +750,13 @@ class FileManager(wx.Frame):
             self.announce(_("No active file list."))
             return
 
-        self.selected_items.clear()
+        selected_items = self._active_selected_items()
+        selected_items.clear()
         items_selected_count = 0
         for i in range(ctrl.GetItemCount()):
             name = ctrl.GetItemText(i)
             if name != _('This folder is empty'):
-                self.selected_items.add(name)
+                selected_items.add(name)
                 ctrl.Select(i)
                 items_selected_count += 1
 
@@ -944,7 +972,7 @@ class FileManager(wx.Frame):
             self.announce(_("No active file list."))
             return
 
-        selected_names = list(self.selected_items)
+        selected_names = list(self._active_selected_items())
 
         if not selected_names:
             self.announce(_("No items selected to delete."))
@@ -985,9 +1013,10 @@ class FileManager(wx.Frame):
                 wx.MessageBox(_("Could not delete {}: {}").format(name, e), _("Delete Error"), wx.OK | wx.ICON_ERROR)
                 self.announce(_("Error deleting: {}").format(name))
 
+        selected_items = self._active_selected_items()
         for item in items_to_remove_from_selection:
-            if item in self.selected_items:
-                self.selected_items.remove(item)
+            if item in selected_items:
+                selected_items.remove(item)
 
         if deleted_count > 0:
             play_delete_sound()
@@ -1011,22 +1040,34 @@ class FileManager(wx.Frame):
             self.announce(_("Settings cancelled."))
         settings_dialog.Destroy()
 
+    def _resort_file_lists(self):
+        """Refresh whichever list(s) are visible so a changed sort_mode takes
+        effect immediately. In commander mode populate_file_list() with no
+        args only re-populates the focused panel, leaving the other one in
+        the old order until the user navigates it -- so both are refreshed
+        explicitly here."""
+        if self.settings.get_explorer_view_mode() == 'commander' and hasattr(self, 'left_list'):
+            self.populate_file_list(ctrl=self.left_list, path=self.left_path)
+            self.populate_file_list(ctrl=self.right_list, path=self.right_path)
+        else:
+            self.populate_file_list()
+
     def on_sort_by_name(self, event):
         self.settings.set_sort_mode('name')
         self.sort_mode = 'name'
-        self.populate_file_list()
+        self._resort_file_lists()
         self.announce(_("Sorted by name."))
 
     def on_sort_by_date(self, event):
         self.settings.set_sort_mode('date')
         self.sort_mode = 'date'
-        self.populate_file_list()
+        self._resort_file_lists()
         self.announce(_("Sorted by date modified."))
 
     def on_sort_by_type(self, event):
         self.settings.set_sort_mode('type')
         self.sort_mode = 'type'
-        self.populate_file_list()
+        self._resort_file_lists()
         self.announce(_("Sorted by type."))
 
 

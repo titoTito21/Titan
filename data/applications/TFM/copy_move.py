@@ -35,9 +35,12 @@ class CopyMoveDialog(wx.Dialog):
             pass
 
 
-def copy_files_with_progress(parent, src_files, dst_folder):
+def copy_files_with_progress(parent, src_files, dst_folder, on_complete=None):
     """Copy files with a progress dialog. Dialog is created on the calling
-    (main) thread; only file I/O runs in the background thread."""
+    (main) thread; only file I/O runs in the background thread. `on_complete`
+    (if given) runs on the main thread once the dialog closes -- callers use
+    it to refresh the destination file list, since this function has no
+    other way to signal the caller that it's done."""
     # Create and show dialog on the main thread
     dialog = CopyMoveDialog(parent, _("Copying files"), len(src_files))
     dialog.Show()
@@ -60,13 +63,18 @@ def copy_files_with_progress(parent, src_files, dst_folder):
                              _("Error copying: {}").format(os.path.basename(src)))
 
         wx.CallAfter(dialog.Destroy)
+        if on_complete:
+            wx.CallAfter(on_complete)
 
     threading.Thread(target=copy_thread, daemon=True).start()
 
 
-def move_files_with_progress(parent, src_files, dst_folder):
+def move_files_with_progress(parent, src_files, dst_folder, on_complete=None):
     """Move files with a progress dialog. Dialog is created on the calling
-    (main) thread; only file I/O runs in the background thread."""
+    (main) thread; only file I/O runs in the background thread. `on_complete`
+    (if given) runs on the main thread once the dialog closes -- callers use
+    it to refresh the destination file list, since this function has no
+    other way to signal the caller that it's done."""
     # Create and show dialog on the main thread
     dialog = CopyMoveDialog(parent, _("Moving files"), len(src_files))
     dialog.Show()
@@ -86,5 +94,7 @@ def move_files_with_progress(parent, src_files, dst_folder):
                              _("Error moving: {}").format(os.path.basename(src)))
 
         wx.CallAfter(dialog.Destroy)
+        if on_complete:
+            wx.CallAfter(on_complete)
 
     threading.Thread(target=move_thread, daemon=True).start()
