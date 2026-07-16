@@ -7,193 +7,445 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-07-11 15:02+0200\n"
+"POT-Creation-Date: 2026-07-13 13:17+0200\n"
 "PO-Revision-Date: 2025-07-11 15:02+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: en <LL@li.org>\n"
 "Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: web.py:87
-#, python-brace-format
-msgid "Nie znaleziono pliku dźwiękowego: {}"
-msgstr "Sound file not found: {}"
-
-#: web.py:93
-#, python-brace-format
-msgid "Nie można odtworzyć dźwięku: {}"
+#: bookmarks.py:29
+#, fuzzy, python-brace-format
+msgid "Nie można zapisać zakładek: {}"
 msgstr "Cannot play sound: {}"
 
-#: web.py:100
-msgid "Pobrane pliki"
-msgstr "Downloaded files"
+#: bookmarks.py:58
+msgid "Zakładki"
+msgstr "Bookmarks"
 
-#: web.py:107
-msgid "Lista plików pobranych przez tBrowser:"
-msgstr "List of files downloaded by tBrowser:"
+#: bookmarks.py:65
+msgid "Zapisane zakładki:"
+msgstr "Saved bookmarks:"
 
-#: web.py:168
-msgid "tBrowser"
-msgstr "tBrowser"
+#: browser_tab.py:28 web.py:72 web.py:252
+msgid "Nowa karta"
+msgstr "New tab"
 
-#: web.py:179
-msgid "Wstecz"
-msgstr "Back"
-
-#: web.py:180
-msgid "Dalej"
-msgstr "Forward"
-
-#: web.py:181
-msgid "Odśwież"
-msgstr "Refresh"
-
-#: web.py:183
-msgid "Przycisk Wstecz"
-msgstr "Back Button"
-
-#: web.py:184
-msgid "Przycisk Dalej"
-msgstr "Forward Button"
-
-#: web.py:185
-msgid "Przycisk Odśwież"
-msgstr "Refresh Button"
-
-#: web.py:188
-msgid "Wpisz adres lub wyszukaj w Google"
-msgstr "Enter address or search in Google"
-
-#: web.py:257
-msgid "Ustawienia..."
-msgstr "Settings..."
-
-#: web.py:258
-msgid "Aplikacja"
-msgstr "Application"
-
-#: web.py:273
-msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
-msgstr "Back navigation is not available in virtual buffer mode."
-
-#: web.py:274 web.py:282 web.py:425 web.py:662
-msgid "Informacja"
-msgstr "Information"
-
-#: web.py:281
-msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
-msgstr "Forward navigation is not available in virtual buffer mode."
-
-#: web.py:293 web.py:300 web.py:472
+#: browser_tab.py:200 web.py:275
 msgid "Ładowanie strony..."
 msgstr "Loading page..."
 
-#: web.py:304 web.py:499
-msgid "Strona załadowana."
-msgstr "Page loaded."
-
-#: web.py:313
+#: browser_tab.py:232
 #, python-brace-format
 msgid "Załadowano stronę {}"
 msgstr "Loaded page {}"
 
-#: web.py:425
-#, python-brace-format
-msgid "Kliknięto przycisk: {}"
-msgstr "Clicked button: {}"
-
-#: web.py:459 web.py:467
-#, python-brace-format
-msgid ""
-"Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
-msgstr "Page contains {} forms, {} links, {} buttons and {} rows."
-
-#: web.py:503
-msgid "Załadowano stronę"
-msgstr "Page loaded"
-
-#: web.py:516
+#: browser_tab.py:299
 #, python-brace-format
 msgid "Błąd podczas ładowania strony: {}"
 msgstr "Error loading page: {}"
 
-#: web.py:517
+#: browser_tab.py:300
 msgid "Błąd podczas ładowania strony."
 msgstr "Error loading page."
 
-#: web.py:545
-#, python-brace-format
-msgid "Łącze: {}"
-msgstr "Link: {}"
+#: browser_tab.py:326
+msgid "Załadowano stronę"
+msgstr "Page loaded"
 
-#: web.py:558
+#: browser_tab.py:351 browser_tab.py:359
+#, python-brace-format
+msgid "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgstr "Page contains {} forms, {} links, {} buttons and {} rows."
+
+#: browser_tab.py:392 browser_tab.py:506
+#, python-brace-format
+msgid "Pole edycji: {}"
+msgstr "Edit field: {}"
+
+#: browser_tab.py:394 browser_tab.py:425 browser_tab.py:508 browser_tab.py:514
+#, python-brace-format
+msgid ", Wartość: {}"
+msgstr ", Value: {}"
+
+#: browser_tab.py:399
+#, fuzzy
+msgid "Przycisk bez etykiety"
+msgstr "Back Button"
+
+#: browser_tab.py:400 browser_tab.py:474 browser_tab.py:503
 #, python-brace-format
 msgid "Przycisk: {}"
 msgstr "Button: {}"
 
-#: web.py:569
-#, python-brace-format
-msgid ""
-"\n"
-"Nagłówek: {}\n"
-msgstr ""
-"\n"
-"Heading: {}\n"
+#: browser_tab.py:405 browser_tab.py:517 browser_tab.py:628
+msgid "zaznaczone"
+msgstr "checked"
 
-#: web.py:581
+#: browser_tab.py:405 browser_tab.py:517 browser_tab.py:628
+msgid "niezaznaczone"
+msgstr "unchecked"
+
+#: browser_tab.py:407
+#, python-brace-format
+msgid "Pole wyboru: {} ({})"
+msgstr "Checkbox: {} ({})"
+
+#: browser_tab.py:409
+#, fuzzy, python-brace-format
+msgid "Przycisk radiowy: {} ({})"
+msgstr "Button: {}"
+
+#: browser_tab.py:423 browser_tab.py:512
+#, python-brace-format
+msgid "Pole tekstowe: {}"
+msgstr "Text field: {}"
+
+#: browser_tab.py:464 browser_tab.py:501
+#, python-brace-format
+msgid "Łącze: {}"
+msgstr "Link: {}"
+
+#: browser_tab.py:472
+#, fuzzy
+msgid "Przycisk"
+msgstr "Button: {}"
+
+#: browser_tab.py:518
+msgid "Pole wyboru"
+msgstr "Checkbox"
+
+#: browser_tab.py:518
+#, fuzzy
+msgid "Przycisk radiowy"
+msgstr "Refresh Button"
+
+#: browser_tab.py:527
+msgid "Brak elementów interaktywnych na stronie."
+msgstr "No interactive elements on this page."
+
+#: browser_tab.py:589
+#, python-brace-format
+msgid "Wprowadź tekst dla: {}"
+msgstr "Enter text for: {}"
+
+#: browser_tab.py:589
+msgid "Edycja pola"
+msgstr "Edit field"
+
+#: browser_tab.py:601
+#, fuzzy, python-brace-format
+msgid "Wpisano: {}"
+msgstr "Button: {}"
+
+#: browser_tab.py:629
+#, python-brace-format
+msgid "{} {}"
+msgstr "{} {}"
+
+#: browser_tab.py:637
+msgid "Ten przycisk nie należy do żadnego formularza."
+msgstr "This button does not belong to any form."
+
+#: browser_tab.py:638 web.py:483
+msgid "Informacja"
+msgstr "Information"
+
+#: browser_tab.py:669
+msgid "Wysyłanie formularza..."
+msgstr "Submitting form..."
+
+#: browser_tab.py:679
+#, fuzzy, python-brace-format
+msgid "Błąd podczas wysyłania formularza: {}"
+msgstr "Error loading page: {}"
+
+#: browser_tab.py:680
+#, fuzzy
+msgid "Błąd podczas wysyłania formularza."
+msgstr "Error loading page."
+
+#: common.py:88
+#, python-brace-format
+msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgstr "Sound file not found: {}"
+
+#: common.py:94
+#, python-brace-format
+msgid "Nie można odtworzyć dźwięku: {}"
+msgstr "Cannot play sound: {}"
+
+#: downloads.py:47
+#, python-brace-format
+msgid "Nie można zapisać listy pobrań: {}"
+msgstr "Could not save the downloads list: {}"
+
+#: downloads.py:126
+#, fuzzy, python-brace-format
+msgid "Pobrano plik: {}"
+msgstr "Downloaded files"
+
+#: downloads.py:133
+#, python-brace-format
+msgid "Błąd pobierania: {}"
+msgstr "Download error: {}"
+
+#: downloads.py:144
+#, fuzzy
+msgid "Pobieranie"
+msgstr "Downloaded files"
+
+#: downloads.py:144
+#, fuzzy, python-brace-format
+msgid "Pobieranie {}"
+msgstr "Downloaded files"
+
+#: downloads.py:175
+#, fuzzy, python-brace-format
+msgid "Nie można otworzyć pliku: {}"
+msgstr "Cannot play sound: {}"
+
+#: downloads.py:175
+msgid "Błąd"
+msgstr "Error"
+
+#: downloads.py:185
+msgid "Pobrane pliki"
+msgstr "Downloaded files"
+
+#: downloads.py:191
+msgid "Lista plików pobranych przez tBrowser:"
+msgstr "List of files downloaded by tBrowser:"
+
+#: downloads.py:207
+msgid "pobieranie..."
+msgstr "downloading..."
+
+#: downloads.py:208
+msgid "ukończono"
+msgstr "completed"
+
+#: downloads.py:209
+msgid "błąd"
+msgstr "error"
+
+#: downloads.py:231
+msgid "Plik nie został jeszcze pobrany."
+msgstr "The file has not been downloaded yet."
+
+#: findbar.py:25
+msgid "Uwzględnij wielkość liter"
+msgstr "Match case"
+
+#: findbar.py:26
+msgid "Całe słowo"
+msgstr "Whole word"
+
+#: findbar.py:27
+msgid "Poprzedni"
+msgstr "Previous"
+
+#: findbar.py:28
+msgid "Następny"
+msgstr "Next"
+
+#: findbar.py:29
+msgid "Zamknij"
+msgstr "Close"
+
+#: findbar.py:31
+msgid "Znajdź:"
+msgstr "Find:"
+
+#: history.py:30
+#, python-brace-format
+msgid "Nie można zapisać historii: {}"
+msgstr "Could not save history: {}"
+
+#: history.py:69
+msgid "Historia przeglądania"
+msgstr "Browsing history"
+
+#: history.py:76
+msgid "Odwiedzone strony:"
+msgstr "Visited pages:"
+
+#: history.py:83
+msgid "Wyczyść historię"
+msgstr "Clear history"
+
+#: web.py:41
+msgid "tBrowser"
+msgstr "tBrowser"
+
+#: web.py:52
+msgid "Wstecz"
+msgstr "Back"
+
+#: web.py:53
+msgid "Dalej"
+msgstr "Forward"
+
+#: web.py:54
+msgid "Odśwież"
+msgstr "Refresh"
+
+#: web.py:58 web.py:333
+msgid "Dodaj zakładkę"
+msgstr "Add bookmark"
+
+#: web.py:60
+msgid "Przycisk Wstecz"
+msgstr "Back Button"
+
+#: web.py:61
+msgid "Przycisk Dalej"
+msgstr "Forward Button"
+
+#: web.py:62
+msgid "Przycisk Odśwież"
+msgstr "Refresh Button"
+
+#: web.py:65
+msgid "Wpisz adres lub wyszukaj w Google"
+msgstr "Enter address or search in Google"
+
+#: web.py:67
+msgid "Pomniejsz"
+msgstr "Zoom out"
+
+#: web.py:68 web.py:342
+msgid "100%"
+msgstr "100%"
+
+#: web.py:69
+msgid "Powiększ"
+msgstr "Zoom in"
+
+#: web.py:70
+msgid "Resetuj powiększenie"
+msgstr "Reset zoom"
+
+#: web.py:178
+msgid "Nowa karta\tCtrl+T"
+msgstr "New tab\tCtrl+T"
+
+#: web.py:179
+msgid "Zamknij kartę\tCtrl+W"
+msgstr "Close tab\tCtrl+W"
+
+#: web.py:181
+msgid "Historia...\tCtrl+H"
+msgstr "History...\tCtrl+H"
+
+#: web.py:182
+msgid "Zakładki...\tCtrl+B"
+msgstr "Bookmarks...\tCtrl+B"
+
+#: web.py:183
+#, fuzzy
+msgid "Pobrane pliki...\tCtrl+J"
+msgstr "Downloaded files"
+
+#: web.py:185
+msgid "Ustawienia..."
+msgstr "Settings..."
+
+#: web.py:186
+msgid "Aplikacja"
+msgstr "Application"
+
+#: web.py:279
+msgid "Strona załadowana."
+msgstr "Page loaded."
+
+#: web.py:292
+#, python-brace-format
+msgid "Pobieranie: {}"
+msgstr "Downloading: {}"
+
+#: web.py:333
+msgid "Usuń zakładkę"
+msgstr "Remove bookmark"
+
+#: web.py:403
 msgid "Ustawienia tBrowser"
 msgstr "tBrowser Settings"
 
-#: web.py:588
+#: web.py:410
 msgid "Oznajmianie"
 msgstr "Announcements"
 
-#: web.py:591
+#: web.py:413
 msgid "Oznajmiaj podsumowanie strony"
 msgstr "Announce page summary"
 
-#: web.py:594
+#: web.py:416
 msgid "Komunikaty o ładowaniu strony"
 msgstr "Page loading messages"
 
-#: web.py:601
+#: web.py:423
 msgid "Interfejs"
 msgstr "Interface"
 
-#: web.py:604
+#: web.py:426
 msgid "Wybierz tryb przeglądania strony:"
 msgstr "Select page view mode:"
 
-#: web.py:606
+#: web.py:428
 msgid "Widok sieciowy (edge)"
 msgstr "Web view (edge)"
 
-#: web.py:606
+#: web.py:428
 msgid "Tryb wirtualnego bufora"
 msgstr "Virtual buffer mode"
 
-#: web.py:617
+#: web.py:439
 msgid "Prywatność"
 msgstr "Privacy"
 
-#: web.py:621
+#: web.py:442
 msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
 msgstr "Do not display cookie alerts (if possible)"
 
-#: web.py:628
+#: web.py:449
 msgid "Zapisz"
 msgstr "Save"
 
-#: web.py:629
+#: web.py:450
 msgid "Anuluj"
 msgstr "Cancel"
 
-#: web.py:661
+#: web.py:481
 msgid ""
-"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
-"zmiany."
-msgstr "Settings have been saved. Restart the application to apply changes."
+"Ustawienia zostały zapisane. Tryb przeglądania zostanie zastosowany dla "
+"nowo otwieranych kart; pozostałe ustawienia obowiązują od razu."
+msgstr ""
+"Settings saved. The browsing mode will apply to newly opened tabs; the "
+"other settings take effect immediately."
+
+#~ msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
+#~ msgstr "Back navigation is not available in virtual buffer mode."
+
+#~ msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
+#~ msgstr "Forward navigation is not available in virtual buffer mode."
+
+#~ msgid "Kliknięto przycisk: {}"
+#~ msgstr "Clicked button: {}"
+
+#~ msgid ""
+#~ "\n"
+#~ "Nagłówek: {}\n"
+#~ msgstr ""
+#~ "\n"
+#~ "Heading: {}\n"
+
+#~ msgid ""
+#~ "Ustawienia zostały zapisane. Uruchom ponownie"
+#~ " aplikację, aby zastosować zmiany."
+#~ msgstr "Settings have been saved. Restart the application to apply changes."
+

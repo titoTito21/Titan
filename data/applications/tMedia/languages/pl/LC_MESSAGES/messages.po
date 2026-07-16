@@ -144,6 +144,18 @@ msgid "Playing"
 msgstr "Odtwarzanie"
 
 #: player.py
+msgid "Pause"
+msgstr "Pauza"
+
+#: player.py
+msgid "Volume down"
+msgstr "Zmniejsz głośność"
+
+#: player.py
+msgid "Volume up"
+msgstr "Zwiększ głośność"
+
+#: player.py
 msgid "Rewind 10s"
 msgstr "Przewijanie w lewo"
 
@@ -196,6 +208,10 @@ msgstr "Zapisz"
 #: Settings.py
 msgid "Cancel"
 msgstr "Anuluj"
+
+#: tmedia.py
+msgid "Back"
+msgstr "Wstecz"
 
 #: tmedia.py
 msgid "Settings..."

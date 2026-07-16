@@ -70,6 +70,11 @@ class ExplorerModule(AppModuleBase):
     def __init__(self, engine):
         super().__init__(engine)
         self._last_path = None
+        # Cache of the current folder's real directory listing (see
+        # _scan_current_folder), keyed by _last_path so it's rebuilt only when
+        # the folder actually changes, not on every list-item focus.
+        self._dir_cache_path = None
+        self._dir_cache = None
 
     @property
     def app_name(self):
@@ -77,6 +82,8 @@ class ExplorerModule(AppModuleBase):
 
     def on_lose_focus(self, obj):
         self._last_path = None
+        self._dir_cache_path = None
+        self._dir_cache = None
         super().on_lose_focus(obj)
 
     def customize_object(self, obj):
@@ -88,10 +95,18 @@ class ExplorerModule(AppModuleBase):
                 name = obj.name or ""
                 if name:
                     if "." in name:
+                        # Extension visible in the displayed name -- accurate,
+                        # no need to touch the disk.
                         ext = os.path.splitext(name)[1].lower()
                         detail = L(_FILE_TYPE_KEYS.get(ext, "file.generic"), ext)
                     else:
-                        detail = L("explorer.folder")
+                        # No dot in the displayed name: could be a real folder,
+                        # OR a file whose extension Explorer is hiding (the
+                        # Windows default "hide extensions for known file
+                        # types" setting) -- guessing "folder" from the bare
+                        # text alone would misreport a hidden-extension file.
+                        # Resolve it against the real folder listing instead.
+                        detail = self._real_type_detail(name)
                     obj.description = self._append(obj.description, detail)
                 return obj
 
@@ -120,6 +135,58 @@ class ExplorerModule(AppModuleBase):
         if not detail:
             return description
         return f"{description}, {detail}" if description else detail
+
+    def _real_type_detail(self, name):
+        """Resolve the real type of an extensionless-looking list item by
+        consulting the actual folder contents (real data), instead of assuming
+        "folder". Falls back to that same assumption -- today's behavior --
+        whenever the real folder can't be listed or the match is ambiguous, so
+        this never regresses, it only adds accuracy when the folder is knowable
+        (virtual folders like "This PC" or a search-results view have no real
+        path and always take the fallback).
+        """
+        scan = self._scan_current_folder()
+        if scan is not None:
+            dirs, files_by_stem = scan
+            key = name.lower()
+            if key in dirs:
+                return L("explorer.folder")
+            matches = files_by_stem.get(key)
+            if matches and len(matches) == 1:
+                ext = os.path.splitext(matches[0])[1].lower()
+                return L(_FILE_TYPE_KEYS.get(ext, "file.generic"), ext)
+        return L("explorer.folder")
+
+    def _scan_current_folder(self):
+        """Return ``(dirs, files_by_stem)`` for the current folder (address-bar
+        path), cached until the folder changes. ``dirs`` is a set of lower-cased
+        subdirectory names; ``files_by_stem`` maps a lower-cased filename stem
+        to the list of real filenames sharing it (usually one -- more than one
+        means an ambiguous match, e.g. "report.docx" and "report.pdf" both
+        present). Returns ``None`` when the folder is unknown or unlistable."""
+        path = self._last_path
+        if not path:
+            return None
+        if path == self._dir_cache_path and self._dir_cache is not None:
+            return self._dir_cache
+        dirs = set()
+        files_by_stem = {}
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir():
+                            dirs.add(entry.name.lower())
+                        else:
+                            stem = os.path.splitext(entry.name)[0].lower()
+                            files_by_stem.setdefault(stem, []).append(entry.name)
+                    except OSError:
+                        continue
+        except OSError:
+            return None
+        self._dir_cache_path = path
+        self._dir_cache = (dirs, files_by_stem)
+        return self._dir_cache
 
     @staticmethod
     def _tree_level(obj):

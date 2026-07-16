@@ -143,6 +143,18 @@ msgid "Playing"
 msgstr ""
 
 #: player.py
+msgid "Pause"
+msgstr ""
+
+#: player.py
+msgid "Volume down"
+msgstr ""
+
+#: player.py
+msgid "Volume up"
+msgstr ""
+
+#: player.py
 msgid "Rewind 10s"
 msgstr ""
 
@@ -194,6 +206,10 @@ msgstr ""
 
 #: Settings.py
 msgid "Cancel"
+msgstr ""
+
+#: tmedia.py
+msgid "Back"
 msgstr ""
 
 #: tmedia.py

@@ -356,8 +356,13 @@ class KeyboardHook:
         # ---- 3. NumPad object navigation + dial (NumLock off, no reader mod) -- #
         # NumPad Minus toggles the dial; NumPad 4/6/8/2/5/Enter drive object
         # navigation (or the dial when it is active). All route through the
-        # engine's modifier-gesture handler.
-        if (is_numpad_nav or key_name == "numpadsubtract") and not self._ctrl and not self._alt:
+        # engine's modifier-gesture handler. NumPad 4/6/8/2/5/Enter already only
+        # arrive here with NumLock off (their vk aliases with the digit keys
+        # otherwise -- see _normalize). NumPad Minus has no such aliasing (same
+        # vk regardless of NumLock), so it needs an explicit check to match NVDA
+        # and keep NumPad usable for typing digits when NumLock is on.
+        if (is_numpad_nav or (key_name == "numpadsubtract" and not self._numlock_on())) \
+                and not self._ctrl and not self._alt:
             try:
                 if self.engine.on_modifier_gesture(vk, key_name, self._ctrl,
                                                    self._alt, self._shift):
@@ -456,6 +461,12 @@ class KeyboardHook:
             self.engine.on_toggle_key("caps", not cur)
         except Exception as e:
             print(f"[TitanAccess] keyboard_hook: caps tap error: {e}")
+
+    def _numlock_on(self):
+        try:
+            return bool(self._user32.GetKeyState(VK_NUMLOCK) & 0x0001)
+        except Exception:
+            return False
 
     def _handle_toggle(self, vk):
         try:

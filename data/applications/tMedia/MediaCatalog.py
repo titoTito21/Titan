@@ -11,13 +11,9 @@ from urllib.request import url2pathname
 
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
-from player import Player
 from translation import _
 
-try:
-    from src.titan_core.skin_manager import apply_skin_to_window
-except ImportError:
-    apply_skin_to_window = None
+import common
 
 try:
     import win32api
@@ -55,17 +51,6 @@ def _file_uri_to_path(uri):
     return url2pathname(urlparse(uri).path)
 
 
-def _apply_skin_to_tree(window):
-    if not apply_skin_to_window or not window:
-        return
-    try:
-        apply_skin_to_window(window)
-    except Exception:
-        return
-    for child in window.GetChildren():
-        _apply_skin_to_tree(child)
-
-
 RADIO_BROWSER_COUNTRIES_URL = "https://de1.api.radio-browser.info/json/countries"
 RADIO_BROWSER_STATIONS_URL = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/"
 
@@ -96,7 +81,7 @@ class LanguagePickerDialog(wx.Dialog):
         vbox.Add(btn_sizer, flag=wx.ALL, border=10)
 
         panel.SetSizer(vbox)
-        _apply_skin_to_tree(self)
+        common.apply_skin(self)
 
         self.countries = []
         self.selected_country_code = None
@@ -140,25 +125,23 @@ class LanguagePickerDialog(wx.Dialog):
         return None
 
 
-class MediaCatalog(wx.Frame):
-    def __init__(self, parent, *args, **kwargs):
-        super(MediaCatalog, self).__init__(parent, *args, **kwargs)
-        self.SetTitle(_("Media Catalog"))
-        self.SetSize((600, 400))
-        panel = wx.Panel(self)
+class MediaCatalogPanel(wx.Panel):
+    def __init__(self, parent, owner, *args, **kwargs):
+        super(MediaCatalogPanel, self).__init__(parent, *args, **kwargs)
+        self.owner = owner
 
         vbox = wx.BoxSizer(wx.VERTICAL)
-        self.media_tree = wx.TreeCtrl(panel)
+        self.media_tree = wx.TreeCtrl(self)
         root = self.media_tree.AddRoot(_("Media Catalog"))
 
         vbox.Add(self.media_tree, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
-        self.progress_bar = wx.Gauge(panel, range=100, size=(-1, 20))
+        self.progress_bar = wx.Gauge(self, range=100, size=(-1, 20))
         vbox.Add(self.progress_bar, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
         self.progress_bar.Hide()
 
-        panel.SetSizer(vbox)
-        _apply_skin_to_tree(self)
+        self.SetSizer(vbox)
+        common.apply_skin(self)
 
         self.media_tree.Bind(wx.EVT_TREE_ITEM_EXPANDING, self.on_item_expanding)
         self.media_tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_tree_item_activated)
@@ -170,6 +153,9 @@ class MediaCatalog(wx.Frame):
         self.podcast_node = None
 
         wx.CallAfter(self._show_language_picker)
+
+    def focus_default(self):
+        self.media_tree.SetFocus()
 
     def _show_language_picker(self):
         dlg = LanguagePickerDialog(self)
@@ -190,7 +176,7 @@ class MediaCatalog(wx.Frame):
 
     def _load_without_radio(self):
         self.progress_bar.Show()
-        self.loading_sound_channel = self.GetParent().play_sound('loading', loop=True)
+        self.loading_sound_channel = common.play_sound('loading', loop=True)
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             future_podcasts = executor.submit(self._get_podcasts_data)
@@ -200,11 +186,11 @@ class MediaCatalog(wx.Frame):
 
         wx.CallAfter(self._populate_tree_no_radio, self.root_node, podcasts_data, url_catalogs_data)
         wx.CallAfter(self.loading_complete_initial)
-        wx.CallAfter(self.GetParent().stop_sound, 'loading')
+        wx.CallAfter(common.stop_sound, 'loading')
 
     def _load_initial_data_threaded(self, root_node, country_code):
         wx.CallAfter(self.progress_bar.Show)
-        self.loading_sound_channel = wx.CallAfter(self.GetParent().play_sound, 'loading', loop=True)
+        self.loading_sound_channel = wx.CallAfter(common.play_sound, 'loading', loop=True)
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             future_stations = executor.submit(self._get_radio_stations, country_code)
@@ -217,7 +203,7 @@ class MediaCatalog(wx.Frame):
 
         wx.CallAfter(self._populate_initial_tree, root_node, stations, podcasts_data, url_catalogs_data)
         wx.CallAfter(self.loading_complete_initial)
-        wx.CallAfter(self.GetParent().stop_sound, 'loading')
+        wx.CallAfter(common.stop_sound, 'loading')
 
     def _get_radio_stations(self, country_code):
         try:
@@ -401,14 +387,14 @@ class MediaCatalog(wx.Frame):
     def loading_complete_initial(self):
         self.progress_bar.Hide()
         if self.loading_sound_channel:
-            self.GetParent().stop_sound(channel=self.loading_sound_channel)
-        self.GetParent().play_sound('ding')
+            common.stop_sound(channel=self.loading_sound_channel)
+        common.play_sound('ding')
 
     def loading_complete(self, parent_node):
         self.progress_bar.Hide()
         if self.loading_sound_channel:
-            self.GetParent().stop_sound(channel=self.loading_sound_channel)
-        self.GetParent().play_sound('ding')
+            common.stop_sound(channel=self.loading_sound_channel)
+        common.play_sound('ding')
         self.media_tree.Expand(parent_node)
 
     def on_tree_item_activated(self, event):
@@ -424,19 +410,21 @@ class MediaCatalog(wx.Frame):
                     display_title = self.media_tree.GetItemText(item)
 
                 self.play_media(url_to_play, display_title)
-                self.GetParent().play_sound('done')
-                self.GetParent().speak_message(_("Playing: %s") % display_title)
+                common.play_sound('done')
+                common.speak(_("Playing: %s") % display_title)
 
     def on_tree_key_down(self, event):
         if event.GetKeyCode() == wx.WXK_RETURN:
             item = self.media_tree.GetSelection()
             if item:
                 self.on_tree_item_activated(wx.TreeEvent(wx.wxEVT_TREE_ITEM_ACTIVATED, self.media_tree, item))
+        elif event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.owner.go_back()
         else:
             event.Skip()
 
     def play_media(self, url, title=None):
-        player = self.GetParent().config.get('DEFAULT', 'player', fallback='tplayer')
+        player = common.config.get('DEFAULT', 'player', fallback='tplayer')
 
         if player == 'vlc':
             if os.name == 'nt':
@@ -446,11 +434,9 @@ class MediaCatalog(wx.Frame):
                 subprocess.Popen(["vlc", url])
         else:
             display_title = title or unquote(url).split('/')[-1]
-            tplayer = Player(self)
-            tplayer.play_file(url, title)
-            tplayer.Show()
-            self.GetParent().play_sound('enteringtplayer')
-            self.GetParent().speak_message(_("Player: %s") % display_title)
+            common.play_sound('enteringtplayer')
+            common.speak(_("Player: %s") % display_title)
+            self.owner.play_media(url, title)
 
     def show_error_message(self, message):
         wx.MessageBox(message, _("Loading Error"), wx.OK | wx.ICON_ERROR)

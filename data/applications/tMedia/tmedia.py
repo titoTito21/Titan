@@ -1,103 +1,81 @@
 import wx
+import sys
 from translation import _
-import os
-import configparser
-import threading
-import subprocess
-from pygame import mixer
-from MediaCatalog import MediaCatalog
+
+import common
+from MediaCatalog import MediaCatalogPanel
 from Settings import SettingsWindow
-from player import Player
-from YoutubeSearch import YoutubeSearchApp
-
-try:
-    from src.titan_core.skin_manager import apply_skin_to_window
-except ImportError:
-    apply_skin_to_window = None
+from player import PlayerPanel
+from YoutubeSearch import YoutubeSearchPanel
 
 
-def _apply_skin_to_tree(window):
-    if not apply_skin_to_window or not window:
-        return
-    try:
-        apply_skin_to_window(window)
-    except Exception:
-        return
-    for child in window.GetChildren():
-        _apply_skin_to_tree(child)
+class FunctionListPanel(wx.Panel):
+    """Root view: pick Media Catalog or YouTube Search."""
 
-try:
-    from src.titan_core.tce_speech import speak as _tce_speak
-except ImportError:
-    _tce_speak = None
+    def __init__(self, parent, owner, *args, **kwargs):
+        super(FunctionListPanel, self).__init__(parent, *args, **kwargs)
+        self.owner = owner
 
-if _tce_speak is None:
-    try:
-        import accessible_output3.outputs.auto as _ao3
-        _ao3_speaker = _ao3.Auto()
-    except Exception:
-        _ao3_speaker = None
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        self.function_list = wx.ListBox(self, choices=[_("Media Catalog"), _("YouTube Search")])
+        self.function_list.SetName(_("TMedia functions"))
+        vbox.Add(self.function_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
+        self.function_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_function_select)
+        self.function_list.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
 
-class TTSThread(threading.Thread):
-    """Lightweight TTS thread backed by TCE Speech / accessible_output3."""
+        self.SetSizer(vbox)
+        common.apply_skin(self)
 
-    def __init__(self):
-        super().__init__(daemon=True)
-        self.message = None
-        self._stop_event = threading.Event()
+    def focus_default(self):
+        self.function_list.SetFocus()
 
-    def run(self):
-        while not self._stop_event.is_set():
-            if self.message:
-                self._do_speak(self.message)
-                self.message = None
-            self._stop_event.wait(timeout=0.05)
+    def on_function_select(self, event):
+        selection = self.function_list.GetSelection()
+        if selection != wx.NOT_FOUND:
+            common.play_sound('enter')
+            if selection == 0:
+                common.speak(_("Loading media catalog"))
+                self.owner.show_view('media_catalog')
+            elif selection == 1:
+                self.owner.show_view('youtube_search')
 
-    def _do_speak(self, message):
-        if _tce_speak is not None:
-            _tce_speak(message)
-            return
-        try:
-            if _ao3_speaker:
-                _ao3_speaker.speak(message, interrupt=True)
-                return
-        except Exception:
-            pass
-        try:
-            import sys as _sys
-            if _sys.platform == 'win32':
-                import win32com.client as wincl
-                wincl.Dispatch("SAPI.SpVoice").Speak(message)
-            elif _sys.platform == 'darwin':
-                subprocess.run(['say', message], check=False)
-            else:
-                subprocess.run(['spd-say', message], check=False)
-        except Exception:
-            pass
+    def on_key_down(self, event):
+        if event.GetKeyCode() == wx.WXK_RETURN:
+            self.on_function_select(None)
+        else:
+            event.Skip()
 
-    def speak(self, message):
-        self._do_speak(message)
-
-    def interrupt(self):
-        self._stop_event.set()
-
-    def set_message(self, message):
-        self.message = message
 
 class TMediaApp(wx.Frame):
-    def __init__(self, *args, **kwargs):
+    """Single-window shell: a back button + one content area that swaps
+    between the function list, the media catalog, YouTube search, and the
+    player, instead of the old picker-window-plus-function-window pair."""
+
+    def __init__(self, *args, initial_media=None, **kwargs):
         super(TMediaApp, self).__init__(*args, **kwargs)
 
         self.SetTitle("TMedia")
         self.SetSize((600, 400))
-        panel = wx.Panel(self)
 
-        self.config = self.load_settings()
+        self.views = {}
+        self.view_stack = []
+        self.current_view = None
 
-        self.init_sounds()
-        self.tts_thread = TTSThread()
-        self.tts_thread.start()
+        self.outer_panel = wx.Panel(self)
+        outer_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.back_button = wx.Button(self.outer_panel, label=_("Back"))
+        self.back_button.Bind(wx.EVT_BUTTON, lambda e: self.go_back())
+        self.back_button.Hide()
+        outer_sizer.Add(self.back_button, 0, wx.ALL, 5)
+
+        self.view_container = wx.Panel(self.outer_panel)
+        self.view_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.view_container.SetSizer(self.view_sizer)
+        outer_sizer.Add(self.view_container, proportion=1, flag=wx.EXPAND)
+
+        self.outer_panel.SetSizer(outer_sizer)
 
         menubar = wx.MenuBar()
         fileMenu = wx.Menu()
@@ -107,110 +85,92 @@ class TMediaApp(wx.Frame):
 
         self.Bind(wx.EVT_MENU, self.open_settings, settings_item)
 
-        vbox = wx.BoxSizer(wx.VERTICAL)
+        self.show_view('function_list')
 
-        self.function_list = wx.ListBox(panel, choices=[_("Media Catalog"), _("YouTube Search")])
-        self.function_list.SetName(_("TMedia functions"))
-        vbox.Add(self.function_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+        if initial_media:
+            self.play_media(initial_media)
 
-        self.function_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_function_select)
-        self.function_list.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
+    # ------------------------------------------------------------------ #
+    # View stack
+    # ------------------------------------------------------------------ #
+    def _create_view(self, name):
+        if name == 'function_list':
+            return FunctionListPanel(self.view_container, owner=self)
+        if name == 'media_catalog':
+            return MediaCatalogPanel(self.view_container, owner=self)
+        if name == 'youtube_search':
+            return YoutubeSearchPanel(self.view_container, owner=self)
+        raise ValueError(name)
 
-        panel.SetSizer(vbox)
-        _apply_skin_to_tree(self)
+    def _get_or_create_view(self, name):
+        panel = self.views.get(name)
+        if panel is None:
+            panel = self._create_view(name)
+            self.views[name] = panel
+            self.view_sizer.Add(panel, proportion=1, flag=wx.EXPAND)
+            panel.Hide()
+        return panel
 
-    def load_settings(self):
-        config = configparser.ConfigParser()
-        config_path = self.get_config_path()
-        if not os.path.exists(os.path.dirname(config_path)):
-            os.makedirs(os.path.dirname(config_path))
-        if os.path.exists(config_path):
-            config.read(config_path)
+    def show_view(self, name, push=True):
+        if self.current_view == name:
+            return
+        if self.current_view == 'player' and name != 'player':
+            self._destroy_player_view()
+
+        panel = self._get_or_create_view(name)
+        for key, existing in self.views.items():
+            if existing is not panel:
+                existing.Hide()
+        panel.Show()
+
+        if push and self.current_view is not None:
+            self.view_stack.append(self.current_view)
+        self.current_view = name
+
+        self.back_button.Show(name != 'function_list')
+        if name == 'function_list':
+            self.SetTitle("TMedia")
+
+        self.view_container.Layout()
+        self.outer_panel.Layout()
+        if hasattr(panel, 'focus_default'):
+            panel.focus_default()
         else:
-            config['DEFAULT'] = {
-                'sound_effects': 'True',
-                'tts_enabled': 'False',
-                'player': 'tplayer'
-            }
-            with open(config_path, 'w') as configfile:
-                config.write(configfile)
-        return config
+            panel.SetFocus()
 
-    def get_config_path(self):
-        if os.name == 'nt':
-            return os.path.join(os.getenv('APPDATA'), 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-        elif os.name == 'posix':
-            if 'darwin' in os.sys.platform:
-                return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-            else:
-                return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
+    def go_back(self):
+        if not self.view_stack:
+            return
+        previous = self.view_stack.pop()
+        self.show_view(previous, push=False)
 
-    def init_sounds(self):
-        mixer.init()
-        self.sounds = {
-            'ding': mixer.Sound('sfx/ding.ogg'),
-            'done': mixer.Sound('sfx/done.ogg'),
-            'enter': mixer.Sound('sfx/enter.ogg'),
-            'enteringtplayer': mixer.Sound('sfx/enteringtplayer.ogg'),
-            'sound_on': mixer.Sound('sfx/sound_on.ogg'),
-            'loading': mixer.Sound('sfx/loading.ogg'),
-            'click': mixer.Sound('sfx/click.ogg')
-        }
+    def _destroy_player_view(self):
+        panel = self.views.pop('player', None)
+        if panel:
+            panel.stop_and_cleanup()
+            self.view_sizer.Detach(panel)
+            panel.Destroy()
 
-    def play_sound(self, sound_name, loop=False):
-        if self.config.getboolean('DEFAULT', 'sound_effects', fallback=True):
-            sound = self.sounds.get(sound_name)
-            if sound:
-                if loop:
-                    return sound.play(-1)
-                else:
-                    return sound.play()
-        return None
-
-    def stop_sound(self, sound_name=None, channel=None):
-        if self.config.getboolean('DEFAULT', 'sound_effects', fallback=True):
-            if channel:
-                channel.stop()
-            elif sound_name:
-                sound = self.sounds.get(sound_name)
-                if sound:
-                    sound.stop()
-
-    def speak_message(self, message):
-        if self.config.getboolean('DEFAULT', 'tts_enabled', fallback=False):
-            self.tts_thread.set_message(message)
-
-    def on_function_select(self, event):
-        selection = self.function_list.GetSelection()
-        if selection != wx.NOT_FOUND:
-            self.play_sound('enter')
-            if selection == 0:
-                self.speak_message(_("Loading media catalog"))
-                self.load_media_catalog()
-            elif selection == 1:
-                self.open_youtube_search()
-
-    def on_key_down(self, event):
-        if event.GetKeyCode() == wx.WXK_RETURN:
-            self.on_function_select(None)
-        else:
-            event.Skip()
-
-    def load_media_catalog(self):
-        media_catalog = MediaCatalog(self)
-        media_catalog.Show()
-        self.play_sound('ding')
-
-    def open_youtube_search(self):
-        youtube_search = YoutubeSearchApp(self)
-        youtube_search.Show()
+    def play_media(self, url, title=None):
+        """Switch to the embedded player and start playback. This is what
+        the media catalog / YouTube search views call instead of opening a
+        second top-level Player window."""
+        self._destroy_player_view()
+        panel = PlayerPanel(self.view_container, owner=self)
+        self.views['player'] = panel
+        self.view_sizer.Add(panel, proportion=1, flag=wx.EXPAND)
+        panel.Hide()
+        panel.play_file(url, title)
+        self.show_view('player')
 
     def open_settings(self, event):
-        settings_window = SettingsWindow(self, self.config)
+        settings_window = SettingsWindow(self)
         settings_window.Show()
+
 
 if __name__ == '__main__':
     app = wx.App()
-    frame = TMediaApp(None)
+    initial_media = sys.argv[1] if len(sys.argv) > 1 else None
+    frame = TMediaApp(None, initial_media=initial_media)
     frame.Show()
     app.MainLoop()

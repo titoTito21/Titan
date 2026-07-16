@@ -1,42 +1,16 @@
 import wx
-import os
-import sys
 import platform
-import configparser
 import subprocess
 from translation import _
 
-try:
-    from src.titan_core.skin_manager import apply_skin_to_window
-except ImportError:
-    apply_skin_to_window = None
+import common
 
-
-def _apply_skin_to_tree(window):
-    if not apply_skin_to_window or not window:
-        return
-    try:
-        apply_skin_to_window(window)
-    except Exception:
-        return
-    for child in window.GetChildren():
-        _apply_skin_to_tree(child)
-
-def get_config_path():
-    _plat = platform.system()
-    if _plat == 'Windows':
-        appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-        return os.path.join(appdata, 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-    elif _plat == 'Darwin':
-        return os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
-    else:
-        return os.path.join(os.path.expanduser('~'), '.config', 'Titosoft', 'Titan', 'appsettings', 'media.ini')
 
 class SettingsWindow(wx.Frame):
-    def __init__(self, parent, config):
+    def __init__(self, parent):
         super(SettingsWindow, self).__init__(parent, title=_("Settings"), size=(400, 300))
 
-        self.config = config
+        self.config = common.config
         panel = wx.Panel(self)
 
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -70,24 +44,22 @@ class SettingsWindow(wx.Frame):
         cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         panel.SetSizer(vbox)
-        _apply_skin_to_tree(self)
+        common.apply_skin(self)
 
     def on_sound_checkbox(self, event):
         if self.sound_effects_checkbox.IsChecked():
-            self.GetParent().play_sound('sound_on')
+            common.play_sound('sound_on')
 
     def on_save(self, event):
-        config_path = get_config_path()
         self.config['DEFAULT']['sound_effects'] = str(self.sound_effects_checkbox.IsChecked())
         self.config['DEFAULT']['tts_enabled'] = str(self.tts_checkbox.IsChecked())
 
         if self.player_choice.GetStringSelection() == 'VLC Media Player':
             self.config['DEFAULT']['player'] = 'vlc'
         else:
-            self.config['DEFAULT']['player'] = 'wbudowany'
+            self.config['DEFAULT']['player'] = 'tplayer'
 
-        with open(config_path, 'w') as configfile:
-            self.config.write(configfile)
+        common.save_config()
         self.Close()
 
     def on_cancel(self, event):

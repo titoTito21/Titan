@@ -1,217 +1,45 @@
 # -*- coding: utf-8 -*-
 import wx
 import wx.html2
-import threading
-import os
-import platform
-import configparser
 import re
-import pygame
-from translation import _
-import subprocess
-
-try:
-    from src.titan_core.skin_manager import apply_skin_to_window
-except ImportError:
-    apply_skin_to_window = None
-
-
-def _apply_skin_to_tree(window):
-    if not apply_skin_to_window or not window:
-        return
-    try:
-        apply_skin_to_window(window)
-    except Exception:
-        return
-    for child in window.GetChildren():
-        _apply_skin_to_tree(child)
-
-# TCE Speech: use Titan TTS engine (stereo speech) when available
-try:
-    from src.titan_core.tce_speech import speak as _tce_speak
-except ImportError:
-    _tce_speak = None
-
-if _tce_speak is not None:
-    def _speak(text):
-        _tce_speak(text)
-else:
-    # Standalone fallback (outside Titan environment)
-    try:
-        import accessible_output3.outputs.auto as _ao3
-        _speaker = _ao3.Auto()
-    except Exception:
-        _speaker = None
-
-    def _speak(text):
-        """Announce text via accessible_output3 with cross-platform fallback."""
-        if _speaker:
-            try:
-                _speaker.speak(text, interrupt=True)
-                return
-            except Exception:
-                pass
-        try:
-            _sys = platform.system()
-            if _sys == 'Windows':
-                import win32com.client
-                win32com.client.Dispatch("SAPI.SpVoice").Speak(text)
-            elif _sys == 'Darwin':
-                subprocess.Popen(['say', text])
-            else:
-                subprocess.Popen(['spd-say', text])
-        except Exception:
-            pass
-
-pygame.mixer.init()
-# Legacy alias so existing code using `speaker.speak(...)` still works
-class _SpeakerCompat:
-    def speak(self, text, interrupt=False):
-        _speak(text)
-speaker = _SpeakerCompat()
-
 import requests
-from bs4 import BeautifulSoup, NavigableString, Tag
+from translation import _
 
-def get_config_path():
-    if platform.system() == 'Windows':
-        appdata = os.getenv('APPDATA')
-        config_dir = os.path.join(appdata, 'Titosoft', 'Titan', 'appsettings')
-    elif platform.system() == 'Darwin':  # macOS
-        home = os.path.expanduser('~')
-        config_dir = os.path.join(home, 'Library', 'Application Support', 'Titosoft', 'Titan', 'appsettings')
-    else:
-        home = os.path.expanduser('~')
-        config_dir = os.path.join(home, '.config', 'Titosoft', 'Titan', 'appsettings')
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-    config_path = os.path.join(config_dir, 'tbrowser.ini')
-    return config_path
+from common import _apply_skin_to_tree, config, save_config
+from browser_tab import BrowserTab
+from downloads import DownloadManager, DownloadsDialog
+from history import HistoryStore, HistoryDialog
+from bookmarks import BookmarkStore, BookmarksDialog
+from findbar import FindBar
 
-CONFIG_PATH = get_config_path()
-
-DEFAULT_SETTINGS = {
-    'announcements': {
-        'announce_page_summary': 'True',
-        'loading_messages': 'True'
-    },
-    'interface': {
-        'view_mode': 'edge'
-    },
-    # Nowa sekcja privacy
-    'privacy': {
-        'block_cookie_banners': 'False'
-    }
-}
-
-config = configparser.ConfigParser()
-if not os.path.exists(CONFIG_PATH):
-    # Jeśli pliku nie ma, tworzymy go z domyślnymi ustawieniami
-    config.read_dict(DEFAULT_SETTINGS)
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as configfile:
-        config.write(configfile)
-else:
-    config.read(CONFIG_PATH, encoding='utf-8')
-
-    # Uzupełniamy ewentualnie brakujące sekcje/klucze
-    for section in DEFAULT_SETTINGS:
-        if section not in config:
-            config[section] = DEFAULT_SETTINGS[section]
-        else:
-            for key in DEFAULT_SETTINGS[section]:
-                if key not in config[section]:
-                    config[section][key] = DEFAULT_SETTINGS[section][key]
-
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as configfile:
-        config.write(configfile)
-
-def play_sound(sound_file):
-    sound_path = os.path.join('sfx', sound_file)
-    if not os.path.exists(sound_path):
-        print(_("Nie znaleziono pliku dźwiękowego: {}").format(sound_path))
-        return
-    try:
-        sound = pygame.mixer.Sound(sound_path)
-        sound.play()
-    except Exception as e:
-        print(_("Nie można odtworzyć dźwięku: {}").format(e))
-
-def speak(text):
-    speaker.speak(text)
-
-class DownloadsDialog(wx.Dialog):
-    def __init__(self, parent, downloads):
-        super(DownloadsDialog, self).__init__(parent, title=_("Pobrane pliki"))
-        self.parent = parent
-        self.downloads = downloads
-
-        panel = wx.Panel(self)
-        vbox = wx.BoxSizer(wx.VERTICAL)
-
-        info_text = wx.StaticText(panel, label=_("Lista plików pobranych przez tBrowser:"))
-        vbox.Add(info_text, flag=wx.ALL, border=5)
-
-        self.listbox = wx.ListBox(panel, choices=self.downloads, style=wx.LB_SINGLE)
-        vbox.Add(self.listbox, proportion=1, flag=wx.ALL | wx.EXPAND, border=5)
-
-        # Enter i Del w liście
-        self.listbox.Bind(wx.EVT_KEY_DOWN, self.onKeyDown)
-
-        panel.SetSizer(vbox)
-        self.SetSize((400, 300))
-        self.Centre()
-        _apply_skin_to_tree(self)
-
-    def onKeyDown(self, event):
-        keycode = event.GetKeyCode()
-        if keycode == wx.WXK_RETURN:
-            self.openSelectedFile()
-        elif keycode == wx.WXK_DELETE:
-            self.removeSelectedFile()
-        else:
-            event.Skip()
-
-    def openSelectedFile(self):
-        selection = self.listbox.GetSelection()
-        if selection == wx.NOT_FOUND:
-            return
-        file_path = self.listbox.GetString(selection)
-        if platform.system() == 'Windows':
-            os.startfile(file_path)
-        elif platform.system() == 'Darwin':
-            subprocess.Popen(['open', file_path])
-        else:
-            subprocess.Popen(['xdg-open', file_path])
-
-    def removeSelectedFile(self):
-        selection = self.listbox.GetSelection()
-        if selection == wx.NOT_FOUND:
-            return
-        self.listbox.Delete(selection)
-        del self.downloads[selection]
 
 class BrowserFrame(wx.Frame):
     def __init__(self, *args, **kwargs):
         super(BrowserFrame, self).__init__(*args, **kwargs)
 
+        self.settings = config
+        self.home_url = 'https://titosofttitan.com/titan'
+
+        self.download_manager = DownloadManager(self)
+        self.history_store = HistoryStore()
+        self.bookmark_store = BookmarkStore()
+        self.tabs = []
+
         self.loading = False
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
-        self.settings = config
-        self.home_url = 'https://titosofttitan.com/titan'
-
-        # Lista pobranych plików (póki co pusta).
-        self.downloads = []
-
         self.InitUI()
         self.Centre()
         self.Show()
-        self.LoadHomePage()
+        self.open_new_tab(self.home_url)
 
+    # ==================================================================== #
+    # UI construction
+    # ==================================================================== #
     def InitUI(self):
         self.SetTitle(_("tBrowser"))
-        self.SetSize((800, 600))
+        self.SetSize((900, 650))
 
         self.panel = wx.Panel(self)
         self.panel.SetWindowStyleFlag(wx.TAB_TRAVERSAL)
@@ -224,6 +52,10 @@ class BrowserFrame(wx.Frame):
         self.back_button = wx.Button(self.toolbar, label=_("Wstecz"))
         self.forward_button = wx.Button(self.toolbar, label=_("Dalej"))
         self.refresh_button = wx.Button(self.toolbar, label=_("Odśwież"))
+        # Full text labels rather than a bare glyph: a screen reader reads a
+        # button's own caption as its accessible name, and "☆" alone reads as
+        # a Unicode character name, not "add bookmark".
+        self.star_button = wx.Button(self.toolbar, label=_("Dodaj zakładkę"))
 
         self.back_button.SetToolTip(_("Przycisk Wstecz"))
         self.forward_button.SetToolTip(_("Przycisk Dalej"))
@@ -232,25 +64,31 @@ class BrowserFrame(wx.Frame):
         self.address = wx.TextCtrl(self.toolbar, style=wx.TE_PROCESS_ENTER)
         self.address.SetHint(_("Wpisz adres lub wyszukaj w Google"))
 
+        self.zoom_out_button = wx.Button(self.toolbar, label=_("Pomniejsz"))
+        self.zoom_reset_button = wx.Button(self.toolbar, label=_("100%"))
+        self.zoom_in_button = wx.Button(self.toolbar, label=_("Powiększ"))
+        self.zoom_reset_button.SetToolTip(_("Resetuj powiększenie"))
+
+        self.new_tab_button = wx.Button(self.toolbar, label=_("Nowa karta"))
+
         self.toolbar_sizer.Add(self.back_button, 0, wx.ALL, 5)
         self.toolbar_sizer.Add(self.forward_button, 0, wx.ALL, 5)
         self.toolbar_sizer.Add(self.refresh_button, 0, wx.ALL, 5)
+        self.toolbar_sizer.Add(self.star_button, 0, wx.ALL, 5)
         self.toolbar_sizer.Add(self.address, 1, wx.ALL | wx.EXPAND, 5)
+        self.toolbar_sizer.Add(self.zoom_out_button, 0, wx.ALL, 5)
+        self.toolbar_sizer.Add(self.zoom_reset_button, 0, wx.ALL, 5)
+        self.toolbar_sizer.Add(self.zoom_in_button, 0, wx.ALL, 5)
+        self.toolbar_sizer.Add(self.new_tab_button, 0, wx.ALL, 5)
 
         self.toolbar.SetSizer(self.toolbar_sizer)
         vbox.Add(self.toolbar, 0, wx.EXPAND)
 
-        view_mode = self.settings['interface'].get('view_mode', 'edge')
-        if view_mode == 'edge':
-            self.browser = wx.html2.WebView.New(self.panel)
-            self.browser.EnableAccessToDevTools(True)
-            self.browser.Bind(wx.EVT_CHAR_HOOK, self.OnBrowserCharHook)
-            self.browser.SetFocus()
-        else:
-            self.browser = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
-            self.browser.SetFocus()
+        self.notebook = wx.Notebook(self.panel)
+        vbox.Add(self.notebook, 1, wx.EXPAND)
 
-        vbox.Add(self.browser, 1, wx.EXPAND)
+        self.findbar = FindBar(self.panel, self.get_active_tab)
+        vbox.Add(self.findbar, 0, wx.EXPAND)
 
         self.panel.SetSizer(vbox)
 
@@ -265,13 +103,6 @@ class BrowserFrame(wx.Frame):
         self.CreateMenuBar()
         _apply_skin_to_tree(self)
 
-    def LoadHomePage(self):
-        if isinstance(self.browser, wx.html2.WebView):
-            self.browser.LoadURL(self.home_url)
-        else:
-            self.address.SetValue(self.home_url)
-            self.LoadVirtualBuffer(self.home_url)
-
     def OnSize(self, event):
         rect = self.statusbar.GetFieldRect(1)
         self.progress.SetPosition((rect.x + 2, rect.y + 2))
@@ -280,136 +111,174 @@ class BrowserFrame(wx.Frame):
             event.Skip()
 
     def BindEvents(self):
-        if isinstance(self.browser, wx.html2.WebView):
-            self.browser.Bind(wx.html2.EVT_WEBVIEW_NAVIGATING, self.OnNavigating)
-            self.browser.Bind(wx.html2.EVT_WEBVIEW_LOADED, self.OnPageLoaded)
-            self.browser.Bind(wx.html2.EVT_WEBVIEW_TITLE_CHANGED, self.OnTitleChanged)
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnTabChanged)
 
         self.address.Bind(wx.EVT_TEXT_ENTER, self.OnAddressEnter)
-        self.back_button.Bind(wx.EVT_BUTTON, self.OnBack)
-        self.forward_button.Bind(wx.EVT_BUTTON, self.OnForward)
-        self.refresh_button.Bind(wx.EVT_BUTTON, self.OnRefresh)
+        self.back_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('go_back'))
+        self.forward_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('go_forward'))
+        self.refresh_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('refresh'))
+        self.star_button.Bind(wx.EVT_BUTTON, self.OnToggleBookmark)
+        self.zoom_out_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('zoom_out'))
+        self.zoom_reset_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('zoom_reset'))
+        self.zoom_in_button.Bind(wx.EVT_BUTTON, lambda e: self._active_call('zoom_in'))
+        self.new_tab_button.Bind(wx.EVT_BUTTON, lambda e: self.open_new_tab())
 
         self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
 
-        if isinstance(self.browser, wx.TextCtrl):
-            self.browser.Bind(wx.EVT_LEFT_DOWN, self.OnTextCtrlClick)
-            self.browser.Bind(wx.EVT_KEY_DOWN, self.OnTextCtrlKeyDown)
-
-        # Accelerator table so shortcuts work even when WebView (Edge) has focus
-        self._accel_id_address = wx.NewIdRef()
-        self._accel_id_address_alt = wx.NewIdRef()
-        self._accel_id_refresh = wx.NewIdRef()
-        self._accel_id_downloads = wx.NewIdRef()
+        # Accelerator table so shortcuts work even when a WebView (Edge) tab has focus.
+        ids = {name: wx.NewIdRef() for name in (
+            'address', 'refresh', 'downloads', 'new_tab', 'close_tab',
+            'next_tab', 'prev_tab', 'history', 'bookmarks', 'toggle_bookmark',
+            'find', 'find_next', 'find_prev', 'zoom_in', 'zoom_out', 'zoom_reset',
+        )}
+        self._accel_ids = ids
         accel_entries = [
-            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('L'), self._accel_id_address),
-            wx.AcceleratorEntry(wx.ACCEL_ALT, ord('D'), self._accel_id_address_alt),
-            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F6, self._accel_id_address),
-            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, self._accel_id_refresh),
-            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('J'), self._accel_id_downloads),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('L'), ids['address']),
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F6, ids['address']),
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F5, ids['refresh']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('J'), ids['downloads']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('T'), ids['new_tab']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W'), ids['close_tab']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_TAB, ids['next_tab']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL | wx.ACCEL_SHIFT, wx.WXK_TAB, ids['prev_tab']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('H'), ids['history']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('B'), ids['bookmarks']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('D'), ids['toggle_bookmark']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('F'), ids['find']),
+            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F3, ids['find_next']),
+            wx.AcceleratorEntry(wx.ACCEL_SHIFT, wx.WXK_F3, ids['find_prev']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('='), ids['zoom_in']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_ADD, ids['zoom_in']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('-'), ids['zoom_out']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_SUBTRACT, ids['zoom_out']),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('0'), ids['zoom_reset']),
         ]
         self.SetAcceleratorTable(wx.AcceleratorTable(accel_entries))
-        self.Bind(wx.EVT_MENU, self._OnAccelFocusAddress, id=self._accel_id_address)
-        self.Bind(wx.EVT_MENU, self._OnAccelFocusAddress, id=self._accel_id_address_alt)
-        self.Bind(wx.EVT_MENU, lambda e: self.OnRefresh(e), id=self._accel_id_refresh)
-        self.Bind(wx.EVT_MENU, lambda e: self.ShowDownloads(), id=self._accel_id_downloads)
-
-    def _OnAccelFocusAddress(self, event):
-        """Focus address bar via accelerator (works even when WebView has focus)."""
-        self.address.SetFocus()
-        self.address.SelectAll()
+        self.Bind(wx.EVT_MENU, lambda e: self.focus_address(), id=ids['address'])
+        self.Bind(wx.EVT_MENU, lambda e: self._active_call('refresh'), id=ids['refresh'])
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowDownloads(), id=ids['downloads'])
+        self.Bind(wx.EVT_MENU, lambda e: self.open_new_tab(), id=ids['new_tab'])
+        self.Bind(wx.EVT_MENU, lambda e: self.close_tab(), id=ids['close_tab'])
+        self.Bind(wx.EVT_MENU, lambda e: self._cycle_tab(1), id=ids['next_tab'])
+        self.Bind(wx.EVT_MENU, lambda e: self._cycle_tab(-1), id=ids['prev_tab'])
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowHistory(), id=ids['history'])
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowBookmarks(), id=ids['bookmarks'])
+        self.Bind(wx.EVT_MENU, self.OnToggleBookmark, id=ids['toggle_bookmark'])
+        self.Bind(wx.EVT_MENU, lambda e: self.findbar.OpenBar(), id=ids['find'])
+        self.Bind(wx.EVT_MENU, lambda e: self.findbar.find_next(), id=ids['find_next'])
+        self.Bind(wx.EVT_MENU, lambda e: self.findbar.find_previous(), id=ids['find_prev'])
+        self.Bind(wx.EVT_MENU, lambda e: self._active_call('zoom_in'), id=ids['zoom_in'])
+        self.Bind(wx.EVT_MENU, lambda e: self._active_call('zoom_out'), id=ids['zoom_out'])
+        self.Bind(wx.EVT_MENU, lambda e: self._active_call('zoom_reset'), id=ids['zoom_reset'])
 
     def CreateMenuBar(self):
         menubar = wx.MenuBar()
         app_menu = wx.Menu()
 
+        new_tab_item = app_menu.Append(wx.ID_ANY, _("Nowa karta\tCtrl+T"))
+        close_tab_item = app_menu.Append(wx.ID_ANY, _("Zamknij kartę\tCtrl+W"))
+        app_menu.AppendSeparator()
+        history_item = app_menu.Append(wx.ID_ANY, _("Historia...\tCtrl+H"))
+        bookmarks_item = app_menu.Append(wx.ID_ANY, _("Zakładki...\tCtrl+B"))
+        downloads_item = app_menu.Append(wx.ID_ANY, _("Pobrane pliki...\tCtrl+J"))
+        app_menu.AppendSeparator()
         settings_item = app_menu.Append(wx.ID_ANY, _("Ustawienia..."))
         menubar.Append(app_menu, _("Aplikacja"))
 
         self.SetMenuBar(menubar)
+        self.Bind(wx.EVT_MENU, lambda e: self.open_new_tab(), new_tab_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.close_tab(), close_tab_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowHistory(), history_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowBookmarks(), bookmarks_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.ShowDownloads(), downloads_item)
         self.Bind(wx.EVT_MENU, self.OnSettings, settings_item)
 
-    def OnSettings(self, event):
-        settings_dialog = SettingsDialog(self)
-        settings_dialog.ShowModal()
-        settings_dialog.Destroy()
+    # ==================================================================== #
+    # Tab management
+    # ==================================================================== #
+    def get_active_tab(self):
+        if not self.tabs:
+            return None
+        idx = self.notebook.GetSelection()
+        if idx == wx.NOT_FOUND or idx >= len(self.tabs):
+            return None
+        return self.tabs[idx]
 
-    def OnBack(self, event):
-        if isinstance(self.browser, wx.html2.WebView):
-            if self.browser.CanGoBack():
-                self.browser.GoBack()
+    def open_new_tab(self, url=None):
+        tab = BrowserTab(self.notebook, self)
+        self.tabs.append(tab)
+        self.notebook.AddPage(tab, self._short_title(tab.current_title))
+        self.notebook.SetSelection(len(self.tabs) - 1)
+        self.notify_tab_changed(tab)
+        tab.load(url or self.home_url)
+        tab.focus_content()
+        return tab
+
+    def close_tab(self, tab=None):
+        tab = tab or self.get_active_tab()
+        if tab is None or tab not in self.tabs:
+            return
+        idx = self.tabs.index(tab)
+        del self.tabs[idx]
+        self.notebook.DeletePage(idx)
+        if not self.tabs:
+            self.Close()
         else:
-            wx.MessageBox(_("Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."),
-                          _("Informacja"), wx.OK | wx.ICON_INFORMATION)
+            new_tab = self.get_active_tab()
+            if new_tab is not None:
+                self.notify_tab_changed(new_tab)
 
-    def OnForward(self, event):
-        if isinstance(self.browser, wx.html2.WebView):
-            if self.browser.CanGoForward():
-                self.browser.GoForward()
+    def _cycle_tab(self, delta):
+        if len(self.tabs) < 2:
+            return
+        idx = (self.notebook.GetSelection() + delta) % len(self.tabs)
+        self.notebook.SetSelection(idx)
+
+    def _active_call(self, method_name):
+        tab = self.get_active_tab()
+        if tab is not None:
+            getattr(tab, method_name)()
+        if method_name in ('zoom_in', 'zoom_out', 'zoom_reset'):
+            self.update_zoom_display()
+
+    def OnTabChanged(self, event):
+        tab = self.get_active_tab()
+        if tab is not None:
+            self.notify_tab_changed(tab)
+            self.set_loading_state(tab.loading)
+        event.Skip()
+
+    def _short_title(self, title):
+        title = title or _("Nowa karta")
+        return title if len(title) <= 24 else title[:21] + '...'
+
+    def notify_tab_changed(self, tab):
+        """A tab's title/url changed, or it became the active tab."""
+        if tab in self.tabs:
+            idx = self.tabs.index(tab)
+            self.notebook.SetPageText(idx, self._short_title(tab.get_title()))
+        if tab is not self.get_active_tab():
+            return
+        self.address.SetValue(tab.get_url())
+        self.SetTitle("{} - tBrowser".format(tab.get_title()))
+        self.back_button.Enable(tab.can_go_back())
+        self.forward_button.Enable(tab.can_go_forward())
+        self.update_bookmark_star()
+        self.update_zoom_display()
+
+    # ==================================================================== #
+    # Loading / status bar (driven by the active tab only)
+    # ==================================================================== #
+    def set_loading_state(self, is_loading):
+        self.loading = is_loading
+        if is_loading:
+            self.statusbar.SetStatusText(_("Ładowanie strony..."))
+            self.progress.SetValue(0)
+            self.timer.Start(100)
         else:
-            wx.MessageBox(_("Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."),
-                          _("Informacja"), wx.OK | wx.ICON_INFORMATION)
-
-    def OnRefresh(self, event):
-        if isinstance(self.browser, wx.html2.WebView):
-            self.browser.Reload()
-        else:
-            self.LoadVirtualBuffer(self.address.GetValue())
-
-    def OnNavigating(self, event):
-        url = event.GetURL()
-        self.address.SetValue(url)
-        self.statusbar.SetStatusText(_("Ładowanie strony..."))
-        threading.Thread(target=play_sound, args=('select.ogg',), daemon=True).start()
-        self.progress.SetValue(0)
-        self.loading = True
-        self.timer.Start(100)
-
-        if self.settings.getboolean('announcements', 'loading_messages'):
-            threading.Thread(target=speak, args=(_("Ładowanie strony..."),), daemon=True).start()
-
-    def OnPageLoaded(self, event):
-        """Po załadowaniu strony w WebView."""
-        self.statusbar.SetStatusText(_("Strona załadowana."))
-        self.progress.SetValue(100)
-        threading.Thread(target=play_sound, args=('ding.ogg',), daemon=True).start()
-        self.loading = False
-        self.timer.Stop()
-
-        # Jeśli włączone komunikaty
-        if self.settings.getboolean('announcements', 'loading_messages'):
-            title = self.browser.GetCurrentTitle()
-            threading.Thread(target=speak, args=(_("Załadowano stronę {}").format(title),), daemon=True).start()
-
-        # Ustawiamy tytuł okna
-        title = self.browser.GetCurrentTitle()
-        self.SetTitle(f"{title} - tBrowser")
-        self.browser.SetFocus()
-
-        # Jeśli jest włączone ukrywanie alertów cookie, to uruchamiamy krótki JS
-        if self.settings.getboolean('privacy', 'block_cookie_banners'):
-            self.hide_cookie_banners_webview()
-
-        # Komunikat o strukturze strony
-        if self.settings.getboolean('announcements', 'announce_page_summary'):
-            self.DisplayPageInfo()
-
-    def hide_cookie_banners_webview(self):
-        """
-        Przykładowy skrypt JS, który próbuje odnaleźć dowolny element,
-        w którego klasie lub ID pojawia się słowo 'cookie', i go ukrywa.
-        """
-        script = r"""
-        var banners = document.querySelectorAll('[id*="cookie"], [class*="cookie"]');
-        for (var i = 0; i < banners.length; i++) {
-            banners[i].style.display = 'none';
-        }
-        """
-        self.browser.RunScript(script)
-
-    def OnTitleChanged(self, event):
-        title = event.GetString()
-        self.SetTitle(f"{title} - tBrowser")
+            self.statusbar.SetStatusText(_("Strona załadowana."))
+            self.progress.SetValue(100)
+            self.timer.Stop()
 
     def OnTimer(self, event):
         if self.loading:
@@ -418,6 +287,16 @@ class BrowserFrame(wx.Frame):
                 self.progress.SetValue(current_value + 5)
         else:
             self.timer.Stop()
+
+    def notify_download_started(self, url):
+        self.statusbar.SetStatusText(_("Pobieranie: {}").format(url))
+
+    # ==================================================================== #
+    # Address bar / navigation
+    # ==================================================================== #
+    def focus_address(self):
+        self.address.SetFocus()
+        self.address.SelectAll()
 
     def OnAddressEnter(self, event):
         input_text = self.address.GetValue().strip()
@@ -430,365 +309,96 @@ class BrowserFrame(wx.Frame):
             self.address.SetValue(url)
         else:
             query = requests.utils.quote(input_text)
-            url = f"https://www.google.com/search?q={query}"
+            url = "https://www.google.com/search?q={}".format(query)
             self.address.SetValue(url)
 
-        if isinstance(self.browser, wx.html2.WebView):
-            self.browser.LoadURL(url)
-            self.browser.SetFocus()
-        else:
-            self.LoadVirtualBuffer(url)
+        tab = self.get_active_tab() or self.open_new_tab()
+        tab.load(url)
+
+    def open_url_in_active_tab(self, url):
+        tab = self.get_active_tab() or self.open_new_tab()
+        tab.load(url)
 
     def is_probable_url(self, text):
         return bool(re.match(r'^[\w.-]+\.[a-z]{2,}$', text, re.IGNORECASE))
 
-    def OnCharHook(self, event):
-        """
-        Globalny skrót klawiaturowy dla okna głównego:
-        - F6 lub Ctrl+L: fokus na pasek adresu
-        - Ctrl+J: wyświetlenie okna pobranych plików
-        """
-        keycode = event.GetKeyCode()
-        ctrl_down = event.ControlDown()
+    # ==================================================================== #
+    # Bookmarks / history / downloads dialogs
+    # ==================================================================== #
+    def update_bookmark_star(self):
+        tab = self.get_active_tab()
+        if tab is None:
+            return
+        marked = self.bookmark_store.is_bookmarked(tab.get_url())
+        self.star_button.SetLabel(_("Usuń zakładkę") if marked else _("Dodaj zakładkę"))
 
-        if keycode == wx.WXK_F6 or (ctrl_down and keycode == ord('L')):
-            self.address.SetFocus()
-            self.address.SelectAll()
-        elif ctrl_down and keycode == ord('J'):
-            self.ShowDownloads()
-        else:
-            event.Skip()
+    def update_zoom_display(self):
+        tab = self.get_active_tab()
+        can_zoom = tab is not None and tab.is_zoom_ready()
+        self.zoom_out_button.Enable(can_zoom)
+        self.zoom_in_button.Enable(can_zoom)
+        self.zoom_reset_button.Enable(can_zoom)
+        if not can_zoom:
+            self.zoom_reset_button.SetLabel(_("100%"))
+            return
+        try:
+            factor = tab.browser.GetZoomFactor()
+        except Exception:
+            factor = 1.0
+        self.zoom_reset_button.SetLabel("{}%".format(int(round(factor * 100))))
 
-    def OnBrowserCharHook(self, event):
-        """
-        Skróty wewnątrz WebView:
-        - F5: odświeżenie strony
-        - F6 lub Ctrl+L: fokus na pasek adresu
-        Wszystkie inne skróty są przekazywane do silnika przeglądarki.
-        """
-        keycode = event.GetKeyCode()
-        ctrl_down = event.ControlDown()
+    def OnToggleBookmark(self, event):
+        tab = self.get_active_tab()
+        if tab is None:
+            return
+        self.bookmark_store.toggle(tab.get_url(), tab.get_title())
+        self.update_bookmark_star()
 
-        if keycode == wx.WXK_F5:
-            self.OnRefresh(event)
-        elif keycode == wx.WXK_F6 or (ctrl_down and keycode == ord('L')):
-            self.address.SetFocus()
-            self.address.SelectAll()
-        else:
-            # Przekazujemy zdarzenie dalej, aby standardowe skróty (np. Ctrl+C, Ctrl+F) działały
-            event.Skip()
+    def ShowBookmarks(self):
+        dlg = BookmarksDialog(self, self.bookmark_store, self.open_url_in_active_tab)
+        dlg.ShowModal()
+        dlg.Destroy()
+        self.update_bookmark_star()
 
-    def ShowDownloads(self):
-        dlg = DownloadsDialog(self, self.downloads)
+    def ShowHistory(self):
+        dlg = HistoryDialog(self, self.history_store, self.open_url_in_active_tab)
         dlg.ShowModal()
         dlg.Destroy()
 
-    def OnTextCtrlClick(self, event):
-        # Dotyczy trybu wirtualnego bufora
-        position = self.browser.HitTestPos(event.GetPosition())
-        # Search from last to first because elements can be nested.
-        for element in reversed(self.interactive_elements):
-            if element['start'] <= position <= element['end']:
-                element_type = element.get('type')
-                if element_type == 'link':
-                    # Make sure href is a full URL
-                    base_url = self.address.GetValue()
-                    href = element['tag'].get('href', '')
-                    full_url = requests.compat.urljoin(base_url, href)
-                    self.address.SetValue(full_url)
-                    self.LoadVirtualBuffer(full_url)
-                elif element_type == 'button':
-                    # For now, just a message. Form submission would be complex.
-                    wx.MessageBox(_("Kliknięto przycisk: {}").format(element['label']), _("Informacja"), wx.OK | wx.ICON_INFORMATION)
-                elif element_type in ['input_text', 'textarea']:
-                    self.EditTextElement(element)
-                elif element_type in ['checkbox', 'radio']:
-                    self.ToggleCheckElement(element)
-                return # Stop after handling the first match
-        event.Skip()
+    def ShowDownloads(self):
+        dlg = DownloadsDialog(self, self.download_manager)
+        dlg.ShowModal()
+        dlg.Destroy()
 
-    def OnTextCtrlKeyDown(self, event):
+    # ==================================================================== #
+    # Global keyboard handling
+    # ==================================================================== #
+    def OnCharHook(self, event):
+        """Frame-wide handling that must work regardless of which child has
+        focus (toolbar, notebook, address bar).
+
+        Deliberately does NOT swallow a bare Alt tap here: that would block
+        the standard Windows Alt-focuses-the-menu-bar convention (needed for
+        keyboard/screen-reader users) from anywhere in the window. The
+        WebView2-freeze fix for Alt (see browser_tab.OnBrowserCharHook) only
+        needs to apply while focus is actually inside the WebView2 render
+        area, which that handler already scopes correctly -- it fires first
+        and swallows the event before it would ever reach here."""
         keycode = event.GetKeyCode()
-        ctrl_down = event.ControlDown()
-        shift_down = event.ShiftDown()
-        if keycode == wx.WXK_TAB:
-            self.Navigate()
-        elif keycode == wx.WXK_F6 or (ctrl_down and keycode == ord('L')):
-            self.address.SetFocus()
-            self.address.SelectAll()
+
+        if keycode == wx.WXK_ESCAPE and self.findbar.IsShown():
+            self.findbar.CloseBar()
         else:
             event.Skip()
 
-    def Navigate(self):
-        pass
+    # ==================================================================== #
+    # Settings dialog
+    # ==================================================================== #
+    def OnSettings(self, event):
+        settings_dialog = SettingsDialog(self)
+        settings_dialog.ShowModal()
+        settings_dialog.Destroy()
 
-    def DisplayPageInfo(self):
-        if isinstance(self.browser, wx.html2.WebView):
-            script = """
-            var forms = document.getElementsByTagName('form').length;
-            var links = document.getElementsByTagName('a').length;
-            var buttons = document.getElementsByTagName('button').length;
-            var rows = document.getElementsByTagName('tr').length;
-            var result = forms + ',' + links + ',' + buttons + ',' + rows;
-            result;
-            """
-            result = self.browser.RunScript(script)
-            if result:
-                data = result.split(',')
-                if len(data) == 4:
-                    forms, links, buttons, rows = data
-                    message = _("Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy.").format(forms, links, buttons, rows)
-                    threading.Thread(target=speak, args=(message,), daemon=True).start()
-        else:
-            if hasattr(self, 'current_soup'):
-                forms = len(self.current_soup.find_all('form'))
-                links = len(self.current_soup.find_all('a'))
-                buttons = len(self.current_soup.find_all('button'))
-                rows = len(self.current_soup.find_all('tr'))
-                message = _("Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy.").format(forms, links, buttons, rows)
-                threading.Thread(target=speak, args=(message,), daemon=True).start()
-
-    def get_label_for_input(self, input_element):
-        # 1. Check for a <label> with a 'for' attribute matching the input's id
-        if input_element.get('id'):
-            # BeautifulSoup's find doesn't automatically search the whole document
-            # from a tag object, so we search from the root soup.
-            label = self.current_soup.find('label', {'for': input_element['id']})
-            if label:
-                return label.get_text(strip=True)
-
-        # 2. Check if the input is wrapped inside a <label>
-        parent_label = input_element.find_parent('label')
-        if parent_label:
-            # We need to be careful not to include the text of the input itself if it's inside the label
-            # A simple way is to get all text and then remove the input's value if present.
-            # A cleaner way is to extract the input and get text again, but that modifies the tree.
-            # Let's stick to a simple text extraction.
-            return ' '.join(parent_label.find_all(string=True, recursive=False)).strip()
-
-
-        # 3. Fallback to 'aria-label', 'placeholder', or 'name' attribute
-        for attr in ['aria-label', 'placeholder', 'title', 'name']:
-            if input_element.get(attr):
-                return input_element.get(attr)
-        
-        return '' # No label found
-
-    def parse_input_tag(self, child):
-        input_type = child.get('type', 'text').lower()
-        label = self.get_label_for_input(child)
-        start = self.browser.GetLastPosition()
-        
-        display_text = ""
-        element_type = None
-
-        if input_type in ['text', 'password', 'email', 'search', 'tel', 'url']:
-            element_type = 'input_text'
-            value = child.get('value', '')
-            display_text = _("Pole edycji: {}").format(label)
-            if value:
-                display_text += _(", Wartość: {}").format(value)
-        
-        elif input_type in ['button', 'submit', 'reset']:
-            element_type = 'button'
-            value = child.get('value')
-            # If value is empty, try to get label from text, though inputs don't have text content.
-            label = value or label or _("Przycisk bez etykiety")
-            display_text = _("Przycisk: {}").format(label)
-
-        elif input_type in ['checkbox', 'radio']:
-            element_type = input_type
-            is_checked = child.has_attr('checked')
-            state = _("zaznaczone") if is_checked else _("niezaznaczone")
-            if input_type == 'checkbox':
-                display_text = _("Pole wyboru: {} ({})").format(label, state)
-            else: # radio
-                display_text = _("Przycisk radiowy: {} ({})").format(label, state)
-
-        if display_text:
-            self.browser.AppendText(display_text + ' ')
-            end = self.browser.GetLastPosition()
-            self.interactive_elements.append({
-                'start': start, 'end': end, 'type': element_type,
-                'label': label, 'tag': child
-            })
-
-    def parse_textarea_tag(self, child):
-        label = self.get_label_for_input(child)
-        value = child.get_text(strip=True)
-        start = self.browser.GetLastPosition()
-        display_text = _("Pole tekstowe: {}").format(label)
-        if value:
-            display_text += _(", Wartość: {}").format(value)
-        
-        self.browser.AppendText(display_text + ' ')
-        end = self.browser.GetLastPosition()
-        self.interactive_elements.append({
-            'start': start, 'end': end, 'type': 'textarea',
-            'label': label, 'tag': child
-        })
-
-    def EditTextElement(self, element):
-        tag = element['tag']
-        current_value = ''
-        if element['type'] == 'textarea':
-            current_value = ''.join(tag.stripped_strings)
-        else: # input_text
-            current_value = tag.get('value', '')
-
-        dlg = wx.TextEntryDialog(self, _("Wprowadź tekst dla: {}").format(element['label']), _("Edycja pola"), current_value)
-        
-        if dlg.ShowModal() == wx.ID_OK:
-            new_value = dlg.GetValue()
-            if element['type'] == 'textarea':
-                tag.clear() # Remove old content
-                tag.append(new_value)
-            else: # input_text
-                tag['value'] = new_value
-            
-            self.render_content(self.current_soup)
-            speak(_("Wpisano: {}").format(new_value))
-        
-        dlg.Destroy()
-
-    def ToggleCheckElement(self, element):
-        tag = element['tag']
-        
-        if element['type'] == 'checkbox':
-            if tag.has_attr('checked'):
-                del tag['checked']
-            else:
-                tag['checked'] = 'checked'
-        
-        elif element['type'] == 'radio':
-            # In radio groups, only one can be selected.
-            # First, ensure the clicked one is checked.
-            if not tag.has_attr('checked'):
-                name = tag.get('name')
-                if name:
-                    # Find all radio buttons in the same group within the same form
-                    form = tag.find_parent('form')
-                    search_root = form if form else self.current_soup
-                    radios = search_root.find_all('input', {'type': 'radio', 'name': name})
-                    for r in radios:
-                        if r.has_attr('checked'):
-                            del r['checked']
-                tag['checked'] = 'checked'
-
-        self.render_content(self.current_soup)
-        new_state = _("zaznaczone") if tag.has_attr('checked') else _("niezaznaczone")
-        speak(_("{} {}").format(element['label'], new_state))
-
-    def LoadVirtualBuffer(self, url):
-        """Ładowanie strony w trybie wirtualnego bufora."""
-        self.statusbar.SetStatusText(_("Ładowanie strony..."))
-        threading.Thread(target=play_sound, args=('select.ogg',), daemon=True).start()
-        self.progress.SetValue(0)
-        self.loading = True
-        self.timer.Start(100)
-
-        def load_content():
-            try:
-                response = requests.get(url)
-                soup = BeautifulSoup(response.content, 'html.parser')
-                self.current_soup = soup
-
-                # Jeśli włączone blokowanie cookie-banners, usuwamy z DOM to, co wygląda na banner.
-                if self.settings.getboolean('privacy', 'block_cookie_banners'):
-                    # Prosta heurystyka: usuwamy elementy, w których ID lub class zawiera "cookie"
-                    cookie_divs = soup.find_all(lambda tag:
-                        ('cookie' in (tag.get('id') or '').lower()) or
-                        ('cookie' in ' '.join(tag.get('class', [])).lower())
-                    )
-                    for c in cookie_divs:
-                        c.decompose()  # usuwa element z drzewa
-
-                wx.CallAfter(self.render_content, soup)
-
-                self.loading = False
-                wx.CallAfter(self.timer.Stop)
-                wx.CallAfter(self.progress.SetValue, 100)
-                wx.CallAfter(self.statusbar.SetStatusText, _("Strona załadowana."))
-                threading.Thread(target=play_sound, args=('ding.ogg',), daemon=True).start()
-
-                if self.settings.getboolean('announcements', 'loading_messages'):
-                    threading.Thread(target=speak, args=(_("Załadowano stronę"),), daemon=True).start()
-
-                title_tag = soup.find('title')
-                if title_tag:
-                    title = title_tag.get_text()
-                else:
-                    title = url
-                wx.CallAfter(self.SetTitle, f"{title} - tBrowser")
-                wx.CallAfter(self.browser.SetFocus)
-
-                if self.settings.getboolean('announcements', 'announce_page_summary'):
-                    wx.CallAfter(self.DisplayPageInfo)
-            except Exception as e:
-                print(_("Błąd podczas ładowania strony: {}").format(e))
-                wx.CallAfter(self.statusbar.SetStatusText, _("Błąd podczas ładowania strony."))
-                self.loading = False
-                wx.CallAfter(self.timer.Stop)
-
-        threading.Thread(target=load_content, daemon=True).start()
-
-    def render_content(self, soup):
-        self.browser.Freeze()
-        self.browser.Clear()
-        self.interactive_elements = []
-
-        # Ignorowane tagi, które nie powinny być renderowane
-        ignored_tags = ['script', 'style', 'meta', 'link', 'head']
-        for tag in soup.find_all(ignored_tags):
-            tag.decompose()
-
-        body = soup.find('body')
-        if body:
-            self.parse_element(body)
-
-        self.browser.Thaw()
-
-    def parse_element(self, element):
-        for child in element.children:
-            if isinstance(child, NavigableString):
-                text = child.strip()
-                if text:
-                    self.browser.AppendText(text + ' ')
-            elif isinstance(child, Tag):
-                # Elementy blokowe, które wymagają nowej linii przed i po
-                if child.name in ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'form', 'table', 'tr', 'th', 'td']:
-                    self.browser.AppendText('\n')
-                    self.parse_element(child)
-                    self.browser.AppendText('\n')
-                elif child.name == 'a':
-                    link_label = child.get_text(strip=True) or child.get('href', '')
-                    start = self.browser.GetLastPosition()
-                    display_text = _("Łącze: {}").format(link_label)
-                    self.browser.AppendText(display_text + ' ')
-                    end = self.browser.GetLastPosition()
-                    self.interactive_elements.append({
-                        'start': start, 'end': end, 'type': 'link',
-                        'label': link_label, 'tag': child
-                    })
-                elif child.name == 'button':
-                    button_label = child.get_text(strip=True) or child.get('value', _('Przycisk'))
-                    start = self.browser.GetLastPosition()
-                    display_text = _("Przycisk: {}").format(button_label)
-                    self.browser.AppendText(display_text + ' ')
-                    end = self.browser.GetLastPosition()
-                    self.interactive_elements.append({
-                        'start': start, 'end': end, 'type': 'button',
-                        'label': button_label, 'tag': child
-                    })
-                elif child.name == 'input':
-                    self.parse_input_tag(child)
-                elif child.name == 'textarea':
-                    self.parse_textarea_tag(child)
-                elif child.name == 'br':
-                    self.browser.AppendText('\n')
-                else:
-                    # Inne tagi traktujemy jako liniowe
-                    self.parse_element(child)
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent):
@@ -816,7 +426,7 @@ class SettingsDialog(wx.Dialog):
         interface_sizer = wx.StaticBoxSizer(interface_box, wx.VERTICAL)
 
         view_mode_label = wx.StaticText(panel, label=_("Wybierz tryb przeglądania strony:"))
-        self.view_mode_choice = wx.Choice(panel, 
+        self.view_mode_choice = wx.Choice(panel,
             choices=[_("Widok sieciowy (edge)"), _("Tryb wirtualnego bufora")])
         current_mode = self.settings['interface'].get('view_mode', 'edge')
         if current_mode == 'edge':
@@ -827,11 +437,10 @@ class SettingsDialog(wx.Dialog):
         interface_sizer.Add(view_mode_label, flag=wx.ALL, border=5)
         interface_sizer.Add(self.view_mode_choice, flag=wx.ALL | wx.EXPAND, border=5)
 
-        # Nowa grupa "Prywatność"
+        # Grupa "Prywatność"
         privacy_box = wx.StaticBox(panel, label=_("Prywatność"))
         privacy_sizer = wx.StaticBoxSizer(privacy_box, wx.VERTICAL)
 
-        # Checkbox do blokowania komunikatów o cookies
         self.block_cookies_cb = wx.CheckBox(panel, label=_("Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"))
         self.block_cookies_cb.SetValue(self.settings.getboolean('privacy', 'block_cookie_banners'))
 
@@ -847,14 +456,13 @@ class SettingsDialog(wx.Dialog):
         save_btn.Bind(wx.EVT_BUTTON, self.OnSave)
         cancel_btn.Bind(wx.EVT_BUTTON, self.OnCancel)
 
-        # Układ w oknie ustawień
         vbox.Add(announcement_sizer, flag=wx.ALL | wx.EXPAND, border=10)
         vbox.Add(interface_sizer, flag=wx.ALL | wx.EXPAND, border=10)
         vbox.Add(privacy_sizer, flag=wx.ALL | wx.EXPAND, border=10)
         vbox.Add(btn_sizer, flag=wx.ALIGN_CENTER)
 
         panel.SetSizer(vbox)
-        self.SetSize((400, 400))
+        self.SetSize((400, 420))
         self.Centre()
         _apply_skin_to_tree(self)
 
@@ -867,18 +475,19 @@ class SettingsDialog(wx.Dialog):
         else:
             self.settings['interface']['view_mode'] = 'virtual_buffer'
 
-        # Zapisujemy ustawienie dotyczące plików cookie:
         self.settings['privacy']['block_cookie_banners'] = str(self.block_cookies_cb.GetValue())
 
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as configfile:
-            self.settings.write(configfile)
+        save_config()
 
-        wx.MessageBox(_("Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować zmiany."),
-                      _("Informacja"), wx.OK | wx.ICON_INFORMATION)
+        wx.MessageBox(
+            _("Ustawienia zostały zapisane. Tryb przeglądania zostanie zastosowany dla nowo otwieranych kart; "
+              "pozostałe ustawienia obowiązują od razu."),
+            _("Informacja"), wx.OK | wx.ICON_INFORMATION)
         self.EndModal(wx.ID_OK)
 
     def OnCancel(self, event):
         self.EndModal(wx.ID_CANCEL)
+
 
 if __name__ == '__main__':
     app = wx.App()

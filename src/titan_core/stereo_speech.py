@@ -2363,7 +2363,11 @@ class StereoSpeech:
             if _seq is not None and _seq != self._speak_seq:
                 return
 
-            self.stop()
+            # invalidate_pending=False: this call already holds a still-valid
+            # _seq (just checked above); a bare stop() here only needs to clear
+            # out whatever previous utterance is still on the channel, not
+            # invalidate this in-progress, still-current one.
+            self.stop(invalidate_pending=False)
             self.is_speaking = True
 
             # In 3D mode we must always generate audio to memory so it can be
@@ -2449,7 +2453,9 @@ class StereoSpeech:
                     if _seq is not None and _seq != self._speak_seq:
                         return
 
-                    self.stop()  # Stop any playback that started while unlocked
+                    # invalidate_pending=False: see the comment on the sibling
+                    # self.stop() call above -- this _seq is still valid.
+                    self.stop(invalidate_pending=False)  # Stop any playback that started while unlocked
                     self.is_speaking = True
 
                     if not audio:
@@ -2517,7 +2523,8 @@ class StereoSpeech:
                                 pass
                         return
 
-                    self.stop()
+                    # invalidate_pending=False: _seq just re-checked as valid.
+                    self.stop(invalidate_pending=False)
                     self.is_speaking = True
 
                     if not temp_file:
@@ -2570,7 +2577,8 @@ class StereoSpeech:
                             if _seq is not None and _seq != self._speak_seq:
                                 return
 
-                            self.stop()
+                            # invalidate_pending=False: _seq just re-checked as valid.
+                            self.stop(invalidate_pending=False)
                             self.is_speaking = True
 
                         if not audio:
@@ -2791,7 +2799,10 @@ class StereoSpeech:
         # Signal current speech to stop immediately (without waiting for the lock):
         # sets is_speaking=False, kills EXE subprocess, cancels DLL, stops pygame channel.
         # This unblocks any thread stuck in communicate() or espeak_Synchronize().
-        self.stop()
+        # invalidate_pending=False: my_seq was JUST bumped-and-captured above --
+        # bumping again here would immediately supersede this very call before
+        # speak_thread below ever runs.
+        self.stop(invalidate_pending=False)
 
         def speak_thread():
             # If a newer message arrived while we were waiting, skip this one
@@ -2803,9 +2814,31 @@ class StereoSpeech:
         thread.daemon = True
         thread.start()
     
-    def stop(self):
-        """Stops current TTS speech safely."""
+    def stop(self, invalidate_pending=True):
+        """Stops current TTS speech safely.
+
+        ``invalidate_pending`` (default True) also bumps ``_speak_seq`` so any
+        in-flight ``speak``/``speak_async``/``speak_concat`` worker thread's own
+        freshness check (``if my_seq != self._speak_seq``) trips at its next
+        checkpoint and it stops producing MORE audio, instead of this call only
+        killing the channel that's playing RIGHT NOW. Without this, an external
+        "stop everything" call (e.g. the keyboard-hook's Ctrl-to-silence in
+        Titan Access, via SpeechAdapter.stop()) could halt the current segment
+        yet a still-running speak_concat worker -- past its own freshness check
+        already -- kept right on synthesizing and queuing/playing the NEXT
+        segments of the very announcement that was just interrupted.
+
+        Pass ``invalidate_pending=False`` from *within* this same synth/
+        playback pipeline, where the caller already captured its OWN valid
+        sequence number and is calling this only to clear out the PREVIOUS
+        utterance before proceeding -- bumping here would immediately
+        self-invalidate that in-progress, still-current call.
+        """
         try:
+            if invalidate_pending:
+                with self._seq_lock:
+                    self._speak_seq += 1
+
             self.is_speaking = False
 
             # Stop eSpeak DLL (always cancel - synthesis may be in progress even if not "playing")
@@ -2818,8 +2851,16 @@ class StereoSpeech:
             # Stop current TTS pygame channel
             if hasattr(self, 'current_tts_channel') and self.current_tts_channel:
                 try:
-                    if self.current_tts_channel.get_busy():
-                        self.current_tts_channel.stop()
+                    ch = self.current_tts_channel
+                    ch.stop()
+                    # Halting a channel with a segment queued via Channel.queue()
+                    # (see speak_concat's pipeline) makes SDL_mixer auto-advance
+                    # to it -- its "channel finished" callback can't tell a
+                    # manual stop from natural completion, so the FIRST stop()
+                    # above can actually start the queued segment playing. Stop
+                    # again to also kill that auto-started segment before it
+                    # becomes audible (harmless no-op if nothing is playing).
+                    ch.stop()
                 except (AttributeError, Exception) as e:
                     print(f"[StereoSpeech] Error stopping TTS channel: {e}")
                 finally:
@@ -2895,7 +2936,10 @@ class StereoSpeech:
         with self._seq_lock:
             self._speak_seq += 1
             my_seq = self._speak_seq
-        self.stop()
+        # invalidate_pending=False: my_seq was JUST bumped-and-captured above --
+        # bumping again here would immediately supersede this very call before
+        # worker() below ever runs.
+        self.stop(invalidate_pending=False)
         # Mark speaking up front so is_speaking stays True through the (brief)
         # upfront synthesis, not just during playback -- otherwise a caller
         # polling between speak_concat() and the first audio would see "idle".

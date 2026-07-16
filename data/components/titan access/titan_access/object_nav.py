@@ -44,7 +44,20 @@ class ObjectNavigator:
 
     # ------------------------------------------------------------------ #
     def navigate(self, direction):
-        """Perform *direction* navigation. Returns True if handled."""
+        """Swallow the key immediately and perform *direction* navigation on the
+        background thread. Always returns True (handled) -- object-nav keys are
+        always ours to swallow, and the actual work is a chain of live UIA COM
+        calls (sibling/parent/child walks, activation patterns) that must never
+        run on the keyboard-hook thread (it would stall WH_KEYBOARD_LL, the same
+        class of bug once caused by blocking caret reads there). Queued via
+        engine.submit_action (FIFO, not the caret-read "latest wins" slot) since
+        each step's result depends on the position the previous step left."""
+        self.engine.submit_action(lambda: self._navigate_now(direction))
+        return True
+
+    def _navigate_now(self, direction):
+        """The actual navigation work (see :meth:`navigate`); runs on the
+        engine's background thread."""
         native = self._current_native()
         if direction == "current":
             self.engine.announce_object(self.engine.current_object,

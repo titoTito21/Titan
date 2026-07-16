@@ -33,6 +33,7 @@ Keyboard callbacks the hook invokes (return True to swallow the key):
 
 import ctypes
 import os
+import queue
 import threading
 import time
 from typing import List, Optional, Tuple
@@ -127,6 +128,11 @@ class TitanAccessEngine:
         self._bg_stop = False       # a stop-speech request is pending
         self._bg_alive = False
         self._bg_thread: Optional[threading.Thread] = None
+        # Ordered (FIFO) background jobs -- e.g. object-navigation steps, whose
+        # result depends on the position left by the PREVIOUS step, so (unlike
+        # _bg_read's "latest wins" slot) rapid repeats must run every queued
+        # step in order rather than collapsing to the latest.
+        self._action_queue: "queue.Queue" = queue.Queue()
 
         # Host-app announcement hooks (TCE pushes these for widgets whose meaning
         # UIA cannot convey -- the virtual tab bar, wx.CheckListBox check state).
@@ -520,6 +526,17 @@ class TitanAccessEngine:
                     fn()
                 except Exception as e:
                     print(f"[TitanAccess] bg read error: {e}")
+            # Drain the ordered action queue (object-nav steps, ...) in FIFO
+            # order -- every queued job runs, none are dropped/collapsed.
+            while True:
+                try:
+                    action = self._action_queue.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    action()
+                except Exception as e:
+                    print(f"[TitanAccess] bg action error: {e}")
         try:
             ctypes.windll.ole32.CoUninitialize()
         except Exception:
@@ -535,6 +552,14 @@ class TitanAccessEngine:
     def request_stop_speech(self):
         """Ask the background thread to stop speech (safe from the hook thread)."""
         self._bg_stop = True
+        self._bg_event.set()
+
+    def submit_action(self, fn):
+        """Queue an ordered (FIFO) background job -- e.g. an object-navigation
+        step. Every queued job runs, in order, on the background thread; use
+        this (not :meth:`submit_read`) whenever a job's result depends on the
+        one before it, so rapid repeats can never skip/reorder a step."""
+        self._action_queue.put(fn)
         self._bg_event.set()
 
     # ==================================================================== #

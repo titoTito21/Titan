@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-23 08:38+0100\n"
+"POT-Creation-Date: 2026-07-13 13:17+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,235 +17,405 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: data/applications/tWeb/web.py:115
+#: bookmarks.py:29
 #, python-brace-format
-msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgid "Nie można zapisać zakładek: {}"
 msgstr ""
 
-#: data/applications/tWeb/web.py:121
-#, python-brace-format
-msgid "Nie można odtworzyć dźwięku: {}"
+#: bookmarks.py:58
+msgid "Zakładki"
 msgstr ""
 
-#: data/applications/tWeb/web.py:128
-msgid "Pobrane pliki"
+#: bookmarks.py:65
+msgid "Zapisane zakładki:"
 msgstr ""
 
-#: data/applications/tWeb/web.py:135
-msgid "Lista plików pobranych przez tBrowser:"
+#: browser_tab.py:28 web.py:72 web.py:252
+msgid "Nowa karta"
 msgstr ""
 
-#: data/applications/tWeb/web.py:196
-msgid "tBrowser"
-msgstr ""
-
-#: data/applications/tWeb/web.py:207
-msgid "Wstecz"
-msgstr ""
-
-#: data/applications/tWeb/web.py:208
-msgid "Dalej"
-msgstr ""
-
-#: data/applications/tWeb/web.py:209
-msgid "Odśwież"
-msgstr ""
-
-#: data/applications/tWeb/web.py:211
-msgid "Przycisk Wstecz"
-msgstr ""
-
-#: data/applications/tWeb/web.py:212
-msgid "Przycisk Dalej"
-msgstr ""
-
-#: data/applications/tWeb/web.py:213
-msgid "Przycisk Odśwież"
-msgstr ""
-
-#: data/applications/tWeb/web.py:216
-msgid "Wpisz adres lub wyszukaj w Google"
-msgstr ""
-
-#: data/applications/tWeb/web.py:285
-msgid "Ustawienia..."
-msgstr ""
-
-#: data/applications/tWeb/web.py:286
-msgid "Aplikacja"
-msgstr ""
-
-#: data/applications/tWeb/web.py:301
-msgid "Nawigacja wstecz nie jest dostępna w trybie wirtualnego bufora."
-msgstr ""
-
-#: data/applications/tWeb/web.py:302 data/applications/tWeb/web.py:310
-#: data/applications/tWeb/web.py:461 data/applications/tWeb/web.py:835
-msgid "Informacja"
-msgstr ""
-
-#: data/applications/tWeb/web.py:309
-msgid "Nawigacja do przodu nie jest dostępna w trybie wirtualnego bufora."
-msgstr ""
-
-#: data/applications/tWeb/web.py:321 data/applications/tWeb/web.py:328
-#: data/applications/tWeb/web.py:643
+#: browser_tab.py:200 web.py:275
 msgid "Ładowanie strony..."
 msgstr ""
 
-#: data/applications/tWeb/web.py:332 data/applications/tWeb/web.py:670
-msgid "Strona załadowana."
-msgstr ""
-
-#: data/applications/tWeb/web.py:341
+#: browser_tab.py:232
 #, python-brace-format
 msgid "Załadowano stronę {}"
 msgstr ""
 
-#: data/applications/tWeb/web.py:461
-#, python-brace-format
-msgid "Kliknięto przycisk: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:499 data/applications/tWeb/web.py:507
-#, python-brace-format
-msgid "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
-msgstr ""
-
-#: data/applications/tWeb/web.py:547
-#, python-brace-format
-msgid "Pole edycji: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:549 data/applications/tWeb/web.py:581
-#, python-brace-format
-msgid ", Wartość: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:555
-msgid "Przycisk bez etykiety"
-msgstr ""
-
-#: data/applications/tWeb/web.py:556 data/applications/tWeb/web.py:735
-#, python-brace-format
-msgid "Przycisk: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:561 data/applications/tWeb/web.py:638
-msgid "zaznaczone"
-msgstr ""
-
-#: data/applications/tWeb/web.py:561 data/applications/tWeb/web.py:638
-msgid "niezaznaczone"
-msgstr ""
-
-#: data/applications/tWeb/web.py:563
-#, python-brace-format
-msgid "Pole wyboru: {} ({})"
-msgstr ""
-
-#: data/applications/tWeb/web.py:565
-#, python-brace-format
-msgid "Przycisk radiowy: {} ({})"
-msgstr ""
-
-#: data/applications/tWeb/web.py:579
-#, python-brace-format
-msgid "Pole tekstowe: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:598
-#, python-brace-format
-msgid "Wprowadź tekst dla: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:598
-msgid "Edycja pola"
-msgstr ""
-
-#: data/applications/tWeb/web.py:609
-#, python-brace-format
-msgid "Wpisano: {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:639
-#, python-brace-format
-msgid "{} {}"
-msgstr ""
-
-#: data/applications/tWeb/web.py:674
-msgid "Załadowano stronę"
-msgstr ""
-
-#: data/applications/tWeb/web.py:687
+#: browser_tab.py:299
 #, python-brace-format
 msgid "Błąd podczas ładowania strony: {}"
 msgstr ""
 
-#: data/applications/tWeb/web.py:688
+#: browser_tab.py:300
 msgid "Błąd podczas ładowania strony."
 msgstr ""
 
-#: data/applications/tWeb/web.py:725
+#: browser_tab.py:326
+msgid "Załadowano stronę"
+msgstr ""
+
+#: browser_tab.py:351 browser_tab.py:359
+#, python-brace-format
+msgid "Strona zawiera {} pól formularza, {} łączy, {} przycisków i {} wierszy."
+msgstr ""
+
+#: browser_tab.py:392 browser_tab.py:506
+#, python-brace-format
+msgid "Pole edycji: {}"
+msgstr ""
+
+#: browser_tab.py:394 browser_tab.py:425 browser_tab.py:508 browser_tab.py:514
+#, python-brace-format
+msgid ", Wartość: {}"
+msgstr ""
+
+#: browser_tab.py:399
+msgid "Przycisk bez etykiety"
+msgstr ""
+
+#: browser_tab.py:400 browser_tab.py:474 browser_tab.py:503
+#, python-brace-format
+msgid "Przycisk: {}"
+msgstr ""
+
+#: browser_tab.py:405 browser_tab.py:517 browser_tab.py:628
+msgid "zaznaczone"
+msgstr ""
+
+#: browser_tab.py:405 browser_tab.py:517 browser_tab.py:628
+msgid "niezaznaczone"
+msgstr ""
+
+#: browser_tab.py:407
+#, python-brace-format
+msgid "Pole wyboru: {} ({})"
+msgstr ""
+
+#: browser_tab.py:409
+#, python-brace-format
+msgid "Przycisk radiowy: {} ({})"
+msgstr ""
+
+#: browser_tab.py:423 browser_tab.py:512
+#, python-brace-format
+msgid "Pole tekstowe: {}"
+msgstr ""
+
+#: browser_tab.py:464 browser_tab.py:501
 #, python-brace-format
 msgid "Łącze: {}"
 msgstr ""
 
-#: data/applications/tWeb/web.py:733
+#: browser_tab.py:472
 msgid "Przycisk"
 msgstr ""
 
-#: data/applications/tWeb/web.py:754
+#: browser_tab.py:518
+msgid "Pole wyboru"
+msgstr ""
+
+#: browser_tab.py:518
+msgid "Przycisk radiowy"
+msgstr ""
+
+#: browser_tab.py:527
+msgid "Brak elementów interaktywnych na stronie."
+msgstr ""
+
+#: browser_tab.py:589
+#, python-brace-format
+msgid "Wprowadź tekst dla: {}"
+msgstr ""
+
+#: browser_tab.py:589
+msgid "Edycja pola"
+msgstr ""
+
+#: browser_tab.py:601
+#, python-brace-format
+msgid "Wpisano: {}"
+msgstr ""
+
+#: browser_tab.py:629
+#, python-brace-format
+msgid "{} {}"
+msgstr ""
+
+#: browser_tab.py:637
+msgid "Ten przycisk nie należy do żadnego formularza."
+msgstr ""
+
+#: browser_tab.py:638 web.py:483
+msgid "Informacja"
+msgstr ""
+
+#: browser_tab.py:669
+msgid "Wysyłanie formularza..."
+msgstr ""
+
+#: browser_tab.py:679
+#, python-brace-format
+msgid "Błąd podczas wysyłania formularza: {}"
+msgstr ""
+
+#: browser_tab.py:680
+msgid "Błąd podczas wysyłania formularza."
+msgstr ""
+
+#: common.py:88
+#, python-brace-format
+msgid "Nie znaleziono pliku dźwiękowego: {}"
+msgstr ""
+
+#: common.py:94
+#, python-brace-format
+msgid "Nie można odtworzyć dźwięku: {}"
+msgstr ""
+
+#: downloads.py:47
+#, python-brace-format
+msgid "Nie można zapisać listy pobrań: {}"
+msgstr ""
+
+#: downloads.py:126
+#, python-brace-format
+msgid "Pobrano plik: {}"
+msgstr ""
+
+#: downloads.py:133
+#, python-brace-format
+msgid "Błąd pobierania: {}"
+msgstr ""
+
+#: downloads.py:144
+msgid "Pobieranie"
+msgstr ""
+
+#: downloads.py:144
+#, python-brace-format
+msgid "Pobieranie {}"
+msgstr ""
+
+#: downloads.py:175
+#, python-brace-format
+msgid "Nie można otworzyć pliku: {}"
+msgstr ""
+
+#: downloads.py:175
+msgid "Błąd"
+msgstr ""
+
+#: downloads.py:185
+msgid "Pobrane pliki"
+msgstr ""
+
+#: downloads.py:191
+msgid "Lista plików pobranych przez tBrowser:"
+msgstr ""
+
+#: downloads.py:207
+msgid "pobieranie..."
+msgstr ""
+
+#: downloads.py:208
+msgid "ukończono"
+msgstr ""
+
+#: downloads.py:209
+msgid "błąd"
+msgstr ""
+
+#: downloads.py:231
+msgid "Plik nie został jeszcze pobrany."
+msgstr ""
+
+#: findbar.py:25
+msgid "Uwzględnij wielkość liter"
+msgstr ""
+
+#: findbar.py:26
+msgid "Całe słowo"
+msgstr ""
+
+#: findbar.py:27
+msgid "Poprzedni"
+msgstr ""
+
+#: findbar.py:28
+msgid "Następny"
+msgstr ""
+
+#: findbar.py:29
+msgid "Zamknij"
+msgstr ""
+
+#: findbar.py:31
+msgid "Znajdź:"
+msgstr ""
+
+#: history.py:30
+#, python-brace-format
+msgid "Nie można zapisać historii: {}"
+msgstr ""
+
+#: history.py:69
+msgid "Historia przeglądania"
+msgstr ""
+
+#: history.py:76
+msgid "Odwiedzone strony:"
+msgstr ""
+
+#: history.py:83
+msgid "Wyczyść historię"
+msgstr ""
+
+#: web.py:41
+msgid "tBrowser"
+msgstr ""
+
+#: web.py:52
+msgid "Wstecz"
+msgstr ""
+
+#: web.py:53
+msgid "Dalej"
+msgstr ""
+
+#: web.py:54
+msgid "Odśwież"
+msgstr ""
+
+#: web.py:58 web.py:333
+msgid "Dodaj zakładkę"
+msgstr ""
+
+#: web.py:60
+msgid "Przycisk Wstecz"
+msgstr ""
+
+#: web.py:61
+msgid "Przycisk Dalej"
+msgstr ""
+
+#: web.py:62
+msgid "Przycisk Odśwież"
+msgstr ""
+
+#: web.py:65
+msgid "Wpisz adres lub wyszukaj w Google"
+msgstr ""
+
+#: web.py:67
+msgid "Pomniejsz"
+msgstr ""
+
+#: web.py:68 web.py:342
+msgid "100%"
+msgstr ""
+
+#: web.py:69
+msgid "Powiększ"
+msgstr ""
+
+#: web.py:70
+msgid "Resetuj powiększenie"
+msgstr ""
+
+#: web.py:178
+msgid "Nowa karta\tCtrl+T"
+msgstr ""
+
+#: web.py:179
+msgid "Zamknij kartę\tCtrl+W"
+msgstr ""
+
+#: web.py:181
+msgid "Historia...\tCtrl+H"
+msgstr ""
+
+#: web.py:182
+msgid "Zakładki...\tCtrl+B"
+msgstr ""
+
+#: web.py:183
+msgid "Pobrane pliki...\tCtrl+J"
+msgstr ""
+
+#: web.py:185
+msgid "Ustawienia..."
+msgstr ""
+
+#: web.py:186
+msgid "Aplikacja"
+msgstr ""
+
+#: web.py:279
+msgid "Strona załadowana."
+msgstr ""
+
+#: web.py:292
+#, python-brace-format
+msgid "Pobieranie: {}"
+msgstr ""
+
+#: web.py:333
+msgid "Usuń zakładkę"
+msgstr ""
+
+#: web.py:403
 msgid "Ustawienia tBrowser"
 msgstr ""
 
-#: data/applications/tWeb/web.py:761
+#: web.py:410
 msgid "Oznajmianie"
 msgstr ""
 
-#: data/applications/tWeb/web.py:764
+#: web.py:413
 msgid "Oznajmiaj podsumowanie strony"
 msgstr ""
 
-#: data/applications/tWeb/web.py:767
+#: web.py:416
 msgid "Komunikaty o ładowaniu strony"
 msgstr ""
 
-#: data/applications/tWeb/web.py:774
+#: web.py:423
 msgid "Interfejs"
 msgstr ""
 
-#: data/applications/tWeb/web.py:777
+#: web.py:426
 msgid "Wybierz tryb przeglądania strony:"
 msgstr ""
 
-#: data/applications/tWeb/web.py:779
+#: web.py:428
 msgid "Widok sieciowy (edge)"
 msgstr ""
 
-#: data/applications/tWeb/web.py:779
+#: web.py:428
 msgid "Tryb wirtualnego bufora"
 msgstr ""
 
-#: data/applications/tWeb/web.py:790
+#: web.py:439
 msgid "Prywatność"
 msgstr ""
 
-#: data/applications/tWeb/web.py:794
+#: web.py:442
 msgid "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)"
 msgstr ""
 
-#: data/applications/tWeb/web.py:801
+#: web.py:449
 msgid "Zapisz"
 msgstr ""
 
-#: data/applications/tWeb/web.py:802
+#: web.py:450
 msgid "Anuluj"
 msgstr ""
 
-#: data/applications/tWeb/web.py:834
+#: web.py:481
 msgid ""
-"Ustawienia zostały zapisane. Uruchom ponownie aplikację, aby zastosować "
-"zmiany."
+"Ustawienia zostały zapisane. Tryb przeglądania zostanie zastosowany dla "
+"nowo otwieranych kart; pozostałe ustawienia obowiązują od razu."
 msgstr ""
 

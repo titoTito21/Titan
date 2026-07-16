@@ -92,6 +92,13 @@ def _is_fs_root(path):
     return os.path.dirname(path) == path
 
 
+_AUDIO_PREVIEW_EXTENSIONS = ('.mp3', '.wav', '.ogg', '.wma', '.flac', '.aac', '.m4a')
+
+
+def _is_audio_file(name):
+    return os.path.splitext(name)[1].lower() in _AUDIO_PREVIEW_EXTENSIONS
+
+
 def get_app_sfx_path():
     return get_sfx_directory()
 
@@ -116,6 +123,7 @@ class FileManager(wx.Frame):
         self.settings = SettingsManager()
         self.clipboard = []
         self.active_panel = None
+        self._preview_engine = None
 
         # Set initial path or default to home
         default_path = initial_path if initial_path and os.path.exists(initial_path) else os.path.expanduser("~")
@@ -253,9 +261,44 @@ class FileManager(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_select_all, id=wx.ID_SELECTALL)
         self.Bind(wx.EVT_MENU, self.on_delete, id=wx.ID_DELETE)
         self.Bind(wx.EVT_MENU, self.on_rename, id=ID_RENAME)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
 
         self.update_window_title()
         self.Show()
+
+    def on_close(self, event):
+        if self._preview_engine:
+            try:
+                self._preview_engine.release()
+            except Exception:
+                pass
+        event.Skip()
+
+    def _get_preview_engine(self):
+        """Lazily load tMedia's headless MediaEngine (data/applications/tMedia/media_engine.py)
+        for the Space-bar audio preview below. No wx UI, no TCE speech, no sound
+        effects -- deliberately bare so TFM doesn't need its own VLC dependency
+        or inherit tMedia's announcements/sound theme just to preview a file."""
+        if self._preview_engine is None:
+            try:
+                tmedia_dir = os.path.normpath(os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), '..', 'tMedia'))
+                if tmedia_dir not in sys.path:
+                    sys.path.insert(0, tmedia_dir)
+                from media_engine import MediaEngine
+                self._preview_engine = MediaEngine()
+            except Exception:
+                self._preview_engine = False
+        return self._preview_engine or None
+
+    def toggle_audio_preview(self, full_path):
+        """Space on an audio file: play/pause it silently in place, no window,
+        no TTS, no sound effects -- just the file's own audio."""
+        engine = self._get_preview_engine()
+        if engine is None:
+            play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
+            return
+        engine.toggle_preview(full_path)
 
     def _setup_voiceover_names(self):
         """Set VoiceOver-readable names on interactive controls (macOS only)."""
@@ -824,7 +867,9 @@ class FileManager(wx.Frame):
             if item_index != -1:
                 name = ctrl.GetItemText(item_index)
                 if name != _('This folder is empty'):
-                    if name in self.selected_items:
+                    if _is_audio_file(name) and not event.ShiftDown():
+                        self.toggle_audio_preview(os.path.join(self.current_path, name))
+                    elif name in self.selected_items:
                         self.selected_items.remove(name)
                         ctrl.Select(item_index, 0)
                         self.announce(_("Deselected: {}. Total: {}").format(name, len(self.selected_items)))
@@ -1123,15 +1168,19 @@ class FileManager(wx.Frame):
             if item_index != -1:
                 name = ctrl.GetItemText(item_index)
                 if name != _('This folder is empty'):
-                    selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
-                    if name in selected_items:
-                        selected_items.remove(name)
-                        ctrl.Select(item_index, 0)
-                        self.announce(_("Deselected: {}. Total: {}").format(name, len(selected_items)))
+                    if _is_audio_file(name) and not event.ShiftDown():
+                        path = self.left_path if panel_side == 'left' else self.right_path
+                        self.toggle_audio_preview(os.path.join(path, name))
                     else:
-                        selected_items.add(name)
-                        ctrl.Select(item_index)
-                        self.announce(_("Selected: {}. Total: {}").format(name, len(selected_items)))
+                        selected_items = self.left_selected_items if panel_side == 'left' else self.right_selected_items
+                        if name in selected_items:
+                            selected_items.remove(name)
+                            ctrl.Select(item_index, 0)
+                            self.announce(_("Deselected: {}. Total: {}").format(name, len(selected_items)))
+                        else:
+                            selected_items.add(name)
+                            ctrl.Select(item_index)
+                            self.announce(_("Selected: {}. Total: {}").format(name, len(selected_items)))
                 else:
                     play_sound(os.path.join(get_sfx_directory(), 'error.ogg'))
                     self.announce(_("Cannot select this entry."))

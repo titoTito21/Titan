@@ -34,10 +34,14 @@ from titan_access.contracts import SpeechLike  # noqa: F401  (documents intent)
 # Map the screen-reader ``Synthesizer`` setting (PascalCase, from the C# dialog)
 # to a Titan TTS engine id where a sensible equivalent exists. Anything else is
 # passed through lower-cased; the Titan engine simply ignores unknown ids.
+# NOTE: "bestspeech" is deliberately NOT aliased here -- it is itself a real,
+# first-class TitanTTS engine id (data/titantts engines/bestspeech/__engine__.py),
+# so it must pass through unchanged. An earlier version of this table predated
+# that plugin and aliased it to "espeak", which silently hijacked every
+# set_engine("bestspeech") call (e.g. from the dial's engine-cycle gesture).
 _SYNTH_TO_ENGINE = {
     "sapi5": "sapi5",
     "onecore": "sapi5",       # nearest Windows-native equivalent
-    "bestspeech": "espeak",
 }
 
 
