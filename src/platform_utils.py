@@ -265,9 +265,27 @@ def discover_data_entries(subdir, predicate=None):
             continue
         for name in names:
             full = os.path.join(root, name)
+            entry_name = name
+            if not os.path.isdir(full):
+                # Not a directory -- could be a packaged .TCA/.TCD add-on.
+                # The package file itself stays exactly where it is (it is
+                # never deleted or converted into a directory); it's
+                # transparently extracted into a runtime cache and that
+                # cache directory is used for the rest of this call, so
+                # every existing caller/predicate keeps working unmodified.
+                try:
+                    from src.titan_core import titan_package
+                    if titan_package.is_package_file(full):
+                        entry_name = titan_package.read_header(full).id
+                        full = titan_package.ensure_extracted(full)
+                    else:
+                        continue
+                except Exception as e:
+                    print(f"[platform_utils] Skipping unreadable package '{full}': {e}")
+                    continue
             try:
-                if pred(name, full):
-                    found[name] = full
+                if pred(entry_name, full):
+                    found[entry_name] = full
             except Exception:
                 continue
     return found

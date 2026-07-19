@@ -405,7 +405,7 @@ class TitanNetHTTPServer:
         # 4 MB read chunks: large enough that per-chunk overhead is negligible
         # for a 1GB file, small enough to keep memory flat.
         CHUNK_SIZE = 4 * 1024 * 1024
-        ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z')
+        ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z', '.tca', '.tcd')
 
         temp_path = None
         try:
@@ -507,7 +507,12 @@ class TitanNetHTTPServer:
             # Validate category
             valid_categories = [
                 'application', 'component', 'sound_theme',
-                'game', 'tce_package', 'language_pack'
+                'game', 'tce_package', 'language_pack',
+                'status_bar_applet',  # already offered by the desktop upload
+                                       # dialog but was missing here -- fixed
+                                       # alongside the .tca/.tcd additions below
+                'launcher', 'im_module', 'gamepad_mode',
+                'tts_engine', 'widget',
             ]
             if metadata['category'] not in valid_categories:
                 return web.json_response({

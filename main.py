@@ -248,7 +248,7 @@ from src.controller.controller_ui import initialize_controller_system, shutdown_
 from src.controller.controller_modes import initialize_controller_modes
 from src.ui.notificationcenter import create_notifications_file, NOTIFICATIONS_FILE_PATH, start_monitoring
 from src.ui.shutdown_question import show_shutdown_dialog
-from src.titan_core.app_manager import find_application_by_shortname, open_application
+from src.titan_core.app_manager import find_application_by_shortname, open_application, read_app_info
 from src.titan_core.game_manager import get_games, open_game, get_games_by_platform
 from src.titan_core.component_manager import ComponentManager
 from src.ui.menu import MenuBar
@@ -518,6 +518,16 @@ def main(command_line_args=None):
             except Exception as e:
                 print(f"Error applying Titan TTS SAPI registration: {e}")
 
+            # .TCA/.TCD file associations -- HKCU only, no admin/UAC needed,
+            # so unlike SAPI registration this can just run silently every
+            # startup (idempotent, cheap).
+            try:
+                from src.system.file_association import register as register_file_association, is_registered as file_association_registered
+                if not file_association_registered():
+                    register_file_association()
+            except Exception as e:
+                print(f"Error registering .tca/.tcd file associations: {e}")
+
             # Install Copilot key hook on the main thread (LL hook binds to it).
             # Done here, before GUI/IUI startup, so the hook never blocks them.
             try:
@@ -585,6 +595,33 @@ def main(command_line_args=None):
             sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         except Exception as e:
             print(f"Error adding to sys.path: {e}")
+
+        # .TCA/.TCD package installation (e.g. Titan was launched via the
+        # Windows Explorer file association for a double-clicked package).
+        # Installs into the per-user overlay data directory, then hands off
+        # to the app-launch path below (by filling in command_line_args.
+        # application) or launches a game directly. Other add-on kinds have
+        # no direct "launch" concept -- installing is enough, normal startup
+        # further down picks them up like any other already-installed add-on.
+        try:
+            if command_line_args and getattr(command_line_args, 'install_package', None):
+                from src.titan_core.package_install import install_package
+                from src.titan_core import titan_package as _titan_package
+                installed = install_package(command_line_args.install_package)
+                if installed and installed.kind == _titan_package.KIND_APP:
+                    app_info = read_app_info(installed.extracted_dir, lang)
+                    if app_info and app_info.get('shortname'):
+                        command_line_args.application = app_info['shortname']
+                        command_line_args.file_path = None
+                elif installed and installed.kind == _titan_package.KIND_GAME:
+                    from src.titan_core.game_manager import read_game_info
+                    game_info = read_game_info(installed.extracted_dir)
+                    if game_info:
+                        game_info['platform'] = game_info.get('platform', 'Titan-Games')
+                        open_game(game_info)
+                        return True
+        except Exception as e:
+            print(f"Error installing package: {e}")
 
         # Sprawdzenie argumentów wiersza poleceń
         try:
@@ -1090,6 +1127,11 @@ if __name__ == "__main__":
     parser.add_argument('--profile', action='store_true',
                        help='Run under cProfile and write a .pstats dump on exit '
                             '(optimization profiling - see src/scripts/profile_hotpaths.py)')
+    parser.add_argument('--install-package', default=None, metavar='PATH',
+                       help='Install a .tca/.tcd package file into the user data '
+                            'directory, then launch it (apps/games) or surface it '
+                            '(other add-on kinds). Used by the Explorer file '
+                            'association for double-clicked packages.')
     args = parser.parse_args()
 
     # Optimization profiling (Phase 0 of the code-optimization plan).

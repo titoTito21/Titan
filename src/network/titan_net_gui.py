@@ -12,6 +12,7 @@ from src.network.titan_net import TitanNetClient
 import os
 import tempfile
 from src.titan_core.sound import play_sound, play_sound_file, initialize_sound
+from src.titan_core import titan_package
 
 # Guarantee the pygame mixer is initialized even when Titan-Net is opened
 # from a context where the main TCE GUI never ran (launcher mode, direct
@@ -2906,6 +2907,7 @@ class TitanNetMainWindow(wx.Frame):
         repo_items = [
             _("Browse Packages"),
             _("Upload Package"),
+            _("Package Folder and Upload"),
             _("Search Packages"),
             _("Pending Packages (Preview)"),
         ]
@@ -3371,6 +3373,8 @@ class TitanNetMainWindow(wx.Frame):
                 self.show_browse_apps()
             elif item_text == _("Upload Package"):
                 self.show_upload_app_dialog()
+            elif item_text == _("Package Folder and Upload"):
+                self.show_package_folder_and_upload_dialog()
             elif item_text == _("Search Packages"):
                 self.show_search_apps_dialog()
             elif item_text == _("Pending Packages (Preview)"):
@@ -8562,84 +8566,183 @@ class TitanNetMainWindow(wx.Frame):
 
     # App Repository Methods
 
-    def show_upload_app_dialog(self):
-        """Dialog to upload package"""
-        # Ask for file
-        dlg = wx.FileDialog(
-            self,
-            _("Select package file (.TCEPACKAGE)"),
-            wildcard="TCE Packages (*.TCEPACKAGE)|*.TCEPACKAGE|All files (*.*)|*.*",
-            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
-        )
+    # Kind name (titan_package.KIND_NAMES values) -> repository category
+    # value. Existing category strings ('application', 'status_bar_applet',
+    # ...) predate the .TCA/.TCD format and must not change -- they're
+    # already stored against real uploaded packages. Only the newer kinds
+    # (launcher/im_module/gamepad_mode/tts_engine/widget) get fresh values.
+    _KIND_TO_REPO_CATEGORY = {
+        'app': 'application',
+        'game': 'game',
+        'component': 'component',
+        'launcher': 'launcher',
+        'im_module': 'im_module',
+        'gamepad_mode': 'gamepad_mode',
+        'tts_engine': 'tts_engine',
+        'widget': 'widget',
+        'statusbar_applet': 'status_bar_applet',
+    }
 
-        if dlg.ShowModal() == wx.ID_OK:
+    def _detect_package_kind(self, file_path):
+        """Best-effort .tca/.tcd sniff. Returns (id, category_value) or
+        (None, None) if file_path isn't a recognized Titan package."""
+        try:
+            if titan_package.is_package_file(file_path):
+                header = titan_package.read_header(file_path)
+                category = self._KIND_TO_REPO_CATEGORY.get(header.kind_name)
+                return header.id, category
+        except Exception:
+            pass
+        return None, None
+
+    def show_upload_app_dialog(self, preselected_path=None):
+        """Dialog to upload a package. If preselected_path is given (e.g.
+        from show_package_folder_and_upload_dialog), the file picker step is
+        skipped and that path is used directly."""
+        if preselected_path:
+            file_path = preselected_path
+        else:
+            dlg = wx.FileDialog(
+                self,
+                _("Select package file (.TCA/.TCD)"),
+                wildcard="Titan Packages (*.tca;*.tcd)|*.tca;*.tcd|"
+                         "TCE Packages (*.TCEPACKAGE)|*.TCEPACKAGE|"
+                         "All files (*.*)|*.*",
+                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+            )
+            if dlg.ShowModal() != wx.ID_OK:
+                dlg.Destroy()
+                return
             file_path = dlg.GetPath()
+            dlg.Destroy()
 
-            # Ask for package name
-            name_dlg = _new_text_entry_dialog(self, _("Package name:"), _("Upload Package"))
-            if name_dlg.ShowModal() == wx.ID_OK:
-                app_name = name_dlg.GetValue().strip()
+        detected_id, detected_category = self._detect_package_kind(file_path)
 
-                # Ask for description
-                desc_dlg = _new_text_entry_dialog(self, _("Description:"), _("Upload Package"))
-                if desc_dlg.ShowModal() == wx.ID_OK:
-                    description = desc_dlg.GetValue().strip()
+        # Ask for package name (pre-filled from the manifest id when detected)
+        name_dlg = _new_text_entry_dialog(
+            self, _("Package name:"), _("Upload Package"),
+            detected_id or ""
+        )
+        if name_dlg.ShowModal() == wx.ID_OK:
+            app_name = name_dlg.GetValue().strip()
 
-                    # Ask for category
-                    categories = [
-                        ("Application", "application"),
-                        ("Component", "component"),
-                        ("Sound Theme", "sound_theme"),
-                        ("Game", "game"),
-                        ("TCE Package", "tce_package"),
-                        ("Language Pack", "language_pack"),
-                        ("Status Bar Applet", "status_bar_applet")
-                    ]
-                    category_labels = [cat[0] for cat in categories]
-                    cat_dlg = wx.SingleChoiceDialog(self, _("Select category:"), _("Category"), category_labels)
-                    if cat_dlg.ShowModal() == wx.ID_OK:
-                        category = categories[cat_dlg.GetSelection()][1]  # Use server-compatible value
+            # Ask for description
+            desc_dlg = _new_text_entry_dialog(self, _("Description:"), _("Upload Package"))
+            if desc_dlg.ShowModal() == wx.ID_OK:
+                description = desc_dlg.GetValue().strip()
 
-                        # Ask for version
-                        ver_dlg = _new_text_entry_dialog(self, _("Version (e.g. 1.0.0):"), _("Version"), "1.0.0")
-                        if ver_dlg.ShowModal() == wx.ID_OK:
-                            version = ver_dlg.GetValue().strip()
+                # Ask for category (pre-selected when the file was
+                # recognized as a .tca/.tcd of a known kind)
+                categories = [
+                    ("Application", "application"),
+                    ("Game", "game"),
+                    ("Component", "component"),
+                    ("Launcher", "launcher"),
+                    ("Titan IM Module", "im_module"),
+                    ("Gamepad Mode", "gamepad_mode"),
+                    ("TTS Engine", "tts_engine"),
+                    ("Widget/Applet", "widget"),
+                    ("Status Bar Applet", "status_bar_applet"),
+                    ("Sound Theme", "sound_theme"),
+                    ("TCE Package", "tce_package"),
+                    ("Language Pack", "language_pack"),
+                ]
+                category_labels = [cat[0] for cat in categories]
+                cat_dlg = wx.SingleChoiceDialog(self, _("Select category:"), _("Category"), category_labels)
+                if detected_category:
+                    values = [cat[1] for cat in categories]
+                    if detected_category in values:
+                        cat_dlg.SetSelection(values.index(detected_category))
+                if cat_dlg.ShowModal() == wx.ID_OK:
+                    category = categories[cat_dlg.GetSelection()][1]  # Use server-compatible value
 
-                            # Upload package with a GUI progress bar.
-                            speak_titannet(_("Uploading package..."))
-                            progress = wx.ProgressDialog(
-                                _("Uploading Package"),
-                                _("Starting upload..."),
-                                maximum=100,
-                                parent=self,
-                                style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_SMOOTH
-                            )
-                            on_progress = self._make_transfer_progress(
-                                progress, _("Uploading: {percent}%"))
+                    # Ask for version
+                    ver_dlg = _new_text_entry_dialog(self, _("Version (e.g. 1.0.0):"), _("Version"), "1.0.0")
+                    if ver_dlg.ShowModal() == wx.ID_OK:
+                        version = ver_dlg.GetValue().strip()
 
-                            def upload_thread():
-                                try:
-                                    result = self.titan_client.upload_app(
-                                        file_path,
-                                        app_name,
-                                        version,
-                                        description,
-                                        category,
-                                        progress_callback=on_progress
-                                    )
-                                    wx.CallAfter(self._on_upload_done, result, progress)
-                                except Exception as e:
-                                    wx.CallAfter(self._on_upload_done,
-                                                 {"success": False, "error": str(e)}, progress)
+                        # Upload package with a GUI progress bar.
+                        speak_titannet(_("Uploading package..."))
+                        progress = wx.ProgressDialog(
+                            _("Uploading Package"),
+                            _("Starting upload..."),
+                            maximum=100,
+                            parent=self,
+                            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_SMOOTH
+                        )
+                        on_progress = self._make_transfer_progress(
+                            progress, _("Uploading: {percent}%"))
 
-                            threading.Thread(target=upload_thread, daemon=True).start()
+                        def upload_thread():
+                            try:
+                                result = self.titan_client.upload_app(
+                                    file_path,
+                                    app_name,
+                                    version,
+                                    description,
+                                    category,
+                                    progress_callback=on_progress
+                                )
+                                wx.CallAfter(self._on_upload_done, result, progress)
+                            except Exception as e:
+                                wx.CallAfter(self._on_upload_done,
+                                             {"success": False, "error": str(e)}, progress)
 
-                        ver_dlg.Destroy()
-                    cat_dlg.Destroy()
-                desc_dlg.Destroy()
-            name_dlg.Destroy()
+                        threading.Thread(target=upload_thread, daemon=True).start()
 
-        dlg.Destroy()
+                    ver_dlg.Destroy()
+                cat_dlg.Destroy()
+            desc_dlg.Destroy()
+        name_dlg.Destroy()
+
+    def show_package_folder_and_upload_dialog(self):
+        """Pick an existing add-on directory, pack it into a temp .tca/.tcd,
+        then hand off to show_upload_app_dialog for the rest of the flow."""
+        dir_dlg = wx.DirDialog(
+            self, _("Select the add-on folder to package"),
+            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST
+        )
+        if dir_dlg.ShowModal() != wx.ID_OK:
+            dir_dlg.Destroy()
+            return
+        source_dir = dir_dlg.GetPath()
+        dir_dlg.Destroy()
+
+        kind_choices = [
+            ("Application", titan_package.KIND_APP),
+            ("Game", titan_package.KIND_GAME),
+            ("Component", titan_package.KIND_COMPONENT),
+            ("Launcher", titan_package.KIND_LAUNCHER),
+            ("Titan IM Module", titan_package.KIND_IM_MODULE),
+            ("Gamepad Mode", titan_package.KIND_GAMEPAD_MODE),
+            ("TTS Engine", titan_package.KIND_TTS_ENGINE),
+            ("Widget/Applet", titan_package.KIND_WIDGET),
+            ("Status Bar Applet", titan_package.KIND_STATUSBAR_APPLET),
+        ]
+        kind_dlg = wx.SingleChoiceDialog(
+            self, _("What kind of add-on is this?"), _("Add-on Kind"),
+            [c[0] for c in kind_choices]
+        )
+        if kind_dlg.ShowModal() != wx.ID_OK:
+            kind_dlg.Destroy()
+            return
+        kind = kind_choices[kind_dlg.GetSelection()][1]
+        kind_dlg.Destroy()
+
+        try:
+            ext = titan_package.default_extension(kind)
+            base = os.path.basename(source_dir.rstrip('\\/'))
+            fd, tmp_path = tempfile.mkstemp(suffix=ext, prefix=f'{base}_')
+            os.close(fd)
+            titan_package.build_package(source_dir, tmp_path, kind)
+        except Exception as e:
+            wx.MessageBox(
+                _("Failed to package '{folder}':\n{error}").format(folder=source_dir, error=e),
+                _("Packaging Error"), wx.OK | wx.ICON_ERROR, self
+            )
+            return
+
+        self.show_upload_app_dialog(preselected_path=tmp_path)
 
     def _make_transfer_progress(self, progress, announce_template):
         """Return a thread-safe progress callback for upload/download.
