@@ -206,6 +206,47 @@ def navigate(self, direction):
     return True, current_column, total_columns
 ```
 
+## Buffer System API (Optional)
+
+Widgets run **in-process** in the host Titan. If your widget surfaces a
+stream of items the user might want to review later (alerts, feed entries,
+status changes), publish them into the Titan Buffer System so they appear
+in Titan's shared, audio-game-style review (GUI / Klango / tilde Titan UI
+overlay):
+
+```python
+from src.buffers import buffer_bus
+
+buffer_bus.push("mywidget", "alerts", text,
+                category_name="My Widget", buffer_name=_("Alerts"), kind="notification")
+```
+
+In-process, `push()` returns `True` and plays a quiet ping when the item
+lands in the buffer the user is currently reviewing; background buffers
+stay silent. `kind` is a hint (`'message'` | `'private'` | `'notification'`).
+Calls are best-effort and never raise. Most widgets do not need this — only
+add it if your widget genuinely produces reviewable items.
+
+## Packaging as `.TCD` (Optional)
+
+Instead of shipping a directory, a widget can be distributed as a single
+`.tcd` file. Purely optional and additive.
+
+```bash
+python src/scripts/pack_addon.py data/applets/my_widget --kind widget -o my_widget.tcd
+```
+
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `main.py`/`applet.json` (or legacy `init.py`) still resolve the same
+  way once extracted.
+- Drop the `.tcd` into `data/applets/` (bundled or per-user overlay) and
+  it's discovered identically to a directory-based widget.
+
+See `src/titan_core/titan_package.py` for the format implementation.
+
 ## Directory Structure
 
 ### Legacy system (init.py)
@@ -225,6 +266,13 @@ data/applets/my_widget/
     ├── pl/
     └── en/
 ```
+
+**Loading order matters**: `load_widgets()` in `src/ui/invisibleui.py` checks
+for `init.py` (legacy) **first**. If it's present and loads successfully,
+the modern `applet.json`/`main.py` files in the same folder are never even
+looked at. New widgets should use the modern format and must NOT also
+include an `init.py` in the same folder, or the legacy loader will silently
+shadow it.
 
 ## Internationalization
 

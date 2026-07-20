@@ -33,6 +33,10 @@ status = 1
 **Parametry:**
 - `name` - nazwa wyświetlana w menedżerze komponentów
 - **`status = 1` oznacza WYŁĄCZONY, `status = 0` oznacza WŁĄCZONY** (odwrotnie!)
+- `libs` (opcjonalnie) - rozdzielone przecinkami katalogi wewnątrz folderu
+  komponentu dodawane do `sys.path` przed załadowaniem (domyślnie `lib`),
+  dzięki czemu komponent może dołączyć własne zależności (natywne DLL-e,
+  spakowane biblioteki Python)
 - **WAŻNE**: Nazwa pliku to `__component__.TCE` (wielkie litery .TCE)
 - **WAŻNE**: Główny plik to `init.py` (małe litery, NIE `__init__.py`)
 - **WAŻNE**: Dodaj pustą linię na końcu pliku
@@ -170,14 +174,15 @@ def shutdown():
 
 ## Interfejs komponentu
 
-### Wymagane funkcje
+Wszystkie poniższe funkcje są opcjonalne — menedżer komponentów sprawdza
+`hasattr()` przed wywołaniem każdej z nich, łącznie z `initialize`, więc
+brak którejś po prostu pomija ten krok zamiast uniemożliwić załadowanie
+komponentu.
 
 #### initialize(app=None)
-**Wymagana funkcja** wywoływana przy starcie Titan:
+Wywoływana przy starcie Titan, jeśli zdefiniowana:
 - `app` - instancja głównej aplikacji wxPython (może być None)
 - Użyj do inicjalizacji zasobów, uruchamiania wątków
-
-### Opcjonalne funkcje
 
 #### shutdown()
 Wywoływana przy zamykaniu Titan:
@@ -296,6 +301,67 @@ def on_klango_init(klango_mode):
     # Dodaj własne pozycje menu do Klango
     pass
 ```
+
+### Hooki launchera (get_launcher_hooks)
+
+Komponent może podłączyć się do startu alternatywnego launchera:
+
+```python
+def get_launcher_hooks():
+    """Zwróć słownik hooków launchera (opcjonalnie)
+
+    Dostępne hooki:
+        'on_launcher_init': wywoływana z (launcher_manager, launcher_name)
+        gdy startuje alternatywny launcher
+    """
+    return {
+        'on_launcher_init': on_launcher_init
+    }
+
+def on_launcher_init(launcher_manager, launcher_name):
+    """Hook wywoływany gdy startuje alternatywny launcher (patrz Przewodnik
+    tworzenia launcherów)"""
+    pass
+```
+
+## API systemu buforów (wstrzykiwane automatycznie)
+
+Menedżer komponentów wstrzykuje obiekt `buffers` na poziomie modułu
+(powiązany z nazwą Twojego komponentu) do przestrzeni nazw `init.py` zanim
+zostanie on uruchomiony. Zasila on System Buforów Titana — współdzielony,
+audio-growy przegląd ostatnich wiadomości/powiadomień, nawigowany identycznie
+z GUI, trybu Klango i nakładki Titan UI (tylda). Użyj go, jeśli Twój
+komponent generuje strumień elementów, które użytkownik może chcieć
+przejrzeć (posty z kanału, alerty, przychodzące zdarzenia itp.):
+
+```python
+# `buffers` jest wstrzykiwane jako globalna zmienna modułu. Do samodzielnego
+# testowania (uruchamiania init.py bezpośrednio) awaryjnie utwórz własny:
+try:
+    buffers
+except NameError:
+    from src.buffers import buffer_bus
+    buffers = buffer_bus.make_module_api("mojkomponent")
+
+buffers.register_category("Mój komponent")            # opcjonalnie ładna nazwa
+buffers.ensure_buffer("events", "Zdarzenia", kind="notification")
+
+# Wypchnij każdy nowy element w miarę napływu (bezpieczne wątkowo, nigdy nie rzuca wyjątku):
+buffers.push("events", text, author=source_name)
+```
+
+`kind` to podpowiedź (`'message'` | `'private'` | `'notification'`).
+`push()` zwraca `True`, gdy element trafił do bufora aktualnie przeglądanego
+przez użytkownika (Titan odtwarza wtedy ciche piknięcie); bufory w tle
+pozostają ciche. Pomiń to całkowicie, jeśli komponent nie generuje
+elementów do przeglądania.
+
+Uwaga: to wstrzyknięcie jest niezawodne w ścieżce ładowania skompilowanego
+`.pyc` przez importlib oraz w trybie deweloperskim. Jedna ze ścieżek
+skompilowanej wersji (komponent dostarczony jako surowy `.py` bez
+skompilowanego `.pyc` obok) ładuje się przez `exec()` i NIE wstrzykuje
+`buffers` — zawsze używaj powyższego zabezpieczenia `except NameError`
+zamiast zakładać, że zmienna globalna modułu istnieje.
 
 ## API rejestracji widoków (Component View Registration)
 
@@ -771,6 +837,29 @@ data/components/moj_komponent/
         └── LC_MESSAGES/
             └── component_id.mo
 ```
+
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, komponent można rozpowszechniać jako pojedynczy plik
+`.tcd` — z całą zawartością, łącznie z ewentualnym `lib/` zawierającym
+natywne zależności. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py data/components/moj_komponent --kind component -o moj_komponent.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `init.py` i `__component__.TCE` nadal działają tak samo
+  po rozpakowaniu, a natywne zależności w `lib/` działają bez zmian, bo
+  wpis do `sys.path` jest liczony na podstawie rozpakowanej ścieżki.
+- Plik `.tcd` wystarczy umieścić w `data/components/` (wbudowanym lub w
+  nakładce użytkownika) — zostanie wykryty i załadowany dokładnie tak samo
+  jak komponent oparty na katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
 
 ## Testowanie komponentów
 

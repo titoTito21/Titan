@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html" class="active">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -766,6 +767,28 @@ return shifted.set_frame_rate(audio.frame_rate)</code></pre>
 <li>Subprocess: użyj <code>subprocess.Popen</code> z <code>creationflags=getattr(subprocess, &#x27;CREATE_NO_WINDOW&#x27;, 0)</code> na Windowsie żeby nie wyskakiwało okno konsoli.</li>
 <li>Pliki binarne (DLL, .exe, dane słowników) trzymaj w podkatalogu silnika i znajdź je przez <code>os.path.dirname(os.path.abspath(__file__))</code>.</li>
 <li>Sprawdzaj <code>sys.platform</code> w <code>is_available()</code> — jeśli silnik jest tylko na Windowsie, zwracaj <code>False</code> na innych systemach.</li>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, silnik TTS można rozpowszechniać jako pojedynczy plik
+<code>.tcd</code> — z całą zawartością, łącznie z ewentualnymi natywnymi mostkami
+DLL/EXE. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py &quot;data/titantts engines/moj_silnik&quot; --kind tts_engine -o moj_silnik.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>__engine__.py</code>/<code>__engine__.TCE</code> i ewentualny natywny
+  mostek (DLL, bridge .exe) nadal działają tak samo po rozpakowaniu, bo
+  wpis do <code>sys.path</code> dla katalogów <code>libs=</code> jest liczony na podstawie
+  rozpakowanej ścieżki.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/titantts engines/</code> (wbudowanym</li>
+  lub w nakładce użytkownika) — zostanie wykryty dokładnie tak samo jak
+  silnik oparty na katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
 
 <h2>Testowanie silnika</h2>
 

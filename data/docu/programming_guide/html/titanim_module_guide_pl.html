@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -298,6 +299,9 @@ description = Opis modułu
 <li><code>name</code> - nazwa wyświetlana w liście Titan IM</li>
 <li><strong><code>status = 0</code> oznacza WŁĄCZONY, inna wartość oznacza WYŁĄCZONY</strong></li>
 <li><code>description</code> - opis modułu (opcjonalny)</li>
+<li><code>libs</code> (opcjonalnie) - rozdzielone przecinkami katalogi wewnątrz folderu</li>
+  modułu dodawane do <code>sys.path</code> przed załadowaniem (domyślnie <code>lib</code>), dzięki
+  czemu moduł może dołączyć własne zależności
 <li><strong>WAŻNE</strong>: Nazwa pliku to <code>__im.TCE</code> (wielkie litery .TCE)</li>
 <li><strong>WAŻNE</strong>: Główny plik to <code>init.py</code> (małe litery, NIE <code>__init__.py</code>)</li>
 <li><strong>WAŻNE</strong>: Dodaj pustą linię na końcu pliku</li>
@@ -385,6 +389,33 @@ Zwraca tekst statusu pokazywany po nazwie modułu:
     if connected and username:
         return f&quot;- connected as {username}&quot;
     return &quot;&quot;</code></pre>
+
+<h2>Config API (automatycznie wstrzykiwane)</h2>
+
+<p>Każdy moduł otrzymuje też obiekt <code>config</code> przez <code>_module.config</code> —
+przestrzenny (namespaced) helper zapisu/odczytu wspierany przez wspólny,
+zaszyfrowany plik <code>titan.IM</code>. Dane każdego modułu przechowywane są pod
+kluczem odpowiadającym nazwie folderu, więc dane innych modułów (Telegram,
+EltenLink...) nigdy nie są naruszane:</p>
+
+<pre><code class="language-python">data = _module.config.load()                  # słownik tego modułu ({} jeśli brak)
+_module.config.save({&quot;username&quot;: &quot;jan&quot;})       # zastępuje cały słownik modułu
+value = _module.config.get(&quot;username&quot;, &quot;&quot;)     # pojedynczy klucz, z wartością domyślną
+_module.config.set(&quot;username&quot;, &quot;jan&quot;)          # pojedynczy klucz
+_module.config.update(username=&quot;jan&quot;, token=&quot;...&quot;)  # scal wiele kluczy naraz</code></pre>
+
+<p>Użyj tego zamiast pisać własny plik ustawień, jeśli moduł musi pamiętać
+stan logowania, tokeny albo preferencje między sesjami.</p>
+
+<h2>Tłumaczenia (automatycznie wstrzykiwane)</h2>
+
+<p>Jeśli folder modułu zawiera katalog <code>languages/</code>, loader ustawia <code>mod._</code> w
+przestrzeni nazw modułu <strong>przed</strong> uruchomieniem <code>init.py</code> — ponieważ to
+JEST przestrzeń nazw modułu, zwykłe wywołanie <code>_(&quot;tekst&quot;)</code> działa
+bezpośrednio w kodzie modułu, bez żadnego <code>import</code> ani ręcznej konfiguracji
+<code>gettext.translation()</code>. Domena gettext to <strong>nazwa folderu modułu</strong> (nie
+stała domena jak w przypadku silników TTS). W razie braku <code>languages/</code> lub
+błędu ładowania, spada do funkcji tożsamościowej.</p>
 
 <h2>Sound API (automatycznie wstrzykiwane)</h2>
 
@@ -1019,6 +1050,25 @@ def get_status_text():
 <pre><code>data/titanIM_modules/nazwa_modułu/
 ├── init.py              # Główny plik modułu (NIE __init__.py!)
 └── __im.TCE             # Konfiguracja modułu</code></pre>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, moduł Titan IM można rozpowszechniać jako pojedynczy plik
+<code>.tcd</code>. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/titanIM_modules/MojModul --kind im_module -o MojModul.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>init.py</code> i <code>__im.TCE</code> nadal działają tak samo po
+  rozpakowaniu.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/titanIM_modules/</code> (wbudowanym lub</li>
+  w nakładce użytkownika) — zostanie wykryty i załadowany dokładnie tak
+  samo jak moduł oparty na katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
 
 <h2>Testowanie modułów</h2>
 

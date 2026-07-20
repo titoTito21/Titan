@@ -424,6 +424,7 @@ def generate_navigation(files, current_file, language='pl'):
         'game_creation_guide_pl.md': 'Tworzenie gier',
         'launcher_creation_guide_pl.md': 'Tworzenie launcherów',
         'tts_engine_guide_pl.md': 'Silniki TTS (TitanTTS)',
+        'gamepad_mode_guide_pl.md': 'Tryby gamepada',
     }
 
     guides_en = {
@@ -435,6 +436,7 @@ def generate_navigation(files, current_file, language='pl'):
         'game_creation_guide_en.md': 'Creating Games',
         'launcher_creation_guide_en.md': 'Creating Launchers',
         'tts_engine_guide_en.md': 'TitanTTS Engines',
+        'gamepad_mode_guide_en.md': 'Gamepad Modes',
     }
 
     guides = guides_pl if language == 'pl' else guides_en
@@ -502,6 +504,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'game_creation_guide_pl.md': ('Tworzenie gier', 'Dodaj własne gry do TCE Launcher'),
         'launcher_creation_guide_pl.md': ('Tworzenie launcherów', 'Zbuduj alternatywny interfejs TCE w wxPython, PyQt5, tkinter lub pygame'),
         'tts_engine_guide_pl.md': ('Silniki TTS (TitanTTS)', 'Zaimplementuj własny silnik syntezy mowy dla TCE'),
+        'gamepad_mode_guide_pl.md': ('Tryby gamepada', 'Twórz własne tryby sterowania gamepadem dla TCE'),
     }
 
     guides_en = {
@@ -513,6 +516,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'game_creation_guide_en.md': ('Creating Games', 'Add custom games to TCE Launcher'),
         'launcher_creation_guide_en.md': ('Creating Launchers', 'Build alternative TCE interfaces in wxPython, PyQt5, tkinter, or pygame'),
         'tts_engine_guide_en.md': ('TitanTTS Engines', 'Implement custom text-to-speech engines for TCE'),
+        'gamepad_mode_guide_en.md': ('Gamepad Modes', 'Build custom gamepad control modes for TCE'),
     }
 
     guides = guides_pl if language == 'pl' else guides_en

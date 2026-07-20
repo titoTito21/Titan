@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_en.html">Creating Games</a></li>
 <li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
 <li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
                 </ul>
             </nav>
         </aside>
@@ -776,6 +777,33 @@ if __name__ == &#x27;__main__&#x27;:
 <pre><code>name_pl=Moja aplikacja
 name_en=My Application
 openfile=myapp.exe</code></pre></p>
+
+<h2>Packaging as <code>.TCA</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, an application can be distributed as a
+single <code>.tca</code> file. This is purely optional and additive — directory-based
+apps keep working exactly as before.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/applications/my_application --kind app -o my_application.tca</code></pre>
+
+<li><code>.tca</code> is a custom compressed container (magic header + LZMA payload) —</li>
+  deliberately NOT a real zip/7z, so 7-Zip and Windows Explorer refuse to
+  open it as an archive. This is obfuscation, not encryption.
+<li>No code changes needed: the package payload is byte-identical to the</li>
+  source directory, including <code>__app.tce</code> — <code>openfile=</code> still resolves the
+  same way once the package is (transparently, automatically) extracted.
+<li>Drop the <code>.tca</code> file directly into <code>data/applications/</code> (bundled or the</li>
+  per-user overlay under <code>%APPDATA%/titosoft/Titan/data/applications/</code>) — it
+  is discovered and launched identically to a directory-based app.
+<li>On Windows, double-clicking a <code>.tca</code> in Explorer (once Titan has</li>
+  registered the file association, which happens automatically on startup)
+  installs a copy into the user's <code>data/applications/</code> and launches it
+  directly.
+<li>Can be uploaded to the Titan-Net app repository from the desktop client</li>
+  (Upload Package, or Package Folder and Upload to package straight from a
+  directory).
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
 
 <h2>Testing Applications</h2>
 

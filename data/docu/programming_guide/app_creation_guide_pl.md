@@ -538,6 +538,36 @@ name_en=My Application
 openfile=myapp.exe
 ```
 
+## Pakowanie jako `.TCA` (opcjonalnie)
+
+Zamiast katalogu, aplikację można rozpowszechniać jako pojedynczy plik
+`.tca`. To rozwiązanie w pełni opcjonalne i dodatkowe — aplikacje oparte na
+katalogach nadal działają dokładnie tak samo jak wcześniej.
+
+```bash
+python src/scripts/pack_addon.py data/applications/moja_aplikacja --kind app -o moja_aplikacja.tca
+```
+
+- `.tca` to własny skompresowany kontener (nagłówek magiczny + skompresowany
+  strumień LZMA) — celowo NIE jest to prawdziwy zip/7z, więc 7-Zip i
+  Eksplorator Windows odmawiają otwarcia go jako archiwum. To obfuskacja, nie
+  szyfrowanie.
+- Nie są potrzebne żadne zmiany w kodzie: zawartość paczki jest identyczna
+  bajt-w-bajt z katalogiem źródłowym, łącznie z `__app.tce` — `openfile=`
+  nadal działa tak samo po (automatycznym, przezroczystym) rozpakowaniu.
+- Plik `.tca` wystarczy umieścić bezpośrednio w `data/applications/`
+  (wbudowanym lub w nakładce użytkownika pod
+  `%APPDATA%/titosoft/Titan/data/applications/`) — zostanie wykryty i
+  uruchomiony dokładnie tak samo jak aplikacja oparta na katalogu.
+- W Windows dwuklik na `.tca` w Eksploratorze (po zarejestrowaniu skojarzenia
+  plików przez Titana, co dzieje się automatycznie przy starcie) instaluje
+  kopię do `data/applications/` użytkownika i od razu ją uruchamia.
+- Można też przesłać do repozytorium aplikacji Titan-Net z klienta
+  desktopowego (Upload Package, albo Package Folder and Upload żeby
+  spakować bezpośrednio z katalogu).
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
+
 ## Testowanie aplikacji
 
 1. Utwórz katalog w `data/applications/nazwa_aplikacji/`

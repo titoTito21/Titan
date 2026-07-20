@@ -20,6 +20,51 @@ python compiletorelease.py
 ```
 This uses PyInstaller to compile the application to a standalone executable in the `dist` directory. Requires PyInstaller: `pip install pyinstaller`
 
+### Packaging Add-ons (.TCA / .TCD)
+
+Any app, game, component, launcher, Titan IM module, gamepad mode, TTS
+engine, widget/applet, or statusbar applet can OPTIONALLY be packaged into a
+single compressed file instead of shipping as a directory — `.TCA` for
+applications/games, `.TCD` for every other kind. This is purely additive:
+directory-based add-ons keep working unchanged, and the packaged file, once
+placed in the right `data/<subdir>/` folder, is discovered and used
+identically (see `src/titan_core/titan_package.py` for the format itself).
+
+```bash
+# Pack (or convert) an existing add-on directory into a package
+python src/scripts/pack_addon.py data/applications/tcalc --kind app -o tcalc.tca
+
+# --kind is inferred from the source path if omitted (data/<subdir>/... ->
+# app/game/component/launcher/im_module/gamepad_mode/tts_engine/widget/statusbar_applet)
+python src/scripts/pack_addon.py data/components/mycomponent
+
+# Inspect/unpack a package for debugging (does not touch the original file)
+python src/scripts/pack_addon.py --unpack tcalc.tca -o /tmp/tcalc_inspect
+```
+
+Key properties:
+- Custom binary container (magic `TCPK` + raw LZMA payload) — deliberately
+  NOT a real zip/7z, so 7-Zip and Windows Explorer refuse to open it as an
+  archive. This is obfuscation, not encryption.
+- The payload, once read, is byte-identical to the source directory
+  (including that add-on kind's own existing manifest file — `__app.TCE`,
+  `__component__.TCE`, etc.) — no separate package manifest schema exists.
+- The package file itself is permanent and never deleted or converted into
+  a directory. `src/platform_utils.py`'s `discover_data_entries()` (the
+  shared discovery function used by every one of the 9 add-on kinds)
+  transparently extracts a package into a transient runtime cache
+  (`%APPDATA%/titosoft/Titan/pkg_cache/`) on demand — this cache is purely
+  a performance detail, never user-managed data.
+- Windows: double-clicking a `.tca`/`.tcd` in Explorer (once
+  `src/system/file_association.py` has registered the association, done
+  automatically at startup) launches Titan with `--install-package <path>`,
+  which copies the file into the correct per-user overlay `data/<subdir>/`
+  directory and then launches it (apps/games) or lets normal startup pick it
+  up (other kinds) — see `src/titan_core/package_install.py`.
+- Can be uploaded to/downloaded from the Titan-Net app repository (see
+  "Titan-Net Messaging System" below) the same way as any other repository
+  file.
+
 ### Translation Management (Modular System)
 
 The translation system uses modular .po/.mo files organized by domain (gui, settings, network, etc.)
@@ -144,11 +189,18 @@ TCE Launcher/
 - **Applets**: Located in `data/applets/`, UI widgets for taskbar and desktop
 - Applications use format: `name_pl=`, `name_en=`, `openfile=`, `shortname=`
 - Components use INI format with `[component]` section
+- Every plugin kind above (plus games, launchers, Titan IM modules, gamepad
+  modes, TTS engines, and statusbar applets) can also ship as a single
+  packaged `.TCA`/`.TCD` file instead of a directory — see "Packaging
+  Add-ons" under Development Commands and `src/titan_core/titan_package.py`
 
 ### Core Managers
 - `src/titan_core/app_manager.py`: Handles loading/running applications from `data/applications/`
 - `src/titan_core/game_manager.py`: Manages games directory and game launching
 - `src/titan_core/component_manager.py`: Loads and manages components, provides menu integration hooks
+- `src/titan_core/titan_package.py`: `.TCA`/`.TCD` packaged add-on format — build/read/extract
+- `src/titan_core/package_install.py`: Installs a package file into the correct per-user `data/<subdir>/` (used by the Explorer file-association flow)
+- `src/system/file_association.py`: Registers `.tca`/`.tcd` double-click handling in Windows (`HKCU`, no admin needed)
 
 ### System Features
 - `src/titan_core/sound.py`: Audio system with theme support, uses `accessible_output3` for TTS
@@ -172,6 +224,12 @@ Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, 
 - Audio notifications from `sfx/*/titannet/` directory
 - SQLite database for users and messages
 - Server runs on `ws://0.0.0.0:8001`, client connects to `ws://localhost:8001` by default
+- **App repository**: generic upload/browse/download catalog for distributable
+  content (apps, components, games, and now `.TCA`/`.TCD` packages of any
+  add-on kind), backed by the `app_repository` table (`titan-net server/models.py`),
+  HTTP endpoints in `titan-net server/http_server.py` (`/api/repository/*`),
+  web UI (`titan-net server/web/repository.html`), and the desktop client's
+  Upload Package / Package Folder and Upload dialogs (`src/network/titan_net_gui.py`)
 
 ### Key Dependencies
 - wxPython for GUI

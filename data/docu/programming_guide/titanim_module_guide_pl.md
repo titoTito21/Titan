@@ -35,6 +35,9 @@ description = Opis modułu
 - `name` - nazwa wyświetlana w liście Titan IM
 - **`status = 0` oznacza WŁĄCZONY, inna wartość oznacza WYŁĄCZONY**
 - `description` - opis modułu (opcjonalny)
+- `libs` (opcjonalnie) - rozdzielone przecinkami katalogi wewnątrz folderu
+  modułu dodawane do `sys.path` przed załadowaniem (domyślnie `lib`), dzięki
+  czemu moduł może dołączyć własne zależności
 - **WAŻNE**: Nazwa pliku to `__im.TCE` (wielkie litery .TCE)
 - **WAŻNE**: Główny plik to `init.py` (małe litery, NIE `__init__.py`)
 - **WAŻNE**: Dodaj pustą linię na końcu pliku
@@ -128,6 +131,35 @@ def get_status_text():
         return f"- connected as {username}"
     return ""
 ```
+
+## Config API (automatycznie wstrzykiwane)
+
+Każdy moduł otrzymuje też obiekt `config` przez `_module.config` —
+przestrzenny (namespaced) helper zapisu/odczytu wspierany przez wspólny,
+zaszyfrowany plik `titan.IM`. Dane każdego modułu przechowywane są pod
+kluczem odpowiadającym nazwie folderu, więc dane innych modułów (Telegram,
+EltenLink...) nigdy nie są naruszane:
+
+```python
+data = _module.config.load()                  # słownik tego modułu ({} jeśli brak)
+_module.config.save({"username": "jan"})       # zastępuje cały słownik modułu
+value = _module.config.get("username", "")     # pojedynczy klucz, z wartością domyślną
+_module.config.set("username", "jan")          # pojedynczy klucz
+_module.config.update(username="jan", token="...")  # scal wiele kluczy naraz
+```
+
+Użyj tego zamiast pisać własny plik ustawień, jeśli moduł musi pamiętać
+stan logowania, tokeny albo preferencje między sesjami.
+
+## Tłumaczenia (automatycznie wstrzykiwane)
+
+Jeśli folder modułu zawiera katalog `languages/`, loader ustawia `mod._` w
+przestrzeni nazw modułu **przed** uruchomieniem `init.py` — ponieważ to
+JEST przestrzeń nazw modułu, zwykłe wywołanie `_("tekst")` działa
+bezpośrednio w kodzie modułu, bez żadnego `import` ani ręcznej konfiguracji
+`gettext.translation()`. Domena gettext to **nazwa folderu modułu** (nie
+stała domena jak w przypadku silników TTS). W razie braku `languages/` lub
+błędu ładowania, spada do funkcji tożsamościowej.
 
 ## Sound API (automatycznie wstrzykiwane)
 
@@ -800,6 +832,27 @@ data/titanIM_modules/nazwa_modułu/
 ├── init.py              # Główny plik modułu (NIE __init__.py!)
 └── __im.TCE             # Konfiguracja modułu
 ```
+
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, moduł Titan IM można rozpowszechniać jako pojedynczy plik
+`.tcd`. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py data/titanIM_modules/MojModul --kind im_module -o MojModul.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `init.py` i `__im.TCE` nadal działają tak samo po
+  rozpakowaniu.
+- Plik `.tcd` wystarczy umieścić w `data/titanIM_modules/` (wbudowanym lub
+  w nakładce użytkownika) — zostanie wykryty i załadowany dokładnie tak
+  samo jak moduł oparty na katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
 
 ## Testowanie modułów
 

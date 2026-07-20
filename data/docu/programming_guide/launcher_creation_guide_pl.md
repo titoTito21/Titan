@@ -81,7 +81,7 @@ Wszystkie wartości to `true` lub `false`. Jeśli pole nie istnieje, użyta zost
 | titan_im | true | `api.titan_net_client`, `api.open_telegram()`, `api.open_messenger()`, ... |
 | help | true | `api.show_help()` |
 | components | true | `api.get_components()`, `api.get_component_menu_functions()` |
-| system_hooks | true | Hooki systemowe (klawisz Win, lockscreen, ...) |
+| system_hooks | true | Parsowane, ale **obecnie nie steruje niczym** w `LauncherAPI.__init__` — zachowane na przyszłość, nie polegaj na ustawieniu `false` żeby cokolwiek wyłączyć |
 | notifications | true | `api.notifications` |
 | sound | true | Pełny system dźwięków TCE (zawsze dostępny) |
 | invisible_ui | false | `api.start_invisible_ui()` (przełączanie tyldą) |
@@ -177,6 +177,8 @@ api.get_stereo_speech()                # instancja StereoSpeech lub None
 #### Wibracje kontrolera
 ```python
 api.vibrate_cursor_move()
+api.vibrate_menu_open()
+api.vibrate_menu_close()
 api.vibrate_selection()
 api.vibrate_focus_change()
 api.vibrate_error()
@@ -184,6 +186,9 @@ api.vibrate_notification()
 api.vibrate_startup()
 api.set_vibration_enabled(True)
 api.set_vibration_strength(0.7)
+api.get_controller_info()              # informacje o statusie kontrolera lub None
+api.refresh_controllers()
+api.test_vibration()
 ```
 
 #### Statusbar (pasek statusu)
@@ -212,7 +217,8 @@ api.request_exit()                         # zamknięcie pętli wx (graceful)
 api.force_exit()                           # twardy shutdown TCE + os._exit(0)
 api.register_shutdown_callback(callback)   # zarejestruj callback przy zamykaniu
 api.has_feature('applications')            # czy funkcja jest włączona (bool)
-api.check_for_updates()                    # sprawdź aktualizacje TCE
+api.check_for_updates()                    # sprawdź aktualizacje TCE, pokazuje okno jeśli dostępna → bool
+api.show_shutdown_dialog()                 # pokaż okno potwierdzenia zamknięcia TCE
 
 # Minimalizacja do tray:
 api.register_minimize_handler(callback)    # callback ukrywa twoje okno
@@ -735,6 +741,30 @@ def shutdown():
     _window = None
     _qt_app = None
 ```
+
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, launcher można rozpowszechniać jako pojedynczy plik
+`.tcd`. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py data/launchers/moj_launcher --kind launcher -o moj_launcher.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `init.py` i `__launcher__.TCE` nadal działają tak samo
+  po rozpakowaniu.
+- Plik `.tcd` wystarczy umieścić w `data/launchers/` (wbudowanym lub w
+  nakładce użytkownika) — zostanie wykryty tak samo jak launcher oparty na
+  katalogu. Uwaga: samo zainstalowanie paczki launchera nie sprawia, że
+  staje się on aktywnym launcherem — trzeba go dodatkowo wybrać (Ustawienia
+  albo `--launcher <nazwa>`), tak samo jak przy ręcznie zainstalowanym
+  katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
 
 ## Weryfikacja instalacji
 

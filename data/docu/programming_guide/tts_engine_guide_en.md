@@ -447,6 +447,28 @@ For engines that call APIs or slow subprocesses, a disk cache is **essential** (
 - Bundle binaries (DLLs, .exe, dictionary data) in a subdirectory of the engine and locate them via `os.path.dirname(os.path.abspath(__file__))`.
 - Check `sys.platform` in `is_available()` — if your engine is Windows-only, return `False` elsewhere.
 
+## Packaging as `.TCD` (Optional)
+
+Instead of shipping a directory, a TTS engine can be distributed as a
+single `.tcd` file — same content, including any bundled native
+DLL/EXE bridge binaries. Purely optional and additive.
+
+```bash
+python src/scripts/pack_addon.py "data/titantts engines/my_engine" --kind tts_engine -o my_engine.tcd
+```
+
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `__engine__.py`/`__engine__.TCE` and any bundled native bridge (DLL,
+  bridge .exe) still work the same way once extracted, since `sys.path`
+  insertion for `libs=` dirs is computed from the extracted path.
+- Drop the `.tcd` into `data/titantts engines/` (bundled or per-user
+  overlay) and it's discovered identically to a directory-based engine.
+
+See `src/titan_core/titan_package.py` for the format implementation.
+
 ## Testing your engine
 
 1. Drop the directory into `data/titantts engines/`.

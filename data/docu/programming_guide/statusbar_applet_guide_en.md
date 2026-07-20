@@ -1,66 +1,66 @@
-# Przewodnik tworzenia apletów paska statusu Titan
+# Titan Statusbar Applet Creation Guide
 
-## Wprowadzenie
+## Introduction
 
-Aplety paska statusu to małe wtyczki znajdujące się w katalogu `data/statusbar_applets/`, które wyświetlają dynamiczne informacje w pasku statusu we wszystkich trybach interfejsu (GUI, IUI, Klango). Są ładowane przez `StatusbarAppletManager` (`src/titan_core/statusbar_applet_manager.py`).
+Statusbar applets are small plugins located in the `data/statusbar_applets/` directory that display dynamic information in the status bar across all interface modes (GUI, IUI, Klango). They are loaded by `StatusbarAppletManager` (`src/titan_core/statusbar_applet_manager.py`).
 
-Przykłady: informacje systemowe (CPU/RAM/Dysk), zegar, status sieci.
+Examples: system information (CPU/RAM/Disk), a clock, network status.
 
-## Architektura apletów paska statusu
+## Statusbar Applet Architecture
 
-### Lokalizacja apletów
-Wszystkie aplety znajdują się w katalogu `data/statusbar_applets/`. Każdy aplet to osobny katalog zawierający:
-- `main.py` - główny plik z kodem apletu
-- `applet.json` - plik metadanych apletu
+### Applet Location
+All applets are located in the `data/statusbar_applets/` directory. Each applet is a separate directory containing:
+- `main.py` - the main file with the applet's code
+- `applet.json` - the applet's metadata file
 
-**Oba pliki są wymagane** aby aplet został załadowany.
+**Both files are required** for the applet to be loaded.
 
-### Cykl życia apletu
+### Applet Lifecycle
 
-1. **Ładowanie** - aplety są ładowane przy starcie Titan
-2. **Odświeżanie** - funkcja `get_statusbar_item_text()` jest wywoływana co N sekund (zgodnie z `update_interval`)
-3. **Aktywacja** - opcjonalna funkcja `on_statusbar_item_activate()` wywoływana po dwukliknięciu/aktywacji
+1. **Loading** - applets are loaded at Titan startup
+2. **Refresh** - `get_statusbar_item_text()` is called every N seconds (per `update_interval`)
+3. **Activation** - the optional `on_statusbar_item_activate()` is called on double-click/activation
 
-## Struktura pliku metadanych
+## Metadata File Structure
 
 ### applet.json
 
 ```json
 {
-    "name": "Nazwa po angielsku",
-    "name_pl": "Nazwa po polsku",
-    "name_en": "Nazwa po angielsku",
-    "description": "Opis po angielsku",
-    "description_pl": "Opis po polsku",
-    "description_en": "Opis po angielsku",
+    "name": "English name",
+    "name_pl": "Polish name",
+    "name_en": "English name",
+    "description": "English description",
+    "description_pl": "Polish description",
+    "description_en": "English description",
     "version": "1.0.0",
     "author": "TCE Launcher",
     "update_interval": 5
 }
 ```
 
-**Parametry:**
-- `name`, `name_pl`, `name_en` - nazwa apletu w różnych językach
-- `description`, `description_pl`, `description_en` - opis apletu
-- `version` - wersja apletu (semver)
-- `author` - autor apletu
-- `update_interval` - interwał odświeżania w sekundach
+**Parameters:**
+- `name`, `name_pl`, `name_en` - the applet's name in different languages
+- `description`, `description_pl`, `description_en` - the applet's description
+- `version` - applet version (semver)
+- `author` - applet author
+- `update_interval` - refresh interval in seconds
 
-## Implementacja apletu
+## Applet Implementation
 
-### Podstawowa struktura main.py
+### Basic main.py structure
 
 ```python
 """
-Nazwa apletu - Statusbar Applet
+Applet name - Statusbar Applet
 
-Opis apletu
+Applet description
 """
 
 import os
 import sys
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
 TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
@@ -73,64 +73,64 @@ if TCE_ROOT not in sys.path:
 
 def get_statusbar_item_info():
     """
-    Zwróć metadane apletu.
+    Return applet metadata.
 
     Returns:
-        dict: Informacje o aplecie z polami 'name' i 'update_interval'
+        dict: Applet info with 'name' and 'update_interval' fields
     """
     return {
-        "name": _("Nazwa apletu"),
-        "update_interval": 5  # Odświeżaj co 5 sekund
+        "name": _("Applet Name"),
+        "update_interval": 5  # Refresh every 5 seconds
     }
 
 
 def get_statusbar_item_text():
     """
-    Zwróć tekst do wyświetlenia w pasku statusu.
+    Return the text to display in the status bar.
 
-    Ta funkcja jest wywoływana okresowo (co update_interval sekund).
-    Trzymaj ją szybką — ma narzucony timeout 2 sekundy przez StatusbarAppletManager.
+    This function is called periodically (every update_interval seconds).
+    Keep it fast — StatusbarAppletManager enforces a 2-second timeout.
 
     Returns:
-        str: Tekst do wyświetlenia w pasku statusu
+        str: Text to display in the status bar
     """
     try:
-        # Dodaj logikę pobierania tekstu paska statusu tutaj
-        value = "..."  # Zastąp rzeczywistymi danymi
+        # Add your status bar text logic here
+        value = "..."  # Replace with real data
 
-        return _("Nazwa apletu: {value}").format(value=value)
+        return _("Applet Name: {value}").format(value=value)
     except Exception as e:
         print(f"Error getting applet_id information: {e}")
-        return _("Nazwa apletu: Error")
+        return _("Applet Name: Error")
 
 
 def on_statusbar_item_activate(parent_frame=None):
     """
-    Opcjonalnie: Obsłuż aktywację gdy użytkownik wybierze ten element paska statusu.
+    Optional: handle activation when the user selects this status bar item.
 
-    Wywoływana gdy użytkownik dwukliknie lub aktywuje element paska statusu.
+    Called when the user double-clicks or activates the status bar item.
 
     Args:
-        parent_frame: wx.Frame dla okien dialogowych GUI (None dla trybu konsoli/niewidzialnego)
+        parent_frame: wx.Frame for GUI dialogs (None for console/invisible mode)
     """
     try:
         if parent_frame:
-            # Tryb GUI — pokaż szczegółowe okno dialogowe
+            # GUI mode — show a detailed dialog
             import wx
 
-            # Zbuduj szczegółową wiadomość tutaj
-            message = _("Szczegółowe informacje apletu:\n\n")
-            message += "..."  # Dodaj szczegóły
+            # Build your detailed message here
+            message = _("Detailed applet information:\n\n")
+            message += "..."  # Add details
 
             wx.MessageBox(
                 message,
-                _("Nazwa apletu"),
+                _("Applet Name"),
                 wx.OK | wx.ICON_INFORMATION,
                 parent_frame
             )
         else:
-            # Tryb konsoli/niewidzialny — wypisz informacje
-            print(_("Nazwa apletu - widok szczegółowy niedostępny w trybie konsoli"))
+            # Console/invisible mode — print info
+            print(_("Applet Name - detail view not available in console mode"))
 
     except Exception as e:
         print(f"Error showing applet_id details: {e}")
@@ -138,73 +138,73 @@ def on_statusbar_item_activate(parent_frame=None):
         traceback.print_exc()
 ```
 
-## Wymagane funkcje
+## Required Functions
 
 ### get_statusbar_item_info()
-**Wymagana funkcja** zwracająca metadane apletu:
+**Required function** returning applet metadata:
 ```python
 def get_statusbar_item_info():
     return {
-        "name": _("Nazwa apletu"),  # Nazwa wyświetlana
-        "update_interval": 5  # Interwał odświeżania w sekundach
+        "name": _("Applet Name"),  # Display name
+        "update_interval": 5  # Refresh interval in seconds
     }
 ```
 
 ### get_statusbar_item_text()
-**Wymagana funkcja** zwracająca tekst paska statusu:
+**Required function** returning the status bar text:
 ```python
 def get_statusbar_item_text():
-    # MUSI zwrócić string
-    # MUSI wykonać się w < 2 sekundy (timeout)
-    # NIGDY nie powinna rzucać wyjątku — zawsze zwracaj string
-    return "Tekst paska statusu"
+    # MUST return a string
+    # MUST execute in < 2 seconds (timeout)
+    # Should NEVER raise an exception — always return a string
+    return "Status bar text"
 ```
 
-## Opcjonalne funkcje
+## Optional Functions
 
 ### on_statusbar_item_activate(parent_frame=None)
-Obsługuje aktywację elementu paska statusu:
+Handles activation of the status bar item:
 ```python
 def on_statusbar_item_activate(parent_frame=None):
     if parent_frame:
-        # Tryb GUI — pokaż wx.MessageBox lub własne okno
+        # GUI mode — show a wx.MessageBox or your own window
         import wx
-        wx.MessageBox("Szczegóły", "Tytuł", wx.OK | wx.ICON_INFORMATION, parent_frame)
+        wx.MessageBox("Details", "Title", wx.OK | wx.ICON_INFORMATION, parent_frame)
     else:
-        # Tryb konsoli — wypisz informacje
-        print("Szczegóły apletu")
+        # Console mode — print info
+        print("Applet details")
 ```
 
-## Kluczowe wskazówki od StatusbarAppletManager
+## Key Tips From StatusbarAppletManager
 
-### Zasady wydajności
+### Performance Rules
 
-1. **Trzymaj `get_statusbar_item_text()` szybką** — poniżej 2 sekund
-2. **Cachuj kosztowne dane** — nie odczytuj plików przy każdym wywołaniu
-3. **Obsługuj wyjątki gracefully** — zawsze zwracaj string, nigdy nie rzucaj wyjątku
-4. **Używaj `interval=0.1`** dla próbkowania CPU (nie blokującej `interval=1`)
+1. **Keep `get_statusbar_item_text()` fast** — under 2 seconds
+2. **Cache expensive data** — don't re-read files on every call
+3. **Handle exceptions gracefully** — always return a string, never raise
+4. **Use `interval=0.1`** for CPU sampling (not the blocking `interval=1`)
 
-### System cachowania
+### Caching System
 
-- Tekst apletu jest cachowany z **timeout 2 sekundy**
-- Jeśli timeout zostanie przekroczony, w pasku statusu pojawi się "Error: Timeout"
-- `update_interval` z `applet.json` ustawia jak często cache jest odświeżany
-- Priorytet nazwy wyświetlanej: `get_statusbar_item_info()['name']` > lokalizowana nazwa z `applet.json`
+- Applet text is cached with a **2-second timeout**
+- If the timeout is exceeded, "Error: Timeout" is shown in the status bar
+- `update_interval` from `applet.json` sets how often the cache is refreshed
+- Display name priority: `get_statusbar_item_info()['name']` > localized name from `applet.json`
 
-### Wymagania ładowania
+### Loading Requirements
 
-Aby aplet został załadowany:
-- **Oba pliki `applet.json` i `main.py` są wymagane**
-- Katalog musi być w `data/statusbar_applets/{applet_id}/`
-- `get_statusbar_item_info()` i `get_statusbar_item_text()` muszą być zdefiniowane
+For an applet to be loaded:
+- **Both `applet.json` and `main.py` are required**
+- The directory must be at `data/statusbar_applets/{applet_id}/`
+- `get_statusbar_item_info()` and `get_statusbar_item_text()` must be defined
 
-## Przykłady apletów
+## Applet Examples
 
-### Przykład 1: Aplet zegara
+### Example 1: Clock Applet
 
-Pokazuje aktualny czas (GG:MM) w pasku statusu. Po aktywacji wyświetla pełną datę, czas i dzień tygodnia.
+Shows the current time (HH:MM) in the status bar. On activation, displays the full date, time, and day of the week.
 
-**Plik: `data/statusbar_applets/clock/applet.json`**
+**File: `data/statusbar_applets/clock/applet.json`**
 
 ```json
 {
@@ -220,21 +220,21 @@ Pokazuje aktualny czas (GG:MM) w pasku statusu. Po aktywacji wyświetla pełną 
 }
 ```
 
-**Plik: `data/statusbar_applets/clock/main.py`**
+**File: `data/statusbar_applets/clock/main.py`**
 
 ```python
 """
-Aplet zegara paska statusu
+Clock Statusbar Applet
 
-Wyświetla aktualny czas w pasku statusu.
-Po aktywacji pokazuje pełną datę, czas i dzień tygodnia.
+Displays the current time in the status bar.
+On activation, shows the full date, time, and day of the week.
 """
 
 import os
 import sys
 from datetime import datetime
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
 TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
@@ -247,23 +247,23 @@ if TCE_ROOT not in sys.path:
 
 def get_statusbar_item_info():
     """
-    Zwróć metadane apletu.
+    Return applet metadata.
 
     Returns:
-        dict: Informacje o aplecie z polami 'name' i 'update_interval'
+        dict: Applet info with 'name' and 'update_interval' fields
     """
     return {
-        "name": _("Zegar"),
+        "name": _("Clock"),
         "update_interval": 30
     }
 
 
 def get_statusbar_item_text():
     """
-    Zwróć aktualny czas jako GG:MM dla paska statusu.
+    Return the current time as HH:MM for the status bar.
 
     Returns:
-        str: Aktualny czas sformatowany jako GG:MM
+        str: Current time formatted as HH:MM
     """
     try:
         now = datetime.now()
@@ -271,29 +271,29 @@ def get_statusbar_item_text():
         return time_str
     except Exception as e:
         print(f"Error getting clock information: {e}")
-        return _("Zegar: Błąd")
+        return _("Clock: Error")
 
 
 def on_statusbar_item_activate(parent_frame=None):
     """
-    Pokaż pełną datę, czas i dzień tygodnia po aktywacji.
+    Show the full date, time, and day of the week on activation.
 
     Args:
-        parent_frame: wx.Frame dla okien dialogowych GUI (None dla trybu konsoli/niewidzialnego)
+        parent_frame: wx.Frame for GUI dialogs (None for console/invisible mode)
     """
     try:
         now = datetime.now()
 
-        days_pl = {
-            0: "Poniedziałek", 1: "Wtorek", 2: "Środa",
-            3: "Czwartek", 4: "Piątek", 5: "Sobota", 6: "Niedziela"
+        days_en = {
+            0: "Monday", 1: "Tuesday", 2: "Wednesday",
+            3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"
         }
-        day_name = days_pl.get(now.weekday(), "Nieznany")
+        day_name = days_en.get(now.weekday(), "Unknown")
 
         full_date = now.strftime("%Y-%m-%d")
         full_time = now.strftime("%H:%M:%S")
 
-        message = _("Data: {date}\nCzas: {time}\nDzień tygodnia: {day}").format(
+        message = _("Date: {date}\nTime: {time}\nDay of week: {day}").format(
             date=full_date,
             time=full_time,
             day=day_name
@@ -303,7 +303,7 @@ def on_statusbar_item_activate(parent_frame=None):
             import wx
             wx.MessageBox(
                 message,
-                _("Zegar"),
+                _("Clock"),
                 wx.OK | wx.ICON_INFORMATION,
                 parent_frame
             )
@@ -318,11 +318,11 @@ def on_statusbar_item_activate(parent_frame=None):
 
 ---
 
-### Przykład 2: Aplet statusu baterii
+### Example 2: Battery Status Applet
 
-Pokazuje procent baterii i status ładowania. Gracefully obsługuje komputery stacjonarne bez baterii.
+Shows the battery percentage and charging status. Gracefully handles desktop PCs with no battery.
 
-**Plik: `data/statusbar_applets/battery/applet.json`**
+**File: `data/statusbar_applets/battery/applet.json`**
 
 ```json
 {
@@ -338,21 +338,21 @@ Pokazuje procent baterii i status ładowania. Gracefully obsługuje komputery st
 }
 ```
 
-**Plik: `data/statusbar_applets/battery/main.py`**
+**File: `data/statusbar_applets/battery/main.py`**
 
 ```python
 """
-Aplet statusu baterii paska statusu
+Battery Status Statusbar Applet
 
-Wyświetla procent baterii i status ładowania w pasku statusu.
-Po aktywacji pokazuje szczegółowe informacje o baterii włącznie z czasem pozostałym.
-Gracefully obsługuje komputery stacjonarne bez baterii.
+Displays battery percentage and charging status in the status bar.
+On activation, shows detailed battery information including time remaining.
+Gracefully handles desktop PCs without a battery.
 """
 
 import os
 import sys
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
 TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
@@ -371,23 +371,23 @@ except ImportError:
 
 def get_statusbar_item_info():
     """
-    Zwróć metadane apletu.
+    Return applet metadata.
 
     Returns:
-        dict: Informacje o aplecie z polami 'name' i 'update_interval'
+        dict: Applet info with 'name' and 'update_interval' fields
     """
     return {
-        "name": _("Bateria"),
+        "name": _("Battery"),
         "update_interval": 60
     }
 
 
 def _get_battery():
     """
-    Bezpiecznie pobierz informacje o baterii.
+    Safely retrieve battery information.
 
     Returns:
-        psutil battery named tuple lub None jeśli niedostępne
+        psutil battery named tuple, or None if unavailable
     """
     if not HAS_PSUTIL:
         return None
@@ -399,62 +399,62 @@ def _get_battery():
 
 def get_statusbar_item_text():
     """
-    Zwróć procent baterii i wskaźnik ładowania dla paska statusu.
+    Return battery percentage and charging indicator for the status bar.
 
     Returns:
-        str: Tekst statusu baterii (np. "Bateria: 75% [Ładowanie]" lub "Brak baterii")
+        str: Battery status text (e.g. "Battery: 75% [Charging]" or "No battery")
     """
     try:
         battery = _get_battery()
         if battery is None:
-            return _("Bateria: N/D")
+            return _("Battery: N/A")
 
         percent = int(battery.percent)
         if battery.power_plugged:
-            status = _("Ładowanie")
+            status = _("Charging")
         else:
-            status = _("Rozładowywanie")
+            status = _("Discharging")
 
-        return _("Bateria: {percent}% [{status}]").format(
+        return _("Battery: {percent}% [{status}]").format(
             percent=percent,
             status=status
         )
     except Exception as e:
         print(f"Error getting battery information: {e}")
-        return _("Bateria: Błąd")
+        return _("Battery: Error")
 
 
 def on_statusbar_item_activate(parent_frame=None):
     """
-    Pokaż szczegółowe informacje o baterii po aktywacji.
+    Show detailed battery information on activation.
 
     Args:
-        parent_frame: wx.Frame dla okien dialogowych GUI (None dla trybu konsoli/niewidzialnego)
+        parent_frame: wx.Frame for GUI dialogs (None for console/invisible mode)
     """
     try:
         battery = _get_battery()
 
         if battery is None:
-            message = _("Nie wykryto baterii. To może być komputer stacjonarny lub psutil nie jest zainstalowane.")
+            message = _("No battery detected. This may be a desktop PC, or psutil is not installed.")
         else:
             percent = int(battery.percent)
-            plugged = _("Tak") if battery.power_plugged else _("Nie")
+            plugged = _("Yes") if battery.power_plugged else _("No")
 
             if battery.secsleft == psutil.POWER_TIME_UNLIMITED:
-                time_remaining = _("Nieograniczony (podłączony)")
+                time_remaining = _("Unlimited (plugged in)")
             elif battery.secsleft == psutil.POWER_TIME_UNKNOWN:
-                time_remaining = _("Nieznany")
+                time_remaining = _("Unknown")
             else:
                 hours = battery.secsleft // 3600
                 minutes = (battery.secsleft % 3600) // 60
-                time_remaining = _("{hours}g {minutes}m").format(
+                time_remaining = _("{hours}h {minutes}m").format(
                     hours=hours,
                     minutes=minutes
                 )
 
-            message = _("Poziom baterii: {percent}%\n"
-                        "Podłączona: {plugged}\n"
-                        "Czas pozostały: {time_remaining}").format(
+            message = _("Battery level: {percent}%\n"
+                        "Plugged in: {plugged}\n"
+                        "Time remaining: {time_remaining}").format(
                 percent=percent,
                 plugged=plugged,
                 time_remaining=time_remaining
@@ -464,7 +464,7 @@ def on_statusbar_item_activate(parent_frame=None):
             import wx
             wx.MessageBox(
                 message,
-                _("Status baterii"),
+                _("Battery Status"),
                 wx.OK | wx.ICON_INFORMATION,
                 parent_frame
             )
@@ -479,11 +479,11 @@ def on_statusbar_item_activate(parent_frame=None):
 
 ---
 
-### Przykład 3: Aplet statusu sieci
+### Example 3: Network Status Applet
 
-Pokazuje aktualny typ połączenia sieciowego i adres IP. Po aktywacji wyświetla wszystkie interfejsy sieciowe.
+Shows the current network connection type and IP address. On activation, lists all network interfaces.
 
-**Plik: `data/statusbar_applets/network_status/applet.json`**
+**File: `data/statusbar_applets/network_status/applet.json`**
 
 ```json
 {
@@ -499,21 +499,21 @@ Pokazuje aktualny typ połączenia sieciowego i adres IP. Po aktywacji wyświetl
 }
 ```
 
-**Plik: `data/statusbar_applets/network_status/main.py`**
+**File: `data/statusbar_applets/network_status/main.py`**
 
 ```python
 """
-Aplet statusu sieci paska statusu
+Network Status Statusbar Applet
 
-Wyświetla aktualny typ połączenia sieciowego i adres IP w pasku statusu.
-Po aktywacji pokazuje wszystkie interfejsy sieciowe z ich adresami.
+Displays the current network connection type and IP address in the status bar.
+On activation, shows all network interfaces with their addresses.
 """
 
 import os
 import sys
 import socket
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 APPLET_DIR = os.path.dirname(os.path.abspath(__file__))
 TCE_ROOT = os.path.abspath(os.path.join(APPLET_DIR, '..', '..', '..'))
 if TCE_ROOT not in sys.path:
@@ -532,23 +532,23 @@ except ImportError:
 
 def get_statusbar_item_info():
     """
-    Zwróć metadane apletu.
+    Return applet metadata.
 
     Returns:
-        dict: Informacje o aplecie z polami 'name' i 'update_interval'
+        dict: Applet info with 'name' and 'update_interval' fields
     """
     return {
-        "name": _("Sieć"),
+        "name": _("Network"),
         "update_interval": 10
     }
 
 
 def _get_local_ip():
     """
-    Pobierz podstawowy lokalny adres IP łącząc się z zewnętrznym hostem.
+    Get the primary local IP address by connecting to an external host.
 
     Returns:
-        str: Lokalny adres IP lub "N/D" jeśli niedostępny
+        str: Local IP address, or "N/A" if unavailable
     """
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -558,18 +558,18 @@ def _get_local_ip():
         s.close()
         return ip
     except Exception:
-        return "N/D"
+        return "N/A"
 
 
 def _get_connection_type():
     """
-    Określ aktywny typ połączenia sieciowego (Wi-Fi, Ethernet lub Rozłączony).
+    Determine the active network connection type (Wi-Fi, Ethernet, or Disconnected).
 
     Returns:
-        str: Nazwa typu połączenia
+        str: Connection type name
     """
     if not HAS_PSUTIL:
-        return _("Nieznany")
+        return _("Unknown")
 
     try:
         stats = psutil.net_if_stats()
@@ -585,46 +585,46 @@ def _get_connection_type():
             elif "ethernet" in name_lower or "eth" in name_lower:
                 return _("Ethernet")
 
-        # Sprawdź czy jakikolwiek interfejs nie-loopback jest aktywny
+        # Check if any non-loopback interface is up
         for iface_name, iface_stats in stats.items():
             if iface_stats.isup and not iface_name.startswith("lo") and iface_name != "Loopback Pseudo-Interface 1":
-                return _("Połączony")
+                return _("Connected")
 
-        return _("Rozłączony")
+        return _("Disconnected")
     except Exception:
-        return _("Nieznany")
+        return _("Unknown")
 
 
 def get_statusbar_item_text():
     """
-    Zwróć typ połączenia sieciowego i IP dla paska statusu.
+    Return the network connection type and IP for the status bar.
 
     Returns:
-        str: Tekst statusu sieci (np. "Sieć: Wi-Fi 192.168.1.10")
+        str: Network status text (e.g. "Net: Wi-Fi 192.168.1.10")
     """
     try:
         conn_type = _get_connection_type()
         ip = _get_local_ip()
 
-        if ip == "N/D":
-            return _("Sieć: {type} (brak IP)").format(type=conn_type)
+        if ip == "N/A":
+            return _("Net: {type} (no IP)").format(type=conn_type)
 
-        return _("Sieć: {type} {ip}").format(type=conn_type, ip=ip)
+        return _("Net: {type} {ip}").format(type=conn_type, ip=ip)
     except Exception as e:
         print(f"Error getting network information: {e}")
-        return _("Sieć: Błąd")
+        return _("Net: Error")
 
 
 def on_statusbar_item_activate(parent_frame=None):
     """
-    Pokaż wszystkie interfejsy sieciowe i ich adresy po aktywacji.
+    Show all network interfaces and their addresses on activation.
 
     Args:
-        parent_frame: wx.Frame dla okien dialogowych GUI (None dla trybu konsoli/niewidzialnego)
+        parent_frame: wx.Frame for GUI dialogs (None for console/invisible mode)
     """
     try:
         lines = []
-        lines.append(_("Interfejsy sieciowe:"))
+        lines.append(_("Network Interfaces:"))
         lines.append("")
 
         if HAS_PSUTIL:
@@ -633,7 +633,7 @@ def on_statusbar_item_activate(parent_frame=None):
 
             for iface_name in sorted(addrs.keys()):
                 iface_stats = stats.get(iface_name)
-                status = _("Aktywny") if iface_stats and iface_stats.isup else _("Nieaktywny")
+                status = _("Up") if iface_stats and iface_stats.isup else _("Down")
                 speed = iface_stats.speed if iface_stats else 0
 
                 lines.append(_("{name} [{status}]").format(
@@ -642,7 +642,7 @@ def on_statusbar_item_activate(parent_frame=None):
                 ))
 
                 if speed > 0:
-                    lines.append(_("  Prędkość: {speed} Mbps").format(speed=speed))
+                    lines.append(_("  Speed: {speed} Mbps").format(speed=speed))
 
                 for addr in addrs[iface_name]:
                     if addr.family == socket.AF_INET:
@@ -655,9 +655,9 @@ def on_statusbar_item_activate(parent_frame=None):
             ip = _get_local_ip()
             hostname = socket.gethostname()
             lines.append(_("Hostname: {hostname}").format(hostname=hostname))
-            lines.append(_("Lokalny IP: {ip}").format(ip=ip))
+            lines.append(_("Local IP: {ip}").format(ip=ip))
             lines.append("")
-            lines.append(_("Zainstaluj psutil dla szczegółowych informacji o interfejsach."))
+            lines.append(_("Install psutil for detailed interface information."))
 
         message = "\n".join(lines)
 
@@ -665,7 +665,7 @@ def on_statusbar_item_activate(parent_frame=None):
             import wx
             wx.MessageBox(
                 message,
-                _("Status sieci"),
+                _("Network Status"),
                 wx.OK | wx.ICON_INFORMATION,
                 parent_frame
             )
@@ -678,39 +678,59 @@ def on_statusbar_item_activate(parent_frame=None):
         traceback.print_exc()
 ```
 
-## Struktura katalogów
+## Directory Structure
 
 ```
-data/statusbar_applets/nazwa_apletu/
-├── applet.json          # Metadane (nazwa, opis, update_interval)
-└── main.py              # Implementacja z wymaganymi funkcjami
+data/statusbar_applets/applet_name/
+├── applet.json          # Metadata (name, description, update_interval)
+└── main.py              # Implementation with required functions
 ```
 
-## Testowanie apletów
+## Packaging as `.TCD` (Optional)
 
-1. Umieść aplet w `data/statusbar_applets/nazwa_apletu/`
-2. Upewnij się że oba pliki `applet.json` i `main.py` istnieją
-3. Uruchom Titan
-4. Tekst apletu powinien pojawić się w pasku statusu
-5. Dwukliknij lub aktywuj element paska statusu aby przetestować dialog aktywacji
+Instead of shipping a directory, a statusbar applet can be distributed as a
+single `.tcd` file. Purely optional and additive.
 
-## Przykład referencyjny
+```bash
+python src/scripts/pack_addon.py data/statusbar_applets/applet_name --kind statusbar_applet -o applet_name.tcd
+```
 
-Sprawdź `data/statusbar_applets/system_information/main.py`:
-- Używa `psutil` dla CPU/RAM/dysku
-- `get_statusbar_item_text()` zwraca sformatowany string
-- `on_statusbar_item_activate()` otwiera szczegółowy wx.MessageBox
-- Używa `set_language()` dla przetłumaczonych wyjść
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `main.py` and `applet.json` still resolve the same way once extracted.
+- Drop the `.tcd` into `data/statusbar_applets/` (bundled or per-user
+  overlay) and it's discovered/loaded identically to a directory-based
+  applet.
 
-## Najważniejsze wskazówki
+See `src/titan_core/titan_package.py` for the format implementation.
 
-1. **ZAWSZE zwracaj string** z `get_statusbar_item_text()` — nigdy nie rzucaj wyjątku
-2. **Trzymaj funkcję szybką** — poniżej 2 sekund (preferowane < 500ms)
-3. **Cachuj kosztowne operacje** — nie pobieraj danych sieciowych przy każdym wywołaniu
-4. **Używaj `interval=0.1`** dla psutil.cpu_percent() zamiast blokującego `interval=1`
-5. **Obsługuj gracefully brak zależności** — sprawdź czy psutil/inne biblioteki są dostępne
-6. **Testuj w wielu trybach** — GUI, Invisible UI i Klango
-7. **Używaj tłumaczeń** - `set_language()` dla wszystkich stringów użytkownika
-8. **Implementuj `on_statusbar_item_activate()` dla szczegółów** — użytkownicy lubią więcej informacji!
+## Testing Applets
 
-Aplety paska statusu umożliwiają dodawanie dynamicznych informacji do interfejsu Titan bez modyfikowania kodu głównego. Dzięki prostemu API każdy może stworzyć własny aplet wyświetlający przydatne dane w czasie rzeczywistym.
+1. Place the applet in `data/statusbar_applets/applet_name/`
+2. Make sure both `applet.json` and `main.py` exist
+3. Start Titan
+4. The applet text should appear in the status bar
+5. Double-click or activate the status bar item to test the activation dialog
+
+## Reference Example
+
+Check `data/statusbar_applets/system_information/main.py`:
+- Uses `psutil` for CPU/RAM/disk
+- `get_statusbar_item_text()` returns a formatted string
+- `on_statusbar_item_activate()` opens a detailed wx.MessageBox
+- Uses `set_language()` for translated output
+
+## Key Tips
+
+1. **ALWAYS return a string** from `get_statusbar_item_text()` — never raise an exception
+2. **Keep the function fast** — under 2 seconds (ideally < 500ms)
+3. **Cache expensive operations** — don't fetch network data on every call
+4. **Use `interval=0.1`** for `psutil.cpu_percent()` instead of the blocking `interval=1`
+5. **Handle missing dependencies gracefully** — check whether psutil/other libraries are available
+6. **Test across every interface mode** — GUI, Invisible UI, and Klango
+7. **Use translations** - `set_language()` for all user-facing strings
+8. **Implement `on_statusbar_item_activate()` for details** — users appreciate more information!
+
+Statusbar applets let you add dynamic information to Titan's interface without modifying the core code. With a simple API, anyone can build their own applet that displays useful, real-time data.

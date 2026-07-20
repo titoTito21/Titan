@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_en.html" class="active">Creating Games</a></li>
 <li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
 <li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
                 </ul>
             </nav>
         </aside>
@@ -899,6 +900,30 @@ class RPGGame:
             self.player_data = data.get(&#x27;player&#x27;, self.player_data)
             return True
         return False</code></pre>
+
+<h2>Packaging as <code>.TCA</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, a game can be distributed as a single
+<code>.tca</code> file — the same container format used for applications. Purely
+optional and additive; directory-based games keep working unchanged.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/games/my_game --kind game -o my_game.tca</code></pre>
+
+<li><code>.tca</code> is a custom compressed container (magic header + LZMA payload),</li>
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive (obfuscation, not encryption).
+<li>No code changes needed: the package payload is byte-identical to the</li>
+  directory, including <code>sfx/</code> and <code>__game.tce</code> — <code>openfile=</code> still resolves
+  the same way once extracted.
+<li>Drop the <code>.tca</code> into <code>data/games/</code> (bundled or the per-user overlay) and</li>
+  it's discovered/launched identically to a directory-based game.
+<li>On Windows, double-clicking a <code>.tca</code> (once Titan has registered the file</li>
+  association, automatic on startup) installs it into the user's
+  <code>data/games/</code> and launches it directly.
+<li>Can be uploaded to the Titan-Net app repository the same way as any other</li>
+  package.
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
 
 <h2>Testing Games</h2>
 

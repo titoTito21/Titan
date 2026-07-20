@@ -538,6 +538,35 @@ name_en=My Application
 openfile=myapp.exe
 ```
 
+## Packaging as `.TCA` (Optional)
+
+Instead of shipping a directory, an application can be distributed as a
+single `.tca` file. This is purely optional and additive — directory-based
+apps keep working exactly as before.
+
+```bash
+python src/scripts/pack_addon.py data/applications/my_application --kind app -o my_application.tca
+```
+
+- `.tca` is a custom compressed container (magic header + LZMA payload) —
+  deliberately NOT a real zip/7z, so 7-Zip and Windows Explorer refuse to
+  open it as an archive. This is obfuscation, not encryption.
+- No code changes needed: the package payload is byte-identical to the
+  source directory, including `__app.tce` — `openfile=` still resolves the
+  same way once the package is (transparently, automatically) extracted.
+- Drop the `.tca` file directly into `data/applications/` (bundled or the
+  per-user overlay under `%APPDATA%/titosoft/Titan/data/applications/`) — it
+  is discovered and launched identically to a directory-based app.
+- On Windows, double-clicking a `.tca` in Explorer (once Titan has
+  registered the file association, which happens automatically on startup)
+  installs a copy into the user's `data/applications/` and launches it
+  directly.
+- Can be uploaded to the Titan-Net app repository from the desktop client
+  (Upload Package, or Package Folder and Upload to package straight from a
+  directory).
+
+See `src/titan_core/titan_package.py` for the format implementation.
+
 ## Testing Applications
 
 1. Create directory in `data/applications/application_name/`

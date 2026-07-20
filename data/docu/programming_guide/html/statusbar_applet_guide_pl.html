@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -926,6 +927,25 @@ def on_statusbar_item_activate(parent_frame=None):
 <pre><code>data/statusbar_applets/nazwa_apletu/
 ├── applet.json          # Metadane (nazwa, opis, update_interval)
 └── main.py              # Implementacja z wymaganymi funkcjami</code></pre>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, aplet paska statusu można rozpowszechniać jako pojedynczy
+plik <code>.tcd</code>. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/statusbar_applets/nazwa_apletu --kind statusbar_applet -o nazwa_apletu.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>main.py</code> i <code>applet.json</code> nadal działają tak samo po
+  rozpakowaniu.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/statusbar_applets/</code> (wbudowanym</li>
+  lub w nakładce użytkownika) — zostanie wykryty i załadowany dokładnie
+  tak samo jak aplet oparty na katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
 
 <h2>Testowanie apletów</h2>
 

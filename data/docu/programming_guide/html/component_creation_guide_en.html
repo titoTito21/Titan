@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_en.html">Creating Games</a></li>
 <li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
 <li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
                 </ul>
             </nav>
         </aside>
@@ -296,20 +297,152 @@ status = 1
 <strong>Parameters:</strong>
 <li><code>name</code> - name displayed in component manager</li>
 <li><strong><code>status = 1</code> means DISABLED, <code>status = 0</code> means ENABLED</strong> (inverted!)</li>
+<li><code>libs</code> (optional) - comma-separated dirs under the component folder added</li>
+  to <code>sys.path</code> before loading (default <code>lib</code>), so the component can vendor
+  its own third-party dependencies (native DLLs, bundled Python packages)
 <li><strong>IMPORTANT</strong>: File name is <code>__component__.TCE</code> (uppercase .TCE)</li>
 <li><strong>IMPORTANT</strong>: Main file is <code>init.py</code> (lowercase, NOT <code>__init__.py</code>)</li>
 <li><strong>IMPORTANT</strong>: Add blank line at end of file</li>
 
+<h2>Component Implementation</h2>
+
+<h3>Basic init.py structure</h3>
+
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+&quot;&quot;&quot;
+Component name - description
+&quot;&quot;&quot;
+
+import os
+import sys
+import wx
+import gettext
+
+# Add the component directory to the path
+COMPONENT_DIR = os.path.dirname(__file__)
+if COMPONENT_DIR not in sys.path:
+    sys.path.insert(0, COMPONENT_DIR)
+
+# Add the TCE root directory to the path
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, &#x27;..&#x27;, &#x27;..&#x27;, &#x27;..&#x27;))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+# Import TCE modules
+try:
+    from src.titan_core.sound import play_sound
+    SOUND_AVAILABLE = True
+except ImportError as e:
+    SOUND_AVAILABLE = False
+    print(f&quot;[component_id] Warning: sound module not available: {e}&quot;)
+
+try:
+    from src.settings.settings import get_setting
+    SETTINGS_AVAILABLE = True
+except ImportError as e:
+    SETTINGS_AVAILABLE = False
+    print(f&quot;[component_id] Warning: settings module not available: {e}&quot;)
+    def get_setting(key, default=&#x27;&#x27;, section=&#x27;general&#x27;):
+        return default
+
+# Translation support
+LANGUAGES_DIR = os.path.join(COMPONENT_DIR, &#x27;languages&#x27;)
+
+try:
+    if SETTINGS_AVAILABLE:
+        lang = get_setting(&#x27;language&#x27;, &#x27;pl&#x27;)
+    else:
+        lang = &#x27;pl&#x27;
+
+    translation = gettext.translation(&#x27;component_id&#x27;, localedir=LANGUAGES_DIR, languages=[lang], fallback=True)
+    translation.install()
+    _ = translation.gettext
+except Exception as e:
+    print(f&quot;[component_id] Translation loading failed: {e}&quot;)
+    def _(text):
+        return text
+
+
+class MyComponent:
+    &quot;&quot;&quot;Main component class&quot;&quot;&quot;
+
+    def __init__(self):
+        &quot;&quot;&quot;Initialize the component&quot;&quot;&quot;
+        self._ = _
+        print(f&quot;[component_id] Component initialized&quot;)
+
+    def enable(self):
+        &quot;&quot;&quot;Enable component functionality&quot;&quot;&quot;
+        try:
+            # Add component logic here
+            if SOUND_AVAILABLE:
+                play_sound(&#x27;ui/dialog.ogg&#x27;)
+            print(f&quot;[component_id] Component enabled&quot;)
+            return True
+        except Exception as e:
+            print(f&quot;[component_id] Error enabling component: {e}&quot;)
+            return False
+
+    def disable(self):
+        &quot;&quot;&quot;Disable component functionality&quot;&quot;&quot;
+        try:
+            # Add cleanup logic here
+            if SOUND_AVAILABLE:
+                play_sound(&#x27;ui/dialogclose.ogg&#x27;)
+            print(f&quot;[component_id] Component disabled&quot;)
+        except Exception as e:
+            print(f&quot;[component_id] Error disabling component: {e}&quot;)
+
+
+# Global component instance
+_component_instance = None
+
+
+def get_component():
+    &quot;&quot;&quot;Get the global component instance&quot;&quot;&quot;
+    global _component_instance
+    if _component_instance is None:
+        _component_instance = MyComponent()
+    return _component_instance
+
+
+def initialize(app=None):
+    &quot;&quot;&quot;Component initialization - called by ComponentManager&quot;&quot;&quot;
+    try:
+        print(f&quot;[component_id] Initializing component...&quot;)
+        component = get_component()
+        # Add initialization logic here
+        print(f&quot;[component_id] Component initialized successfully&quot;)
+    except Exception as e:
+        print(f&quot;[component_id] Error during initialization: {e}&quot;)
+        import traceback
+        traceback.print_exc()
+
+
+def shutdown():
+    &quot;&quot;&quot;Component shutdown - called by ComponentManager&quot;&quot;&quot;
+    global _component_instance
+    try:
+        print(f&quot;[component_id] Shutting down component...&quot;)
+        if _component_instance:
+            _component_instance.disable()
+            _component_instance = None
+        print(f&quot;[component_id] Component shutdown complete&quot;)
+    except Exception as e:
+        print(f&quot;[component_id] Error during shutdown: {e}&quot;)
+        import traceback
+        traceback.print_exc()</code></pre>
+
 <h2>Component Interface</h2>
 
-<h3>Required Functions</h3>
+<p>All of the functions below are optional — the component manager checks
+with <code>hasattr()</code> before calling any of them, <code>initialize</code> included, so a
+component missing one simply skips that step rather than failing to load.</p>
 
 <h4>initialize(app=None)</h4>
-<strong>Required function</strong> called at Titan startup:
+Called at Titan startup, if defined:
 <li><code>app</code> - wxPython main application instance (may be None)</li>
 <li>Use for initializing resources, starting threads</li>
-
-<h3>Optional Functions</h3>
 
 <h4>shutdown()</h4>
 Called at Titan shutdown:
@@ -393,6 +526,67 @@ def on_iui_init(iui):
     return {
         &#x27;on_klango_init&#x27;: on_klango_init
     }</code></pre>
+
+<h3>Launcher Hooks (get_launcher_hooks)</h3>
+
+<p>Component can hook into alternative-launcher startup:</p>
+
+<pre><code class="language-python">def get_launcher_hooks():
+    &quot;&quot;&quot;Return launcher hooks dict (optional)
+
+    Available hooks:
+        &#x27;on_launcher_init&#x27;: called with (launcher_manager, launcher_name)
+        when an alternative launcher starts
+    &quot;&quot;&quot;
+    return {
+        &#x27;on_launcher_init&#x27;: on_launcher_init
+    }
+
+def on_launcher_init(launcher_manager, launcher_name):
+    &quot;&quot;&quot;Hook called when an alternative launcher (see the Launcher Creation
+    Guide) starts up&quot;&quot;&quot;
+    pass</code></pre>
+
+<h2>Buffer System API (Automatically Injected)</h2>
+
+<p>The component manager injects a module-level <code>buffers</code> object (bound to
+your component name) into your <code>init.py</code>'s namespace before it runs. It
+feeds the Titan Buffer System — the shared, audio-game-style review of
+recent messages/notifications navigated identically from the GUI, Klango
+mode, and the tilde Titan UI overlay. Use it if your component produces a
+stream of items the user might want to review (feed posts, alerts,
+incoming events, etc.):</p>
+
+<pre><code class="language-python"># `buffers` is injected as a module global. For standalone testing (running
+# init.py directly) fall back to creating one:
+try:
+    buffers
+except NameError:
+    from src.buffers import buffer_bus
+    buffers = buffer_bus.make_module_api(&quot;mycomponent&quot;)
+
+buffers.register_category(&quot;My Component&quot;)            # optional nice name
+buffers.ensure_buffer(&quot;events&quot;, &quot;Events&quot;, kind=&quot;notification&quot;)
+
+# Push each new item as it arrives (thread-safe, never raises):
+buffers.push(&quot;events&quot;, text, author=source_name)</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th><code>kind</code> is a hint (<code>&#x27;message&#x27;</code></th>
+<th><code>&#x27;private&#x27;</code></th>
+<th><code>&#x27;notification&#x27;</code>). <code>push()</code></th>
+</tr></thead><tbody>
+</tbody></table>
+returns <code>True</code> when the item landed in the buffer the user is currently
+reviewing (Titan plays a quiet ping); background buffers stay silent. Skip
+this entirely if your component does not produce reviewable items.
+
+<p>Note: this injection is reliable in the frozen <code>.pyc</code>-via-importlib load
+path and in development mode. One frozen-build path (a component shipped
+as a raw <code>.py</code> with no compiled <code>.pyc</code> next to it) loads via <code>exec()</code> and
+does NOT get <code>buffers</code> injected — always use the <code>except NameError</code>
+fallback shown above rather than assuming the module global exists.</p>
 
 <h2>Component View Registration API</h2>
 
@@ -744,6 +938,75 @@ name = File Browser
 status = 0
 </code></pre></p>
 
+<h2>System Integration</h2>
+
+<h3>Accessing the main application</h3>
+<pre><code class="language-python">def initialize(app=None):
+    if app:
+        # Access the main window
+        main_frame = app.GetTopWindow()
+        # Access the menu
+        menubar = main_frame.GetMenuBar()
+        # Access the status bar
+        statusbar = main_frame.GetStatusBar()</code></pre>
+
+<h3>Thread-safe calls</h3>
+<pre><code class="language-python"># Use wx.CallAfter for GUI operations from threads
+wx.CallAfter(self._update_ui, data)
+
+def _update_ui(self, data):
+    # GUI-modifying code
+    pass</code></pre>
+
+<h3>Using system sounds</h3>
+<pre><code class="language-python">from src.titan_core.sound import play_sound, play_error_sound, play_dialog_sound
+
+def my_function():
+    play_sound(&quot;focus.ogg&quot;)  # Play a sound from the current theme
+    play_error_sound()       # Error sound</code></pre>
+
+<h3>Accessing settings</h3>
+<pre><code class="language-python">from src.settings.settings import get_setting, set_setting
+
+def initialize(app=None):
+    # Read a setting
+    enabled = get_setting(&#x27;my_component_enabled&#x27;, &#x27;True&#x27;, section=&#x27;components&#x27;)
+
+    # Save a setting
+    set_setting(&#x27;my_component_value&#x27;, &#x27;42&#x27;, section=&#x27;components&#x27;)</code></pre>
+
+<h2>Component State Management</h2>
+
+<h3>Enabling/disabling</h3>
+Users can enable/disable components through:
+<li>The Component Manager in the GUI</li>
+<li>Invisible UI → Menu → Components</li>
+
+<h3>State persistence</h3>
+The enabled/disabled state is stored in <code>__component__.TCE</code>:
+<pre><code class="language-ini">[component]
+name = My Component
+status = 0  # 0 = enabled, 1 = disabled</code></pre>
+
+<h2>Directory Structure</h2>
+
+<pre><code>data/components/my_component/
+├── init.py              # Main component file (NOT __init__.py!)
+├── __component__.TCE    # Component configuration
+├── bookmarks.json       # Component data (example)
+├── resources/           # Resources (optional)
+│   ├── sounds/
+│   └── images/
+├── data/                # Data files (optional)
+└── languages/           # Translations (optional)
+    ├── component_id.pot
+    ├── pl/
+    │   └── LC_MESSAGES/
+    │       └── component_id.mo
+    └── en/
+        └── LC_MESSAGES/
+            └── component_id.mo</code></pre>
+
 <h2>Component Types</h2>
 
 <li><strong>Service</strong>: Background services (e.g., screen reader integration, system monitoring)</li>
@@ -763,6 +1026,26 @@ status = 0
 <li><strong>Refresh data in on_show</strong> when view becomes visible (Ctrl+Tab)</li>
 <li><strong>Add context menus</strong> for better UX (right-click on ListBox/TreeCtrl)</li>
 
+<h2>Packaging as <code>.TCD</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, a component can be distributed as a
+single <code>.tcd</code> file — same content, including any bundled <code>lib/</code> native
+dependencies. Purely optional and additive.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/components/my_component --kind component -o my_component.tcd</code></pre>
+
+<li><code>.tcd</code> is a custom compressed container (magic header + LZMA payload),</li>
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+<li>No code changes needed: the payload is byte-identical to the directory,</li>
+  so <code>init.py</code> and <code>__component__.TCE</code> still resolve the same way once
+  extracted, and native <code>lib/</code> dependencies work unmodified since
+  <code>sys.path</code> insertion is computed from the extracted path.
+<li>Drop the <code>.tcd</code> into <code>data/components/</code> (bundled or per-user overlay) and</li>
+  it's discovered/loaded identically to a directory-based component.
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
+
 <h2>Testing Components</h2>
 
 <li>Place component in <code>data/components/component_name/</code></li>
@@ -772,6 +1055,47 @@ status = 0
 <li>Check component manager if component is loaded</li>
 <li>Test functionality through component menu</li>
 <li>If component registers view, test Ctrl+Tab cycle</li>
+
+<h2>Debugging</h2>
+
+<h3>Component logs</h3>
+<pre><code class="language-python">import logging
+
+# Configure a logger
+logger = logging.getLogger(__name__)
+
+def initialize(app=None):
+    logger.info(&quot;Component initializing&quot;)
+
+def shutdown():
+    logger.info(&quot;Component shutting down&quot;)</code></pre>
+
+<h3>Error handling</h3>
+<pre><code class="language-python">def initialize(app=None):
+    try:
+        # Initialization code
+        pass
+    except Exception as e:
+        print(f&quot;Component initialization error: {e}&quot;)
+        import traceback
+        traceback.print_exc()</code></pre>
+
+<h2>Reference Examples</h2>
+
+<li><strong>TitanScreenReader</strong> (<code>data/components/TitanScreenReader/</code>): Complex screen reader</li>
+  - Service-type component with background monitoring
+  - Multiple sub-modules (uia_handler, speech_manager, keyboard_handler)
+  - Settings dialog with wxPython
+  - Translation support
+
+<li><strong>tips</strong> (<code>data/components/tips/</code>): Tips system</li>
+  - Simple Feature-type component
+  - Background thread for periodic tips
+  - Settings dialog
+
+<li><strong>tDict</strong> (<code>data/components/tDict/</code>): Dictionary component</li>
+  - <code>data/</code> subdirectory for dictionary files
+  - Translation support
 
 <p>Components enable extending Titan functionality in a modular and safe way. With the simple API, you can easily add new capabilities without modifying the main application code.</p>
             <a href="#" class="back-to-top" title="Powrót na górę">↑</a>

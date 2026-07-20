@@ -686,6 +686,27 @@ data/statusbar_applets/nazwa_apletu/
 └── main.py              # Implementacja z wymaganymi funkcjami
 ```
 
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, aplet paska statusu można rozpowszechniać jako pojedynczy
+plik `.tcd`. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py data/statusbar_applets/nazwa_apletu --kind statusbar_applet -o nazwa_apletu.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `main.py` i `applet.json` nadal działają tak samo po
+  rozpakowaniu.
+- Plik `.tcd` wystarczy umieścić w `data/statusbar_applets/` (wbudowanym
+  lub w nakładce użytkownika) — zostanie wykryty i załadowany dokładnie
+  tak samo jak aplet oparty na katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
+
 ## Testowanie apletów
 
 1. Umieść aplet w `data/statusbar_applets/nazwa_apletu/`

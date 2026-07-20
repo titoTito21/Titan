@@ -206,6 +206,49 @@ def navigate(self, direction):
     return True, current_column, total_columns
 ```
 
+## API systemu buforów (opcjonalnie)
+
+Widgety działają **w tym samym procesie** co Titan. Jeśli Twój widget
+generuje strumień elementów, które użytkownik może chcieć przejrzeć
+później (alerty, wpisy z kanału, zmiany statusu), wypchnij je do Systemu
+Buforów Titana, żeby pojawiły się w jego współdzielonym, audio-growym
+przeglądzie (GUI / Klango / nakładka Titan UI pod tyldą):
+
+```python
+from src.buffers import buffer_bus
+
+buffer_bus.push("mywidget", "alerts", text,
+                category_name="My Widget", buffer_name=_("Alerts"), kind="notification")
+```
+
+W tym samym procesie `push()` zwraca `True` i odtwarza ciche piknięcie, gdy
+element trafi do bufora aktualnie przeglądanego przez użytkownika; bufory w
+tle pozostają ciche. `kind` to podpowiedź (`'message'` | `'private'` |
+`'notification'`). Wywołania są best-effort i nigdy nie rzucają wyjątku.
+Większość widgetów tego nie potrzebuje — dodaj to tylko jeśli Twój widget
+faktycznie generuje elementy warte przejrzenia.
+
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, widget można rozpowszechniać jako pojedynczy plik
+`.tcd`. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py data/applets/moj_widget --kind widget -o moj_widget.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `main.py`/`applet.json` (lub legacy `init.py`) nadal
+  działają tak samo po rozpakowaniu.
+- Plik `.tcd` wystarczy umieścić w `data/applets/` (wbudowanym lub w
+  nakładce użytkownika) — zostanie wykryty dokładnie tak samo jak widget
+  oparty na katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
+
 ## Struktura katalogów
 
 ### System legacy (init.py)
@@ -225,6 +268,14 @@ data/applets/moj_widget/
     ├── pl/
     └── en/
 ```
+
+**Kolejność ładowania ma znaczenie**: `load_widgets()` w
+`src/ui/invisibleui.py` sprawdza obecność `init.py` (legacy) **jako
+pierwszą**. Jeśli plik istnieje i załaduje się poprawnie, pliki nowego
+systemu (`applet.json`/`main.py`) w tym samym folderze nigdy nie zostaną
+nawet sprawdzone. Nowe widgety powinny używać nowego systemu i NIE mogą
+mieć w tym samym folderze `init.py`, bo legacy loader po cichu je
+przesłoni.
 
 ## Internacjonalizacja
 

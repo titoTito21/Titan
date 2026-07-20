@@ -649,6 +649,32 @@ class RPGGame:
         return False
 ```
 
+## Packaging as `.TCA` (Optional)
+
+Instead of shipping a directory, a game can be distributed as a single
+`.tca` file — the same container format used for applications. Purely
+optional and additive; directory-based games keep working unchanged.
+
+```bash
+python src/scripts/pack_addon.py data/games/my_game --kind game -o my_game.tca
+```
+
+- `.tca` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive (obfuscation, not encryption).
+- No code changes needed: the package payload is byte-identical to the
+  directory, including `sfx/` and `__game.tce` — `openfile=` still resolves
+  the same way once extracted.
+- Drop the `.tca` into `data/games/` (bundled or the per-user overlay) and
+  it's discovered/launched identically to a directory-based game.
+- On Windows, double-clicking a `.tca` (once Titan has registered the file
+  association, automatic on startup) installs it into the user's
+  `data/games/` and launches it directly.
+- Can be uploaded to the Titan-Net app repository the same way as any other
+  package.
+
+See `src/titan_core/titan_package.py` for the format implementation.
+
 ## Testing Games
 
 1. Create directory in `data/games/game_name/`

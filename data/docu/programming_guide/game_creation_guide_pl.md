@@ -649,6 +649,33 @@ class RPGGame:
         return False
 ```
 
+## Pakowanie jako `.TCA` (opcjonalnie)
+
+Zamiast katalogu, grę można rozpowszechniać jako pojedynczy plik `.tca` —
+ten sam format kontenera co dla aplikacji. Całkowicie opcjonalne i
+dodatkowe; gry oparte na katalogach nadal działają bez zmian.
+
+```bash
+python src/scripts/pack_addon.py data/games/moja_gra --kind game -o moja_gra.tca
+```
+
+- `.tca` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum (obfuskacja, nie szyfrowanie).
+- Nie są potrzebne zmiany w kodzie: zawartość paczki jest identyczna
+  bajt-w-bajt z katalogiem, łącznie z `sfx/` i `__game.tce` — `openfile=`
+  nadal działa tak samo po rozpakowaniu.
+- Plik `.tca` wystarczy umieścić w `data/games/` (wbudowanym lub w nakładce
+  użytkownika) — zostanie wykryty i uruchomiony dokładnie tak samo jak gra
+  oparta na katalogu.
+- W Windows dwuklik na `.tca` (po zarejestrowaniu skojarzenia plików przez
+  Titana, automatycznie przy starcie) instaluje go do `data/games/`
+  użytkownika i od razu uruchamia.
+- Można przesłać do repozytorium aplikacji Titan-Net tak samo jak każdą
+  inną paczkę.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
+
 ## Testowanie gier
 
 1. Utwórz katalog w `data/games/nazwa_gry/`

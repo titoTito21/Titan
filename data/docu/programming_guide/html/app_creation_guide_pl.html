@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -776,6 +777,34 @@ if __name__ == &#x27;__main__&#x27;:
 <pre><code>name_pl=Moja aplikacja
 name_en=My Application
 openfile=myapp.exe</code></pre></p>
+
+<h2>Pakowanie jako <code>.TCA</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, aplikację można rozpowszechniać jako pojedynczy plik
+<code>.tca</code>. To rozwiązanie w pełni opcjonalne i dodatkowe — aplikacje oparte na
+katalogach nadal działają dokładnie tak samo jak wcześniej.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/applications/moja_aplikacja --kind app -o moja_aplikacja.tca</code></pre>
+
+<li><code>.tca</code> to własny skompresowany kontener (nagłówek magiczny + skompresowany</li>
+  strumień LZMA) — celowo NIE jest to prawdziwy zip/7z, więc 7-Zip i
+  Eksplorator Windows odmawiają otwarcia go jako archiwum. To obfuskacja, nie
+  szyfrowanie.
+<li>Nie są potrzebne żadne zmiany w kodzie: zawartość paczki jest identyczna</li>
+  bajt-w-bajt z katalogiem źródłowym, łącznie z <code>__app.tce</code> — <code>openfile=</code>
+  nadal działa tak samo po (automatycznym, przezroczystym) rozpakowaniu.
+<li>Plik <code>.tca</code> wystarczy umieścić bezpośrednio w <code>data/applications/</code></li>
+  (wbudowanym lub w nakładce użytkownika pod
+  <code>%APPDATA%/titosoft/Titan/data/applications/</code>) — zostanie wykryty i
+  uruchomiony dokładnie tak samo jak aplikacja oparta na katalogu.
+<li>W Windows dwuklik na <code>.tca</code> w Eksploratorze (po zarejestrowaniu skojarzenia</li>
+  plików przez Titana, co dzieje się automatycznie przy starcie) instaluje
+  kopię do <code>data/applications/</code> użytkownika i od razu ją uruchamia.
+<li>Można też przesłać do repozytorium aplikacji Titan-Net z klienta</li>
+  desktopowego (Upload Package, albo Package Folder and Upload żeby
+  spakować bezpośrednio z katalogu).
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
 
 <h2>Testowanie aplikacji</h2>
 

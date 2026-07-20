@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_en.html">Creating Games</a></li>
 <li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
 <li><a href="tts_engine_guide_en.html" class="active">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
                 </ul>
             </nav>
         </aside>
@@ -766,6 +767,26 @@ return shifted.set_frame_rate(audio.frame_rate)</code></pre>
 <li>Subprocess: use <code>subprocess.Popen</code> with <code>creationflags=getattr(subprocess, &#x27;CREATE_NO_WINDOW&#x27;, 0)</code> on Windows so a console window does not flash.</li>
 <li>Bundle binaries (DLLs, .exe, dictionary data) in a subdirectory of the engine and locate them via <code>os.path.dirname(os.path.abspath(__file__))</code>.</li>
 <li>Check <code>sys.platform</code> in <code>is_available()</code> — if your engine is Windows-only, return <code>False</code> elsewhere.</li>
+
+<h2>Packaging as <code>.TCD</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, a TTS engine can be distributed as a
+single <code>.tcd</code> file — same content, including any bundled native
+DLL/EXE bridge binaries. Purely optional and additive.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py &quot;data/titantts engines/my_engine&quot; --kind tts_engine -o my_engine.tcd</code></pre>
+
+<li><code>.tcd</code> is a custom compressed container (magic header + LZMA payload),</li>
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+<li>No code changes needed: the payload is byte-identical to the directory,</li>
+  so <code>__engine__.py</code>/<code>__engine__.TCE</code> and any bundled native bridge (DLL,
+  bridge .exe) still work the same way once extracted, since <code>sys.path</code>
+  insertion for <code>libs=</code> dirs is computed from the extracted path.
+<li>Drop the <code>.tcd</code> into <code>data/titantts engines/</code> (bundled or per-user</li>
+  overlay) and it's discovered identically to a directory-based engine.
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
 
 <h2>Testing your engine</h2>
 

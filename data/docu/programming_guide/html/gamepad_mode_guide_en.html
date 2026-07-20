@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titan Gamepad Mode Creation Guide - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html" class="active">Gamepad Modes</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Titan Gamepad Mode Creation Guide</h1>
+            </div>
+            <h1>Titan Gamepad Mode Creation Guide</h1>
+
+<h2>Introduction</h2>
+
+<p>Custom gamepad modes are folders under <code>data/gamepad/modes/</code>, exactly like a
+component, that plug into Titan's controller mode cycle. With a gamepad
+connected, <strong>holding a bumper for about a second</strong> switches modes (LB =
+previous, RB = next) — the built-in modes (System, Controller, Screen
+reader, Screen keyboard) come first, then every custom mode found here.
+While a custom mode is active it receives the controller's button /
+analog-stick / d-pad / bumper-tap events through <code>handle_*</code> hooks, and can
+speak, play sounds, or simulate keystrokes in response.</p>
+
+<p>The canonical API reference lives in <code>src/controller/gamepad_mode_api.py</code>
+(read its module docstring), and <code>data/gamepad/modes/README.md</code> documents
+it for third-party authors. <code>data/gamepad/modes/document_reader/</code> is a
+complete, working worked example.</p>
+
+<h2>Gamepad Mode System Architecture</h2>
+
+<h3>Mode Location</h3>
+
+All custom modes are located in <code>data/gamepad/modes/</code> (bundled) and the
+per-user overlay <code>%APPDATA%/titosoft/Titan/data/gamepad/modes/</code>. Each mode
+is a separate directory containing:
+<li><code>__mode__.TCE</code> — mode configuration file (INI format)</li>
+<li>a Python file with a <code>GamepadMode</code> subclass (referenced by <code>main=</code> in the</li>
+  config, or the only <code>*.py</code> file in the folder if <code>main=</code> is omitted)
+<li>optionally a <code>languages/</code> folder with the mode's own gettext domain</li>
+<li>optionally a <code>lib/</code> folder with vendored third-party dependencies</li>
+
+<h3>Mode Lifecycle</h3>
+
+<li><strong>Discovery</strong> — <code>load_custom_modes()</code> scans both mode directories at</li>
+   startup, reads <code>__mode__.TCE</code>, and skips disabled/broken folders
+<li><strong>Instantiation</strong> — the <code>GamepadMode</code> subclass found in the main module</li>
+   is instantiated once and added to the mode cycle
+<li><strong>Activation</strong> — <code>on_activate(manager)</code> is called when the user cycles</li>
+   into this mode (hold a bumper for ~1s)
+<li><strong>Input handling</strong> — <code>handle_button</code>/<code>handle_axis</code>/<code>handle_hat</code>/</li>
+   <code>handle_bumper</code> are called for each discrete input event while the mode
+   is active
+<li><strong>Deactivation</strong> — <code>on_deactivate(manager)</code> is called when switching away</li>
+
+<h2>Configuration File Structure</h2>
+
+<h3><code>__mode__.TCE</code></h3>
+
+<p>INI file with a <code>[mode]</code> section:</p>
+
+<pre><code class="language-ini">[mode]
+name = My Mode
+name_pl = Mój tryb
+name_en = My Mode
+main = my_mode.py
+description = What the mode does
+libs = lib
+status = 0</code></pre>
+
+<strong>Parameters:</strong>
+<li><code>status</code> — <strong><code>0</code> = enabled (loaded), anything else = disabled</strong> (same</li>
+  convention as components)
+<li><code>name</code> / <code>name_&lt;lang&gt;</code> — the label announced when the mode is selected.</li>
+  The loader picks <code>name_&lt;current_lang&gt;</code>, then <code>name_en</code>, then <code>name</code>,
+  then falls back to the folder name.
+<li><code>main</code> — the Python file containing the <code>GamepadMode</code> subclass. If</li>
+  omitted, the loader picks the alphabetically-first <code>*.py</code> file in the
+  folder.
+<li><code>libs</code> (optional) — comma-separated dirs under the mode folder added to</li>
+  <code>sys.path</code> before the mode loads (default <code>lib</code>), so the mode can vendor
+  its own third-party dependencies without polluting the host environment.
+  See <code>data/gamepad/modes/titan_talk/lib/</code> for a real example (vendors
+  <code>uiautomation</code> and <code>Pillow</code>).
+<li><strong>There is no <code>domain=</code> config key.</strong> The gettext domain is determined</li>
+  entirely by the string literal you pass to
+  <code>setup_mode_translations(__file__, &#x27;my_mode&#x27;)</code> in the mode's own <code>.py</code>
+  file — that call is the only place the domain is actually decided.
+<li><strong>IMPORTANT</strong>: Include a blank line at end of file</li>
+
+<h2>The Mode Class</h2>
+
+<pre><code class="language-python">from src.controller.gamepad_mode_api import (
+    GamepadMode, setup_mode_translations, speak, play_mode_sound,
+    tap, tap_combo,
+)
+
+# Loads this mode&#x27;s own languages/ folder (gettext domain &quot;my_mode&quot;)
+_ = setup_mode_translations(__file__, &#x27;my_mode&#x27;)
+
+
+class MyMode(GamepadMode):
+    name = &quot;My Mode&quot;  # fallback label; __mode__.TCE name(_lang) wins
+
+    def on_activate(self, manager):
+        &quot;&quot;&quot;Called when this mode becomes active.&quot;&quot;&quot;
+        speak(_(&quot;My Mode activated.&quot;))
+
+    def on_deactivate(self, manager):
+        &quot;&quot;&quot;Called when switching away from this mode. Optional cleanup.&quot;&quot;&quot;
+        pass
+
+    def handle_button(self, button_id):
+        &quot;&quot;&quot;Button press (0=A, 1=B, 2=X, 3=Y, 6=Back, 7=Start, 8=LS, 9=RS, 10=Guide).&quot;&quot;&quot;
+        if button_id == 0:  # A
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;A pressed&quot;))
+            return True
+        return False
+
+    def handle_axis(self, axis_id, value):
+        &quot;&quot;&quot;Analog-stick flick, debounced (0=left X, 1=left Y, 2=right X, 3=right Y).
+        value is negative for up/left, positive for down/right.&quot;&quot;&quot;
+        return False
+
+    def handle_hat(self, x, y):
+        &quot;&quot;&quot;D-pad movement, edge-detected. x: -1/0/1 left/centre/right,
+        y: 1/0/-1 up/centre/down.&quot;&quot;&quot;
+        return False
+
+    def handle_bumper(self, is_left):
+        &quot;&quot;&quot;Bumper TAP only (holding a bumper still switches modes).
+        is_left True = LB, False = RB.&quot;&quot;&quot;
+        return False</code></pre>
+
+<p>The loader instantiates any <code>GamepadMode</code> subclass defined in the main
+module — subclass it and override only the hooks you need; all have safe
+no-op defaults.</p>
+
+<h2>Hooks Reference</h2>
+
+<table class="doc-table">
+<thead><tr>
+<th>Method</th>
+<th>Called when</th>
+<th>Return</th>
+</tr></thead><tbody>
+<tr>
+<td><code>on_activate(manager)</code></td>
+<td>the mode becomes active</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>on_deactivate(manager)</code></td>
+<td>switching away from this mode</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>handle_button(button_id)</code></td>
+<td>a button is pressed (once per press, not release)</td>
+<td><code>True</code> if handled</td>
+</tr>
+<tr>
+<td><code>handle_axis(axis_id, value)</code></td>
+<td>an analog stick flicks past the dead-zone (debounced — one call per discrete flick)</td>
+<td><code>True</code> if handled</td>
+</tr>
+<tr>
+<td><code>handle_hat(x, y)</code></td>
+<td>the d-pad changes direction (edge-detected)</td>
+<td><code>True</code> if handled</td>
+</tr>
+<tr>
+<td><code>handle_bumper(is_left)</code></td>
+<td>a bumper is <strong>tapped</strong> (short press+release, not a hold)</td>
+<td><code>True</code> if handled</td>
+</tr>
+</tbody></table>
+
+<p>Bumpers (buttons 4/5) never reach <code>handle_button</code> — they're reserved for
+mode switching. A <strong>tap</strong> (press+release under the hold threshold) is
+delivered to <code>handle_bumper</code> instead; <strong>holding</strong> a bumper for ~1s still
+changes the controller mode regardless of what the active mode returns.</p>
+
+<h2>Button / Axis / Hat Numbering</h2>
+
+<p>Standard Xbox / XInput layout:</p>
+
+<li><strong>Buttons</strong>: <code>0</code>=A, <code>1</code>=B, <code>2</code>=X, <code>3</code>=Y, <code>6</code>=Back/View, <code>7</code>=Start/Menu,</li>
+  <code>8</code>=left-stick press, <code>9</code>=right-stick press, <code>10</code>=Guide. <code>4</code>/<code>5</code>
+  (bumpers) never reach <code>handle_button</code>.
+<li><strong>Axes</strong>: <code>0</code>=left X, <code>1</code>=left Y, <code>2</code>=right X, <code>3</code>=right Y. Negative =</li>
+  up/left, positive = down/right.
+<li><strong>Hat</strong>: <code>x</code> is <code>-1</code>/<code>0</code>/<code>1</code> (left/centre/right), <code>y</code> is <code>1</code>/<code>0</code>/<code>-1</code></li>
+  (up/centre/down) — pygame's hat convention.
+
+<h2>Helper Functions</h2>
+
+<p>All importable from <code>src.controller.gamepad_mode_api</code>:</p>
+
+<li><code>setup_mode_translations(__file__, domain)</code> — load the mode's own</li>
+  gettext domain from its <code>languages/</code> folder; falls back to identity if
+  missing
+<li><code>speak(text, position=0.0, interrupt=True, pitch_offset=0)</code> — send text</li>
+  to the active screen reader / Titan TTS (stereo pan + pitch aware)
+<li><code>play_mode_sound(path=&#x27;joystick/ui2.ogg&#x27;, pan=None, elevation=0.0)</code> —</li>
+  play a TCE sound effect from the current sfx theme
+<li><code>tap(key, hold=0.04)</code> / <code>press(key)</code> / <code>release(key)</code> — simulate a</li>
+  single keystroke (pynput-backed, falls back to the <code>keyboard</code> package on
+  Windows) — cross-platform
+<li><code>tap_combo(*keys, hold=0.04)</code> — simulate a chord, e.g.</li>
+  <code>tap_combo(&#x27;ctrl&#x27;, &#x27;c&#x27;)</code>
+<li><code>type_text(text)</code> — type a string character by character</li>
+<li><code>get_clipboard_text()</code> — read current clipboard text (<strong>Windows only</strong>,</li>
+  <code>&#x27;&#x27;</code> on other platforms)
+<li><code>get_focused_window_text()</code> — read the focused control's full text via</li>
+  <code>WM_GETTEXT</code>, read-only — no keystrokes, no caret movement (**Windows
+  only**, <code>&#x27;&#x27;</code> elsewhere); good for grabbing a document into a virtual
+  buffer
+<li><code>is_edit_field_focused()</code> — <code>True</code> when a text caret is present</li>
+  (<strong>Windows only</strong>; returns <code>True</code> on other platforms so modes stay
+  usable)
+
+<p>Key names for <code>tap</code>/<code>press</code>/<code>release</code>: single characters plus <code>enter</code>,
+<code>escape</code>, <code>backspace</code>, <code>tab</code>, <code>space</code>, <code>shift</code>, <code>ctrl</code>, <code>alt</code>, <code>win</code>,
+<code>insert</code>, <code>delete</code>, <code>home</code>, <code>end</code>, <code>pageup</code>, <code>pagedown</code>, <code>up</code>, <code>down</code>,
+<code>left</code>, <code>right</code>, <code>capslock</code>, <code>num0</code>..<code>num9</code>.</p>
+
+<h2>Design Principles</h2>
+
+<li><strong>Never silently drive the focused app</strong> — prefer read-only inspection</li>
+   (<code>get_focused_window_text</code>, <code>get_clipboard_text</code>) over keystroke
+   injection unless the mode's whole purpose is to act as a remote control
+<li><strong>Always give audio feedback</strong> — every handled event should <code>speak()</code></li>
+   or <code>play_mode_sound()</code> something; a silent gamepad mode is unusable for
+   a blind user
+<li><strong>Announce yourself on activation</strong> — <code>on_activate</code> should briefly</li>
+   explain the controls so the user doesn't need to look anything up
+<li><strong>Return <code>True</code> only when you actually handle the event</strong></li>
+<li><strong>Keep <code>handle_*</code> fast</strong> — these run on the controller polling thread;</li>
+   don't block on network/disk I/O inside them
+
+<h2>Complete Example: Media Control Mode</h2>
+
+<p>A simple mode mapping face buttons to media playback, with audio feedback
+on every action.</p>
+
+<p><strong>File: <code>data/gamepad/modes/media_control/__mode__.TCE</code></strong>
+<pre><code class="language-ini">[mode]
+name = Media Control
+name_pl = Sterowanie mediami
+name_en = Media Control
+main = media_control.py
+description = Control media playback with face buttons: A play/pause, B next, X previous, Y mute.
+status = 0</code></pre></p>
+
+<p><strong>File: <code>data/gamepad/modes/media_control/media_control.py</code></strong>
+<pre><code class="language-python">&quot;&quot;&quot;
+Media Control - custom gamepad mode for TCE.
+
+Controls:
+  * A (0) - Play / Pause
+  * B (1) - Next track
+  * X (2) - Previous track
+  * Y (3) - Mute / Unmute
+&quot;&quot;&quot;
+
+from src.controller.gamepad_mode_api import (
+    GamepadMode, setup_mode_translations, speak, play_mode_sound,
+)
+
+_ = setup_mode_translations(__file__, &#x27;media_control&#x27;)
+
+
+class MediaControlMode(GamepadMode):
+    name = &quot;Media Control&quot;
+
+    def on_activate(self, manager):
+        speak(_(&quot;Media control. A play pause, B next, X previous, Y mute.&quot;))
+
+    def handle_button(self, button_id):
+        if button_id == 0:  # A
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Play / Pause&quot;))
+            return True
+        if button_id == 1:  # B
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Next track&quot;))
+            return True
+        if button_id == 2:  # X
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Previous track&quot;))
+            return True
+        if button_id == 3:  # Y
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Mute&quot;))
+            return True
+        return False</code></pre></p>
+
+<h2>Reference Examples</h2>
+
+<li><strong>document_reader</strong> (<code>data/gamepad/modes/document_reader/</code>): Read-only</li>
+  virtual-buffer reader — captures the focused text field or clipboard
+  into its own buffer and navigates it line-by-line / char-by-char without
+  ever touching the real caret. Full translation support (<code>languages/</code>).
+<li><strong>titan_talk</strong> (<code>data/gamepad/modes/titan_talk/</code>): Heavier example that</li>
+  vendors third-party dependencies (<code>uiautomation</code>, <code>Pillow</code>) via <code>lib/</code> —
+  a joystick-driven screen reader.
+
+<h2>Translation Setup</h2>
+
+<pre><code class="language-bash"># 1. Create languages/ directory inside the mode folder
+mkdir data/gamepad/modes/my_mode/languages
+
+# 2. Extract translatable strings
+pybabel extract -o languages/my_mode.pot --no-default-keywords --keyword=_ \
+    data/gamepad/modes/my_mode/my_mode.py
+
+# 3. Initialize languages
+pybabel init -l pl -d data/gamepad/modes/my_mode/languages \
+    -i data/gamepad/modes/my_mode/languages/my_mode.pot -D my_mode
+pybabel init -l en -d data/gamepad/modes/my_mode/languages \
+    -i data/gamepad/modes/my_mode/languages/my_mode.pot -D my_mode
+
+# 4. Compile
+pybabel compile -d data/gamepad/modes/my_mode/languages</code></pre>
+
+<h2>Packaging as <code>.TCD</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, a gamepad mode can be distributed as a
+single <code>.tcd</code> file — same content, including any bundled <code>lib/</code> native
+dependencies. Purely optional and additive.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/gamepad/modes/my_mode --kind gamepad_mode -o my_mode.tcd</code></pre>
+
+<li><code>.tcd</code> is a custom compressed container (magic header + LZMA payload),</li>
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+<li>No code changes needed: the payload is byte-identical to the directory,</li>
+  so <code>__mode__.TCE</code> and the main <code>.py</code> file still resolve the same way
+  once extracted, and vendored <code>lib/</code> dependencies work unmodified.
+<li>Drop the <code>.tcd</code> into <code>data/gamepad/modes/</code> (bundled or per-user overlay)</li>
+  and it's discovered identically to a directory-based mode.
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
+
+<h2>Multiplatform Requirements</h2>
+
+<p>Gamepad modes run inside TCE's controller polling loop on **Windows,
+macOS, and Linux**.</p>
+
+<li><code>speak()</code>, <code>play_mode_sound()</code>, <code>tap()</code>/<code>press()</code>/<code>release()</code>/</li>
+  <code>tap_combo()</code> are already cross-platform (pynput-backed) — use them
+  freely
+<li><code>get_clipboard_text()</code>, <code>get_focused_window_text()</code>,</li>
+  <code>is_edit_field_focused()</code> are <strong>Windows-only</strong> — they return safe
+  defaults (<code>&#x27;&#x27;</code> / <code>True</code>) on macOS and Linux; a mode that depends on them
+  should announce gracefully when the returned value is empty rather than
+  assuming Windows
+<li>Do not import <code>win32com</code>, <code>winreg</code>, or other Windows-only modules at</li>
+  module level without a <code>try/except</code> or <code>sys.platform == &#x27;win32&#x27;</code> guard
+
+<h2>Testing Your Mode</h2>
+
+<li>Create the mode folder under <code>data/gamepad/modes/</code></li>
+<li>Add <code>__mode__.TCE</code> and the main <code>.py</code> file with a <code>GamepadMode</code> subclass</li>
+<li>Restart TCE with a gamepad connected</li>
+<li>Hold LB/RB for ~1 second to cycle to the new mode; confirm it announces</li>
+   itself on activation
+<li>Test every button/stick/d-pad/bumper-tap control you implemented</li>
+<li>Check console output for <code>[GamepadMode] loaded mode &#x27;...&#x27;</code> — if it's</li>
+   missing, check <code>status = 0</code> and that the main file has a <code>GamepadMode</code>
+   subclass
+
+<h2>Key Tips</h2>
+
+<li><strong>Always give audio feedback</strong> — sounds and/or TTS for every handled</li>
+   event
+<li><strong>Announce controls on activation</strong> — don't make the user guess</li>
+<li><strong>Never assume Windows</strong> — use the multiplatform guards above</li>
+<li><strong>Keep input handlers fast</strong> — they run on the controller polling</li>
+   thread
+<li><strong>Prefer read-only inspection over keystroke injection</strong> unless the</li>
+   mode is explicitly a remote control
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

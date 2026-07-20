@@ -33,20 +33,154 @@ status = 1
 **Parameters:**
 - `name` - name displayed in component manager
 - **`status = 1` means DISABLED, `status = 0` means ENABLED** (inverted!)
+- `libs` (optional) - comma-separated dirs under the component folder added
+  to `sys.path` before loading (default `lib`), so the component can vendor
+  its own third-party dependencies (native DLLs, bundled Python packages)
 - **IMPORTANT**: File name is `__component__.TCE` (uppercase .TCE)
 - **IMPORTANT**: Main file is `init.py` (lowercase, NOT `__init__.py`)
 - **IMPORTANT**: Add blank line at end of file
 
+## Component Implementation
+
+### Basic init.py structure
+
+```python
+# -*- coding: utf-8 -*-
+"""
+Component name - description
+"""
+
+import os
+import sys
+import wx
+import gettext
+
+# Add the component directory to the path
+COMPONENT_DIR = os.path.dirname(__file__)
+if COMPONENT_DIR not in sys.path:
+    sys.path.insert(0, COMPONENT_DIR)
+
+# Add the TCE root directory to the path
+TCE_ROOT = os.path.abspath(os.path.join(COMPONENT_DIR, '..', '..', '..'))
+if TCE_ROOT not in sys.path:
+    sys.path.insert(0, TCE_ROOT)
+
+# Import TCE modules
+try:
+    from src.titan_core.sound import play_sound
+    SOUND_AVAILABLE = True
+except ImportError as e:
+    SOUND_AVAILABLE = False
+    print(f"[component_id] Warning: sound module not available: {e}")
+
+try:
+    from src.settings.settings import get_setting
+    SETTINGS_AVAILABLE = True
+except ImportError as e:
+    SETTINGS_AVAILABLE = False
+    print(f"[component_id] Warning: settings module not available: {e}")
+    def get_setting(key, default='', section='general'):
+        return default
+
+# Translation support
+LANGUAGES_DIR = os.path.join(COMPONENT_DIR, 'languages')
+
+try:
+    if SETTINGS_AVAILABLE:
+        lang = get_setting('language', 'pl')
+    else:
+        lang = 'pl'
+
+    translation = gettext.translation('component_id', localedir=LANGUAGES_DIR, languages=[lang], fallback=True)
+    translation.install()
+    _ = translation.gettext
+except Exception as e:
+    print(f"[component_id] Translation loading failed: {e}")
+    def _(text):
+        return text
+
+
+class MyComponent:
+    """Main component class"""
+
+    def __init__(self):
+        """Initialize the component"""
+        self._ = _
+        print(f"[component_id] Component initialized")
+
+    def enable(self):
+        """Enable component functionality"""
+        try:
+            # Add component logic here
+            if SOUND_AVAILABLE:
+                play_sound('ui/dialog.ogg')
+            print(f"[component_id] Component enabled")
+            return True
+        except Exception as e:
+            print(f"[component_id] Error enabling component: {e}")
+            return False
+
+    def disable(self):
+        """Disable component functionality"""
+        try:
+            # Add cleanup logic here
+            if SOUND_AVAILABLE:
+                play_sound('ui/dialogclose.ogg')
+            print(f"[component_id] Component disabled")
+        except Exception as e:
+            print(f"[component_id] Error disabling component: {e}")
+
+
+# Global component instance
+_component_instance = None
+
+
+def get_component():
+    """Get the global component instance"""
+    global _component_instance
+    if _component_instance is None:
+        _component_instance = MyComponent()
+    return _component_instance
+
+
+def initialize(app=None):
+    """Component initialization - called by ComponentManager"""
+    try:
+        print(f"[component_id] Initializing component...")
+        component = get_component()
+        # Add initialization logic here
+        print(f"[component_id] Component initialized successfully")
+    except Exception as e:
+        print(f"[component_id] Error during initialization: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def shutdown():
+    """Component shutdown - called by ComponentManager"""
+    global _component_instance
+    try:
+        print(f"[component_id] Shutting down component...")
+        if _component_instance:
+            _component_instance.disable()
+            _component_instance = None
+        print(f"[component_id] Component shutdown complete")
+    except Exception as e:
+        print(f"[component_id] Error during shutdown: {e}")
+        import traceback
+        traceback.print_exc()
+```
+
 ## Component Interface
 
-### Required Functions
+All of the functions below are optional — the component manager checks
+with `hasattr()` before calling any of them, `initialize` included, so a
+component missing one simply skips that step rather than failing to load.
 
 #### initialize(app=None)
-**Required function** called at Titan startup:
+Called at Titan startup, if defined:
 - `app` - wxPython main application instance (may be None)
 - Use for initializing resources, starting threads
-
-### Optional Functions
 
 #### shutdown()
 Called at Titan shutdown:
@@ -138,6 +272,65 @@ def get_klango_hooks():
         'on_klango_init': on_klango_init
     }
 ```
+
+### Launcher Hooks (get_launcher_hooks)
+
+Component can hook into alternative-launcher startup:
+
+```python
+def get_launcher_hooks():
+    """Return launcher hooks dict (optional)
+
+    Available hooks:
+        'on_launcher_init': called with (launcher_manager, launcher_name)
+        when an alternative launcher starts
+    """
+    return {
+        'on_launcher_init': on_launcher_init
+    }
+
+def on_launcher_init(launcher_manager, launcher_name):
+    """Hook called when an alternative launcher (see the Launcher Creation
+    Guide) starts up"""
+    pass
+```
+
+## Buffer System API (Automatically Injected)
+
+The component manager injects a module-level `buffers` object (bound to
+your component name) into your `init.py`'s namespace before it runs. It
+feeds the Titan Buffer System — the shared, audio-game-style review of
+recent messages/notifications navigated identically from the GUI, Klango
+mode, and the tilde Titan UI overlay. Use it if your component produces a
+stream of items the user might want to review (feed posts, alerts,
+incoming events, etc.):
+
+```python
+# `buffers` is injected as a module global. For standalone testing (running
+# init.py directly) fall back to creating one:
+try:
+    buffers
+except NameError:
+    from src.buffers import buffer_bus
+    buffers = buffer_bus.make_module_api("mycomponent")
+
+buffers.register_category("My Component")            # optional nice name
+buffers.ensure_buffer("events", "Events", kind="notification")
+
+# Push each new item as it arrives (thread-safe, never raises):
+buffers.push("events", text, author=source_name)
+```
+
+`kind` is a hint (`'message'` | `'private'` | `'notification'`). `push()`
+returns `True` when the item landed in the buffer the user is currently
+reviewing (Titan plays a quiet ping); background buffers stay silent. Skip
+this entirely if your component does not produce reviewable items.
+
+Note: this injection is reliable in the frozen `.pyc`-via-importlib load
+path and in development mode. One frozen-build path (a component shipped
+as a raw `.py` with no compiled `.pyc` next to it) loads via `exec()` and
+does NOT get `buffers` injected — always use the `except NameError`
+fallback shown above rather than assuming the module global exists.
 
 ## Component View Registration API
 
@@ -458,6 +651,87 @@ status = 0
 
 ```
 
+## System Integration
+
+### Accessing the main application
+```python
+def initialize(app=None):
+    if app:
+        # Access the main window
+        main_frame = app.GetTopWindow()
+        # Access the menu
+        menubar = main_frame.GetMenuBar()
+        # Access the status bar
+        statusbar = main_frame.GetStatusBar()
+```
+
+### Thread-safe calls
+```python
+# Use wx.CallAfter for GUI operations from threads
+wx.CallAfter(self._update_ui, data)
+
+def _update_ui(self, data):
+    # GUI-modifying code
+    pass
+```
+
+### Using system sounds
+```python
+from src.titan_core.sound import play_sound, play_error_sound, play_dialog_sound
+
+def my_function():
+    play_sound("focus.ogg")  # Play a sound from the current theme
+    play_error_sound()       # Error sound
+```
+
+### Accessing settings
+```python
+from src.settings.settings import get_setting, set_setting
+
+def initialize(app=None):
+    # Read a setting
+    enabled = get_setting('my_component_enabled', 'True', section='components')
+
+    # Save a setting
+    set_setting('my_component_value', '42', section='components')
+```
+
+## Component State Management
+
+### Enabling/disabling
+Users can enable/disable components through:
+1. The Component Manager in the GUI
+2. Invisible UI → Menu → Components
+
+### State persistence
+The enabled/disabled state is stored in `__component__.TCE`:
+```ini
+[component]
+name = My Component
+status = 0  # 0 = enabled, 1 = disabled
+```
+
+## Directory Structure
+
+```
+data/components/my_component/
+├── init.py              # Main component file (NOT __init__.py!)
+├── __component__.TCE    # Component configuration
+├── bookmarks.json       # Component data (example)
+├── resources/           # Resources (optional)
+│   ├── sounds/
+│   └── images/
+├── data/                # Data files (optional)
+└── languages/           # Translations (optional)
+    ├── component_id.pot
+    ├── pl/
+    │   └── LC_MESSAGES/
+    │       └── component_id.mo
+    └── en/
+        └── LC_MESSAGES/
+            └── component_id.mo
+```
+
 ## Component Types
 
 - **Service**: Background services (e.g., screen reader integration, system monitoring)
@@ -477,6 +751,28 @@ status = 0
 8. **Refresh data in on_show** when view becomes visible (Ctrl+Tab)
 9. **Add context menus** for better UX (right-click on ListBox/TreeCtrl)
 
+## Packaging as `.TCD` (Optional)
+
+Instead of shipping a directory, a component can be distributed as a
+single `.tcd` file — same content, including any bundled `lib/` native
+dependencies. Purely optional and additive.
+
+```bash
+python src/scripts/pack_addon.py data/components/my_component --kind component -o my_component.tcd
+```
+
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `init.py` and `__component__.TCE` still resolve the same way once
+  extracted, and native `lib/` dependencies work unmodified since
+  `sys.path` insertion is computed from the extracted path.
+- Drop the `.tcd` into `data/components/` (bundled or per-user overlay) and
+  it's discovered/loaded identically to a directory-based component.
+
+See `src/titan_core/titan_package.py` for the format implementation.
+
 ## Testing Components
 
 1. Place component in `data/components/component_name/`
@@ -486,5 +782,50 @@ status = 0
 5. Check component manager if component is loaded
 6. Test functionality through component menu
 7. If component registers view, test Ctrl+Tab cycle
+
+## Debugging
+
+### Component logs
+```python
+import logging
+
+# Configure a logger
+logger = logging.getLogger(__name__)
+
+def initialize(app=None):
+    logger.info("Component initializing")
+
+def shutdown():
+    logger.info("Component shutting down")
+```
+
+### Error handling
+```python
+def initialize(app=None):
+    try:
+        # Initialization code
+        pass
+    except Exception as e:
+        print(f"Component initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+```
+
+## Reference Examples
+
+- **TitanScreenReader** (`data/components/TitanScreenReader/`): Complex screen reader
+  - Service-type component with background monitoring
+  - Multiple sub-modules (uia_handler, speech_manager, keyboard_handler)
+  - Settings dialog with wxPython
+  - Translation support
+
+- **tips** (`data/components/tips/`): Tips system
+  - Simple Feature-type component
+  - Background thread for periodic tips
+  - Settings dialog
+
+- **tDict** (`data/components/tDict/`): Dictionary component
+  - `data/` subdirectory for dictionary files
+  - Translation support
 
 Components enable extending Titan functionality in a modular and safe way. With the simple API, you can easily add new capabilities without modifying the main application code.

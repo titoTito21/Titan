@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_en.html">Creating Games</a></li>
 <li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
 <li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
                 </ul>
             </nav>
         </aside>
@@ -455,6 +456,49 @@ The system automatically positions speech based on values returned from <code>na
     # Return: (success, horizontal_index, total_horizontal_items)
     return True, current_column, total_columns</code></pre>
 
+<h2>Buffer System API (Optional)</h2>
+
+<p>Widgets run <strong>in-process</strong> in the host Titan. If your widget surfaces a
+stream of items the user might want to review later (alerts, feed entries,
+status changes), publish them into the Titan Buffer System so they appear
+in Titan's shared, audio-game-style review (GUI / Klango / tilde Titan UI
+overlay):</p>
+
+<pre><code class="language-python">from src.buffers import buffer_bus
+
+buffer_bus.push(&quot;mywidget&quot;, &quot;alerts&quot;, text,
+                category_name=&quot;My Widget&quot;, buffer_name=_(&quot;Alerts&quot;), kind=&quot;notification&quot;)</code></pre>
+
+<p>In-process, <code>push()</code> returns <code>True</code> and plays a quiet ping when the item
+lands in the buffer the user is currently reviewing; background buffers
+<table class="doc-table">
+<thead><tr>
+<th>stay silent. <code>kind</code> is a hint (<code>&#x27;message&#x27;</code></th>
+<th><code>&#x27;private&#x27;</code></th>
+<th><code>&#x27;notification&#x27;</code>).</th>
+</tr></thead><tbody>
+</tbody></table>
+Calls are best-effort and never raise. Most widgets do not need this — only
+add it if your widget genuinely produces reviewable items.</p>
+
+<h2>Packaging as <code>.TCD</code> (Optional)</h2>
+
+<p>Instead of shipping a directory, a widget can be distributed as a single
+<code>.tcd</code> file. Purely optional and additive.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/applets/my_widget --kind widget -o my_widget.tcd</code></pre>
+
+<li><code>.tcd</code> is a custom compressed container (magic header + LZMA payload),</li>
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+<li>No code changes needed: the payload is byte-identical to the directory,</li>
+  so <code>main.py</code>/<code>applet.json</code> (or legacy <code>init.py</code>) still resolve the same
+  way once extracted.
+<li>Drop the <code>.tcd</code> into <code>data/applets/</code> (bundled or per-user overlay) and</li>
+  it's discovered identically to a directory-based widget.
+
+<p>See <code>src/titan_core/titan_package.py</code> for the format implementation.</p>
+
 <h2>Directory Structure</h2>
 
 <h3>Legacy system (init.py)</h3>
@@ -470,6 +514,13 @@ The system automatically positions speech based on values returned from <code>na
     ├── messages.pot
     ├── pl/
     └── en/</code></pre>
+
+<p><strong>Loading order matters</strong>: <code>load_widgets()</code> in <code>src/ui/invisibleui.py</code> checks
+for <code>init.py</code> (legacy) <strong>first</strong>. If it's present and loads successfully,
+the modern <code>applet.json</code>/<code>main.py</code> files in the same folder are never even
+looked at. New widgets should use the modern format and must NOT also
+include an <code>init.py</code> in the same folder, or the legacy loader will silently
+shadow it.</p>
 
 <h2>Internationalization</h2>
 

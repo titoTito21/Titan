@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -455,6 +456,50 @@ System automatycznie pozycjonuje mowę na podstawie zwracanych wartości z <code
     # Zwróć: (success, horizontal_index, total_horizontal_items)
     return True, current_column, total_columns</code></pre>
 
+<h2>API systemu buforów (opcjonalnie)</h2>
+
+<p>Widgety działają <strong>w tym samym procesie</strong> co Titan. Jeśli Twój widget
+generuje strumień elementów, które użytkownik może chcieć przejrzeć
+później (alerty, wpisy z kanału, zmiany statusu), wypchnij je do Systemu
+Buforów Titana, żeby pojawiły się w jego współdzielonym, audio-growym
+przeglądzie (GUI / Klango / nakładka Titan UI pod tyldą):</p>
+
+<pre><code class="language-python">from src.buffers import buffer_bus
+
+buffer_bus.push(&quot;mywidget&quot;, &quot;alerts&quot;, text,
+                category_name=&quot;My Widget&quot;, buffer_name=_(&quot;Alerts&quot;), kind=&quot;notification&quot;)</code></pre>
+
+<p>W tym samym procesie <code>push()</code> zwraca <code>True</code> i odtwarza ciche piknięcie, gdy
+element trafi do bufora aktualnie przeglądanego przez użytkownika; bufory w
+<table class="doc-table">
+<thead><tr>
+<th>tle pozostają ciche. <code>kind</code> to podpowiedź (<code>&#x27;message&#x27;</code></th>
+<th><code>&#x27;private&#x27;</code></th>
+</tr></thead><tbody>
+</tbody></table>
+<code>&#x27;notification&#x27;</code>). Wywołania są best-effort i nigdy nie rzucają wyjątku.
+Większość widgetów tego nie potrzebuje — dodaj to tylko jeśli Twój widget
+faktycznie generuje elementy warte przejrzenia.</p>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, widget można rozpowszechniać jako pojedynczy plik
+<code>.tcd</code>. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/applets/moj_widget --kind widget -o moj_widget.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>main.py</code>/<code>applet.json</code> (lub legacy <code>init.py</code>) nadal
+  działają tak samo po rozpakowaniu.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/applets/</code> (wbudowanym lub w</li>
+  nakładce użytkownika) — zostanie wykryty dokładnie tak samo jak widget
+  oparty na katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
+
 <h2>Struktura katalogów</h2>
 
 <h3>System legacy (init.py)</h3>
@@ -470,6 +515,14 @@ System automatycznie pozycjonuje mowę na podstawie zwracanych wartości z <code
     ├── messages.pot
     ├── pl/
     └── en/</code></pre>
+
+<p><strong>Kolejność ładowania ma znaczenie</strong>: <code>load_widgets()</code> w
+<code>src/ui/invisibleui.py</code> sprawdza obecność <code>init.py</code> (legacy) **jako
+pierwszą**. Jeśli plik istnieje i załaduje się poprawnie, pliki nowego
+systemu (<code>applet.json</code>/<code>main.py</code>) w tym samym folderze nigdy nie zostaną
+nawet sprawdzone. Nowe widgety powinny używać nowego systemu i NIE mogą
+mieć w tym samym folderze <code>init.py</code>, bo legacy loader po cichu je
+przesłoni.</p>
 
 <h2>Internacjonalizacja</h2>
 

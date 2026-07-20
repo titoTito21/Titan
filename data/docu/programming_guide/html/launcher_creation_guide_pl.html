@@ -255,6 +255,7 @@
 <li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
 <li><a href="launcher_creation_guide_pl.html" class="active">Tworzenie launcherów</a></li>
 <li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
                 </ul>
             </nav>
         </aside>
@@ -394,7 +395,7 @@ invisible_ui = false</code></pre>
 <tr>
 <td>system_hooks</td>
 <td>true</td>
-<td>Hooki systemowe (klawisz Win, lockscreen, ...)</td>
+<td>Parsowane, ale <strong>obecnie nie steruje niczym</strong> w <code>LauncherAPI.__init__</code> — zachowane na przyszłość, nie polegaj na ustawieniu <code>false</code> żeby cokolwiek wyłączyć</td>
 </tr>
 <tr>
 <td>notifications</td>
@@ -491,13 +492,18 @@ api.get_stereo_speech()                # instancja StereoSpeech lub None</code><
 
 <h4>Wibracje kontrolera</h4>
 <pre><code class="language-python">api.vibrate_cursor_move()
+api.vibrate_menu_open()
+api.vibrate_menu_close()
 api.vibrate_selection()
 api.vibrate_focus_change()
 api.vibrate_error()
 api.vibrate_notification()
 api.vibrate_startup()
 api.set_vibration_enabled(True)
-api.set_vibration_strength(0.7)</code></pre>
+api.set_vibration_strength(0.7)
+api.get_controller_info()              # informacje o statusie kontrolera lub None
+api.refresh_controllers()
+api.test_vibration()</code></pre>
 
 <h4>Statusbar (pasek statusu)</h4>
 <pre><code class="language-python">api.statusbar_applet_manager.get_statusbar_items()    # lista wszystkich tekstów [str]
@@ -520,7 +526,8 @@ api.request_exit()                         # zamknięcie pętli wx (graceful)
 api.force_exit()                           # twardy shutdown TCE + os._exit(0)
 api.register_shutdown_callback(callback)   # zarejestruj callback przy zamykaniu
 api.has_feature(&#x27;applications&#x27;)            # czy funkcja jest włączona (bool)
-api.check_for_updates()                    # sprawdź aktualizacje TCE
+api.check_for_updates()                    # sprawdź aktualizacje TCE, pokazuje okno jeśli dostępna → bool
+api.show_shutdown_dialog()                 # pokaż okno potwierdzenia zamknięcia TCE
 
 # Minimalizacja do tray:
 api.register_minimize_handler(callback)    # callback ukrywa twoje okno
@@ -1025,6 +1032,28 @@ def shutdown():
         pass
     _window = None
     _qt_app = None</code></pre>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, launcher można rozpowszechniać jako pojedynczy plik
+<code>.tcd</code>. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/launchers/moj_launcher --kind launcher -o moj_launcher.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>init.py</code> i <code>__launcher__.TCE</code> nadal działają tak samo
+  po rozpakowaniu.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/launchers/</code> (wbudowanym lub w</li>
+  nakładce użytkownika) — zostanie wykryty tak samo jak launcher oparty na
+  katalogu. Uwaga: samo zainstalowanie paczki launchera nie sprawia, że
+  staje się on aktywnym launcherem — trzeba go dodatkowo wybrać (Ustawienia
+  albo <code>--launcher &lt;nazwa&gt;</code>), tak samo jak przy ręcznie zainstalowanym
+  katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
 
 <h2>Weryfikacja instalacji</h2>
 

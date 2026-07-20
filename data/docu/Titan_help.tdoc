@@ -16,19 +16,51 @@ Alt - aktywacja menu głównego programu
 #System aplikacji
 Aplikacje Titan to niezależne programy napisane w języku Python lub skompilowane do plików wykonywalnych (.exe). Jedynym elementem łączącym TCE z aplikacją jest odpowiedni wpis konfiguracyjny. Wszystkie domyślne aplikacje TCE są opracowywane zgodnie ze standardami TCE, charakteryzując się prostotą, intuicyjnością i możliwością konfiguracji.
 
+Aplikację można zainstalować jako zwykły katalog, albo jako pojedynczy spakowany plik .TCA - zobacz sekcję "Pakowanie dodatków (.TCA/.TCD)" poniżej.
+
 #System gier
-Titan oferuje pełne wsparcie dla gier TCE oraz zewnętrznych aplikacji rozrywkowych. System domyślnie nie zawiera wbudowanych gier.
+Titan oferuje pełne wsparcie dla gier TCE oraz zewnętrznych aplikacji rozrywkowych. System domyślnie nie zawiera wbudowanych gier. Titan wykrywa też automatycznie gry Steam i Battle.net zainstalowane w systemie.
 
 Informacja dla programistów: Dokumentacja dotycząca tworzenia aplikacji i gier dostępna jest w katalogu titan/data/docu/programming guide
 
+#Komponenty
+Komponenty to rozszerzenia działające w tle, które dodają nowe funkcje do Titana - integracje, czytniki, narzędzia dostępności i inne. Komponentami zarządzasz w Menedżerze komponentów, gdzie możesz je włączać i wyłączać. Niektóre komponenty dodają własną kategorię ustawień albo własny widok w głównym panelu (przełączany klawiszem Ctrl+Tab).
+
+#Tryby gamepada
+Titan obsługuje pełną nawigację gamepadem. Wbudowane tryby to: System, Kontroler, Czytnik ekranu oraz Klawiatura ekranowa.
+
+Przytrzymanie zderzaka (LB lub RB) przez około sekundę przełącza tryb sterowania - LB cofa do poprzedniego trybu, RB przechodzi do następnego. Programiści mogą dodawać własne tryby gamepada (np. czytniki dokumentów, sterowanie mediami) - trafiają one do tego samego cyklu przełączania.
+
+#Silniki mowy (TitanTTS)
+Titan mówi przez wybrany silnik mowy - może to być silnik systemowy (SAPI5, eSpeak, macOS Speech, Speech Dispatcher) albo jeden z wtyczek TitanTTS (np. Milena, ElevenLabs, DECtalk, Eloquence i inne, zależnie od zainstalowanych silników). Silnik, głos, tempo i wysokość mowy zmienisz w Ustawieniach, w sekcji dźwięku/mowy.
+
+#Pakowanie dodatków (.TCA/.TCD)
+Aplikacje, gry oraz inne dodatki (komponenty, launchery, moduły Titan IM, tryby gamepada, silniki TTS, widgety, aplety paska statusu) można rozpowszechniać jako pojedynczy plik zamiast katalogu:
+- aplikacje i gry: rozszerzenie .TCA
+- wszystkie pozostałe rodzaje dodatków: rozszerzenie .TCD
+
+To własny, skompresowany format - celowo nie jest to zwykłe archiwum zip, więc nie da się go otworzyć w 7-Zip ani Eksploratorze Windows jako archiwum.
+
+Aby zainstalować taki plik, wystarczy dwuklik na pliku .TCA/.TCD w Eksploratorze Windows (Titan rejestruje to skojarzenie automatycznie przy starcie) - Titan skopiuje go do odpowiedniego katalogu danych i od razu uruchomi (dla aplikacji/gier) albo udostępni (dla pozostałych rodzajów dodatków). Pliki te można też pobierać i przesyłać przez repozytorium aplikacji Titan-Net.
+
+Programiści znajdą pełną instrukcję pakowania własnych dodatków w przewodnikach w data/docu/programming_guide/.
+
 #Titan IM
-Moduł Titan IM zapewnia integrację z popularnymi komunikatorami: Telegram, Messenger oraz WhatsApp. Ze względu na ograniczenia techniczne, WhatsApp i Messenger działają jako aplikacje internetowe zintegrowane z TCE poprzez dedykowane skrypty.
+Moduł Titan IM zapewnia integrację z popularnymi komunikatorami: Telegram, Messenger oraz WhatsApp, a także z własną siecią społecznościową Titana (Titan-Net) i z Elten (patrz osobne sekcje poniżej). Ze względu na ograniczenia techniczne, WhatsApp i Messenger działają jako aplikacje internetowe zintegrowane z TCE poprzez dedykowane skrypty.
 
 #Pasek statusu
 Pasek statusu wyświetla kluczowe informacje systemowe, takie jak: aktualny czas, poziom naładowania baterii, głośność systemu oraz status połączenia sieciowego.
 
 #Niewidzialny interfejs
 Po zminimalizowaniu okna głównego, Titan automatycznie przełącza się w tryb niewidzialnego interfejsu. Tryb ten umożliwia pełne sterowanie programem z poziomu dowolnej aplikacji w systemie, bez konieczności przełączania okien.
+
+#Skróty klawiszowe niewidzialnego interfejsu
+Kombinacja Ctrl+Shift pełni rolę głównego modyfikatora w niewidzialnym interfejsie. W dokumentacji skróty przedstawiane są jako "Titan+klawisz" dla uproszczenia zapisu.
+
+Titan+strzałki - nawigacja w czterech kierunkach (góra, dół, lewo, prawo). W trybie domyślnym (poza widgetami) strzałki góra/dół przełączają między kategoriami, a lewo/prawo między elementami danej kategorii. W widgetach strzałki zapewniają standardową nawigację kierunkową
+Titan+Enter - aktywuj zaznaczony element
+Titan+Backspace lub Titan+Esc - wyjdź z bieżącego widgetu
+Klawisz tylda (~) - przełącz tryb Titan UI (jeśli opcja jest aktywna)
 
 #Tryb Titan UI
 Tryb Titan UI umożliwia nawigację po interfejsie wyłącznie za pomocą klawiszy strzałek, bez konieczności przytrzymywania dodatkowych modyfikatorów. Zapewnia to jeszcze większy komfort użytkowania dla osób preferujących uproszczoną nawigację.

@@ -1,291 +1,322 @@
-# Przewodnik tworzenia modułów Titan IM
+# Titan IM Module Creation Guide
 
-## Wprowadzenie
+## Introduction
 
-Moduły Titan IM to zewnętrzne wtyczki komunikatorów dla systemu Titan IM w TCE Launcher. Moduły znajdują się w katalogu `data/titanIM_modules/` i mogą dodawać własne komunikatory, czytniki RSS, narzędzia społecznościowe i wiele innych.
+Titan IM modules are external communicator plugins for the Titan IM system in TCE Launcher. Modules live in the `data/titanIM_modules/` directory and can add custom communicators, RSS readers, social tools, and much more.
 
-## Architektura modułów Titan IM
+## Titan IM Module Architecture
 
-### Lokalizacja modułów
-Wszystkie moduły znajdują się w katalogu `data/titanIM_modules/`. Każdy moduł to osobny katalog zawierający:
-- `init.py` - główny plik z kodem modułu (NIE `__init__.py`!)
-- `__im.TCE` - plik konfiguracyjny modułu (format INI)
+### Module Location
+All modules are located in the `data/titanIM_modules/` directory. Each module is a separate directory containing:
+- `init.py` - the main file with the module's code (NOT `__init__.py`!)
+- `__im.TCE` - the module's configuration file (INI format)
 
-### Cykl życia modułu
+### Module Lifecycle
 
-1. **Ładowanie** - moduły są ładowane przy starcie Titan IM
-2. **Otwarcie** - funkcja `open(parent_frame)` wywoływana gdy użytkownik wybierze moduł
-3. **Status** - opcjonalna funkcja `get_status_text()` zwraca tekst statusu
+1. **Loading** - modules are loaded at Titan IM startup
+2. **Opening** - `open(parent_frame)` is called when the user selects the module
+3. **Status** - the optional `get_status_text()` returns status text
 
-## Struktura pliku konfiguracyjnego
+## Configuration File Structure
 
 ### __im.TCE
 
-Plik INI z sekcją `[im_module]`:
+INI file with an `[im_module]` section:
 
 ```ini
 [im_module]
-name = Nazwa modułu
+name = Module Name
 status = 0
-description = Opis modułu
+description = Module description
 
 ```
 
-**Parametry:**
-- `name` - nazwa wyświetlana w liście Titan IM
-- **`status = 0` oznacza WŁĄCZONY, inna wartość oznacza WYŁĄCZONY**
-- `description` - opis modułu (opcjonalny)
-- **WAŻNE**: Nazwa pliku to `__im.TCE` (wielkie litery .TCE)
-- **WAŻNE**: Główny plik to `init.py` (małe litery, NIE `__init__.py`)
-- **WAŻNE**: Dodaj pustą linię na końcu pliku
+**Parameters:**
+- `name` - name displayed in the Titan IM list
+- **`status = 0` means ENABLED, any other value means DISABLED**
+- `description` - module description (optional)
+- `libs` (optional) - comma-separated dirs under the module folder added
+  to `sys.path` before loading (default `lib`), so the module can vendor
+  its own dependencies
+- **IMPORTANT**: File name is `__im.TCE` (uppercase .TCE)
+- **IMPORTANT**: Main file is `init.py` (lowercase, NOT `__init__.py`)
+- **IMPORTANT**: Add a blank line at end of file
 
-## Implementacja modułu
+## Module Implementation
 
-### Podstawowa struktura init.py
+### Basic init.py structure
 
 ```python
 # -*- coding: utf-8 -*-
 """
-Nazwa modułu - Titan IM external module for TCE Launcher
-Opis modułu
+Module Name - Titan IM external module for TCE Launcher
+Module description
 """
 
 import os
 import sys
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 _MODULE_DIR = os.path.dirname(__file__)
 _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API and _() are auto-injected by the IM module manager
-# (_: gettext from {module_path}/languages/, sounds: unified Sound API)
-# Zapewnia ujednolicone dźwięki TitanNet/Titan IM (takie same jak Telegram, EltenLink, Titan-Net)
+# The Sound API and the _() function are automatically injected by the module manager:
+# - _module.sounds: unified TitanNet/Titan IM sounds (Telegram, EltenLink, Titan-Net)
+# - _: gettext from {module_path}/languages/ (domain = module id, language from TCE settings)
 _module = sys.modules[__name__]
 
 
 def open(parent_frame):
-    """Otwórz okno komunikatora.
+    """Open the communicator window.
 
-    Wywoływane gdy użytkownik wybierze ten moduł z listy Titan IM.
-    parent_frame: wx.Frame lub None - referencja okna rodzica
+    Called when the user selects this module from the Titan IM list.
+    parent_frame: wx.Frame or None - parent window reference
     """
     try:
         import wx
         sounds = _module.sounds
 
-        # Odtwórz dźwięk powitania (ujednolicony ze wszystkimi integracjami Titan IM)
+        # Play the welcome sound (unified across all Titan IM integrations)
         sounds.welcome()
 
-        # TODO: Implementuj tutaj okno swojego komunikatora
-        # Przykład:
+        # TODO: Implement your communicator window here
+        # Example:
         # frame = MyIMFrame(parent_frame)
         # frame.Show()
 
         sounds.dialog_open()
-        wx.MessageBox("Moduł otwarty!", "Nazwa modułu", wx.OK | wx.ICON_INFORMATION, parent_frame)
+        wx.MessageBox("Module opened!", "Module Name", wx.OK | wx.ICON_INFORMATION, parent_frame)
     except Exception as e:
         print(f"[module_id] Error opening: {e}")
 
 
 def get_status_text():
-    """Zwróć sufiks statusu połączenia pokazywany po nazwie modułu w liście Titan IM.
+    """Return the connection status suffix shown after the module name in the Titan IM list.
 
-    Zwróć pusty string jeśli nie połączono / brak statusu do pokazania.
-    Przykłady: "- connected as jan", "- 3 nieprzeczytane"
+    Return an empty string if not connected / no status to show.
+    Examples: "- connected as jan", "- 3 unread"
     """
     return ""
 ```
 
-## Wymagane funkcje
+## Required Functions
 
 ### open(parent_frame)
-**Wymagana funkcja** wywoływana gdy użytkownik otwiera moduł:
+**Required function** called when the user opens the module:
 ```python
 def open(parent_frame):
     """
-    parent_frame: wx.Frame lub None dla trybu konsoli
+    parent_frame: wx.Frame or None for console mode
     """
-    sounds = _module.sounds  # Dostęp do Sound API
-    sounds.welcome()  # Odtwórz dźwięk powitania
+    sounds = _module.sounds  # Access the Sound API
+    sounds.welcome()  # Play the welcome sound
 
-    # Utwórz i pokaż okno swojego komunikatora
+    # Create and show your communicator window
     # ...
 ```
 
-## Opcjonalne funkcje
+## Optional Functions
 
 ### get_status_text()
-Zwraca tekst statusu pokazywany po nazwie modułu:
+Returns the status text shown after the module name:
 ```python
 def get_status_text():
     """
     Returns:
-        str: Sufiks statusu, np. "- connected as użytkownik" lub ""
+        str: Status suffix, e.g. "- connected as username" or ""
     """
     if connected and username:
         return f"- connected as {username}"
     return ""
 ```
 
-## Sound API (automatycznie wstrzykiwane)
+## Config API (Automatically Injected)
 
-Każdy moduł otrzymuje obiekt `sounds` przez `_module.sounds` z ujednoliconymi dźwiękami TitanNet/Titan IM.
+Every module also receives a `config` object via `_module.config` — a
+namespaced load/save helper backed by the shared, encrypted `titan.IM`
+file. Each module's data is stored under a key matching its folder name, so
+other modules' data (Telegram, EltenLink...) is never disturbed:
 
-### Główne kategorie dźwięków
-
-#### Wiadomości
 ```python
-sounds.new_message()        # Nowa wiadomość otrzymana
-sounds.message_sent()       # Wiadomość wysłana
-sounds.chat_message()       # Wiadomość czatu (w aktywnym czacie)
-sounds.typing()             # Wskaźnik pisania
+data = _module.config.load()                  # this module's dict ({} if none)
+_module.config.save({"username": "jan"})       # replaces the whole module dict
+value = _module.config.get("username", "")     # single key, with a default
+_module.config.set("username", "jan")          # single key
+_module.config.update(username="jan", token="...")  # merge multiple keys at once
 ```
 
-#### Obecność użytkowników
+Use this instead of writing your own settings file if the module needs to
+remember login state, tokens, or preferences between sessions.
+
+## Translations (Automatically Injected)
+
+If the module folder contains a `languages/` directory, the loader sets
+`mod._` in the module's namespace **before** `init.py` runs — since that
+IS the module's namespace, a plain `_("text")` call works directly in the
+module's code, with no `import` or manual `gettext.translation()` setup.
+The gettext domain is **the module's folder name** (not a fixed domain
+like TTS engines use). If `languages/` is missing or fails to load, it
+falls back to an identity function.
+
+## Sound API (Automatically Injected)
+
+Every module receives a `sounds` object via `_module.sounds` with unified TitanNet/Titan IM sounds.
+
+### Main Sound Categories
+
+#### Messages
 ```python
-sounds.user_online()        # Użytkownik zalogowany
-sounds.user_offline()       # Użytkownik wylogowany
-sounds.status_changed()     # Status użytkownika zmieniony
-sounds.account_created()    # Nowe konto utworzone
+sounds.new_message()        # New message received
+sounds.message_sent()       # Message sent
+sounds.chat_message()       # Chat message (in the active chat)
+sounds.typing()             # Typing indicator
 ```
 
-#### Czaty/pokoje
+#### User Presence
 ```python
-sounds.new_chat()           # Nowy czat lub pokój otwarty
-sounds.new_replies()        # Nowe odpowiedzi (forum, wątek)
+sounds.user_online()        # User logged in
+sounds.user_offline()       # User logged out
+sounds.status_changed()     # User status changed
+sounds.account_created()    # New account created
 ```
 
-#### Połączenia głosowe
+#### Chats/Rooms
 ```python
-sounds.call_connected()     # Połączenie głosowe nawiązane
-sounds.ring_incoming()      # Dzwonek przychodzący
-sounds.ring_outgoing()      # Dzwonek wychodzący
-sounds.walkie_talkie_start()    # Push-to-talk aktywowany
-sounds.walkie_talkie_end()      # Push-to-talk dezaktywowany
-sounds.recording_start()    # Nagrywanie głosu rozpoczęte
-sounds.recording_stop()     # Nagrywanie głosu zatrzymane
+sounds.new_chat()           # New chat or room opened
+sounds.new_replies()        # New replies (forum, thread)
 ```
 
-#### Pliki
+#### Voice Calls
 ```python
-sounds.file_received()      # Nowy plik otrzymany
-sounds.file_success()       # Operacja na pliku udana
-sounds.file_error()         # Operacja na pliku nieudana
+sounds.call_connected()     # Voice call connected
+sounds.ring_incoming()      # Incoming ring
+sounds.ring_outgoing()      # Outgoing ring
+sounds.walkie_talkie_start()    # Push-to-talk activated
+sounds.walkie_talkie_end()      # Push-to-talk deactivated
+sounds.recording_start()    # Voice recording started
+sounds.recording_stop()     # Voice recording stopped
 ```
 
-#### Ogólne powiadomienia
+#### Files
 ```python
-sounds.notification()       # Ogólne powiadomienie
-sounds.success()            # Powiadomienie sukcesu
-sounds.error()              # Powiadomienie błędu
-sounds.welcome()            # Moduł otwarty
-sounds.goodbye()            # Moduł zamknięty / rozłączony
-sounds.birthday()           # Powiadomienie urodzinowe
-sounds.new_feed_post()      # Nowy post na kanale
-sounds.moderation()         # Alert moderacji / broadcast
-sounds.motd()               # Wiadomość dnia
-sounds.app_update()         # Aktualizacja aplikacji/pakietu
+sounds.file_received()      # New file received
+sounds.file_success()       # File operation succeeded
+sounds.file_error()         # File operation failed
 ```
 
-#### Dźwięki UI - rdzenne
+#### General Notifications
 ```python
-sounds.focus(pan=0.5)       # Zmiana fokusu (stereo pan 0.0-1.0)
-sounds.select()             # Wybór / akcja potwierdzona
-sounds.click()              # Prosty klik
+sounds.notification()       # General notification
+sounds.success()            # Success notification
+sounds.error()               # Error notification
+sounds.welcome()            # Module opened
+sounds.goodbye()            # Module closed / disconnected
+sounds.birthday()           # Birthday notification
+sounds.new_feed_post()      # New feed post
+sounds.moderation()         # Moderation alert / broadcast
+sounds.motd()               # Message of the day
+sounds.app_update()         # Application/package update
 ```
 
-#### Dźwięki UI - okna dialogowe
+#### UI Sounds - Core
 ```python
-sounds.dialog_open()        # Okno dialogowe otwarte
-sounds.dialog_close()       # Okno dialogowe zamknięte
-sounds.window_open()        # Okno otwarte
-sounds.window_close()       # Okno zamknięte
-sounds.popup()              # Popup otwarty
-sounds.popup_close()        # Popup zamknięty
-sounds.msg_box()            # Message box otwarty
-sounds.msg_box_close()      # Message box zamknięty
+sounds.focus(pan=0.5)       # Focus change (stereo pan 0.0-1.0)
+sounds.select()             # Selection / action confirmed
+sounds.click()               # Simple click
 ```
 
-#### Dźwięki UI - menu kontekstowe
+#### UI Sounds - Dialogs
 ```python
-sounds.context_menu()       # Menu kontekstowe otwarte
-sounds.context_menu_close() # Menu kontekstowe zamknięte
+sounds.dialog_open()        # Dialog opened
+sounds.dialog_close()       # Dialog closed
+sounds.window_open()        # Window opened
+sounds.window_close()       # Window closed
+sounds.popup()               # Popup opened
+sounds.popup_close()        # Popup closed
+sounds.msg_box()            # Message box opened
+sounds.msg_box_close()      # Message box closed
 ```
 
-#### Dźwięki UI - listy i nawigacja
+#### UI Sounds - Context Menus
 ```python
-sounds.end_of_list()        # Koniec listy osiągnięty
-sounds.section_change()     # Sekcja/zakładka zmieniona
-sounds.switch_category()    # Kategoria przełączona
-sounds.switch_list()        # Lista przełączona
-sounds.focus_collapsed()    # Węzeł drzewa zwinięty
-sounds.focus_expanded()     # Węzeł drzewa rozwinięty
+sounds.context_menu()       # Context menu opened
+sounds.context_menu_close() # Context menu closed
 ```
 
-#### Dźwięki UI - powiadomienia i stan okna
+#### UI Sounds - Lists and Navigation
 ```python
-sounds.notify_sound()       # Dźwięk powiadomienia (bez TTS)
-sounds.tip()                # Podpowiedź / wskazówka
-sounds.minimize()           # Okno zminimalizowane
-sounds.restore()            # Okno przywrócone
+sounds.end_of_list()        # End of list reached
+sounds.section_change()     # Section/tab changed
+sounds.switch_category()    # Category switched
+sounds.switch_list()        # List switched
+sounds.focus_collapsed()    # Tree node collapsed
+sounds.focus_expanded()     # Tree node expanded
 ```
 
-#### Dźwięki systemowe
+#### UI Sounds - Notifications and Window State
 ```python
-sounds.connecting()         # Łączenie w toku
+sounds.notify_sound()       # Notification sound (no TTS)
+sounds.tip()                 # Tip / hint
+sounds.minimize()           # Window minimized
+sounds.restore()            # Window restored
 ```
 
-### TTS (Text-to-Speech) powiadomienia
-
+#### System Sounds
 ```python
-# Proste TTS z pozycjonowaniem stereo
-sounds.speak("Połączony!", position=0.0, pitch_offset=0)
-
-# Powiadomienie z automatycznym dźwiękiem + TTS (respektuje ustawienia TCE)
-# Typy: 'error', 'success', 'info', 'warning', 'banned'
-sounds.notify("Logowanie udane", 'success')
-sounds.notify("Połączenie nieudane", 'error')
-sounds.notify("Dostępna nowa aktualizacja", 'info')
-sounds.notify("Przekroczony limit", 'warning')
-
-# Powiadomienie tylko z TTS (bez efektu dźwiękowego)
-sounds.notify("Odpowiedź opublikowana", 'success', play_sound_effect=False)
+sounds.connecting()         # Connecting in progress
 ```
 
-### Bezpośredni dostęp do dźwięków
+### TTS (Text-to-Speech) Notifications
 
 ```python
-# Odtwórz dowolny plik dźwiękowy z katalogu sfx/
+# Simple TTS with stereo positioning
+sounds.speak("Connected!", position=0.0, pitch_offset=0)
+
+# Notification with an automatic sound effect + TTS (respects TCE settings)
+# Types: 'error', 'success', 'info', 'warning', 'banned'
+sounds.notify("Login successful", 'success')
+sounds.notify("Connection failed", 'error')
+sounds.notify("New update available", 'info')
+sounds.notify("Rate limit exceeded", 'warning')
+
+# TTS-only notification (no sound effect)
+sounds.notify("Reply posted", 'success', play_sound_effect=False)
+```
+
+### Direct Sound Access
+
+```python
+# Play any sound file from the sfx/ directory
 sounds.play('titannet/new_message.ogg')
-sounds.play('core/FOCUS.ogg', pan=0.3)  # pan: 0.0 (lewo) do 1.0 (prawo)
+sounds.play('core/FOCUS.ogg', pan=0.3)  # pan: 0.0 (left) to 1.0 (right)
 ```
 
-Pełna dokumentacja API: `data/titanIM_modules/README.md`
+Full API documentation: `data/titanIM_modules/README.md`
 
-## Kompletne przykłady kodu
+## Complete Code Examples
 
-### Przykład 1: Prosty klient czatu
+### Example 1: Simple Chat Client
 
-Kompletny moduł IM otwierający okno czatu z listą kontaktów, wyświetlaniem wiadomości, polem wprowadzania wiadomości i pełną integracją Sound API.
+A complete IM module opening a chat window with a contact list, message display, message input, and full Sound API integration.
 
-**Plik: `data/titanIM_modules/SimpleChat/__im.TCE`**
+**File: `data/titanIM_modules/SimpleChat/__im.TCE`**
 ```ini
 [im_module]
 name = Simple Chat
 status = 0
-description = Prosty klient czatu z kontaktami, wiadomościami i powiadomieniami dźwiękowymi
+description = A simple chat client with contacts, messages, and sound notifications
 
 ```
 
-**Plik: `data/titanIM_modules/SimpleChat/init.py`**
+**File: `data/titanIM_modules/SimpleChat/init.py`**
 
 ```python
 # -*- coding: utf-8 -*-
 """
 Simple Chat - Titan IM external module for TCE Launcher
-Prosty klient czatu demonstrujący kontakty, wiadomości i Sound API.
+A simple chat client demonstrating contacts, messages, and the Sound API.
 """
 
 import os
@@ -293,17 +324,17 @@ import sys
 import threading
 import time
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 _MODULE_DIR = os.path.dirname(__file__)
 _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API and _() are auto-injected by the IM module manager
+# The Sound API and the _() function are automatically injected by the module manager
 # (_: gettext from {module_path}/languages/, sounds: unified Sound API)
 _module = sys.modules[__name__]
 
-# Stan połączenia dla tekstu statusu
+# Connection state for the status text
 _state = {
     "connected": False,
     "username": "",
@@ -312,11 +343,11 @@ _state = {
 
 
 # ---------------------------------------------------------------------------
-# Okno czatu
+# Chat window
 # ---------------------------------------------------------------------------
 
 class SimpleChatFrame:
-    """Główne okno czatu z listą kontaktów, wyświetlaniem wiadomości i polem wprowadzania."""
+    """Main chat window with a contact list, message display, and input field."""
 
     def __init__(self, parent_frame, sounds):
         import wx
@@ -325,7 +356,7 @@ class SimpleChatFrame:
         self.frame = wx.Frame(parent_frame, title="Simple Chat", size=(700, 500))
         self.frame.Bind(wx.EVT_CLOSE, self._on_close)
 
-        # --- Dane demo ---
+        # --- Demo data ---
         self.contacts = ["Alice", "Bob", "Charlie", "Diana", "Eve"]
         self.online = {"Alice", "Charlie", "Eve"}
         self.messages = {name: [] for name in self.contacts}
@@ -335,9 +366,9 @@ class SimpleChatFrame:
         main_panel = wx.Panel(self.frame)
         main_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Lewo: lista kontaktów
+        # Left: contact list
         left_sizer = wx.BoxSizer(wx.VERTICAL)
-        left_sizer.Add(wx.StaticText(main_panel, label="Kontakty"), 0, wx.ALL, 5)
+        left_sizer.Add(wx.StaticText(main_panel, label="Contacts"), 0, wx.ALL, 5)
 
         self.contact_list = wx.ListBox(main_panel, style=wx.LB_SINGLE)
         self._refresh_contacts()
@@ -347,9 +378,9 @@ class SimpleChatFrame:
 
         main_sizer.Add(left_sizer, 1, wx.EXPAND)
 
-        # Prawo: wiadomości + wprowadzanie
+        # Right: messages + input
         right_sizer = wx.BoxSizer(wx.VERTICAL)
-        right_sizer.Add(wx.StaticText(main_panel, label="Wiadomości"), 0, wx.ALL, 5)
+        right_sizer.Add(wx.StaticText(main_panel, label="Messages"), 0, wx.ALL, 5)
 
         self.message_display = wx.TextCtrl(
             main_panel,
@@ -357,13 +388,13 @@ class SimpleChatFrame:
         )
         right_sizer.Add(self.message_display, 1, wx.EXPAND | wx.ALL, 5)
 
-        # Wiersz wprowadzania
+        # Input row
         input_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.message_input = wx.TextCtrl(main_panel, style=wx.TE_PROCESS_ENTER)
         self.message_input.Bind(wx.EVT_TEXT_ENTER, self._on_send)
         input_sizer.Add(self.message_input, 1, wx.EXPAND | wx.ALL, 5)
 
-        send_btn = wx.Button(main_panel, label="Wyślij")
+        send_btn = wx.Button(main_panel, label="Send")
         send_btn.Bind(wx.EVT_BUTTON, self._on_send)
         input_sizer.Add(send_btn, 0, wx.ALL, 5)
 
@@ -372,29 +403,29 @@ class SimpleChatFrame:
 
         main_panel.SetSizer(main_sizer)
 
-        # Symuluj połączenie
+        # Simulate connecting
         self._connect()
 
-    # --- Połączenie ---
+    # --- Connection ---
 
     def _connect(self):
-        """Symuluj łączenie się z serwerem czatu."""
+        """Simulate connecting to a chat server."""
         self.sounds.connecting()
         _state["connected"] = True
         _state["username"] = "You"
-        self.sounds.notify("Połączono jako You", 'success')
+        self.sounds.notify("Connected as You", 'success')
 
-        # Symuluj przychodzące wiadomości w tle
+        # Simulate incoming messages in the background
         self._sim_thread = threading.Thread(target=self._simulate_incoming, daemon=True)
         self._sim_thread.start()
 
     def _simulate_incoming(self):
-        """Symuluj otrzymywanie wiadomości od kontaktów po opóźnieniu."""
+        """Simulate receiving messages from contacts after a delay."""
         import wx
         time.sleep(3)
         greetings = [
-            ("Alice", "Hej! Jak się masz?"),
-            ("Charlie", "Widziałeś najnowszą aktualizację?"),
+            ("Alice", "Hey! How are you?"),
+            ("Charlie", "Did you see the latest update?"),
         ]
         for sender, text in greetings:
             self.messages[sender].append(f"{sender}: {text}")
@@ -403,20 +434,20 @@ class SimpleChatFrame:
             time.sleep(2)
 
     def _on_incoming_message(self, sender):
-        """Obsłuż nowo otrzymaną wiadomość w wątku GUI."""
+        """Handle a newly received message on the GUI thread."""
         self.sounds.new_message()
         self._refresh_contacts()
         if self.current_contact == sender:
             self._show_messages(sender)
 
-    # --- Lista kontaktów ---
+    # --- Contact list ---
 
     def _refresh_contacts(self):
         self.contact_list.Clear()
         for name in self.contacts:
             status = " (online)" if name in self.online else ""
             unread = len([m for m in self.messages[name] if m.startswith(name)])
-            tag = f" [{unread} nowych]" if unread else ""
+            tag = f" [{unread} new]" if unread else ""
             self.contact_list.Append(f"{name}{status}{tag}")
 
     def _on_contact_select(self, event):
@@ -436,8 +467,8 @@ class SimpleChatFrame:
         self.current_contact = self.contacts[idx]
 
         menu = wx.Menu()
-        item_info = menu.Append(wx.ID_ANY, "Pokaż info")
-        item_clear = menu.Append(wx.ID_ANY, "Wyczyść historię")
+        item_info = menu.Append(wx.ID_ANY, "View Info")
+        item_clear = menu.Append(wx.ID_ANY, "Clear History")
 
         self.frame.Bind(wx.EVT_MENU, self._on_view_info, item_info)
         self.frame.Bind(wx.EVT_MENU, self._on_clear_history, item_clear)
@@ -454,7 +485,7 @@ class SimpleChatFrame:
             return
         status = "Online" if name in self.online else "Offline"
         self.sounds.dialog_open()
-        wx.MessageBox(f"Kontakt: {name}\nStatus: {status}", "Info kontaktu",
+        wx.MessageBox(f"Contact: {name}\nStatus: {status}", "Contact Info",
                       wx.OK | wx.ICON_INFORMATION, self.frame)
         self.sounds.dialog_close()
 
@@ -462,9 +493,9 @@ class SimpleChatFrame:
         if self.current_contact:
             self.messages[self.current_contact].clear()
             self._show_messages(self.current_contact)
-            self.sounds.notify("Historia wyczyszczona", 'info')
+            self.sounds.notify("History cleared", 'info')
 
-    # --- Wiadomości ---
+    # --- Messaging ---
 
     def _show_messages(self, contact):
         self.message_display.SetValue("\n".join(self.messages[contact]))
@@ -479,7 +510,7 @@ class SimpleChatFrame:
         self._show_messages(self.current_contact)
         self.sounds.message_sent()
 
-    # --- Zamknięcie ---
+    # --- Close ---
 
     def _on_close(self, event):
         _state["connected"] = False
@@ -493,14 +524,14 @@ class SimpleChatFrame:
 
 
 # ---------------------------------------------------------------------------
-# Interfejs modułu
+# Module interface
 # ---------------------------------------------------------------------------
 
 def open(parent_frame):
-    """Otwórz okno czatu.
+    """Open the chat window.
 
-    Wywoływane gdy użytkownik wybierze ten moduł z listy Titan IM.
-    parent_frame: wx.Frame lub None - referencja okna rodzica
+    Called when the user selects this module from the Titan IM list.
+    parent_frame: wx.Frame or None - parent window reference
     """
     try:
         sounds = _module.sounds
@@ -511,46 +542,46 @@ def open(parent_frame):
     except Exception as e:
         print(f"[SimpleChat] Error opening: {e}")
         try:
-            _module.sounds.notify(f"Nie udało się otworzyć: {e}", 'error')
+            _module.sounds.notify(f"Failed to open: {e}", 'error')
         except Exception:
             pass
 
 
 def get_status_text():
-    """Zwróć sufiks statusu połączenia pokazywany po nazwie modułu w liście Titan IM.
+    """Return the connection status suffix shown after the module name in the Titan IM list.
 
-    Przykłady: "- connected as You", "- 2 nieprzeczytane"
+    Examples: "- connected as You", "- 2 unread"
     """
     if _state["connected"] and _state["username"]:
         parts = [f"- connected as {_state['username']}"]
         if _state["unread"] > 0:
-            parts.append(f", {_state['unread']} nieprzeczytane")
+            parts.append(f", {_state['unread']} unread")
         return "".join(parts)
     return ""
 ```
 
 ---
 
-### Przykład 2: Czytnik RSS
+### Example 2: RSS Feed Reader
 
-Prostszy moduł IM który pobiera i wyświetla elementy kanału RSS, otwierając je w domyślnej przeglądarce.
+A simpler IM module that fetches and displays RSS feed items, opening them in the default browser.
 
-**Plik: `data/titanIM_modules/RSSReader/__im.TCE`**
+**File: `data/titanIM_modules/RSSReader/__im.TCE`**
 ```ini
 [im_module]
 name = RSS Feed Reader
 status = 0
-description = Czytnik kanałów RSS z integracją przeglądarki i powiadomieniami dźwiękowymi
+description = RSS feed reader with browser integration and sound notifications
 
 ```
 
-**Plik: `data/titanIM_modules/RSSReader/init.py`**
+**File: `data/titanIM_modules/RSSReader/init.py`**
 
 ```python
 # -*- coding: utf-8 -*-
 """
 RSS Feed Reader - Titan IM external module for TCE Launcher
-Pobiera kanały RSS i wyświetla elementy w dostępnej liście.
+Fetches RSS feeds and displays items in an accessible list.
 """
 
 import os
@@ -558,31 +589,31 @@ import sys
 import threading
 import webbrowser
 
-# Dodaj katalog główny TCE do ścieżki
+# Add the TCE root directory to the path
 _MODULE_DIR = os.path.dirname(__file__)
 _TCE_ROOT = os.path.abspath(os.path.join(_MODULE_DIR, '..', '..', '..'))
 if _TCE_ROOT not in sys.path:
     sys.path.insert(0, _TCE_ROOT)
 
-# Sound API and _() are auto-injected by the IM module manager
+# The Sound API and the _() function are automatically injected by the module manager
 # (_: gettext from {module_path}/languages/, sounds: unified Sound API)
 _module = sys.modules[__name__]
 
-# Stan dla tekstu statusu
+# State for the status text
 _state = {
     "unread": 0
 }
 
-# Domyślny URL kanału (można zmienić w oknie czytnika)
+# Default feed URL (can be changed in the reader window)
 DEFAULT_FEED_URL = "https://feeds.bbci.co.uk/news/rss.xml"
 
 
 # ---------------------------------------------------------------------------
-# Pomocniki parsowania RSS
+# RSS parsing helpers
 # ---------------------------------------------------------------------------
 
 def _fetch_feed(url):
-    """Pobierz i sparsuj kanał RSS. Zwraca listę dict z title, link, description."""
+    """Fetch and parse an RSS feed. Returns a list of dicts with title, link, description."""
     import urllib.request
     import xml.etree.ElementTree as ET
 
@@ -593,35 +624,35 @@ def _fetch_feed(url):
             data = resp.read()
         root = ET.fromstring(data)
 
-        # Obsługa RSS 2.0 (<channel><item>) i Atom (<entry>)
+        # Support both RSS 2.0 (<channel><item>) and Atom (<entry>)
         # RSS 2.0
         for item in root.iter("item"):
-            title = item.findtext("title", "Brak tytułu")
+            title = item.findtext("title", "No title")
             link = item.findtext("link", "")
             desc = item.findtext("description", "")
             items.append({"title": title, "link": link, "description": desc})
 
-        # Fallback Atom
+        # Atom fallback
         if not items:
             ns = {"atom": "http://www.w3.org/2005/Atom"}
             for entry in root.findall("atom:entry", ns):
-                title = entry.findtext("atom:title", "Brak tytułu", ns)
+                title = entry.findtext("atom:title", "No title", ns)
                 link_el = entry.find("atom:link", ns)
                 link = link_el.get("href", "") if link_el is not None else ""
                 desc = entry.findtext("atom:summary", "", ns)
                 items.append({"title": title, "link": link, "description": desc})
     except Exception as e:
-        raise RuntimeError(f"Nie udało się pobrać kanału: {e}")
+        raise RuntimeError(f"Failed to fetch feed: {e}")
 
     return items
 
 
 # ---------------------------------------------------------------------------
-# Okno czytnika
+# Reader window
 # ---------------------------------------------------------------------------
 
 class RSSReaderFrame:
-    """Okno czytnika kanałów RSS z listą kanałów i integracją przeglądarki."""
+    """RSS feed reader window with a feed list and browser integration."""
 
     def __init__(self, parent_frame, sounds):
         import wx
@@ -636,56 +667,56 @@ class RSSReaderFrame:
         panel = wx.Panel(self.frame)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Wprowadzanie URL kanału
+        # Feed URL input
         url_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        url_sizer.Add(wx.StaticText(panel, label="URL kanału:"), 0,
+        url_sizer.Add(wx.StaticText(panel, label="Feed URL:"), 0,
                        wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
         self.url_input = wx.TextCtrl(panel, value=self.feed_url)
         url_sizer.Add(self.url_input, 1, wx.EXPAND | wx.ALL, 5)
-        refresh_btn = wx.Button(panel, label="Odśwież")
+        refresh_btn = wx.Button(panel, label="Refresh")
         refresh_btn.Bind(wx.EVT_BUTTON, self._on_refresh)
         url_sizer.Add(refresh_btn, 0, wx.ALL, 5)
         sizer.Add(url_sizer, 0, wx.EXPAND)
 
-        # Etykieta statusu
-        self.status_label = wx.StaticText(panel, label="Naciśnij Odśwież aby załadować kanał.")
+        # Status label
+        self.status_label = wx.StaticText(panel, label="Press Refresh to load the feed.")
         sizer.Add(self.status_label, 0, wx.ALL, 5)
 
-        # Lista elementów kanału
+        # Feed items list
         self.item_list = wx.ListBox(panel)
         self.item_list.Bind(wx.EVT_LISTBOX_DCLICK, self._on_item_activate)
         self.item_list.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
         sizer.Add(self.item_list, 1, wx.EXPAND | wx.ALL, 5)
 
-        # Wyświetlanie opisu
+        # Description display
         self.desc_display = wx.TextCtrl(
             panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2
         )
         sizer.Add(self.desc_display, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
 
-        # Pokaż opis przy wyborze
+        # Show description on selection
         self.item_list.Bind(wx.EVT_LISTBOX, self._on_item_select)
 
         panel.SetSizer(sizer)
 
-        # Auto-załaduj kanał
+        # Auto-load the feed
         self._on_refresh(None)
 
-    # --- Ładowanie kanału ---
+    # --- Feed loading ---
 
     def _on_refresh(self, event):
-        """Załaduj kanał w wątku w tle."""
+        """Load the feed in a background thread."""
         import wx
         self.feed_url = self.url_input.GetValue().strip()
         if not self.feed_url:
             self.sounds.error()
             return
-        self.status_label.SetLabel("Ładowanie...")
+        self.status_label.SetLabel("Loading...")
         self.sounds.connecting()
         threading.Thread(target=self._load_feed, daemon=True).start()
 
     def _load_feed(self):
-        """Wątek w tle: pobierz kanał i zaktualizuj UI."""
+        """Background thread: fetch the feed and update the UI."""
         import wx
         try:
             items = _fetch_feed(self.feed_url)
@@ -701,31 +732,31 @@ class RSSReaderFrame:
         for item in items:
             self.item_list.Append(item["title"])
 
-        self.status_label.SetLabel(f"Załadowano {len(items)} elementów.")
+        self.status_label.SetLabel(f"Loaded {len(items)} items.")
         self.desc_display.SetValue("")
 
         if items:
             self.sounds.new_feed_post()
-            self.sounds.notify(f"Załadowano {len(items)} elementów kanału", 'success')
+            self.sounds.notify(f"{len(items)} feed items loaded", 'success')
         else:
-            self.sounds.notify("Kanał jest pusty", 'info')
+            self.sounds.notify("Feed is empty", 'info')
 
     def _on_feed_error(self, error_msg):
-        self.status_label.SetLabel(f"Błąd: {error_msg}")
-        self.sounds.notify(f"Błąd kanału: {error_msg}", 'error')
+        self.status_label.SetLabel(f"Error: {error_msg}")
+        self.sounds.notify(f"Feed error: {error_msg}", 'error')
 
-    # --- Interakcja z elementami ---
+    # --- Item interaction ---
 
     def _on_item_select(self, event):
         idx = self.item_list.GetSelection()
         if idx == -1 or idx >= len(self.items):
             return
         self.sounds.select()
-        desc = self.items[idx].get("description", "Brak opisu.")
+        desc = self.items[idx].get("description", "No description available.")
         self.desc_display.SetValue(desc)
 
     def _on_item_activate(self, event):
-        """Otwórz wybrany element kanału w domyślnej przeglądarce."""
+        """Open the selected feed item in the default browser."""
         self._open_selected_item()
 
     def _on_key_down(self, event):
@@ -742,13 +773,13 @@ class RSSReaderFrame:
         link = self.items[idx].get("link", "")
         if link:
             webbrowser.open(link)
-            self.sounds.notify("Otwarto w przeglądarce", 'info')
+            self.sounds.notify("Opened in browser", 'info')
             if _state["unread"] > 0:
                 _state["unread"] -= 1
         else:
-            self.sounds.notify("Brak linku dla tego elementu", 'warning')
+            self.sounds.notify("No link available for this item", 'warning')
 
-    # --- Zamknięcie ---
+    # --- Close ---
 
     def _on_close(self, event):
         _state["unread"] = 0
@@ -760,14 +791,14 @@ class RSSReaderFrame:
 
 
 # ---------------------------------------------------------------------------
-# Interfejs modułu
+# Module interface
 # ---------------------------------------------------------------------------
 
 def open(parent_frame):
-    """Otwórz okno czytnika kanałów RSS.
+    """Open the RSS feed reader window.
 
-    Wywoływane gdy użytkownik wybierze ten moduł z listy Titan IM.
-    parent_frame: wx.Frame lub None - referencja okna rodzica
+    Called when the user selects this module from the Titan IM list.
+    parent_frame: wx.Frame or None - parent window reference
     """
     try:
         sounds = _module.sounds
@@ -778,61 +809,81 @@ def open(parent_frame):
     except Exception as e:
         print(f"[RSSReader] Error opening: {e}")
         try:
-            _module.sounds.notify(f"Nie udało się otworzyć: {e}", 'error')
+            _module.sounds.notify(f"Failed to open: {e}", 'error')
         except Exception:
             pass
 
 
 def get_status_text():
-    """Zwróć sufiks statusu pokazywany po nazwie modułu w liście Titan IM.
+    """Return the status suffix shown after the module name in the Titan IM list.
 
-    Przykład: "- 5 nieprzeczytanych"
+    Example: "- 5 unread"
     """
     if _state["unread"] > 0:
-        return f"- {_state['unread']} nieprzeczytanych"
+        return f"- {_state['unread']} unread"
     return ""
 ```
 
-## Struktura katalogów
+## Directory Structure
 
 ```
-data/titanIM_modules/nazwa_modułu/
-├── init.py              # Główny plik modułu (NIE __init__.py!)
-└── __im.TCE             # Konfiguracja modułu
+data/titanIM_modules/ModuleName/
+├── init.py              # Main module file (NOT __init__.py!)
+└── __im.TCE             # Module configuration
 ```
 
-## Testowanie modułów
+## Packaging as `.TCD` (Optional)
 
-1. Umieść moduł w `data/titanIM_modules/nazwa_modułu/`
-2. Upewnij się że plik to `init.py` a nie `__init__.py`
-3. Sprawdź format `__im.TCE` (INI, wielkie litery .TCE)
-4. Uruchom Titan
-5. Otwórz Titan IM (w GUI, IUI lub trybie Klango)
-6. Sprawdź czy moduł pojawia się w liście komunikatorów
-7. Kliknij/wybierz moduł — powinna wywołać się funkcja `open(parent_frame)`
-8. Jeśli `get_status_text()` jest zaimplementowane, sprawdź czy pokazuje się po nazwie modułu
+Instead of shipping a directory, a Titan IM module can be distributed as a
+single `.tcd` file. Purely optional and additive.
 
-## Jak moduły pojawiają się w każdym interfejsie
+```bash
+python src/scripts/pack_addon.py data/titanIM_modules/MyModule --kind im_module -o MyModule.tcd
+```
 
-- **GUI** (`src/ui/gui.py`): Wymienione w listbox sieci, status pokazywany inline
-- **Invisible UI** (`src/ui/invisibleui.py`): Wymienione w elementach kategorii Titan IM
-- **Tryb Klango** (`src/system/klangomode.py`): Wymienione w podmenu Titan IM
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `init.py` and `__im.TCE` still resolve the same way once extracted.
+- Drop the `.tcd` into `data/titanIM_modules/` (bundled or per-user
+  overlay) and it's discovered/loaded identically to a directory-based
+  module.
 
-## Przykład referencyjny
+See `src/titan_core/titan_package.py` for the format implementation.
 
-- **ExampleIM** (`data/titanIM_modules/ExampleIM/`): Pokazuje Sound API z przyciskami demo
-  - Domyślnie wyłączony (`status = 1`)
-  - Demonstruje `sounds.welcome()`, `sounds.notify()`, dźwięki obecności, itp.
+## Testing Modules
 
-## Najważniejsze wskazówki
+1. Place the module in `data/titanIM_modules/ModuleName/`
+2. Make sure the file is `init.py`, not `__init__.py`
+3. Check the `__im.TCE` format (INI, uppercase .TCE)
+4. Start Titan
+5. Open Titan IM (in GUI, IUI, or Klango mode)
+6. Check whether the module appears in the communicators list
+7. Click/select the module — it should call `open(parent_frame)`
+8. If `get_status_text()` is implemented, check that it shows after the module name
 
-1. **Zawsze implementuj `open(parent_frame)`** — wymagane
-2. **Używaj `_module.sounds` dla ujednoliconych dźwięków** — takich samych jak Telegram, Titan-Net
-3. **Implementuj `get_status_text()` dla informacji o połączeniu** — użytkownicy lubią widzieć status
-4. **Gracefully obsługuj `parent_frame=None`** — obsługuj tryb konsoli
-5. **Testuj we wszystkich trybach** — GUI, Invisible UI i Klango
-6. **Używaj wx.CallAfter dla aktualizacji GUI z wątków** — bezpieczne dla wątków
-7. **Dodawaj dźwięki dla lepszego UX** — `new_message()`, `message_sent()`, `user_online()`, itp.
-8. **Obsługuj zamknięcie gracefully** — wywołaj `sounds.goodbye()`, wyczyść stan
+## How Modules Appear in Each Interface
 
-Moduły Titan IM umożliwiają dodawanie własnych komunikatorów, kanałów społecznościowych i narzędzi do TCE Launcher bez modyfikowania kodu głównego. Dzięki ujednoliconemu Sound API wszystkie moduły mają spójne doświadczenie dźwiękowe, takie same jak wbudowane integracje (Telegram, EltenLink, Titan-Net).
+- **GUI** (`src/ui/gui.py`): Listed in the network listbox, status shown inline
+- **Invisible UI** (`src/ui/invisibleui.py`): Listed among the Titan IM category elements
+- **Klango Mode** (`src/system/klangomode.py`): Listed in the Titan IM submenu
+
+## Reference Example
+
+- **ExampleIM** (`data/titanIM_modules/ExampleIM/`): Demonstrates the Sound API with demo buttons
+  - Disabled by default (`status = 1`)
+  - Demonstrates `sounds.welcome()`, `sounds.notify()`, presence sounds, etc.
+
+## Key Tips
+
+1. **Always implement `open(parent_frame)`** — required
+2. **Use `_module.sounds` for unified sounds** — the same ones Telegram and Titan-Net use
+3. **Implement `get_status_text()` for connection info** — users like seeing status
+4. **Handle `parent_frame=None` gracefully** — support console mode
+5. **Test across every interface mode** — GUI, Invisible UI, and Klango
+6. **Use wx.CallAfter for GUI updates from threads** — thread-safe
+7. **Add sounds for a better UX** — `new_message()`, `message_sent()`, `user_online()`, etc.
+8. **Handle closing gracefully** — call `sounds.goodbye()`, clear state
+
+Titan IM modules let you add custom communicators, social feeds, and tools to TCE Launcher without modifying the core code. Thanks to the unified Sound API, every module gets a consistent audio experience, matching the built-in integrations (Telegram, EltenLink, Titan-Net).

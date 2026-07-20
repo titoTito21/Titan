@@ -447,6 +447,30 @@ Dla silników wywołujących API lub powolny subprocess, cache dyskowy jest **kl
 - Pliki binarne (DLL, .exe, dane słowników) trzymaj w podkatalogu silnika i znajdź je przez `os.path.dirname(os.path.abspath(__file__))`.
 - Sprawdzaj `sys.platform` w `is_available()` — jeśli silnik jest tylko na Windowsie, zwracaj `False` na innych systemach.
 
+## Pakowanie jako `.TCD` (opcjonalnie)
+
+Zamiast katalogu, silnik TTS można rozpowszechniać jako pojedynczy plik
+`.tcd` — z całą zawartością, łącznie z ewentualnymi natywnymi mostkami
+DLL/EXE. W pełni opcjonalne i dodatkowe.
+
+```bash
+python src/scripts/pack_addon.py "data/titantts engines/moj_silnik" --kind tts_engine -o moj_silnik.tcd
+```
+
+- `.tcd` to własny skompresowany kontener (nagłówek magiczny + strumień
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+- Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z
+  katalogiem, więc `__engine__.py`/`__engine__.TCE` i ewentualny natywny
+  mostek (DLL, bridge .exe) nadal działają tak samo po rozpakowaniu, bo
+  wpis do `sys.path` dla katalogów `libs=` jest liczony na podstawie
+  rozpakowanej ścieżki.
+- Plik `.tcd` wystarczy umieścić w `data/titantts engines/` (wbudowanym
+  lub w nakładce użytkownika) — zostanie wykryty dokładnie tak samo jak
+  silnik oparty na katalogu.
+
+Zobacz `src/titan_core/titan_package.py` po implementację formatu.
+
 ## Testowanie silnika
 
 1. Skopiuj katalog do `data/titantts engines/`.

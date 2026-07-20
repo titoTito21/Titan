@@ -81,7 +81,7 @@ All values are `true` or `false`. Missing fields use their default.
 | titan_im | true | `api.titan_net_client`, `api.open_telegram()`, `api.open_messenger()`, ... |
 | help | true | `api.show_help()` |
 | components | true | `api.get_components()`, `api.get_component_menu_functions()` |
-| system_hooks | true | OS-level hooks (Win key, lockscreen, ...) |
+| system_hooks | true | Parsed but **not currently wired to gate anything** in `LauncherAPI.__init__` — kept for forward-compatibility, don't rely on setting it `false` to disable something yet |
 | notifications | true | `api.notifications` |
 | sound | true | Full TCE sound system (always available regardless) |
 | invisible_ui | false | `api.start_invisible_ui()` (tilde key overlay) |
@@ -177,6 +177,8 @@ api.get_stereo_speech()                # StereoSpeech instance or None
 #### Controller vibrations
 ```python
 api.vibrate_cursor_move()
+api.vibrate_menu_open()
+api.vibrate_menu_close()
 api.vibrate_selection()
 api.vibrate_focus_change()
 api.vibrate_error()
@@ -184,6 +186,9 @@ api.vibrate_notification()
 api.vibrate_startup()
 api.set_vibration_enabled(True)
 api.set_vibration_strength(0.7)
+api.get_controller_info()              # controller/gamepad status info or None
+api.refresh_controllers()
+api.test_vibration()
 ```
 
 #### Statusbar
@@ -212,7 +217,8 @@ api.request_exit()                         # graceful wx loop exit
 api.force_exit()                           # hard shutdown + os._exit(0)
 api.register_shutdown_callback(callback)   # called when shutting down
 api.has_feature('applications')            # whether feature is enabled (bool)
-api.check_for_updates()                    # check for TCE updates
+api.check_for_updates()                    # check for TCE updates, shows dialog if available → bool
+api.show_shutdown_dialog()                 # show TCE's shutdown confirmation dialog
 
 # Minimize to tray:
 api.register_minimize_handler(callback)    # callback hides your window
@@ -733,6 +739,29 @@ def shutdown():
     _window = None
     _qt_app = None
 ```
+
+## Packaging as `.TCD` (Optional)
+
+Instead of shipping a directory, a launcher can be distributed as a single
+`.tcd` file. Purely optional and additive.
+
+```bash
+python src/scripts/pack_addon.py data/launchers/my_launcher --kind launcher -o my_launcher.tcd
+```
+
+- `.tcd` is a custom compressed container (magic header + LZMA payload),
+  deliberately not a real zip/7z — 7-Zip and Windows Explorer refuse to
+  open it as an archive.
+- No code changes needed: the payload is byte-identical to the directory,
+  so `init.py` and `__launcher__.TCE` still resolve the same way once
+  extracted.
+- Drop the `.tcd` into `data/launchers/` (bundled or per-user overlay) and
+  it's discovered identically to a directory-based launcher. Note:
+  installing a launcher package doesn't make it your *active* launcher
+  automatically — it just becomes selectable (Settings, or
+  `--launcher <name>`), same as a manually-installed launcher directory.
+
+See `src/titan_core/titan_package.py` for the format implementation.
 
 ## Verifying the install
 

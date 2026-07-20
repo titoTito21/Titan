@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia trybów gamepada Titan - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html" class="active">Tryby gamepada</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia trybów gamepada Titan</h1>
+            </div>
+            <h1>Przewodnik tworzenia trybów gamepada Titan</h1>
+
+<h2>Wprowadzenie</h2>
+
+<p>Własne tryby gamepada to foldery pod <code>data/gamepad/modes/</code>, dokładnie tak
+samo jak komponent, które podłączają się do cyklu trybów kontrolera Titana.
+Przy podłączonym gamepadzie, **przytrzymanie zderzaka (bumpera) przez
+około sekundę** przełącza tryby (LB = poprzedni, RB = następny) —
+wbudowane tryby (System, Kontroler, Czytnik ekranu, Klawiatura ekranowa)
+są pierwsze, potem każdy własny tryb znaleziony tutaj. Gdy własny tryb
+jest aktywny, otrzymuje zdarzenia przycisków / gałek analogowych / krzyżaka
+/ zderzaków przez hooki <code>handle_*</code> i może mówić, odtwarzać dźwięki albo
+symulować naciśnięcia klawiszy w odpowiedzi.</p>
+
+<p>Kanoniczna dokumentacja API znajduje się w
+<code>src/controller/gamepad_mode_api.py</code> (przeczytaj docstring modułu), a
+<code>data/gamepad/modes/README.md</code> dokumentuje to dla autorów zewnętrznych.
+<code>data/gamepad/modes/document_reader/</code> to kompletny, działający przykład.</p>
+
+<h2>Architektura systemu trybów gamepada</h2>
+
+<h3>Lokalizacja trybów</h3>
+
+Wszystkie własne tryby znajdują się w <code>data/gamepad/modes/</code> (wbudowane) i w
+nakładce użytkownika <code>%APPDATA%/titosoft/Titan/data/gamepad/modes/</code>. Każdy
+tryb to osobny katalog zawierający:
+<li><code>__mode__.TCE</code> — plik konfiguracyjny trybu (format INI)</li>
+<li>plik Python z podklasą <code>GamepadMode</code> (wskazany przez <code>main=</code> w</li>
+  konfiguracji, albo jedyny plik <code>*.py</code> w folderze jeśli <code>main=</code> pominięto)
+<li>opcjonalnie folder <code>languages/</code> z własną domeną gettext trybu</li>
+<li>opcjonalnie folder <code>lib/</code> z dołączonymi zależnościami zewnętrznymi</li>
+
+<h3>Cykl życia trybu</h3>
+
+<li><strong>Wykrywanie</strong> — <code>load_custom_modes()</code> skanuje oba katalogi trybów przy</li>
+   starcie, czyta <code>__mode__.TCE</code>, pomija wyłączone/uszkodzone foldery
+<li><strong>Tworzenie instancji</strong> — podklasa <code>GamepadMode</code> znaleziona w głównym</li>
+   module jest tworzona raz i dodawana do cyklu trybów
+<li><strong>Aktywacja</strong> — <code>on_activate(manager)</code> jest wywoływana gdy użytkownik</li>
+   przełączy się na ten tryb (przytrzymanie zderzaka przez ~1s)
+<li><strong>Obsługa wejścia</strong> — <code>handle_button</code>/<code>handle_axis</code>/<code>handle_hat</code>/</li>
+   <code>handle_bumper</code> są wywoływane dla każdego dyskretnego zdarzenia wejścia
+   dopóki tryb jest aktywny
+<li><strong>Dezaktywacja</strong> — <code>on_deactivate(manager)</code> jest wywoływana przy</li>
+   przełączeniu na inny tryb
+
+<h2>Struktura pliku konfiguracyjnego</h2>
+
+<h3><code>__mode__.TCE</code></h3>
+
+<p>Plik INI z sekcją <code>[mode]</code>:</p>
+
+<pre><code class="language-ini">[mode]
+name = Mój tryb
+name_pl = Mój tryb
+name_en = My Mode
+main = moj_tryb.py
+description = Co robi ten tryb
+libs = lib
+status = 0</code></pre>
+
+<strong>Parametry:</strong>
+<li><code>status</code> — <strong><code>0</code> = włączony (załadowany), inna wartość = wyłączony</strong></li>
+  (ta sama konwencja co komponenty)
+<li><code>name</code> / <code>name_&lt;lang&gt;</code> — etykieta ogłaszana przy wybraniu trybu. Loader</li>
+  wybiera <code>name_&lt;aktualny_język&gt;</code>, potem <code>name_en</code>, potem <code>name</code>, a na
+  końcu spada do nazwy folderu.
+<li><code>main</code> — plik Python zawierający podklasę <code>GamepadMode</code>. Jeśli pominięty,</li>
+  loader wybiera alfabetycznie pierwszy plik <code>*.py</code> w folderze.
+<li><code>libs</code> (opcjonalnie) — rozdzielone przecinkami katalogi wewnątrz folderu</li>
+  trybu dodawane do <code>sys.path</code> przed załadowaniem (domyślnie <code>lib</code>), dzięki
+  czemu tryb może dołączyć własne zależności bez zaśmiecania środowiska
+  hosta. Zobacz <code>data/gamepad/modes/titan_talk/lib/</code> po prawdziwy przykład
+  (dołącza <code>uiautomation</code> i <code>Pillow</code>).
+<li><strong>Nie istnieje klucz konfiguracyjny <code>domain=</code>.</strong> Domena gettext jest</li>
+  ustalana wyłącznie przez literał tekstowy przekazany do
+  <code>setup_mode_translations(__file__, &#x27;moj_tryb&#x27;)</code> we własnym pliku <code>.py</code>
+  trybu — to wywołanie jest jedynym miejscem, gdzie domena jest faktycznie
+  ustalana.
+<li><strong>WAŻNE</strong>: Dodaj pustą linię na końcu pliku</li>
+
+<h2>Klasa trybu</h2>
+
+<pre><code class="language-python">from src.controller.gamepad_mode_api import (
+    GamepadMode, setup_mode_translations, speak, play_mode_sound,
+    tap, tap_combo,
+)
+
+# Ładuje własny folder languages/ tego trybu (domena gettext &quot;moj_tryb&quot;)
+_ = setup_mode_translations(__file__, &#x27;moj_tryb&#x27;)
+
+
+class MojTryb(GamepadMode):
+    name = &quot;Mój tryb&quot;  # etykieta zapasowa; name(_lang) z __mode__.TCE wygrywa
+
+    def on_activate(self, manager):
+        &quot;&quot;&quot;Wywoływana gdy ten tryb staje się aktywny.&quot;&quot;&quot;
+        speak(_(&quot;Mój tryb aktywowany.&quot;))
+
+    def on_deactivate(self, manager):
+        &quot;&quot;&quot;Wywoływana przy przełączeniu na inny tryb. Opcjonalne sprzątanie.&quot;&quot;&quot;
+        pass
+
+    def handle_button(self, button_id):
+        &quot;&quot;&quot;Naciśnięcie przycisku (0=A, 1=B, 2=X, 3=Y, 6=Back, 7=Start, 8=LS, 9=RS, 10=Guide).&quot;&quot;&quot;
+        if button_id == 0:  # A
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Naciśnięto A&quot;))
+            return True
+        return False
+
+    def handle_axis(self, axis_id, value):
+        &quot;&quot;&quot;Wychylenie gałki analogowej, z debounce (0=lewa X, 1=lewa Y, 2=prawa X, 3=prawa Y).
+        value jest ujemne dla góra/lewo, dodatnie dla dół/prawo.&quot;&quot;&quot;
+        return False
+
+    def handle_hat(self, x, y):
+        &quot;&quot;&quot;Ruch krzyżaka, wykrywany na zboczu. x: -1/0/1 lewo/środek/prawo,
+        y: 1/0/-1 góra/środek/dół.&quot;&quot;&quot;
+        return False
+
+    def handle_bumper(self, is_left):
+        &quot;&quot;&quot;Tylko TAP zderzaka (przytrzymanie nadal przełącza tryby).
+        is_left True = LB, False = RB.&quot;&quot;&quot;
+        return False</code></pre>
+
+<p>Loader tworzy instancję dowolnej podklasy <code>GamepadMode</code> zdefiniowanej w
+głównym module — nadpisz tylko te hooki, których potrzebujesz; wszystkie
+mają bezpieczne domyślne implementacje "nic nie rób".</p>
+
+<h2>Przegląd hooków</h2>
+
+<table class="doc-table">
+<thead><tr>
+<th>Metoda</th>
+<th>Wywoływana gdy</th>
+<th>Zwraca</th>
+</tr></thead><tbody>
+<tr>
+<td><code>on_activate(manager)</code></td>
+<td>tryb staje się aktywny</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>on_deactivate(manager)</code></td>
+<td>przełączenie na inny tryb</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>handle_button(button_id)</code></td>
+<td>naciśnięcie przycisku (raz na naciśnięcie, nie na puszczenie)</td>
+<td><code>True</code> jeśli obsłużono</td>
+</tr>
+<tr>
+<td><code>handle_axis(axis_id, value)</code></td>
+<td>gałka analogowa wychyla się poza strefę martwą (z debounce — jedno wywołanie na dyskretne wychylenie)</td>
+<td><code>True</code> jeśli obsłużono</td>
+</tr>
+<tr>
+<td><code>handle_hat(x, y)</code></td>
+<td>krzyżak zmienia kierunek (wykrywanie na zboczu)</td>
+<td><code>True</code> jeśli obsłużono</td>
+</tr>
+<tr>
+<td><code>handle_bumper(is_left)</code></td>
+<td>zderzak jest <strong>stuknięty</strong> (krótkie naciśnięcie+puszczenie, nie przytrzymanie)</td>
+<td><code>True</code> jeśli obsłużono</td>
+</tr>
+</tbody></table>
+
+<p>Zderzaki (przyciski 4/5) nigdy nie trafiają do <code>handle_button</code> —
+zarezerwowane są do przełączania trybów. <strong>Stuknięcie</strong> (naciśnięcie i
+puszczenie poniżej progu przytrzymania) trafia zamiast tego do
+<code>handle_bumper</code>; <strong>przytrzymanie</strong> zderzaka przez ~1s nadal zmienia tryb
+kontrolera niezależnie od tego, co zwróci aktywny tryb.</p>
+
+<h2>Numeracja przycisków / osi / krzyżaka</h2>
+
+<p>Standardowy układ Xbox / XInput:</p>
+
+<li><strong>Przyciski</strong>: <code>0</code>=A, <code>1</code>=B, <code>2</code>=X, <code>3</code>=Y, <code>6</code>=Back/View, <code>7</code>=Start/Menu,</li>
+  <code>8</code>=naciśnięcie lewej gałki, <code>9</code>=naciśnięcie prawej gałki, <code>10</code>=Guide.
+  <code>4</code>/<code>5</code> (zderzaki) nigdy nie trafiają do <code>handle_button</code>.
+<li><strong>Osie</strong>: <code>0</code>=lewa X, <code>1</code>=lewa Y, <code>2</code>=prawa X, <code>3</code>=prawa Y. Ujemne =</li>
+  góra/lewo, dodatnie = dół/prawo.
+<li><strong>Krzyżak</strong>: <code>x</code> to <code>-1</code>/<code>0</code>/<code>1</code> (lewo/środek/prawo), <code>y</code> to <code>1</code>/<code>0</code>/<code>-1</code></li>
+  (góra/środek/dół) — konwencja pygame dla hat.
+
+<h2>Funkcje pomocnicze</h2>
+
+<p>Wszystkie importowalne z <code>src.controller.gamepad_mode_api</code>:</p>
+
+<li><code>setup_mode_translations(__file__, domain)</code> — ładuje własną domenę</li>
+  gettext trybu z jego folderu <code>languages/</code>; spada do funkcji tożsamościowej
+  jeśli brak
+<li><code>speak(text, position=0.0, interrupt=True, pitch_offset=0)</code> — wysyła</li>
+  tekst do aktywnego czytnika ekranu / Titan TTS (świadome panoramowania
+  stereo i wysokości głosu)
+<li><code>play_mode_sound(path=&#x27;joystick/ui2.ogg&#x27;, pan=None, elevation=0.0)</code> —</li>
+  odtwarza efekt dźwiękowy TCE z aktualnego motywu sfx
+<li><code>tap(key, hold=0.04)</code> / <code>press(key)</code> / <code>release(key)</code> — symuluje</li>
+  pojedyncze naciśnięcie klawisza (oparte na pynput, spada do pakietu
+  <code>keyboard</code> w Windows) — wieloplatformowe
+<li><code>tap_combo(*keys, hold=0.04)</code> — symuluje akord, np.</li>
+  <code>tap_combo(&#x27;ctrl&#x27;, &#x27;c&#x27;)</code>
+<li><code>type_text(text)</code> — wpisuje tekst znak po znaku</li>
+<li><code>get_clipboard_text()</code> — czyta bieżący tekst schowka (<strong>tylko Windows</strong>,</li>
+  <code>&#x27;&#x27;</code> na innych platformach)
+<li><code>get_focused_window_text()</code> — czyta pełny tekst kontrolki z fokusem przez</li>
+  <code>WM_GETTEXT</code>, tylko do odczytu — bez naciśnięć klawiszy, bez ruchu
+  karetki (<strong>tylko Windows</strong>, <code>&#x27;&#x27;</code> gdzie indziej); dobre do wciągnięcia
+  dokumentu do wirtualnego bufora
+<li><code>is_edit_field_focused()</code> — <code>True</code> gdy widoczna jest karetka tekstowa</li>
+  (<strong>tylko Windows</strong>; na innych platformach zwraca <code>True</code>, żeby tryby
+  pozostały użyteczne)
+
+<p>Nazwy klawiszy dla <code>tap</code>/<code>press</code>/<code>release</code>: pojedyncze znaki plus <code>enter</code>,
+<code>escape</code>, <code>backspace</code>, <code>tab</code>, <code>space</code>, <code>shift</code>, <code>ctrl</code>, <code>alt</code>, <code>win</code>,
+<code>insert</code>, <code>delete</code>, <code>home</code>, <code>end</code>, <code>pageup</code>, <code>pagedown</code>, <code>up</code>, <code>down</code>,
+<code>left</code>, <code>right</code>, <code>capslock</code>, <code>num0</code>..<code>num9</code>.</p>
+
+<h2>Zasady projektowania</h2>
+
+<li><strong>Nigdy nie steruj po cichu aktywną aplikacją</strong> — preferuj inspekcję</li>
+   tylko do odczytu (<code>get_focused_window_text</code>, <code>get_clipboard_text</code>) nad
+   wstrzykiwaniem klawiszy, chyba że całym celem trybu jest bycie pilotem
+   zdalnego sterowania
+<li><strong>Zawsze dawaj informację zwrotną dźwiękiem</strong> — każde obsłużone</li>
+   zdarzenie powinno coś <code>speak()</code> albo <code>play_mode_sound()</code>; cichy tryb
+   gamepada jest bezużyteczny dla niewidomego użytkownika
+<li><strong>Przedstaw się przy aktywacji</strong> — <code>on_activate</code> powinno krótko</li>
+   wyjaśnić sterowanie, żeby użytkownik nie musiał niczego sprawdzać
+<li><strong>Zwracaj <code>True</code> tylko gdy faktycznie obsłużyłeś zdarzenie</strong></li>
+<li><strong>Trzymaj <code>handle_*</code> szybkie</strong> — działają w wątku odpytywania</li>
+   kontrolera; nie blokuj na I/O sieciowym/dyskowym w środku
+
+<h2>Kompletny przykład: Tryb sterowania mediami</h2>
+
+<p>Prosty tryb mapujący przyciski przednie na sterowanie odtwarzaniem, z
+informacją zwrotną dźwiękiem przy każdej akcji.</p>
+
+<p><strong>Plik: <code>data/gamepad/modes/media_control/__mode__.TCE</code></strong>
+<pre><code class="language-ini">[mode]
+name = Sterowanie mediami
+name_pl = Sterowanie mediami
+name_en = Media Control
+main = media_control.py
+description = Steruj odtwarzaniem mediów przyciskami: A play/pause, B następny, X poprzedni, Y wycisz.
+status = 0</code></pre></p>
+
+<p><strong>Plik: <code>data/gamepad/modes/media_control/media_control.py</code></strong>
+<pre><code class="language-python">&quot;&quot;&quot;
+Sterowanie mediami - własny tryb gamepada dla TCE.
+
+Sterowanie:
+  * A (0) - Play / Pauza
+  * B (1) - Następny utwór
+  * X (2) - Poprzedni utwór
+  * Y (3) - Wycisz / Odcisz
+&quot;&quot;&quot;
+
+from src.controller.gamepad_mode_api import (
+    GamepadMode, setup_mode_translations, speak, play_mode_sound,
+)
+
+_ = setup_mode_translations(__file__, &#x27;media_control&#x27;)
+
+
+class MediaControlMode(GamepadMode):
+    name = &quot;Sterowanie mediami&quot;
+
+    def on_activate(self, manager):
+        speak(_(&quot;Sterowanie mediami. A play pauza, B następny, X poprzedni, Y wycisz.&quot;))
+
+    def handle_button(self, button_id):
+        if button_id == 0:  # A
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Play / Pauza&quot;))
+            return True
+        if button_id == 1:  # B
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Następny utwór&quot;))
+            return True
+        if button_id == 2:  # X
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Poprzedni utwór&quot;))
+            return True
+        if button_id == 3:  # Y
+            play_mode_sound(&#x27;joystick/ui1.ogg&#x27;)
+            speak(_(&quot;Wycisz&quot;))
+            return True
+        return False</code></pre></p>
+
+<h2>Przykłady referencyjne</h2>
+
+<li><strong>document_reader</strong> (<code>data/gamepad/modes/document_reader/</code>): Czytnik</li>
+  wirtualnego bufora tylko do odczytu — przechwytuje pole tekstowe z
+  fokusem albo schowek do własnego bufora i nawiguje po nim linia po
+  linii / znak po znaku, nigdy nie dotykając prawdziwej karetki. Pełne
+  wsparcie tłumaczeń (<code>languages/</code>).
+<li><strong>titan_talk</strong> (<code>data/gamepad/modes/titan_talk/</code>): Cięższy przykład</li>
+  dołączający zewnętrzne zależności (<code>uiautomation</code>, <code>Pillow</code>) przez
+  <code>lib/</code> — czytnik ekranu sterowany joystickiem.
+
+<h2>Konfiguracja tłumaczeń</h2>
+
+<pre><code class="language-bash"># 1. Utwórz katalog languages/ wewnątrz folderu trybu
+mkdir data/gamepad/modes/moj_tryb/languages
+
+# 2. Wyodrębnij tłumaczalne teksty
+pybabel extract -o languages/moj_tryb.pot --no-default-keywords --keyword=_ \
+    data/gamepad/modes/moj_tryb/moj_tryb.py
+
+# 3. Zainicjuj języki
+pybabel init -l pl -d data/gamepad/modes/moj_tryb/languages \
+    -i data/gamepad/modes/moj_tryb/languages/moj_tryb.pot -D moj_tryb
+pybabel init -l en -d data/gamepad/modes/moj_tryb/languages \
+    -i data/gamepad/modes/moj_tryb/languages/moj_tryb.pot -D moj_tryb
+
+# 4. Skompiluj
+pybabel compile -d data/gamepad/modes/moj_tryb/languages</code></pre>
+
+<h2>Pakowanie jako <code>.TCD</code> (opcjonalnie)</h2>
+
+<p>Zamiast katalogu, tryb gamepada można rozpowszechniać jako pojedynczy plik
+<code>.tcd</code> — z całą zawartością, łącznie z ewentualnym <code>lib/</code> zawierającym
+zależności zewnętrzne. W pełni opcjonalne i dodatkowe.</p>
+
+<pre><code class="language-bash">python src/scripts/pack_addon.py data/gamepad/modes/moj_tryb --kind gamepad_mode -o moj_tryb.tcd</code></pre>
+
+<li><code>.tcd</code> to własny skompresowany kontener (nagłówek magiczny + strumień</li>
+  LZMA), celowo nie jest to prawdziwy zip/7z — 7-Zip i Eksplorator Windows
+  odmawiają otwarcia go jako archiwum.
+<li>Nie są potrzebne zmiany w kodzie: zawartość jest identyczna bajt-w-bajt z</li>
+  katalogiem, więc <code>__mode__.TCE</code> i główny plik <code>.py</code> nadal działają tak
+  samo po rozpakowaniu, a dołączone zależności w <code>lib/</code> działają bez zmian.
+<li>Plik <code>.tcd</code> wystarczy umieścić w <code>data/gamepad/modes/</code> (wbudowanym lub w</li>
+  nakładce użytkownika) — zostanie wykryty dokładnie tak samo jak tryb
+  oparty na katalogu.
+
+<p>Zobacz <code>src/titan_core/titan_package.py</code> po implementację formatu.</p>
+
+<h2>Wymagania wieloplatformowości</h2>
+
+<p>Tryby gamepada działają wewnątrz pętli odpytywania kontrolera TCE na
+<strong>Windows, macOS i Linux</strong>.</p>
+
+<li><code>speak()</code>, <code>play_mode_sound()</code>, <code>tap()</code>/<code>press()</code>/<code>release()</code>/</li>
+  <code>tap_combo()</code> są już wieloplatformowe (oparte na pynput) — używaj ich
+  swobodnie
+<li><code>get_clipboard_text()</code>, <code>get_focused_window_text()</code>,</li>
+  <code>is_edit_field_focused()</code> są <strong>tylko dla Windows</strong> — zwracają bezpieczne
+  wartości domyślne (<code>&#x27;&#x27;</code> / <code>True</code>) na macOS i Linux; tryb zależny od nich
+  powinien reagować łagodnie na pustą wartość zamiast zakładać Windows
+<li>Nie importuj <code>win32com</code>, <code>winreg</code> ani innych modułów tylko dla Windows na</li>
+  poziomie modułu bez zabezpieczenia <code>try/except</code> albo
+  <code>sys.platform == &#x27;win32&#x27;</code>
+
+<h2>Testowanie trybu</h2>
+
+<li>Utwórz folder trybu pod <code>data/gamepad/modes/</code></li>
+<li>Dodaj <code>__mode__.TCE</code> i główny plik <code>.py</code> z podklasą <code>GamepadMode</code></li>
+<li>Zrestartuj TCE z podłączonym gamepadem</li>
+<li>Przytrzymaj LB/RB przez ~1 sekundę żeby przełączyć się na nowy tryb;</li>
+   potwierdź że ogłasza się przy aktywacji
+<li>Przetestuj każdy przycisk/gałkę/krzyżak/stuknięcie zderzaka który</li>
+   zaimplementowałeś
+<li>Sprawdź logi konsoli pod kątem <code>[GamepadMode] loaded mode &#x27;...&#x27;</code> — jeśli</li>
+   go brak, sprawdź <code>status = 0</code> i czy główny plik zawiera podklasę
+   <code>GamepadMode</code>
+
+<h2>Najważniejsze wskazówki</h2>
+
+<li><strong>Zawsze dawaj informację zwrotną dźwiękiem</strong> — dźwięki i/lub TTS dla</li>
+   każdego obsłużonego zdarzenia
+<li><strong>Ogłaszaj sterowanie przy aktywacji</strong> — nie każ użytkownikowi zgadywać</li>
+<li><strong>Nigdy nie zakładaj Windows</strong> — używaj zabezpieczeń wieloplatformowości</li>
+   opisanych powyżej
+<li><strong>Trzymaj handlery wejścia szybkie</strong> — działają w wątku odpytywania</li>
+   kontrolera
+<li><strong>Preferuj inspekcję tylko do odczytu nad wstrzykiwaniem klawiszy</strong>,</li>
+   chyba że tryb jest jawnie pilotem zdalnego sterowania
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>
