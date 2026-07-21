@@ -256,6 +256,42 @@ def _step_gemini(model, system, history, tools, api_key):
     return {'text': text, 'tool_calls': calls, '_raw_parts': list(parts)}
 
 
+def _step_gemini_stream(model, system, history, tools, api_key, on_delta):
+    """Streaming variant of :func:`_step_gemini`: emits text deltas to
+    ``on_delta`` as they arrive (so the caller can start speaking mid-reply)
+    while still collecting tool calls and the raw proto parts. Returns the same
+    dict shape. Used only when a text-delta consumer is supplied; the caller
+    falls back to the non-streaming step if this raises."""
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    gmodel = genai.GenerativeModel(model, system_instruction=system,
+                                   tools=_to_gemini_tools(tools))
+    resp = gmodel.generate_content(_gemini_contents(history), stream=True)
+    text, calls, raw_parts = '', [], []
+    idx = 0
+    for chunk in resp:
+        try:
+            parts = chunk.candidates[0].content.parts
+        except (IndexError, AttributeError):
+            parts = []
+        for part in parts:
+            raw_parts.append(part)
+            fc = getattr(part, 'function_call', None)
+            if fc and getattr(fc, 'name', ''):
+                calls.append({'id': f'{fc.name}_{idx}', 'name': fc.name,
+                              'args': _proto_to_dict(fc.args)})
+                idx += 1
+            else:
+                delta = getattr(part, 'text', '')
+                if delta:
+                    text += delta
+                    try:
+                        on_delta(delta)
+                    except Exception:
+                        pass
+    return {'text': text, 'tool_calls': calls, '_raw_parts': raw_parts}
+
+
 def _proto_to_dict(args):
     """Convert a Gemini proto MapComposite / Struct into a plain dict."""
     out = {}
@@ -306,6 +342,7 @@ DEFAULT_SYSTEM = (
 
 def run_agent(goal, tools, *, provider=None, model=None, system=None,
               on_text=None, on_tool_start=None, on_tool_result=None,
+              on_text_delta=None,
               confirm=None, confirm_all=False, cancel_event=None, max_steps=25):
     """Run the tool-calling loop until the model stops requesting tools, the
     step budget is exhausted, or cancellation is requested.
@@ -335,9 +372,23 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
 
     history = [{'role': 'user', 'content': goal}]
     final_text = ''
+    # Stream text deltas (for a voice caller to speak mid-reply) only when a
+    # consumer is supplied and the provider supports it (Gemini). The streaming
+    # step falls back to the proven non-streaming one on any error, so the agent
+    # path is never destabilised.
+    use_stream = on_text_delta is not None and provider == 'gemini'
     for _step in range(max_steps):
         _check_cancel()
-        result = step_fn(model, system, history, tools, api_key)
+        if use_stream:
+            try:
+                result = _step_gemini_stream(model, system, history, tools,
+                                             api_key, on_text_delta)
+            except Exception as e:
+                print(f"[ai_agent] streaming step failed ({e}); using non-stream.")
+                use_stream = False
+                result = step_fn(model, system, history, tools, api_key)
+        else:
+            result = step_fn(model, system, history, tools, api_key)
         text = (result.get('text') or '').strip()
         calls = result.get('tool_calls') or []
         if text and on_text:

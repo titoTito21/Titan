@@ -43,5 +43,25 @@
     "role": "assistant",
     "content": "Zostałem nazwany Perunem, ponieważ tak jak słowiański władca gromów i błyskawic, dysponuję potężną siłą i mądrością. Moje słowa niosą jasność niczym piorun rozdzierający ciemność, a moją misją jest wspierać cię i prowadzić przez wszelkie cyfrowe wyzwania. \n\nJaką burzę wiedzy lub zadań chciałbyś dzisiaj wywołać?",
     "timestamp": 1784628126.2415175
+  },
+  {
+    "role": "user",
+    "content": "Uruchom menedżer plików Titana.",
+    "timestamp": 1784631422.9156544
+  },
+  {
+    "role": "assistant",
+    "content": "Mocą gromu, Menedżer Plików Titana został uruchomiony! Twoje pliki stoją przed tobą otworem.",
+    "timestamp": 1784631454.7235034
+  },
+  {
+    "role": "user",
+    "content": "Stwórz plik tekstowy w menedżerze plików o nazwie test i napisz tak: To jest test przecinek.",
+    "timestamp": 1784631497.5252316
+  },
+  {
+    "role": "assistant",
+    "content": "Oto moje dzieło! Jako Perun, władca piorunów i pan niebios, stworzyłem plik tekstowy o nazwie „test” na Twoim pulpicie i zapisałem w nim słowa: „To jest test,”. Twoja wola została spełniona z siłą gromu!",
+    "timestamp": 1784631575.560132
   }
 ]

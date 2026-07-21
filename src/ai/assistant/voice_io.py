@@ -153,14 +153,10 @@ def _iter_chunk_pcm(chunk):
         return
 
 
-def _speak_gemini_stream(text, voice_name, cancel_event=None):
-    """Synthesize with Gemini TTS and play the audio as it streams in, so speech
-    starts on the FIRST chunk instead of after the whole clip. Returns True once
-    at least one audio chunk played; raises on setup/SDK failure before audio."""
-    import sounddevice as sd
-    import numpy as np
+def _gemini_tts_chunks(text, voice_name):
+    """Yield PCM byte segments for ``text`` from Gemini TTS, streamed. Raises on
+    setup/SDK failure before any audio is produced."""
     client, types = _genai()
-
     stream = client.models.generate_content_stream(
         model=_TTS_MODEL,
         contents=text,
@@ -170,35 +166,145 @@ def _speak_gemini_stream(text, voice_name, cancel_event=None):
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
                         voice_name=voice_name)))))
+    for chunk in stream:
+        for pcm in _iter_chunk_pcm(chunk):
+            yield pcm
 
-    out = None
+
+def _speak_gemini_stream(text, voice_name, cancel_event=None, out_holder=None):
+    """Synthesize with Gemini TTS and play the audio as it streams in, so speech
+    starts on the FIRST chunk instead of after the whole clip. When ``out_holder``
+    (a 1-element list) is given, a single OutputStream is reused across calls for
+    gapless sentence-by-sentence playback. Returns True once at least one audio
+    chunk played; raises on setup/SDK failure before audio."""
+    import sounddevice as sd
+    import numpy as np
+    own_stream = out_holder is None
+    if out_holder is None:
+        out_holder = [None]
     played = False
     try:
-        for chunk in stream:
+        for pcm in _gemini_tts_chunks(text, voice_name):
             if cancel_event is not None and cancel_event.is_set():
                 break
-            for pcm in _iter_chunk_pcm(chunk):
-                if out is None:
-                    # Open the output device only once we have real audio, so a
-                    # text-only/metadata first chunk doesn't hold the device.
-                    out = sd.OutputStream(samplerate=_TTS_SR, channels=1,
-                                          dtype='int16')
-                    out.start()
-                arr = np.frombuffer(pcm, dtype=np.int16)
-                out.write(arr)  # blocks until the buffer drains -> paces playback
-                played = True
-                if cancel_event is not None and cancel_event.is_set():
-                    break
+            if out_holder[0] is None:
+                # Open the device only once we have real audio, so a text-only /
+                # metadata first chunk doesn't hold it.
+                out_holder[0] = sd.OutputStream(samplerate=_TTS_SR, channels=1,
+                                                dtype='int16')
+                out_holder[0].start()
+            out_holder[0].write(np.frombuffer(pcm, dtype=np.int16))
+            played = True
     finally:
-        if out is not None:
+        if own_stream and out_holder[0] is not None:
             try:
-                out.stop()
-                out.close()
+                out_holder[0].stop()
+                out_holder[0].close()
             except Exception:
                 pass
     if not played:
         raise RuntimeError("Gemini TTS returned no audio.")
     return True
+
+
+# --------------------------------------------------------------------------- #
+# Sentence-pipelined speaker: speak each sentence as the reply is still being
+# generated, so the assistant starts talking almost immediately.
+# --------------------------------------------------------------------------- #
+import queue  # noqa: E402
+import re     # noqa: E402  (threading is imported at the top of the module)
+
+_SENTENCE_RE = re.compile(r'[^.!?…\n]*[.!?…\n]+', re.S)
+
+
+def _split_sentences(buffer):
+    """Split ``buffer`` into (complete_sentences, remainder)."""
+    sentences, pos = [], 0
+    for m in _SENTENCE_RE.finditer(buffer):
+        s = m.group().strip()
+        if s:
+            sentences.append(s)
+        pos = m.end()
+    return sentences, buffer[pos:]
+
+
+class SentenceSpeaker:
+    """Consumes streamed text deltas and speaks complete sentences as they form,
+    one at a time, over a single reused audio stream. ``feed(delta)`` accepts
+    partial text; ``finish()`` flushes the tail and waits for playback. Speaking
+    happens on a worker thread so feeding never blocks the agent loop. Falls back
+    to Titan TTS if Gemini TTS fails for a sentence. Interruptible via
+    ``cancel_event``."""
+
+    def __init__(self, persona=None, cancel_event=None):
+        self.voice = (persona or {}).get('gemini_voice') or 'Kore'
+        self.cancel_event = cancel_event
+        self._buf = ''
+        self._q = queue.Queue()
+        self._out_holder = [None]
+        self._gemini_ok = True
+        self.spoke = False
+        self._worker = threading.Thread(target=self._run, daemon=True)
+        self._worker.start()
+
+    def feed(self, delta):
+        if not delta:
+            return
+        self._buf += delta
+        sentences, self._buf = _split_sentences(self._buf)
+        for s in sentences:
+            self._q.put(s)
+
+    def finish(self, timeout=120):
+        tail = self._buf.strip()
+        self._buf = ''
+        if tail:
+            self._q.put(tail)
+        self._q.put(None)  # sentinel
+        self._worker.join(timeout=timeout)
+
+    def _cancelled(self):
+        return self.cancel_event is not None and self.cancel_event.is_set()
+
+    def _run(self):
+        while True:
+            sentence = self._q.get()
+            if sentence is None or self._cancelled():
+                break
+            self._speak_one(sentence)
+        # Close the shared output stream.
+        if self._out_holder[0] is not None:
+            try:
+                self._out_holder[0].stop()
+                self._out_holder[0].close()
+            except Exception:
+                pass
+            self._out_holder[0] = None
+
+    def _speak_one(self, sentence):
+        if self._gemini_ok:
+            try:
+                _speak_gemini_stream(sentence, self.voice,
+                                     cancel_event=self.cancel_event,
+                                     out_holder=self._out_holder)
+                self.spoke = True
+                return
+            except Exception as e:
+                print(f"[voice_io] sentence TTS failed ({e}); Titan TTS fallback.")
+                self._gemini_ok = False
+                if self._out_holder[0] is not None:
+                    try:
+                        self._out_holder[0].stop()
+                        self._out_holder[0].close()
+                    except Exception:
+                        pass
+                    self._out_holder[0] = None
+        if not self._cancelled():
+            try:
+                _titan_tts_fallback(sentence)
+                self.spoke = True
+            except Exception as e:
+                print(f"[voice_io] Titan TTS fallback failed: {e}")
 
 
 def _titan_tts_fallback(text):

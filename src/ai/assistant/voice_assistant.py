@@ -112,23 +112,42 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
         on_transcript(goal_text)
     personas_mod.append_history(persona, 'user', goal_text)
 
-    # 2. Run the agent (computer-use + everyday tools) as this persona.
+    # 2. Run the agent (computer-use + everyday tools) as this persona. Text is
+    #    streamed to a sentence speaker so the assistant starts talking while the
+    #    reply is still being generated (low latency), not only at the end.
     status("thinking")
     confirm, confirm_all = _confirm_from_policy(gui_confirm)
     tools = get_assistant_tools()
     system = build_system(persona)
+    speaker = voice_io.SentenceSpeaker(persona=persona, cancel_event=cancel_event)
+    spoke_started = {'v': False}
 
-    reply = run_agent(
-        goal_text, tools, provider=_ASSISTANT_PROVIDER, system=system,
-        on_text=(on_reply if on_reply else None),
-        confirm=confirm, confirm_all=confirm_all, cancel_event=cancel_event)
+    def _delta(chunk):
+        if not spoke_started['v']:
+            spoke_started['v'] = True
+            status("speaking")
+        speaker.feed(chunk)
+
+    try:
+        reply = run_agent(
+            goal_text, tools, provider=_ASSISTANT_PROVIDER, system=system,
+            on_text=(on_reply if on_reply else None), on_text_delta=_delta,
+            confirm=confirm, confirm_all=confirm_all, cancel_event=cancel_event)
+    except BaseException:
+        # Always tear the speaker down (cancel/errors included) so its worker
+        # thread and audio stream never leak.
+        speaker.finish(timeout=5)
+        raise
     reply = (reply or '').strip()
 
-    # 3. Speak the reply.
+    # 3. Flush the pipeline; if nothing was streamed/spoken (e.g. streaming
+    #    unavailable), speak the whole reply once at the end.
+    speaker.finish()
     if reply:
         personas_mod.append_history(persona, 'assistant', reply)
-        status("speaking")
-        voice_io.speak(reply, persona=persona, cancel_event=cancel_event)
+        if not speaker.spoke:
+            status("speaking")
+            voice_io.speak(reply, persona=persona, cancel_event=cancel_event)
     status("idle")
     return reply
 
