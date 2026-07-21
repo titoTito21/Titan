@@ -475,6 +475,7 @@ class SettingsFrame(wx.Frame):
         # Game controller panel is built up-front but only registered as a
         # category while a gamepad is connected (see _sync_controller_category).
         self.controller_panel = wx.Panel(self.content_panel)
+        self.ai_features_panel = wx.Panel(self.content_panel)
 
         # Register categories
         self.register_category(_("General"), self.general_panel)
@@ -484,6 +485,9 @@ class SettingsFrame(wx.Frame):
         self.register_category(_("Environment"), self.environment_panel)
         self.register_category(_("System Monitor"), self.system_monitor_panel)
         self.register_category(_("Titan TTS"), self.stereo_speech_panel)
+        self.register_category(_("AI features"), self.ai_features_panel,
+                               save_callback=self._save_ai_features,
+                               load_callback=self._load_ai_features)
 
         if sys.platform == 'win32':
             self.windows_panel = wx.Panel(self.content_panel)
@@ -510,6 +514,7 @@ class SettingsFrame(wx.Frame):
         self.InitSystemMonitorPanel()
         self.InitStereoSpeechPanel()
         self.InitControllerPanel()
+        self.InitAIFeaturesPanel()
 
         if sys.platform == 'win32':
             self.InitWindowsPanel()
@@ -863,6 +868,12 @@ class SettingsFrame(wx.Frame):
         self.confirm_exit_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.confirm_exit_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        # Reveals the Programmer menu (AI creation kit and future dev tools).
+        self.developer_tools_cb = wx.CheckBox(self.general_panel, label=_("Enable developer tools"))
+        self.developer_tools_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.developer_tools_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.developer_tools_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         vbox.AddSpacer(10)
 
         # When TCE is minimized
@@ -1089,6 +1100,138 @@ class SettingsFrame(wx.Frame):
         vbox.Add(self.battery_critical_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
         panel.SetSizer(vbox)
+
+    def InitAIFeaturesPanel(self):
+        """AI features category: master enable, communication method (API key /
+        Claude CLI / Codex CLI) and, for the API method, provider + encrypted
+        API key. Powers the developer AI creation kit (Programmer menu)."""
+        from src.ai import ai_provider as ap
+        panel = self.ai_features_panel
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        intro = wx.StaticText(panel, label=_(
+            "Enable AI components to generate apps, games, components and other "
+            "add-ons with the AI creation kit (Programmer menu)."))
+        intro.Wrap(720)
+        vbox.Add(intro, flag=wx.LEFT | wx.TOP | wx.RIGHT, border=10)
+
+        self.ai_enable_cb = wx.CheckBox(panel, label=_("Enable AI components"))
+        self.ai_enable_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_enable_cb.Bind(wx.EVT_CHECKBOX, self._on_ai_state_change)
+        vbox.Add(self.ai_enable_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        # Communication method
+        self._ai_methods = list(ap.METHODS)  # [(id, label), ...]
+        self.ai_method_radio = wx.RadioBox(
+            panel, label=_("Communication method"),
+            choices=[_("API key"), _("Claude CLI"), _("Codex CLI")],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.ai_method_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_method_radio.Bind(wx.EVT_RADIOBOX, self._on_ai_state_change)
+        vbox.Add(self.ai_method_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # --- API-key subsection (shown only when the API method is chosen) --- #
+        self.ai_provider_label = wx.StaticText(panel, label=_("AI provider:"))
+        vbox.Add(self.ai_provider_label, flag=wx.LEFT | wx.TOP, border=10)
+        self._ai_providers = list(ap.PROVIDERS)  # [(id, label), ...]
+        self.ai_provider_choice = wx.Choice(
+            panel, choices=[label for _pid, label in self._ai_providers])
+        self.ai_provider_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_provider_choice.Bind(wx.EVT_CHOICE, self._on_ai_provider_change)
+        vbox.Add(self.ai_provider_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        self.ai_key_label = wx.StaticText(
+            panel, label=_("API key (stored encrypted on this device):"))
+        vbox.Add(self.ai_key_label, flag=wx.LEFT | wx.TOP, border=10)
+        self.ai_key_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        self.ai_key_ctrl.SetName(_("API key"))
+        self.ai_key_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.ai_key_ctrl, flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
+
+        # AI Agent confirmation policy (how the computer-use agent asks before
+        # acting). Separate from the creation kit.
+        self._ai_agent_confirm_values = ['tiered', 'all', 'none']
+        self.ai_agent_confirm_radio = wx.RadioBox(
+            panel, label=_("AI Agent confirmations"),
+            choices=[_("Confirm risky actions (recommended)"),
+                     _("Confirm every action"),
+                     _("Autonomous (no confirmations)")],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.ai_agent_confirm_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.ai_agent_confirm_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        # In-memory per-provider keys (decrypted), swapped as the provider
+        # choice changes; persisted (re-encrypted) only on Save.
+        self._ai_keys = {}
+        self._ai_current_provider = self._ai_providers[0][0]
+
+        panel.SetSizer(vbox)
+        panel.Layout()
+
+    def _current_ai_method(self):
+        idx = self.ai_method_radio.GetSelection()
+        return self._ai_methods[idx][0] if idx >= 0 else 'api'
+
+    def _current_ai_provider(self):
+        idx = self.ai_provider_choice.GetSelection()
+        return self._ai_providers[idx][0] if idx >= 0 else self._ai_providers[0][0]
+
+    def _update_ai_controls_state(self):
+        """Enable/disable controls to reflect the master switch and method."""
+        enabled = self.ai_enable_cb.GetValue()
+        self.ai_method_radio.Enable(enabled)
+        api = enabled and self._current_ai_method() == 'api'
+        for ctrl in (self.ai_provider_label, self.ai_provider_choice,
+                     self.ai_key_label, self.ai_key_ctrl):
+            ctrl.Enable(api)
+
+    def _on_ai_state_change(self, event):
+        self._update_ai_controls_state()
+        if event:
+            event.Skip()
+
+    def _on_ai_provider_change(self, event):
+        # Stash the key currently in the field under the old provider, then load
+        # the newly selected provider's key.
+        self._ai_keys[self._ai_current_provider] = self.ai_key_ctrl.GetValue()
+        provider = self._current_ai_provider()
+        self._ai_current_provider = provider
+        self.ai_key_ctrl.SetValue(self._ai_keys.get(provider, ''))
+        if event:
+            event.Skip()
+
+    def _load_ai_features(self, panel):
+        from src.ai import ai_provider as ap
+        self.ai_enable_cb.SetValue(ap.is_ai_enabled())
+        method = ap.get_ai_method()
+        method_ids = [mid for mid, _l in self._ai_methods]
+        self.ai_method_radio.SetSelection(method_ids.index(method) if method in method_ids else 0)
+        provider = ap.get_ai_provider()
+        provider_ids = [pid for pid, _l in self._ai_providers]
+        self.ai_provider_choice.SetSelection(provider_ids.index(provider) if provider in provider_ids else 0)
+        self._ai_keys = {pid: ap.get_ai_key(pid) for pid, _l in self._ai_providers}
+        self._ai_current_provider = self._current_ai_provider()
+        self.ai_key_ctrl.SetValue(self._ai_keys.get(self._ai_current_provider, ''))
+        policy = ap.get_agent_confirm()
+        self.ai_agent_confirm_radio.SetSelection(
+            self._ai_agent_confirm_values.index(policy)
+            if policy in self._ai_agent_confirm_values else 0)
+        self._update_ai_controls_state()
+
+    def _save_ai_features(self, panel):
+        from src.ai import ai_provider as ap
+        # Capture the visible field into the per-provider map before persisting.
+        self._ai_keys[self._ai_current_provider] = self.ai_key_ctrl.GetValue()
+        ap.set_ai_enabled(self.ai_enable_cb.GetValue())
+        ap.set_ai_method(self._current_ai_method())
+        ap.set_ai_provider(self._current_ai_provider())
+        for pid, key in self._ai_keys.items():
+            ap.set_ai_key(pid, (key or '').strip())
+        try:
+            ap.set_agent_confirm(
+                self._ai_agent_confirm_values[self.ai_agent_confirm_radio.GetSelection()])
+        except Exception:
+            pass
 
     def InitWindowsPanel(self):
         panel = self.windows_panel
@@ -1458,6 +1601,9 @@ class SettingsFrame(wx.Frame):
 
         confirm_exit_value = general_settings.get('confirm_exit', 'False')
         self.confirm_exit_cb.SetValue(str(confirm_exit_value).lower() in ['true', '1'])
+
+        developer_tools_value = general_settings.get('developer_tools', 'False')
+        self.developer_tools_cb.SetValue(str(developer_tools_value).lower() in ['true', '1'])
 
         startup_mode_value = general_settings.get('startup_mode', 'normal')
         if startup_mode_value == 'minimized':
@@ -2206,6 +2352,7 @@ class SettingsFrame(wx.Frame):
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
             'confirm_exit': str(self.confirm_exit_cb.GetValue()),
+            'developer_tools': str(self.developer_tools_cb.GetValue()),
             'startup_mode': startup_mode,
             'language': selected_language,
             'launcher': launcher_folder,
@@ -2382,6 +2529,18 @@ class SettingsFrame(wx.Frame):
             restart_system_monitor()
         except Exception as e:
             print(f"Warning: Could not restart system monitor: {e}")
+
+        # Rebuild the main window's menu bar so context menus gated on settings
+        # (e.g. the Programmer menu / AI creation kit) appear or disappear
+        # immediately, without an app restart. SettingsFrame has no direct
+        # reference to the main frame (parent is None), so locate it among the
+        # top-level windows.
+        try:
+            for win in wx.GetTopLevelWindows():
+                if hasattr(win, 'rebuild_menu_bar'):
+                    win.rebuild_menu_bar()
+        except Exception as e:
+            print(f"[Settings] Could not rebuild main menu bar: {e}")
 
         # Check if startup mode or language changed to provide appropriate message
         if old_startup_mode != startup_mode or old_language != selected_language:

@@ -3146,6 +3146,17 @@ class TitanApp(wx.Frame):
 
         print(f"[GUI] Registered view '{view_id}' at position {insert_idx} (total views: {len(self.registered_views)})")
 
+    def rebuild_menu_bar(self):
+        """Recreate the menu bar so context-dependent menus (e.g. the Programmer
+        menu, gated on the developer-tools / AI-features settings) appear or
+        disappear without an app restart. Called after settings are saved."""
+        try:
+            from src.ui.menu import MenuBar
+            self.SetMenuBar(MenuBar(self))
+            print("[GUI] Menu bar rebuilt")
+        except Exception as e:
+            print(f"[GUI] Error rebuilding menu bar: {e}")
+
     def _auto_sync_tab_bar_on_focus(self, event, control):
         """Re-inject the virtual tab bar row whenever focus lands on a
         registered view's control. This fixes the case where component code

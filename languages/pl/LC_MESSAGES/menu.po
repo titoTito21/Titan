@@ -8,16 +8,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-11 11:47+0200\n"
+"POT-Creation-Date: 2026-07-21 09:27+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
-"Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
-"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language: pl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: src/ui/menu.py:52
@@ -32,97 +31,130 @@ msgstr "Menedżer komponentów..."
 msgid "Program settings"
 msgstr "Ustawienia programu"
 
-#: src/ui/menu.py:82
+#: src/ui/menu.py:87
+msgid "AI Agent..."
+msgstr "Agent AI..."
+
+#: src/ui/menu.py:93
 msgid "Help"
 msgstr "Pomoc"
 
-#: src/ui/menu.py:91
+#: src/ui/menu.py:102
 msgid "Minimize"
 msgstr "Minimalizuj"
 
-#: src/ui/menu.py:98
+#: src/ui/menu.py:109
 msgid "Exit"
 msgstr "Wyjście"
 
-#: src/ui/menu.py:112
+#: src/ui/menu.py:123
 msgid "Program"
 msgstr "Program"
 
-#: src/ui/menu.py:117
+#: src/ui/menu.py:128
 msgid "Switch to"
 msgstr "Przełącz na"
 
-#: src/ui/menu.py:132
+#: src/ui/menu.py:143
 msgid "Components"
 msgstr "Komponenty"
 
-#: src/ui/menu.py:136
+#: src/ui/menu.py:169
+#, python-brace-format
+msgid "Create {kind}..."
+msgstr "Utwórz: {kind}..."
+
+#: src/ui/menu.py:174
+msgid "Enable AI features in Settings, AI features"
+msgstr ""
+"Włącz składniki sztucznej inteligencji w Ustawieniach, Składniki sztucznej "
+"inteligencji"
+
+#: src/ui/menu.py:176
+msgid "AI"
+msgstr "AI"
+
+#: src/ui/menu.py:178
+msgid "Programmer"
+msgstr "Programista"
+
+#: src/ui/menu.py:193
+#, python-brace-format
+msgid "Could not open the AI creator: {error}"
+msgstr "Nie można otworzyć kreatora AI: {error}"
+
+#: src/ui/menu.py:194 src/ui/menu.py:211 src/ui/menu.py:233 src/ui/menu.py:235
+#: src/ui/menu.py:350 src/ui/menu.py:357 src/ui/menu.py:362
+msgid "Error"
+msgstr "Błąd"
+
+#: src/ui/menu.py:210
+#, python-brace-format
+msgid "Could not open the AI Agent: {error}"
+msgstr "Nie można otworzyć Agenta AI: {error}"
+
+#: src/ui/menu.py:214
 msgid "Select data package"
 msgstr "Wybierz pakiet danych"
 
-#: src/ui/menu.py:136
+#: src/ui/menu.py:214
 #, fuzzy
 msgid ""
 "Data packages "
 "(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
 msgstr "Pakiety danych (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
 
-#: src/ui/menu.py:141
+#: src/ui/menu.py:219
 msgid "Package installation"
 msgstr "Instalacja pakietu"
 
-#: src/ui/menu.py:141
+#: src/ui/menu.py:219
 msgid "Preparing for installation..."
 msgstr "Przygotowywanie do instalacji..."
 
-#: src/ui/menu.py:151
+#: src/ui/menu.py:229
 msgid "Component Manager"
 msgstr "Menedżer komponentów"
 
-#: src/ui/menu.py:155
+#: src/ui/menu.py:233
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
 msgstr ""
 "Nie można załadować Menedżera komponentów (nie znaleziono "
 "componentmanagergui.py)"
 
-#: src/ui/menu.py:155 src/ui/menu.py:157 src/ui/menu.py:272 src/ui/menu.py:279
-#: src/ui/menu.py:284
-msgid "Error"
-msgstr "Błąd"
-
-#: src/ui/menu.py:157
+#: src/ui/menu.py:235
 msgid "Component Manager has not been initialized."
 msgstr "Menedżer komponentów nie został zainicjalizowany."
 
-#: src/ui/menu.py:236
+#: src/ui/menu.py:314
 msgid "Unpacking .tcepackage package..."
 msgstr "Rozpakowywanie pakietu .tcepackage..."
 
-#: src/ui/menu.py:238
+#: src/ui/menu.py:316
 msgid "Unpacking ZIP package..."
 msgstr "Rozpakowywanie pakietu ZIP..."
 
-#: src/ui/menu.py:259
+#: src/ui/menu.py:337
 msgid ""
 "Error: 7z executable not found. Make sure it is installed or in the "
 "'data/bin/' directory."
 msgstr ""
-"Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się"
-" w katalogu 'data/bin/'."
+"Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się w "
+"katalogu 'data/bin/'."
 
-#: src/ui/menu.py:259
+#: src/ui/menu.py:337
 msgid "Executable file error"
 msgstr "Błąd pliku wykonywalnego"
 
-#: src/ui/menu.py:264
+#: src/ui/menu.py:342
 msgid "Unpacking 7z package..."
 msgstr "Rozpakowywanie pakietu 7z..."
 
-#: src/ui/menu.py:266
+#: src/ui/menu.py:344
 msgid "Starting 7z process..."
 msgstr "Uruchamianie procesu 7z..."
 
-#: src/ui/menu.py:272
+#: src/ui/menu.py:350
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
@@ -131,20 +163,20 @@ msgstr ""
 "Błąd podczas instalacji pakietu:\n"
 "{}"
 
-#: src/ui/menu.py:275
+#: src/ui/menu.py:353
 msgid "Finished unpacking 7z."
 msgstr "Zakończono rozpakowywanie 7z."
 
-#: src/ui/menu.py:279
+#: src/ui/menu.py:357
 #, python-brace-format
 msgid "Unsupported file format: {}"
 msgstr "Nieobsługiwany format pliku: {}"
 
-#: src/ui/menu.py:279
+#: src/ui/menu.py:357
 msgid "(no extension)"
 msgstr "(brak rozszerzenia)"
 
-#: src/ui/menu.py:284
+#: src/ui/menu.py:362
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
@@ -157,15 +189,15 @@ msgstr ""
 "Szczegóły:\n"
 "{}"
 
-#: src/ui/menu.py:289
+#: src/ui/menu.py:367
 msgid "Data package has been installed!"
 msgstr "Pakiet danych został zainstalowany!"
 
-#: src/ui/menu.py:289
+#: src/ui/menu.py:367
 msgid "Success"
 msgstr "Sukces"
 
-#: src/ui/menu.py:297
+#: src/ui/menu.py:375
 msgid "Settings"
 msgstr "Ustawienia"
 
@@ -195,4 +227,3 @@ msgstr "Ustawienia"
 
 #~ msgid "Finished unpacking .tcepackage."
 #~ msgstr "Zakończono rozpakowywanie .tcepackage."
-

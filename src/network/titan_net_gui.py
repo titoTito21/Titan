@@ -3286,7 +3286,14 @@ class TitanNetMainWindow(wx.Frame):
         if self.current_view == "menu":
             # Component contributions carry their run callable as client data;
             # run it directly so enabled components act from the main view.
-            data = self.main_listbox.GetClientData(selection)
+            # GetClientData() raises a wxAssertionError when NO item has ever
+            # had client data set (i.e. no components are installed), so guard
+            # it — otherwise this would abort before the text dispatch below and
+            # leave every main-menu option dead when there are no components.
+            try:
+                data = self.main_listbox.GetClientData(selection)
+            except Exception:
+                data = None
             if callable(data):
                 play_sound('core/SELECT.ogg')
                 data()

@@ -37,6 +37,7 @@ DOMAIN_FILES = {
     'window_switcher': ['src/ui/window_switcher.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
     'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py'],
+    'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/ai_agent_gui.py'],
 }
 
 def extract_domain(domain, files):

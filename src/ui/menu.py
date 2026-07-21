@@ -76,6 +76,17 @@ class MenuBar(wx.MenuBar):
         except:
             pass
 
+        # AI Agent - operates the computer on the user's behalf. Shown only
+        # when AI features are enabled in Settings, AI features.
+        try:
+            from src.ai.ai_provider import is_ai_enabled
+            _ai_on = is_ai_enabled()
+        except Exception:
+            _ai_on = False
+        if _ai_on:
+            agent_item = program_menu.Append(wx.ID_ANY, _("AI Agent..."))
+            self.Bind(wx.EVT_MENU, self.on_open_ai_agent, agent_item)
+
         program_menu.AppendSeparator()
 
         # Help with icon
@@ -131,6 +142,73 @@ class MenuBar(wx.MenuBar):
             if component_menu.GetMenuItemCount() > 0:
                 self.Append(component_menu, _("Components"))
 
+        # Programmer menu - developer tools (incl. the AI creation kit). Only
+        # shown when "Enable developer tools" is on in Settings, General.
+        self._build_programmer_menu()
+
+    def _build_programmer_menu(self):
+        """Append the Programmer menu when developer tools are enabled. Its AI
+        submenu (creation kit) is populated only when AI features are also on."""
+        if str(get_setting('developer_tools', 'False', 'general')).lower() not in ('true', '1'):
+            return
+
+        programmer_menu = wx.Menu()
+
+        # AI creation kit lives in its own submenu, leaving room for future
+        # (non-AI) programmer tools directly under the Programmer menu.
+        try:
+            from src.ai.ai_provider import is_ai_enabled
+            from src.ai.ai_creation_kit import KINDS
+        except Exception as e:
+            print(f"[menu] AI creation kit unavailable: {e}")
+            is_ai_enabled, KINDS = (lambda: False), []
+
+        ai_menu = wx.Menu()
+        if is_ai_enabled() and KINDS:
+            for kind in KINDS:
+                label = _("Create {kind}...").format(kind=kind['label'])
+                item = ai_menu.Append(wx.ID_ANY, label)
+                self.Bind(wx.EVT_MENU,
+                          lambda e, kid=kind['id']: self._open_ai_creator(kid), item)
+        else:
+            placeholder = ai_menu.Append(wx.ID_ANY, _("Enable AI features in Settings, AI features"))
+            placeholder.Enable(False)
+        programmer_menu.AppendSubMenu(ai_menu, _("AI"))
+
+        self.Append(programmer_menu, _("Programmer"))
+
+    def _open_ai_creator(self, kind_id):
+        try:
+            if not self.parent.IsShown():
+                self.parent.restore_from_tray()
+        except Exception:
+            pass
+        try:
+            from src.ai.ai_creation_kit import open_creation_wizard
+            open_creation_wizard(self.parent, kind_id)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _show_skinned_message(
+                _("Could not open the AI creator: {error}").format(error=e),
+                _("Error"), wx.OK | wx.ICON_ERROR)
+
+
+    def on_open_ai_agent(self, event):
+        try:
+            if not self.parent.IsShown():
+                self.parent.restore_from_tray()
+        except Exception:
+            pass
+        try:
+            from src.ai.ai_agent_gui import open_agent
+            open_agent(self.parent)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _show_skinned_message(
+                _("Could not open the AI Agent: {error}").format(error=e),
+                _("Error"), wx.OK | wx.ICON_ERROR)
 
     def on_install_data_package(self, event):
         with wx.FileDialog(self.parent, _("Select data package"), wildcard=_("Data packages (*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"), style=wx.FD_OPEN) as dlg:
