@@ -86,6 +86,13 @@ class MenuBar(wx.MenuBar):
         if _ai_on:
             agent_item = program_menu.Append(wx.ID_ANY, _("AI Agent..."))
             self.Bind(wx.EVT_MENU, self.on_open_ai_agent, agent_item)
+            assistant_item = program_menu.Append(wx.ID_ANY, _("AI Assistant..."))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self.on_open_ai_assistant('turn'), assistant_item)
+            assistant_live_item = program_menu.Append(
+                wx.ID_ANY, _("AI Assistant (Live mode)..."))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self.on_open_ai_assistant('live'), assistant_live_item)
 
         program_menu.AppendSeparator()
 
@@ -208,6 +215,22 @@ class MenuBar(wx.MenuBar):
             traceback.print_exc()
             _show_skinned_message(
                 _("Could not open the AI Agent: {error}").format(error=e),
+                _("Error"), wx.OK | wx.ICON_ERROR)
+
+    def on_open_ai_assistant(self, mode='turn'):
+        try:
+            if not self.parent.IsShown():
+                self.parent.restore_from_tray()
+        except Exception:
+            pass
+        try:
+            from src.ai.assistant.assistant_gui import open_assistant
+            open_assistant(self.parent, mode=mode)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _show_skinned_message(
+                _("Could not open the AI Assistant: {error}").format(error=e),
                 _("Error"), wx.OK | wx.ICON_ERROR)
 
     def on_install_data_package(self, event):

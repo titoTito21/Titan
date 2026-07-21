@@ -2,6 +2,7 @@
   "name_en": "Perun",
   "name_pl": "Perun",
   "voice": "male",
+  "gemini_voice": "Charon",
   "tts_voice": "Microsoft Jakub Desktop",
   "tts_rate": -3,
   "tts_volume": 100,

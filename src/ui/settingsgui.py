@@ -148,10 +148,13 @@ def _wx_key_to_string(keycode, modifiers):
 class KeyCaptureDialog(wx.Dialog):
     """Modal dialog that captures the next key combination pressed by the user."""
 
-    def __init__(self, parent, current_label=''):
-        super().__init__(parent, title=_("Capture Titan UI key"),
+    def __init__(self, parent, current_label='', title=None, exclude_bases=None):
+        super().__init__(parent, title=title or _("Capture Titan UI key"),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.captured_key = None
+        # Base keys that may not be captured (e.g. arrows/tab for assistant
+        # hotkeys, so they stay usable for navigation).
+        self._exclude_bases = set(exclude_bases or ())
 
         vbox = wx.BoxSizer(wx.VERTICAL)
 
@@ -210,6 +213,13 @@ class KeyCaptureDialog(wx.Dialog):
         key_string = _wx_key_to_string(keycode, modifiers)
         if key_string is None:
             # Modifier-only press — ignore, wait for the actual key.
+            return
+
+        # Reject excluded base keys (arrows/tab) so they remain free for navigation.
+        base = key_string.split('+')[-1]
+        if base in self._exclude_bases:
+            self.captured_label.SetLabel(
+                _("That key is not allowed here. Please choose another key."))
             return
 
         self.captured_key = key_string
@@ -1160,6 +1170,49 @@ class SettingsFrame(wx.Frame):
         self.ai_agent_confirm_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(self.ai_agent_confirm_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
+        # --- Voice assistant (Perun / Melitele) --------------------------- #
+        vbox.Add(wx.StaticLine(panel), flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+        assistant_header = wx.StaticText(panel, label=_("Voice assistant"))
+        vbox.Add(assistant_header, flag=wx.LEFT | wx.TOP, border=10)
+
+        vbox.Add(wx.StaticText(panel, label=_("Assistant model:")),
+                 flag=wx.LEFT | wx.TOP, border=10)
+        self._assistant_personas = []
+        try:
+            from src.ai.assistant import personas as _personas
+            self._assistant_personas = _personas.list_personas()
+        except Exception as e:
+            print(f"[settings] could not list assistant personas: {e}")
+        choices = [p['name_en'] for p in self._assistant_personas] or [_("(none installed)")]
+        self.assistant_model_choice = wx.Choice(panel, choices=choices)
+        self.assistant_model_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.assistant_model_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
+        # Global assistant hotkey (works anywhere).
+        self._assistant_hotkey_value = ''
+        vbox.Add(wx.StaticText(panel, label=_(
+            "Global assistant shortcut (arrows and Tab are not allowed):")),
+            flag=wx.LEFT | wx.TOP, border=10)
+        self.assistant_hotkey_btn = wx.Button(panel, label=_("Not set"))
+        self.assistant_hotkey_btn.SetName(_("Global assistant shortcut"))
+        self.assistant_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.assistant_hotkey_btn.Bind(
+            wx.EVT_BUTTON, lambda e: self._capture_assistant_hotkey(False))
+        vbox.Add(self.assistant_hotkey_btn, flag=wx.LEFT | wx.TOP, border=10)
+
+        # Titan UI assistant hotkey (only active while Titan UI is on).
+        self._assistant_titan_hotkey_value = ''
+        vbox.Add(wx.StaticText(panel, label=_(
+            "Titan UI assistant shortcut (active only in Titan UI; arrows and "
+            "Tab are not allowed):")),
+            flag=wx.LEFT | wx.TOP, border=10)
+        self.assistant_titan_hotkey_btn = wx.Button(panel, label=_("Not set"))
+        self.assistant_titan_hotkey_btn.SetName(_("Titan UI assistant shortcut"))
+        self.assistant_titan_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.assistant_titan_hotkey_btn.Bind(
+            wx.EVT_BUTTON, lambda e: self._capture_assistant_hotkey(True))
+        vbox.Add(self.assistant_titan_hotkey_btn, flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
+
         # In-memory per-provider keys (decrypted), swapped as the provider
         # choice changes; persisted (re-encrypted) only on Save.
         self._ai_keys = {}
@@ -1167,6 +1220,23 @@ class SettingsFrame(wx.Frame):
 
         panel.SetSizer(vbox)
         panel.Layout()
+
+    def _capture_assistant_hotkey(self, titan_ui):
+        """Open a key-capture dialog for an assistant shortcut (no arrows/Tab)."""
+        current = (self._assistant_titan_hotkey_value if titan_ui
+                   else self._assistant_hotkey_value)
+        dlg = KeyCaptureDialog(
+            self, current_label=current,
+            title=_("Capture assistant shortcut"),
+            exclude_bases={'tab', 'up', 'down', 'left', 'right'})
+        if dlg.ShowModal() == wx.ID_OK and dlg.captured_key:
+            if titan_ui:
+                self._assistant_titan_hotkey_value = dlg.captured_key
+                self.assistant_titan_hotkey_btn.SetLabel(dlg.captured_key)
+            else:
+                self._assistant_hotkey_value = dlg.captured_key
+                self.assistant_hotkey_btn.SetLabel(dlg.captured_key)
+        dlg.Destroy()
 
     def _current_ai_method(self):
         idx = self.ai_method_radio.GetSelection()
@@ -1216,6 +1286,17 @@ class SettingsFrame(wx.Frame):
         self.ai_agent_confirm_radio.SetSelection(
             self._ai_agent_confirm_values.index(policy)
             if policy in self._ai_agent_confirm_values else 0)
+        # Voice assistant
+        if self._assistant_personas:
+            model = ap.get_assistant_model()
+            ids = [p['id'] for p in self._assistant_personas]
+            self.assistant_model_choice.SetSelection(
+                ids.index(model) if model in ids else 0)
+        self._assistant_hotkey_value = ap.get_assistant_hotkey()
+        self.assistant_hotkey_btn.SetLabel(self._assistant_hotkey_value or _("Not set"))
+        self._assistant_titan_hotkey_value = ap.get_assistant_titan_hotkey()
+        self.assistant_titan_hotkey_btn.SetLabel(
+            self._assistant_titan_hotkey_value or _("Not set"))
         self._update_ai_controls_state()
 
     def _save_ai_features(self, panel):
@@ -1232,6 +1313,19 @@ class SettingsFrame(wx.Frame):
                 self._ai_agent_confirm_values[self.ai_agent_confirm_radio.GetSelection()])
         except Exception:
             pass
+        # Voice assistant
+        try:
+            if self._assistant_personas:
+                idx = self.assistant_model_choice.GetSelection()
+                if 0 <= idx < len(self._assistant_personas):
+                    ap.set_assistant_model(self._assistant_personas[idx]['id'])
+            ap.set_assistant_hotkey(self._assistant_hotkey_value)
+            ap.set_assistant_titan_hotkey(self._assistant_titan_hotkey_value)
+            # Re-register the global hotkeys so changes take effect immediately.
+            from src.ai.assistant import hotkeys as _assistant_hotkeys
+            _assistant_hotkeys.register()
+        except Exception as e:
+            print(f"[settings] saving assistant settings failed: {e}")
 
     def InitWindowsPanel(self):
         panel = self.windows_panel

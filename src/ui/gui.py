@@ -644,6 +644,17 @@ class TitanApp(wx.Frame):
         # subsequent user-driven focus/list-item sounds play normally.
         wx.CallLater(800, self._end_startup_sound_guard)
 
+        # Register the voice-assistant global hotkeys (best effort; no-op unless
+        # AI features are enabled and a shortcut is configured).
+        wx.CallLater(1200, self._register_assistant_hotkeys)
+
+    def _register_assistant_hotkeys(self):
+        try:
+            from src.ai.assistant import hotkeys as _assistant_hotkeys
+            _assistant_hotkeys.register()
+        except Exception as e:
+            print(f"[gui] assistant hotkey registration failed: {e}")
+
     def _end_startup_sound_guard(self):
         self._startup_sound_guard = False
 

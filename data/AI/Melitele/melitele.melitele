@@ -2,6 +2,7 @@
   "name_en": "Melitele",
   "name_pl": "Melitele",
   "voice": "female",
+  "gemini_voice": "Aoede",
   "tts_voice": "Microsoft Paulina Desktop",
   "tts_rate": 1,
   "tts_volume": 100,

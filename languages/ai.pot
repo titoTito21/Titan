@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-21 11:20+0200\n"
+"POT-Creation-Date: 2026-07-21 11:57+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -129,6 +129,7 @@ msgid "Save..."
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:76 src/ai/ai_creation_kit.py:530
+#: src/ai/assistant/assistant_gui.py:100
 msgid "Close"
 msgstr ""
 
@@ -147,10 +148,12 @@ msgid ""
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:155 src/ai/ai_creation_kit.py:547
+#: src/ai/assistant/assistant_gui.py:168 src/ai/assistant/assistant_gui.py:225
 msgid "AI not configured"
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:158 src/ai/ai_creation_kit.py:553
+#: src/ai/assistant/assistant_gui.py:120
 msgid "You"
 msgstr ""
 
@@ -315,10 +318,12 @@ msgid ""
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:234 src/ai/ai_creation_kit.py:808
+#: src/ai/assistant/assistant_gui.py:289
 msgid "Enable AI components in Settings, AI features first."
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:235 src/ai/ai_creation_kit.py:809
+#: src/ai/assistant/assistant_gui.py:290
 msgid "AI features disabled"
 msgstr ""
 
@@ -326,15 +331,17 @@ msgstr ""
 msgid "Titan AI Agent"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:50
+#: src/ai/ai_agent_gui.py:50 src/ai/assistant/assistant_gui.py:69
 msgid "Conversation:"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:54
+#: src/ai/ai_agent_gui.py:54 src/ai/assistant/assistant_gui.py:73
 msgid "Conversation"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:57
+#: src/ai/ai_agent_gui.py:57 src/ai/assistant/assistant_gui.py:51
+#: src/ai/assistant/assistant_gui.py:76 src/ai/assistant/assistant_gui.py:212
+#: src/ai/assistant/assistant_gui.py:265
 msgid "Ready."
 msgstr ""
 
@@ -350,7 +357,7 @@ msgstr ""
 msgid "Send"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:72
+#: src/ai/ai_agent_gui.py:72 src/ai/assistant/assistant_gui.py:96
 msgid "Stop (Shift+Escape)"
 msgstr ""
 
@@ -378,7 +385,7 @@ msgid ""
 "Allow it?"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:134
+#: src/ai/ai_agent_gui.py:134 src/ai/assistant/assistant_gui.py:137
 #, python-brace-format
 msgid "Confirm action: {action}"
 msgstr ""
@@ -395,11 +402,14 @@ msgstr ""
 msgid "Agent working"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:195
+#: src/ai/ai_agent_gui.py:195 src/ai/assistant/assistant_gui.py:203
+#: src/ai/assistant/assistant_gui.py:204
 msgid "Cancelled."
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:196 src/ai/ai_agent_gui.py:200
+#: src/ai/assistant/assistant_gui.py:204 src/ai/assistant/assistant_gui.py:208
+#: src/ai/assistant/assistant_gui.py:232 src/ai/assistant/assistant_gui.py:263
 msgid "System"
 msgstr ""
 
@@ -407,11 +417,11 @@ msgstr ""
 msgid "Agent cancelled."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:199
+#: src/ai/ai_agent_gui.py:199 src/ai/assistant/assistant_gui.py:207
 msgid "Error."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:200
+#: src/ai/ai_agent_gui.py:200 src/ai/assistant/assistant_gui.py:208
 #, python-brace-format
 msgid "Error: {error}"
 msgstr ""
@@ -428,11 +438,114 @@ msgstr ""
 msgid "Agent finished"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:212
+#: src/ai/ai_agent_gui.py:212 src/ai/assistant/assistant_gui.py:267
 msgid "Cancelling..."
 msgstr ""
 
 #: src/ai/ai_agent_gui.py:213
 msgid "Cancelling agent"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:45
+msgid "Listening..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:46
+msgid "I did not hear anything."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:47
+msgid "Transcribing..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:48
+msgid "Thinking..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:49
+msgid "Speaking..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:50
+msgid "Live conversation active."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:60
+#, python-brace-format
+msgid "Titan Assistant - {name}"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:79
+msgid "Type instead of speaking (optional):"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:82
+msgid "Type instead of speaking"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:87
+msgid "Talk"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:90
+msgid "Send text"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:93 src/ai/assistant/assistant_gui.py:251
+msgid "Start live mode"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:140
+#, python-brace-format
+msgid ""
+"The assistant wants to run:\n"
+"\n"
+"{action}\n"
+"\n"
+"{desc}\n"
+"\n"
+"Allow it?"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:142
+msgid "Confirm action"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:166 src/ai/assistant/assistant_gui.py:223
+msgid ""
+"The assistant needs AI features enabled and a Gemini API key (Settings, "
+"AI features)."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:209
+msgid "Assistant error"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:231
+msgid "Stop live mode"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:232
+msgid "Live mode started. Speak naturally."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:244
+msgid "Live mode failed"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:263
+msgid "Live mode stopped."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:268
+msgid "Cancelling"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:294
+msgid "No assistant persona found in data/ai (Perun / Melitele)."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:295
+msgid "Assistant unavailable"
 msgstr ""
 

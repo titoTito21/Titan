@@ -109,6 +109,36 @@ def set_ai_key(provider, plaintext):
     set_setting('api_key_' + provider, value, section=_SETTINGS_SECTION)
 
 
+def get_assistant_model():
+    """Selected voice-assistant persona id (folder name under data/ai/), e.g.
+    'Perun' or 'Melitele'. '' means "first available"."""
+    return get_setting('assistant_model', '', section=_SETTINGS_SECTION) or ''
+
+
+def set_assistant_model(model):
+    set_setting('assistant_model', model or '', section=_SETTINGS_SECTION)
+
+
+def get_assistant_hotkey():
+    """Global hotkey (normalized 'ctrl+alt+a' form) that launches the voice
+    assistant from anywhere. '' = unset."""
+    return get_setting('assistant_hotkey', '', section=_SETTINGS_SECTION) or ''
+
+
+def set_assistant_hotkey(hotkey):
+    set_setting('assistant_hotkey', hotkey or '', section=_SETTINGS_SECTION)
+
+
+def get_assistant_titan_hotkey():
+    """Hotkey that launches the assistant, active ONLY while the Titan UI is on.
+    '' = unset."""
+    return get_setting('assistant_titan_hotkey', '', section=_SETTINGS_SECTION) or ''
+
+
+def set_assistant_titan_hotkey(hotkey):
+    set_setting('assistant_titan_hotkey', hotkey or '', section=_SETTINGS_SECTION)
+
+
 def get_agent_confirm():
     """Agent confirmation policy: 'tiered' (default; confirm mutating/system
     tools), 'all' (confirm every action) or 'none' (auto, except always-confirm
