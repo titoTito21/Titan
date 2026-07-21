@@ -296,7 +296,17 @@ def _flatten_conversation(system, messages):
 def _cli_command(method):
     """argv prefix for the chosen CLI, reading the prompt from stdin and
     printing the answer non-interactively. Overridable via settings
-    ``ai.claude_cli_cmd`` / ``ai.codex_cmd``."""
+    ``ai.claude_cli_cmd`` / ``ai.codex_cmd``.
+
+    Defaults:
+    - Claude CLI: ``claude --print`` -- with no prompt argument, ``--print``
+      reads the prompt from stdin and prints the plain-text answer.
+    - Codex CLI:  ``codex exec -`` -- ``exec`` runs headless (non-interactive)
+      and the ``-`` positional tells Codex to read the prompt from stdin.
+
+    Both CLIs must be installed AND already authenticated (they use their own
+    stored credentials, not Titan's API key); Titan only pipes the prompt in and
+    reads the answer out."""
     if method == 'claude_cli':
         override = (get_setting('claude_cli_cmd', '', section=_SETTINGS_SECTION) or '').strip()
         return override.split() if override else ['claude', '--print']
@@ -305,6 +315,7 @@ def _cli_command(method):
 
 
 def _generate_cli(method, system, messages, emit):
+    import threading
     argv = _cli_command(method)
     prompt = _flatten_conversation(system, messages)
     try:
@@ -317,18 +328,47 @@ def _generate_cli(method, system, messages, emit):
         raise RuntimeError(
             f"CLI '{argv[0]}' not found. Install it or set a custom command in "
             f"Settings, AI features.")
-    try:
-        proc.stdin.write(prompt)
-        proc.stdin.close()
-    except Exception:
-        pass
+
+    # Feed the prompt on a background thread so a large prompt (full docs +
+    # multi-turn auto-fix history can exceed the OS pipe buffer) can never
+    # deadlock against us reading stdout.
+    def _feed():
+        try:
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+        except Exception:
+            pass
+    feeder = threading.Thread(target=_feed, daemon=True)
+    feeder.start()
+
+    # Continuously drain stderr on its own thread; otherwise a chatty CLI can
+    # fill the stderr pipe and block while we are busy reading stdout.
+    err_parts = []
+
+    def _drain_err():
+        try:
+            for line in iter(proc.stderr.readline, ''):
+                err_parts.append(line)
+        except Exception:
+            pass
+    draining = threading.Thread(target=_drain_err, daemon=True)
+    draining.start()
+
     parts = []
     for line in iter(proc.stdout.readline, ''):
         parts.append(line)
         emit(line)
     proc.stdout.close()
     code = proc.wait()
+    feeder.join(timeout=5)
+    draining.join(timeout=5)
+    err = ''.join(err_parts)
     if code != 0:
-        err = proc.stderr.read() if proc.stderr else ''
         raise RuntimeError(f"CLI '{argv[0]}' exited with code {code}: {err.strip()[:500]}")
-    return ''.join(parts)
+    out = ''.join(parts)
+    if not out.strip():
+        raise RuntimeError(
+            f"CLI '{argv[0]}' produced no output. Make sure it is installed and "
+            f"logged in (try running it once in a terminal). "
+            + (f"Details: {err.strip()[:300]}" if err.strip() else ""))
+    return out

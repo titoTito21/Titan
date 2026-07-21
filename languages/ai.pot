@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-21 09:27+0200\n"
+"POT-Creation-Date: 2026-07-21 11:20+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,182 +17,276 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ai/ai_creation_kit.py:64
+#: src/ai/ai_creation_kit.py:74
 msgid "Application"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:65
+#: src/ai/ai_creation_kit.py:75
 msgid "Game"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:66
+#: src/ai/ai_creation_kit.py:76
 msgid "Component"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:67
+#: src/ai/ai_creation_kit.py:77
 msgid "Launcher"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:68
+#: src/ai/ai_creation_kit.py:78
 msgid "IM Module"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:69
+#: src/ai/ai_creation_kit.py:79
 msgid "Gamepad Mode"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:70
+#: src/ai/ai_creation_kit.py:80
 msgid "TTS Engine"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:71
+#: src/ai/ai_creation_kit.py:81
 msgid "Widget"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:72
+#: src/ai/ai_creation_kit.py:82
 msgid "Statusbar Applet"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:73
+#: src/ai/ai_creation_kit.py:83
 msgid "Language"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:228
+#: src/ai/ai_creation_kit.py:353
 msgid "The model returned no files."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:230
+#: src/ai/ai_creation_kit.py:355
 msgid "The generated files are empty."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:233
+#: src/ai/ai_creation_kit.py:359
 #, python-brace-format
 msgid "The manifest file {name} is missing."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:314
+#: src/ai/ai_creation_kit.py:450
 #, python-brace-format
 msgid "Create {kind} with AI"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:327
+#: src/ai/ai_creation_kit.py:463
 #, python-brace-format
 msgid "Describe the {kind} you want:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:330
+#: src/ai/ai_creation_kit.py:466
 msgid "Description"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:334
+#: src/ai/ai_creation_kit.py:471 src/ai/ai_creation_kit.py:472
+msgid "Search the web for reference"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:474 src/ai/ai_creation_kit.py:476
+msgid "Auto-fix generated code"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:481
+msgid "Plan and ask questions"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:484
 msgid "Generate"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:348
+#: src/ai/ai_creation_kit.py:496
+msgid "Progress"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:502
 msgid "Live output:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:353
+#: src/ai/ai_creation_kit.py:507
 msgid "Live output"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:357
+#: src/ai/ai_creation_kit.py:511
 msgid "Generated files:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:361
+#: src/ai/ai_creation_kit.py:515
 msgid "Generated files"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:367
+#: src/ai/ai_creation_kit.py:521
 msgid "File content"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:372
+#: src/ai/ai_creation_kit.py:526
 msgid "Save..."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:76 src/ai/ai_creation_kit.py:376
+#: src/ai/ai_agent_gui.py:76 src/ai/ai_creation_kit.py:530
 msgid "Close"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:387
+#: src/ai/ai_creation_kit.py:541
 msgid "Please describe what to create."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:387
+#: src/ai/ai_creation_kit.py:541
 msgid "Error"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:153 src/ai/ai_creation_kit.py:391
+#: src/ai/ai_agent_gui.py:153 src/ai/ai_creation_kit.py:545
 msgid ""
 "AI features are not configured. Enable them and set a method in Settings,"
 " AI features."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:155 src/ai/ai_creation_kit.py:393
+#: src/ai/ai_agent_gui.py:155 src/ai/ai_creation_kit.py:547
 msgid "AI not configured"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:158 src/ai/ai_creation_kit.py:400
+#: src/ai/ai_agent_gui.py:158 src/ai/ai_creation_kit.py:553
 msgid "You"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:408
+#: src/ai/ai_creation_kit.py:577
+msgid "Searching the web..."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:578
+msgid "Searching the web"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:585
+msgid "(no web results)"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:588
+msgid "Web results"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:598
+msgid "Planning..."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:599
+msgid "Planning"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:607
+msgid "Plan"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:622
+msgid "Planning failed."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:624
+msgid "Planning failed"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:625
+msgid "Planning error"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:631
+msgid "Plan ready. Answer any questions above, then Generate."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:634
+msgid "Plan ready"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:642
 msgid "Generating..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:410
+#: src/ai/ai_creation_kit.py:643
 #, python-brace-format
 msgid "Generating {kind}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:439
+#: src/ai/ai_creation_kit.py:660
+#, python-brace-format
+msgid "Auto-fixing ({n})..."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:661
+msgid "Fixing code"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:663
+#, python-brace-format
+msgid "Auto-fix {n}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:673
+msgid "auto-fixed"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:674
+msgid "auto-fix incomplete"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:696 src/ai/ai_creation_kit.py:706
 #, python-brace-format
 msgid "Creating: {file}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:440
+#: src/ai/ai_creation_kit.py:697
 #, python-brace-format
 msgid "Creating {file}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:445
-#, python-brace-format
-msgid "Generating... {n} chars, {s}s"
+#: src/ai/ai_creation_kit.py:705
+msgid "Generating"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:455
+#: src/ai/ai_creation_kit.py:707
+#, python-brace-format
+msgid "{stage}... {pct}% ({n} chars, {s}s)"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:722
 msgid "Generation failed."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:457
+#: src/ai/ai_creation_kit.py:724
 msgid "Generation failed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:458
+#: src/ai/ai_creation_kit.py:725
 msgid "Generation error"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:468
+#: src/ai/ai_creation_kit.py:736
 msgid "You can refine your description and generate again."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:469
+#: src/ai/ai_creation_kit.py:737
 msgid "Incomplete result"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:475
+#: src/ai/ai_creation_kit.py:745
 #, python-brace-format
-msgid "Done: {n} file(s). Review below, then Save."
+msgid "Done: {n} file(s)."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:478
+#: src/ai/ai_creation_kit.py:746
+msgid "Review below, then Save."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:748
 #, python-brace-format
 msgid "Done, {n} files generated"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:508
+#: src/ai/ai_creation_kit.py:778
 #, python-brace-format
 msgid ""
 "Package into a single {ext} file?\n"
@@ -201,30 +295,30 @@ msgid ""
 "No = a plain folder in your data directory."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:512
+#: src/ai/ai_creation_kit.py:782
 msgid "Package add-on?"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:526
+#: src/ai/ai_creation_kit.py:796
 msgid "Save failed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:529 src/ai/ai_creation_kit.py:530
+#: src/ai/ai_creation_kit.py:799 src/ai/ai_creation_kit.py:800
 msgid "Saved"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:530
+#: src/ai/ai_creation_kit.py:800
 #, python-brace-format
 msgid ""
 "Saved to:\n"
 "{path}"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:234 src/ai/ai_creation_kit.py:538
+#: src/ai/ai_agent_gui.py:234 src/ai/ai_creation_kit.py:808
 msgid "Enable AI components in Settings, AI features first."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:235 src/ai/ai_creation_kit.py:539
+#: src/ai/ai_agent_gui.py:235 src/ai/ai_creation_kit.py:809
 msgid "AI features disabled"
 msgstr ""
 

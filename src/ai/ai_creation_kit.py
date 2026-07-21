@@ -14,6 +14,9 @@ bundled ``data/<subdir>/``) rather than a hand-maintained format description, so
 each kind's manifest and layout stay authoritative without duplication here.
 """
 
+import ast
+import json
+import math
 import os
 import re
 import shutil
@@ -25,6 +28,8 @@ import traceback
 import wx
 
 from src.ai import ai_provider
+from src.ai import creation_docs
+from src.ai import web_search
 from src.titan_core import titan_package
 from src import platform_utils
 from src.titan_core.translation import set_language
@@ -58,26 +63,43 @@ def _speak(text):
 # Kind catalogue
 # --------------------------------------------------------------------------- #
 # Each kind: id (matches titan_package.NAME_TO_KIND for packageable kinds),
-# display label, data subdir, manifest filename (for the prompt/validation),
-# and whether it can be packed into a .TCA/.TCD.
+# display label, data subdir, the acceptable manifest/entry filenames (the first
+# is the primary one; used for prompt guidance and validation), and whether it
+# can be packed into a .TCA/.TCD.
+#
+# IMPORTANT: these manifest names are the REAL ones used by each kind's manager
+# (verified against data/<subdir>/ and the programming guides). Getting them
+# wrong makes the model emit an add-on the host cannot load.
 KINDS = [
-    {'id': 'app',              'label': _("Application"),      'subdir': 'applications',      'manifest': '__app.TCE',           'package': True},
-    {'id': 'game',             'label': _("Game"),            'subdir': 'games',             'manifest': '__game.TCE',          'package': True},
-    {'id': 'component',        'label': _("Component"),       'subdir': 'components',        'manifest': '__component__.TCE',   'package': True},
-    {'id': 'launcher',         'label': _("Launcher"),        'subdir': 'launchers',         'manifest': '__launcher.TCE',      'package': True},
-    {'id': 'im_module',        'label': _("IM Module"),       'subdir': 'titanIM_modules',   'manifest': '__im_module.TCE',     'package': True},
-    {'id': 'gamepad_mode',     'label': _("Gamepad Mode"),    'subdir': 'gamepad/modes',     'manifest': '__mode.TCE',          'package': True},
-    {'id': 'tts_engine',       'label': _("TTS Engine"),      'subdir': 'titantts engines',  'manifest': '__engine.TCE',        'package': True},
-    {'id': 'widget',           'label': _("Widget"),          'subdir': 'applets',           'manifest': '__applet.TCE',        'package': True},
-    {'id': 'statusbar_applet', 'label': _("Statusbar Applet"),'subdir': 'statusbar_applets', 'manifest': '__statusbar.TCE',     'package': True},
-    {'id': 'language',         'label': _("Language"),        'subdir': None,                'manifest': None,                  'package': False},
+    {'id': 'app',              'label': _("Application"),      'subdir': 'applications',      'manifests': ('__app.TCE',),                        'package': True},
+    {'id': 'game',             'label': _("Game"),            'subdir': 'games',             'manifests': ('__game.TCE',),                       'package': True},
+    {'id': 'component',        'label': _("Component"),       'subdir': 'components',        'manifests': ('__component__.TCE',),                'package': True},
+    {'id': 'launcher',         'label': _("Launcher"),        'subdir': 'launchers',         'manifests': ('__launcher__.TCE',),                'package': True},
+    {'id': 'im_module',        'label': _("IM Module"),       'subdir': 'titanIM_modules',   'manifests': ('__im.TCE',),                        'package': True},
+    {'id': 'gamepad_mode',     'label': _("Gamepad Mode"),    'subdir': 'gamepad/modes',     'manifests': ('__mode__.TCE',),                    'package': True},
+    {'id': 'tts_engine',       'label': _("TTS Engine"),      'subdir': 'titantts engines',  'manifests': ('__engine__.TCE',),                  'package': True},
+    {'id': 'widget',           'label': _("Widget"),          'subdir': 'applets',           'manifests': ('applet.json', 'init.py', 'main.py'), 'package': True},
+    {'id': 'statusbar_applet', 'label': _("Statusbar Applet"),'subdir': 'statusbar_applets', 'manifests': ('applet.json',),                     'package': True},
+    {'id': 'language',         'label': _("Language"),        'subdir': None,                'manifests': (),                                   'package': False},
 ]
 
 _KIND_BY_ID = {k['id']: k for k in KINDS}
 
+
+def primary_manifest(kind):
+    """The main manifest/entry filename for a kind, or None (e.g. language)."""
+    manifests = kind.get('manifests') or ()
+    return manifests[0] if manifests else None
+
 # Line marker that delimits generated files. Chosen to be extremely unlikely to
 # appear at the start of a real source/manifest/po line.
 _FILE_MARKER = re.compile(r'^@@FILE:\s*(.+?)\s*$')
+
+# How many corrective round-trips the auto-fix loop may make after a generation
+# that fails static checks (Python syntax / JSON validity).
+_MAX_AUTOFIX_ROUNDS = 2
+# Number of web results pulled in when "search the web" is enabled.
+_WEB_SEARCH_RESULTS = 5
 
 _MAX_EXAMPLE_FILES = 6
 _MAX_EXAMPLE_FILE_CHARS = 4000
@@ -146,14 +168,48 @@ def _read_example_files(kind):
     return []
 
 
-def build_system_prompt(kind):
-    manifest_line = (
-        f"- Include the manifest file exactly as the reference shows (named "
-        f"'{kind['manifest']}').\n" if kind['manifest'] else
-        "- Follow the file naming and format shown in the reference example.\n")
+def _manifest_line(kind):
+    manifest = primary_manifest(kind)
+    if not manifest:
+        return ("- Follow the file naming and format shown in the reference "
+                "example and the guide.")
+    manifests = kind.get('manifests') or ()
+    if len(manifests) > 1:
+        allowed = ", ".join(f"'{m}'" for m in manifests)
+        return (f"- Include the manifest/entry file the guide requires "
+                f"(one of {allowed}); name it EXACTLY, do not invent a new name.")
+    return (f"- Include the manifest file named EXACTLY '{manifest}', as the "
+            f"guide and reference example show. Do NOT invent a different name.")
+
+
+def _docs_and_example_block(kind):
+    """The reference material appended to every prompt: the kind's full guide,
+    the shared core API, and a real example add-on of this kind."""
+    parts = []
+    docs = creation_docs.build_docs_block(kind['id'])
+    if docs:
+        parts.append("===== TITAN DOCUMENTATION (authoritative) =====")
+        parts.append(docs)
+    parts.append("")
+    parts.append(f"===== REFERENCE EXAMPLE (an existing Titan {kind['label']}) =====")
+    example = _read_example_files(kind)
+    if example:
+        for rel, content in example:
+            parts.append(f"@@FILE: {rel}")
+            parts.append(content.rstrip('\n'))
+    else:
+        parts.append("(no reference example available; use the documentation "
+                     "above and standard Titan add-on conventions)")
+    return '\n'.join(parts)
+
+
+def build_system_prompt(kind, extra_context=None):
+    """System prompt for the file-generation phase. ``extra_context`` (e.g. web
+    search results) is appended verbatim when provided."""
     prompt = [
         f"You are the Titan add-on creator. You generate a complete, working "
-        f"Titan {kind['label']} as a set of files.",
+        f"Titan {kind['label']} as a set of files. You have the full Titan "
+        f"programming documentation below; follow it exactly.",
         "",
         "OUTPUT FORMAT (STRICT):",
         "- Output ONLY file blocks. Immediately before each file, emit a line "
@@ -165,27 +221,96 @@ def build_system_prompt(kind):
         "add-on root.",
         "",
         "REQUIREMENTS:",
-        manifest_line.rstrip('\n'),
+        _manifest_line(kind),
+        "- The code MUST be valid Python with no syntax errors and must import "
+        "cleanly. Any manifest JSON must be valid JSON.",
         "- All user-facing UI text and messages MUST be in English. Use the "
-        "gettext function _() for translatable strings wherever the reference "
-        "example does.",
+        "gettext function _() for translatable strings wherever the guide and "
+        "reference example do.",
         "- Never use emojis in user-facing text or notifications.",
-        "- Follow the structure, manifest keys and conventions shown in the "
-        "reference example below.",
+        "- Follow the structure, required entry-point functions, manifest keys "
+        "and conventions from the documentation and reference example below.",
         "- Make the code self-contained and runnable; the entry point named in "
-        "the manifest must exist.",
+        "the manifest/guide must exist and have the exact expected signature.",
+        "- Wrap risky work in try/except so a failure never crashes the host.",
         "",
-        f"REFERENCE EXAMPLE (an existing Titan {kind['label']}):",
     ]
-    example = _read_example_files(kind)
-    if example:
-        for rel, content in example:
-            prompt.append(f"@@FILE: {rel}")
-            prompt.append(content.rstrip('\n'))
-    else:
-        prompt.append("(no reference example available; use standard Titan "
-                       "add-on conventions)")
+    if extra_context:
+        prompt.append(extra_context)
+        prompt.append("")
+    prompt.append(_docs_and_example_block(kind))
     return '\n'.join(prompt)
+
+
+def build_plan_prompt(kind, extra_context=None):
+    """System prompt for the PLANNING phase: the model asks clarifying questions
+    and proposes a build plan (a wizard), but writes NO files yet."""
+    prompt = [
+        f"You are the Titan add-on architect. The user wants to create a Titan "
+        f"{kind['label']}. Your job in THIS step is to plan it, not to write "
+        f"the files yet.",
+        "",
+        "Respond in plain text (no code, no @@FILE blocks) with exactly these "
+        "two sections:",
+        "",
+        "QUESTIONS:",
+        "- Up to 5 short, numbered clarifying questions about anything "
+        "ambiguous (features, behaviour, options). If the request is already "
+        "clear, write 'None'.",
+        "",
+        "PLAN:",
+        "- A concise, numbered build plan: the exact files you will create "
+        "(with their correct manifest/entry filenames from the documentation), "
+        "what each file does, the entry-point functions required by this kind, "
+        "and the Titan APIs you will use.",
+        "",
+        "Keep it brief and concrete. Base every filename and API on the Titan "
+        "documentation and reference example below - do not invent names.",
+        "",
+    ]
+    if extra_context:
+        prompt.append(extra_context)
+        prompt.append("")
+    prompt.append(_docs_and_example_block(kind))
+    return '\n'.join(prompt)
+
+
+# --------------------------------------------------------------------------- #
+# Static checking (drives the auto-fix loop)
+# --------------------------------------------------------------------------- #
+def static_check(files):
+    """Return a list of human-readable problems found by cheap static analysis:
+    Python syntax errors (via :func:`ast.parse`) and invalid JSON manifests.
+    Empty list means the files pass these checks."""
+    problems = []
+    for path, content in files.items():
+        low = path.lower()
+        if low.endswith('.py'):
+            try:
+                ast.parse(content, filename=path)
+            except SyntaxError as e:
+                where = f"line {e.lineno}" if e.lineno else "?"
+                problems.append(f"{path}: SyntaxError at {where}: {e.msg}")
+            except Exception as e:  # pragma: no cover - defensive
+                problems.append(f"{path}: could not parse ({e})")
+        elif low.endswith('.json'):
+            try:
+                json.loads(content)
+            except Exception as e:
+                problems.append(f"{path}: invalid JSON ({e})")
+    return problems
+
+
+def build_fix_message(problems):
+    """A user-turn message asking the model to fix the reported problems and
+    re-emit ALL files."""
+    listing = "\n".join(f"- {p}" for p in problems)
+    return (
+        "The files you generated have the following problems:\n"
+        f"{listing}\n\n"
+        "Fix every problem and output the COMPLETE corrected add-on again, "
+        "using the exact same strict @@FILE format. Re-emit every file (not "
+        "just the changed ones). Do not add any commentary.")
 
 
 # --------------------------------------------------------------------------- #
@@ -223,26 +348,37 @@ def _sanitize_relpath(rel):
 
 def validate_files(kind, files):
     """Return (ok, message). Lenient: needs at least one non-empty file, and —
-    when the kind has a known manifest — that manifest to be present."""
+    when the kind has known manifest/entry names — one of them to be present."""
     if not files:
         return False, _("The model returned no files.")
     if not any(v.strip() for v in files.values()):
         return False, _("The generated files are empty.")
-    if kind['manifest'] and not any(
-            os.path.basename(p) == kind['manifest'] for p in files):
+    manifests = kind.get('manifests') or ()
+    if manifests and not any(
+            os.path.basename(p) in manifests for p in files):
         return False, _("The manifest file {name} is missing.").format(
-            name=kind['manifest'])
+            name=" / ".join(manifests))
     return True, ''
 
 
 def _derive_name(kind, files):
     """Best-effort add-on folder name from the manifest 'shortname' key, else
     the first path component, else a timestamp."""
+    manifests = kind.get('manifests') or ()
     for path, content in files.items():
-        if kind['manifest'] and os.path.basename(path) == kind['manifest']:
+        if manifests and os.path.basename(path) in manifests:
             m = re.search(r'^\s*shortname\s*=\s*"?([^"\r\n]+)"?', content, re.M)
             if m:
                 return _safe_dirname(m.group(1))
+            # applet.json manifests carry the name under a JSON key instead.
+            if os.path.basename(path) == 'applet.json':
+                try:
+                    data = json.loads(content)
+                    nm = data.get('name_en') or data.get('name')
+                    if nm:
+                        return _safe_dirname(str(nm))
+                except Exception:
+                    pass
     for path in files:
         top = path.split('/')[0]
         if top and not os.path.basename(top) == path:
@@ -330,7 +466,21 @@ class AICreationWizardDialog(wx.Dialog):
         self.desc.SetName(_("Description"))
         vbox.Add(self.desc, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
+        # Options that shape generation.
+        opts = wx.BoxSizer(wx.HORIZONTAL)
+        self.web_cb = wx.CheckBox(panel, label=_("Search the web for reference"))
+        self.web_cb.SetName(_("Search the web for reference"))
+        opts.Add(self.web_cb, flag=wx.RIGHT, border=12)
+        self.autofix_cb = wx.CheckBox(panel, label=_("Auto-fix generated code"))
+        self.autofix_cb.SetValue(True)
+        self.autofix_cb.SetName(_("Auto-fix generated code"))
+        opts.Add(self.autofix_cb)
+        vbox.Add(opts, flag=wx.LEFT | wx.TOP, border=10)
+
         row = wx.BoxSizer(wx.HORIZONTAL)
+        self.plan_btn = wx.Button(panel, label=_("Plan and ask questions"))
+        self.plan_btn.Bind(wx.EVT_BUTTON, self.OnPlan)
+        row.Add(self.plan_btn, flag=wx.RIGHT, border=6)
         self.gen_btn = wx.Button(panel, label=_("Generate"))
         self.gen_btn.Bind(wx.EVT_BUTTON, self.OnGenerate)
         row.Add(self.gen_btn, flag=wx.RIGHT, border=6)
@@ -338,10 +488,14 @@ class AICreationWizardDialog(wx.Dialog):
         row.Add(self.status, flag=wx.ALIGN_CENTER_VERTICAL)
         vbox.Add(row, flag=wx.LEFT | wx.TOP, border=10)
 
-        # Real, moving progress: an indeterminate gauge pulsed on a timer while
-        # the model streams, so the dialog never looks frozen.
+        # Real, moving progress: a determinate gauge whose percentage is driven
+        # by how much output has streamed in (monotonic, asymptotic to ~95% and
+        # snapped to 100% on completion), nudged by a timer so it keeps creeping
+        # even during network stalls -- never a frozen or fake bar.
         self.gauge = wx.Gauge(panel, range=100, size=(-1, 16))
+        self.gauge.SetName(_("Progress"))
         vbox.Add(self.gauge, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+        self._progress = 0
         self._pulse_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_pulse, self._pulse_timer)
 
@@ -380,45 +534,148 @@ class AICreationWizardDialog(wx.Dialog):
         panel.SetSizer(vbox)
         self.desc.SetFocus()
 
-    # -- generation ------------------------------------------------------- #
-    def OnGenerate(self, event):
-        text = self.desc.GetValue().strip()
+    # -- shared task plumbing -------------------------------------------- #
+    def _prepare_turn(self, text):
+        """Common pre-flight for Plan/Generate. Returns False if not ready."""
         if not text:
             wx.MessageBox(_("Please describe what to create."), _("Error"),
                           wx.OK | wx.ICON_WARNING, self)
-            return
+            return False
         if not ai_provider.is_ai_ready():
             wx.MessageBox(_("AI features are not configured. Enable them and set "
                             "a method in Settings, AI features."),
                           _("AI not configured"), wx.OK | wx.ICON_WARNING, self)
-            return
-        # Multi-turn: include the previous generation so the model refines.
-        if self.generated_files and (not self.messages or self.messages[-1]['role'] != 'assistant'):
-            self.messages.append({"role": "assistant",
-                                  "content": self._last_raw or ''})
+            return False
+        # Multi-turn: fold the previous generation in so the model refines.
+        if self._last_raw and (not self.messages or self.messages[-1]['role'] != 'assistant'):
+            self.messages.append({"role": "assistant", "content": self._last_raw})
         self.messages.append({"role": "user", "content": text})
         self._append_transcript(_("You"), text)
         self.desc.SetValue("")
-
+        self.plan_btn.Enable(False)
         self.gen_btn.Enable(False)
         self.save_btn.Enable(False)
         self._stream_buf = []
         self._file_announced = set()
         self._gen_start = time.time()
-        self.status.SetLabel(_("Generating..."))
-        self._pulse_timer.Start(100)
-        _speak(_("Generating {kind}").format(kind=self.kind['label']))
+        self._progress = 0
+        self.gauge.SetValue(0)
+        self._pulse_timer.Start(150)
+        return True
 
-        system = build_system_prompt(self.kind)
+    def _set_progress(self, percent):
+        """Move the gauge to ``percent`` but never backwards (monotonic)."""
+        percent = max(0, min(100, int(percent)))
+        if percent > self._progress:
+            self._progress = percent
+            self.gauge.SetValue(percent)
+
+    def _maybe_web_context(self, query):
+        """Run a web search if the option is ticked; return a prompt block ('')."""
+        if not self.web_cb.GetValue():
+            return ''
+        wx.CallAfter(self.status.SetLabel, _("Searching the web..."))
+        wx.CallAfter(_speak, _("Searching the web"))
+        try:
+            results = web_search.search(query, max_results=_WEB_SEARCH_RESULTS)
+        except Exception:
+            results = []
+        if not results:
+            wx.CallAfter(self.transcript.AppendText,
+                         "\n" + _("(no web results)") + "\n")
+            return ''
+        wx.CallAfter(self.transcript.AppendText,
+                     "\n=== " + _("Web results") + " ===\n"
+                     + "\n".join(f"- {r['title']} ({r['url']})" for r in results)
+                     + "\n")
+        return web_search.format_results_for_prompt(results)
+
+    # -- planning --------------------------------------------------------- #
+    def OnPlan(self, event):
+        text = self.desc.GetValue().strip()
+        if not self._prepare_turn(text):
+            return
+        self.status.SetLabel(_("Planning..."))
+        _speak(_("Planning"))
         convo = list(self.messages)
 
         def _work():
             try:
+                extra = self._maybe_web_context(text)
+                system = build_plan_prompt(self.kind, extra_context=extra)
+                wx.CallAfter(self.transcript.AppendText,
+                             "\n=== " + _("Plan") + " ===\n")
                 raw = ai_provider.generate(system, convo, on_chunk=self._on_chunk)
-                wx.CallAfter(self._on_done, raw, None)
+                wx.CallAfter(self._on_plan_done, raw, None)
             except Exception as e:
                 traceback.print_exc()
-                wx.CallAfter(self._on_done, None, str(e))
+                wx.CallAfter(self._on_plan_done, None, str(e))
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _on_plan_done(self, raw, error):
+        self._pulse_timer.Stop()
+        self.plan_btn.Enable(True)
+        self.gen_btn.Enable(True)
+        if error:
+            self.gauge.SetValue(0)
+            self.status.SetLabel(_("Planning failed."))
+            play_sound('core/error.ogg')
+            _speak(_("Planning failed"))
+            wx.MessageBox(error, _("Planning error"), wx.OK | wx.ICON_ERROR, self)
+            return
+        # Keep the plan/questions in the conversation so Generate builds on them.
+        self.messages.append({"role": "assistant", "content": raw or ''})
+        self._last_raw = ''  # the plan is not a file set
+        self.gauge.SetValue(100)
+        self.status.SetLabel(_("Plan ready. Answer any questions above, then "
+                               "Generate."))
+        play_sound('core/SELECT.ogg')
+        _speak(_("Plan ready"))
+        self.desc.SetFocus()
+
+    # -- generation ------------------------------------------------------- #
+    def OnGenerate(self, event):
+        text = self.desc.GetValue().strip()
+        if not self._prepare_turn(text):
+            return
+        self.status.SetLabel(_("Generating..."))
+        _speak(_("Generating {kind}").format(kind=self.kind['label']))
+        convo = list(self.messages)
+        autofix = self.autofix_cb.GetValue()
+
+        def _work():
+            try:
+                extra = self._maybe_web_context(text)
+                system = build_system_prompt(self.kind, extra_context=extra)
+                raw = ai_provider.generate(system, convo, on_chunk=self._on_chunk)
+                files = parse_files(raw)
+                fixed_note = ''
+                if autofix:
+                    problems = static_check(files)
+                    rounds = 0
+                    while problems and rounds < _MAX_AUTOFIX_ROUNDS:
+                        rounds += 1
+                        wx.CallAfter(self.status.SetLabel,
+                                     _("Auto-fixing ({n})...").format(n=rounds))
+                        wx.CallAfter(_speak, _("Fixing code"))
+                        wx.CallAfter(self.transcript.AppendText,
+                                     "\n=== " + _("Auto-fix {n}").format(n=rounds)
+                                     + " ===\n")
+                        convo.append({"role": "assistant", "content": raw})
+                        convo.append({"role": "user",
+                                      "content": build_fix_message(problems)})
+                        raw = ai_provider.generate(system, convo,
+                                                   on_chunk=self._on_chunk)
+                        files = parse_files(raw)
+                        problems = static_check(files)
+                    if rounds:
+                        fixed_note = (_("auto-fixed") if not problems
+                                      else _("auto-fix incomplete"))
+                wx.CallAfter(self._on_done, raw, files, fixed_note, None)
+            except Exception as e:
+                traceback.print_exc()
+                wx.CallAfter(self._on_done, None, None, '', str(e))
 
         threading.Thread(target=_work, daemon=True).start()
 
@@ -440,15 +697,25 @@ class AICreationWizardDialog(wx.Dialog):
                 _speak(_("Creating {file}").format(file=name))
         chars = len(joined)
         elapsed = int(time.time() - self._gen_start)
-        # Keep the status as a live counter when not mid-file-announce.
-        if not self._file_announced:
-            self.status.SetLabel(_("Generating... {n} chars, {s}s").format(n=chars, s=elapsed))
+        # Real, data-driven percentage: rises fast then eases toward 95% as more
+        # text streams in (we cannot know the true total up front). 100% is only
+        # set on completion in _on_done.
+        pct = int(95 * (1 - math.exp(-chars / 4000.0)))
+        self._set_progress(pct)
+        base = _("Generating") if not self._file_announced \
+            else _("Creating: {file}").format(file=sorted(self._file_announced)[-1])
+        self.status.SetLabel(_("{stage}... {pct}% ({n} chars, {s}s)").format(
+            stage=base, pct=self._progress, n=chars, s=elapsed))
 
     def _on_pulse(self, event):
-        self.gauge.Pulse()
+        # Creep forward a little between chunks so the bar keeps moving even
+        # while waiting on the network, but never past the streamed estimate cap.
+        if self._progress < 95:
+            self._set_progress(self._progress + 1)
 
-    def _on_done(self, raw, error):
+    def _on_done(self, raw, files, fixed_note, error):
         self._pulse_timer.Stop()
+        self.plan_btn.Enable(True)
         self.gen_btn.Enable(True)
         if error:
             self.gauge.SetValue(0)
@@ -459,7 +726,8 @@ class AICreationWizardDialog(wx.Dialog):
             return
         self._last_raw = raw
         self.gauge.SetValue(100)
-        files = parse_files(raw)
+        if files is None:
+            files = parse_files(raw)
         ok, msg = validate_files(self.kind, files)
         if not ok:
             self.status.SetLabel(msg)
@@ -472,8 +740,10 @@ class AICreationWizardDialog(wx.Dialog):
         self.generated_files = files
         self._populate_preview(files)
         self.save_btn.Enable(True)
-        self.status.SetLabel(_("Done: {n} file(s). Review below, then Save.").format(
-            n=len(files)))
+        suffix = f" ({fixed_note})" if fixed_note else ''
+        self.status.SetLabel(
+            _("Done: {n} file(s).").format(n=len(files)) + suffix + " "
+            + _("Review below, then Save."))
         play_sound('core/SELECT.ogg')
         _speak(_("Done, {n} files generated").format(n=len(files)))
 
