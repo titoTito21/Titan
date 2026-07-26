@@ -1130,6 +1130,16 @@ class SettingsFrame(wx.Frame):
         self.ai_enable_cb.Bind(wx.EVT_CHECKBOX, self._on_ai_state_change)
         vbox.Add(self.ai_enable_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        # Every control below depends on the master switch: like the Titan TTS
+        # panel, they are HIDDEN entirely (not just disabled) while AI is off, and
+        # shown/hidden live as the checkbox is toggled. Collected here so
+        # _update_ai_controls_state can flip them all at once.
+        self._ai_dependent_ctrls = []
+
+        def _dep(ctrl):
+            self._ai_dependent_ctrls.append(ctrl)
+            return ctrl
+
         # Communication method
         self._ai_methods = list(ap.METHODS)  # [(id, label), ...]
         self.ai_method_radio = wx.RadioBox(
@@ -1138,25 +1148,25 @@ class SettingsFrame(wx.Frame):
             majorDimension=1, style=wx.RA_SPECIFY_COLS)
         self.ai_method_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.ai_method_radio.Bind(wx.EVT_RADIOBOX, self._on_ai_state_change)
-        vbox.Add(self.ai_method_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+        vbox.Add(_dep(self.ai_method_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
         # --- API-key subsection (shown only when the API method is chosen) --- #
         self.ai_provider_label = wx.StaticText(panel, label=_("AI provider:"))
-        vbox.Add(self.ai_provider_label, flag=wx.LEFT | wx.TOP, border=10)
+        vbox.Add(_dep(self.ai_provider_label), flag=wx.LEFT | wx.TOP, border=10)
         self._ai_providers = list(ap.PROVIDERS)  # [(id, label), ...]
         self.ai_provider_choice = wx.Choice(
             panel, choices=[label for _pid, label in self._ai_providers])
         self.ai_provider_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.ai_provider_choice.Bind(wx.EVT_CHOICE, self._on_ai_provider_change)
-        vbox.Add(self.ai_provider_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+        vbox.Add(_dep(self.ai_provider_choice), flag=wx.LEFT | wx.EXPAND, border=10)
 
         self.ai_key_label = wx.StaticText(
             panel, label=_("API key (stored encrypted on this device):"))
-        vbox.Add(self.ai_key_label, flag=wx.LEFT | wx.TOP, border=10)
+        vbox.Add(_dep(self.ai_key_label), flag=wx.LEFT | wx.TOP, border=10)
         self.ai_key_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
         self.ai_key_ctrl.SetName(_("API key"))
         self.ai_key_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(self.ai_key_ctrl, flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
+        vbox.Add(_dep(self.ai_key_ctrl), flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
 
         # AI Agent confirmation policy (how the computer-use agent asks before
         # acting). Separate from the creation kit.
@@ -1168,15 +1178,25 @@ class SettingsFrame(wx.Frame):
                      _("Autonomous (no confirmations)")],
             majorDimension=1, style=wx.RA_SPECIFY_COLS)
         self.ai_agent_confirm_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(self.ai_agent_confirm_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+        vbox.Add(_dep(self.ai_agent_confirm_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
         # --- Voice assistant (Perun / Melitele) --------------------------- #
-        vbox.Add(wx.StaticLine(panel), flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+        vbox.Add(_dep(wx.StaticLine(panel)), flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
         assistant_header = wx.StaticText(panel, label=_("Voice assistant"))
-        vbox.Add(assistant_header, flag=wx.LEFT | wx.TOP, border=10)
+        vbox.Add(_dep(assistant_header), flag=wx.LEFT | wx.TOP, border=10)
 
-        vbox.Add(wx.StaticText(panel, label=_("Assistant model:")),
-                 flag=wx.LEFT | wx.TOP, border=10)
+        # Text-to-speech engine: the cloud providers that actually offer a TTS API
+        # (Gemini, OpenAI - Claude has none, so it isn't listed) plus Titan TTS.
+        self._assistant_tts_values = [v for v, _l in ap.assistant_tts_options()]
+        self.assistant_tts_radio = wx.RadioBox(
+            panel, label=_("Assistant voice (text to speech)"),
+            choices=[label for _v, label in ap.assistant_tts_options()],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.assistant_tts_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.assistant_tts_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        assistant_model_label = wx.StaticText(panel, label=_("Assistant model:"))
+        vbox.Add(_dep(assistant_model_label), flag=wx.LEFT | wx.TOP, border=10)
         self._assistant_personas = []
         try:
             from src.ai.assistant import personas as _personas
@@ -1186,32 +1206,42 @@ class SettingsFrame(wx.Frame):
         choices = [p['name_en'] for p in self._assistant_personas] or [_("(none installed)")]
         self.assistant_model_choice = wx.Choice(panel, choices=choices)
         self.assistant_model_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(self.assistant_model_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+        vbox.Add(_dep(self.assistant_model_choice), flag=wx.LEFT | wx.EXPAND, border=10)
 
         # Global assistant hotkey (works anywhere).
         self._assistant_hotkey_value = ''
-        vbox.Add(wx.StaticText(panel, label=_(
-            "Global assistant shortcut (arrows and Tab are not allowed):")),
-            flag=wx.LEFT | wx.TOP, border=10)
-        self.assistant_hotkey_btn = wx.Button(panel, label=_("Not set"))
+        assistant_hotkey_label = wx.StaticText(panel, label=_(
+            "Global assistant shortcut (arrows and Tab are not allowed):"))
+        vbox.Add(_dep(assistant_hotkey_label), flag=wx.LEFT | wx.TOP, border=10)
+        self.assistant_hotkey_btn = wx.Button(
+            panel, label=self._assistant_hotkey_label(False, ''))
         self.assistant_hotkey_btn.SetName(_("Global assistant shortcut"))
         self.assistant_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.assistant_hotkey_btn.Bind(
             wx.EVT_BUTTON, lambda e: self._capture_assistant_hotkey(False))
-        vbox.Add(self.assistant_hotkey_btn, flag=wx.LEFT | wx.TOP, border=10)
+        vbox.Add(_dep(self.assistant_hotkey_btn), flag=wx.LEFT | wx.TOP, border=10)
 
         # Titan UI assistant hotkey (only active while Titan UI is on).
         self._assistant_titan_hotkey_value = ''
-        vbox.Add(wx.StaticText(panel, label=_(
+        assistant_titan_hotkey_label = wx.StaticText(panel, label=_(
             "Titan UI assistant shortcut (active only in Titan UI; arrows and "
-            "Tab are not allowed):")),
-            flag=wx.LEFT | wx.TOP, border=10)
-        self.assistant_titan_hotkey_btn = wx.Button(panel, label=_("Not set"))
+            "Tab are not allowed):"))
+        vbox.Add(_dep(assistant_titan_hotkey_label), flag=wx.LEFT | wx.TOP, border=10)
+        self.assistant_titan_hotkey_btn = wx.Button(
+            panel, label=self._assistant_hotkey_label(True, ''))
         self.assistant_titan_hotkey_btn.SetName(_("Titan UI assistant shortcut"))
         self.assistant_titan_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.assistant_titan_hotkey_btn.Bind(
             wx.EVT_BUTTON, lambda e: self._capture_assistant_hotkey(True))
-        vbox.Add(self.assistant_titan_hotkey_btn, flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
+        vbox.Add(_dep(self.assistant_titan_hotkey_btn), flag=wx.LEFT | wx.TOP, border=10)
+
+        # Dictation: pressing an assistant hotkey while a text field is focused
+        # types what you say into that field instead of running a command.
+        self.assistant_dictation_cb = wx.CheckBox(panel, label=_(
+            "Dictate into text fields (an assistant shortcut pressed while a text "
+            "field is focused types what you say into it)"))
+        self.assistant_dictation_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.assistant_dictation_cb), flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
 
         # In-memory per-provider keys (decrypted), swapped as the provider
         # choice changes; persisted (re-encrypted) only on Save.
@@ -1220,6 +1250,13 @@ class SettingsFrame(wx.Frame):
 
         panel.SetSizer(vbox)
         panel.Layout()
+
+    def _assistant_hotkey_label(self, titan_ui, value):
+        """Descriptive button label so a screen reader announces WHICH shortcut it
+        is, not just the bare key (e.g. 'Titan UI assistant shortcut: F3')."""
+        base = (_("Titan UI assistant shortcut") if titan_ui
+                else _("Global assistant shortcut"))
+        return "{name}: {key}".format(name=base, key=value or _("Not set"))
 
     def _capture_assistant_hotkey(self, titan_ui):
         """Open a key-capture dialog for an assistant shortcut (no arrows/Tab)."""
@@ -1232,10 +1269,12 @@ class SettingsFrame(wx.Frame):
         if dlg.ShowModal() == wx.ID_OK and dlg.captured_key:
             if titan_ui:
                 self._assistant_titan_hotkey_value = dlg.captured_key
-                self.assistant_titan_hotkey_btn.SetLabel(dlg.captured_key)
+                self.assistant_titan_hotkey_btn.SetLabel(
+                    self._assistant_hotkey_label(True, dlg.captured_key))
             else:
                 self._assistant_hotkey_value = dlg.captured_key
-                self.assistant_hotkey_btn.SetLabel(dlg.captured_key)
+                self.assistant_hotkey_btn.SetLabel(
+                    self._assistant_hotkey_label(False, dlg.captured_key))
         dlg.Destroy()
 
     def _current_ai_method(self):
@@ -1247,13 +1286,27 @@ class SettingsFrame(wx.Frame):
         return self._ai_providers[idx][0] if idx >= 0 else self._ai_providers[0][0]
 
     def _update_ai_controls_state(self):
-        """Enable/disable controls to reflect the master switch and method."""
+        """Show/hide the AI settings to reflect the master switch (like the Titan
+        TTS panel: everything but the enable checkbox disappears while AI is off),
+        and within that, reveal the API provider/key only for the API method.
+        Re-lays out the panel so the change is immediate."""
         enabled = self.ai_enable_cb.GetValue()
-        self.ai_method_radio.Enable(enabled)
-        api = enabled and self._current_ai_method() == 'api'
-        for ctrl in (self.ai_provider_label, self.ai_provider_choice,
-                     self.ai_key_label, self.ai_key_ctrl):
-            ctrl.Enable(api)
+        for ctrl in self._ai_dependent_ctrls:
+            ctrl.Show(enabled)
+        # The API-key subsection only makes sense for the 'API key' method.
+        if enabled:
+            api = self._current_ai_method() == 'api'
+            for ctrl in (self.ai_provider_label, self.ai_provider_choice,
+                         self.ai_key_label, self.ai_key_ctrl):
+                ctrl.Show(api)
+        self.ai_features_panel.Layout()
+        # Refresh the scroll region so the shorter/taller panel doesn't leave a
+        # dead scroll area or clip controls.
+        try:
+            self.content_panel.Layout()
+            self.content_panel.FitInside()
+        except Exception:
+            pass
 
     def _on_ai_state_change(self, event):
         self._update_ai_controls_state()
@@ -1293,10 +1346,16 @@ class SettingsFrame(wx.Frame):
             self.assistant_model_choice.SetSelection(
                 ids.index(model) if model in ids else 0)
         self._assistant_hotkey_value = ap.get_assistant_hotkey()
-        self.assistant_hotkey_btn.SetLabel(self._assistant_hotkey_value or _("Not set"))
+        self.assistant_hotkey_btn.SetLabel(
+            self._assistant_hotkey_label(False, self._assistant_hotkey_value))
         self._assistant_titan_hotkey_value = ap.get_assistant_titan_hotkey()
         self.assistant_titan_hotkey_btn.SetLabel(
-            self._assistant_titan_hotkey_value or _("Not set"))
+            self._assistant_hotkey_label(True, self._assistant_titan_hotkey_value))
+        self.assistant_dictation_cb.SetValue(ap.get_assistant_dictation())
+        tts = ap.get_assistant_tts()
+        self.assistant_tts_radio.SetSelection(
+            self._assistant_tts_values.index(tts)
+            if tts in self._assistant_tts_values else 0)
         self._update_ai_controls_state()
 
     def _save_ai_features(self, panel):
@@ -1321,6 +1380,10 @@ class SettingsFrame(wx.Frame):
                     ap.set_assistant_model(self._assistant_personas[idx]['id'])
             ap.set_assistant_hotkey(self._assistant_hotkey_value)
             ap.set_assistant_titan_hotkey(self._assistant_titan_hotkey_value)
+            ap.set_assistant_dictation(self.assistant_dictation_cb.GetValue())
+            sel = self.assistant_tts_radio.GetSelection()
+            if 0 <= sel < len(self._assistant_tts_values):
+                ap.set_assistant_tts(self._assistant_tts_values[sel])
             # Re-register the global hotkeys so changes take effect immediately.
             from src.ai.assistant import hotkeys as _assistant_hotkeys
             _assistant_hotkeys.register()

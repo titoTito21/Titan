@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-11 11:47+0200\n"
+"POT-Creation-Date: 2026-07-24 13:19+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,7 +34,7 @@ msgstr ""
 msgid "Restores the application window"
 msgstr ""
 
-#: src/ui/gui.py:470 src/ui/gui.py:549 src/ui/gui.py:1924
+#: src/ui/gui.py:470 src/ui/gui.py:549 src/ui/gui.py:1935
 msgid "Application List:"
 msgstr ""
 
@@ -54,7 +54,7 @@ msgstr ""
 msgid "Create Account"
 msgstr ""
 
-#: src/ui/gui.py:514 src/ui/gui.py:3350 src/ui/gui.py:4025 src/ui/gui.py:4084
+#: src/ui/gui.py:514 src/ui/gui.py:3372 src/ui/gui.py:4047 src/ui/gui.py:4106
 msgid "Logout"
 msgstr ""
 
@@ -70,7 +70,7 @@ msgstr ""
 msgid "Applications"
 msgstr ""
 
-#: src/ui/gui.py:551 src/ui/gui.py:1945
+#: src/ui/gui.py:551 src/ui/gui.py:1956
 msgid "Game List:"
 msgstr ""
 
@@ -78,11 +78,11 @@ msgstr ""
 msgid "Games"
 msgstr ""
 
-#: src/ui/gui.py:553 src/ui/gui.py:1968
+#: src/ui/gui.py:553 src/ui/gui.py:1979
 msgid "Titan IM:"
 msgstr ""
 
-#: src/ui/gui.py:553 src/ui/gui.py:664
+#: src/ui/gui.py:553 src/ui/gui.py:675
 msgid "Titan IM"
 msgstr ""
 
@@ -94,125 +94,125 @@ msgstr ""
 msgid "Titan App Suite"
 msgstr ""
 
-#: src/ui/gui.py:662
+#: src/ui/gui.py:673
 msgid "Application List"
 msgstr ""
 
-#: src/ui/gui.py:663
+#: src/ui/gui.py:674
 msgid "Game List"
 msgstr ""
 
-#: src/ui/gui.py:665
+#: src/ui/gui.py:676
 msgid "Online Users"
 msgstr ""
 
-#: src/ui/gui.py:666
+#: src/ui/gui.py:677
 msgid "Status Bar"
 msgstr ""
 
-#: src/ui/gui.py:667
+#: src/ui/gui.py:678
 msgid "Type a message"
 msgstr ""
 
-#: src/ui/gui.py:668
+#: src/ui/gui.py:679
 msgid "Phone number with country code"
 msgstr ""
 
-#: src/ui/gui.py:669
+#: src/ui/gui.py:680
 msgid "2FA password"
 msgstr ""
 
-#: src/ui/gui.py:670
+#: src/ui/gui.py:681
 msgid "Log in"
 msgstr ""
 
-#: src/ui/gui.py:671
+#: src/ui/gui.py:682
 msgid "Create account"
 msgstr ""
 
-#: src/ui/gui.py:672
+#: src/ui/gui.py:683
 msgid "Log out"
 msgstr ""
 
-#: src/ui/gui.py:925
+#: src/ui/gui.py:936
 msgid "Unknown App"
 msgstr ""
 
-#: src/ui/gui.py:980
+#: src/ui/gui.py:991
 msgid "Unknown Game"
 msgstr ""
 
-#: src/ui/gui.py:1003
+#: src/ui/gui.py:1014
 #, python-brace-format
 msgid "Clock: {}"
 msgstr ""
 
-#: src/ui/gui.py:1008
+#: src/ui/gui.py:1019
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr ""
 
-#: src/ui/gui.py:1010
+#: src/ui/gui.py:1021
 #, python-brace-format
 msgid "Volume: {}"
 msgstr ""
 
-#: src/ui/gui.py:1172
+#: src/ui/gui.py:1183
 msgid "expanded folder"
 msgstr ""
 
-#: src/ui/gui.py:1174
+#: src/ui/gui.py:1185
 msgid "collapsed folder"
 msgstr ""
 
-#: src/ui/gui.py:1176
+#: src/ui/gui.py:1187
 msgid "game"
 msgstr ""
 
-#: src/ui/gui.py:1295
+#: src/ui/gui.py:1306
 msgid "Open"
 msgstr ""
 
-#: src/ui/gui.py:1332
+#: src/ui/gui.py:1343
 #, python-brace-format
 msgid "Run {}..."
 msgstr ""
 
-#: src/ui/gui.py:1332 src/ui/gui.py:1336
+#: src/ui/gui.py:1343 src/ui/gui.py:1347
 msgid "item"
 msgstr ""
 
-#: src/ui/gui.py:1336
+#: src/ui/gui.py:1347
 #, python-brace-format
 msgid "Uninstall {}"
 msgstr ""
 
-#: src/ui/gui.py:1353
+#: src/ui/gui.py:1364
 msgid "An error occurred: No data to run."
 msgstr ""
 
-#: src/ui/gui.py:1353 src/ui/gui.py:1371 src/ui/gui.py:1379 src/ui/gui.py:1422
-#: src/ui/gui.py:3844 src/ui/gui.py:4105 src/ui/gui.py:4153 src/ui/gui.py:4469
-#: src/ui/gui.py:4474 src/ui/gui.py:4483 src/ui/gui.py:4529 src/ui/gui.py:4534
-#: src/ui/gui.py:4543 src/ui/gui.py:4578 src/ui/gui.py:4583 src/ui/gui.py:4639
-#: src/ui/gui.py:4687 src/ui/gui.py:4692 src/ui/gui.py:5092 src/ui/gui.py:5108
+#: src/ui/gui.py:1364 src/ui/gui.py:1382 src/ui/gui.py:1390 src/ui/gui.py:1433
+#: src/ui/gui.py:3866 src/ui/gui.py:4127 src/ui/gui.py:4175 src/ui/gui.py:4491
+#: src/ui/gui.py:4496 src/ui/gui.py:4505 src/ui/gui.py:4551 src/ui/gui.py:4556
+#: src/ui/gui.py:4565 src/ui/gui.py:4600 src/ui/gui.py:4605 src/ui/gui.py:4661
+#: src/ui/gui.py:4709 src/ui/gui.py:4714 src/ui/gui.py:5123 src/ui/gui.py:5139
 msgid "Error"
 msgstr ""
 
-#: src/ui/gui.py:1371
+#: src/ui/gui.py:1382
 msgid "An error occurred: No data to uninstall."
 msgstr ""
 
-#: src/ui/gui.py:1374
+#: src/ui/gui.py:1385
 msgid "unknown item"
 msgstr ""
 
-#: src/ui/gui.py:1379
+#: src/ui/gui.py:1390
 #, python-brace-format
 msgid "Error: Cannot find the directory '{}' to uninstall."
 msgstr ""
 
-#: src/ui/gui.py:1384
+#: src/ui/gui.py:1395
 #, python-brace-format
 msgid ""
 "Are you sure you want to uninstall '{}' from Titan?\n"
@@ -220,20 +220,20 @@ msgid ""
 "This will delete the entire directory: {}"
 msgstr ""
 
-#: src/ui/gui.py:1385
+#: src/ui/gui.py:1396
 msgid "Confirm Uninstall"
 msgstr ""
 
-#: src/ui/gui.py:1412
+#: src/ui/gui.py:1423
 #, python-brace-format
 msgid "'{}' has been successfully uninstalled."
 msgstr ""
 
-#: src/ui/gui.py:1412
+#: src/ui/gui.py:1423
 msgid "Success"
 msgstr ""
 
-#: src/ui/gui.py:1422
+#: src/ui/gui.py:1433
 #, python-brace-format
 msgid ""
 "Error uninstalling '{}':\n"
@@ -242,186 +242,186 @@ msgid ""
 "Make sure the directory is not in use."
 msgstr ""
 
-#: src/ui/gui.py:1851
+#: src/ui/gui.py:1862
 msgid "Network status:"
 msgstr ""
 
-#: src/ui/gui.py:1861
+#: src/ui/gui.py:1872
 msgid "Clock:"
 msgstr ""
 
-#: src/ui/gui.py:1863
+#: src/ui/gui.py:1874
 msgid "Battery level:"
 msgstr ""
 
-#: src/ui/gui.py:1865
+#: src/ui/gui.py:1876
 msgid "Volume:"
 msgstr ""
 
-#: src/ui/gui.py:2025 src/ui/gui.py:2055 src/ui/gui.py:2090
+#: src/ui/gui.py:2036 src/ui/gui.py:2066 src/ui/gui.py:2101
 msgid "Tab bar"
 msgstr ""
 
-#: src/ui/gui.py:2026 src/ui/gui.py:2051 src/ui/gui.py:2547 src/ui/gui.py:2690
-#: src/ui/gui.py:2734
+#: src/ui/gui.py:2037 src/ui/gui.py:2062 src/ui/gui.py:2558 src/ui/gui.py:2701
+#: src/ui/gui.py:2745
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr ""
 
-#: src/ui/gui.py:2484
+#: src/ui/gui.py:2495
 #, python-brace-format
 msgid "Picked up {}"
 msgstr ""
 
-#: src/ui/gui.py:2579
+#: src/ui/gui.py:2590
 #, python-brace-format
 msgid "Dropped {} at position {}"
 msgstr ""
 
-#: src/ui/gui.py:2605
+#: src/ui/gui.py:2616
 msgid "Drag cancelled"
 msgstr ""
 
-#: src/ui/gui.py:2986
+#: src/ui/gui.py:2997
 #, python-brace-format
 msgid "Show {}"
 msgstr ""
 
-#: src/ui/gui.py:3271 src/ui/gui.py:4228 src/ui/gui.py:4259
+#: src/ui/gui.py:3293 src/ui/gui.py:4250 src/ui/gui.py:4281
 msgid "Telegram"
 msgstr ""
 
-#: src/ui/gui.py:3272 src/ui/gui.py:4230 src/ui/gui.py:4272
+#: src/ui/gui.py:3294 src/ui/gui.py:4252 src/ui/gui.py:4294
 msgid "Facebook Messenger"
 msgstr ""
 
-#: src/ui/gui.py:3273 src/ui/gui.py:4231 src/ui/gui.py:4284
+#: src/ui/gui.py:3295 src/ui/gui.py:4253 src/ui/gui.py:4306
 msgid "WhatsApp"
 msgstr ""
 
-#: src/ui/gui.py:3274 src/ui/gui.py:4232 src/ui/gui.py:4290
+#: src/ui/gui.py:3296 src/ui/gui.py:4254 src/ui/gui.py:4312
 msgid "Titan-Net (Beta)"
 msgstr ""
 
-#: src/ui/gui.py:3275 src/ui/gui.py:4233 src/ui/gui.py:4302
+#: src/ui/gui.py:3297 src/ui/gui.py:4255 src/ui/gui.py:4324
 msgid "EltenLink (Beta)"
 msgstr ""
 
-#: src/ui/gui.py:3342 src/ui/gui.py:4021 src/ui/gui.py:4886
+#: src/ui/gui.py:3364 src/ui/gui.py:4043 src/ui/gui.py:4917
 msgid "Contacts"
 msgstr ""
 
-#: src/ui/gui.py:3344 src/ui/gui.py:4022 src/ui/gui.py:4908
+#: src/ui/gui.py:3366 src/ui/gui.py:4044 src/ui/gui.py:4939
 msgid "Group Chats"
 msgstr ""
 
-#: src/ui/gui.py:3346 src/ui/gui.py:4023
+#: src/ui/gui.py:3368 src/ui/gui.py:4045
 msgid "Settings"
 msgstr ""
 
-#: src/ui/gui.py:3348 src/ui/gui.py:4024 src/ui/gui.py:4467 src/ui/gui.py:4476
-#: src/ui/gui.py:4527 src/ui/gui.py:4536 src/ui/gui.py:4576 src/ui/gui.py:4585
-#: src/ui/gui.py:4685 src/ui/gui.py:4694 src/ui/gui.py:4922
+#: src/ui/gui.py:3370 src/ui/gui.py:4046 src/ui/gui.py:4489 src/ui/gui.py:4498
+#: src/ui/gui.py:4549 src/ui/gui.py:4558 src/ui/gui.py:4598 src/ui/gui.py:4607
+#: src/ui/gui.py:4707 src/ui/gui.py:4716 src/ui/gui.py:4953
 msgid "Information"
 msgstr ""
 
-#: src/ui/gui.py:3352 src/ui/gui.py:4026
+#: src/ui/gui.py:3374 src/ui/gui.py:4048
 msgid "Back to main menu"
 msgstr ""
 
-#: src/ui/gui.py:3383
+#: src/ui/gui.py:3405
 msgid "Logged in to Telegram"
 msgstr ""
 
-#: src/ui/gui.py:3403 src/ui/gui.py:3527 src/ui/gui.py:3782
+#: src/ui/gui.py:3425 src/ui/gui.py:3549 src/ui/gui.py:3804
 msgid "Login cancelled"
 msgstr ""
 
-#: src/ui/gui.py:3411
+#: src/ui/gui.py:3433
 #, python-brace-format
 msgid ""
 "Cannot launch Telegram.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/ui/gui.py:3412 src/ui/gui.py:4004
+#: src/ui/gui.py:3434 src/ui/gui.py:4026
 msgid "Telegram Error"
 msgstr ""
 
-#: src/ui/gui.py:3428
+#: src/ui/gui.py:3450
 msgid ""
 "Cannot launch Messenger WebView.\n"
 "Check if WebView2 is installed."
 msgstr ""
 
-#: src/ui/gui.py:3430
+#: src/ui/gui.py:3452
 msgid "Messenger WebView Error"
 msgstr ""
 
-#: src/ui/gui.py:3448
+#: src/ui/gui.py:3470
 msgid ""
 "Cannot launch WhatsApp WebView.\n"
 "Check if WebView2 is installed."
 msgstr ""
 
-#: src/ui/gui.py:3450
+#: src/ui/gui.py:3472
 msgid "WhatsApp WebView Error"
 msgstr ""
 
-#: src/ui/gui.py:3504
+#: src/ui/gui.py:3526
 #, python-brace-format
 msgid "Logged in to Titan-Net as {username}"
 msgstr ""
 
-#: src/ui/gui.py:3525
+#: src/ui/gui.py:3547
 msgid "Continuing in offline mode"
 msgstr ""
 
-#: src/ui/gui.py:3534
+#: src/ui/gui.py:3556
 #, python-brace-format
 msgid ""
 "Cannot launch Titan-Net.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/ui/gui.py:3535 src/ui/gui.py:3559
+#: src/ui/gui.py:3557 src/ui/gui.py:3581
 msgid "Titan-Net Error"
 msgstr ""
 
-#: src/ui/gui.py:3545
+#: src/ui/gui.py:3567
 msgid "Not connected to Titan-Net"
 msgstr ""
 
-#: src/ui/gui.py:3558
+#: src/ui/gui.py:3580
 #, python-brace-format
 msgid ""
 "Cannot open Titan-Net window.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/ui/gui.py:3643 src/ui/gui.py:3807 src/ui/gui.py:3935
+#: src/ui/gui.py:3665 src/ui/gui.py:3829 src/ui/gui.py:3957
 #, python-brace-format
 msgid "{user} is now online"
 msgstr ""
 
-#: src/ui/gui.py:3652 src/ui/gui.py:3811
+#: src/ui/gui.py:3674 src/ui/gui.py:3833
 #, python-brace-format
 msgid "{user} went offline"
 msgstr ""
 
-#: src/ui/gui.py:3662 src/ui/gui.py:3803
+#: src/ui/gui.py:3684 src/ui/gui.py:3825
 #, python-brace-format
 msgid "New message from {user}"
 msgstr ""
 
-#: src/ui/gui.py:3693
+#: src/ui/gui.py:3715
 #, python-brace-format
 msgid ""
 "Cerberus Protocol activated. Security threat level: {level}. Reason: "
 "{reason}. Your system will shut down in 10 seconds."
 msgstr ""
 
-#: src/ui/gui.py:3700
+#: src/ui/gui.py:3722
 #, python-brace-format
 msgid ""
 "Cerberus Protocol: {level}\n"
@@ -432,130 +432,130 @@ msgid ""
 "Your system will shut down."
 msgstr ""
 
-#: src/ui/gui.py:3704
+#: src/ui/gui.py:3726
 msgid "Cerberus Protocol"
 msgstr ""
 
-#: src/ui/gui.py:3745
+#: src/ui/gui.py:3767
 #, python-brace-format
 msgid "Cerberus security alert: {level}. {message}"
 msgstr ""
 
-#: src/ui/gui.py:3779
+#: src/ui/gui.py:3801
 msgid "Connected to EltenLink (Beta)"
 msgstr ""
 
-#: src/ui/gui.py:3789
+#: src/ui/gui.py:3811
 #, python-brace-format
 msgid ""
 "Cannot open EltenLink (Beta).\n"
 "Error: {error}"
 msgstr ""
 
-#: src/ui/gui.py:3790
+#: src/ui/gui.py:3812
 msgid "EltenLink (Beta) Error"
 msgstr ""
 
-#: src/ui/gui.py:3836
+#: src/ui/gui.py:3858
 msgid ""
 "Messenger WebView opened.\n"
 "Please log in to see your contacts in Titan IM."
 msgstr ""
 
-#: src/ui/gui.py:3837
+#: src/ui/gui.py:3859
 msgid "Messenger WebView"
 msgstr ""
 
-#: src/ui/gui.py:3843
+#: src/ui/gui.py:3865
 msgid ""
 "Failed to open Messenger WebView.\n"
 "Check if WebView2 is installed."
 msgstr ""
 
-#: src/ui/gui.py:3905
+#: src/ui/gui.py:3927
 #, python-brace-format
 msgid "New Titan-Net message from {user}"
 msgstr ""
 
-#: src/ui/gui.py:3976 src/ui/gui.py:3995
+#: src/ui/gui.py:3998 src/ui/gui.py:4017
 msgid "Opening Telegram"
 msgstr ""
 
-#: src/ui/gui.py:4003
+#: src/ui/gui.py:4025
 #, python-brace-format
 msgid ""
 "Cannot open Telegram.\n"
 "Error: {error}"
 msgstr ""
 
-#: src/ui/gui.py:4028
+#: src/ui/gui.py:4050
 msgid "Telegram Options"
 msgstr ""
 
-#: src/ui/gui.py:4083
+#: src/ui/gui.py:4105
 #, python-brace-format
 msgid "Successfully logged out from {}."
 msgstr ""
 
-#: src/ui/gui.py:4091
+#: src/ui/gui.py:4113
 #, python-brace-format
 msgid "Error logging out from {}: {}"
 msgstr ""
 
-#: src/ui/gui.py:4092
+#: src/ui/gui.py:4114
 msgid "Logout Error"
 msgstr ""
 
-#: src/ui/gui.py:4105
+#: src/ui/gui.py:4127
 msgid "Enter phone number with country code (e.g. +48123456789)."
 msgstr ""
 
-#: src/ui/gui.py:4116
+#: src/ui/gui.py:4138
 msgid "Connecting to Telegram..."
 msgstr ""
 
-#: src/ui/gui.py:4119
+#: src/ui/gui.py:4141
 msgid "TCE User"
 msgstr ""
 
-#: src/ui/gui.py:4141
+#: src/ui/gui.py:4163
 msgid "Failed to connect to Telegram server."
 msgstr ""
 
-#: src/ui/gui.py:4141 src/ui/gui.py:5147
+#: src/ui/gui.py:4163 src/ui/gui.py:5178
 msgid "Connection Error"
 msgstr ""
 
-#: src/ui/gui.py:4165
+#: src/ui/gui.py:4187
 msgid "Disconnecting..."
 msgstr ""
 
-#: src/ui/gui.py:4257
+#: src/ui/gui.py:4279
 #, python-brace-format
 msgid "Telegram - connected as {}"
 msgstr ""
 
-#: src/ui/gui.py:4270
+#: src/ui/gui.py:4292
 #, python-brace-format
 msgid "Facebook Messenger - connected as {}"
 msgstr ""
 
-#: src/ui/gui.py:4282
+#: src/ui/gui.py:4304
 #, python-brace-format
 msgid "WhatsApp - connected as {}"
 msgstr ""
 
-#: src/ui/gui.py:4288
+#: src/ui/gui.py:4310
 #, python-brace-format
 msgid "Titan-Net (Beta) - connected as {}"
 msgstr ""
 
-#: src/ui/gui.py:4300
+#: src/ui/gui.py:4322
 #, python-brace-format
 msgid "EltenLink (Beta) - connected as {}"
 msgstr ""
 
-#: src/ui/gui.py:4463
+#: src/ui/gui.py:4485
 #, python-brace-format
 msgid ""
 "Current time settings:\n"
@@ -563,88 +563,88 @@ msgid ""
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4464
+#: src/ui/gui.py:4486
 msgid "Time Settings"
 msgstr ""
 
-#: src/ui/gui.py:4466
+#: src/ui/gui.py:4488
 msgid ""
 "Could not open time settings. Please use your system's settings "
 "application."
 msgstr ""
 
-#: src/ui/gui.py:4469 src/ui/gui.py:4474
+#: src/ui/gui.py:4491 src/ui/gui.py:4496
 #, python-brace-format
 msgid ""
 "Could not open date/time settings:\n"
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4476 src/ui/gui.py:4536 src/ui/gui.py:4585 src/ui/gui.py:4694
+#: src/ui/gui.py:4498 src/ui/gui.py:4558 src/ui/gui.py:4607 src/ui/gui.py:4716
 msgid "This feature is not supported on this platform."
 msgstr ""
 
-#: src/ui/gui.py:4483 src/ui/gui.py:4529 src/ui/gui.py:4534
+#: src/ui/gui.py:4505 src/ui/gui.py:4551 src/ui/gui.py:4556
 #, python-brace-format
 msgid ""
 "Could not open power settings:\n"
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4521 src/ui/gui.py:4524
+#: src/ui/gui.py:4543 src/ui/gui.py:4546
 msgid "Power Information"
 msgstr ""
 
-#: src/ui/gui.py:4523
+#: src/ui/gui.py:4545
 msgid "No battery detected. Power settings may not be available."
 msgstr ""
 
-#: src/ui/gui.py:4526
+#: src/ui/gui.py:4548
 msgid ""
 "Could not open power settings. Please use your system's settings "
 "application."
 msgstr ""
 
-#: src/ui/gui.py:4543 src/ui/gui.py:4578
+#: src/ui/gui.py:4565 src/ui/gui.py:4600
 #, python-brace-format
 msgid ""
 "Could not open volume mixer:\n"
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4572
+#: src/ui/gui.py:4594
 msgid ""
 "GUI volume mixer not found.\n"
 "\n"
 "You can use 'alsamixer' in terminal for audio control."
 msgstr ""
 
-#: src/ui/gui.py:4573
+#: src/ui/gui.py:4595
 msgid "Volume Control"
 msgstr ""
 
-#: src/ui/gui.py:4575
+#: src/ui/gui.py:4597
 msgid "Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."
 msgstr ""
 
-#: src/ui/gui.py:4583
+#: src/ui/gui.py:4605
 #, python-brace-format
 msgid ""
 "Could not open audio settings:\n"
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4614
+#: src/ui/gui.py:4636
 msgid ""
 "WiFi interface could not be initialized.\n"
 "This may be due to missing drivers or system restrictions."
 msgstr ""
 
-#: src/ui/gui.py:4615
+#: src/ui/gui.py:4637
 msgid "WiFi Warning"
 msgstr ""
 
-#: src/ui/gui.py:4627
+#: src/ui/gui.py:4649
 #, python-brace-format
 msgid ""
 "Error opening WiFi interface: {}\n"
@@ -652,22 +652,22 @@ msgid ""
 "Trying system WiFi settings instead..."
 msgstr ""
 
-#: src/ui/gui.py:4628
+#: src/ui/gui.py:4650
 msgid "WiFi Error"
 msgstr ""
 
-#: src/ui/gui.py:4639 src/ui/gui.py:4687 src/ui/gui.py:4692
+#: src/ui/gui.py:4661 src/ui/gui.py:4709 src/ui/gui.py:4714
 #, python-brace-format
 msgid ""
 "Could not open network settings:\n"
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4675 src/ui/gui.py:4682
+#: src/ui/gui.py:4697 src/ui/gui.py:4704
 msgid "Network Information"
 msgstr ""
 
-#: src/ui/gui.py:4681
+#: src/ui/gui.py:4703
 #, python-brace-format
 msgid ""
 "Network interface information:\n"
@@ -675,163 +675,163 @@ msgid ""
 "{}"
 msgstr ""
 
-#: src/ui/gui.py:4684
+#: src/ui/gui.py:4706
 msgid "Could not open network settings. Please use your system's network manager."
 msgstr ""
 
-#: src/ui/gui.py:4922
+#: src/ui/gui.py:4953
 msgid "Network settings - coming soon"
 msgstr ""
 
-#: src/ui/gui.py:4929
+#: src/ui/gui.py:4960
 msgid "Zalogowany jako"
 msgstr ""
 
-#: src/ui/gui.py:4929
+#: src/ui/gui.py:4960
 msgid "Nieznany"
 msgstr ""
 
-#: src/ui/gui.py:4930
+#: src/ui/gui.py:4961
 msgid "Users online"
 msgstr ""
 
-#: src/ui/gui.py:4931 src/ui/gui.py:4933
+#: src/ui/gui.py:4962 src/ui/gui.py:4964
 msgid "Connection status"
 msgstr ""
 
-#: src/ui/gui.py:4931
+#: src/ui/gui.py:4962
 msgid "Connected"
 msgstr ""
 
-#: src/ui/gui.py:4933
+#: src/ui/gui.py:4964
 msgid "Disconnected"
 msgstr ""
 
-#: src/ui/gui.py:4935
+#: src/ui/gui.py:4966
 msgid "Telegram Information"
 msgstr ""
 
-#: src/ui/gui.py:4960
+#: src/ui/gui.py:4991
 msgid "Refreshing contacts list, found"
 msgstr ""
 
-#: src/ui/gui.py:4960
+#: src/ui/gui.py:4991
 msgid "contacts"
 msgstr ""
 
-#: src/ui/gui.py:4966 src/ui/gui.py:5000
+#: src/ui/gui.py:4997 src/ui/gui.py:5031
 msgid "unread"
 msgstr ""
 
-#: src/ui/gui.py:4968
+#: src/ui/gui.py:4999
 msgid "Added contact"
 msgstr ""
 
-#: src/ui/gui.py:4971
+#: src/ui/gui.py:5002
 msgid "No connection or client to refresh contacts"
 msgstr ""
 
-#: src/ui/gui.py:4994
+#: src/ui/gui.py:5025
 msgid "Refreshing group chats, found"
 msgstr ""
 
-#: src/ui/gui.py:4994
+#: src/ui/gui.py:5025
 msgid "groups"
 msgstr ""
 
-#: src/ui/gui.py:5002
+#: src/ui/gui.py:5033
 msgid "Added group"
 msgstr ""
 
-#: src/ui/gui.py:5005
+#: src/ui/gui.py:5036
 msgid "No connection or client to refresh groups"
 msgstr ""
 
-#: src/ui/gui.py:5046 src/ui/gui.py:5061
+#: src/ui/gui.py:5077 src/ui/gui.py:5092
 msgid "Private message"
 msgstr ""
 
-#: src/ui/gui.py:5046 src/ui/gui.py:5061
+#: src/ui/gui.py:5077 src/ui/gui.py:5092
 msgid "Send private message"
 msgstr ""
 
-#: src/ui/gui.py:5047 src/ui/gui.py:5062 src/ui/gui.py:5097
+#: src/ui/gui.py:5078 src/ui/gui.py:5093 src/ui/gui.py:5128
 msgid "Voice call"
 msgstr ""
 
-#: src/ui/gui.py:5047 src/ui/gui.py:5062
+#: src/ui/gui.py:5078 src/ui/gui.py:5093
 msgid "Start voice call"
 msgstr ""
 
-#: src/ui/gui.py:5054
+#: src/ui/gui.py:5085
 msgid "Open group chat"
 msgstr ""
 
-#: src/ui/gui.py:5054
+#: src/ui/gui.py:5085
 msgid "Open group chat window"
 msgstr ""
 
-#: src/ui/gui.py:5091
+#: src/ui/gui.py:5122
 msgid ""
 "Voice calls are not available.\n"
 "Check if py-tgcalls is installed."
 msgstr ""
 
-#: src/ui/gui.py:5096
+#: src/ui/gui.py:5127
 #, python-brace-format
 msgid "Do you want to start a voice call with {}?"
 msgstr ""
 
-#: src/ui/gui.py:5108
+#: src/ui/gui.py:5139
 msgid "Failed to start conversation."
 msgstr ""
 
-#: src/ui/gui.py:5146
+#: src/ui/gui.py:5177
 #, python-brace-format
 msgid "Connection failed: {}"
 msgstr ""
 
-#: src/ui/gui.py:5195
+#: src/ui/gui.py:5226
 #, python-format
 msgid "--- Chat history with %s ---"
 msgstr ""
 
-#: src/ui/gui.py:5213
+#: src/ui/gui.py:5244
 msgid "--- End of history ---"
 msgstr ""
 
-#: src/ui/gui.py:5222
+#: src/ui/gui.py:5253
 msgid "Otrzymano zmianę statusu"
 msgstr ""
 
-#: src/ui/gui.py:5222
+#: src/ui/gui.py:5253
 msgid "dane"
 msgstr ""
 
-#: src/ui/gui.py:5226
+#: src/ui/gui.py:5257
 msgid "Zaktualizowano listę użytkowników online"
 msgstr ""
 
-#: src/ui/gui.py:5226
+#: src/ui/gui.py:5257
 msgid "użytkowników"
 msgstr ""
 
-#: src/ui/gui.py:5235
+#: src/ui/gui.py:5266
 #, python-brace-format
 msgid "{} joined Telegram"
 msgstr ""
 
-#: src/ui/gui.py:5238
+#: src/ui/gui.py:5269
 #, python-brace-format
 msgid "{} left Telegram"
 msgstr ""
 
-#: src/ui/gui.py:5252
+#: src/ui/gui.py:5283
 #, python-brace-format
 msgid "{} pisze..."
 msgstr ""
 
-#: src/ui/gui.py:5255
+#: src/ui/gui.py:5286
 #, python-brace-format
 msgid "Rozmowa z {}"
 msgstr ""

@@ -60,15 +60,15 @@ def _to_anthropic_tools(tools):
 
 
 def _jsonschema_to_gemini(schema):
-    """Convert a JSON-schema-subset dict into a genai protos.Schema."""
-    import google.generativeai as genai
-    Type = genai.protos.Type
+    """Convert a JSON-schema-subset dict into a google.genai types.Schema."""
+    from google.genai import types
+    Type = types.Type
     type_map = {
         'object': Type.OBJECT, 'string': Type.STRING, 'number': Type.NUMBER,
         'integer': Type.INTEGER, 'boolean': Type.BOOLEAN, 'array': Type.ARRAY,
     }
     if not schema:
-        return genai.protos.Schema(type=Type.OBJECT)
+        return types.Schema(type=Type.OBJECT)
     stype = type_map.get(schema.get('type', 'string'), Type.STRING)
     kwargs = {'type': stype}
     if 'description' in schema:
@@ -84,17 +84,17 @@ def _jsonschema_to_gemini(schema):
         kwargs['items'] = _jsonschema_to_gemini(schema.get('items', {'type': 'string'}))
     if 'enum' in schema:
         kwargs['enum'] = [str(e) for e in schema['enum']]
-    return genai.protos.Schema(**kwargs)
+    return types.Schema(**kwargs)
 
 
 def _to_gemini_tools(tools):
-    import google.generativeai as genai
-    decls = [genai.protos.FunctionDeclaration(
+    from google.genai import types
+    decls = [types.FunctionDeclaration(
         name=t['name'],
         description=t.get('description', ''),
         parameters=_jsonschema_to_gemini(t.get('parameters')),
     ) for t in tools]
-    return [genai.protos.Tool(function_declarations=decls)]
+    return [types.Tool(function_declarations=decls)]
 
 
 # --------------------------------------------------------------------------- #
@@ -127,7 +127,7 @@ def _openai_messages(system, history):
 
 
 def _step_openai(model, system, history, tools, api_key):
-    import openai
+    openai = ai_provider._import_sdk('openai')
     client = openai.OpenAI(api_key=api_key)
     resp = client.chat.completions.create(
         model=model, messages=_openai_messages(system, history),
@@ -177,7 +177,7 @@ def _anthropic_messages(history):
 
 
 def _step_anthropic(model, system, history, tools, api_key):
-    import anthropic
+    anthropic = ai_provider._import_sdk('anthropic')
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
         model=model, system=system, max_tokens=4000,
@@ -194,64 +194,82 @@ def _step_anthropic(model, system, history, tools, api_key):
 
 
 def _gemini_contents(history):
-    import google.generativeai as genai
-    proto = genai.protos
+    from google.genai import types
     contents = []
     for m in history:
         if m['role'] == 'user':
-            contents.append(proto.Content(role='user',
-                            parts=[proto.Part(text=m['content'])]))
+            # A user turn may carry audio (spoken request fed straight to the
+            # agent, no separate transcription step) alongside/instead of text.
+            parts = []
+            if m.get('content'):
+                parts.append(types.Part(text=m['content']))
+            au = m.get('audio')
+            if au and au.get('data'):
+                parts.append(types.Part(inline_data=types.Blob(
+                    mime_type=au.get('mime_type', 'audio/wav'), data=au['data'])))
+            if not parts:
+                parts.append(types.Part(text=m.get('content', '')))
+            contents.append(types.Content(role='user', parts=parts))
         elif m['role'] == 'assistant':
             # Gemini 3.x rejects replayed function calls unless the ORIGINAL
-            # proto parts (which carry an internal thought signature not exposed
-            # as a Python attribute) are sent back verbatim. So reuse the raw
-            # parts captured from the response when available.
+            # response parts (which carry an internal thought signature) are sent
+            # back verbatim. So reuse the raw parts captured from the response
+            # when available.
             raw = m.get('_gemini_raw_parts')
             if raw is not None:
-                contents.append(proto.Content(role='model', parts=list(raw)))
+                contents.append(types.Content(role='model', parts=list(raw)))
             else:
                 parts = []
                 if m.get('content'):
-                    parts.append(proto.Part(text=m['content']))
+                    parts.append(types.Part(text=m['content']))
                 for c in m.get('tool_calls', []):
-                    parts.append(proto.Part(function_call=proto.FunctionCall(
+                    parts.append(types.Part(function_call=types.FunctionCall(
                         name=c['name'], args=c['args'])))
-                contents.append(proto.Content(role='model', parts=parts))
+                contents.append(types.Content(role='model', parts=parts))
         elif m['role'] == 'tool':
-            contents.append(proto.Content(role='user', parts=[proto.Part(
-                function_response=proto.FunctionResponse(
+            contents.append(types.Content(role='user', parts=[types.Part(
+                function_response=types.FunctionResponse(
                     name=m['name'], response={'result': m['content']}))]))
         elif m['role'] == 'images':
-            parts = [proto.Part(inline_data=proto.Blob(mime_type='image/png', data=png))
+            parts = [types.Part(inline_data=types.Blob(mime_type='image/png', data=png))
                      for png in m['images']]
             # Merge into the preceding user content to avoid consecutive user turns.
             if contents and contents[-1].role == 'user':
                 for p in parts:
                     contents[-1].parts.append(p)
             else:
-                contents.append(proto.Content(role='user', parts=parts))
+                contents.append(types.Content(role='user', parts=parts))
     return contents
 
 
+def _gemini_client_config(system, tools, api_key):
+    """Return (client, config) for a Gemini agent step using the new google.genai
+    SDK. ``config`` carries the system instruction and the tool declarations."""
+    genai = ai_provider._import_sdk('gemini')
+    from google.genai import types
+    client = genai.Client(api_key=api_key)
+    config = types.GenerateContentConfig(
+        system_instruction=system, tools=_to_gemini_tools(tools))
+    return client, config
+
+
 def _step_gemini(model, system, history, tools, api_key):
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    gmodel = genai.GenerativeModel(model, system_instruction=system,
-                                   tools=_to_gemini_tools(tools))
-    resp = gmodel.generate_content(_gemini_contents(history))
+    client, config = _gemini_client_config(system, tools, api_key)
+    resp = client.models.generate_content(
+        model=model, contents=_gemini_contents(history), config=config)
     text, calls = '', []
     try:
-        parts = resp.candidates[0].content.parts
-    except (IndexError, AttributeError):
+        parts = resp.candidates[0].content.parts or []
+    except (IndexError, AttributeError, TypeError):
         parts = []
     for i, part in enumerate(parts):
         fc = getattr(part, 'function_call', None)
         if fc and getattr(fc, 'name', ''):
             calls.append({'id': f'{fc.name}_{i}', 'name': fc.name,
-                          'args': _proto_to_dict(fc.args)})
+                          'args': _gemini_args(fc.args)})
         elif getattr(part, 'text', ''):
             text += part.text
-    # Keep the raw proto parts so the assistant turn can be replayed verbatim
+    # Keep the raw response parts so the assistant turn can be replayed verbatim
     # (preserves Gemini 3.x thought signatures).
     return {'text': text, 'tool_calls': calls, '_raw_parts': list(parts)}
 
@@ -259,27 +277,25 @@ def _step_gemini(model, system, history, tools, api_key):
 def _step_gemini_stream(model, system, history, tools, api_key, on_delta):
     """Streaming variant of :func:`_step_gemini`: emits text deltas to
     ``on_delta`` as they arrive (so the caller can start speaking mid-reply)
-    while still collecting tool calls and the raw proto parts. Returns the same
+    while still collecting tool calls and the raw response parts. Returns the same
     dict shape. Used only when a text-delta consumer is supplied; the caller
     falls back to the non-streaming step if this raises."""
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    gmodel = genai.GenerativeModel(model, system_instruction=system,
-                                   tools=_to_gemini_tools(tools))
-    resp = gmodel.generate_content(_gemini_contents(history), stream=True)
+    client, config = _gemini_client_config(system, tools, api_key)
+    stream = client.models.generate_content_stream(
+        model=model, contents=_gemini_contents(history), config=config)
     text, calls, raw_parts = '', [], []
     idx = 0
-    for chunk in resp:
+    for chunk in stream:
         try:
-            parts = chunk.candidates[0].content.parts
-        except (IndexError, AttributeError):
+            parts = chunk.candidates[0].content.parts or []
+        except (IndexError, AttributeError, TypeError):
             parts = []
         for part in parts:
             raw_parts.append(part)
             fc = getattr(part, 'function_call', None)
             if fc and getattr(fc, 'name', ''):
                 calls.append({'id': f'{fc.name}_{idx}', 'name': fc.name,
-                              'args': _proto_to_dict(fc.args)})
+                              'args': _gemini_args(fc.args)})
                 idx += 1
             else:
                 delta = getattr(part, 'text', '')
@@ -292,27 +308,20 @@ def _step_gemini_stream(model, system, history, tools, api_key, on_delta):
     return {'text': text, 'tool_calls': calls, '_raw_parts': raw_parts}
 
 
-def _proto_to_dict(args):
-    """Convert a Gemini proto MapComposite / Struct into a plain dict."""
-    out = {}
+def _gemini_args(args):
+    """Normalize a google.genai FunctionCall.args into a plain dict. The new SDK
+    already returns a dict; this stays defensive for None / mapping-like values."""
+    if not args:
+        return {}
+    if isinstance(args, dict):
+        return dict(args)
     try:
-        for k, v in args.items():
-            out[k] = _proto_value(v)
+        return dict(args.items())
     except Exception:
-        pass
-    return out
-
-
-def _proto_value(v):
-    # google proto values expose list/map via python iteration.
-    if hasattr(v, 'items'):
-        return {k: _proto_value(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)) or (hasattr(v, '__iter__') and not isinstance(v, str)):
         try:
-            return [_proto_value(x) for x in v]
+            return dict(args)
         except Exception:
-            return v
-    return v
+            return {}
 
 
 _STEP_FUNCS = {
@@ -335,14 +344,41 @@ DEFAULT_SYSTEM = (
     "coordinates -- always give click/move coordinates in ACTUAL screen pixels "
     "as reported by the screenshot, not image pixels. Prefer reading text via "
     "read_focused_window when it is enough, and use the screenshot only when you "
-    "need to see layout or find something visually. When the goal is done, reply "
-    "with a short final summary and no further tool calls. If you cannot "
-    "proceed, say why.")
+    "need to see layout or find something visually. Besides controlling the "
+    "computer, you have Titan-native tools: read and change Titan's settings, "
+    "list and run components and their actions, list and launch any Titan add-on "
+    "(applications, games, Titan IM modules and more), and send a private message "
+    "to someone on Titan-Net, Telegram, WhatsApp or Messenger. For WhatsApp and "
+    "Messenger you do NOT need Titan's own IM - the message tool opens the "
+    "desktop app or the browser web app (WhatsApp Web / messenger.com); when it "
+    "hands off, finish the send yourself with your computer-use tools (open the "
+    "right chat, type the text, press Enter). You can also play the "
+    "user's OWN media library: search their tMedia catalogs (online folders and "
+    "local/Google Drive files) for a title/episode/audiobook and play the "
+    "matching file in tMedia (titan_search_media / titan_play_media); play "
+    "internet radio for a country with the country auto-selected "
+    "(titan_play_radio, country in English or ISO code); and create reminders in "
+    "tReminder (titan_create_reminder). Reserve web music (YouTube/Spotify) for "
+    "when they ask for that. "
+    "You can also BROWSE THE WEB in a real browser: open a page, read its text, "
+    "links, form fields, drop-downs and buttons, fill forms field by field, "
+    "choose options, click and submit, and go back (the browser_* tools). Prefer "
+    "them when a task means visiting a website or filling in a form - read the "
+    "page first so you know the exact fields and buttons. If those tools report "
+    "they are unavailable, open the page in the normal browser and use the "
+    "screen-reading and clicking tools instead. "
+    "Prefer these Titan tools over clicking through the UI when they fit. "
+    "Describe what you do in plain, human language: NEVER write internal tool or "
+    "function names (such as run_shell, titan_send_message, press_keys) or raw "
+    "function-call syntax in your replies - say it in words a person understands "
+    "(e.g. 'I'll run a system command', 'I'll send the message', 'I'll press "
+    "Enter'). When the goal is done, reply with a short final summary and no "
+    "further tool calls. If you cannot proceed, say why.")
 
 
 def run_agent(goal, tools, *, provider=None, model=None, system=None,
               on_text=None, on_tool_start=None, on_tool_result=None,
-              on_text_delta=None,
+              on_text_delta=None, goal_audio=None,
               confirm=None, confirm_all=False, cancel_event=None, max_steps=25):
     """Run the tool-calling loop until the model stops requesting tools, the
     step budget is exhausted, or cancellation is requested.
@@ -370,7 +406,13 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
         if cancel_event is not None and cancel_event.is_set():
             raise AgentCancelled()
 
-    history = [{'role': 'user', 'content': goal}]
+    first_user = {'role': 'user', 'content': goal}
+    # goal_audio ({'data': bytes, 'mime_type': str}) lets a voice caller feed the
+    # spoken request straight to the model (Gemini is multimodal), skipping a
+    # separate speech-to-text round trip. Ignored by non-Gemini providers.
+    if goal_audio and goal_audio.get('data') and provider == 'gemini':
+        first_user['audio'] = goal_audio
+    history = [first_user]
     final_text = ''
     # Stream text deltas (for a voice caller to speak mid-reply) only when a
     # consumer is supplied and the provider supports it (Gemini). The streaming

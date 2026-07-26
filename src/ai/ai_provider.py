@@ -139,10 +139,59 @@ def set_assistant_titan_hotkey(hotkey):
     set_setting('assistant_titan_hotkey', hotkey or '', section=_SETTINGS_SECTION)
 
 
+# Which providers actually expose a text-to-speech API. Anthropic/Claude is
+# deliberately absent: Claude has no TTS endpoint yet, so it is not offered.
+# (Flip a provider to True here the day it ships one and it appears in the UI.)
+_PROVIDER_TTS = {
+    'gemini': ('gemini', 'Gemini TTS'),
+    'openai': ('openai', 'OpenAI TTS'),
+    'anthropic': None,
+}
+
+
+def assistant_tts_options():
+    """Ordered [(value, label)] for the assistant text-to-speech choice: each
+    cloud provider that supports TTS (and only if it does), then Titan TTS which
+    is always available. Cloud order follows PROVIDERS."""
+    opts = []
+    for pid, _label in PROVIDERS:
+        entry = _PROVIDER_TTS.get(pid)
+        if entry:
+            opts.append(entry)
+    opts.append(('titan', 'Titan TTS'))
+    return opts
+
+
+def get_assistant_tts():
+    """Selected engine the assistant speaks with: a provider id that supports TTS
+    ('gemini' / 'openai') or 'titan' (Titan TTS). Defaults to 'gemini' (the
+    assistant's cloud voice); an invalid/unsupported stored value falls back to
+    the first available option."""
+    valid = [v for v, _l in assistant_tts_options()]
+    val = get_setting('assistant_tts', 'gemini', section=_SETTINGS_SECTION)
+    return val if val in valid else (valid[0] if valid else 'titan')
+
+
+def set_assistant_tts(engine):
+    set_setting('assistant_tts', engine or 'gemini', section=_SETTINGS_SECTION)
+
+
+def get_assistant_dictation():
+    """When True, pressing an assistant hotkey while an editable text field is
+    focused just DICTATES: the assistant transcribes what you say and types it
+    into the field instead of running the command agent. Default on."""
+    val = get_setting('assistant_dictation', True, section=_SETTINGS_SECTION)
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def set_assistant_dictation(enabled):
+    set_setting('assistant_dictation', bool(enabled), section=_SETTINGS_SECTION)
+
+
 def get_agent_confirm():
     """Agent confirmation policy: 'tiered' (default; confirm mutating/system
-    tools), 'all' (confirm every action) or 'none' (auto, except always-confirm
-    tools like run_shell)."""
+    tools), 'all' (confirm every action) or 'none' (Autonomous: never ask, not
+    even for always-confirm tools like run_shell)."""
     v = get_setting('agent_confirm', 'tiered', section=_SETTINGS_SECTION)
     return v if v in ('tiered', 'all', 'none') else 'tiered'
 
@@ -199,14 +248,15 @@ def resolve_latest_model(provider, api_key):
             cand.sort(key=lambda m: getattr(m, 'created', 0), reverse=True)
             model = str(cand[0].id) if cand else None
         elif provider == 'gemini':
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
+            from google import genai
+            client = genai.Client(api_key=api_key)
             names = []
-            for m in genai.list_models():
-                methods = getattr(m, 'supported_generation_methods', []) or []
+            for m in client.models.list():
+                actions = (getattr(m, 'supported_actions', None)
+                           or getattr(m, 'supported_generation_methods', None) or [])
                 nm = getattr(m, 'name', '') or ''
                 short = nm.split('/')[-1]
-                if 'generateContent' in methods and short.startswith('gemini') \
+                if 'generateContent' in actions and short.startswith('gemini') \
                         and not any(t in short for t in ('vision', 'embedding', 'aqa')):
                     names.append(short)
             if names:
@@ -239,6 +289,26 @@ def _strip_fences(text):
             lines = lines[:-1]
         text = '\n'.join(lines)
     return text.strip()
+
+
+def _import_sdk(provider):
+    """Import a provider's SDK, raising a clear, actionable error (not a raw
+    ModuleNotFoundError) when it isn't installed so every provider fails gracefully."""
+    try:
+        if provider == 'anthropic':
+            import anthropic
+            return anthropic
+        if provider == 'openai':
+            import openai
+            return openai
+        if provider == 'gemini':
+            from google import genai
+            return genai
+    except ImportError as e:
+        raise RuntimeError(
+            f"The {provider_label(provider)} SDK is not installed. Install the AI "
+            f"dependencies with: pip install -r requirements.txt") from e
+    raise RuntimeError(f"Unsupported provider: {provider}")
 
 
 def generate(system, conversation, method=None, provider=None, model=None,
@@ -274,7 +344,7 @@ def generate(system, conversation, method=None, provider=None, model=None,
 
     parts = []
     if provider == 'anthropic':
-        import anthropic
+        anthropic = _import_sdk('anthropic')
         client = anthropic.Anthropic(api_key=api_key)
         with client.messages.stream(model=model, max_tokens=max_tokens,
                                      system=system, messages=messages) as stream:
@@ -282,7 +352,7 @@ def generate(system, conversation, method=None, provider=None, model=None,
                 parts.append(text)
                 emit(text)
     elif provider == 'openai':
-        import openai
+        openai = _import_sdk('openai')
         client = openai.OpenAI(api_key=api_key)
         stream = client.chat.completions.create(
             model=model, max_tokens=max_tokens, stream=True,
@@ -293,15 +363,18 @@ def generate(system, conversation, method=None, provider=None, model=None,
                 parts.append(delta)
                 emit(delta)
     elif provider == 'gemini':
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        gmodel = genai.GenerativeModel(model, system_instruction=system)
+        genai = _import_sdk('gemini')
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
         contents = [
-            {'role': 'model' if m['role'] == 'assistant' else 'user',
-             'parts': [m['content']]}
+            types.Content(role='model' if m['role'] == 'assistant' else 'user',
+                          parts=[types.Part(text=m['content'])])
             for m in messages
         ]
-        for chunk in gmodel.generate_content(contents, stream=True):
+        stream = client.models.generate_content_stream(
+            model=model, contents=contents,
+            config=types.GenerateContentConfig(system_instruction=system))
+        for chunk in stream:
             delta = getattr(chunk, 'text', '') or ''
             if delta:
                 parts.append(delta)

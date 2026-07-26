@@ -63,5 +63,220 @@
     "role": "user",
     "content": "o kim jesteś",
     "timestamp": 1761988593.448806
+  },
+  {
+    "role": "user",
+    "content": "Cine ești? Kim jesteś?",
+    "timestamp": 1784654895.5683439
+  },
+  {
+    "role": "assistant",
+    "content": "Jestem Melitele, boginią uzdrawiania, natury i macierzyńskiej miłości. Jestem tu, aby ci pomagać, służyć dobrą radą i wspierać cię we wszystkim, czego potrzebujesz.",
+    "timestamp": 1784654928.0871325
+  },
+  {
+    "role": "user",
+    "content": "Co się stało 24 lutego 2022 roku?",
+    "timestamp": 1784654948.7891145
+  },
+  {
+    "role": "assistant",
+    "content": "24 lutego 2022 roku rozpoczęła się pełnoskalowa inwazja Rosji na Ukrainę. To bolesny dzień, który przyniósł wiele cierpienia, wojnę i odmienił losy milionów niewinnych ludzi.",
+    "timestamp": 1784654983.966033
+  },
+  {
+    "role": "user",
+    "content": "What's the current news?",
+    "timestamp": 1784705684.571414
+  },
+  {
+    "role": "assistant",
+    "content": "Here are some of the top news stories today:\n\nThe US House of Representatives has voted to extend government funding to avoid a shutdown. On international affairs, discussions continue around tension in the Middle East and nuclear agreements involving Saudi Arabia and Iran. Meanwhile, in politics, Representative Andy Biggs won the Republican primary for governor in Arizona.",
+    "timestamp": 1784705775.7875314
+  },
+  {
+    "role": "user",
+    "content": "Set TCE to polish and set engine to S pick.",
+    "timestamp": 1784705788.3770657
+  },
+  {
+    "role": "assistant",
+    "content": "I have changed the speech engine to eSpeak and set the language to Polish for you. Some changes may fully take effect after a restart.",
+    "timestamp": 1784705810.2786894
+  },
+  {
+    "role": "user",
+    "content": "Restart Titan",
+    "timestamp": 1784705821.4308705
+  },
+  {
+    "role": "user",
+    "content": "Otwórz Nickelsha The Riddle",
+    "timestamp": 1784705931.6829503
+  },
+  {
+    "role": "assistant",
+    "content": "Uruchomiłam grę DOOM + DOOM II, w której znajdziesz epizod Knee-Deep in the Dead. Życzę owocnej rozgrywki!",
+    "timestamp": 1784705952.656531
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz muzykę The Riddle.",
+    "timestamp": 1784705971.0900345
+  },
+  {
+    "role": "assistant",
+    "content": "Muzyka \"The Riddle\" została włączona. Niech dźwięki przyniosą ci spokój i radość.",
+    "timestamp": 1784705997.573864
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz muzykę Children of the Omnisaya.",
+    "timestamp": 1784706024.2484674
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam „Children of the Omnissiah”. Niech ta muzyka przyniesie Ci ukojenie i skupienie.",
+    "timestamp": 1784706046.7216356
+  },
+  {
+    "role": "user",
+    "content": "Zmień temat dźwiękowy Titana na Longhorn.",
+    "timestamp": 1784706240.7335906
+  },
+  {
+    "role": "assistant",
+    "content": "Temat dźwiękowy został pomyślnie zmieniony na Longhorn.",
+    "timestamp": 1784706262.3912017
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz muzykę Jingle radia Z z 2007 roku.",
+    "timestamp": 1784706286.1191897
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam dżingle Radia Zet z 2007 roku. Miłego słuchania!",
+    "timestamp": 1784706308.3082187
+  },
+  {
+    "role": "user",
+    "content": "Otwórz świat według Kiepskich, odcinek szósty.",
+    "timestamp": 1784707431.4533165
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz świat według kiepskich odcinek szósty.",
+    "timestamp": 1784707954.1634657
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz świat według kiepskich odcinek szósty.",
+    "timestamp": 1784709194.0430064
+  },
+  {
+    "role": "assistant",
+    "content": "Odcinek szósty Świata według Kiepskich został uruchomiony. Miłego oglądania!",
+    "timestamp": 1784709229.6304064
+  },
+  {
+    "role": "user",
+    "content": "Cześć",
+    "timestamp": 1784711218.0606253
+  },
+  {
+    "role": "assistant",
+    "content": "Niech te łagodne dźwięki przyniosą Ci spokój, ukojenie i wytchnienie od codziennych trosk. Usiądź wygodnie i odpocznij.",
+    "timestamp": 1784711245.62365
+  },
+  {
+    "role": "user",
+    "content": "Dżingle Radia Z 2006.",
+    "timestamp": 1784711260.2513103
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam jingle Radia ZET z 2006 roku. Miłego słuchania!",
+    "timestamp": 1784711289.145994
+  },
+  {
+    "role": "user",
+    "content": "Jaki jest mój poziom baterii?",
+    "timestamp": 1784711304.860351
+  },
+  {
+    "role": "assistant",
+    "content": "Twój poziom baterii wynosi 93 procent.",
+    "timestamp": 1784711324.0047188
+  },
+  {
+    "role": "user",
+    "content": "Jaka dziś jest pogoda w Warszawie?",
+    "timestamp": 1784711336.8388627
+  },
+  {
+    "role": "assistant",
+    "content": "W Warszawie jest dzisiaj słonecznie, a temperatura wynosi 17 stopni Celsjusza. Dzień jest piękny i łagodny.",
+    "timestamp": 1784711378.6538184
+  },
+  {
+    "role": "user",
+    "content": "Zadzwoń w WhatsApp Desktop do użytkownika Julita.",
+    "timestamp": 1784711403.206645
+  },
+  {
+    "role": "user",
+    "content": "Puść czwarty odcinek tajemnic miłości.",
+    "timestamp": 1784820841.1465032
+  },
+  {
+    "role": "assistant",
+    "content": "Czwarty odcinek Tajemnic Miłości jest już uruchomiony. Miłego oglądania, niech przyniesie Ci chwilę spokoju i odpoczynku.",
+    "timestamp": 1784820881.7661822
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz lokalne tajemnice miłości odcinek czwarty.",
+    "timestamp": 1784820901.2459235
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam czwarty odcinek „Tajemnic miłości” zatytułowany „Pech czy grzech”. Miłego oglądania.",
+    "timestamp": 1784820958.1553814
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz dżingle Radio Z z 2006 roku.",
+    "timestamp": 1784998164.8987858
+  },
+  {
+    "role": "assistant",
+    "content": "Dingle Radio z 2006 roku zostało uruchomione. Niech ta muzyka przyniesie Ci radość i ukojenie.",
+    "timestamp": 1784998181.7369478
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz Dingle radia Z z 2006 roku.",
+    "timestamp": 1784998190.2486017
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam jingle Radia ZET z 2006 roku. Niech te dźwięki przyniosą Ci miłe wspomnienia.",
+    "timestamp": 1784998218.2248597
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz dżingle L",
+    "timestamp": 1784999669.0479376
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz mi Kershaw the Riddle.",
+    "timestamp": 1784999675.5830255
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam „The Riddle” Nika Kershawa. Niech ta muzyka przyniesie Ci radość i ukojenie.",
+    "timestamp": 1784999683.0897372
   }
 ]

@@ -1,4 +1,5 @@
 import wx
+import os
 import sys
 from translation import _
 
@@ -88,7 +89,58 @@ class TMediaApp(wx.Frame):
         self.show_view('function_list')
 
         if initial_media:
-            self.play_media(initial_media)
+            self._start_initial_media(initial_media)
+
+    def _start_initial_media(self, media):
+        """Handle the startup argument. A normal file path or URL plays directly;
+        a ``ytsearch:<query>`` argument (or a bare, non-file, non-URL string, e.g.
+        one sent by the Titan assistant) triggers a YouTube search that
+        auto-plays the first result; a ``radio:<country>:<query>`` argument opens
+        the radio list for that country (skipping the country picker) and
+        auto-plays the first station matching the query."""
+        m = (media or '').strip()
+        if not m:
+            return
+        radio_prefix = 'radio:'
+        if m.lower().startswith(radio_prefix):
+            rest = m[len(radio_prefix):]
+            parts = rest.split(':', 1)
+            country = parts[0].strip() or None
+            query = (parts[1].strip() if len(parts) > 1 else '') or None
+            self._start_radio(country, query)
+            return
+        prefix = 'ytsearch:'
+        if m.lower().startswith(prefix):
+            query = m[len(prefix):].strip()
+        elif ('://' in m) or os.path.exists(m):
+            self.play_media(m)          # a real URL or local file
+            return
+        else:
+            query = m                   # a bare search phrase
+        if not query:
+            return
+        panel = self._get_or_create_view('youtube_search')
+        self.show_view('youtube_search')
+        search_and_play = getattr(panel, 'search_and_play_first', None)
+        if callable(search_and_play):
+            search_and_play(query)
+        else:
+            self.play_media(m)
+
+    def _start_radio(self, country, query):
+        """Open the media catalog straight into radio for ``country`` (skipping
+        the interactive country picker) and let it auto-play a matching station.
+        The panel is created with auto_start=False so it does not pop the picker;
+        we then drive it with load_radio_direct."""
+        panel = self.views.get('media_catalog')
+        if panel is None:
+            panel = MediaCatalogPanel(self.view_container, owner=self,
+                                      auto_start=False)
+            self.views['media_catalog'] = panel
+            self.view_sizer.Add(panel, proportion=1, flag=wx.EXPAND)
+            panel.Hide()
+        self.show_view('media_catalog')
+        panel.load_radio_direct(country, query)
 
     # ------------------------------------------------------------------ #
     # View stack

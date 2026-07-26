@@ -45,18 +45,10 @@ _ = set_language(get_setting('language', 'pl'))
 
 
 def _speak(text):
-    """Announce ``text`` to the screen reader (best effort, never raises)."""
-    try:
-        from src.accessibility.messages import speak_sr_only
-        speak_sr_only(text)
-        return
-    except Exception:
-        pass
-    try:
-        from src.system.notifications import speak_notification
-        speak_notification(text, 'info')
-    except Exception:
-        pass
+    """Announce ``text`` (Titan TTS when enabled, else screen reader / notification
+    voice; best effort, never raises)."""
+    from src.ai.ai_speech import speak
+    speak(text)
 
 
 # --------------------------------------------------------------------------- #
@@ -203,14 +195,56 @@ def _docs_and_example_block(kind):
     return '\n'.join(parts)
 
 
-def build_system_prompt(kind, extra_context=None):
+def _questions_protocol_block(kind):
+    """Instructions that let the model PAUSE generation and ask the user
+    structured questions (rendered by Titan as a GUI wizard) before it writes
+    any files. Mirrors Titan's own 'Create {kind} Wizard' setup flow."""
+    return '\n'.join([
+        "ASKING QUESTIONS (interactive wizard):",
+        "- If ANYTHING about the request is unclear or under-specified, do NOT "
+        "guess. FIRST ask the user, exactly like Titan's own setup wizard for "
+        "this add-on.",
+        "- To ask, output ONLY a JSON object of questions wrapped between a line "
+        f"'{_QJSON_START}' and a line '{_QJSON_END}', and NOTHING else (no files, "
+        "no prose). Titan will show the user a GUI wizard and send you their "
+        "answers, then you continue.",
+        "- Ask the standard wizard details for this kind (for example: display "
+        "names, a short id/shortname, an optional description, the entry point, "
+        "and the key feature/behaviour/layout choices), plus anything specific "
+        "to this request. Keep it to the few questions that actually matter.",
+        "- The questions JSON schema is:",
+        '  {"questions": [',
+        '    {"id": "name_en", "text": "English name?", "type": "text",',
+        '     "default": ""},',
+        '    {"id": "layout", "text": "Which layout?", "type": "choice",',
+        '     "options": ["List", "Grid"], "default": "List"},',
+        '    {"id": "features", "text": "Which features?", "type": "multichoice",',
+        '     "options": ["Sound", "Notifications"]},',
+        '    {"id": "settings", "text": "Include settings?", "type": "boolean",',
+        '     "default": true}',
+        '  ]}',
+        f"- 'type' is one of: {', '.join(_QUESTION_TYPES)}; ask at most "
+        f"{_MAX_QUESTIONS}. 'choice'/'multichoice' need an 'options' list.",
+        "- Once the request is clear (either originally or after answers), STOP "
+        "asking and output the files in the strict format below.",
+        "",
+    ])
+
+
+def build_system_prompt(kind, extra_context=None, allow_questions=True):
     """System prompt for the file-generation phase. ``extra_context`` (e.g. web
-    search results) is appended verbatim when provided."""
+    search results) is appended verbatim when provided. When ``allow_questions``
+    is set, the model may pause to ask the user structured questions (shown as a
+    GUI wizard) before writing files."""
     prompt = [
         f"You are the Titan add-on creator. You generate a complete, working "
         f"Titan {kind['label']} as a set of files. You have the full Titan "
         f"programming documentation below; follow it exactly.",
         "",
+    ]
+    if allow_questions:
+        prompt.append(_questions_protocol_block(kind))
+    prompt += [
         "OUTPUT FORMAT (STRICT):",
         "- Output ONLY file blocks. Immediately before each file, emit a line "
         "that is EXACTLY: @@FILE: <relative/path>",
@@ -273,6 +307,160 @@ def build_plan_prompt(kind, extra_context=None):
         prompt.append("")
     prompt.append(_docs_and_example_block(kind))
     return '\n'.join(prompt)
+
+
+# --------------------------------------------------------------------------- #
+# Interactive questionnaire (structured questions -> GUI wizard -> answers)
+# --------------------------------------------------------------------------- #
+# The model returns a machine-readable set of questions which the app renders as
+# an accessible GUI wizard (see :class:`QuestionnaireDialog`); the collected
+# answers are folded back into the conversation before generation.
+_MAX_QUESTIONS = 8
+# How many times the model may pause to ask the user questions during a single
+# generation before we insist it just build with its best judgement.
+_MAX_QUESTION_ROUNDS = 3
+_QUESTION_TYPES = ('text', 'choice', 'multichoice', 'boolean')
+# Delimiters the model wraps the JSON in, so we can extract it even if the model
+# adds stray prose despite instructions.
+_QJSON_START = '@@QUESTIONS_JSON'
+_QJSON_END = '@@END_QUESTIONS_JSON'
+
+
+def build_questions_prompt(kind, extra_context=None):
+    """System prompt for the INTERVIEW phase: the model produces a small set of
+    STRUCTURED clarifying questions as JSON (rendered later as a GUI wizard). It
+    writes no plan and no files here."""
+    prompt = [
+        f"You are the Titan add-on architect interviewing the user before "
+        f"building a Titan {kind['label']}. Ask only what you genuinely need to "
+        f"build the best add-on: features, behaviour, layout, options, wording.",
+        "",
+        "Return ONLY a JSON object describing your questions, wrapped exactly "
+        f"between a line '{_QJSON_START}' and a line '{_QJSON_END}'. No prose, "
+        "no markdown, no code fences.",
+        "",
+        "The JSON schema is:",
+        '{"questions": [',
+        '  {"id": "short_key", "text": "the question?", "type": "text",',
+        '   "multiline": false, "default": ""},',
+        '  {"id": "layout", "text": "Which layout?", "type": "choice",',
+        '   "options": ["List", "Grid"], "default": "List"},',
+        '  {"id": "features", "text": "Which features?", "type": "multichoice",',
+        '   "options": ["Sound", "Notifications"], "default": []},',
+        '  {"id": "settings", "text": "Include a settings page?",',
+        '   "type": "boolean", "default": true}',
+        ']}',
+        "",
+        "RULES:",
+        f"- Ask AT MOST {_MAX_QUESTIONS} questions; fewer is better. If the "
+        "request is already fully clear, return {\"questions\": []}.",
+        f"- 'type' must be one of: {', '.join(_QUESTION_TYPES)}.",
+        "- 'choice'/'multichoice' MUST include a non-empty 'options' list.",
+        "- 'text' may set 'multiline': true for long free-form answers.",
+        "- Every question needs a unique 'id' and a clear 'text'. Provide a "
+        "sensible 'default' whenever you can.",
+        "- Questions must be answerable by a non-programmer; do not ask about "
+        "file names, code, or Titan internals.",
+        "",
+    ]
+    if extra_context:
+        prompt.append(extra_context)
+        prompt.append("")
+    prompt.append(_docs_and_example_block(kind))
+    return '\n'.join(prompt)
+
+
+def looks_like_questions(text):
+    """True if a generation response is a request for clarification (a questions
+    block) rather than generated files."""
+    if not text:
+        return False
+    return _QJSON_START in text and '@@FILE:' not in text
+
+
+def parse_questions(text):
+    """Extract the questions list from a model response. Tolerant of stray text,
+    code fences, and the delimiter lines. Returns a list of normalised question
+    dicts (possibly empty). Raises ValueError if no JSON object can be found."""
+    if not text:
+        return []
+    blob = text
+    # Prefer the delimited region if present.
+    if _QJSON_START in blob:
+        blob = blob.split(_QJSON_START, 1)[1]
+    if _QJSON_END in blob:
+        blob = blob.split(_QJSON_END, 1)[0]
+    blob = blob.strip()
+    # Strip a leading/trailing markdown code fence if the model added one.
+    blob = re.sub(r'^```[a-zA-Z]*\n', '', blob)
+    blob = re.sub(r'\n```$', '', blob).strip()
+    # Fall back to the first {...} span.
+    if not blob.startswith('{'):
+        start = blob.find('{')
+        end = blob.rfind('}')
+        if start == -1 or end == -1 or end <= start:
+            raise ValueError("No JSON object found in the model's response.")
+        blob = blob[start:end + 1]
+    data = json.loads(blob)
+    raw = data.get('questions', []) if isinstance(data, dict) else []
+    return _normalise_questions(raw)
+
+
+def _normalise_questions(raw):
+    """Coerce a raw questions list into safe, well-formed dicts. Malformed
+    entries are dropped rather than raising."""
+    out = []
+    seen_ids = set()
+    for i, q in enumerate(raw):
+        if not isinstance(q, dict):
+            continue
+        text = str(q.get('text', '')).strip()
+        if not text:
+            continue
+        qtype = str(q.get('type', 'text')).strip().lower()
+        if qtype not in _QUESTION_TYPES:
+            qtype = 'text'
+        qid = str(q.get('id') or f"q{i + 1}").strip() or f"q{i + 1}"
+        if qid in seen_ids:
+            qid = f"{qid}_{i + 1}"
+        seen_ids.add(qid)
+        options = []
+        if qtype in ('choice', 'multichoice'):
+            options = [str(o).strip() for o in q.get('options', [])
+                       if str(o).strip()]
+            if not options:
+                # A choice with no options is useless; degrade to free text.
+                qtype = 'text'
+        out.append({
+            'id': qid,
+            'text': text,
+            'type': qtype,
+            'options': options,
+            'multiline': bool(q.get('multiline', False)),
+            'default': q.get('default'),
+        })
+        if len(out) >= _MAX_QUESTIONS:
+            break
+    return out
+
+
+def format_answers_for_prompt(questions, answers):
+    """Build the user-turn message that carries the questionnaire answers into
+    the generation conversation. ``answers`` maps question id -> answer string."""
+    lines = ["Here are my answers to your questions. Use them to build the "
+             "add-on exactly as I have specified:", ""]
+    for q in questions:
+        ans = answers.get(q['id'], '')
+        if isinstance(ans, (list, tuple)):
+            ans = ", ".join(str(a) for a in ans)
+        ans = str(ans).strip()
+        if not ans:
+            ans = "(no preference - use your best judgement)"
+        lines.append(f"- {q['text']}")
+        lines.append(f"  Answer: {ans}")
+    lines.append("")
+    lines.append("Now generate the complete add-on accordingly.")
+    return '\n'.join(lines)
 
 
 # --------------------------------------------------------------------------- #
@@ -344,6 +532,45 @@ def _sanitize_relpath(rel):
     rel = rel.strip().strip('"').replace('\\', '/')
     parts = [p for p in rel.split('/') if p not in ('', '.', '..')]
     return '/'.join(parts)
+
+
+def normalize_addon_paths(kind, files):
+    """Flatten a generated add-on so its manifest sits at the ROOT.
+
+    Models sometimes wrap every file under a single top-level folder (e.g.
+    ``mywidget/applet.json`` instead of ``applet.json``). That is fine for a
+    directory the user drops in themselves, but it breaks BOTH folder-save (we
+    already create the name directory) and packaging (the package payload root
+    IS the add-on root) -- the manager then cannot find the manifest and reports
+    it missing. If the primary manifest lives under a common prefix shared by
+    every file, strip that prefix. Kinds without a manifest (languages, whose
+    locale directory is meaningful) are returned unchanged.
+
+    Returns a new ordered dict; the input is not mutated."""
+    manifests = kind.get('manifests') or ()
+    if not manifests or not files:
+        return files
+    # Already at root? Nothing to do.
+    if any(os.path.dirname(p) == '' and os.path.basename(p) in manifests
+           for p in files):
+        return files
+    # Find the manifest and its directory prefix.
+    manifest_path = next(
+        (p for p in files if os.path.basename(p) in manifests), None)
+    if not manifest_path:
+        return files
+    prefix = os.path.dirname(manifest_path)
+    if not prefix:
+        return files
+    prefix += '/'
+    # Only strip if EVERY file lives under that prefix (otherwise we'd drop
+    # siblings that belong at the real root).
+    if not all(p.startswith(prefix) for p in files):
+        return files
+    out = {}
+    for p, content in files.items():
+        out[p[len(prefix):]] = content
+    return out
 
 
 def validate_files(kind, files):
@@ -440,6 +667,120 @@ def save_as_package(kind, files, name=None):
 
 
 # --------------------------------------------------------------------------- #
+# Questionnaire wizard (renders AI-generated structured questions)
+# --------------------------------------------------------------------------- #
+class QuestionnaireDialog(wx.Dialog):
+    """An accessible GUI wizard that renders a list of AI-generated questions
+    (see :func:`parse_questions`) using the control type appropriate to each
+    question, and returns the user's answers as {question id -> value}.
+
+    Text -> text field, choice -> radio group, multichoice -> checkbox group,
+    boolean -> yes/no checkbox. Every control carries an accessible name so a
+    screen reader announces the question it belongs to."""
+
+    def __init__(self, parent, kind, questions):
+        title = _("Answer questions about your {kind}").format(
+            kind=kind['label'])
+        super().__init__(parent, title=title, size=(620, 560),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.questions = questions
+        self.answers = {}
+        self._controls = {}   # id -> (question, control-or-list)
+
+        outer = wx.BoxSizer(wx.VERTICAL)
+        intro = wx.StaticText(self, label=_(
+            "The AI has a few questions. Answer what you can; leave anything "
+            "blank to let the AI decide."))
+        outer.Add(intro, flag=wx.ALL, border=10)
+
+        # Scrollable area so any number of questions fits.
+        self.scroller = wx.ScrolledWindow(self, style=wx.VSCROLL)
+        self.scroller.SetScrollRate(0, 12)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        for idx, q in enumerate(self.questions, 1):
+            self._build_question(self.scroller, sizer, idx, q)
+        self.scroller.SetSizer(sizer)
+        outer.Add(self.scroller, proportion=1,
+                  flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
+
+        btns = wx.StdDialogButtonSizer()
+        ok = wx.Button(self, wx.ID_OK, _("Use these answers"))
+        ok.SetDefault()
+        btns.AddButton(ok)
+        btns.AddButton(wx.Button(self, wx.ID_CANCEL, _("Cancel")))
+        btns.Realize()
+        outer.Add(btns, flag=wx.ALIGN_RIGHT | wx.ALL, border=10)
+
+        self.SetSizer(outer)
+        self.Bind(wx.EVT_BUTTON, self.OnOk, id=wx.ID_OK)
+        if self.questions:
+            first = self._controls[self.questions[0]['id']][1]
+            ctrl = first[0] if isinstance(first, list) else first
+            ctrl.SetFocus()
+
+    def _build_question(self, parent, sizer, idx, q):
+        label = f"{idx}. {q['text']}"
+        qtype = q['type']
+        default = q.get('default')
+
+        if qtype == 'boolean':
+            cb = wx.CheckBox(parent, label=label)
+            cb.SetValue(bool(default) if default is not None else False)
+            cb.SetName(q['text'])
+            sizer.Add(cb, flag=wx.EXPAND | wx.TOP, border=12)
+            self._controls[q['id']] = (q, cb)
+            return
+
+        sizer.Add(wx.StaticText(parent, label=label),
+                  flag=wx.EXPAND | wx.TOP, border=12)
+
+        if qtype == 'choice':
+            options = q['options']
+            rb = wx.RadioBox(parent, label='', choices=options,
+                             majorDimension=1, style=wx.RA_SPECIFY_COLS)
+            if default in options:
+                rb.SetSelection(options.index(default))
+            rb.SetName(q['text'])
+            sizer.Add(rb, flag=wx.EXPAND | wx.LEFT, border=8)
+            self._controls[q['id']] = (q, rb)
+
+        elif qtype == 'multichoice':
+            defaults = default if isinstance(default, (list, tuple)) else []
+            boxes = []
+            for opt in q['options']:
+                cb = wx.CheckBox(parent, label=opt)
+                cb.SetValue(opt in defaults)
+                cb.SetName(f"{q['text']}: {opt}")
+                sizer.Add(cb, flag=wx.EXPAND | wx.LEFT, border=16)
+                boxes.append(cb)
+            self._controls[q['id']] = (q, boxes)
+
+        else:  # text
+            style = wx.TE_MULTILINE if q.get('multiline') else 0
+            tc = wx.TextCtrl(parent, style=style,
+                             size=(-1, 70 if q.get('multiline') else -1))
+            if isinstance(default, str) and default:
+                tc.SetValue(default)
+            tc.SetName(q['text'])
+            sizer.Add(tc, flag=wx.EXPAND | wx.LEFT, border=8)
+            self._controls[q['id']] = (q, tc)
+
+    def OnOk(self, event):
+        for qid, (q, ctrl) in self._controls.items():
+            qtype = q['type']
+            if qtype == 'boolean':
+                self.answers[qid] = _("Yes") if ctrl.GetValue() else _("No")
+            elif qtype == 'choice':
+                self.answers[qid] = ctrl.GetStringSelection()
+            elif qtype == 'multichoice':
+                self.answers[qid] = [cb.GetLabel() for cb in ctrl
+                                     if cb.GetValue()]
+            else:
+                self.answers[qid] = ctrl.GetValue().strip()
+        event.Skip()  # let the dialog close with wx.ID_OK
+
+
+# --------------------------------------------------------------------------- #
 # Wizard dialog
 # --------------------------------------------------------------------------- #
 class AICreationWizardDialog(wx.Dialog):
@@ -474,11 +815,17 @@ class AICreationWizardDialog(wx.Dialog):
         self.autofix_cb = wx.CheckBox(panel, label=_("Auto-fix generated code"))
         self.autofix_cb.SetValue(True)
         self.autofix_cb.SetName(_("Auto-fix generated code"))
-        opts.Add(self.autofix_cb)
+        opts.Add(self.autofix_cb, flag=wx.RIGHT, border=12)
+        self.ask_cb = wx.CheckBox(panel, label=_("Let the AI ask me questions"))
+        self.ask_cb.SetValue(True)
+        self.ask_cb.SetName(_("Let the AI ask me questions"))
+        self.ask_cb.SetToolTip(_("While generating, the AI may pause and ask you "
+                                 "a few questions in a guided wizard."))
+        opts.Add(self.ask_cb)
         vbox.Add(opts, flag=wx.LEFT | wx.TOP, border=10)
 
         row = wx.BoxSizer(wx.HORIZONTAL)
-        self.plan_btn = wx.Button(panel, label=_("Plan and ask questions"))
+        self.plan_btn = wx.Button(panel, label=_("Plan"))
         self.plan_btn.Bind(wx.EVT_BUTTON, self.OnPlan)
         row.Add(self.plan_btn, flag=wx.RIGHT, border=6)
         self.gen_btn = wx.Button(panel, label=_("Generate"))
@@ -590,6 +937,63 @@ class AICreationWizardDialog(wx.Dialog):
                      + "\n")
         return web_search.format_results_for_prompt(results)
 
+    # -- interactive questionnaire (during generation) ------------------- #
+    def _ask_questions_blocking(self, questions):
+        """Show the GUI questionnaire wizard on the main thread and block this
+        (worker) thread until the user finishes. Returns {'answers': {...}} or
+        {'cancelled': True}."""
+        result = {}
+        done = threading.Event()
+
+        def _show():
+            try:
+                self.status.SetLabel(_("Waiting for your answers..."))
+                _speak(_("The AI has some questions"))
+                play_sound('core/NOTIFICATION.ogg')
+                dlg = QuestionnaireDialog(self, self.kind, questions)
+                try:
+                    if dlg.ShowModal() == wx.ID_OK:
+                        result['answers'] = dlg.answers
+                    else:
+                        result['cancelled'] = True
+                finally:
+                    dlg.Destroy()
+            except Exception:
+                traceback.print_exc()
+                result['cancelled'] = True
+            finally:
+                done.set()
+
+        wx.CallAfter(_show)
+        done.wait()
+        if 'answers' in result:
+            # Echo the answers into the transcript for a durable record.
+            wx.CallAfter(self.transcript.AppendText,
+                         "\n=== " + _("Your answers") + " ===\n"
+                         + format_answers_for_prompt(questions, result['answers'])
+                         + "\n")
+        return result
+
+    def _begin_stream_section(self, header):
+        """Reset streaming/progress state for a new generation round and label
+        the transcript (thread-safe: runs on the GUI thread)."""
+        def _do():
+            self.status.SetLabel(header + "...")
+            self.transcript.AppendText("\n=== " + header + " ===\n")
+            self._stream_buf = []
+            self._file_announced = set()
+            self._gen_start = time.time()
+        wx.CallAfter(_do)
+
+    def _on_generation_cancelled(self):
+        self._pulse_timer.Stop()
+        self.gauge.SetValue(0)
+        self.plan_btn.Enable(True)
+        self.gen_btn.Enable(True)
+        self.status.SetLabel(_("Cancelled."))
+        _speak(_("Cancelled"))
+        self.desc.SetFocus()
+
     # -- planning --------------------------------------------------------- #
     def OnPlan(self, event):
         text = self.desc.GetValue().strip()
@@ -643,12 +1047,51 @@ class AICreationWizardDialog(wx.Dialog):
         _speak(_("Generating {kind}").format(kind=self.kind['label']))
         convo = list(self.messages)
         autofix = self.autofix_cb.GetValue()
+        allow_questions = self.ask_cb.GetValue()
 
         def _work():
             try:
                 extra = self._maybe_web_context(text)
-                system = build_system_prompt(self.kind, extra_context=extra)
+                system = build_system_prompt(self.kind, extra_context=extra,
+                                             allow_questions=allow_questions)
+                # Interactive phase: the model may pause to ask the user
+                # questions (shown as a GUI wizard) before it writes any files.
                 raw = ai_provider.generate(system, convo, on_chunk=self._on_chunk)
+                q_rounds = 0
+                iterations = 0
+                # Hard ceiling so a model that ignores "stop asking" can never
+                # loop forever (a few extra for the insist-and-retry turns).
+                _max_iters = _MAX_QUESTION_ROUNDS + 3
+                while (allow_questions and looks_like_questions(raw)
+                       and iterations < _max_iters):
+                    iterations += 1
+                    try:
+                        questions = parse_questions(raw)
+                    except Exception:
+                        questions = []
+                    convo.append({"role": "assistant", "content": raw})
+                    if not questions or q_rounds >= _MAX_QUESTION_ROUNDS:
+                        # Nothing answerable, or we've asked enough: insist on
+                        # building now.
+                        convo.append({"role": "user", "content": (
+                            "Do not ask more questions. Generate the complete "
+                            "add-on now using your best judgement, in the strict "
+                            "@@FILE format.")})
+                    else:
+                        answers = self._ask_questions_blocking(questions)
+                        if answers.get('cancelled'):
+                            wx.CallAfter(self._on_generation_cancelled)
+                            return
+                        q_rounds += 1
+                        convo.append({"role": "user", "content":
+                                      format_answers_for_prompt(
+                                          questions, answers['answers'])})
+                        # Persist the interview so a later Generate/refine keeps it.
+                        self.messages = list(convo)
+                    self._begin_stream_section(
+                        _("Generating") + " ({n})".format(n=q_rounds + 1))
+                    raw = ai_provider.generate(system, convo,
+                                               on_chunk=self._on_chunk)
                 files = parse_files(raw)
                 fixed_note = ''
                 if autofix:
@@ -728,6 +1171,9 @@ class AICreationWizardDialog(wx.Dialog):
         self.gauge.SetValue(100)
         if files is None:
             files = parse_files(raw)
+        # Flatten any stray wrapper folder so the manifest sits at the root
+        # (otherwise a packaged/saved add-on has a "missing manifest").
+        files = normalize_addon_paths(self.kind, files)
         ok, msg = validate_files(self.kind, files)
         if not ok:
             self.status.SetLabel(msg)

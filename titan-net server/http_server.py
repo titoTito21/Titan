@@ -196,6 +196,9 @@ class TitanNetHTTPServer:
         self.app.router.add_get('/api/extensions/{ext_id}', self.handle_get_extension)
         self.app.router.add_post('/api/extensions/{ext_id}/approve', self.handle_approve_extension)
         self.app.router.add_post('/api/extensions/{ext_id}/reject', self.handle_reject_extension)
+        self.app.router.add_post('/api/extensions/{ext_id}/disable', self.handle_disable_extension)
+        self.app.router.add_post('/api/extensions/{ext_id}/enable', self.handle_enable_extension)
+        self.app.router.add_delete('/api/extensions/{ext_id}', self.handle_delete_extension)
         self.app.router.add_get('/api/extensions/{slug}/client', self.handle_extension_client)
         self.app.router.add_get('/api/extensions/{slug}/data/{key}', self.handle_extension_data_get)
         self.app.router.add_put('/api/extensions/{slug}/data/{key}', self.handle_extension_data_set)
@@ -2149,6 +2152,60 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Reject extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_disable_extension(self, request: web.Request) -> web.Response:
+        """Take an ACTIVE moderator component offline network-wide (staff only)."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.set_extension_active, ext_id, user['id'], False
+            )
+            if result.get('success'):
+                logger.info(f"Extension {ext_id} disabled by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Disable extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_enable_extension(self, request: web.Request) -> web.Response:
+        """Restore a disabled moderator component to active (staff only)."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.set_extension_active, ext_id, user['id'], True
+            )
+            if result.get('success'):
+                logger.info(f"Extension {ext_id} enabled by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Enable extension error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    async def handle_delete_extension(self, request: web.Request) -> web.Response:
+        """Permanently delete a moderator component (staff only)."""
+        try:
+            user = self._require_auth(request)
+            if not user:
+                return self._auth_required_response()
+            ext_id = int(request.match_info['ext_id'])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None, self.db.delete_extension, ext_id, user['id']
+            )
+            if result.get('success'):
+                logger.info(f"Extension {ext_id} deleted by {user['username']}")
+            return web.json_response(result, status=200 if result.get('success') else 403)
+        except Exception as e:
+            logger.error(f"Delete extension error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
     async def handle_extension_client(self, request: web.Request) -> web.Response:

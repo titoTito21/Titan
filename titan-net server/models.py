@@ -1085,6 +1085,26 @@ class Database:
             )
             """)
 
+            # =========================================================
+            # User blocks (personal "full ignore")
+            # =========================================================
+            # blocker_id has blocked blocked_id. Enforcement is symmetric
+            # ("full ignore"): the blocked user cannot send private messages to
+            # the blocker, neither party sees the other's room/chat messages,
+            # and neither sees the other as online. Purely a per-user relation —
+            # nothing to do with moderation bans.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_blocks (
+                blocker_id INTEGER NOT NULL,
+                blocked_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (blocker_id, blocked_id),
+                FOREIGN KEY (blocker_id) REFERENCES users(id),
+                FOREIGN KEY (blocked_id) REFERENCES users(id)
+            )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id)")
+
             # Sessions table for WebSocket connections
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -2555,8 +2575,79 @@ class Database:
         conn.close()
         return room_ids
 
-    def get_online_users(self) -> List[Dict[str, Any]]:
-        """Get list of online users"""
+    # ==================== User blocks ("full ignore") ====================
+
+    @_serialized_write
+    def block_user(self, blocker_id: int, blocked_id: int) -> Dict[str, Any]:
+        """Record that ``blocker_id`` blocks ``blocked_id``. Idempotent."""
+        if blocker_id == blocked_id:
+            return {"success": False, "error": "You cannot block yourself"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE id = ?", (blocked_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return {"success": False, "error": "User not found"}
+        cursor.execute(
+            "INSERT OR IGNORE INTO user_blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)",
+            (blocker_id, blocked_id, datetime.now().isoformat()),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    @_serialized_write
+    def unblock_user(self, blocker_id: int, blocked_id: int) -> Dict[str, Any]:
+        """Remove a block. Idempotent."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?",
+            (blocker_id, blocked_id),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+
+    def get_blocked_users(self, blocker_id: int) -> List[Dict[str, Any]]:
+        """List the users ``blocker_id`` has blocked (for the management list)."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT u.id, u.username, u.titan_number, b.created_at "
+            "FROM user_blocks b JOIN users u ON u.id = b.blocked_id "
+            "WHERE b.blocker_id = ? ORDER BY b.created_at DESC",
+            (blocker_id,),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def _blocked_pair_ids(self, user_id: int, cursor) -> set:
+        """Return the set of user ids that are mutually invisible to ``user_id``
+        — everyone they blocked plus everyone who blocked them. Uses the caller's
+        cursor to avoid opening a second connection."""
+        cursor.execute(
+            "SELECT blocked_id AS other FROM user_blocks WHERE blocker_id = ? "
+            "UNION SELECT blocker_id AS other FROM user_blocks WHERE blocked_id = ?",
+            (user_id, user_id),
+        )
+        return {self._row_get(r, 'other') for r in cursor.fetchall()}
+
+    def get_all_blocks(self) -> List[Dict[str, Any]]:
+        """Return every (blocker_id, blocked_id) pair — used by the WebSocket
+        server to build its in-memory block map at startup."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT blocker_id, blocked_id FROM user_blocks")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def get_online_users(self, viewer_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get list of online users. When ``viewer_id`` is given, users that are
+        mutually blocked with the viewer ("full ignore") are omitted so the two
+        parties never see each other as online."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -2566,6 +2657,10 @@ class Database:
         """)
 
         users = [dict(row) for row in cursor.fetchall()]
+        if viewer_id is not None:
+            hidden = self._blocked_pair_ids(viewer_id, cursor)
+            if hidden:
+                users = [u for u in users if u['id'] not in hidden]
         conn.close()
         return users
 
@@ -4305,6 +4400,63 @@ class Database:
         conn.commit()
         conn.close()
         return {"success": True, "status": new_status}
+
+    @_serialized_write
+    def set_extension_active(self, extension_id: int, reviewer_id: int, active: bool) -> Dict[str, Any]:
+        """Enable/disable an already-reviewed extension. Staff only. Disabling an
+        active extension takes it offline network-wide (status 'disabled') so no
+        client downloads/runs it anymore; enabling restores it to 'active'.
+        Unlike review_extension this deliberately allows the ORIGINAL author to
+        toggle their own extension too, so moderation of live add-ons isn't
+        blocked by the two-person rule."""
+        if not self._is_staff(reviewer_id):
+            return {"success": False, "error": "Only moderators can manage extensions"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM extensions WHERE id = ?", (extension_id,))
+        ext = cursor.fetchone()
+        if not ext:
+            conn.close()
+            return {"success": False, "error": "Extension not found"}
+        current = self._row_get(ext, 'status', 0)
+        if current not in ('active', 'disabled'):
+            conn.close()
+            return {"success": False, "error": "Only reviewed extensions can be enabled or disabled"}
+        new_status = 'active' if active else 'disabled'
+        now = datetime.now().isoformat()
+        cursor.execute("UPDATE extensions SET status = ?, updated_at = ? WHERE id = ?",
+                       (new_status, now, extension_id))
+        cursor.execute(
+            "INSERT INTO extension_reviews (extension_id, reviewer_id, decision, note, reviewed_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (extension_id, reviewer_id, 'enabled' if active else 'disabled', None, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "status": new_status}
+
+    @_serialized_write
+    def delete_extension(self, extension_id: int, reviewer_id: int) -> Dict[str, Any]:
+        """Permanently remove an extension and its review trail / storage / assets.
+        Staff only. Used to take a live moderator component off the network for good."""
+        if not self._is_staff(reviewer_id):
+            return {"success": False, "error": "Only moderators can delete extensions"}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM extensions WHERE id = ?", (extension_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return {"success": False, "error": "Extension not found"}
+        cursor.execute("DELETE FROM extension_reviews WHERE extension_id = ?", (extension_id,))
+        cursor.execute("DELETE FROM extension_storage WHERE extension_id = ?", (extension_id,))
+        try:
+            cursor.execute("DELETE FROM extension_assets WHERE extension_id = ?", (extension_id,))
+        except sqlite3.OperationalError:
+            pass  # assets table may not exist on older DBs
+        cursor.execute("DELETE FROM extensions WHERE id = ?", (extension_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
 
     def get_active_extension_client(self, slug: str) -> Optional[Dict[str, Any]]:
         """Return the downloadable payload for an ACTIVE extension: for a

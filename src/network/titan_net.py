@@ -1003,6 +1003,55 @@ class TitanNetClient:
                 'message': _('Error getting users: {error}').format(error=str(e))
             }
 
+    def block_user(self, user_id: int) -> Dict:
+        """Block a user ("full ignore"): they can no longer send you private
+        messages, and neither of you sees the other's room messages or online
+        status. Returns Dict with 'success' and optional 'error'."""
+        if not self.is_connected or not self.websocket:
+            return {'success': False, 'message': _('Not logged in')}
+        try:
+            async def _block():
+                response = await self._send_and_wait(
+                    {"type": "block_user", "user_id": user_id}, "block_result")
+                if response and response.get('type') == 'block_result':
+                    return {'success': response.get('success', False),
+                            'error': response.get('error')}
+                return {'success': False, 'message': _('No response from server')}
+            return self._run_async(_block())
+        except Exception as e:
+            return {'success': False, 'message': str(e)}
+
+    def unblock_user(self, user_id: int) -> Dict:
+        """Remove a block previously set with block_user()."""
+        if not self.is_connected or not self.websocket:
+            return {'success': False, 'message': _('Not logged in')}
+        try:
+            async def _unblock():
+                response = await self._send_and_wait(
+                    {"type": "unblock_user", "user_id": user_id}, "block_result")
+                if response and response.get('type') == 'block_result':
+                    return {'success': response.get('success', False),
+                            'error': response.get('error')}
+                return {'success': False, 'message': _('No response from server')}
+            return self._run_async(_unblock())
+        except Exception as e:
+            return {'success': False, 'message': str(e)}
+
+    def get_blocked_users(self) -> Dict:
+        """List the users you have blocked (for the management view)."""
+        if not self.is_connected or not self.websocket:
+            return {'success': False, 'message': _('Not logged in'), 'users': []}
+        try:
+            async def _get_blocked():
+                response = await self._send_and_wait(
+                    {"type": "get_blocked_users"}, "blocked_users")
+                if response and response.get('type') == 'blocked_users':
+                    return {'success': True, 'users': response.get('users', [])}
+                return {'success': False, 'users': [], 'message': _('No response from server')}
+            return self._run_async(_get_blocked())
+        except Exception as e:
+            return {'success': False, 'users': [], 'message': str(e)}
+
     def get_all_users(self) -> Dict:
         """
         Get list of all registered users (moderator/developer only)
@@ -2423,6 +2472,42 @@ class TitanNetClient:
             response = requests.post(
                 f"{self.http_url}/api/extensions/{extension_id}/reject",
                 json={'note': note},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def disable_extension(self, extension_id: int) -> Dict:
+        """Take an active moderator component offline network-wide (staff only)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions/{extension_id}/disable",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def enable_extension(self, extension_id: int) -> Dict:
+        """Restore a disabled moderator component to active (staff only)."""
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/extensions/{extension_id}/enable",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_extension(self, extension_id: int) -> Dict:
+        """Permanently delete a moderator component (staff only)."""
+        try:
+            response = requests.delete(
+                f"{self.http_url}/api/extensions/{extension_id}",
                 headers=self._http_headers(),
                 timeout=10
             )

@@ -56,10 +56,13 @@ def _launch(require_titan_ui):
         if not ai_provider.is_ai_enabled():
             return
         try:
-            from src.ai.assistant.assistant_gui import open_assistant
-            open_assistant(frame, mode='turn')
+            # Hotkeys start the assistant in windowless speech mode (press to
+            # talk, spoken reply, no window). The Program menu still opens the
+            # full assistant window.
+            from src.ai.assistant import headless
+            headless.launch(frame)
         except Exception as e:
-            print(f"[assistant.hotkeys] could not open assistant: {e}")
+            print(f"[assistant.hotkeys] could not launch assistant: {e}")
     # keyboard fires on its own thread; hop to the GUI thread.
     wx.CallAfter(_open)
 

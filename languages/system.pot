@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-11 11:47+0200\n"
+"POT-Creation-Date: 2026-07-24 13:19+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -197,7 +197,7 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr ""
 
-#: src/system/system_monitor.py:737 src/titan_core/tce_system_net.py:1028
+#: src/system/system_monitor.py:752 src/titan_core/tce_system_net.py:1028
 #: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
 #, python-brace-format
 msgid "Connected to {}"
@@ -413,7 +413,7 @@ msgstr ""
 msgid "Volume: {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:741
+#: src/system/system_monitor.py:756
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr ""

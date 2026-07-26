@@ -63,7 +63,7 @@ def _rms(frame_bytes):
     return (sum(v * v for v in vals) / count) ** 0.5
 
 
-def record_until_silence(max_seconds=20.0, silence_seconds=1.2,
+def record_until_silence(max_seconds=20.0, silence_seconds=0.9,
                          start_timeout=6.0, cancel_event=None,
                          on_level=None):
     """Record from the default microphone until ~``silence_seconds`` of silence
@@ -171,12 +171,42 @@ def _gemini_tts_chunks(text, voice_name):
             yield pcm
 
 
-def _speak_gemini_stream(text, voice_name, cancel_event=None, out_holder=None):
-    """Synthesize with Gemini TTS and play the audio as it streams in, so speech
-    starts on the FIRST chunk instead of after the whole clip. When ``out_holder``
-    (a 1-element list) is given, a single OutputStream is reused across calls for
-    gapless sentence-by-sentence playback. Returns True once at least one audio
-    chunk played; raises on setup/SDK failure before audio."""
+# OpenAI also returns 24 kHz mono 16-bit PCM when asked for response_format='pcm',
+# so it plays through the exact same OutputStream as Gemini.
+_OPENAI_TTS_MODEL = 'gpt-4o-mini-tts'
+_OPENAI_TTS_VOICE = 'alloy'
+
+
+def _openai_tts_chunks(text, voice=_OPENAI_TTS_VOICE):
+    """Yield PCM byte segments for ``text`` from OpenAI TTS, streamed. Raises if
+    no OpenAI key is set or the SDK/network fails."""
+    from src.ai import ai_provider
+    key = ai_provider.get_ai_key('openai')
+    if not key:
+        raise RuntimeError("OpenAI TTS needs an OpenAI API key (Settings, AI features).")
+    client = ai_provider._import_sdk('openai').OpenAI(api_key=key)
+    with client.audio.speech.with_streaming_response.create(
+            model=_OPENAI_TTS_MODEL, voice=voice, input=text,
+            response_format='pcm') as resp:
+        for chunk in resp.iter_bytes(4096):
+            if chunk:
+                yield chunk
+
+
+def _cloud_tts_chunks(text, engine, voice_name):
+    """Dispatch to the selected cloud TTS provider's PCM chunk generator."""
+    if engine == 'openai':
+        return _openai_tts_chunks(text, _OPENAI_TTS_VOICE)
+    return _gemini_tts_chunks(text, voice_name)
+
+
+def _speak_cloud_stream(text, engine, voice_name, cancel_event=None, out_holder=None):
+    """Synthesize with the selected cloud TTS (``engine`` = 'gemini' | 'openai')
+    and play the audio as it streams in, so speech starts on the FIRST chunk
+    instead of after the whole clip. When ``out_holder`` (a 1-element list) is
+    given, a single OutputStream is reused across calls for gapless
+    sentence-by-sentence playback. Returns True once at least one audio chunk
+    played; raises on setup/SDK failure before audio."""
     import sounddevice as sd
     import numpy as np
     own_stream = out_holder is None
@@ -184,7 +214,7 @@ def _speak_gemini_stream(text, voice_name, cancel_event=None, out_holder=None):
         out_holder = [None]
     played = False
     try:
-        for pcm in _gemini_tts_chunks(text, voice_name):
+        for pcm in _cloud_tts_chunks(text, engine, voice_name):
             if cancel_event is not None and cancel_event.is_set():
                 break
             if out_holder[0] is None:
@@ -203,8 +233,18 @@ def _speak_gemini_stream(text, voice_name, cancel_event=None, out_holder=None):
             except Exception:
                 pass
     if not played:
-        raise RuntimeError("Gemini TTS returned no audio.")
+        raise RuntimeError(f"{engine} TTS returned no audio.")
     return True
+
+
+def _assistant_tts_engine():
+    """The user's chosen assistant TTS engine ('gemini' | 'openai' | 'titan');
+    defaults to 'gemini' when settings are unavailable."""
+    try:
+        from src.ai import ai_provider
+        return ai_provider.get_assistant_tts()
+    except Exception:
+        return 'gemini'
 
 
 # --------------------------------------------------------------------------- #
@@ -239,13 +279,38 @@ class SentenceSpeaker:
     def __init__(self, persona=None, cancel_event=None):
         self.voice = (persona or {}).get('gemini_voice') or 'Kore'
         self.cancel_event = cancel_event
+        self.engine = _assistant_tts_engine()
         self._buf = ''
         self._q = queue.Queue()
         self._out_holder = [None]
-        self._gemini_ok = True
+        self._cloud_ok = True
+        self._first_flushed = False
         self.spoke = False
         self._worker = threading.Thread(target=self._run, daemon=True)
         self._worker.start()
+
+    def _enqueue(self, sentence):
+        sentence = (sentence or '').strip()
+        if sentence:
+            self._first_flushed = True
+            self._q.put(sentence)
+
+    def _early_head(self):
+        """Prefix of the pending buffer safe to speak NOW as the very first
+        utterance, so speech starts before a full sentence has formed. Breaks at
+        a natural clause boundary, or a word boundary once the buffer is clearly
+        long. Returns None while it's still too short to be worth it."""
+        buf = self._buf
+        if len(buf) < 24:
+            return None
+        for i, ch in enumerate(buf):
+            if ch in ',;:' and i >= 16:
+                return buf[:i + 1]
+        if len(buf) >= 56:
+            cut = buf.rfind(' ', 24, 56)
+            if cut > 16:
+                return buf[:cut + 1]
+        return None
 
     def feed(self, delta):
         if not delta:
@@ -253,7 +318,14 @@ class SentenceSpeaker:
         self._buf += delta
         sentences, self._buf = _split_sentences(self._buf)
         for s in sentences:
-            self._q.put(s)
+            self._enqueue(s)
+        # Low-latency first sound: don't wait for the first full sentence -
+        # release an early clause so the assistant starts talking sooner.
+        if not self._first_flushed:
+            head = self._early_head()
+            if head is not None:
+                self._buf = self._buf[len(head):]
+                self._enqueue(head)
 
     def finish(self, timeout=120):
         tail = self._buf.strip()
@@ -263,15 +335,31 @@ class SentenceSpeaker:
         self._q.put(None)  # sentinel
         self._worker.join(timeout=timeout)
 
+    def wait_idle(self, timeout=60):
+        """Block until everything fed so far has finished speaking, WITHOUT
+        ending the speaker (more text can still be fed afterwards). Used so an
+        interactive ``ask_user`` question is spoken only after the streamed
+        lead-in has been said. Returns early on cancellation."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._cancelled():
+                return
+            if self._q.unfinished_tasks == 0:
+                return
+            time.sleep(0.03)
+
     def _cancelled(self):
         return self.cancel_event is not None and self.cancel_event.is_set()
 
     def _run(self):
         while True:
             sentence = self._q.get()
-            if sentence is None or self._cancelled():
-                break
-            self._speak_one(sentence)
+            try:
+                if sentence is None or self._cancelled():
+                    break
+                self._speak_one(sentence)
+            finally:
+                self._q.task_done()
         # Close the shared output stream.
         if self._out_holder[0] is not None:
             try:
@@ -282,16 +370,18 @@ class SentenceSpeaker:
             self._out_holder[0] = None
 
     def _speak_one(self, sentence):
-        if self._gemini_ok:
+        # 'titan' skips the cloud entirely; a cloud engine streams until it fails
+        # once, after which we stick with the Titan TTS fallback for the rest.
+        if self.engine != 'titan' and self._cloud_ok:
             try:
-                _speak_gemini_stream(sentence, self.voice,
-                                     cancel_event=self.cancel_event,
-                                     out_holder=self._out_holder)
+                _speak_cloud_stream(sentence, self.engine, self.voice,
+                                    cancel_event=self.cancel_event,
+                                    out_holder=self._out_holder)
                 self.spoke = True
                 return
             except Exception as e:
                 print(f"[voice_io] sentence TTS failed ({e}); Titan TTS fallback.")
-                self._gemini_ok = False
+                self._cloud_ok = False
                 if self._out_holder[0] is not None:
                     try:
                         self._out_holder[0].stop()
@@ -313,17 +403,20 @@ def _titan_tts_fallback(text):
 
 
 def speak(text, persona=None, cancel_event=None):
-    """Speak ``text`` aloud with the persona's Gemini voice, STREAMING the audio
-    for low latency-to-first-sound. Falls back to Titan TTS. Never raises."""
+    """Speak ``text`` aloud using the user's chosen assistant TTS engine (Gemini /
+    OpenAI cloud voice, STREAMING for low latency-to-first-sound, or Titan TTS
+    directly). Cloud engines fall back to Titan TTS on any failure. Never raises."""
     text = (text or '').strip()
     if not text:
         return
-    voice = (persona or {}).get('gemini_voice') or 'Kore'
-    try:
-        _speak_gemini_stream(text, voice, cancel_event=cancel_event)
-        return
-    except Exception as e:
-        print(f"[voice_io] Gemini TTS stream failed ({e}); falling back to Titan TTS.")
+    engine = _assistant_tts_engine()
+    if engine != 'titan':
+        voice = (persona or {}).get('gemini_voice') or 'Kore'
+        try:
+            _speak_cloud_stream(text, engine, voice, cancel_event=cancel_event)
+            return
+        except Exception as e:
+            print(f"[voice_io] {engine} TTS stream failed ({e}); falling back to Titan TTS.")
     try:
         _titan_tts_fallback(text)
     except Exception as e:

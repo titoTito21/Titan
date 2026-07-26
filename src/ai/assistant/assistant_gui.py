@@ -28,17 +28,8 @@ except Exception:
 
 
 def _speak(text):
-    try:
-        from src.accessibility.messages import speak_sr_only
-        speak_sr_only(str(text))
-        return
-    except Exception:
-        pass
-    try:
-        from src.system.notifications import speak_notification
-        speak_notification(str(text), 'info')
-    except Exception:
-        pass
+    from src.ai.ai_speech import speak
+    speak(text)
 
 
 _STATUS_LABELS = {
@@ -129,11 +120,9 @@ class AssistantFrame(wx.Frame):
         done = threading.Event()
 
         def ask():
-            try:
-                argstr = ', '.join(f"{k}={v}" for k, v in (args or {}).items())
-            except Exception:
-                argstr = ''
-            desc = f"{tool['name']}({argstr})"
+            from src.ai.agent_tools import describe_action
+            desc = (describe_action(tool['name'], args)
+                    or tool.get('description') or tool['name'])
             _speak(_("Confirm action: {action}").format(action=desc))
             dlg = wx.MessageDialog(
                 self,
@@ -148,6 +137,31 @@ class AssistantFrame(wx.Frame):
         done.wait()
         return result.get('ok', False)
 
+    # -- interactive follow-up question (text mode) ---------------------- #
+    def _gui_ask(self, question):
+        """Ask the user a follow-up question with a text dialog (worker thread ->
+        GUI). Returns the typed answer, or None if cancelled/empty. Used for a
+        TYPED conversation so the user is not forced to speak."""
+        result = {}
+        done = threading.Event()
+
+        def ask():
+            _speak(question)
+            dlg = wx.TextEntryDialog(self, question, _("The assistant needs more information"))
+            result['ok'] = (dlg.ShowModal() == wx.ID_OK)
+            result['text'] = dlg.GetValue().strip()
+            dlg.Destroy()
+            done.set()
+
+        wx.CallAfter(ask)
+        done.wait()
+        if not result.get('ok'):
+            return None
+        answer = result.get('text') or ''
+        if answer:
+            self._append(_("You"), answer)
+        return answer or None
+
     # -- turn (voice or text) -------------------------------------------- #
     def on_talk(self, event):
         self._start_turn(goal_text=None)
@@ -157,9 +171,10 @@ class AssistantFrame(wx.Frame):
         if not text:
             return
         self.input.SetValue("")
-        self._start_turn(goal_text=text)
+        # Typed conversation -> follow-up questions are asked by text dialog.
+        self._start_turn(goal_text=text, ask_user=self._gui_ask)
 
-    def _start_turn(self, goal_text):
+    def _start_turn(self, goal_text, ask_user=None):
         if self._running or self._live:
             return
         if not voice_assistant.is_available():
@@ -182,7 +197,7 @@ class AssistantFrame(wx.Frame):
                     self.persona, goal_text=goal_text,
                     on_status=self._on_status, on_transcript=self._on_transcript,
                     on_reply=self._on_reply, gui_confirm=self._confirm,
-                    cancel_event=self._cancel, language=lang)
+                    cancel_event=self._cancel, language=lang, ask_user=ask_user)
                 wx.CallAfter(self._on_finished, None)
             except AgentCancelled:
                 wx.CallAfter(self._on_finished, 'cancelled')

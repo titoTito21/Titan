@@ -25,17 +25,8 @@ except Exception:
 
 
 def _speak(text):
-    try:
-        from src.accessibility.messages import speak_sr_only
-        speak_sr_only(str(text))
-        return
-    except Exception:
-        pass
-    try:
-        from src.system.notifications import speak_notification
-        speak_notification(str(text), 'info')
-    except Exception:
-        pass
+    from src.ai.ai_speech import speak
+    speak(text)
 
 
 class AIAgentFrame(wx.Frame):
@@ -59,14 +50,16 @@ class AIAgentFrame(wx.Frame):
 
         vbox.Add(wx.StaticText(panel, label=_("Your instruction:")),
                  flag=wx.LEFT | wx.TOP, border=8)
-        self.input = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER,
-                                 size=(-1, 70))
-        self.input.SetName(_("Your instruction"))
-        self.input.Bind(wx.EVT_TEXT_ENTER, self.on_send)
+        # Multi-line box: Enter inserts a new line so an instruction can span
+        # several lines (e.g. an order with one item per line); Shift+Enter sends
+        # it (handled in on_char_hook). No TE_PROCESS_ENTER, so plain Enter keeps
+        # its default newline behaviour.
+        self.input = wx.TextCtrl(panel, style=wx.TE_MULTILINE, size=(-1, 70))
+        self.input.SetName(_("Your instruction (Enter for a new line, Shift+Enter to send)"))
         vbox.Add(self.input, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=8)
 
         btns = wx.BoxSizer(wx.HORIZONTAL)
-        self.send_btn = wx.Button(panel, label=_("Send"))
+        self.send_btn = wx.Button(panel, label=_("Send (Shift+Enter)"))
         self.send_btn.Bind(wx.EVT_BUTTON, self.on_send)
         btns.Add(self.send_btn, flag=wx.RIGHT, border=6)
         self.stop_btn = wx.Button(panel, label=_("Stop (Shift+Escape)"))
@@ -99,6 +92,10 @@ class AIAgentFrame(wx.Frame):
 
     def __on_tool_start(self, name, args):
         desc = self._describe_action(name, args)
+        if not desc:
+            # Unknown tool: let the AI's own generated narration describe it
+            # rather than announcing a synthetic, generic line.
+            return
         self._append(_("Action"), desc)
         self.status.SetLabel(desc)
         _speak(desc)
@@ -113,22 +110,22 @@ class AIAgentFrame(wx.Frame):
         self._append(_("Result"), short)
 
     def _describe_action(self, name, args):
-        try:
-            argstr = ', '.join(f"{k}={v}" for k, v in (args or {}).items())
-        except Exception:
-            argstr = ''
-        return f"{name}({argstr})" if argstr else f"{name}()"
+        return agent_tools.describe_action(name, args)
 
     # -- confirmation (called on the worker thread) ---------------------- #
     def _confirm(self, tool, args):
         policy = ai_provider.get_agent_confirm()
-        if policy == 'none' and not tool.get('always_confirm'):
+        # Autonomous means autonomous: never interrupt the user with a
+        # confirmation dialog, not even for always-confirm tools. Picking this
+        # level is an explicit opt-out of every prompt.
+        if policy == 'none':
             return True
         result = {}
         done = threading.Event()
 
         def ask():
-            desc = self._describe_action(tool['name'], args)
+            desc = (self._describe_action(tool['name'], args)
+                    or tool.get('description') or tool['name'])
             msg = _("The agent wants to run this action:\n\n{action}\n\n{desc}\n\nAllow it?").format(
                 action=desc, desc=tool.get('description', ''))
             _speak(_("Confirm action: {action}").format(action=desc))
@@ -221,6 +218,13 @@ class AIAgentFrame(wx.Frame):
             if not self._running:
                 self.Close()
                 return
+        # In the instruction box: Shift+Enter sends, plain Enter is a new line.
+        if (event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER)
+                and self.FindFocus() is self.input):
+            if event.ShiftDown():
+                self.on_send(event)
+                return
+            # plain Enter falls through to the default (newline in the box)
         event.Skip()
 
     def on_close(self, event):

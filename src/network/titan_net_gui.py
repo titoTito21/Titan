@@ -1683,6 +1683,11 @@ class TitanNetMainWindow(wx.Frame):
         self.is_moderator = False
         self.is_developer = False
 
+        # Ids of users this account has blocked ("full ignore"). Kept in sync so
+        # the per-user context menu can offer Block vs Unblock. Populated in the
+        # background after connect via refresh_blocked_users().
+        self.blocked_user_ids = set()
+
         # Auto-refresh settings
         self.auto_refresh_enabled = True
         self.auto_refresh_interval = 15  # seconds - faster refresh for responsive UI
@@ -2203,8 +2208,23 @@ class TitanNetMainWindow(wx.Frame):
         except Exception as e:
             print(f"Error applying skin to Titan-Net window: {e}")
 
+    def refresh_blocked_users(self):
+        """Load (in the background) the set of users this account has blocked so
+        the per-user context menu can offer Block vs Unblock correctly."""
+        def _fetch():
+            try:
+                result = self.titan_client.get_blocked_users()
+                if result and result.get('success'):
+                    ids = {u['id'] for u in result.get('users', [])}
+                    wx.CallAfter(setattr, self, 'blocked_user_ids', ids)
+            except Exception as e:
+                print(f"Error loading blocked users: {e}")
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def load_user_role(self):
         """Load user role - use cached role from login response first, then fetch from server"""
+        # Blocked-users list is independent of role; load it once on startup.
+        self.refresh_blocked_users()
         # Check if role was already set from login response
         cached_role = getattr(self.titan_client, 'user_role', None)
         if cached_role and cached_role != 'user':
@@ -2368,6 +2388,7 @@ class TitanNetMainWindow(wx.Frame):
             _("Chat Rooms"),
             _("Online Users"),
             _("Private Messages"),
+            _("Blocked Users"),
             _("Mail"),
             _("Forum"),
             _("App Repository"),
@@ -2907,14 +2928,14 @@ class TitanNetMainWindow(wx.Frame):
         repo_items = [
             _("Browse Packages"),
             _("Upload Package"),
-            _("Package Folder and Upload"),
             _("Search Packages"),
             _("Pending Packages (Preview)"),
         ]
 
-        # Add moderation option for moderators/developers
+        # Add moderation options for moderators/developers
         if self.is_moderator:
             repo_items.append(_("Moderate Packages"))
+            repo_items.append(_("Moderate Components"))
 
         for item in repo_items:
             self.main_listbox.Append(item)
@@ -3310,6 +3331,8 @@ class TitanNetMainWindow(wx.Frame):
                 self.show_users_view()
             elif item_text == _("Private Messages"):
                 self.show_private_messages_view()
+            elif item_text == _("Blocked Users"):
+                self.show_blocked_users_dialog()
             elif item_text == _("Mail"):
                 self.open_mail_window()
             elif item_text == _("Forum"):
@@ -3380,14 +3403,14 @@ class TitanNetMainWindow(wx.Frame):
                 self.show_browse_apps()
             elif item_text == _("Upload Package"):
                 self.show_upload_app_dialog()
-            elif item_text == _("Package Folder and Upload"):
-                self.show_package_folder_and_upload_dialog()
             elif item_text == _("Search Packages"):
                 self.show_search_apps_dialog()
             elif item_text == _("Pending Packages (Preview)"):
                 self.show_pending_apps(preview_mode=True)
             elif item_text == _("Moderate Packages"):
                 self.show_pending_apps(preview_mode=False)
+            elif item_text == _("Moderate Components"):
+                self.show_moderate_components()
 
         elif self.current_view == "repository":
             # Show app details
@@ -5023,6 +5046,9 @@ class TitanNetMainWindow(wx.Frame):
         avatar_item = menu.Append(wx.ID_ANY, _("Play avatar"))
         self.Bind(wx.EVT_MENU, lambda e: self._play_user_avatar(user['username']), avatar_item)
 
+        # Personal block ("full ignore"), available to everyone.
+        self._append_block_menu_item(menu, user)
+
         # Moderation options for moderators/developers
         # No blocking server call — show all options, server validates on action
         if self.is_moderator or self.is_developer:
@@ -5055,6 +5081,77 @@ class TitanNetMainWindow(wx.Frame):
         self.main_listbox.PopupMenu(menu)
         menu.Destroy()
 
+    def _append_block_menu_item(self, menu, user):
+        """Append a Block/Unblock toggle for ``user`` to a context menu. Shown to
+        every user (not just moderators) — this is a personal 'full ignore', not
+        a moderation ban. You cannot block yourself."""
+        my_id = getattr(self.titan_client, 'user_id', None)
+        if my_id is not None and user.get('id') == my_id:
+            return
+        if user.get('id') in self.blocked_user_ids:
+            item = menu.Append(wx.ID_ANY, _("Unblock user"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_unblock_user(user), item)
+        else:
+            item = menu.Append(wx.ID_ANY, _("Block user"))
+            self.Bind(wx.EVT_MENU, lambda e: self._context_block_user(user), item)
+
+    def _context_block_user(self, user):
+        """Block a user ('full ignore') — they can no longer PM you and you stop
+        seeing each other's messages and online status."""
+        def _do():
+            result = self.titan_client.block_user(user['id'])
+            wx.CallAfter(self._on_block_result, result, user, True)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _context_unblock_user(self, user):
+        """Remove a previously set block."""
+        def _do():
+            result = self.titan_client.unblock_user(user['id'])
+            wx.CallAfter(self._on_block_result, result, user, False)
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _on_block_result(self, result, user, blocked):
+        if result and result.get('success'):
+            if blocked:
+                self.blocked_user_ids.add(user['id'])
+                speak_notification(
+                    _("Blocked {user}").format(user=user['username']), 'success')
+                # Drop them from the visible online list right away.
+                if self.current_view in ("users", "private_messages_select"):
+                    self.refresh_users()
+            else:
+                self.blocked_user_ids.discard(user['id'])
+                speak_notification(
+                    _("Unblocked {user}").format(user=user['username']), 'success')
+        else:
+            err = (result or {}).get('error') or (result or {}).get('message') or _("Operation failed")
+            speak_notification(err, 'error')
+
+    def show_blocked_users_dialog(self):
+        """List the users you've blocked and let you unblock them. Needed because
+        blocked users are hidden from the online list, so the context menu can't
+        reach them anymore."""
+        result = self.titan_client.get_blocked_users()
+        if not result or not result.get('success'):
+            err = (result or {}).get('message') or _("Could not load blocked users")
+            speak_notification(err, 'error')
+            return
+        users = result.get('users', [])
+        self.blocked_user_ids = {u['id'] for u in users}
+        if not users:
+            wx.MessageBox(_("You have not blocked anyone."),
+                          _("Blocked Users"), wx.OK | wx.ICON_INFORMATION, self)
+            return
+
+        labels = ["{name} (#{num})".format(name=u['username'], num=u.get('titan_number', '?'))
+                  for u in users]
+        dlg = wx.SingleChoiceDialog(
+            self, _("Select a user to unblock:"), _("Blocked Users"), labels)
+        if dlg.ShowModal() == wx.ID_OK:
+            user = users[dlg.GetSelection()]
+            self._context_unblock_user(user)
+        dlg.Destroy()
+
     def show_user_actions(self, user):
         """Show context menu for user actions (instant — no server calls)"""
         menu = wx.Menu()
@@ -5064,6 +5161,9 @@ class TitanNetMainWindow(wx.Frame):
 
         avatar_item = menu.Append(wx.ID_ANY, _("Play avatar"))
         self.Bind(wx.EVT_MENU, lambda e: self._play_user_avatar(user['username']), avatar_item)
+
+        # Personal block ("full ignore"), available to everyone.
+        self._append_block_menu_item(menu, user)
 
         # Add moderation options if user is moderator or developer
         # No blocking server call — show all options, server validates on action
@@ -6997,6 +7097,22 @@ class TitanNetMainWindow(wx.Frame):
             print(f"Error opening moderator components: {e}")
             play_sound('core/error.ogg')
 
+    def show_moderate_components(self):
+        """Open the network-component moderation dialog from the App Repository
+        moderation options: approve pending components and disable/enable/delete
+        already-active ones (staff only)."""
+        if not self.is_moderator:
+            speak_notification(_("Only moderators can moderate components"), 'error')
+            return
+        try:
+            from src.network.titan_net_mod_components import ExtensionReviewDialog
+            dlg = ExtensionReviewDialog(self, self.titan_client)
+            dlg.ShowModal()
+            dlg.Destroy()
+        except Exception as e:
+            print(f"Error opening component moderation: {e}")
+            play_sound('core/error.ogg')
+
     def _view_all_users(self):
         """View all users (including offline) for moderation purposes"""
         if self.is_moderator or self.is_developer:
@@ -8603,9 +8719,10 @@ class TitanNetMainWindow(wx.Frame):
         return None, None
 
     def show_upload_app_dialog(self, preselected_path=None):
-        """Dialog to upload a package. If preselected_path is given (e.g.
-        from show_package_folder_and_upload_dialog), the file picker step is
-        skipped and that path is used directly."""
+        """Dialog to upload a package (.TCA/.TCD/.TCEPACKAGE). The offered
+        category set follows the file type: .tca -> application/game, .tcd ->
+        other component kinds, .tcepackage -> TCE package. If preselected_path is
+        given the file picker step is skipped and that path is used directly."""
         if preselected_path:
             file_path = preselected_path
         else:
@@ -8638,11 +8755,19 @@ class TitanNetMainWindow(wx.Frame):
             if desc_dlg.ShowModal() == wx.ID_OK:
                 description = desc_dlg.GetValue().strip()
 
-                # Ask for category (pre-selected when the file was
-                # recognized as a .tca/.tcd of a known kind)
-                categories = [
+                # Ask for category. The set offered depends on the file type so
+                # the .tca/.tcd distinction is enforced:
+                #   .tca  -> applications and games only
+                #   .tcd  -> every other add-on kind (components, launchers,
+                #            IM modules, gamepad modes, TTS engines, widgets,
+                #            status bar applets, sound themes, language packs)
+                #   .tcepackage / unknown -> the full list
+                # (pre-selected when the file was recognized as a known kind)
+                app_game_categories = [
                     ("Application", "application"),
                     ("Game", "game"),
+                ]
+                component_categories = [
                     ("Component", "component"),
                     ("Launcher", "launcher"),
                     ("Titan IM Module", "im_module"),
@@ -8651,9 +8776,18 @@ class TitanNetMainWindow(wx.Frame):
                     ("Widget/Applet", "widget"),
                     ("Status Bar Applet", "status_bar_applet"),
                     ("Sound Theme", "sound_theme"),
-                    ("TCE Package", "tce_package"),
                     ("Language Pack", "language_pack"),
                 ]
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext == '.tca':
+                    categories = app_game_categories
+                elif ext == '.tcd':
+                    categories = component_categories
+                elif ext == '.tcepackage':
+                    categories = [("TCE Package", "tce_package")]
+                else:
+                    categories = (app_game_categories + component_categories +
+                                  [("TCE Package", "tce_package")])
                 category_labels = [cat[0] for cat in categories]
                 cat_dlg = wx.SingleChoiceDialog(self, _("Select category:"), _("Category"), category_labels)
                 if detected_category:
@@ -8701,55 +8835,6 @@ class TitanNetMainWindow(wx.Frame):
                 cat_dlg.Destroy()
             desc_dlg.Destroy()
         name_dlg.Destroy()
-
-    def show_package_folder_and_upload_dialog(self):
-        """Pick an existing add-on directory, pack it into a temp .tca/.tcd,
-        then hand off to show_upload_app_dialog for the rest of the flow."""
-        dir_dlg = wx.DirDialog(
-            self, _("Select the add-on folder to package"),
-            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST
-        )
-        if dir_dlg.ShowModal() != wx.ID_OK:
-            dir_dlg.Destroy()
-            return
-        source_dir = dir_dlg.GetPath()
-        dir_dlg.Destroy()
-
-        kind_choices = [
-            ("Application", titan_package.KIND_APP),
-            ("Game", titan_package.KIND_GAME),
-            ("Component", titan_package.KIND_COMPONENT),
-            ("Launcher", titan_package.KIND_LAUNCHER),
-            ("Titan IM Module", titan_package.KIND_IM_MODULE),
-            ("Gamepad Mode", titan_package.KIND_GAMEPAD_MODE),
-            ("TTS Engine", titan_package.KIND_TTS_ENGINE),
-            ("Widget/Applet", titan_package.KIND_WIDGET),
-            ("Status Bar Applet", titan_package.KIND_STATUSBAR_APPLET),
-        ]
-        kind_dlg = wx.SingleChoiceDialog(
-            self, _("What kind of add-on is this?"), _("Add-on Kind"),
-            [c[0] for c in kind_choices]
-        )
-        if kind_dlg.ShowModal() != wx.ID_OK:
-            kind_dlg.Destroy()
-            return
-        kind = kind_choices[kind_dlg.GetSelection()][1]
-        kind_dlg.Destroy()
-
-        try:
-            ext = titan_package.default_extension(kind)
-            base = os.path.basename(source_dir.rstrip('\\/'))
-            fd, tmp_path = tempfile.mkstemp(suffix=ext, prefix=f'{base}_')
-            os.close(fd)
-            titan_package.build_package(source_dir, tmp_path, kind)
-        except Exception as e:
-            wx.MessageBox(
-                _("Failed to package '{folder}':\n{error}").format(folder=source_dir, error=e),
-                _("Packaging Error"), wx.OK | wx.ICON_ERROR, self
-            )
-            return
-
-        self.show_upload_app_dialog(preselected_path=tmp_path)
 
     def _make_transfer_progress(self, progress, announce_template):
         """Return a thread-safe progress callback for upload/download.

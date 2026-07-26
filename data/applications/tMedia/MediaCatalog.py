@@ -5,9 +5,18 @@ import html
 import platform
 import feedparser
 import subprocess
+import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, quote, urljoin, urlparse
 from urllib.request import url2pathname
+
+
+def _norm_country(s):
+    """Accent/case-insensitive fold for country-name matching (handles Polish
+    'l with stroke', which NFKD does not decompose)."""
+    s = ''.join({'ł': 'l', 'Ł': 'L'}.get(c, c) for c in (s or ''))
+    return ''.join(c for c in unicodedata.normalize('NFKD', s.lower())
+                   if not unicodedata.combining(c)).strip()
 
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
@@ -126,7 +135,7 @@ class LanguagePickerDialog(wx.Dialog):
 
 
 class MediaCatalogPanel(wx.Panel):
-    def __init__(self, parent, owner, *args, **kwargs):
+    def __init__(self, parent, owner, *args, auto_start=True, **kwargs):
         super(MediaCatalogPanel, self).__init__(parent, *args, **kwargs)
         self.owner = owner
 
@@ -152,7 +161,12 @@ class MediaCatalogPanel(wx.Panel):
         self._selected_country_code = None
         self.podcast_node = None
 
-        wx.CallAfter(self._show_language_picker)
+        # ``auto_start`` False is used when TMedia is launched straight into a
+        # specific mode (e.g. the agent asked to play a radio station for a given
+        # country): the caller drives loading itself and we must NOT pop the
+        # interactive country picker.
+        if auto_start:
+            wx.CallAfter(self._show_language_picker)
 
     def focus_default(self):
         self.media_tree.SetFocus()
@@ -173,6 +187,83 @@ class MediaCatalogPanel(wx.Panel):
             self.initial_load_thread.start()
         else:
             self._load_without_radio()
+
+    # ------------------------------------------------------------------ #
+    # Direct radio mode (agent-driven): auto-pick a country, skip the picker
+    # ------------------------------------------------------------------ #
+    def load_radio_direct(self, country_name=None, query=None):
+        """Load radio stations for ``country_name`` (an English country name or
+        an ISO 3166-1 code) without showing the picker, and auto-play the first
+        station matching ``query`` if given. Falls back to the interactive picker
+        when the country cannot be resolved."""
+        self.progress_bar.Show()
+        self.loading_sound_channel = common.play_sound('loading', loop=True)
+        Thread(target=self._load_radio_direct_threaded,
+               args=(country_name, query), daemon=True).start()
+
+    def _resolve_country_code(self, country_name):
+        if not country_name:
+            return None
+        try:
+            resp = requests.get(RADIO_BROWSER_COUNTRIES_URL, timeout=15)
+            countries = resp.json() if resp.status_code == 200 else []
+        except requests.RequestException:
+            return None
+        countries = [c for c in countries if c.get('stationcount', 0) > 0]
+        target = _norm_country(country_name)
+        code = (country_name or '').strip().upper()
+        # Direct ISO code (e.g. "PL").
+        for c in countries:
+            if (c.get('iso_3166_1') or '').upper() == code:
+                return c.get('iso_3166_1')
+        # Exact English name, then substring either way.
+        for c in countries:
+            if _norm_country(c.get('name', '')) == target:
+                return c.get('iso_3166_1')
+        for c in countries:
+            n = _norm_country(c.get('name', ''))
+            if target and (target in n or n in target):
+                return c.get('iso_3166_1')
+        return None
+
+    def _load_radio_direct_threaded(self, country_name, query):
+        code = self._resolve_country_code(country_name)
+        if not code:
+            # Couldn't auto-pick: don't guess, fall back to the normal picker.
+            wx.CallAfter(common.stop_sound, 'loading')
+            wx.CallAfter(self.progress_bar.Hide)
+            wx.CallAfter(self._show_language_picker)
+            return
+        stations = self._get_radio_stations(code)
+        wx.CallAfter(self._populate_radio_only, stations, query)
+        wx.CallAfter(self.loading_complete_initial)
+        wx.CallAfter(common.stop_sound, 'loading')
+
+    def _populate_radio_only(self, stations, query):
+        radio_node = self.media_tree.AppendItem(self.root_node, _("Radio Stations"))
+        match_item = None
+        for station in stations:
+            item = self.media_tree.AppendItem(radio_node, station['name'])
+            self.media_tree.SetItemData(item, station['url'])
+            if (query and match_item is None
+                    and _norm_country(query) in _norm_country(station['name'])):
+                match_item = item
+        self.media_tree.SetItemHasChildren(radio_node, True)
+        self.media_tree.Expand(self.root_node)
+        self.media_tree.Expand(radio_node)
+        if match_item is not None:
+            self.media_tree.SelectItem(match_item)
+            self.media_tree.EnsureVisible(match_item)
+            url = self.media_tree.GetItemData(match_item)
+            self.play_media(url, self.media_tree.GetItemText(match_item))
+        else:
+            first = self.media_tree.GetFirstChild(radio_node)[0]
+            if first.IsOk():
+                self.media_tree.SelectItem(first)
+                self.media_tree.EnsureVisible(first)
+            if query:
+                common.speak(_("No station matching %s; showing all stations.") % query)
+        self.media_tree.SetFocus()
 
     def _load_without_radio(self):
         self.progress_bar.Show()

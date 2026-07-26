@@ -15,6 +15,112 @@ import os
 import subprocess
 import sys
 
+try:
+    from src.titan_core.translation import set_language
+    from src.settings.settings import get_setting
+    _ = set_language(get_setting('language', 'pl'))
+except Exception:  # pragma: no cover - translation is optional at import time
+    def _(s):
+        return s
+
+
+# --------------------------------------------------------------------------- #
+# Human-readable action descriptions (for narration / confirm dialogs)
+# --------------------------------------------------------------------------- #
+def _clip(value, limit=80):
+    s = str(value).replace('\n', ' ').strip()
+    return s if len(s) <= limit else s[:limit] + '...'
+
+
+def describe_action(name, args):
+    """A short, human-readable sentence for a tool call, for the on-screen
+    transcript / spoken narration / confirm dialogs - so the user never sees a
+    raw identifier like ``run_shell(command=...)``."""
+    a = args or {}
+
+    def g(key, default=''):
+        v = a.get(key, default)
+        return _clip(v) if v not in (None, '') else default
+
+    simple = {
+        'get_foreground_window': _("Checking the active window"),
+        'list_windows': _("Listing the open windows"),
+        'read_focused_window': _("Reading the current window"),
+        'screenshot': _("Taking a screenshot to see the screen"),
+        'speak': _("Speaking to you"),
+        'titan_list_settings': _("Reading Titan settings"),
+        'titan_list_components': _("Listing Titan components"),
+        'titan_list_addons': _("Listing Titan add-ons"),
+        'titan_list_tts_engines': _("Listing the TTS engines"),
+        'titan_open_settings': _("Opening Titan settings"),
+        'list_tce_items': _("Listing Titan apps and games"),
+    }
+    if name in simple and not (name == 'titan_list_settings' and a.get('section')):
+        return simple[name]
+
+    handlers = {
+        'list_files': lambda: _("Listing files in {path}").format(path=g('path') or '.'),
+        'read_file': lambda: _("Reading the file {path}").format(path=g('path')),
+        'type_text': lambda: _("Typing text"),
+        'press_keys': lambda: _("Pressing {keys}").format(keys=g('keys')),
+        'click': lambda: _("Clicking at {x}, {y}").format(x=a.get('x'), y=a.get('y')),
+        'move_mouse': lambda: _("Moving the mouse to {x}, {y}").format(x=a.get('x'), y=a.get('y')),
+        'focus_window': lambda: _("Switching to the window {title}").format(title=g('title')),
+        'launch_program': lambda: _("Launching {path}").format(path=g('path')),
+        'run_shell': lambda: _("Running a system command: {command}").format(command=g('command')),
+        'write_file': lambda: _("Writing the file {path}").format(path=g('path')),
+        'delete_path': lambda: _("Deleting {path}").format(path=g('path')),
+        'web_search': lambda: _("Searching the web for {query}").format(query=g('query')),
+        'get_definition': lambda: _("Looking up the definition of {term}").format(term=g('term')),
+        'get_weather': lambda: (_("Checking the weather for {loc}").format(loc=g('location'))
+                                if a.get('location') else _("Checking the weather")),
+        'launch_tce_item': lambda: _("Launching {name}").format(name=g('name')),
+        'play_music': lambda: (
+            _("Playing {q} on {src}").format(q=g('query'), src=g('source'))
+            if a.get('query') and a.get('source')
+            else _("Playing {q}").format(q=g('query')) if a.get('query')
+            else _("Playing music")),
+        'titan_get_setting': lambda: _("Reading the setting {name}").format(
+            name=f"{a.get('section', 'general')}.{g('key')}"),
+        'titan_set_setting': lambda: _("Changing the setting {name} to {value}").format(
+            name=f"{a.get('section', 'general')}.{g('key')}", value=g('value')),
+        'titan_list_settings': lambda: _("Reading the {section} settings").format(section=g('section')),
+        'titan_run_component_action': lambda: _("Running the component action {action}").format(action=g('action')),
+        'titan_set_component_enabled': lambda: (
+            _("Enabling the component {name}") if str(a.get('enabled', True)).lower() in ('true', '1', 'yes')
+            else _("Disabling the component {name}")).format(name=g('component')),
+        'titan_launch': lambda: _("Launching {name}").format(name=g('name')),
+        'titan_im_login': lambda: _("Logging in to {service} as {user}").format(
+            service=g('service'), user=g('username')),
+        'titan_list_im_contacts': lambda: _("Listing {service} contacts").format(service=g('service')),
+        'titan_send_message': lambda: _("Sending a message to {recipient} on {service}").format(
+            recipient=g('recipient'), service=g('service')),
+        'ask_user': lambda: _("Asking you: {question}").format(question=g('question')),
+        'browser_open': lambda: _("Opening the web page {url}").format(url=g('url')),
+        'browser_read': lambda: _("Reading the web page"),
+        'browser_fill': lambda: _("Filling in the field {field}").format(field=g('field')),
+        'browser_select': lambda: _("Choosing {option} for {field}").format(
+            option=g('option'), field=g('field')),
+        'browser_check': lambda: _("Ticking the box {field}").format(field=g('field')),
+        'browser_click': lambda: _("Clicking {target} on the page").format(target=g('target')),
+        'browser_submit': lambda: _("Submitting the form"),
+        'browser_back': lambda: _("Going back to the previous page"),
+        'browser_close': lambda: _("Closing the browser"),
+    }
+    if name in handlers:
+        try:
+            return handlers[name]()
+        except Exception:
+            pass
+    if name in simple:
+        return simple[name]
+    # Unknown tool (e.g. one contributed by a component): we have no hand-written
+    # phrase for it. Return None so narration defers to the AI's OWN generated
+    # text describing what it is doing; callers that must show something (confirm
+    # dialogs) fall back to the tool's human-readable description.
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Observation (risk: auto)
 # --------------------------------------------------------------------------- #
@@ -320,32 +426,60 @@ def focus_window(title, **_):
 def speak(text, **_):
     """Speak a short message to the user via Titan TTS / screen reader."""
     try:
-        from src.accessibility.messages import speak_sr_only
-        speak_sr_only(str(text))
+        from src.ai.ai_speech import speak as _speak
+        _speak(str(text))
         return "Spoke to the user."
-    except Exception:
-        try:
-            from src.system.notifications import speak_notification
-            speak_notification(str(text), 'info')
-            return "Spoke to the user."
-        except Exception as e:
-            return f"Could not speak: {e}"
+    except Exception as e:
+        return f"Could not speak: {e}"
 
 
 # --------------------------------------------------------------------------- #
 # Executing / mutating (risk: confirm)
 # --------------------------------------------------------------------------- #
+# Friendly names the model is likely to use for common Windows programs that
+# are NOT on PATH: they live in the "App Paths" registry, which only ShellExecute
+# / cmd's ``start`` resolves - a bare ``cmd /c msedge`` fails silently.
+_KNOWN_PROGRAMS = {
+    'edge': 'msedge', 'microsoft edge': 'msedge', 'ms edge': 'msedge', 'msedge': 'msedge',
+    'chrome': 'chrome', 'google chrome': 'chrome',
+    'firefox': 'firefox', 'mozilla firefox': 'firefox',
+    'brave': 'brave', 'opera': 'opera',
+    'notepad': 'notepad', 'wordpad': 'wordpad', 'paint': 'mspaint',
+    'calculator': 'calc', 'calc': 'calc',
+    'explorer': 'explorer', 'file explorer': 'explorer',
+    'cmd': 'cmd', 'command prompt': 'cmd', 'powershell': 'powershell',
+    'word': 'winword', 'excel': 'excel', 'powerpoint': 'powerpnt', 'outlook': 'outlook',
+}
+
+
 def launch_program(path, args="", **_):
     """Launch a program or open a file/URL with its default handler."""
     try:
-        path = os.path.expanduser(path)
-        if args:
-            subprocess.Popen([path] + str(args).split())
-        elif os.path.exists(path):
-            os.startfile(path)  # noqa: intended - opens with default handler
-        else:
-            subprocess.Popen(path, shell=True)
-        return f"Launched: {path} {args}".strip()
+        raw = str(path).strip()
+        expanded = os.path.expanduser(raw)
+
+        # 1. A real file/executable path we can see on disk.
+        if os.path.exists(expanded):
+            if args:
+                subprocess.Popen([expanded] + str(args).split())
+            else:
+                os.startfile(expanded)  # noqa: intended - opens with default handler
+            return f"Launched: {expanded} {args}".strip()
+
+        # 2. A URL / URI -> open with the OS default handler (browser, etc.).
+        scheme = raw.split('://', 1)[0]
+        if '://' in raw and scheme and all(c.isalnum() or c in '+.-' for c in scheme):
+            os.startfile(raw)  # noqa: intended - opens with default handler
+            return f"Opened: {raw}"
+
+        # 3. A program name (possibly friendly, e.g. "Microsoft Edge"). Resolve
+        #    known aliases then launch via cmd's ``start``, which - unlike a bare
+        #    ``cmd /c <name>`` - consults the App Paths registry, so browsers and
+        #    Office apps that are not on PATH still launch.
+        target = _KNOWN_PROGRAMS.get(raw.lower(), raw)
+        cmd = f'start "" "{target}"' + (f' {args}' if args else '')
+        subprocess.Popen(cmd, shell=True)
+        return f"Launched: {target} {args}".strip()
     except Exception as e:
         return f"Error launching {path}: {e}"
 
@@ -460,4 +594,26 @@ def get_tools():
         _tool('delete_path', "Delete a file or an empty directory.", delete_path,
               risk='confirm', properties={'path': dict(S, description="Path to delete.")},
               required=['path']),
-    ]
+    ] + _browser_tools() + _titan_tools()
+
+
+def _browser_tools():
+    """Web-browser automation tools (navigate pages, fill in forms). Imported
+    lazily so a missing selenium install never breaks the rest of the toolset."""
+    try:
+        from src.ai.browser_tools import get_browser_tools
+        return get_browser_tools()
+    except Exception as e:
+        print(f"[agent_tools] Browser tools unavailable: {e}")
+        return []
+
+
+def _titan_tools():
+    """Titan-native tools (settings, components, add-ons, IM). Imported lazily
+    to avoid an import cycle (titan_tools imports _tool from this module)."""
+    try:
+        from src.ai.titan_tools import get_titan_tools
+        return get_titan_tools()
+    except Exception as e:
+        print(f"[agent_tools] Titan tools unavailable: {e}")
+        return []

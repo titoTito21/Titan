@@ -5,11 +5,17 @@ Handles microphone capture, VAD, and audio streaming for Titan-Net voice chat
 
 import sounddevice as sd
 import numpy as np
-import webrtcvad
 import queue
 import threading
 import time
 from typing import Optional, Callable
+
+try:
+    import webrtcvad
+except ImportError:
+    # No wheel available for this Python version (e.g. 3.14) - voice rooms
+    # still work, just without VAD (continuous transmission mode).
+    webrtcvad = None
 
 
 class VoiceCaptureManager:
@@ -30,8 +36,11 @@ class VoiceCaptureManager:
         self._use_vad = use_vad
 
         # VAD setup (aggressiveness 0-3, 0=least aggressive, most tolerant)
-        # Only used if use_vad=True
-        self.vad = webrtcvad.Vad(0) if use_vad else None
+        # Only used if use_vad=True and webrtcvad is available
+        self.vad = webrtcvad.Vad(0) if (use_vad and webrtcvad) else None
+        if use_vad and not webrtcvad:
+            print("VAD unavailable (webrtcvad not installed) - falling back to continuous transmission")
+            self._use_vad = False
 
         # Audio processing
         self.audio_queue = queue.Queue(maxsize=50)  # 50 chunks = 1500ms buffer (handles processing delays on remote servers)
@@ -62,6 +71,10 @@ class VoiceCaptureManager:
 
     @use_vad.setter
     def use_vad(self, value):
+        if value and not webrtcvad:
+            print("VAD unavailable (webrtcvad not installed) - staying in continuous transmission")
+            self._use_vad = False
+            return
         self._use_vad = value
         if value and self.vad is None:
             self.vad = webrtcvad.Vad(0)

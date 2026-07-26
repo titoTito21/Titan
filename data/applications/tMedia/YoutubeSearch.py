@@ -79,6 +79,53 @@ class YoutubeSearchPanel(wx.Panel):
         else:
             common.speak(_("No cached results found"))
 
+    def search_and_play_first(self, query):
+        """Search YouTube for ``query`` and immediately play the FIRST result.
+
+        Used when the app is launched with a search phrase (e.g. by the Titan
+        voice assistant: "play Nik Kershaw - The Riddle"). Runs off the GUI
+        thread and reuses :meth:`_extract_and_play` to resolve the stream."""
+        query = (query or '').strip()
+        if not query:
+            return
+        try:
+            self.search_field.SetValue(query)
+        except Exception:
+            pass
+        common.play_sound('loading')
+        common.speak(_("Searching for: %s") % query)
+
+        def _work():
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True,
+                'no_check_certificate': True,
+                'geo_bypass': True,
+                'ignoreerrors': True,
+                'socket_timeout': 10,
+            }
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    result = ydl.extract_info(f"ytsearch1:{query}", download=False)
+                entries = [v for v in (result.get('entries') or []) if v] if result else []
+                if not entries:
+                    common.speak(_("No results found for: %s") % query)
+                    return
+                video = entries[0]
+                video_id = video.get('id', '')
+                title = video.get('title', query)
+                if not video_id:
+                    common.speak(_("No results found for: %s") % query)
+                    return
+                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                common.speak(_("Playing: %s") % title)
+                self._extract_and_play(video_url, title)
+            except Exception as e:
+                common.speak(_("Search error: %s") % str(e))
+
+        threading.Thread(target=_work, daemon=True).start()
+
     def search_videos(self, query):
         self.results_list.Clear()
         common.play_sound('loading')

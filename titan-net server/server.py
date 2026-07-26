@@ -126,6 +126,18 @@ class TitanNetServer:
         self._online_users_cache: Optional[List[Dict]] = None
         self._online_users_cache_time: float = 0
 
+        # In-memory user-block map for "full ignore" enforcement on the hot
+        # message paths. {blocker_id: set(blocked_ids)}. Loaded from the DB at
+        # startup and kept coherent on block/unblock. _is_hidden() consults it
+        # symmetrically so blocked parties never see each other's messages or
+        # presence.
+        self._blocks: Dict[int, Set[int]] = {}
+        try:
+            for _row in self.db.get_all_blocks():
+                self._blocks.setdefault(_row['blocker_id'], set()).add(_row['blocked_id'])
+        except Exception as _e:
+            logger.error(f"Could not load user blocks: {_e}")
+
         # Broadcast messages cache
         self._broadcast_messages_cache: Dict[str, List[str]] = {}
 
@@ -431,10 +443,28 @@ class TitanNetServer:
             "has_custom_sounds": has_custom_sounds
         }
 
-        await self.broadcast(message)
+        # Pass the sender so blocked parties don't get each other's presence.
+        await self.broadcast(message, sender_user_id=user_id)
 
-    async def broadcast(self, message: Dict, exclude_session: Optional[str] = None):
-        """Broadcast message to all connected clients - optimized with parallel sends"""
+    def _is_hidden(self, a: Optional[int], b: Optional[int]) -> bool:
+        """True if users a and b are mutually invisible ("full ignore") — either
+        one has blocked the other. Used to skip recipients on the hot message
+        and presence paths. Cheap: two set lookups against the in-memory map."""
+        if a is None or b is None or a == b:
+            return False
+        if b in self._blocks.get(a, ()):  # a blocked b
+            return True
+        if a in self._blocks.get(b, ()):  # b blocked a
+            return True
+        return False
+
+    async def broadcast(self, message: Dict, exclude_session: Optional[str] = None,
+                        sender_user_id: Optional[int] = None):
+        """Broadcast message to all connected clients - optimized with parallel sends.
+
+        When ``sender_user_id`` is given, clients that are mutually blocked with
+        the sender ("full ignore") are skipped so blocked parties never see the
+        sender's messages or presence changes."""
         disconnected = []
         message_json = json.dumps(message)  # Serialize once
 
@@ -449,6 +479,7 @@ class TitanNetServer:
             send_to_client(session_id, client)
             for session_id, client in self.clients.items()
             if session_id != exclude_session
+            and not self._is_hidden(sender_user_id, client['user_id'])
         ]
 
         if tasks:
@@ -478,7 +509,8 @@ class TitanNetServer:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def broadcast_to_room(self, room_id: int, message: Dict, exclude_user_id: Optional[int] = None):
+    async def broadcast_to_room(self, room_id: int, message: Dict, exclude_user_id: Optional[int] = None,
+                                sender_user_id: Optional[int] = None):
         """Broadcast message to all members of a room - optimized with caching and parallel sends"""
         # Cache room members to avoid repeated DB queries
         cache_key = f"room_members_{room_id}"
@@ -505,11 +537,13 @@ class TitanNetServer:
             except websockets.exceptions.ConnectionClosed:
                 pass
 
-        # Broadcast to members only - parallel sends
+        # Broadcast to members only - parallel sends. Skip anyone mutually
+        # blocked with the sender so a "full ignore" hides room messages too.
         tasks = [
             send_to_client(client)
             for client in self.clients.values()
             if client['user_id'] != exclude_user_id and client['user_id'] in member_ids
+            and not self._is_hidden(sender_user_id, client['user_id'])
         ]
 
         if tasks:
@@ -607,7 +641,7 @@ class TitanNetServer:
                 # Status update is a WRITE — must go through the serialized
                 # writer executor, not the multi-worker auth pool.
                 update_status = self.db.run_write_async(self.db.update_user_status, user['id'], 'online')
-                online_future = loop.run_in_executor(self._auth_executor, self.db.get_online_users)
+                online_future = loop.run_in_executor(self._auth_executor, self.db.get_online_users, user['id'])
                 unread_future = loop.run_in_executor(self._auth_executor, self.db.get_unread_private_messages_summary, user['id'])
 
                 # Check custom sounds (filesystem I/O)
@@ -790,6 +824,17 @@ class TitanNetServer:
                 recipient_id = recipient['id']
 
         if not recipient_id:
+            return
+
+        # "Full ignore": if either party has blocked the other, silently drop the
+        # private message (the sender still gets a normal confirmation so a block
+        # isn't leaked). This stops a blocked user from spamming the blocker.
+        if self._is_hidden(client['user_id'], recipient_id):
+            await self.clients[session_id]['websocket'].send(json.dumps({
+                "type": "message_sent",
+                "message_id": None,
+                "blocked": True
+            }))
             return
 
         # Save message to database (non-blocking)
@@ -1088,7 +1133,7 @@ class TitanNetServer:
             "titan_number": client['titan_number'],
             "message": message_text,
             "sent_at": message_data['sent_at']
-        })
+        }, sender_user_id=client['user_id'])
 
     async def handle_get_rooms(self, session_id: str) -> Dict:
         """Handle get available rooms - cached for 3 seconds"""
@@ -1322,10 +1367,69 @@ class TitanNetServer:
             self._online_users_cache = users
             self._online_users_cache_time = current_time
 
+        # Filter the (globally cached) list for THIS viewer so mutually-blocked
+        # users never appear online to each other ("full ignore").
+        client = self.clients.get(session_id)
+        if client:
+            viewer_id = client['user_id']
+            users = [u for u in users if not self._is_hidden(viewer_id, u.get('id'))]
+
         return {
             "type": "online_users",
             "users": users
         }
+
+    async def handle_block_user(self, session_id: str, data: Dict) -> Dict:
+        """User X blocks user Y ("full ignore"). Persists + updates the in-memory
+        map so enforcement is immediate on this connection."""
+        client = self.clients.get(session_id)
+        if not client:
+            return {"type": "error", "error": "Not authenticated"}
+        target_id = data.get('user_id')
+        target_titan = data.get('titan_number')
+        loop = asyncio.get_event_loop()
+        if not target_id and target_titan:
+            target = await loop.run_in_executor(None, self.db.get_user_by_titan_number, target_titan)
+            if target:
+                target_id = target['id']
+        if not target_id:
+            return {"type": "block_result", "success": False, "error": "User not found"}
+        result = await loop.run_in_executor(None, self.db.block_user, client['user_id'], target_id)
+        if result.get('success'):
+            self._blocks.setdefault(client['user_id'], set()).add(target_id)
+        return {"type": "block_result", "success": result.get('success', False),
+                "error": result.get('error'), "user_id": target_id, "blocked": True}
+
+    async def handle_unblock_user(self, session_id: str, data: Dict) -> Dict:
+        """Remove a block (X unblocks Y)."""
+        client = self.clients.get(session_id)
+        if not client:
+            return {"type": "error", "error": "Not authenticated"}
+        target_id = data.get('user_id')
+        target_titan = data.get('titan_number')
+        loop = asyncio.get_event_loop()
+        if not target_id and target_titan:
+            target = await loop.run_in_executor(None, self.db.get_user_by_titan_number, target_titan)
+            if target:
+                target_id = target['id']
+        if not target_id:
+            return {"type": "block_result", "success": False, "error": "User not found"}
+        result = await loop.run_in_executor(None, self.db.unblock_user, client['user_id'], target_id)
+        if result.get('success'):
+            s = self._blocks.get(client['user_id'])
+            if s:
+                s.discard(target_id)
+        return {"type": "block_result", "success": result.get('success', False),
+                "error": result.get('error'), "user_id": target_id, "blocked": False}
+
+    async def handle_get_blocked_users(self, session_id: str) -> Dict:
+        """Return the list of users the caller has blocked (management view)."""
+        client = self.clients.get(session_id)
+        if not client:
+            return {"type": "error", "error": "Not authenticated"}
+        loop = asyncio.get_event_loop()
+        users = await loop.run_in_executor(None, self.db.get_blocked_users, client['user_id'])
+        return {"type": "blocked_users", "users": users}
 
     async def handle_update_blog(self, session_id: str, data: Dict):
         """Handle update blog URL"""
@@ -3450,6 +3554,18 @@ class TitanNetServer:
 
                         elif msg_type == 'get_online_users':
                             response = await self.handle_get_online_users(session_id)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'block_user':
+                            response = await self.handle_block_user(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'unblock_user':
+                            response = await self.handle_unblock_user(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'get_blocked_users':
+                            response = await self.handle_get_blocked_users(session_id)
                             await websocket.send(json.dumps(response))
 
                         elif msg_type == 'update_blog':

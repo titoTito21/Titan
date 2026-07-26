@@ -63,5 +63,175 @@
     "role": "assistant",
     "content": "Oto moje dzieło! Jako Perun, władca piorunów i pan niebios, stworzyłem plik tekstowy o nazwie „test” na Twoim pulpicie i zapisałem w nim słowa: „To jest test,”. Twoja wola została spełniona z siłą gromu!",
     "timestamp": 1784631575.560132
+  },
+  {
+    "role": "user",
+    "content": "Uruchom ustawienia czytnika ekranu Titan.",
+    "timestamp": 1784641131.388722
+  },
+  {
+    "role": "user",
+    "content": "Kim jesteś?",
+    "timestamp": 1784642704.7816913
+  },
+  {
+    "role": "assistant",
+    "content": "Jestem Perun – słowiański bóg gromu, błyskawic i mądrości. Władam siłą piorunów i głęboką wiedzą, by służyć ci pomocą. Powiedz, jakie zadanie mam dla ciebie wykonać?",
+    "timestamp": 1784642740.45305
+  },
+  {
+    "role": "user",
+    "content": "Otwórz przeglądarkę internetową.",
+    "timestamp": 1784642776.8126214
+  },
+  {
+    "role": "assistant",
+    "content": "Przeglądarka internetowa została otwarta. Jako władca gromów, oddaję Ci władzę nad siecią.",
+    "timestamp": 1784642802.099492
+  },
+  {
+    "role": "user",
+    "content": "Jaki jest poziom baterii?",
+    "timestamp": 1784642820.678779
+  },
+  {
+    "role": "assistant",
+    "content": "Poziom baterii wynosi 20%. Urządzenie pracuje na zasilaniu bateryjnym i pozostała mu około godzina i piętnaście minut działania.",
+    "timestamp": 1784642870.3778045
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz jingle radia Z z 2007.",
+    "timestamp": 1784644529.3148437
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz dżingla Radia Z z 2007 roku.",
+    "timestamp": 1784644541.0567517
+  },
+  {
+    "role": "assistant",
+    "content": "Grom i pioruny! Odtwarzam dżingiel Radia ZET z 2007 roku. Niech dźwięki przepełnią przestrzeń!",
+    "timestamp": 1784644569.055557
+  },
+  {
+    "role": "user",
+    "content": "Jaka jest pogoda w Warszawie?",
+    "timestamp": 1784644602.2606463
+  },
+  {
+    "role": "assistant",
+    "content": "W Warszawie padają przelotne deszcze. Temperatura wynosi 17 stopni Celsjusza, wilgotność sięga 88 procent, a wiatr wieje z prędkością 25 kilometrów na godzinę. Chmury i deszcz są dziś po mojej myśli!",
+    "timestamp": 1784644645.6034377
+  },
+  {
+    "role": "user",
+    "content": "otwórz przeglądarce w Glovo McDonald",
+    "timestamp": 1784654494.1652746
+  },
+  {
+    "role": "assistant",
+    "content": "Otworzyłem Glovo z wyszukiwaniem McDonald's w Twojej przeglądarce. Smacznego!",
+    "timestamp": 1784654518.8857803
+  },
+  {
+    "role": "user",
+    "content": "Napisz do użytkownika Tito cześć.",
+    "timestamp": 1784654536.868025
+  },
+  {
+    "role": "assistant",
+    "content": "Wiadomość o treści „cześć” została wysłana do użytkownika Tito przez Telegram. Błyskawica dostarczyła Twoje słowa!",
+    "timestamp": 1784654603.8765817
+  },
+  {
+    "role": "user",
+    "content": "Weszli w titan necie wiadomość do Tito. Cześć.",
+    "timestamp": 1784654615.4866543
+  },
+  {
+    "role": "assistant",
+    "content": "Nie jesteś zalogowany do Titan-Neta. Zaloguj się najpierw do usługi, a z mocą błyskawicy dostarczę twoją wiadomość do Tito.",
+    "timestamp": 1784654656.9602723
+  },
+  {
+    "role": "user",
+    "content": "Ustaw język Titana na angielski.",
+    "timestamp": 1784654833.6413636
+  },
+  {
+    "role": "assistant",
+    "content": "Język Titana został zmieniony na angielski. Zmiana wejdzie w życie po ponownym uruchomieniu programu.",
+    "timestamp": 1784654848.2070186
+  },
+  {
+    "role": "user",
+    "content": "Zmień model na Melitele.",
+    "timestamp": 1784654864.798617
+  },
+  {
+    "role": "assistant",
+    "content": "Model asystenta został zmieniony na Melitele. Twój rozkaz został spełniony.",
+    "timestamp": 1784654885.5407243
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz dżingel Radia Z z 2005 roku.",
+    "timestamp": 1784997756.6045578
+  },
+  {
+    "role": "assistant",
+    "content": "Oto jingle Radia ZET z 2005 roku. Niech brzmią donośnie niczym grzmot!",
+    "timestamp": 1784997782.5699277
+  },
+  {
+    "role": "user",
+    "content": "Jaki jest poziom baterii?",
+    "timestamp": 1784997805.183841
+  },
+  {
+    "role": "assistant",
+    "content": "Twój komputer nie posiada baterii. Jest podłączony bezpośrednio do zasilania stacjonarnego.",
+    "timestamp": 1784997835.096246
+  },
+  {
+    "role": "user",
+    "content": "Jaki jest stan bezpiecznego rozruchu?",
+    "timestamp": 1784997844.7789073
+  },
+  {
+    "role": "assistant",
+    "content": "Bezpieczny rozruch na tym komputerze jest wyłączony.",
+    "timestamp": 1784997857.8755615
+  },
+  {
+    "role": "user",
+    "content": "Jaką mam pamięć RAM, ile jej mam, a także dysk.",
+    "timestamp": 1784997873.9297664
+  },
+  {
+    "role": "assistant",
+    "content": "Masz 32 GB pamięci RAM w dwóch kościach po 16 GB, pracujących z prędkością 3200 MHz. \n\nGłówny dysk to SSD ADATA LEGEND 800 o pojemności 1 TB — partycja systemowa C ma 789 GB, z czego wolne jest ponad 700 GB. Podłączony jest również pendrive SanDisk o pojemności 64 GB.",
+    "timestamp": 1784997912.4121652
+  },
+  {
+    "role": "user",
+    "content": "A jaki mam dysk i ile mam?",
+    "timestamp": 1784997923.7440543
+  },
+  {
+    "role": "assistant",
+    "content": "Masz szybki dysk SSD model ADATA LEGEND 800 o pojemności 1 terabajta. Na partycji systemowej C masz 735 gigabajtów pojemności, z czego wolne pozostaje aż 653 gigabajty.",
+    "timestamp": 1784997969.017961
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz Dżingler Radio Z 2007 roku.",
+    "timestamp": 1784998054.6380532
+  },
+  {
+    "role": "assistant",
+    "content": "Grom z jasnego nieba! Odtwarzam jingle Radia ZET z 2007 roku.",
+    "timestamp": 1784998079.1821616
   }
 ]
