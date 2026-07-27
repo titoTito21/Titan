@@ -1479,11 +1479,12 @@ def resolve_latest_model(provider, api_key):
             cand.sort(key=lambda m: getattr(m, 'created', 0), reverse=True)
             model = str(cand[0].id) if cand else None
         elif provider == 'gemini':
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
+            from google import genai
+            client = genai.Client(api_key=api_key)
             names = []
-            for m in genai.list_models():
-                methods = getattr(m, 'supported_generation_methods', []) or []
+            for m in client.models.list():
+                methods = (getattr(m, 'supported_actions', None)
+                           or getattr(m, 'supported_generation_methods', None) or [])
                 nm = getattr(m, 'name', '') or ''
                 short = nm.split('/')[-1]
                 if 'generateContent' in methods and short.startswith('gemini') \
@@ -1536,16 +1537,18 @@ def generate_component_code(conversation, api_key, provider='anthropic', model=N
         )
         text = ''.join(getattr(b, 'text', '') for b in msg.content if getattr(b, 'type', '') == 'text')
     elif provider == 'gemini':
-        import google.generativeai as genai  # may raise ImportError
-        genai.configure(api_key=api_key)
-        gmodel = genai.GenerativeModel(model, system_instruction=system)
+        from google import genai  # may raise ImportError
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
         # Gemini uses 'user'/'model' roles; map the assistant turns across.
         contents = [
-            {'role': 'model' if m['role'] == 'assistant' else 'user',
-             'parts': [m['content']]}
+            types.Content(role='model' if m['role'] == 'assistant' else 'user',
+                          parts=[types.Part(text=m['content'])])
             for m in messages
         ]
-        resp = gmodel.generate_content(contents)
+        resp = client.models.generate_content(
+            model=model, contents=contents,
+            config=types.GenerateContentConfig(system_instruction=system))
         text = getattr(resp, 'text', '') or ''
     elif provider == 'openai':
         import openai  # may raise ImportError

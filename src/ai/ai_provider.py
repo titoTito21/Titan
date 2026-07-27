@@ -19,7 +19,9 @@ Legacy plaintext keys from the moderator-component creator
 (``titannet_component_ai_key_<provider>``) are still read for back-compat.
 """
 
+import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -417,9 +419,80 @@ def _cli_command(method):
     return override.split() if override else ['codex', 'exec', '-']
 
 
+def _cli_search_dirs():
+    """Extra directories the CLI installers use. A compiled, GUI-launched Titan
+    inherits the PATH of whatever started it (Explorer, autostart), which often
+    lacks the per-user npm / native-installer directories a terminal has."""
+    home = os.path.expanduser('~')
+    dirs = [
+        os.path.join(home, '.local', 'bin'),        # native claude installer
+        os.path.join(home, '.npm-global', 'bin'),
+        os.path.join(home, '.bun', 'bin'),
+        os.path.join(home, '.yarn', 'bin'),
+    ]
+    if sys.platform == 'win32':
+        appdata = os.environ.get('APPDATA', '')
+        localapp = os.environ.get('LOCALAPPDATA', '')
+        if appdata:
+            dirs.append(os.path.join(appdata, 'npm'))
+        if localapp:
+            dirs.append(os.path.join(localapp, 'Yarn', 'bin'))
+        dirs.append(os.path.join(os.environ.get('ProgramFiles', r'C:\Program Files'), 'nodejs'))
+    else:
+        dirs.extend(['/usr/local/bin', '/opt/homebrew/bin'])
+    return [d for d in dirs if d and os.path.isdir(d)]
+
+
+def resolve_cli_executable(name):
+    """Full path to a CLI executable, or None when it cannot be found.
+
+    ``shutil.which`` honours PATHEXT, so this also finds the ``.cmd``/``.bat``
+    shims npm installs on Windows -- ``subprocess`` cannot locate those on its
+    own (CreateProcess only ever appends ``.exe``), which is why an installed
+    ``codex`` used to be reported as "not found"."""
+    if os.path.sep in name or (os.path.altsep and os.path.altsep in name):
+        return name if os.path.exists(name) else None
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in _cli_search_dirs():
+        found = shutil.which(name, path=d)
+        if found:
+            return found
+    return None
+
+
+def is_cli_available(method):
+    """True if the CLI backing ``method`` ('claude_cli' / 'codex') is installed."""
+    try:
+        argv = _cli_command(method)
+    except Exception:
+        return False
+    return bool(argv) and resolve_cli_executable(argv[0]) is not None
+
+
+def _cli_argv(method):
+    """Ready-to-run argv for ``method``: absolute executable path, wrapped in
+    ``cmd /c`` when it resolves to a Windows batch shim (``.cmd``/``.bat``),
+    which CreateProcess cannot execute directly."""
+    argv = list(_cli_command(method))
+    if not argv:
+        raise RuntimeError("No CLI command configured. Set one in Settings, AI features.")
+    exe = resolve_cli_executable(argv[0])
+    if not exe:
+        raise RuntimeError(
+            f"CLI '{argv[0]}' not found. Install it or set a custom command in "
+            f"Settings, AI features.")
+    argv[0] = exe
+    if sys.platform == 'win32' and exe.lower().endswith(('.cmd', '.bat')):
+        argv = [os.environ.get('COMSPEC') or 'cmd.exe', '/c'] + argv
+    return argv
+
+
 def _generate_cli(method, system, messages, emit):
     import threading
-    argv = _cli_command(method)
+    name = _cli_command(method)[0]  # what the user configured, for messages
+    argv = _cli_argv(method)
     prompt = _flatten_conversation(system, messages)
     try:
         proc = subprocess.Popen(
@@ -427,10 +500,10 @@ def _generate_cli(method, system, messages, emit):
             stderr=subprocess.PIPE, text=True, encoding='utf-8',
             errors='replace',
             creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0))
-    except FileNotFoundError:
+    except OSError as e:
         raise RuntimeError(
-            f"CLI '{argv[0]}' not found. Install it or set a custom command in "
-            f"Settings, AI features.")
+            f"CLI '{name}' could not be started: {e}. Install it or set a "
+            f"custom command in Settings, AI features.")
 
     # Feed the prompt on a background thread so a large prompt (full docs +
     # multi-turn auto-fix history can exceed the OS pipe buffer) can never
@@ -467,11 +540,11 @@ def _generate_cli(method, system, messages, emit):
     draining.join(timeout=5)
     err = ''.join(err_parts)
     if code != 0:
-        raise RuntimeError(f"CLI '{argv[0]}' exited with code {code}: {err.strip()[:500]}")
+        raise RuntimeError(f"CLI '{name}' exited with code {code}: {err.strip()[:500]}")
     out = ''.join(parts)
     if not out.strip():
         raise RuntimeError(
-            f"CLI '{argv[0]}' produced no output. Make sure it is installed and "
+            f"CLI '{name}' produced no output. Make sure it is installed and "
             f"logged in (try running it once in a terminal). "
             + (f"Details: {err.strip()[:300]}" if err.strip() else ""))
     return out

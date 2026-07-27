@@ -171,9 +171,13 @@ class ProgressDialog(wx.Dialog):
     
     def _update_progress(self, progress, status_text):
         """Internal method to update progress on main thread."""
-        self.progress_bar.SetValue(progress)
-        if status_text:
-            self.status_label.SetLabel(status_text)
+        try:
+            self.progress_bar.SetValue(progress)
+            if status_text:
+                self.status_label.SetLabel(status_text)
+        except RuntimeError:
+            # Dialog was already destroyed - ignore late progress events.
+            pass
 
 
 class Updater:
@@ -185,7 +189,7 @@ class Updater:
         self.interpreter_url = "https://titosofttitan.com/titan/titan.interpreter.7z"
 
         # Resolve install dir so the updater works regardless of cwd.
-        # In compiled mode this is the directory containing TCE Launcher.exe;
+        # In compiled mode this is the directory containing Titan.exe;
         # in dev mode it is the project root.
         self.install_dir = get_base_path()
 
@@ -208,25 +212,48 @@ class Updater:
         self.needs_interpreter = False  # Will be set if version ends with 'i'
     
     def get_current_version(self):
-        """Get current program version from main.py."""
+        """Get current program version from the running main module.
+
+        When Titan is launched normally the entry script is loaded as
+        ``__main__`` (both in dev and in a frozen build), so read VERSION
+        from there first. Doing ``import main`` in a frozen build fails
+        (there is no importable ``main`` module) and, in dev, re-executes
+        main.py as a second module - both are wrong, so they are only a
+        last resort. Returns None when the version cannot be determined so
+        the caller can skip the update instead of assuming a bogus value
+        that would make every launch look out of date.
+        """
         try:
-            # Import main module to get VERSION variable
+            main_mod = sys.modules.get('__main__')
+            if main_mod is not None and hasattr(main_mod, 'VERSION'):
+                return str(main_mod.VERSION).strip()
+
             import main
-            return main.VERSION
+            return str(main.VERSION).strip()
         except Exception as e:
-            print(f"Error reading version from main.py: {e}")
-            return "1.0.0"
+            print(f"Error reading current version: {e}")
+            return None
     
     def check_for_updates(self):
         """Check if updates are available."""
         try:
             # Get current version
             current_version = self.get_current_version()
+            if not current_version:
+                # We could not determine the installed version. Do NOT report
+                # an update - otherwise an unknown local version would compare
+                # unequal to the remote one and block startup forever.
+                print("[UPDATER] Could not determine current version; skipping update check")
+                return False, None, None
 
             # Get remote version
             response = requests.get(self.version_url, timeout=10)
             response.raise_for_status()
             remote_version_raw = response.text.strip()
+
+            if not remote_version_raw:
+                print("[UPDATER] Empty remote version; skipping update check")
+                return False, current_version, current_version
 
             # Check if version ends with 'i' (interpreter flag)
             if remote_version_raw.endswith('i'):
@@ -293,12 +320,138 @@ class Updater:
             progress_dialog.update_progress(100, _("Download failed"))
             return False
     
-    def _extract_archive(self, archive_path, progress_dialog, status_text):
+    def _list_archive_entries(self, archive_path):
+        """Return the list of (relative_path, is_dir) contained in a 7z archive.
+
+        Uses `7z l -slt`, whose ``Path = ...`` / ``Attributes = ...`` lines
+        are parsed reliably even for names containing spaces. Only entries
+        listed after the ``----------`` separator are real files - the block
+        before it describes the archive itself.
+        """
+        entries = []
+        try:
+            proc = subprocess.run(
+                [self.seven_zip_path, 'l', '-slt', archive_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=self.install_dir, **get_subprocess_kwargs()
+            )
+            text = proc.stdout.decode('utf-8', errors='replace')
+        except Exception as e:
+            print(f"Could not list archive {archive_path}: {e}")
+            return entries
+
+        in_files = False
+        cur_path = None
+        cur_attr = ''
+        for line in text.splitlines():
+            if not in_files:
+                if line.strip().startswith('----------'):
+                    in_files = True
+                continue
+            if line.startswith('Path = '):
+                cur_path = line[len('Path = '):].strip()
+                cur_attr = ''
+            elif line.startswith('Attributes = '):
+                cur_attr = line[len('Attributes = '):].strip()
+            elif line.strip() == '' and cur_path is not None:
+                entries.append((cur_path, 'D' in cur_attr))
+                cur_path = None
+                cur_attr = ''
+        if cur_path is not None:
+            entries.append((cur_path, 'D' in cur_attr))
+        return entries
+
+    def _stage_locked_targets(self, archive_path):
+        """Rename existing files an archive will overwrite to ``<name>.old``.
+
+        Titan ships compiled: while it runs, Windows locks the running
+        ``Titan.exe`` and every loaded native module in ``_internal/``
+        (``python3XX.dll``, ``*.pyd``, ``*.dll``), so 7-Zip cannot overwrite
+        them in place. Windows DOES allow *renaming* a running exe / loaded
+        DLL, which frees the original name for the fresh copy to be extracted
+        into. The leftover ``.old`` files are removed at the next startup by
+        cleanup_old_update_files() once the process no longer holds them.
+
+        Returns a list of rollback records describing exactly what to undo if
+        extraction later fails, so the running install can be restored bit for
+        bit:
+
+          ('rename', old_path, target) - existing file moved to <target>.old
+          ('new', target, None)        - file the archive will create fresh
+
+        Restoring a 'rename' removes the freshly-extracted file and renames
+        the ``.old`` back; undoing a 'new' just deletes the created file - so
+        rollback leaves neither a half-replaced nor a half-added install.
+        """
+        staged = []
+        for rel, is_dir in self._list_archive_entries(archive_path):
+            if is_dir:
+                continue
+            target = os.path.join(self.install_dir, rel.replace('/', os.sep))
+            if not os.path.exists(target):
+                # Brand-new file. Nothing to move aside, but record it so a
+                # rollback deletes it instead of leaving new-version orphans.
+                staged.append(('new', target, None))
+                continue
+
+            old_path = target + '.old'
+            try:
+                if os.path.exists(old_path):
+                    os.remove(old_path)  # stale leftover from a prior update
+            except Exception:
+                # Previous .old is somehow still held - use a unique name.
+                old_path = target + '.old{}'.format(int(time.time() * 1000) % 100000)
+            try:
+                os.replace(target, old_path)
+                staged.append(('rename', old_path, target))
+            except Exception as e:
+                # Renaming failed (unexpected). Roll back what we staged so
+                # far and abort staging so extraction doesn't half-replace.
+                print(f"Could not stage locked file {target}: {e}")
+                self._rollback_staging(staged)
+                raise
+        return staged
+
+    def _rollback_staging(self, staged):
+        """Undo _stage_locked_targets: restore renamed files, drop new ones."""
+        for record in staged:
+            kind, a, b = record
+            try:
+                if kind == 'rename':
+                    old_path, target = a, b
+                    if os.path.exists(target):
+                        # The partially-extracted new file is not the running
+                        # image, so it can be removed; then restore the old one.
+                        os.remove(target)
+                    os.replace(old_path, target)
+                elif kind == 'new':
+                    target = a
+                    if os.path.exists(target):
+                        os.remove(target)  # created by the aborted extraction
+            except Exception as e:
+                print(f"Rollback failed for {a}: {e}")
+
+    def _extract_archive(self, archive_path, progress_dialog, status_text,
+                         staged=None):
         """Extract a 7z archive with real progress reporting.
 
         Reads 7z stdout to prevent pipe buffer deadlock and parses
-        progress percentage from -bsp1 output.
+        progress percentage from -bsp1 output. In a compiled build the files
+        that would be overwritten may be locked, so they are first renamed to
+        ``.old`` (see _stage_locked_targets).
+
+        Staging/rollback ownership depends on ``staged``:
+
+        - ``staged is None`` (single-package update): this call owns staging
+          and rolls it back itself if extraction fails.
+        - a caller-provided list (multi-package update): the rename pairs are
+          appended to that shared list and this method does NOT roll back on
+          failure - the caller rolls back the whole set so, e.g., a failed
+          interpreter extraction also undoes the already-extracted program.
         """
+        own_staging = staged is None
+        if own_staging:
+            staged = []
         try:
             progress_dialog.update_progress(0, status_text)
 
@@ -306,10 +459,23 @@ class Updater:
                 print(f"7zip not found at {self.seven_zip_path}")
                 return False
 
+            if not os.path.exists(archive_path):
+                print(f"Archive to extract does not exist: {archive_path}")
+                return False
+
+            # Compiled build: move locked targets (running exe, loaded DLLs)
+            # aside so 7-Zip can write the new copies. Dev build has nothing
+            # locked, so plain overwrite is enough.
+            if is_frozen():
+                staged.extend(self._stage_locked_targets(archive_path))
+
             # -bsp1 outputs progress percentage to stdout
+            # -aoa forces overwrite of ALL existing files (without it a stale
+            #      file already on disk can be silently kept, leaving a
+            #      half-updated install).
             # Extract to the install dir explicitly so cwd cannot affect us.
             cmd = [
-                self.seven_zip_path, 'x', archive_path, '-y',
+                self.seven_zip_path, 'x', archive_path, '-y', '-aoa',
                 f'-o{self.install_dir}', '-bsp1'
             ]
 
@@ -374,10 +540,17 @@ class Updater:
             else:
                 stderr_text = b''.join(stderr_chunks).decode('utf-8', errors='replace') if stderr_chunks else ''
                 print(f"7zip extraction failed with code {returncode}: {stderr_text}")
+                # Extraction failed. If we own staging, restore the files we
+                # moved aside so the running (old) install stays intact.
+                # Otherwise the caller rolls back the whole multi-package set.
+                if own_staging:
+                    self._rollback_staging(staged)
                 return False
 
         except Exception as e:
             print(f"Error extracting archive {archive_path}: {e}")
+            if own_staging:
+                self._rollback_staging(staged)
             return False
         finally:
             try:
@@ -386,10 +559,16 @@ class Updater:
             except Exception as e:
                 print(f"Error cleaning up {archive_path}: {e}")
 
-    def extract_update(self, progress_dialog):
-        """Extract update using 7zip."""
+    def extract_update(self, progress_dialog, staged=None):
+        """Extract update using 7zip.
+
+        ``staged`` is forwarded to _extract_archive: pass a shared list to
+        make this part of a multi-package update whose rollback is owned by
+        the caller.
+        """
         return self._extract_archive(
-            self.temp_file, progress_dialog, _("Extracting update...")
+            self.temp_file, progress_dialog, _("Extracting update..."),
+            staged=staged
         )
 
     def download_interpreter(self, progress_dialog):
@@ -422,65 +601,119 @@ class Updater:
             progress_dialog.update_progress(100, _("Interpreter download failed"))
             return False
 
-    def extract_interpreter(self, progress_dialog):
+    def extract_interpreter(self, progress_dialog, staged=None):
         """Extract interpreter package using 7zip.
 
         Reuses _extract_archive so we get the same pipe draining and
         progress parsing as the main update extraction. Without draining
         the pipes the 7z subprocess can deadlock when its progress output
-        fills the OS pipe buffer.
+        fills the OS pipe buffer. ``staged`` is forwarded so the interpreter
+        can share the program's rollback set in a combined update.
         """
         return self._extract_archive(
             self.temp_interpreter_file, progress_dialog,
-            _("Extracting Python interpreter...")
+            _("Extracting Python interpreter..."), staged=staged
         )
-    
+
+    def _run_update_steps(self, progress_dialog):
+        """Run the download/extract steps. Returns True on success.
+
+        Runs on a worker thread. When an interpreter update is required the
+        program AND the interpreter are downloaded together first, and only
+        then extracted together ("na raz"). The two extractions share ONE
+        rollback set, so if either the program or the interpreter fails to
+        extract, BOTH are rolled back and the running install is left exactly
+        as it was - never a mismatched, half-updated mix of new program with
+        old interpreter (or vice versa). Every step short-circuits.
+        """
+        if self.needs_interpreter:
+            # Download both packages before touching the install.
+            if not self.download_update(progress_dialog):
+                return False
+            if not self.download_interpreter(progress_dialog):
+                return False
+
+            # Both archives are on disk. Extract them under a single shared
+            # rollback set so any failure undoes the whole pair. Rolling back
+            # a staged rename removes the freshly-extracted file and restores
+            # the ``.old`` original, so even an already-extracted program is
+            # reverted when the interpreter step fails.
+            staged = []
+            if not self.extract_update(progress_dialog, staged=staged):
+                self._rollback_staging(staged)
+                return False
+            if not self.extract_interpreter(progress_dialog, staged=staged):
+                self._rollback_staging(staged)
+                return False
+            return True
+
+        # Program-only update: _extract_archive manages its own rollback.
+        if not self.download_update(progress_dialog):
+            return False
+        if not self.extract_update(progress_dialog):
+            return False
+        return True
+
     def perform_update(self):
-        """Perform the full update process."""
+        """Perform the full update process, BLOCKING until it finishes.
+
+        The old implementation started a worker thread and returned True
+        immediately, so the caller (startup code) went on to build and show
+        the whole Titan suite while the download/extraction was still
+        running in the background - and, worse, before the wx main loop was
+        even running, so the queued completion callback never fired
+        predictably.
+
+        Here we still do the network/CPU work on a worker thread (so the UI
+        stays responsive and the progress bar updates), but we pump the
+        event loop with wx.YieldIfNeeded() until the worker is done and then
+        return the real success/failure. That guarantees the suite does not
+        continue starting until the update is fully applied.
+        """
+        progress_dialog = None
         try:
-            # Show progress dialog
             progress_dialog = ProgressDialog(self.parent)
             progress_dialog.Show()
 
+            done_event = threading.Event()
+            result = {'success': False}
+
             def update_thread():
                 try:
-                    # Download main update
-                    if self.download_update(progress_dialog):
-                        # Extract main update
-                        if self.extract_update(progress_dialog):
-                            # If version ends with 'i', also download and extract interpreter
-                            if self.needs_interpreter:
-                                if self.download_interpreter(progress_dialog):
-                                    if self.extract_interpreter(progress_dialog):
-                                        wx.CallAfter(self.update_complete, progress_dialog, True)
-                                    else:
-                                        wx.CallAfter(self.update_complete, progress_dialog, False)
-                                else:
-                                    wx.CallAfter(self.update_complete, progress_dialog, False)
-                            else:
-                                wx.CallAfter(self.update_complete, progress_dialog, True)
-                        else:
-                            wx.CallAfter(self.update_complete, progress_dialog, False)
-                    else:
-                        wx.CallAfter(self.update_complete, progress_dialog, False)
+                    result['success'] = self._run_update_steps(progress_dialog)
                 except Exception as e:
                     print(f"Update thread error: {e}")
-                    wx.CallAfter(self.update_complete, progress_dialog, False)
+                    result['success'] = False
+                finally:
+                    done_event.set()
+                    # Nudge the (possibly idle) event loop so the wait below
+                    # wakes up promptly once the worker finishes.
+                    wx.CallAfter(lambda: None)
 
-            # Start update in separate thread
             thread = threading.Thread(target=update_thread, daemon=True)
             thread.start()
 
-            return True
+            # Block here - but keep the UI alive - until the update is done.
+            while not done_event.is_set():
+                wx.YieldIfNeeded()
+                time.sleep(0.02)
+            # Flush any last progress updates queued via wx.CallAfter.
+            wx.YieldIfNeeded()
+
+            return bool(result['success'])
 
         except Exception as e:
-            print(f"Error starting update: {e}")
+            print(f"Error performing update: {e}")
             return False
-    
-    def update_complete(self, progress_dialog, success):
-        """Handle update completion."""
-        progress_dialog.Destroy()
-        
+        finally:
+            if progress_dialog is not None:
+                try:
+                    progress_dialog.Destroy()
+                except Exception:
+                    pass
+
+    def _show_result(self, success):
+        """Show the final success/failure message to the user."""
         if success:
             dlg = wx.MessageDialog(
                 self.parent,
@@ -491,12 +724,6 @@ class Updater:
             _apply_skin_to_tree(dlg)
             dlg.ShowModal()
             dlg.Destroy()
-            
-            # Close application to allow restart
-            if self.parent:
-                self.parent.Close(True)
-            else:
-                sys.exit(0)
         else:
             dlg = wx.MessageDialog(
                 self.parent,
@@ -507,22 +734,101 @@ class Updater:
             _apply_skin_to_tree(dlg)
             dlg.ShowModal()
             dlg.Destroy()
-    
+
     def check_and_update(self):
-        """Main method to check for updates and show dialog if available."""
+        """Check for updates and, if one exists, offer it before startup.
+
+        Returns True ONLY when the Titan suite must NOT continue starting -
+        i.e. an update was applied and the app has to restart into the new
+        version. In every other case it returns False so the currently
+        installed ("old") version launches normally:
+
+          - no update available                    -> start normally  -> False
+          - user cancels the update                -> start old version -> False
+          - user updates, but it fails/rolls back  -> start old version -> False
+          - user updates and it succeeds           -> restart needed   -> True
+
+        The important guarantee (blocking startup while the download and
+        extraction run) is provided by perform_update(), which does not
+        return until the update is fully applied - so the suite never boots
+        on top of a half-written install.
+        """
         has_update, current_version, new_version = self.check_for_updates()
-        
-        if has_update:
-            changes = self.get_changes()
-            
-            if self.show_update_dialog(current_version, new_version, changes):
-                return self.perform_update()
-        
+
+        if not has_update:
+            return False
+
+        changes = self.get_changes()
+
+        if not self.show_update_dialog(current_version, new_version, changes):
+            # User declined - launch the current version as-is.
+            print("[UPDATER] Update declined by user; starting current version")
+            return False
+
+        success = self.perform_update()
+        self._show_result(success)
+
+        if success:
+            # New version is in place; the running process must restart.
+            return True
+
+        # Update failed and was rolled back - keep running the old version.
+        print("[UPDATER] Update failed; starting current version")
         return False
 
 
+def cleanup_old_update_files(base_dir=None):
+    """Delete ``*.old`` files left behind by a previous in-place update.
+
+    _stage_locked_targets() renames the running executable and any loaded
+    native libraries to ``<name>.old`` so the new copies can be extracted
+    over their original names. Those ``.old`` files cannot be removed while
+    the old process still holds them, so cleanup happens here at the next
+    startup - but only for a ``.old`` file whose live counterpart exists
+    (proof it was a staged replacement), to avoid touching unrelated user
+    files that merely end in ``.old``.
+    """
+    if base_dir is None:
+        base_dir = get_base_path()
+
+    removed = 0
+    try:
+        for root, dirs, files in os.walk(base_dir):
+            # Skip the transient package cache; it manages its own lifetime.
+            if 'pkg_cache' in dirs:
+                dirs.remove('pkg_cache')
+            for name in files:
+                if not name.endswith('.old'):
+                    continue
+                old_path = os.path.join(root, name)
+                live_path = old_path[:-len('.old')]
+                if not os.path.exists(live_path):
+                    continue  # not one of ours - leave it alone
+                try:
+                    os.remove(old_path)
+                    removed += 1
+                except Exception:
+                    # Still locked (should not happen post-restart) - it will
+                    # be retried on the next launch.
+                    pass
+    except Exception as e:
+        print(f"Error cleaning up .old update files: {e}")
+
+    if removed:
+        print(f"[UPDATER] Removed {removed} leftover .old file(s) from previous update")
+
+
 def check_for_updates_on_startup(parent=None):
-    """Function to be called on application startup."""
+    """Check for updates at startup.
+
+    Returns True when the caller must stop and NOT continue launching the
+    Titan suite (an update was applied and a restart is required). Returns
+    False when startup should proceed normally with the current version.
+    """
+    # Always sweep leftovers from a prior in-place update first, whatever the
+    # outcome of this check.
+    cleanup_old_update_files()
+
     updater = Updater(parent)
     return updater.check_and_update()
 

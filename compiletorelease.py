@@ -72,7 +72,7 @@ def compile_to_release():
         sys.executable, "-m", "PyInstaller",
         "--onedir",  # Output as directory, not single file
         "--windowed",  # No console window
-        "--name", "TCE Launcher",
+        "--name", "Titan",
         "--noconfirm",  # Overwrite without asking
     ]
 
@@ -162,9 +162,25 @@ def compile_to_release():
         # Telegram (optional)
         "telethon",
 
-        # AI (optional)
-        "google.generativeai",
+        # AI (optional) - all three provider SDKs ship so every provider works.
+        # google-genai lives in the "google" NAMESPACE package: PyInstaller does
+        # not follow "from google import genai" on its own, so the submodule must
+        # be named explicitly (plus --collect-all below) or the frozen build fails
+        # at runtime with "The Google Gemini SDK is not installed".
+        "google",
+        "google.genai",
+        "google.genai.types",
+        "anthropic",
+        "openai",
         "gtts",
+
+        # AI agent / assistant extras
+        "selenium",          # browser automation tools
+        "pynput",            # global hotkeys / mouse+keyboard control
+        "pynput.keyboard",
+        "pynput.mouse",
+        "numpy",
+        "sounddevice",
 
         # Standard library that might be missed
         "typing",
@@ -239,6 +255,27 @@ def compile_to_release():
         "src.system.key_blocker",
         "src.system.wifi_safe_wrapper",
         "src.system.system_tray_list",
+        "src.ai",
+        "src.ai.ai_provider",
+        "src.ai.ai_agent",
+        "src.ai.ai_agent_gui",
+        "src.ai.ai_creation_kit",
+        "src.ai.ai_speech",
+        "src.ai.agent_tools",
+        "src.ai.browser_tools",
+        "src.ai.titan_tools",
+        "src.ai.creation_docs",
+        "src.ai.secret_store",
+        "src.ai.web_search",
+        "src.ai.assistant",
+        "src.ai.assistant.assistant_gui",
+        "src.ai.assistant.assistant_tools",
+        "src.ai.assistant.voice_assistant",
+        "src.ai.assistant.voice_io",
+        "src.ai.assistant.dictation",
+        "src.ai.assistant.hotkeys",
+        "src.ai.assistant.personas",
+        "src.ai.assistant.headless",
         "src.controller",
         "src.controller.controller_ui",
         "src.controller.controller_modes",
@@ -309,10 +346,34 @@ def compile_to_release():
         "cryptography",  # Include Rust bindings (_rust modules)
         "openal",        # PyOpenAL: bundles soft_oal_64.dll (OpenAL Soft HRTF)
         "sounddevice",   # bundles PortAudio binary (3D room calibration mic capture)
+        "google.genai",  # Gemini SDK (namespace package - needs explicit collection)
+        "anthropic",     # Claude SDK
+        "openai",        # OpenAI SDK
+        "pynput",        # backend modules are picked dynamically per platform
+    ]
+
+    # Distribution metadata some SDKs read at runtime (importlib.metadata.version)
+    copy_metadata_packages = [
+        "google-genai",
+        "anthropic",
+        "openai",
     ]
 
     for pkg in collect_packages:
         cmd.extend(["--collect-all", pkg])
+
+    # --copy-metadata aborts the whole build when a distribution is missing, so
+    # only pass the AI SDKs that are actually installed in the build environment.
+    from importlib.metadata import PackageNotFoundError, version as _dist_version
+    for pkg in copy_metadata_packages:
+        try:
+            _dist_version(pkg)
+        except PackageNotFoundError:
+            print(f"Preflight WARNING: {pkg} is NOT installed - the compiled build "
+                  f"will report a missing SDK when that AI provider is selected. "
+                  f"Install it with: pip install -r requirements.txt")
+            continue
+        cmd.extend(["--copy-metadata", pkg])
 
     # Main script
     cmd.append("main.py")
@@ -331,10 +392,10 @@ def compile_to_release():
         print("Moving data directories for backward compatibility...")
 
         # Move data directories from _internal to main directory
-        output_dir = dist_dir / "TCE Launcher"
+        output_dir = dist_dir / "Titan"
         if IS_MACOS:
-            # macOS .app bundle: output is in TCE Launcher.app
-            app_bundle = dist_dir / "TCE Launcher.app"
+            # macOS .app bundle: output is in Titan.app
+            app_bundle = dist_dir / "Titan.app"
             if app_bundle.exists():
                 output_dir = app_bundle / "Contents" / "MacOS"
                 internal_dir = output_dir / "_internal"
@@ -350,7 +411,7 @@ def compile_to_release():
             dst = output_dir / dir_name
             if IS_MACOS and app_bundle.exists():
                 # On macOS .app bundle, move resources to Contents/Resources/
-                resources_dir = dist_dir / "TCE Launcher.app" / "Contents" / "Resources"
+                resources_dir = dist_dir / "Titan.app" / "Contents" / "Resources"
                 resources_dir.mkdir(parents=True, exist_ok=True)
                 dst = resources_dir / dir_name
             if src.exists():
@@ -583,17 +644,17 @@ import site
         print()
 
         if IS_WINDOWS:
-            exe_name = "TCE Launcher.exe"
+            exe_name = "Titan.exe"
             python_names = "python.exe / pythonw.exe"
         elif IS_MACOS:
-            exe_name = "TCE Launcher.app"
+            exe_name = "Titan.app"
             python_names = "python3"
         else:
-            exe_name = "TCE Launcher"
+            exe_name = "Titan"
             python_names = "python3"
 
         print("Directory structure:")
-        print(f"  TCE Launcher/")
+        print(f"  Titan/")
         print(f"    {exe_name:<27s}- Main application")
         print(f"    data/                  - Applications, games, components")
         print(f"    languages/             - Translation files")
@@ -609,7 +670,7 @@ import site
         print()
         print("To run the compiled application:")
         if IS_MACOS:
-            print(f"  open {dist_dir / 'TCE Launcher.app'}")
+            print(f"  open {dist_dir / 'Titan.app'}")
         else:
             print(f"  {output_dir / exe_name}")
     else:

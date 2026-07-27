@@ -265,7 +265,7 @@ from src.system.updater import check_for_updates_on_startup
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
 
-VERSION = "0.5.5"
+VERSION = "0.5.7"
 try:
     speaker = accessible_output3.outputs.auto.Auto()
 except Exception as _e:
@@ -660,9 +660,14 @@ def main(command_line_args=None):
                     # Create wx.App for Klango mode
                     klango_app = wx.App(False)
 
-                # Check for updates (same as GUI mode)
+                # Check for updates (same as GUI mode). A pending/applied
+                # update is mandatory: do not start the suite.
                 try:
-                    update_result = check_for_updates_on_startup()
+                    if check_for_updates_on_startup():
+                        print("Update pending or applied; not starting Klango mode")
+                        sys.exit(0)
+                except SystemExit:
+                    raise
                 except Exception as e:
                     print(f"Error checking for updates in Klango mode: {e}")
                     import traceback
@@ -864,9 +869,14 @@ def main(command_line_args=None):
                     else:
                         launcher_wx_app = wx.App(False)
 
-                    # Check for updates (same as GUI mode)
+                    # Check for updates (same as GUI mode). A pending/applied
+                    # update is mandatory: do not start the suite.
                     try:
-                        update_result = check_for_updates_on_startup()
+                        if check_for_updates_on_startup():
+                            print("Update pending or applied; not starting Launcher mode")
+                            sys.exit(0)
+                    except SystemExit:
+                        raise
                     except Exception as e:
                         print(f"Error checking for updates in Launcher mode: {e}")
                         import traceback
@@ -1226,14 +1236,17 @@ if __name__ == "__main__":
         print(f"Error loading settings: {e}")
         settings = {}
 
-    # Check for updates using the main app instance
+    # Check for updates using the main app instance.
+    # If an update is available it is mandatory: the suite must NOT start the
+    # outdated version. check_for_updates_on_startup() returns True in that
+    # case (update applied, failed, or declined), and we exit before building
+    # the GUI.
     try:
-        # Check for updates - this will show dialog if update available
-        update_result = check_for_updates_on_startup()
-
-        # If update was applied, the application will exit automatically
-        # If no update or user cancelled, continue normally
-
+        if check_for_updates_on_startup():
+            print("Update pending or applied; not starting Titan suite")
+            sys.exit(0)
+    except SystemExit:
+        raise
     except Exception as e:
         print(f"Error checking for updates: {e}")
         import traceback

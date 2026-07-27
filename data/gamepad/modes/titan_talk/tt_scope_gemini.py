@@ -32,10 +32,10 @@ except Exception as e:  # pragma: no cover
     _PIL = False
 
 try:
-    import google.generativeai as genai
+    from google import genai
     _GENAI = True
 except Exception as e:  # pragma: no cover
-    print(f"[TitanTalk] google-generativeai unavailable: {e}")
+    print(f"[TitanTalk] google-genai unavailable: {e}")
     genai = None
     _GENAI = False
 
@@ -87,6 +87,17 @@ def _click_screen(x, y):
         return False
 
 
+class _GeminiModel:
+    """Minimal ``generate_content`` shim over a google-genai client + model id."""
+
+    def __init__(self, client, name):
+        self.client = client
+        self.name = name
+
+    def generate_content(self, contents):
+        return self.client.models.generate_content(model=self.name, contents=contents)
+
+
 class GeminiScope(Scope):
     id = 'gemini'
 
@@ -104,12 +115,12 @@ class GeminiScope(Scope):
     def _api_key(self):
         return (get_setting('api_key', '', section='titan_talk') or '').strip()
 
-    def _pick_model_name(self):
+    def _pick_model_name(self, client):
         """Auto-select a working vision model for this key.
 
         A fixed model id often fails ("model not found / not supported") because
         availability varies per key and changes over time. Instead we ask the
-        API which models this key can actually call (``list_models``) and pick a
+        API which models this key can actually call (``models.list``) and pick a
         multimodal one that supports ``generateContent`` (every Gemini >=1.5
         model accepts images), preferring a fast "flash" model. A manual
         ``[titan_talk] model`` setting still overrides if present.
@@ -118,13 +129,14 @@ class GeminiScope(Scope):
         if override:
             return override
         try:
-            models = list(genai.list_models())
+            models = list(client.models.list())
         except Exception as e:
-            print(f"[TitanTalk] list_models failed: {e}")
+            print(f"[TitanTalk] models.list failed: {e}")
             return _FALLBACK_MODEL
         names = [m.name for m in models
-                 if 'generateContent' in getattr(m, 'supported_generation_methods', [])
-                 and 'gemini' in m.name]
+                 if 'generateContent' in (getattr(m, 'supported_actions', None)
+                                          or getattr(m, 'supported_generation_methods', None) or [])
+                 and 'gemini' in (m.name or '')]
         if not names:
             return _FALLBACK_MODEL
 
@@ -150,14 +162,17 @@ class GeminiScope(Scope):
         return best
 
     def _ensure_model(self):
+        """A ready-to-call model shim, or None. Wraps the google-genai client so
+        callers keep the simple ``model.generate_content([prompt, image])``
+        call shape."""
         if self._model is not None:
             return self._model
         key = self._api_key()
         if not key:
             return None
         try:
-            genai.configure(api_key=key)
-            self._model = genai.GenerativeModel(self._pick_model_name())
+            client = genai.Client(api_key=key)
+            self._model = _GeminiModel(client, self._pick_model_name(client))
         except Exception as e:
             print(f"[TitanTalk] Gemini model init failed: {e}")
             self._model = None
