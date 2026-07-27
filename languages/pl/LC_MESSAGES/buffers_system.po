@@ -89,6 +89,77 @@ msgstr "Głośność"
 msgid "No voices"
 msgstr "Brak głosów"
 
+#: src/buffers/ai_buffer.py
+msgid "AI settings"
+msgstr "Ustawienia AI"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant"
+msgstr "Asystent"
+
+#: src/buffers/ai_buffer.py
+msgid "Creation kit"
+msgstr "Kreator dodatków"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant persona"
+msgstr "Persona asystenta"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant voice"
+msgstr "Głos asystenta"
+
+#: src/buffers/ai_buffer.py
+msgid "Automatic"
+msgstr "Automatycznie"
+
+#: src/buffers/ai_buffer.py
+msgid "Confirmations"
+msgstr "Potwierdzenia"
+
+#: src/buffers/ai_buffer.py
+msgid "Risky actions"
+msgstr "Ryzykowne akcje"
+
+#: src/buffers/ai_buffer.py
+msgid "Every action"
+msgstr "Każda akcja"
+
+#: src/buffers/ai_buffer.py
+msgid "Autonomous"
+msgstr "Autonomiczny"
+
+#: src/buffers/ai_buffer.py
+msgid "Reminder announcements"
+msgstr "Odczytywanie przypomnień"
+
+#: src/buffers/ai_buffer.py
+msgid "Spoken"
+msgstr "Głosowo"
+
+#: src/buffers/ai_buffer.py
+msgid "Text"
+msgstr "Tekstowo"
+
+#: src/buffers/ai_buffer.py
+msgid "AI wording of reminders"
+msgstr "Treść przypomnień od AI"
+
+#: src/buffers/ai_buffer.py
+msgid "Dictation into text fields"
+msgstr "Dyktowanie do pól tekstowych"
+
+#: src/buffers/buffer_announcer.py
+msgid "action"
+msgstr "akcja"
+#: src/buffers/ai_buffer.py
+msgid "Notifications"
+msgstr "Powiadomienia"
+
+#: src/buffers/buffer_announcer.py
+msgid "setting"
+msgstr "ustawienie"
+
 #~ msgid "Titan"
 #~ msgstr "Titan"
 

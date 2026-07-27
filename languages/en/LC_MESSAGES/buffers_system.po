@@ -89,6 +89,77 @@ msgstr "Volume"
 msgid "No voices"
 msgstr "No voices"
 
+#: src/buffers/ai_buffer.py
+msgid "AI settings"
+msgstr "AI settings"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant"
+msgstr "Assistant"
+
+#: src/buffers/ai_buffer.py
+msgid "Creation kit"
+msgstr "Creation kit"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant persona"
+msgstr "Assistant persona"
+
+#: src/buffers/ai_buffer.py
+msgid "Assistant voice"
+msgstr "Assistant voice"
+
+#: src/buffers/ai_buffer.py
+msgid "Automatic"
+msgstr "Automatic"
+
+#: src/buffers/ai_buffer.py
+msgid "Confirmations"
+msgstr "Confirmations"
+
+#: src/buffers/ai_buffer.py
+msgid "Risky actions"
+msgstr "Risky actions"
+
+#: src/buffers/ai_buffer.py
+msgid "Every action"
+msgstr "Every action"
+
+#: src/buffers/ai_buffer.py
+msgid "Autonomous"
+msgstr "Autonomous"
+
+#: src/buffers/ai_buffer.py
+msgid "Reminder announcements"
+msgstr "Reminder announcements"
+
+#: src/buffers/ai_buffer.py
+msgid "Spoken"
+msgstr "Spoken"
+
+#: src/buffers/ai_buffer.py
+msgid "Text"
+msgstr "Text"
+
+#: src/buffers/ai_buffer.py
+msgid "AI wording of reminders"
+msgstr "AI wording of reminders"
+
+#: src/buffers/ai_buffer.py
+msgid "Dictation into text fields"
+msgstr "Dictation into text fields"
+
+#: src/buffers/buffer_announcer.py
+msgid "action"
+msgstr "action"
+#: src/buffers/ai_buffer.py
+msgid "Notifications"
+msgstr "Notifications"
+
+#: src/buffers/buffer_announcer.py
+msgid "setting"
+msgstr "setting"
+
 #~ msgid "Titan"
 #~ msgstr "Titan"
 

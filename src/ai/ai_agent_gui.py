@@ -12,6 +12,7 @@ import threading
 import wx
 
 from src.ai import ai_provider, ai_agent, agent_tools
+from src.buffers import ai_buffer
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 
@@ -85,6 +86,7 @@ class AIAgentFrame(wx.Frame):
 
     def __on_text(self, text):
         self._append(_("Agent"), text)
+        ai_buffer.push_assistant(text, author=_("Agent"))
         _speak(text)
 
     def _on_tool_start(self, name, args):
@@ -97,6 +99,7 @@ class AIAgentFrame(wx.Frame):
             # rather than announcing a synthetic, generic line.
             return
         self._append(_("Action"), desc)
+        ai_buffer.push_action(desc)
         self.status.SetLabel(desc)
         _speak(desc)
 
@@ -108,6 +111,7 @@ class AIAgentFrame(wx.Frame):
         if len(short) > 300:
             short = short[:300] + '...'
         self._append(_("Result"), short)
+        ai_buffer.push_action_result(short)
 
     def _describe_action(self, name, args):
         return agent_tools.describe_action(name, args)
@@ -153,6 +157,7 @@ class AIAgentFrame(wx.Frame):
             return
         self.input.SetValue("")
         self._append(_("You"), goal)
+        ai_buffer.push_user(goal)
         self._running = True
         self._cancel = threading.Event()
         self.send_btn.Enable(False)

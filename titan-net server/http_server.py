@@ -1622,18 +1622,39 @@ class TitanNetHTTPServer:
             if not to_addr:
                 return web.json_response({'success': False, 'error': 'Recipient is required'}, status=400)
             loop = asyncio.get_event_loop()
+            # Mint the Message-ID here so the stored copy and the message that
+            # actually leaves the server share one identity - that is what lets
+            # a reply coming back from an external client be threaded onto it.
+            from email.utils import make_msgid
+            try:
+                from config import Config
+                msgid_domain = (Config.MAIL_DOMAIN or '').strip() or None
+            except Exception:
+                msgid_domain = None
+            message_id = make_msgid(domain=msgid_domain)
             result = await loop.run_in_executor(
-                None, self.db.send_user_mail, user['id'], to_addr, subject, body
+                None, self.db.send_user_mail, user['id'], to_addr, subject, body, message_id
             )
             # If the recipient is remote, hand the message to the outbound mailer.
             if result.get('success') and result.get('external_recipient'):
                 try:
                     import mailer
                     from email.message import EmailMessage
+                    from email.utils import formatdate
                     msg = EmailMessage()
                     msg['Subject'] = subject
                     msg['From'] = result.get('from_addr')
                     msg['To'] = result['external_recipient']
+                    # Date and Message-ID are mandatory for a well-formed
+                    # message. Postfix does not add them (always_add_missing_
+                    # headers defaults to off), so without these the mail is
+                    # treated as spam by big providers and any reply to it
+                    # carries nothing to thread against.
+                    msg['Date'] = formatdate(localtime=True)
+                    msg['Message-ID'] = message_id
+                    if result.get('in_reply_to'):
+                        msg['In-Reply-To'] = result['in_reply_to']
+                        msg['References'] = result['in_reply_to']
                     msg.set_content(body)
                     await loop.run_in_executor(
                         None, mailer.send_message, msg, result.get('from_addr'),
@@ -1660,15 +1681,20 @@ class TitanNetHTTPServer:
             sender = (data.get('sender') or '').strip()
             subject = (data.get('subject') or '').strip()
             body = data.get('body') or ''
+            message_id = (data.get('message_id') or '').strip()
+            in_reply_to = (data.get('in_reply_to') or '').strip()
             loop = asyncio.get_event_loop()
             local = await loop.run_in_executor(None, self.db.resolve_local_user_by_address, recipient)
             if not local:
                 # Unknown mailbox: accept and drop (avoids Postfix retry loops).
                 return web.json_response({'success': True, 'delivered': False})
             result = await loop.run_in_executor(
-                None, self.db.store_incoming_mail, local['id'], sender, recipient, subject, body
+                None, self.db.store_incoming_mail, local['id'], sender, recipient, subject, body,
+                None, message_id, in_reply_to
             )
-            return web.json_response({'success': True, 'delivered': True, 'mail_id': result.get('mail_id')})
+            return web.json_response({'success': True, 'delivered': True,
+                                      'mail_id': result.get('mail_id'),
+                                      'duplicate': bool(result.get('duplicate'))})
         except Exception as e:
             logger.error(f"Mail incoming error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)

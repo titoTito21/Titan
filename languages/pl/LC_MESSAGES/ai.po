@@ -893,6 +893,17 @@ msgstr "Asystent niedostępny"
 msgid "Dictation"
 msgstr "Dyktowanie"
 
+#: src/ai/assistant/reminder_watcher.py:186
+msgid "Reminder for {time}: {body}"
+msgstr "Przypomnienie na {time}: {body}"
+
+#: src/ai/assistant/reminder_watcher.py:187
+msgid "Reminder: {body}"
+msgstr "Przypomnienie: {body}"
+
+#: src/ai/assistant/reminder_watcher.py:222
+msgid "Reminders"
+msgstr "Przypomnienia"
 #~ msgid "Performing: {action}"
 #~ msgstr "Wykonuję: {action}"
 

@@ -233,5 +233,75 @@
     "role": "assistant",
     "content": "Grom z jasnego nieba! Odtwarzam jingle Radia ZET z 2007 roku.",
     "timestamp": 1784998079.1821616
+  },
+  {
+    "role": "user",
+    "content": "odtwórz lokalnie Malanowski nowe rozdanie - odc 4",
+    "timestamp": 1785136978.3710296
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam czwarty odcinek serialu „Malanowski. Nowe rozdanie” pod tytułem „Widzę cię”.",
+    "timestamp": 1785137025.38557
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz następny odcinek Malanowskiego. Nowe rozdanie.",
+    "timestamp": 1785138441.230897
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam kolejny odcinek: Malanowski. Nowe Rozdanie – Szaleństwo.",
+    "timestamp": 1785138487.403481
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz świat według kiepskich Jolanta.",
+    "timestamp": 1785145826.5326872
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam odcinek Turbo Jolanta. Niech moc gromów będzie z tobą!",
+    "timestamp": 1785145846.9250348
+  },
+  {
+    "role": "user",
+    "content": "Stwórz świat według kiepskich Ferdydurkę.",
+    "timestamp": 1785147088.4681816
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam odcinek „Świat według Kiepskich” w odtwarzaczu Titan. Siądź wygodnie i oglądaj!",
+    "timestamp": 1785147109.549894
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz lokalnie świat według kiepskich Ferdy Durke.",
+    "timestamp": 1785147129.3879192
+  },
+  {
+    "role": "assistant",
+    "content": "Odnazlazłem odcinek 419 pod tytułem „Ferdydurka” z serii Świat według Kiepskich i uruchomiłem jego odtwarzanie. Niech moc pioruna Ci towarzyszy podczas seansu!",
+    "timestamp": 1785147165.6868663
+  },
+  {
+    "role": "user",
+    "content": "Stwórz przypomnienie za minutę trzeba coś zjeść.",
+    "timestamp": 1785147177.304497
+  },
+  {
+    "role": "assistant",
+    "content": "Przypomnienie zostało ustawione na godzinę 12:14. Niech moc piorunów doda ci sił podczas posiłku!",
+    "timestamp": 1785147192.1155603
+  },
+  {
+    "role": "user",
+    "content": "odtwórz jingle radia zet z 2006 roku",
+    "timestamp": 1785152917.6021888
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam dżingle Radia ZET z 2006 roku. Niech dźwięk dawnych lat niesie się jak grzmot!",
+    "timestamp": 1785152928.7110431
   }
 ]

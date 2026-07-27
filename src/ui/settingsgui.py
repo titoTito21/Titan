@@ -1185,12 +1185,17 @@ class SettingsFrame(wx.Frame):
         assistant_header = wx.StaticText(panel, label=_("Voice assistant"))
         vbox.Add(_dep(assistant_header), flag=wx.LEFT | wx.TOP, border=10)
 
-        # Text-to-speech engine: the cloud providers that actually offer a TTS API
-        # (Gemini, OpenAI - Claude has none, so it isn't listed) plus Titan TTS.
+        # Text-to-speech engine: Automatic (follows the API key that is really
+        # configured), the cloud providers that actually offer a TTS API (Gemini,
+        # OpenAI - Claude has none, so it isn't listed), plus Titan TTS.
         self._assistant_tts_values = [v for v, _l in ap.assistant_tts_options()]
+        # Only the 'Automatic' entry is prose worth translating; the rest are
+        # product names (Gemini TTS, OpenAI TTS, Titan TTS).
+        _tts_labels = {'auto': _("Automatic (match the API key you configured)")}
         self.assistant_tts_radio = wx.RadioBox(
             panel, label=_("Assistant voice (text to speech)"),
-            choices=[label for _v, label in ap.assistant_tts_options()],
+            choices=[_tts_labels.get(value, label)
+                     for value, label in ap.assistant_tts_options()],
             majorDimension=1, style=wx.RA_SPECIFY_COLS)
         self.assistant_tts_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(_dep(self.assistant_tts_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
@@ -1241,7 +1246,25 @@ class SettingsFrame(wx.Frame):
             "Dictate into text fields (an assistant shortcut pressed while a text "
             "field is focused types what you say into it)"))
         self.assistant_dictation_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(_dep(self.assistant_dictation_cb), flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
+        vbox.Add(_dep(self.assistant_dictation_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        # Automatic reminder announcements: Titan reads due tReminder reminders
+        # out itself, so they reach the user even with tReminder closed.
+        self._reminder_announce_values = ['voice', 'text', 'off']
+        self.reminder_announce_radio = wx.RadioBox(
+            panel, label=_("Announce reminders automatically"),
+            choices=[_("Speak them in the assistant's voice"),
+                     _("Read them as a text notification"),
+                     _("Do not announce them")],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.reminder_announce_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.reminder_announce_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        self.reminder_ai_phrasing_cb = wx.CheckBox(panel, label=_(
+            "Let the AI word the reminder announcement in the assistant's own "
+            "style (a fixed wording is used otherwise)"))
+        self.reminder_ai_phrasing_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.reminder_ai_phrasing_cb), flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
 
         # In-memory per-provider keys (decrypted), swapped as the provider
         # choice changes; persisted (re-encrypted) only on Save.
@@ -1356,6 +1379,11 @@ class SettingsFrame(wx.Frame):
         self.assistant_tts_radio.SetSelection(
             self._assistant_tts_values.index(tts)
             if tts in self._assistant_tts_values else 0)
+        announce = ap.get_reminder_announce()
+        self.reminder_announce_radio.SetSelection(
+            self._reminder_announce_values.index(announce)
+            if announce in self._reminder_announce_values else 0)
+        self.reminder_ai_phrasing_cb.SetValue(ap.get_reminder_ai_phrasing())
         self._update_ai_controls_state()
 
     def _save_ai_features(self, panel):
@@ -1384,9 +1412,19 @@ class SettingsFrame(wx.Frame):
             sel = self.assistant_tts_radio.GetSelection()
             if 0 <= sel < len(self._assistant_tts_values):
                 ap.set_assistant_tts(self._assistant_tts_values[sel])
+            sel = self.reminder_announce_radio.GetSelection()
+            if 0 <= sel < len(self._reminder_announce_values):
+                ap.set_reminder_announce(self._reminder_announce_values[sel])
+            ap.set_reminder_ai_phrasing(self.reminder_ai_phrasing_cb.GetValue())
             # Re-register the global hotkeys so changes take effect immediately.
             from src.ai.assistant import hotkeys as _assistant_hotkeys
             _assistant_hotkeys.register()
+            # Start/stop the automatic reminder announcer to match the new mode.
+            from src.ai.assistant import reminder_watcher
+            reminder_watcher.refresh()
+            # Re-read the AI settings buffer so it reports the saved state.
+            from src.buffers import ai_buffer
+            ai_buffer.refresh_settings()
         except Exception as e:
             print(f"[settings] saving assistant settings failed: {e}")
 

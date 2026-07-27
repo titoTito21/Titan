@@ -152,10 +152,11 @@ _PROVIDER_TTS = {
 
 
 def assistant_tts_options():
-    """Ordered [(value, label)] for the assistant text-to-speech choice: each
-    cloud provider that supports TTS (and only if it does), then Titan TTS which
-    is always available. Cloud order follows PROVIDERS."""
-    opts = []
+    """Ordered [(value, label)] for the assistant text-to-speech choice:
+    'Automatic' first (pick the engine that matches the configured API key), then
+    each cloud provider that supports TTS (and only if it does), then Titan TTS
+    which is always available. Cloud order follows PROVIDERS."""
+    opts = [('auto', 'Automatic (match the API key you configured)')]
     for pid, _label in PROVIDERS:
         entry = _PROVIDER_TTS.get(pid)
         if entry:
@@ -165,17 +166,79 @@ def assistant_tts_options():
 
 
 def get_assistant_tts():
-    """Selected engine the assistant speaks with: a provider id that supports TTS
-    ('gemini' / 'openai') or 'titan' (Titan TTS). Defaults to 'gemini' (the
-    assistant's cloud voice); an invalid/unsupported stored value falls back to
-    the first available option."""
+    """The stored assistant text-to-speech CHOICE: 'auto' (default), a provider
+    id that supports TTS ('gemini' / 'openai'), or 'titan' (Titan TTS). This is
+    the raw preference - call :func:`resolve_assistant_tts` to get the engine to
+    actually speak with, which also takes the available API keys into account."""
     valid = [v for v, _l in assistant_tts_options()]
-    val = get_setting('assistant_tts', 'gemini', section=_SETTINGS_SECTION)
+    val = get_setting('assistant_tts', 'auto', section=_SETTINGS_SECTION)
     return val if val in valid else (valid[0] if valid else 'titan')
 
 
 def set_assistant_tts(engine):
-    set_setting('assistant_tts', engine or 'gemini', section=_SETTINGS_SECTION)
+    set_setting('assistant_tts', engine or 'auto', section=_SETTINGS_SECTION)
+
+
+def tts_providers_with_key():
+    """Provider ids that both offer a TTS API and have an API key configured,
+    in PROVIDERS order."""
+    return [pid for pid, _l in PROVIDERS
+            if _PROVIDER_TTS.get(pid) and get_ai_key(pid)]
+
+
+def resolve_assistant_tts():
+    """The engine the assistant should actually speak with ('gemini' / 'openai' /
+    'titan'), derived from the stored choice AND the keys that are really set.
+
+    A cloud voice only works if that provider's key is configured, so a mismatch
+    (e.g. "OpenAI TTS" selected while only a Gemini key exists) would fail on
+    every utterance and fall back to Titan TTS after an error. Instead:
+
+    * 'auto' (default) - use the configured main provider when it can speak,
+      otherwise the first TTS-capable provider that has a key, otherwise Titan TTS;
+    * an explicit cloud engine - honoured when its key is present, otherwise
+      another provider that does have one, otherwise Titan TTS;
+    * 'titan' - always honoured (no key needed).
+    """
+    choice = get_assistant_tts()
+    if choice == 'titan':
+        return 'titan'
+    with_key = tts_providers_with_key()
+    if choice != 'auto':
+        if get_ai_key(choice):
+            return choice
+        return with_key[0] if with_key else 'titan'
+    main = get_ai_provider()
+    if main in with_key:
+        return main
+    return with_key[0] if with_key else 'titan'
+
+
+# --------------------------------------------------------------------------- #
+# Automatic reminder announcements (tReminder -> assistant)
+# --------------------------------------------------------------------------- #
+def get_reminder_announce():
+    """How due tReminder reminders are announced by Titan itself, even when the
+    tReminder window is closed: 'voice' (spoken in the assistant's voice,
+    default), 'text' (notification + screen reader / Titan TTS) or 'off'."""
+    v = get_setting('reminder_announce', 'voice', section=_SETTINGS_SECTION)
+    return v if v in ('off', 'text', 'voice') else 'voice'
+
+
+def set_reminder_announce(mode):
+    set_setting('reminder_announce', mode if mode in ('off', 'text', 'voice')
+                else 'voice', section=_SETTINGS_SECTION)
+
+
+def get_reminder_ai_phrasing():
+    """When True (default) the announcement is written by the AI in the
+    assistant's own words instead of a fixed template."""
+    val = get_setting('reminder_ai_phrasing', True, section=_SETTINGS_SECTION)
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def set_reminder_ai_phrasing(enabled):
+    set_setting('reminder_ai_phrasing', bool(enabled), section=_SETTINGS_SECTION)
 
 
 def get_assistant_dictation():

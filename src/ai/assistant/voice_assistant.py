@@ -24,6 +24,7 @@ from src.ai.ai_agent import run_agent, AgentCancelled
 from src.ai.assistant import personas as personas_mod
 from src.ai.assistant import voice_io
 from src.ai.assistant.assistant_tools import get_assistant_tools
+from src.buffers import ai_buffer
 
 try:
     from src.titan_core.sound import play_sound
@@ -196,6 +197,7 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
                 if on_transcript:
                     on_transcript(txt)
                 personas_mod.append_history(persona, 'user', txt)
+                ai_buffer.push_user(txt)
         threading.Thread(target=_bg_transcribe, daemon=True).start()
     else:
         goal_text = (goal_text or '').strip()
@@ -205,6 +207,7 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
         if on_transcript:
             on_transcript(goal_text)
         personas_mod.append_history(persona, 'user', goal_text)
+        ai_buffer.push_user(goal_text)
         goal_arg = goal_text
 
     # 2. Run the agent (computer-use + everyday tools) as this persona. Text is
@@ -237,6 +240,7 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
         if cancel_event is not None and cancel_event.is_set():
             raise AgentCancelled()
         voice_io.speak(question, persona=persona, cancel_event=cancel_event)
+        ai_buffer.push_assistant(question, persona=persona)
         play_sound(SOUND_INITIALIZED)
         status("listening")
         wav = voice_io.record_until_silence(cancel_event=cancel_event)
@@ -249,15 +253,32 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
         answer = (voice_io.transcribe(wav, language_hint=language) or '').strip()
         if answer and on_transcript:
             on_transcript(answer)
+        if answer:
+            ai_buffer.push_user(answer)
         return answer or None
 
     tools = get_assistant_tools(ask_user=(ask_user or _voice_ask))
+
+    # Feed the buffer system's "Actions" buffer so the user can review what the
+    # agent actually did after the fact (the agent loop already exposes these).
+    def _tool_start(name, args):
+        try:
+            from src.ai.agent_tools import describe_action
+            desc = describe_action(name, args)
+        except Exception:
+            desc = None
+        if desc:
+            ai_buffer.push_action(desc)
+
+    def _tool_result(_name, result):
+        ai_buffer.push_action_result(result)
 
     try:
         reply = run_agent(
             goal_arg, tools, provider=_ASSISTANT_PROVIDER, system=system,
             on_text=(on_reply if on_reply else None), on_text_delta=_delta,
             goal_audio=goal_audio,
+            on_tool_start=_tool_start, on_tool_result=_tool_result,
             confirm=confirm, confirm_all=confirm_all, cancel_event=cancel_event)
     except BaseException:
         # Always tear the speaker down (cancel/errors included) so its worker
@@ -273,6 +294,7 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
     speaker.finish()
     if reply:
         personas_mod.append_history(persona, 'assistant', reply)
+        ai_buffer.push_assistant(reply, persona=persona)
         if not speaker.spoke:
             status("speaking")
             voice_io.speak(reply, persona=persona, cancel_event=cancel_event)
@@ -357,6 +379,23 @@ class LiveSession:
         self.on_text = on_text
         self.cancel_event = cancel_event or threading.Event()
         self._thread = None
+        # Text arrives as small deltas; the buffer system gets whole sentences.
+        self._text_buf = ''
+
+    def _buffer_text(self, delta, flush=False):
+        """Accumulate streamed live text and push COMPLETE sentences to the AI
+        conversation buffer, so the review list holds readable lines instead of
+        a shower of fragments."""
+        try:
+            self._text_buf += delta or ''
+            sentences, self._text_buf = voice_io._split_sentences(self._text_buf)
+            if flush and self._text_buf.strip():
+                sentences.append(self._text_buf.strip())
+                self._text_buf = ''
+            for sentence in sentences:
+                ai_buffer.push_assistant(sentence, persona=self.persona)
+        except Exception as e:
+            print(f"[assistant] live buffer feed error: {e}")
 
     def _status(self, msg):
         if self.on_status:
@@ -464,8 +503,10 @@ class LiveSession:
                                 arr = np.frombuffer(data, dtype=np.int16)
                                 out_stream.write(arr)
                             text = getattr(response, 'text', None)
-                            if text and self.on_text:
-                                self.on_text(text)
+                            if text:
+                                self._buffer_text(text)
+                                if self.on_text:
+                                    self.on_text(text)
 
                 sender = asyncio.create_task(_send_mic())
                 receiver = asyncio.create_task(_recv())
@@ -474,6 +515,7 @@ class LiveSession:
                 sender.cancel()
                 receiver.cancel()
         finally:
+            self._buffer_text('', flush=True)  # keep the last, unfinished line
             try:
                 out_stream.stop()
                 out_stream.close()

@@ -962,6 +962,29 @@ msgstr ""
 msgid "Congratulations!"
 msgstr "Gratulacje!"
 
+#: src/ui/settingsgui.py:1193
+msgid "Automatic (match the API key you configured)"
+msgstr "Automatycznie (zgodnie z ustawionym kluczem API)"
+
+#: src/ui/settingsgui.py:1348
+msgid "Announce reminders automatically"
+msgstr "Automatyczne odczytywanie przypomnień"
+
+#: src/ui/settingsgui.py:1349
+msgid "Speak them in the assistant's voice"
+msgstr "Wypowiadaj je głosem asystenta"
+
+#: src/ui/settingsgui.py:1350
+msgid "Read them as a text notification"
+msgstr "Odczytuj je jako powiadomienie tekstowe"
+
+#: src/ui/settingsgui.py:1351
+msgid "Do not announce them"
+msgstr "Nie odczytuj ich"
+
+#: src/ui/settingsgui.py:1357
+msgid "Let the AI word the reminder announcement in the assistant's own style (a fixed wording is used otherwise)"
+msgstr "Pozwól AI ułożyć treść przypomnienia w stylu asystenta (w przeciwnym razie używany jest stały tekst)"
 #~ msgid "Titan key:"
 #~ msgstr "Klawisz Titan:"
 

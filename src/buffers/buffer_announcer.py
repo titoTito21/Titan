@@ -341,6 +341,10 @@ def _element_text(nav):
             'message': _("message"),
             'private': _("message"),
             'notification': _("notification"),
+            # AI category: a conversation line reads as a message, an agent
+            # step as an action.
+            'ai_message': _("message"),
+            'ai_action': _("action"),
         }
         text += ", " + kind_labels.get(nav.kind, str(nav.kind))
 

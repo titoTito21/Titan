@@ -46,9 +46,20 @@ _ = set_language(get_setting('language', 'pl'))
 
 def _speak(text):
     """Announce ``text`` (Titan TTS when enabled, else screen reader / notification
-    voice; best effort, never raises)."""
+    voice; best effort, never raises).
+
+    Every milestone of a generation run goes through here (Planning, Plan ready,
+    Generating, questions, Done, failures, Saved, Cancelled), so this is also
+    where they are recorded in the AI notifications buffer - a spoken milestone
+    can then be reviewed afterwards with the buffer keys.
+    """
     from src.ai.ai_speech import speak
     speak(text)
+    try:
+        from src.buffers import ai_buffer
+        ai_buffer.push_notice(text, author=_("Creation kit"))
+    except Exception as e:
+        print(f"[AICreationKit] buffer feed error: {e}")
 
 
 # --------------------------------------------------------------------------- #

@@ -1527,6 +1527,12 @@ def _reminder_settings_dir():
                         'appsettings')
 
 
+def reminder_file_path():
+    """Full path of tReminder's calendar file (the shared source of truth for
+    reminders, read by the app and by the automatic announcer)."""
+    return os.path.join(_reminder_settings_dir(), 'calendar.tcal')
+
+
 def _parse_reminder_datetime(date_str, time_str):
     """Return (date 'YYYY-MM-DD', time 'HH:MM') from flexible input, defaulting
     to today / the next hour. Accepts today/tomorrow, YYYY-MM-DD, DD.MM.YYYY,
@@ -1578,9 +1584,8 @@ def titan_create_reminder(name, description="", date="", time="", priority="medi
              'date': date_iso, 'time': time_hm, 'priority': prio,
              'repeat': rep, 'done': False}
     try:
-        settings_dir = _reminder_settings_dir()
-        os.makedirs(settings_dir, exist_ok=True)
-        path = os.path.join(settings_dir, 'calendar.tcal')
+        os.makedirs(_reminder_settings_dir(), exist_ok=True)
+        path = reminder_file_path()
         data = []
         if os.path.exists(path):
             try:
@@ -1596,7 +1601,8 @@ def titan_create_reminder(name, description="", date="", time="", priority="medi
     except Exception as e:
         return f"Could not save the reminder: {e}"
     return (f"Reminder '{name}' saved for {date_iso} at {time_hm} in Titan "
-            f"Organizer (tReminder). Keep tReminder running so it can alert you.")
+            f"Organizer (tReminder). Titan announces it when it is due, even if "
+            f"tReminder is closed.")
 
 
 # --------------------------------------------------------------------------- #

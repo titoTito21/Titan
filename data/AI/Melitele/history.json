@@ -278,5 +278,15 @@
     "role": "assistant",
     "content": "Odtwarzam „The Riddle” Nika Kershawa. Niech ta muzyka przyniesie Ci radość i ukojenie.",
     "timestamp": 1784999683.0897372
+  },
+  {
+    "role": "user",
+    "content": "ustaw przypomnienie za minutę, spać",
+    "timestamp": 1785136574.2036278
+  },
+  {
+    "role": "assistant",
+    "content": "Przypomnienie o spaniu zostało ustawione na godzinę 9:17. Niech Twój sen będzie spokojny i pokrzepiający.",
+    "timestamp": 1785136592.3573616
   }
 ]

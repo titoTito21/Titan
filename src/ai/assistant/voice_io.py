@@ -238,13 +238,17 @@ def _speak_cloud_stream(text, engine, voice_name, cancel_event=None, out_holder=
 
 
 def _assistant_tts_engine():
-    """The user's chosen assistant TTS engine ('gemini' | 'openai' | 'titan');
-    defaults to 'gemini' when settings are unavailable."""
+    """The assistant TTS engine to speak with ('gemini' | 'openai' | 'titan').
+
+    Resolved against the API keys that are actually configured, so a cloud voice
+    is never attempted without its key (see
+    :func:`ai_provider.resolve_assistant_tts`). Defaults to Titan TTS when
+    settings are unavailable."""
     try:
         from src.ai import ai_provider
-        return ai_provider.get_assistant_tts()
+        return ai_provider.resolve_assistant_tts()
     except Exception:
-        return 'gemini'
+        return 'titan'
 
 
 # --------------------------------------------------------------------------- #

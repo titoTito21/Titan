@@ -14,6 +14,7 @@ except ImportError:
 import atexit
 import hashlib
 import os
+import re
 import secrets
 import random
 import threading
@@ -1511,10 +1512,46 @@ class Database:
                     body TEXT,
                     received_at TEXT NOT NULL,
                     read INTEGER DEFAULT 0,
+                    message_id TEXT,
+                    in_reply_to TEXT,
                     FOREIGN KEY (owner_user_id) REFERENCES users(id)
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_mail_owner ON mail_messages(owner_user_id, folder)")
+
+            # Migration: RFC 5322 threading identifiers. `message_id` also
+            # de-duplicates inbound deliveries (Postfix retries the pipe after
+            # a temporary failure, which can re-deliver a message the server
+            # already stored), and lets a reply sent from Titan quote the
+            # incoming Message-ID so the thread stays intact in the recipient's
+            # mail client.
+            for column in ('message_id', 'in_reply_to'):
+                try:
+                    cursor.execute(f"SELECT {column} FROM mail_messages LIMIT 1")
+                except sqlite3.OperationalError:
+                    cursor.execute(f"ALTER TABLE mail_messages ADD COLUMN {column} TEXT")
+                    print(f"Migration: Added '{column}' column to mail_messages table")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mail_msgid ON mail_messages(owner_user_id, message_id)")
+
+            # Backfill: messages delivered before addresses were normalized hold
+            # the raw header ("Some One <someone@gmail.com>") in from_addr, which
+            # the Mail client both displays and reuses as the recipient when
+            # replying - making those replies unroutable.
+            cursor.execute(
+                "SELECT id, from_addr, to_addr FROM mail_messages "
+                "WHERE from_addr LIKE '%<%' OR to_addr LIKE '%<%'"
+            )
+            unnormalized = cursor.fetchall()
+            for row in unnormalized:
+                mail_id = self._row_get(row, 'id', 0)
+                clean_from = self.normalize_mail_address(self._row_get(row, 'from_addr', 1))
+                clean_to = self.normalize_mail_address(self._row_get(row, 'to_addr', 2))
+                cursor.execute(
+                    "UPDATE mail_messages SET from_addr = ?, to_addr = ? WHERE id = ?",
+                    (clean_from, clean_to, mail_id),
+                )
+            if unnormalized:
+                print(f"Migration: Normalized {len(unnormalized)} mail address(es) in mail_messages")
 
             # Migration: rebuild forum_bans to scope bans per-group. The old
             # schema had UNIQUE(user_id) (one ban per user, server-wide). The
@@ -2289,10 +2326,25 @@ class Database:
         domain = self._mail_domain()
         return f"{username}@{domain}" if domain else username
 
+    @staticmethod
+    def normalize_mail_address(address: str) -> str:
+        """Reduce a recipient/sender field to a bare ``user@host``.
+
+        Anything that reaches us from a real mail client may carry a display
+        name (``Some One <someone@gmail.com>``); that form must never be used
+        as an envelope recipient or matched against a username."""
+        address = (address or '').strip()
+        if not address:
+            return ''
+        from email.utils import parseaddr
+        _name, parsed = parseaddr(address)
+        parsed = (parsed or '').strip()
+        return parsed or address.strip('<>').strip()
+
     def resolve_local_user_by_address(self, address: str) -> Optional[Dict[str, Any]]:
         """Return the local user a mailbox address belongs to, or None. Matches
         local-part (case-insensitive) to a username when the domain is ours."""
-        address = (address or '').strip().lower()
+        address = self.normalize_mail_address(address).lower()
         if '@' not in address:
             return None
         local, _, domain = address.partition('@')
@@ -2310,15 +2362,35 @@ class Database:
 
     @_serialized_write
     def store_incoming_mail(self, owner_user_id: int, from_addr: str, to_addr: str,
-                            subject: str, body: str, received_at: Optional[str] = None) -> Dict[str, Any]:
-        """Persist a delivered message into a user's inbox."""
+                            subject: str, body: str, received_at: Optional[str] = None,
+                            message_id: Optional[str] = None,
+                            in_reply_to: Optional[str] = None) -> Dict[str, Any]:
+        """Persist a delivered message into a user's inbox.
+
+        Re-delivery of a message we already hold (same owner + Message-ID) is a
+        no-op: Postfix retries the delivery pipe after any temporary failure,
+        including one where the row was written but the response was lost."""
         received_at = received_at or datetime.now().isoformat()
+        from_addr = self.normalize_mail_address(from_addr)
+        to_addr = self.normalize_mail_address(to_addr)
+        message_id = (message_id or '').strip() or None
+        in_reply_to = (in_reply_to or '').strip() or None
         conn = self.get_connection()
         cursor = conn.cursor()
+        if message_id:
+            cursor.execute(
+                "SELECT id FROM mail_messages WHERE owner_user_id = ? AND message_id = ?",
+                (owner_user_id, message_id),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                mail_id = self._row_get(existing, 'id', 0)
+                conn.close()
+                return {"success": True, "mail_id": mail_id, "duplicate": True}
         cursor.execute(
-            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read) "
-            "VALUES (?, 'in', 'inbox', ?, ?, ?, ?, ?, 0)",
-            (owner_user_id, from_addr, to_addr, subject, body, received_at),
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to) "
+            "VALUES (?, 'in', 'inbox', ?, ?, ?, ?, ?, 0, ?, ?)",
+            (owner_user_id, from_addr, to_addr, subject, body, received_at, message_id, in_reply_to),
         )
         mail_id = cursor.lastrowid
         conn.commit()
@@ -2384,13 +2456,46 @@ class Database:
         conn.close()
         return {"success": True}
 
-    def send_user_mail(self, user_id: int, to_addr: str, subject: str, body: str) -> Dict[str, Any]:
+    def find_thread_parent(self, user_id: int, peer_addr: str, subject: str) -> Optional[str]:
+        """The Message-ID this outgoing mail is most likely answering.
+
+        The Mail clients compose a reply as a plain new message ("Re: <subject>"
+        to the sender's address), so the thread has to be recovered here: the
+        newest message this user received from that address whose subject
+        matches once the reply prefixes are stripped."""
+        peer_addr = self.normalize_mail_address(peer_addr).lower()
+        base = re.sub(r'^(?:\s*(?:re|odp|fwd|fw)\s*:\s*)+', '', (subject or ''),
+                      flags=re.IGNORECASE).strip().lower()
+        if not peer_addr or not base:
+            return None
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT subject, message_id FROM mail_messages "
+            "WHERE owner_user_id = ? AND folder = 'inbox' AND lower(from_addr) = ? "
+            "AND message_id IS NOT NULL ORDER BY id DESC LIMIT 20",
+            (user_id, peer_addr),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        for row in rows:
+            candidate = re.sub(r'^(?:\s*(?:re|odp|fwd|fw)\s*:\s*)+',
+                               '', self._row_get(row, 'subject', 0) or '',
+                               flags=re.IGNORECASE).strip().lower()
+            if candidate == base:
+                return self._row_get(row, 'message_id', 1)
+        return None
+
+    def send_user_mail(self, user_id: int, to_addr: str, subject: str, body: str,
+                       message_id: Optional[str] = None) -> Dict[str, Any]:
         """Persist an outgoing message to the sender's 'sent' folder. If the
         recipient is a local Titan-Net user, also deposit it in their inbox.
         Returns ``external_recipient`` so the caller (HTTP layer) knows whether
         it must also hand the message to the outbound mailer for a remote
         address (models does not import the mailer)."""
-        to_addr = (to_addr or '').strip()
+        # A recipient copied out of a received message can still carry the
+        # sender's display name; only the bare address is routable.
+        to_addr = self.normalize_mail_address(to_addr)
         subject = (subject or '').strip()
         if not to_addr:
             return {"success": False, "error": "Recipient is required"}
@@ -2399,20 +2504,23 @@ class Database:
             return {"success": False, "error": "User not found"}
         from_addr = self.user_mail_address(sender['username'])
         now = datetime.now().isoformat()
+        in_reply_to = self.find_thread_parent(user_id, to_addr, subject)
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read) "
-            "VALUES (?, 'out', 'sent', ?, ?, ?, ?, ?, 1)",
-            (user_id, from_addr, to_addr, subject, body, now),
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to) "
+            "VALUES (?, 'out', 'sent', ?, ?, ?, ?, ?, 1, ?, ?)",
+            (user_id, from_addr, to_addr, subject, body, now, message_id, in_reply_to),
         )
         conn.commit()
         conn.close()
         # Internal delivery to a local mailbox.
         local = self.resolve_local_user_by_address(to_addr)
         if local:
-            self.store_incoming_mail(local['id'], from_addr, to_addr, subject, body, now)
-        return {"success": True, "from_addr": from_addr,
+            self.store_incoming_mail(local['id'], from_addr, to_addr, subject, body, now,
+                                     message_id=message_id, in_reply_to=in_reply_to)
+        return {"success": True, "from_addr": from_addr, "to_addr": to_addr,
+                "in_reply_to": in_reply_to,
                 "external_recipient": None if local else to_addr}
 
     @_serialized_write

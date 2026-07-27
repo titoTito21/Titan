@@ -44,6 +44,14 @@ def _speak(text):
     speak(text)
 
 
+def _speak_status(text):
+    """Narrate a progress status - stays SILENT when the assistant answers with
+    Titan TTS, so its own voice is not interrupted by 'Thinking...' /
+    'Speaking...' in the same voice (the audio cues already mark those steps)."""
+    from src.ai.ai_speech import speak_status
+    speak_status(text)
+
+
 # Spoken status announcements (no window to show them in).
 _STATUS_LABELS = {
     'listening': _("Listening..."),
@@ -132,7 +140,10 @@ class _HeadlessAssistant:
     # -- callbacks ------------------------------------------------------- #
     def _on_status(self, key):
         label = _STATUS_LABELS.get(key, key)
-        wx.CallAfter(_speak, label)
+        # "I did not hear anything" is a real message (no sound conveys it), so
+        # it is always spoken; the rest is progress narration.
+        speaker = _speak if key == 'nothing_heard' else _speak_status
+        wx.CallAfter(speaker, label)
 
     def _confirm(self, tool, args):
         """Ask the user to allow a risky agent action (worker thread -> GUI)."""

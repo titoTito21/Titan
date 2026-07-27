@@ -654,6 +654,13 @@ class TitanApp(wx.Frame):
             _assistant_hotkeys.register()
         except Exception as e:
             print(f"[gui] assistant hotkey registration failed: {e}")
+        # Automatic announcements of due tReminder reminders (no-op when the
+        # feature is switched off in Settings, AI features).
+        try:
+            from src.ai.assistant import reminder_watcher
+            reminder_watcher.start()
+        except Exception as e:
+            print(f"[gui] reminder announcer could not start: {e}")
 
     def _end_startup_sound_guard(self):
         self._startup_sound_guard = False

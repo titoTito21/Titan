@@ -32,6 +32,13 @@ def _speak(text):
     speak(text)
 
 
+def _speak_status(text):
+    """Progress narration - silent while the assistant answers with Titan TTS
+    (same voice would talk over the reply); the status is on screen either way."""
+    from src.ai.ai_speech import speak_status
+    speak_status(text)
+
+
 _STATUS_LABELS = {
     'listening': _("Listening..."),
     'nothing_heard': _("I did not hear anything."),
@@ -105,7 +112,9 @@ class AssistantFrame(wx.Frame):
     def _on_status(self, key):
         label = _STATUS_LABELS.get(key, key)
         wx.CallAfter(self.status.SetLabel, label)
-        wx.CallAfter(_speak, label)
+        # "I did not hear anything" is a real message, not progress narration.
+        speaker = _speak if key == 'nothing_heard' else _speak_status
+        wx.CallAfter(speaker, label)
 
     def _on_transcript(self, text):
         self._append(_("You"), text)

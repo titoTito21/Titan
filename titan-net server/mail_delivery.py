@@ -27,8 +27,11 @@ Example Postfix master.cf transport:
 
 import email
 import email.policy
+import email.utils
+import html
 import json
 import os
+import re
 import ssl
 import sys
 import urllib.request
@@ -53,29 +56,89 @@ def _load_token() -> str:
     return ''
 
 
+def _part_text(part) -> str:
+    try:
+        return part.get_content()
+    except Exception:
+        payload = part.get_payload(decode=True) or b''
+        charset = part.get_content_charset() or 'utf-8'
+        try:
+            return payload.decode(charset, 'replace')
+        except (LookupError, TypeError):
+            return payload.decode('utf-8', 'replace')
+
+
+def _html_to_text(source: str) -> str:
+    """Reduce an HTML body to readable plain text.
+
+    Phone/webmail clients (Gmail, Outlook mobile) often reply with an
+    HTML-only body; without this the raw markup ends up in the mailbox and the
+    Mail client shows tag soup instead of the reply.
+    """
+    text = re.sub(r'(?is)<(script|style|head)[^>]*>.*?</\1\s*>', '', source)
+    text = re.sub(r'(?i)<br\s*/?>', '\n', text)
+    text = re.sub(r'(?i)</\s*(p|div|tr|li|h[1-6]|blockquote|table)\s*>', '\n', text)
+    text = re.sub(r'(?s)<[^>]+>', '', text)
+    text = html.unescape(text)
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = re.sub(r'[ \t ]+', ' ', text)
+    text = re.sub(r' *\n *', '\n', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _plain_body(msg) -> str:
-    """Extract a readable text body, preferring text/plain."""
+    """Extract a readable text body, preferring text/plain over text/html."""
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_type() == 'text/plain' and not part.get_filename():
-                try:
-                    return part.get_content()
-                except Exception:
-                    payload = part.get_payload(decode=True) or b''
-                    return payload.decode('utf-8', 'replace')
+                return _part_text(part)
         for part in msg.walk():
             if part.get_content_type() == 'text/html' and not part.get_filename():
-                try:
-                    return part.get_content()
-                except Exception:
-                    payload = part.get_payload(decode=True) or b''
-                    return payload.decode('utf-8', 'replace')
+                return _html_to_text(_part_text(part))
+        return ''
+    body = _part_text(msg)
+    if msg.get_content_type() == 'text/html':
+        return _html_to_text(body)
+    return body
+
+
+def _header(msg, name: str) -> str:
+    """A header's decoded value as a single unfolded line.
+
+    Folded headers (a long ``Subject``, a ``References`` chain) otherwise carry
+    embedded newlines into the database and the Mail client's list view.
+    """
+    try:
+        value = msg.get(name)
+    except Exception:
+        return ''
+    if value is None:
         return ''
     try:
-        return msg.get_content()
+        value = str(value)
     except Exception:
-        payload = msg.get_payload(decode=True) or b''
-        return payload.decode('utf-8', 'replace')
+        return ''
+    return re.sub(r'\s+', ' ', value).strip()
+
+
+def _address(raw: str) -> str:
+    """The bare ``user@host`` from a header that may carry a display name.
+
+    ``From: Some One <someone@gmail.com>`` must be stored as the address alone:
+    the Mail client shows this value in the message list and reuses it verbatim
+    as the recipient when replying, and a display name there makes the reply
+    unroutable.
+    """
+    if not raw:
+        return ''
+    _name, addr = email.utils.parseaddr(raw)
+    addr = (addr or '').strip()
+    if not addr:
+        # Not a parseable address (e.g. a bare local part); keep it as-is
+        # minus any angle brackets so the value stays human-readable.
+        addr = raw.strip().strip('<>').strip()
+    return addr
 
 
 def main() -> int:
@@ -88,9 +151,10 @@ def main() -> int:
         return 0
 
     if not recipient:
-        recipient = (msg.get('Delivered-To') or msg.get('To') or '').strip()
-    sender = (msg.get('From') or '').strip()
-    subject = (msg.get('Subject') or '').strip()
+        recipient = _header(msg, 'Delivered-To') or _header(msg, 'To')
+    recipient = _address(recipient)
+    sender = _address(_header(msg, 'From'))
+    subject = _header(msg, 'Subject')
     body = _plain_body(msg)
 
     payload = json.dumps({
@@ -98,6 +162,12 @@ def main() -> int:
         'sender': sender,
         'subject': subject,
         'body': body,
+        # Threading + de-duplication. Postfix retries this pipe whenever we
+        # exit EX_TEMPFAIL, which includes the case where the server stored the
+        # message but the HTTP response never made it back; the ingest endpoint
+        # uses Message-ID to avoid filing the same reply twice.
+        'message_id': _header(msg, 'Message-ID'),
+        'in_reply_to': _header(msg, 'In-Reply-To'),
     }).encode('utf-8')
 
     req = urllib.request.Request(

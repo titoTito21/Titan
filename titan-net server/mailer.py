@@ -15,7 +15,7 @@ what to tell the user.
 import logging
 import smtplib
 from email.message import EmailMessage
-from email.utils import formataddr, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 
 from config import Config
 
@@ -47,6 +47,7 @@ def send_mail(to_addr: str, subject: str, body: str,
         msg['Subject'] = subject
         msg['From'] = formataddr((from_name, from_addr))
         msg['To'] = to_addr
+        msg['Date'] = formatdate(localtime=True)
         msg['Message-ID'] = make_msgid(domain=Config.MAIL_DOMAIN)
         msg.set_content(body)
         _deliver(msg, from_addr, [to_addr])
@@ -62,6 +63,13 @@ def send_message(msg: EmailMessage, envelope_from: str, recipients) -> bool:
     if not is_enabled():
         logger.info("Mail disabled; would have sent message to %s", recipients)
         return False
+    # Date and Message-ID are required by RFC 5322 and Postfix does not supply
+    # them (always_add_missing_headers is off by default); a message without
+    # them is scored as spam and cannot be threaded when it is replied to.
+    if not msg.get('Date'):
+        msg['Date'] = formatdate(localtime=True)
+    if not msg.get('Message-ID'):
+        msg['Message-ID'] = make_msgid(domain=Config.MAIL_DOMAIN)
     try:
         _deliver(msg, envelope_from, list(recipients))
         return True

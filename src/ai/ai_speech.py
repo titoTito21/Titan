@@ -30,6 +30,32 @@ def titan_tts_enabled():
         return False
 
 
+def assistant_uses_titan_tts():
+    """True when the voice assistant itself speaks with Titan TTS (either chosen
+    outright or resolved that way because no cloud TTS key is configured)."""
+    try:
+        from src.ai import ai_provider
+        return ai_provider.resolve_assistant_tts() == 'titan'
+    except Exception:
+        return False
+
+
+def speak_status(text, interrupt=True):
+    """Speak a PROGRESS status of the assistant ("Thinking...", "Speaking...").
+
+    These are useful while the assistant answers in a cloud voice: the status is
+    narrated by Titan TTS / the screen reader and the reply arrives in a clearly
+    different voice. When the assistant itself speaks with **Titan TTS**, status
+    and answer share one voice, so the chatter only talks over the answer - the
+    audio cues (listening / end of dictation / thinking) already mark those
+    steps. In that case nothing is spoken and only the assistant's own replies
+    (and real messages such as errors) are heard.
+    """
+    if assistant_uses_titan_tts():
+        return
+    speak(text, interrupt=interrupt)
+
+
 def speak(text, interrupt=True):
     """Speak ``text`` for the AI features:
 
