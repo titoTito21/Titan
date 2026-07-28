@@ -5133,8 +5133,22 @@ class TitanApp(wx.Frame):
         play_sound('ui/dialog.ogg')
         message = _("Do you want to start a voice call with {}?").format(username)
         result = _show_skinned_message(message, _("Voice call"), wx.YES_NO | wx.ICON_QUESTION)
-        
-        if result == wx.YES:
+
+        # _show_skinned_message returns MessageDialog.ShowModal(), i.e. wx.ID_YES
+        # / wx.ID_NO - NOT the wx.YES / wx.NO that wx.MessageBox returns.
+        if result == wx.ID_YES:
+            # Windows shows no consent prompt for desktop apps, so a blocked
+            # microphone otherwise produces a call the other side cannot hear.
+            # Check here, on the main thread, where we can offer the settings page.
+            try:
+                from src.system.mic_permission import ensure_microphone_access
+                if not ensure_microphone_access(parent=self):
+                    play_sound('core/error.ogg')
+                    play_sound('ui/dialogclose.ogg')
+                    return
+            except Exception as mic_err:
+                print(f"[GUI] microphone check unavailable: {mic_err}")
+
             # Start voice call
             success = telegram_client.start_voice_call(username)
             if success:

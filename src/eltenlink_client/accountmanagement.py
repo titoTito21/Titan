@@ -1034,7 +1034,9 @@ class AccountManagementDialog(wx.Dialog):
             ret = _show_skinned_message(
                 _("Mail events reporting requires email verification. Do you want to verify your email now?"),
                 _("Mail Events"), wx.YES_NO | wx.ICON_QUESTION, parent)
-            if ret == wx.YES:
+            # _show_skinned_message returns MessageDialog.ShowModal(), i.e.
+            # wx.ID_YES / wx.ID_NO - NOT the wx.YES / wx.NO of wx.MessageBox.
+            if ret == wx.ID_YES:
                 def do_verify():
                     try:
                         ok = self.client.send_mail_events_verification(password)
@@ -1176,7 +1178,8 @@ class AccountManagementDialog(wx.Dialog):
             ret = _show_skinned_message(
                 _("Are you sure you want to remove all auto-login tokens and log out all sessions?"),
                 _("Log out all sessions"), wx.YES_NO | wx.ICON_WARNING, dlg)
-            if ret == wx.YES:
+            # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+            if ret == wx.ID_YES:
                 def do_logout():
                     try:
                         ok = self.client.global_logout(password)
@@ -1298,7 +1301,8 @@ class AccountManagementDialog(wx.Dialog):
                 ret = _show_skinned_message(
                     _("Are you sure you want to archive this account?"),
                     _("Confirm"), wx.YES_NO | wx.ICON_WARNING, parent)
-                if ret == wx.YES:
+                # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+                if ret == wx.ID_YES:
                     def do_archive():
                         try:
                             result = self.client.archive_account(password)
@@ -1410,7 +1414,8 @@ class BlacklistDialog(wx.Dialog):
         ret = _show_skinned_message(
             _("Are you sure you want to remove {user} from the blacklist?").format(user=user),
             _("Remove from blacklist"), wx.YES_NO | wx.ICON_QUESTION, self)
-        if ret != wx.YES:
+        # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+        if ret != wx.ID_YES:
             return
 
         def do_remove():

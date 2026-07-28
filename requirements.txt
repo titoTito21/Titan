@@ -36,10 +36,14 @@ PyOpenAL
 
 # Voice chat dependencies
 sounddevice>=0.4.6
-# webrtcvad-wheels has no Python 3.14 wheels yet (unmaintained since Sept 2024,
-# and its C extension won't build from sdist on 3.14 either). On 3.14, voice
-# rooms fall back to continuous transmission (no VAD) — see voice_capture.py.
+# webrtcvad-wheels has no Python 3.14 wheels (unmaintained since Sept 2024,
+# and its C extension will not build from sdist on 3.14 either). It is used
+# when present; otherwise src/network/vad_fallback.py provides an equivalent
+# pure-Python detector, so Voice Activation works on every Python version.
 webrtcvad-wheels>=2.0.14; python_version < "3.14"
+# Opus keeps voice rooms at ~24kbps instead of 256kbps raw PCM. The libopus
+# DLLs ship in data/lib/; without opuslib the rooms still work in PCM mode.
+opuslib>=3.0.1
 numpy>=1.24.0
 
 # AI System dependencies

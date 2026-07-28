@@ -1442,7 +1442,9 @@ class GameSessionFrame(wx.Frame):
     def _on_leave(self, event):
         confirm = _show_skinned_message(_("Leave this session?"), _("Leave"),
                         wx.YES_NO | wx.ICON_QUESTION, self)
-        if confirm != wx.YES:
+        # _show_skinned_message returns MessageDialog.ShowModal(), i.e. wx.ID_YES
+        # / wx.ID_NO - NOT the wx.YES / wx.NO that wx.MessageBox returns.
+        if confirm != wx.ID_YES:
             return
 
         def _send():
@@ -1457,7 +1459,8 @@ class GameSessionFrame(wx.Frame):
                         _("End Session"),
                         wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
                         self)
-        if confirm != wx.YES:
+        # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+        if confirm != wx.ID_YES:
             return
 
         def _send():

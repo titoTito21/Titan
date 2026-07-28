@@ -1046,3 +1046,21 @@ msgstr ""
 #~ msgid "Networks updated"
 #~ msgstr "Sieci zaktualizowane"
 
+
+msgid "Microphone access is turned off for this computer. Open Settings, Privacy and security, Microphone, and turn on Microphone access."
+msgstr "Dostęp do mikrofonu jest wyłączony na tym komputerze. Otwórz Ustawienia, Prywatność i zabezpieczenia, Mikrofon i włącz Dostęp do mikrofonu."
+
+msgid "Windows is blocking desktop applications from using the microphone. Open Settings, Privacy and security, Microphone, and turn on Let desktop apps access your microphone."
+msgstr "System Windows blokuje aplikacjom klasycznym dostęp do mikrofonu. Otwórz Ustawienia, Prywatność i zabezpieczenia, Mikrofon i włącz Zezwalaj aplikacjom klasycznym na dostęp do mikrofonu."
+
+msgid "No microphone was found. Connect a microphone or headset and try again."
+msgstr "Nie znaleziono mikrofonu. Podłącz mikrofon lub słuchawki z mikrofonem i spróbuj ponownie."
+
+msgid "The microphone is not available."
+msgstr "Mikrofon jest niedostępny."
+
+msgid "Do you want to open microphone settings now?"
+msgstr "Czy chcesz teraz otworzyć ustawienia mikrofonu?"
+
+msgid "Microphone blocked"
+msgstr "Mikrofon zablokowany"

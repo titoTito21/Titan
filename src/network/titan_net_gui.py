@@ -6013,22 +6013,55 @@ class TitanNetMainWindow(wx.Frame):
             pass
         return None
 
+    # A 20ms mono frame at 16kHz is 640 bytes of raw PCM; an Opus frame at
+    # 24kbps is roughly 60. The size is therefore what tells the two apart on
+    # the wire, and it is the ONLY thing that may decide - a listener must not
+    # judge an incoming frame by whether its own Opus support happens to be
+    # installed. Doing that meant a listener without opuslib fed a compressed
+    # frame straight into int16 PCM playback, which is a burst of noise instead
+    # of the sender's voice.
+    _OPUS_FRAME_MAX_BYTES = 500
+
     def _decode_and_resample_chunk(self, audio_data: bytes, user_id=None):
-        """Decode Opus chunk. Returns mono int16 numpy array at 16kHz (no resampling needed)."""
+        """Decode one voice frame. Returns mono int16 numpy array at 16kHz."""
         import numpy as np
 
+        if not audio_data:
+            return None
+
         try:
-            # Decode Opus if enabled
-            if hasattr(self, '_use_opus') and self._use_opus and len(audio_data) < 500:
+            if len(audio_data) < self._OPUS_FRAME_MAX_BYTES:
+                # Compressed frame - it can only be played through Opus.
+                decoded = None
                 try:
-                    from src.network.voice_codec import OpusVoiceCodec
-                    if user_id not in self._opus_decoders:
-                        self._opus_decoders[user_id] = OpusVoiceCodec(
-                            sample_rate=16000, channels=1, bitrate=24000, frame_duration_ms=20
-                        )
-                    audio_data = self._opus_decoders[user_id].decode(audio_data)
-                except Exception:
-                    pass  # Fallback: treat as raw PCM
+                    from src.network.voice_codec import OpusVoiceCodec, OPUS_AVAILABLE
+                    if OPUS_AVAILABLE:
+                        if not hasattr(self, '_opus_decoders'):
+                            self._opus_decoders = {}
+                        if user_id not in self._opus_decoders:
+                            self._opus_decoders[user_id] = OpusVoiceCodec(
+                                sample_rate=16000, channels=1, bitrate=24000, frame_duration_ms=20
+                            )
+                        decoded = self._opus_decoders[user_id].decode(audio_data)
+                except Exception as decode_err:
+                    decoded = None
+                    if not getattr(self, '_opus_decode_error_logged', False):
+                        self._opus_decode_error_logged = True
+                        print(f"[VOICE PLAYBACK] Opus decode failed: {decode_err}")
+
+                if not decoded:
+                    # Drop the frame rather than play compressed bytes as PCM.
+                    if not getattr(self, '_opus_missing_logged', False):
+                        self._opus_missing_logged = True
+                        print("[VOICE PLAYBACK] Opus frames received but Opus is "
+                              "unavailable - dropping them. Install opuslib to "
+                              "hear this speaker.")
+                    return None
+                audio_data = decoded
+
+            # Raw PCM path: an odd trailing byte would break int16 framing.
+            if len(audio_data) % 2:
+                audio_data = audio_data[:-1]
 
             audio_array = np.frombuffer(audio_data, dtype=np.int16)
             if len(audio_array) == 0:

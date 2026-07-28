@@ -1534,143 +1534,34 @@ class WhatsAppWebViewFrame(wx.Frame):
         return False
     
     def setup_voice_call_monitoring(self):
-        """Setup voice call detection for WhatsApp Web - same as Messenger"""
+        """Setup voice call detection for WhatsApp Web - same as Messenger.
+
+        Detection lives in src.network.call_detection_js, which only treats a
+        call as real when an in-call control (End call / Decline / Accept) is on
+        the page. The previous inline script matched any element whose class or
+        aria-label merely contained "call"/"Video", so the Voice call and Video
+        call buttons that WhatsApp Web puts in every chat header announced a
+        phantom incoming call - and a phantom "call ended" - right after login.
+        """
         if not hasattr(self, 'webview') or not self.webview or not self.whatsapp_logged_in:
             # Retry in 3 seconds if not logged in yet
             wx.CallLater(3000, self.setup_voice_call_monitoring)
             return
-        
+
         print("Setting up WhatsApp voice call monitoring...")
-        
-        # Inject enhanced WebRTC and DOM monitoring JavaScript for WhatsApp
-        webrtc_script = """
-        (function() {
-            console.log('TITAN: Setting up WhatsApp voice call monitoring...');
-            
-            if (window.titanWhatsAppVoiceSetup) {
-                console.log('WhatsApp voice monitoring already setup');
-                return;
-            }
-            
-            // Initialize call state
-            window.titanCallState = window.titanCallState || {
-                isCallActive: false,
-                callType: 'unknown',
-                callStartTime: null,
-                peerConnection: null,
-                callUIVisible: false
-            };
-            
-            // Override WebRTC APIs for WhatsApp
-            const originalRTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
-            
-            if (originalRTCPeerConnection) {
-                window.RTCPeerConnection = function(...args) {
-                    console.log('TITAN: WhatsApp RTCPeerConnection created');
-                    const pc = new originalRTCPeerConnection(...args);
-                    window.titanCallState.peerConnection = pc;
-                    
-                    pc.addEventListener('connectionstatechange', () => {
-                        const state = pc.connectionState;
-                        console.log('TITAN: WhatsApp connection state:', state);
-                        
-                        if (state === 'connected') {
-                            window.titanCallState.isCallActive = true;
-                            window.titanCallConnected = true;
-                            console.log('TITAN: WhatsApp call connected');
-                        } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-                            window.titanCallState.isCallActive = false;
-                            window.titanCallEnded = true;
-                            console.log('TITAN: WhatsApp call ended');
-                        }
-                    });
-                    
-                    return pc;
-                };
-                
-                // Copy static methods
-                Object.setPrototypeOf(window.RTCPeerConnection, originalRTCPeerConnection);
-                Object.defineProperty(window.RTCPeerConnection, 'prototype', {
-                    value: originalRTCPeerConnection.prototype
-                });
-            }
-            
-            // Monitor WhatsApp call UI elements
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) {
-                            // WhatsApp call UI selectors
-                            const callSelectors = [
-                                '[data-testid*="call"]',
-                                '[aria-label*="Call"]',
-                                '[aria-label*="End call"]',
-                                '[aria-label*="Mute"]',
-                                '[aria-label*="Video"]',
-                                'div[class*="call"]'
-                            ];
-                            
-                            let callUIFound = false;
-                            
-                            callSelectors.forEach(selector => {
-                                if (node.matches && node.matches(selector)) {
-                                    console.log('TITAN: WhatsApp call UI detected:', selector);
-                                    callUIFound = true;
-                                } else if (node.querySelector && node.querySelector(selector)) {
-                                    console.log('TITAN: WhatsApp call UI found in subtree:', selector);
-                                    callUIFound = true;
-                                }
-                            });
-                            
-                            if (callUIFound) {
-                                window.titanCallState.callUIVisible = true;
-                                window.titanCallUIAppeared = true;
-                                
-                                // Determine call type by checking button labels
-                                const endButton = document.querySelector('[aria-label*="End call"]');
-                                if (endButton) {
-                                    window.titanOutgoingCall = true;
-                                    console.log('TITAN: WhatsApp outgoing call detected');
-                                } else {
-                                    window.titanIncomingCall = true;
-                                    console.log('TITAN: WhatsApp incoming call detected');
-                                }
-                            }
-                        }
-                    });
-                    
-                    mutation.removedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) {
-                            const wasCallUI = node.className && (
-                                node.className.includes('call') || 
-                                node.className.includes('voice') ||
-                                node.querySelector('[data-testid*="call"]')
-                            );
-                            
-                            if (wasCallUI) {
-                                console.log('TITAN: WhatsApp call UI disappeared');
-                                window.titanCallState.callUIVisible = false;
-                                window.titanCallUIDisappeared = true;
-                            }
-                        }
-                    });
-                });
-            });
-            
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['class', 'aria-label', 'data-testid']
-            });
-            
-            window.titanWhatsAppVoiceSetup = true;
-            window.titanVoiceObserver = observer;
-            console.log('TITAN: WhatsApp voice call monitoring setup complete!');
-            
-        })();
-        """
-        
+
+        # Local mirror of the in-page call state, so a sound/announcement can
+        # never fire for a call we never reported as started.
+        self._call_active = False
+        self._call_connected = False
+
+        try:
+            from src.network.call_detection_js import build_monitor_script
+            webrtc_script = build_monitor_script('WhatsApp')
+        except Exception as e:
+            print(f"Voice setup error (detection script): {e}")
+            return
+
         try:
             result = self.webview.RunScript(webrtc_script)
             print("✓ WhatsApp voice call monitoring script injected")
@@ -1685,78 +1576,60 @@ class WhatsAppWebViewFrame(wx.Frame):
             print(f"Voice setup error: {e}")
     
     def check_voice_call_status(self, event=None):
-        """Check for voice call status changes"""
+        """Drain call events from the in-page state machine.
+
+        The page emits at most one 'incoming'/'outgoing' event per real call and
+        one 'ended' event when that same call goes away, so nothing here can
+        announce an end for a call that never started.
+        """
         if not hasattr(self, 'webview') or not self.webview or not self.whatsapp_logged_in:
             return
-        
+
         try:
-            call_check_script = """
-            (function() {
-                if (!window.titanWhatsAppVoiceSetup) return JSON.stringify({status: 'not_setup'});
-                
-                var result = {
-                    isCallActive: window.titanCallState ? window.titanCallState.isCallActive : false,
-                    incomingCall: !!window.titanIncomingCall,
-                    outgoingCall: !!window.titanOutgoingCall,
-                    callConnected: !!window.titanCallConnected,
-                    callEnded: !!window.titanCallEnded,
-                    callUIAppeared: !!window.titanCallUIAppeared,
-                    callUIDisappeared: !!window.titanCallUIDisappeared,
-                    callUIVisible: window.titanCallState ? window.titanCallState.callUIVisible : false
-                };
-                
-                // Clear one-time flags
-                window.titanIncomingCall = false;
-                window.titanOutgoingCall = false;
-                window.titanCallConnected = false;
-                window.titanCallEnded = false;
-                window.titanCallUIAppeared = false;
-                window.titanCallUIDisappeared = false;
-                
-                return JSON.stringify(result);
-            })();
-            """
-            
-            result_str = self.webview.RunScript(call_check_script)
-            if result_str:
-                import json
-                try:
-                    # Handle WebView returning tuple
-                    if isinstance(result_str, tuple) and len(result_str) >= 2:
-                        success, actual_result = result_str
-                        if success:
-                            result_str = actual_result
-                        else:
-                            return
-                    
-                    if isinstance(result_str, str):
-                        result = json.loads(result_str)
-                    else:
-                        return
-                    
-                    # Handle incoming call
-                    if result.get('incomingCall'):
-                        self.on_incoming_call()
-                    
-                    # Handle outgoing call
-                    if result.get('outgoingCall'):
-                        self.on_outgoing_call()
-                    
-                    # Handle call connected
-                    if result.get('callConnected'):
-                        self.on_call_connected()
-                    
-                    # Handle call ended
-                    if result.get('callEnded') or result.get('callUIDisappeared'):
-                        self.on_call_ended()
-                
-                except json.JSONDecodeError as e:
-                    print(f"Voice call check JSON error: {e}")
-                    
+            from src.network.call_detection_js import build_poll_script
+            result_str = self.webview.RunScript(build_poll_script())
+            if not result_str:
+                return
+
+            import json
+
+            # WebView2 returns (success, value) from RunScript.
+            if isinstance(result_str, tuple) and len(result_str) >= 2:
+                success, actual_result = result_str
+                if not success:
+                    return
+                result_str = actual_result
+
+            if not isinstance(result_str, str):
+                return
+
+            try:
+                result = json.loads(result_str)
+            except json.JSONDecodeError as e:
+                print(f"Voice call check JSON error: {e}")
+                return
+
+            if result.get('status') != 'ok':
+                return
+
+            self._call_active = bool(result.get('active'))
+
+            for event_name in (result.get('events') or []):
+                if event_name == 'incoming':
+                    self.on_incoming_call()
+                elif event_name == 'outgoing':
+                    self.on_outgoing_call()
+                elif event_name == 'connected':
+                    self._call_connected = True
+                    self.on_call_connected()
+                elif event_name == 'ended':
+                    self._call_connected = False
+                    self.on_call_ended()
+
         except Exception as e:
             if "'int' object has no attribute 'get'" not in str(e):
                 print(f"Voice call check error: {e}")
-    
+
     def on_incoming_call(self):
         """Handle incoming WhatsApp call"""
         print("📞 WhatsApp incoming call detected")
@@ -2063,7 +1936,7 @@ class WhatsAppWebViewFrame(wx.Frame):
             if hasattr(self, 'webview') and self.webview:
                 # Clear JavaScript state
                 try:
-                    self.webview.RunScript("window.titanWhatsAppMessageSent = false; window.titanWhatsAppSetup = false; window.titanWhatsAppVoiceSetup = false;")
+                    self.webview.RunScript("window.titanWhatsAppMessageSent = false; window.titanWhatsAppSetup = false; window.__titanCallMonitor = null; window.__titanCallState = null;")
                 except:
                     pass
                 

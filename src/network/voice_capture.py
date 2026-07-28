@@ -10,12 +10,11 @@ import threading
 import time
 from typing import Optional, Callable
 
-try:
-    import webrtcvad
-except ImportError:
-    # No wheel available for this Python version (e.g. 3.14) - voice rooms
-    # still work, just without VAD (continuous transmission mode).
-    webrtcvad = None
+# VAD backend. webrtcvad is a C extension with no wheels for current Python
+# versions, so src.network.vad_fallback provides an equivalent pure-Python
+# detector. get_vad() returns whichever works, and never None - Voice
+# Activation must not silently degrade into a permanently open microphone.
+from src.network.vad_fallback import get_vad as _get_vad
 
 
 class VoiceCaptureManager:
@@ -36,11 +35,11 @@ class VoiceCaptureManager:
         self._use_vad = use_vad
 
         # VAD setup (aggressiveness 0-3, 0=least aggressive, most tolerant)
-        # Only used if use_vad=True and webrtcvad is available
-        self.vad = webrtcvad.Vad(0) if (use_vad and webrtcvad) else None
-        if use_vad and not webrtcvad:
-            print("VAD unavailable (webrtcvad not installed) - falling back to continuous transmission")
-            self._use_vad = False
+        self.vad = None
+        self.vad_backend = None
+        if use_vad:
+            self.vad, self.vad_backend = _get_vad(0)
+            print(f"VAD enabled (backend: {self.vad_backend})")
 
         # Audio processing
         self.audio_queue = queue.Queue(maxsize=50)  # 50 chunks = 1500ms buffer (handles processing delays on remote servers)
@@ -71,13 +70,10 @@ class VoiceCaptureManager:
 
     @use_vad.setter
     def use_vad(self, value):
-        if value and not webrtcvad:
-            print("VAD unavailable (webrtcvad not installed) - staying in continuous transmission")
-            self._use_vad = False
-            return
-        self._use_vad = value
+        self._use_vad = bool(value)
         if value and self.vad is None:
-            self.vad = webrtcvad.Vad(0)
+            self.vad, self.vad_backend = _get_vad(0)
+            print(f"VAD enabled (backend: {self.vad_backend})")
 
     def start_capture(self):
         """Start capturing from microphone"""
@@ -238,25 +234,28 @@ class VoiceCaptureManager:
                     self.on_error(str(e))
 
     def _check_vad(self, audio_bytes: bytes) -> bool:
-        """Check if audio chunk contains speech using webrtcvad"""
+        """Check whether an audio chunk contains speech."""
         # If VAD is disabled, always return True (continuous mode)
         if not self.vad:
             return True
 
         try:
-            # webrtcvad requires exact chunk sizes: 10ms, 20ms, or 30ms at 8kHz, 16kHz, or 32kHz
+            # Both backends want exact frames: 10, 20 or 30 ms at 8/16/32/48 kHz.
             return self.vad.is_speech(audio_bytes, self.sample_rate)
         except Exception as e:
-            # VAD error, assume silence and provide helpful debug info
+            # A backend that cannot judge this frame must not mute the user.
+            # Report once, then transmit - a stuck-open mic is recoverable,
+            # a caller nobody can hear is not.
             if not hasattr(self, '_vad_error_logged'):
                 self._vad_error_logged = True
                 expected_size = int(self.sample_rate * self.chunk_duration_ms / 1000) * 2  # *2 for int16
                 actual_size = len(audio_bytes)
-                print(f"VAD error: {e}")
+                print(f"VAD error ({self.vad_backend}): {e}")
                 print(f"  Expected chunk size: {expected_size} bytes ({self.chunk_duration_ms}ms at {self.sample_rate}Hz)")
                 print(f"  Actual chunk size: {actual_size} bytes")
-                print(f"  Note: webrtcvad only supports 10ms, 20ms, or 30ms chunks")
-            return False
+                print(f"  Supported frames: 10ms, 20ms or 30ms")
+                print(f"  Falling back to continuous transmission for this session")
+            return True
 
     def set_vad_aggressiveness(self, level: int):
         """
@@ -267,8 +266,11 @@ class VoiceCaptureManager:
                    Higher values filter out more non-speech
         """
         if 0 <= level <= 3:
-            self.vad.set_mode(level)
-            print(f"VAD aggressiveness set to {level}")
+            if self.vad is None:
+                self.vad, self.vad_backend = _get_vad(level)
+            else:
+                self.vad.set_mode(level)
+            print(f"VAD aggressiveness set to {level} ({self.vad_backend})")
 
     def get_available_devices(self) -> list:
         """Get list of available input audio devices"""

@@ -749,7 +749,9 @@ class GameDetailDialog(wx.Dialog):
             _("Delete game"),
             wx.YES_NO | wx.ICON_WARNING,
         )
-        if confirm != wx.YES:
+        # _show_skinned_message returns MessageDialog.ShowModal(), i.e. wx.ID_YES
+        # / wx.ID_NO - NOT the wx.YES / wx.NO that wx.MessageBox returns.
+        if confirm != wx.ID_YES:
             return
 
         def _send():
@@ -1209,7 +1211,8 @@ class InteractiveGamesFrame(wx.Frame):
             _("Delete game"),
             wx.YES_NO | wx.ICON_WARNING,
         )
-        if confirm != wx.YES:
+        # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+        if confirm != wx.ID_YES:
             return
         game_id = int(data.get('id') or 0)
 

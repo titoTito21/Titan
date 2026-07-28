@@ -1827,3 +1827,9 @@ msgstr ""
 #~ "\n"
 #~ msgstr ""
 
+
+msgid "Your microphone could not be opened, so the other person will not hear you. Check that no other program is using it."
+msgstr "Nie udało się otworzyć mikrofonu, więc druga osoba Cię nie usłyszy. Sprawdź, czy żaden inny program go nie używa."
+
+msgid "The microphone is not available."
+msgstr "Mikrofon jest niedostępny."

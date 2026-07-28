@@ -1419,286 +1419,21 @@ class MessengerWebViewFrame(wx.Frame):
         
         print("Setting up voice call monitoring...")
         
-        # Inject enhanced WebRTC and DOM monitoring JavaScript
-        webrtc_script = """
-        (function() {
-            console.log('TITAN IM: Setting up enhanced voice call monitoring...');
-            
-            if (window.titanVoiceSetup) {
-                console.log('Voice monitoring already setup');
-                return;
-            }
-            
-            // Store original functions
-            const originalRTCPeerConnection = window.RTCPeerConnection;
-            const originalGetUserMedia = navigator.mediaDevices ? navigator.mediaDevices.getUserMedia : null;
-            
-            // Track active calls and media streams
-            window.titanCallState = {
-                isCallActive: false,
-                callType: null,
-                remoteUser: null,
-                callStartTime: null,
-                peerConnection: null,
-                mediaStreams: [],
-                callUIVisible: false
-            };
-            
-            // Monitor getUserMedia calls (indicates call starting)
-            if (originalGetUserMedia) {
-                navigator.mediaDevices.getUserMedia = function(...args) {
-                    console.log('TITAN: getUserMedia called!', args);
-                    
-                    // Check if requesting audio (voice call)
-                    const constraints = args[0];
-                    if (constraints && constraints.audio) {
-                        console.log('TITAN: Audio stream requested - call starting!');
-                        window.titanCallState.callType = 'outgoing';
-                        window.titanOutgoingCall = true;
-                    }
-                    
-                    return originalGetUserMedia.apply(this, args).then(stream => {
-                        console.log('TITAN: Media stream obtained:', stream);
-                        window.titanCallState.mediaStreams.push(stream);
-                        
-                        // Monitor stream ending
-                        stream.getTracks().forEach(track => {
-                            track.addEventListener('ended', () => {
-                                console.log('TITAN: Media track ended');
-                                window.titanCallEnded = true;
-                            });
-                        });
-                        
-                        return stream;
-                    });
-                };
-            }
-            
-            // Override RTCPeerConnection
-            window.RTCPeerConnection = function(...args) {
-                console.log('TITAN: RTCPeerConnection created!', args);
-                const pc = new originalRTCPeerConnection(...args);
-                
-                window.titanCallState.peerConnection = pc;
-                
-                // Monitor all state changes
-                pc.addEventListener('connectionstatechange', function() {
-                    console.log('TITAN: Connection state:', pc.connectionState);
-                    
-                    switch(pc.connectionState) {
-                        case 'connecting':
-                            console.log('TITAN: Call connecting...');
-                            window.titanCallConnecting = true;
-                            break;
-                        case 'connected':
-                            console.log('TITAN: Call connected!');
-                            window.titanCallState.isCallActive = true;
-                            window.titanCallState.callStartTime = Date.now();
-                            window.titanCallConnected = true;
-                            break;
-                        case 'disconnected':
-                        case 'failed':
-                        case 'closed':
-                            console.log('TITAN: Call ended!');
-                            if (window.titanCallState.isCallActive) {
-                                window.titanCallState.isCallActive = false;
-                                window.titanCallEnded = true;
-                            }
-                            break;
-                    }
-                });
-                
-                // Monitor ICE state
-                pc.addEventListener('iceconnectionstatechange', function() {
-                    console.log('TITAN: ICE state:', pc.iceConnectionState);
-                    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                        if (!window.titanCallState.isCallActive) {
-                            console.log('TITAN: ICE connected - call active!');
-                            window.titanCallConnected = true;
-                        }
-                    }
-                });
-                
-                // Monitor tracks (incoming media)
-                pc.addEventListener('track', function(event) {
-                    console.log('TITAN: Remote track received!', event);
-                    if (!window.titanCallState.callType) {
-                        window.titanCallState.callType = 'incoming';
-                        window.titanIncomingCall = true;
-                    }
-                });
-                
-                // Monitor offers/answers
-                const originalCreateOffer = pc.createOffer;
-                pc.createOffer = function(...args) {
-                    console.log('TITAN: Creating offer - outgoing call!');
-                    window.titanCallState.callType = 'outgoing';
-                    window.titanOutgoingCall = true;
-                    return originalCreateOffer.apply(this, args);
-                };
-                
-                const originalCreateAnswer = pc.createAnswer;
-                pc.createAnswer = function(...args) {
-                    console.log('TITAN: Creating answer - incoming call!');
-                    window.titanCallState.callType = 'incoming';
-                    window.titanIncomingCall = true;
-                    return originalCreateAnswer.apply(this, args);
-                };
-                
-                const originalSetRemoteDescription = pc.setRemoteDescription;
-                pc.setRemoteDescription = function(description) {
-                    console.log('TITAN: Setting remote description:', description.type);
-                    if (description.type === 'offer') {
-                        console.log('TITAN: Received offer - incoming call!');
-                        window.titanIncomingCall = true;
-                    }
-                    return originalSetRemoteDescription.apply(this, arguments);
-                };
-                
-                return pc;
-            };
-            
-            // Copy static methods and properties
-            Object.setPrototypeOf(window.RTCPeerConnection, originalRTCPeerConnection);
-            Object.getOwnPropertyNames(originalRTCPeerConnection).forEach(name => {
-                if (typeof originalRTCPeerConnection[name] === 'function') {
-                    window.RTCPeerConnection[name] = originalRTCPeerConnection[name];
-                }
-            });
-            
-            // Enhanced DOM monitoring for call UI
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) {
-                            // More comprehensive call UI detection
-                            const callSelectors = [
-                                '[aria-label*="call"]',
-                                '[aria-label*="Call"]', 
-                                '[aria-label*="voice"]',
-                                '[aria-label*="Voice"]',
-                                '[data-testid*="call"]',
-                                '[data-testid*="voice"]',
-                                '[class*="call"]',
-                                '[class*="voice"]',
-                                '[class*="rtc"]',
-                                '.video-call',
-                                '.voice-call',
-                                '.call-container',
-                                '.call-ui',
-                                '[role="dialog"][aria-label*="call"]'
-                            ];
-                            
-                            let callUIFound = false;
-                            callSelectors.forEach(selector => {
-                                try {
-                                    const elements = node.querySelectorAll ? node.querySelectorAll(selector) : [];
-                                    if (elements.length > 0) {
-                                        console.log('TITAN: Call UI detected with selector:', selector, elements.length);
-                                        callUIFound = true;
-                                    }
-                                } catch (e) {
-                                    // Ignore selector errors
-                                }
-                            });
-                            
-                            // Check if the node itself matches call UI patterns
-                            if (node.className && typeof node.className === 'string') {
-                                if (node.className.includes('call') || node.className.includes('voice') || node.className.includes('rtc')) {
-                                    console.log('TITAN: Call UI node detected:', node.className);
-                                    callUIFound = true;
-                                }
-                            }
-                            
-                            // Check aria-label
-                            if (node.getAttribute) {
-                                const ariaLabel = node.getAttribute('aria-label');
-                                if (ariaLabel && (ariaLabel.toLowerCase().includes('call') || ariaLabel.toLowerCase().includes('voice'))) {
-                                    console.log('TITAN: Call UI via aria-label:', ariaLabel);
-                                    callUIFound = true;
-                                }
-                            }
-                            
-                            if (callUIFound && !window.titanCallState.callUIVisible) {
-                                console.log('TITAN: Call UI appeared!');
-                                window.titanCallState.callUIVisible = true;
-                                window.titanCallUIAppeared = true;
-                            }
-                        }
-                    });
-                    
-                    // Monitor removed nodes for call UI disappearing
-                    mutation.removedNodes.forEach(function(node) {
-                        if (node.nodeType === 1) {
-                            if (node.className && typeof node.className === 'string') {
-                                if (node.className.includes('call') || node.className.includes('voice')) {
-                                    console.log('TITAN: Call UI disappeared:', node.className);
-                                    window.titanCallState.callUIVisible = false;
-                                    window.titanCallUIDisappeared = true;
-                                }
-                            }
-                        }
-                    });
-                });
-            });
-            
-            // Start observing with more comprehensive options
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['class', 'aria-label', 'data-testid']
-            });
-            
-            // Also monitor clicks on potential call buttons
-            document.addEventListener('click', function(event) {
-                const target = event.target;
-                const button = target.closest('button, [role="button"], [tabindex="0"]');
-                
-                if (button) {
-                    const text = button.textContent || button.getAttribute('aria-label') || '';
-                    const className = button.className || '';
-                    
-                    // Check for call-related button clicks
-                    if (text.toLowerCase().includes('call') || 
-                        text.toLowerCase().includes('voice') ||
-                        className.includes('call') ||
-                        className.includes('voice')) {
-                        
-                        console.log('TITAN: Call button clicked!', text, className);
-                        window.titanCallButtonClicked = true;
-                        
-                        // If no call type set yet, assume outgoing
-                        if (!window.titanCallState.callType) {
-                            window.titanCallState.callType = 'outgoing';
-                            window.titanOutgoingCall = true;
-                        }
-                    }
-                }
-            }, true);
-            
-            // Periodic check for call UI elements (fallback)
-            setInterval(function() {
-                const callElements = document.querySelectorAll(
-                    '[aria-label*="End call"], [aria-label*="Mute"], [aria-label*="Video"], ' +
-                    '.call-ui, .video-call, .voice-call, [data-testid*="call"], ' +
-                    '[class*="call-container"], [class*="rtc-"]'
-                );
-                
-                if (callElements.length > 0 && !window.titanCallState.callUIVisible) {
-                    console.log('TITAN: Call UI detected via periodic check:', callElements.length);
-                    window.titanCallState.callUIVisible = true;
-                    window.titanCallUIAppeared = true;
-                }
-            }, 3000);
-            
-            window.titanVoiceSetup = true;
-            window.titanVoiceObserver = observer;
-            console.log('TITAN: Enhanced voice call monitoring setup complete!');
-            
-        })();
-        """
-        
+        # Detection lives in src.network.call_detection_js. The previous inline
+        # script inferred a call from getUserMedia, from any clicked button whose
+        # text contained "call", and from selectors like [class*="call"] /
+        # [aria-label*="Video"] - all of which Messenger's ordinary chat UI
+        # matches, so opening the app announced calls that did not exist.
+        self._call_active = False
+        self._call_connected = False
+
+        try:
+            from src.network.call_detection_js import build_monitor_script
+            webrtc_script = build_monitor_script('Messenger')
+        except Exception as e:
+            print(f"Voice setup error (detection script): {e}")
+            return
+
         try:
             result = self.webview.RunScript(webrtc_script)
             print("✓ Voice call monitoring script injected")
@@ -1713,172 +1448,62 @@ class MessengerWebViewFrame(wx.Frame):
             print(f"Voice setup error: {e}")
     
     def check_voice_call_status(self, event):
-        """Check for voice call status changes"""
+        """Drain call events from the in-page state machine.
+
+        Exactly one 'incoming'/'outgoing' event is emitted per real call and one
+        'ended' event when that call goes away, so no announcement can fire for
+        a call that never started.
+        """
         if not hasattr(self, 'webview') or not self.webview or not self.voice_enabled_item.IsChecked():
             return
-        
+
         try:
-            call_check_script = """
-            (function() {
-                if (!window.titanVoiceSetup) return JSON.stringify({status: 'not_setup'});
-                
-                var result = {
-                    isCallActive: window.titanCallState ? window.titanCallState.isCallActive : false,
-                    callType: window.titanCallState ? window.titanCallState.callType : null,
-                    callUIVisible: window.titanCallState ? window.titanCallState.callUIVisible : false,
-                    events: {
-                        connecting: !!window.titanCallConnecting,
-                        connected: !!window.titanCallConnected,
-                        incoming: !!window.titanIncomingCall,
-                        outgoing: !!window.titanOutgoingCall,
-                        ended: !!window.titanCallEnded,
-                        buttonClicked: !!window.titanCallButtonClicked,
-                        uiAppeared: !!window.titanCallUIAppeared,
-                        uiDisappeared: !!window.titanCallUIDisappeared
-                    },
-                    debug: {
-                        mediaStreams: window.titanCallState ? window.titanCallState.mediaStreams.length : 0,
-                        hasConnection: !!(window.titanCallState && window.titanCallState.peerConnection)
-                    }
-                };
-                
-                // Clear event flags
-                window.titanCallConnecting = false;
-                window.titanCallConnected = false;
-                window.titanIncomingCall = false;
-                window.titanOutgoingCall = false;
-                window.titanCallEnded = false;
-                window.titanCallButtonClicked = false;
-                window.titanCallUIAppeared = false;
-                window.titanCallUIDisappeared = false;
-                
-                return JSON.stringify(result);
-            })();
-            """
-            
-            result_str = self.webview.RunScript(call_check_script)
-            if result_str:
-                import json
-                
-                # Handle WebView returning tuple
-                if isinstance(result_str, tuple) and len(result_str) >= 2:
-                    success, actual_result = result_str
-                    if success:
-                        result_str = actual_result
-                    else:
-                        return
-                
-                result = json.loads(result_str)
-                events = result.get('events', {})
-                debug_info = result.get('debug', {})
-                
-                # Debug output every 20 checks to reduce spam
-                if not hasattr(self, 'voice_debug_counter'):
-                    self.voice_debug_counter = 0
-                self.voice_debug_counter += 1
-                
-                if self.voice_debug_counter % 20 == 0 or any(events.values()):
-                    print(f"Voice check {self.voice_debug_counter}: {result}")
-                
-                # Handle call button clicked (early detection)
-                if events.get('buttonClicked') and not self.is_call_active:
-                    print("🔘 CALL BUTTON CLICKED!")
-                    self.on_call_connecting()
-                
-                # Handle call UI appeared (visual confirmation of call starting)
-                if events.get('uiAppeared') and not self.is_call_active:
-                    print("🖼️ CALL UI APPEARED!")
-                    # If we don't know the call type yet, UI appearance might indicate start
-                    if not result.get('callType'):
-                        self.on_call_connecting()
-                
-                # Handle call connecting
-                if events.get('connecting') and not self.is_call_active:
-                    print("🔄 CALL CONNECTING...")
-                    self.on_call_connecting()
-                
-                # Handle incoming call
-                if events.get('incoming') and not self.is_call_active:
-                    print("📞 INCOMING CALL DETECTED!")
+            from src.network.call_detection_js import build_poll_script
+            result_str = self.webview.RunScript(build_poll_script())
+            if not result_str:
+                return
+
+            import json
+
+            # WebView2 returns (success, value) from RunScript.
+            if isinstance(result_str, tuple) and len(result_str) >= 2:
+                success, actual_result = result_str
+                if not success:
+                    return
+                result_str = actual_result
+
+            if not isinstance(result_str, str):
+                return
+
+            result = json.loads(result_str)
+            if result.get('status') != 'ok':
+                return
+
+            self._call_active = bool(result.get('active'))
+
+            for event_name in (result.get('events') or []):
+                if event_name == 'incoming' and not self.is_call_active:
+                    print("INCOMING CALL DETECTED")
                     self.on_incoming_call()
-                
-                # Handle outgoing call
-                if events.get('outgoing') and not self.is_call_active:
-                    print("📞 OUTGOING CALL DETECTED!")
+                elif event_name == 'outgoing' and not self.is_call_active:
+                    print("OUTGOING CALL DETECTED")
                     self.on_outgoing_call()
-                
-                # Handle call connected
-                if events.get('connected') and not self.is_call_active:
-                    print("✅ CALL CONNECTED!")
-                    self.on_call_connected(result.get('callType'))
-                
-                # Handle call ended
-                if events.get('ended') and self.is_call_active:
-                    print("📴 CALL ENDED!")
-                    self.on_call_ended()
-                
-                # Handle call UI disappeared (possible call end)
-                if events.get('uiDisappeared') and self.is_call_active:
-                    print("🖼️ CALL UI DISAPPEARED!")
-                    # Give it a moment in case it's just UI refresh, then check if call really ended
-                    wx.CallLater(3000, self.check_call_ended_by_ui)
-                
+                elif event_name == 'connected':
+                    self._call_connected = True
+                    if not self.is_call_active:
+                        print("CALL CONNECTED")
+                        self.on_call_connected(result.get('direction'))
+                elif event_name == 'ended':
+                    self._call_connected = False
+                    if self.is_call_active:
+                        print("CALL ENDED")
+                        self.on_call_ended()
+
         except Exception as e:
-            if "'int' object has no attribute 'get'" not in str(e) and "Expecting value: line 1 column 1 (char 0)" not in str(e):
+            if ("'int' object has no attribute 'get'" not in str(e)
+                    and "Expecting value: line 1 column 1 (char 0)" not in str(e)):
                 print(f"Voice call check error: {e}")
-    
-    def check_call_ended_by_ui(self):
-        """Check if call really ended when UI disappeared"""
-        if not self.is_call_active:
-            return
-        
-        try:
-            # Check if call UI is still gone and no WebRTC connection
-            check_script = """
-            (function() {
-                if (!window.titanCallState) return JSON.stringify({ended: true});
-                
-                var callElements = document.querySelectorAll(
-                    '[aria-label*="End call"], [aria-label*="Mute"], [class*="call-ui"]'
-                );
-                
-                var hasActiveConnection = false;
-                if (window.titanCallState.peerConnection) {
-                    var state = window.titanCallState.peerConnection.connectionState;
-                    hasActiveConnection = (state === 'connected' || state === 'connecting');
-                }
-                
-                return JSON.stringify({
-                    callUIElements: callElements.length,
-                    hasActiveConnection: hasActiveConnection,
-                    ended: callElements.length === 0 && !hasActiveConnection
-                });
-            })();
-            """
-            
-            result_str = self.webview.RunScript(check_script)
-            if result_str:
-                import json
-                
-                # Handle WebView returning tuple
-                if isinstance(result_str, tuple) and len(result_str) >= 2:
-                    success, actual_result = result_str
-                    if success:
-                        result_str = actual_result
-                    else:
-                        return
-                
-                result = json.loads(result_str)
-                
-                if result.get('ended'):
-                    print("🔚 Confirmed call ended by UI check")
-                    self.on_call_ended()
-                else:
-                    print(f"🔄 Call still active - UI elements: {result.get('callUIElements')}, Connection: {result.get('hasActiveConnection')}")
-        
-        except Exception as e:
-            print(f"Call end check error: {e}")
-    
+
     def on_call_connecting(self):
         """Handle call connecting"""
         if self.notifications_item.IsChecked():
@@ -2012,20 +1637,11 @@ class MessengerWebViewFrame(wx.Frame):
             end_call_script = """
             (function() {
                 console.log('TITAN: Attempting to end call...');
-                
-                if (window.titanCallState && window.titanCallState.peerConnection) {
-                    try {
-                        window.titanCallState.peerConnection.close();
-                        console.log('TITAN: PeerConnection closed');
-                        return 'success';
-                    } catch (e) {
-                        console.log('TITAN: Error closing PeerConnection:', e);
-                        return 'error: ' + e.message;
-                    }
-                }
-                
-                // Also try to find and click end call button
-                var endButtons = document.querySelectorAll('[aria-label*="End call"], [aria-label*="Zakończ"], [data-testid*="end"], [class*="end-call"]');
+
+                // Click Messenger's own End call control rather than tearing the
+                // peer connection down behind the app's back - closing the socket
+                // left the page believing the call was still up.
+                var endButtons = document.querySelectorAll('[aria-label*="End call" i], [aria-label*="Zakończ" i], [aria-label*="Hang up" i], [data-testid*="end-call" i]');
                 if (endButtons.length > 0) {
                     endButtons[0].click();
                     console.log('TITAN: Clicked end call button');
@@ -2109,21 +1725,23 @@ class MessengerWebViewFrame(wx.Frame):
         try:
             debug_script = """
             (function() {
-                if (!window.titanVoiceSetup) {
+                if (!window.__titanCallState) {
                     return JSON.stringify({error: 'Voice monitoring not setup'});
                 }
-                
+
                 var debug = {
-                    setup: !!window.titanVoiceSetup,
+                    setup: !!window.__titanCallMonitor,
                     hasRTCPeerConnection: !!window.RTCPeerConnection,
                     hasGetUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-                    callState: window.titanCallState || {},
-                    currentCallElements: document.querySelectorAll('[aria-label*="call"], [class*="call"], [data-testid*="call"]').length,
-                    currentVoiceElements: document.querySelectorAll('[aria-label*="voice"], [class*="voice"]').length,
-                    messengerElements: document.querySelectorAll('[data-testid], [aria-label]').length,
-                    hasObserver: !!window.titanVoiceObserver
+                    callState: window.__titanCallState,
+                    detected: window.__titanDetectCall ? window.__titanDetectCall() : null,
+                    inCallControls: document.querySelectorAll(
+                        '[aria-label*="End call" i], [aria-label*="Decline" i], [aria-label*="Accept call" i]').length,
+                    startCallButtons: document.querySelectorAll(
+                        '[aria-label*="Voice call" i], [aria-label*="Video call" i]').length,
+                    messengerElements: document.querySelectorAll('[data-testid], [aria-label]').length
                 };
-                
+
                 return JSON.stringify(debug, null, 2);
             })();
             """
@@ -3237,15 +2855,13 @@ class MessengerWebViewFrame(wx.Frame):
                             if (callButton) {{
                                 console.log('TITAN: Found video call button, clicking...');
                                 callButton.click();
-                                
-                                // Set call state
-                                if (!window.titanCallState) {{
-                                    window.titanCallState = {{ callType: 'outgoing', callUIVisible: false }};
-                                }}
-                                window.titanCallState.callType = 'outgoing';
-                                window.titanOutgoingCall = true;
-                                window.titanCallButtonClicked = true;
-                                
+
+                                // Do NOT fabricate call state here. Clicking the
+                                // button only requests a call; the shared monitor
+                                // reports one once Messenger actually shows in-call
+                                // controls, which is what keeps a failed or
+                                // cancelled attempt from being announced as a call.
+
                                 return {{ success: true }};
                             }} else {{
                                 console.log('TITAN: Video call button not found');

@@ -27,7 +27,7 @@ DOMAIN_FILES = {
     'titannet': [
         'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/titan_net_mod_components.py', 'src/network/feedback_hub.py', 'src/system/klangomode.py'
     ],
-    'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py'],
+    'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py', 'src/system/mic_permission.py'],
     'controller': ['src/controller/controller_ui.py', 'src/controller/controller_modes.py', 'src/controller/controller_vibrations.py'],
     'help': ['src/ui/help.py'],
     'sound': ['src/titan_core/sound.py', 'src/titan_core/tsounds.py', 'src/titan_core/stereo_speech.py'],
