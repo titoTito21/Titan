@@ -3039,6 +3039,93 @@ class TitanNetHTTPServer:
             logger.error(f"Edit reply error: {e}", exc_info=True)
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
+    async def _notify_topic_move(self, actor: dict, result: dict) -> None:
+        """Tell the people affected by a move. Best-effort, never fails the move.
+
+        * moved  - the thread author hears where their thread went (unless they
+          moved it themselves).
+        * pending - every moderator of the TARGET group hears that a request is
+          waiting. Nothing informed them before, so a cross-group move looked
+          like it silently did nothing.
+
+        Both use a private message so the notice survives being offline, plus a
+        live WS push for anyone currently connected.
+        """
+        loop = asyncio.get_event_loop()
+        status = result.get('status')
+        title = result.get('title') or 'a thread'
+        to_forum = result.get('to_forum_name') or 'another forum'
+        from_forum = result.get('from_forum_name') or 'another forum'
+        actor_id = actor['id']
+        actor_name = actor.get('username') or 'A moderator'
+
+        async def _pm(recipient_id: int, text: str) -> None:
+            if not recipient_id or int(recipient_id) == int(actor_id):
+                return
+            try:
+                await loop.run_in_executor(
+                    None, self.db.send_private_message, actor_id, int(recipient_id), text
+                )
+            except Exception as e:
+                logger.warning(f"Topic-move notify failed for {recipient_id}: {e}")
+
+        async def _push(recipient_id: int, payload: dict) -> None:
+            if not recipient_id or int(recipient_id) == int(actor_id):
+                return
+            try:
+                ws_server = getattr(self, 'ws_server', None)
+                send = getattr(ws_server, 'send_to_user', None) if ws_server else None
+                if not send:
+                    return
+                sent = send(int(recipient_id), payload)
+                if asyncio.iscoroutine(sent):
+                    await sent
+            except Exception as e:
+                logger.warning(f"Topic-move WS push failed for {recipient_id}: {e}")
+
+        if status == 'moved':
+            text = (f"Your thread '{title}' was moved from forum '{from_forum}' "
+                    f"to forum '{to_forum}' by {actor_name}.")
+            await _pm(result.get('author_id'), text)
+            await _push(result.get('author_id'), {
+                'type': 'forum_topic_moved',
+                'topic_id': result.get('topic_id'),
+                'title': title,
+                'from_forum': from_forum,
+                'to_forum': to_forum,
+                'moved_by': actor_name,
+            })
+            return
+
+        if status != 'pending':
+            return
+
+        target_group = result.get('to_group_id')
+        if not target_group:
+            return
+        try:
+            moderator_ids = await loop.run_in_executor(
+                None, self.db.list_group_moderator_ids, int(target_group)
+            )
+        except Exception as e:
+            logger.warning(f"Could not list moderators of group {target_group}: {e}")
+            return
+
+        text = (f"{actor_name} asks to move the thread '{title}' from forum "
+                f"'{from_forum}' into your forum '{to_forum}'. Approve or reject "
+                f"it in the move requests list.")
+        for moderator_id in moderator_ids:
+            await _pm(moderator_id, text)
+            await _push(moderator_id, {
+                'type': 'forum_move_request',
+                'request_id': result.get('request_id'),
+                'topic_id': result.get('topic_id'),
+                'title': title,
+                'from_forum': from_forum,
+                'to_forum': to_forum,
+                'requested_by': actor_name,
+            })
+
     async def handle_move_topic(self, request: web.Request) -> web.Response:
         """Move forum topic to different category (moderator only)"""
         try:
@@ -3064,6 +3151,7 @@ class TitanNetHTTPServer:
                 )
                 if result.get('success'):
                     logger.info(f"Topic {topic_id} move ({result.get('status')}) by {user['username']}")
+                    await self._notify_topic_move(user, result)
                 return web.json_response(result, status=200 if result.get('success') else 403)
 
             # Legacy path: move within the flat forum by category text.

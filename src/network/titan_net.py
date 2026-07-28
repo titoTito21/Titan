@@ -148,6 +148,8 @@ class TitanNetClient:
         self.on_new_user_broadcast: Optional[Callable] = None  # New user registration broadcast
 
         # Feedback Hub callbacks
+        self.on_forum_topic_moved: Optional[Callable] = None         # Your thread was moved
+        self.on_forum_move_request: Optional[Callable] = None        # A move needs your approval
         self.on_feedback_new: Optional[Callable] = None              # New feedback/idea submitted
         self.on_feedback_upvoted: Optional[Callable] = None          # Feedback/idea upvoted or unvoted
         self.on_feedback_status_changed: Optional[Callable] = None   # Feedback status / idea decision
@@ -1635,6 +1637,14 @@ class TitanNetClient:
                                 if self.on_cerberus_alert:
                                     self.on_cerberus_alert(message)
 
+                            elif msg_type == 'forum_topic_moved':
+                                # A moderator moved one of our threads
+                                if self.on_forum_topic_moved:
+                                    self.on_forum_topic_moved(message)
+                            elif msg_type == 'forum_move_request':
+                                # Someone wants to move a thread into a forum we moderate
+                                if self.on_forum_move_request:
+                                    self.on_forum_move_request(message)
                             elif msg_type == 'feedback_new':
                                 # New feedback or idea submitted to the Feedback Hub
                                 if self.on_feedback_new:

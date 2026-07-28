@@ -2319,6 +2319,11 @@ class TitanNetMainWindow(wx.Frame):
         self.titan_client.on_feedback_new = self._on_feedback_new_global
         self.titan_client.on_feedback_status_changed = self._on_feedback_status_global
 
+        # Forum thread moves: the author hears where their thread went, and the
+        # target group's moderators hear that a move is waiting for them.
+        self.titan_client.on_forum_topic_moved = self._on_forum_topic_moved
+        self.titan_client.on_forum_move_request = self._on_forum_move_request
+
         # New user broadcast callback
         self.titan_client.on_new_user_broadcast = self.on_new_user_broadcast
 
@@ -5599,6 +5604,37 @@ class TitanNetMainWindow(wx.Frame):
         speak_titannet(text)
         print(f"[TITAN-NET] Feedback Hub: new {item_type} '{title}' by {author}")
 
+    def _on_forum_topic_moved(self, message):
+        """Announce that one of our threads was moved, and where to."""
+        title = message.get('title', '?')
+        to_forum = message.get('to_forum') or _("another forum")
+        from_forum = message.get('from_forum') or _("its previous forum")
+        moved_by = message.get('moved_by') or _("a moderator")
+        try:
+            play_sound('titannet/titannet-notification.ogg')
+        except Exception:
+            pass
+        speak_titannet(_("Your thread {title} was moved from {source} to {destination} by {user}").format(
+            title=title, source=from_forum, destination=to_forum, user=moved_by))
+        print(f"[TITAN-NET] Thread '{title}' moved {from_forum} -> {to_forum} by {moved_by}")
+        if self.current_view == "forum":
+            wx.CallAfter(self.refresh_forum_topics)
+
+    def _on_forum_move_request(self, message):
+        """Announce that a cross-group move is waiting for our approval."""
+        title = message.get('title', '?')
+        to_forum = message.get('to_forum') or _("your forum")
+        from_forum = message.get('from_forum') or _("another forum")
+        requested_by = message.get('requested_by') or _("a moderator")
+        try:
+            play_sound('titannet/titannet-notification.ogg')
+        except Exception:
+            pass
+        speak_titannet(_("{user} asks to move the thread {title} from {source} into {destination}. "
+                         "Approve or reject it in the move requests list.").format(
+            user=requested_by, title=title, source=from_forum, destination=to_forum))
+        print(f"[TITAN-NET] Move request: '{title}' {from_forum} -> {to_forum} by {requested_by}")
+
     def _on_feedback_status_global(self, message):
         """Announce status changes / idea decisions globally."""
         item_type = message.get('item_type', 'feedback')
@@ -7067,12 +7103,22 @@ class TitanNetMainWindow(wx.Frame):
             return
         topic_id = topic['id']
 
+        topic_title = topic.get('title') or _("this thread")
+        source_forum = topic.get('category') or topic.get('forum_name') or _("its current forum")
+
         def _after_move(res):
             if res.get('success'):
                 if res.get('status') == 'pending':
-                    speak_notification(_("Move request sent for approval by the target group moderators"), 'info')
+                    speak_notification(
+                        _("Move request sent to the moderators of {group} for approval").format(
+                            group=res.get('to_group_name') or res.get('to_forum_name') or _("the target group")),
+                        'info')
                 else:
-                    speak_notification(_("Thread moved"), 'success')
+                    speak_notification(
+                        _("Thread moved from {source} to {destination}").format(
+                            source=res.get('from_forum_name') or source_forum,
+                            destination=res.get('to_forum_name') or _("the selected forum")),
+                        'success')
                     if self.current_view == "forum":
                         self.refresh_forum_topics()
             else:
@@ -7091,6 +7137,23 @@ class TitanNetMainWindow(wx.Frame):
             if dlg.ShowModal() == wx.ID_OK:
                 f = forums[dlg.GetSelection()]
                 dlg.Destroy()
+
+                # Confirm before moving: the destination was picked from two
+                # lists in a row, so say out loud what is about to happen and
+                # where it lands. Moving a thread is visible to everyone reading
+                # the forum, so it should not happen on a mis-selection.
+                confirm = _show_titannet_message(
+                    self,
+                    _("Move the thread '{title}' from '{source}' to '{destination}'?").format(
+                        title=topic_title, source=source_forum, destination=f['name']),
+                    _("Move Thread to Forum"),
+                    wx.YES_NO | wx.ICON_QUESTION,
+                )
+                # ShowModal() result - compare against wx.ID_YES, not wx.YES.
+                if confirm != wx.ID_YES:
+                    speak_notification(_("Move cancelled"), 'info')
+                    return
+
                 threading.Thread(
                     target=lambda: wx.CallAfter(_after_move, self.titan_client.move_topic_to_forum(topic_id, f['id'])),
                     daemon=True).start()

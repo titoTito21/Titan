@@ -5861,3 +5861,45 @@ msgstr "Titan App Suite"
 #~ msgid "No pending extensions."
 #~ msgstr "Brak oczekujących rozszerzeń."
 
+
+msgid "Move request sent to the moderators of {group} for approval"
+msgstr "Prośba o przeniesienie wysłana do moderatorów grupy {group} do zatwierdzenia"
+
+msgid "Thread moved from {source} to {destination}"
+msgstr "Wątek przeniesiony z {source} do {destination}"
+
+msgid "Move the thread '{title}' from '{source}' to '{destination}'?"
+msgstr "Przenieść wątek '{title}' z '{source}' do '{destination}'?"
+
+msgid "Move cancelled"
+msgstr "Przenoszenie anulowane"
+
+msgid "this thread"
+msgstr "ten wątek"
+
+msgid "its current forum"
+msgstr "jego obecne forum"
+
+msgid "its previous forum"
+msgstr "jego poprzednie forum"
+
+msgid "the target group"
+msgstr "grupa docelowa"
+
+msgid "the selected forum"
+msgstr "wybrane forum"
+
+msgid "another forum"
+msgstr "inne forum"
+
+msgid "your forum"
+msgstr "Twoje forum"
+
+msgid "a moderator"
+msgstr "moderator"
+
+msgid "Your thread {title} was moved from {source} to {destination} by {user}"
+msgstr "Twój wątek {title} został przeniesiony z {source} do {destination} przez {user}"
+
+msgid "{user} asks to move the thread {title} from {source} into {destination}. Approve or reject it in the move requests list."
+msgstr "{user} prosi o przeniesienie wątku {title} z {source} do {destination}. Zatwierdź lub odrzuć to na liście próśb o przeniesienie."

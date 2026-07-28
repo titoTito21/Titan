@@ -4153,32 +4153,48 @@ class Database:
     def request_topic_move(self, topic_id: int, to_forum_id: int, requested_by: int) -> Dict[str, Any]:
         """Move a thread to another forum.
 
-        Within the SAME group the move is immediate (requester must moderate
-        that group). To a forum in ANOTHER group it creates a PENDING request
-        that a moderator of the TARGET group must approve. Returns a dict with
-        ``status`` 'moved' or 'pending'."""
+        The move is immediate when the requester moderates BOTH ends - the same
+        group, or two different groups they moderate or own. Approval only
+        exists to protect a group from having threads pushed into it by an
+        outsider, so a request the requester would approve themselves is not a
+        request at all: it used to be filed anyway, which left the thread where
+        it was with nobody notified.
+
+        Otherwise a PENDING request is created for the TARGET group's
+        moderators. Returns ``status`` 'moved' or 'pending' plus the names
+        involved so the caller can say what moved from where to where."""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT forum_id FROM forum_topics WHERE id = ?", (topic_id,))
+        cursor.execute("SELECT forum_id, title, author_id FROM forum_topics WHERE id = ?", (topic_id,))
         trow = cursor.fetchone()
         if not trow:
             conn.close()
             return {"success": False, "error": "Topic not found"}
         from_forum_id = self._row_get(trow, 'forum_id')
+        topic_title = self._row_get(trow, 'title', 1)
+        topic_author = self._row_get(trow, 'author_id', 2)
 
-        cursor.execute("SELECT group_id, name FROM group_forums WHERE id = ?", (to_forum_id,))
+        cursor.execute(
+            "SELECT gf.group_id, gf.name, g.name AS group_name "
+            "FROM group_forums gf LEFT JOIN groups g ON g.id = gf.group_id "
+            "WHERE gf.id = ?",
+            (to_forum_id,))
         dest = cursor.fetchone()
         if not dest:
             conn.close()
             return {"success": False, "error": "Destination forum not found"}
         dest_group = self._row_get(dest, 'group_id')
         dest_name = self._row_get(dest, 'name', 1)
+        dest_group_name = self._row_get(dest, 'group_name', 2)
 
         src_group = None
+        src_name = None
         if from_forum_id is not None:
-            cursor.execute("SELECT group_id FROM group_forums WHERE id = ?", (from_forum_id,))
+            cursor.execute("SELECT group_id, name FROM group_forums WHERE id = ?", (from_forum_id,))
             srow = cursor.fetchone()
-            src_group = self._row_get(srow, 'group_id') if srow else None
+            if srow:
+                src_group = self._row_get(srow, 'group_id')
+                src_name = self._row_get(srow, 'name', 1)
 
         # The requester must moderate the SOURCE group (or be admin).
         if src_group is not None and not self.is_group_moderator(src_group, requested_by):
@@ -4187,16 +4203,34 @@ class Database:
 
         now = datetime.now().isoformat()
         same_group = (src_group is not None and src_group == dest_group)
-        if same_group:
+        # Owning or moderating the destination is the same authority the
+        # approval step would have asked for, so there is nobody left to ask.
+        moderates_destination = self.is_group_moderator(dest_group, requested_by)
+
+        common = {
+            "topic_id": topic_id,
+            "title": topic_title,
+            "author_id": topic_author,
+            "from_forum_id": from_forum_id,
+            "from_forum_name": src_name,
+            "from_group_id": src_group,
+            "to_forum_id": to_forum_id,
+            "to_forum_name": dest_name,
+            "to_group_id": dest_group,
+            "to_group_name": dest_group_name,
+        }
+
+        if same_group or moderates_destination:
             cursor.execute(
                 "UPDATE forum_topics SET forum_id = ?, category = ?, updated_at = ? WHERE id = ?",
                 (to_forum_id, dest_name, now, topic_id),
             )
             conn.commit()
             conn.close()
-            return {"success": True, "status": "moved"}
+            return {"success": True, "status": "moved", "cross_group": not same_group, **common}
 
-        # Cross-group: create a pending request for the target group's mods.
+        # Cross-group into a group the requester does not moderate: the target
+        # group's moderators decide.
         cursor.execute(
             "INSERT INTO forum_topic_move_requests "
             "(topic_id, from_forum_id, to_forum_id, requested_by, status, created_at) "
@@ -4206,7 +4240,38 @@ class Database:
         req_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return {"success": True, "status": "pending", "request_id": req_id}
+        return {"success": True, "status": "pending", "request_id": req_id,
+                "cross_group": True, **common}
+
+    def list_group_moderator_ids(self, group_id: int) -> List[int]:
+        """User ids that can moderate ``group_id`` (owner + moderators).
+
+        Used to tell those people that something is waiting for them - a
+        pending move request used to sit in the table with nobody informed.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        ids = []
+        try:
+            cursor.execute("SELECT owner_id FROM groups WHERE id = ?", (group_id,))
+            row = cursor.fetchone()
+            if row:
+                owner_id = self._row_get(row, 'owner_id')
+                if owner_id is not None:
+                    ids.append(int(owner_id))
+
+            cursor.execute(
+                "SELECT user_id FROM group_members "
+                "WHERE group_id = ? AND role IN ('owner', 'moderator') AND status = 'active'",
+                (group_id,),
+            )
+            for row in cursor.fetchall():
+                user_id = self._row_get(row, 'user_id')
+                if user_id is not None and int(user_id) not in ids:
+                    ids.append(int(user_id))
+        finally:
+            conn.close()
+        return ids
 
     @_serialized_write
     def approve_topic_move(self, request_id: int, approver_id: int) -> Dict[str, Any]:
