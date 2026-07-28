@@ -151,22 +151,80 @@ def clear_all():
 # Dynamic window discovery for TCE apps (separate processes)
 # ---------------------------------------------------------------------------
 
-def _discover_tce_app_windows():
+def _shell_mode_active():
+    """
+    True while Titan replaces the system interface.
+
+    In that mode Titan is the shell, so the switcher has to list every
+    application window on the desktop, not just the ones started from TCE.
+    """
+    try:
+        from src.titan_core.tce_system import is_shell_mode_enabled
+        return is_shell_mode_enabled()
+    except Exception:
+        return False
+
+
+def _discover_tce_app_windows(include_system=False):
     """
     Discover windows belonging to TCE app processes.
+
+    With include_system every alt-tab eligible window on the desktop is
+    returned instead of only the TCE ones.
     Returns list of dicts compatible with the registry format.
     """
     discovered = []
 
     if IS_WINDOWS:
-        discovered = _discover_windows_win32()
+        discovered = _discover_windows_win32(include_system=include_system)
     elif IS_MACOS or IS_LINUX:
-        discovered = _discover_windows_pywinctl()
+        discovered = _discover_windows_pywinctl(include_system=include_system)
 
     return discovered
 
 
-def _discover_windows_win32():
+def _is_alt_tab_window(hwnd):
+    """
+    True for windows the user would expect in an alt-tab style list.
+
+    Mirrors the rules the Windows shell itself uses: top level, not a tool
+    window, not owned by another window, and not a cloaked UWP placeholder.
+    """
+    try:
+        import win32gui
+        import win32con
+
+        if win32gui.GetWindow(hwnd, win32con.GW_OWNER):
+            return False
+
+        ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        if ex_style & win32con.WS_EX_TOOLWINDOW:
+            return False
+        # WS_EX_APPWINDOW forces a window into the task list regardless of
+        # the checks below.
+        if ex_style & win32con.WS_EX_APPWINDOW:
+            return True
+
+        # Cloaked windows are the invisible UWP shells that would otherwise
+        # flood the list with entries the user cannot switch to.
+        import ctypes
+        DWMWA_CLOAKED = 14
+        cloaked = ctypes.c_int(0)
+        ctypes.windll.dwmapi.DwmGetWindowAttribute(
+            ctypes.c_void_p(hwnd),
+            ctypes.c_int(DWMWA_CLOAKED),
+            ctypes.byref(cloaked),
+            ctypes.sizeof(cloaked),
+        )
+        if cloaked.value:
+            return False
+
+        return True
+    except Exception:
+        return True
+
+
+def _discover_windows_win32(include_system=False):
     """Discover TCE app windows on Windows using win32gui."""
     discovered = []
     try:
@@ -221,6 +279,14 @@ def _discover_windows_win32():
                     'category': 'app',
                     'handle': hwnd,
                 })
+            elif include_system and pid != main_pid and _is_alt_tab_window(hwnd):
+                results.append({
+                    'name': title,
+                    'window': None,
+                    'callback': None,
+                    'category': 'system',
+                    'handle': hwnd,
+                })
         except Exception:
             pass
 
@@ -233,7 +299,7 @@ def _discover_windows_win32():
     return results
 
 
-def _discover_windows_pywinctl():
+def _discover_windows_pywinctl(include_system=False):
     """Discover TCE app windows using pywinctl (cross-platform fallback)."""
     discovered = []
     try:
@@ -271,19 +337,22 @@ def _discover_windows_pywinctl():
             elif hasattr(window, 'getProcessID'):
                 pid = window.getProcessID()
 
-            if pid and pid in tce_pids and pid != main_pid:
-                handle = None
-                try:
-                    handle = window.getHandle()
-                except Exception:
-                    pass
-                discovered.append({
-                    'name': window.title,
-                    'window': None,
-                    'callback': None,
-                    'category': 'app',
-                    'handle': handle,
-                })
+            is_tce = bool(pid) and pid in tce_pids and pid != main_pid
+            if not is_tce and not (include_system and pid != main_pid):
+                continue
+
+            handle = None
+            try:
+                handle = window.getHandle()
+            except Exception:
+                pass
+            discovered.append({
+                'name': window.title,
+                'window': None,
+                'callback': None,
+                'category': 'app' if is_tce else 'system',
+                'handle': handle,
+            })
     except Exception as e:
         print(f"[WindowSwitcher] Error discovering windows with pywinctl: {e}")
 
@@ -293,7 +362,7 @@ def _discover_windows_pywinctl():
 def _get_all_windows():
     """Get all windows: explicitly registered + dynamically discovered."""
     registered = get_registered_windows()
-    discovered = _discover_tce_app_windows()
+    discovered = _discover_tce_app_windows(include_system=_shell_mode_active())
 
     # Merge - registered first, then discovered (avoid duplicates by name)
     seen_names = {w['name'] for w in registered}

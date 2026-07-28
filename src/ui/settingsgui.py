@@ -503,6 +503,11 @@ class SettingsFrame(wx.Frame):
             self.windows_panel = wx.Panel(self.content_panel)
             self.register_category(_("Windows"), self.windows_panel)
 
+            self.titan_shell_panel = wx.Panel(self.content_panel)
+            self.register_category(_("Titan shell"), self.titan_shell_panel)
+        else:
+            self.titan_shell_panel = None
+
         # Titan-Net category (only if credentials are configured)
         self._titan_net_available = False
         try:
@@ -528,6 +533,7 @@ class SettingsFrame(wx.Frame):
 
         if sys.platform == 'win32':
             self.InitWindowsPanel()
+            self.InitTitanShellPanel()
 
         if self._titan_net_available:
             self.InitTitanNetPanel()
@@ -1038,6 +1044,41 @@ class SettingsFrame(wx.Frame):
                 print(f"[Settings] Copilot key detection error: {e}")
 
         self.environment_panel.SetSizer(vbox)
+
+    def InitTitanShellPanel(self):
+        """
+        Shortcuts Titan takes over while "Modify system interface" is on.
+
+        The master switch stays under Environment; this panel decides which
+        individual Windows+<key> shortcuts Titan claims from the system.
+        """
+        panel = self.titan_shell_panel
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        vbox.Add(wx.StaticText(panel, label=_(
+            "These shortcuts are active only when \"Modify system interface\" "
+            "is enabled under Environment.")), flag=wx.LEFT | wx.TOP, border=10)
+
+        self.shell_binding_cbs = {}
+        try:
+            from src.titan_core.tce_system import SHELL_BINDINGS, get_binding_descriptions
+            descriptions = get_binding_descriptions()
+            for binding_id, _keys, label, default in SHELL_BINDINGS:
+                checkbox = wx.CheckBox(panel, label="{} - {}".format(
+                    label, descriptions.get(binding_id, binding_id)))
+                checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+                checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+                vbox.Add(checkbox, flag=wx.LEFT | wx.TOP, border=10)
+                checkbox.shell_default = default
+                self.shell_binding_cbs[binding_id] = checkbox
+        except Exception as e:
+            print(f"[Settings] Could not build the Titan shell panel: {e}")
+
+        vbox.Add(wx.StaticText(panel, label=_(
+            "Windows+L keeps locking the workstation and shortcuts using "
+            "Control are left to Windows.")), flag=wx.LEFT | wx.TOP, border=10)
+
+        panel.SetSizer(vbox)
 
     def InitSystemMonitorPanel(self):
         panel = self.system_monitor_panel
@@ -1880,6 +1921,13 @@ class SettingsFrame(wx.Frame):
         if self.register_titan_tts_sapi_cb is not None:
             self.register_titan_tts_sapi_cb.SetValue(str(environment_settings.get('register_titan_tts_sapi', 'False')).lower() in ['true', '1'])
 
+        # Titan shell shortcuts
+        shell_settings = self.settings.get('titan_shell', {})
+        for binding_id, checkbox in getattr(self, 'shell_binding_cbs', {}).items():
+            default = str(getattr(checkbox, 'shell_default', True))
+            checkbox.SetValue(
+                str(shell_settings.get(binding_id, default)).lower() in ['true', '1'])
+
         # Copilot key settings
         if self.copilot_remap_cb is not None:
             enabled = str(environment_settings.get('copilot_remap', 'False')).lower() in ['true', '1']
@@ -2590,6 +2638,14 @@ class SettingsFrame(wx.Frame):
                     env_settings['copilot_replacement_vk'] = str(REPLACEMENT_KEYS[idx][0])
         self.settings['environment'] = env_settings
 
+        # Titan shell shortcuts
+        shell_cbs = getattr(self, 'shell_binding_cbs', {})
+        if shell_cbs:
+            self.settings['titan_shell'] = {
+                binding_id: str(checkbox.GetValue())
+                for binding_id, checkbox in shell_cbs.items()
+            }
+
         # Apply SAPI5 registration only if the checkbox state actually changed.
         # Elevation (UAC) is triggered interactively here; startup sync stays silent.
         if self.register_titan_tts_sapi_cb is not None and sapi_new_value != sapi_old_value:
@@ -2724,6 +2780,16 @@ class SettingsFrame(wx.Frame):
             restart_system_monitor()
         except Exception as e:
             print(f"Warning: Could not restart system monitor: {e}")
+
+        # Re-install the Titan shell hooks so turning the system interface
+        # modification (or a single shortcut) on or off takes effect now
+        # instead of on the next start - leaving the Windows key hooked after
+        # the user disabled the mode would be a trap.
+        try:
+            from src.titan_core.tce_system import apply_shell_settings
+            apply_shell_settings()
+        except Exception as e:
+            print(f"Warning: Could not apply Titan shell settings: {e}")
 
         # Rebuild the main window's menu bar so context menus gated on settings
         # (e.g. the Programmer menu / AI creation kit) appear or disappear

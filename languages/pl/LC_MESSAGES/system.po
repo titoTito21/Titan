@@ -1064,3 +1064,31 @@ msgstr "Czy chcesz teraz otworzyć ustawienia mikrofonu?"
 
 msgid "Microphone blocked"
 msgstr "Mikrofon zablokowany"
+
+#: src/titan_core/tce_system.py:57
+msgid "Open the Titan Menu"
+msgstr "Otwórz Titan Menu"
+
+#: src/titan_core/tce_system.py:58
+msgid "Open the Titan file manager"
+msgstr "Otwórz menedżer plików Titana"
+
+#: src/titan_core/tce_system.py:59
+msgid "Open the system tray list"
+msgstr "Otwórz listę zasobnika systemowego"
+
+#: src/titan_core/tce_system.py:60
+msgid "Show or hide the Titan window"
+msgstr "Pokaż lub ukryj okno Titana"
+
+#: src/titan_core/tce_system.py:61
+msgid "Open the Run dialog"
+msgstr "Otwórz okno Uruchom"
+
+#: src/titan_core/tce_system.py:62
+msgid "Open the notification center"
+msgstr "Otwórz centrum powiadomień"
+
+#: src/titan_core/tce_system.py:63
+msgid "Open the window switcher"
+msgstr "Otwórz przełącznik okien"

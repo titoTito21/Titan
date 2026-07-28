@@ -149,3 +149,138 @@ def start_monitoring():
     else:
         network_thread = threading.Thread(target=_monitor_network_events_crossplatform, daemon=True)
         network_thread.start()
+
+
+def read_notifications():
+    """
+    Read the stored notifications, newest first.
+
+    Returns a list of dicts with date, time, appname and content keys.
+    """
+    if not os.path.exists(NOTIFICATIONS_FILE_PATH):
+        return []
+
+    entries = []
+    current = None
+    try:
+        with open(NOTIFICATIONS_FILE_PATH, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.rstrip('\n')
+                if line.strip() == 'notification':
+                    current = {'date': '', 'time': '', 'appname': '', 'content': ''}
+                    entries.append(current)
+                elif current is not None and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    if key in current:
+                        current[key] = value
+    except Exception as e:
+        print(f"[NotificationCenter] Error reading notifications: {e}")
+        return []
+
+    entries.reverse()
+    return entries
+
+
+def clear_notifications():
+    """Remove every stored notification."""
+    try:
+        create_notifications_file()
+        return True
+    except Exception as e:
+        print(f"[NotificationCenter] Error clearing notifications: {e}")
+        return False
+
+
+def show_notification_center(parent=None):
+    """
+    Open the notification center - an accessible list of past notifications.
+
+    Reachable from the Titan shell layer (Windows+N) while the system
+    interface modification is active.
+    """
+    import wx
+    from src.titan_core.translation import _
+    from src.titan_core.skin_manager import apply_skin_to_window
+
+    class NotificationCenterDialog(wx.Dialog):
+        def __init__(self, parent):
+            super().__init__(
+                parent,
+                title=_("Notification center"),
+                style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.STAY_ON_TOP,
+                size=wx.Size(560, 380),
+            )
+
+            panel = wx.Panel(self)
+            sizer = wx.BoxSizer(wx.VERTICAL)
+
+            sizer.Add(wx.StaticText(panel, label=_("Notifications:")),
+                      0, wx.ALL | wx.EXPAND, 5)
+
+            self.listbox = wx.ListBox(panel)
+            sizer.Add(self.listbox, 1, wx.ALL | wx.EXPAND, 5)
+
+            buttons = wx.BoxSizer(wx.HORIZONTAL)
+            self.clear_button = wx.Button(panel, label=_("Clear all"))
+            self.close_button = wx.Button(panel, wx.ID_CANCEL, label=_("Close"))
+            buttons.Add(self.clear_button, 0, wx.ALL, 5)
+            buttons.Add(self.close_button, 0, wx.ALL, 5)
+            sizer.Add(buttons, 0, wx.ALIGN_RIGHT)
+
+            panel.SetSizer(sizer)
+
+            self.clear_button.Bind(wx.EVT_BUTTON, self._on_clear)
+            self.listbox.Bind(wx.EVT_LISTBOX_DCLICK, self._on_read)
+            self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
+
+            self._reload()
+            self.listbox.SetFocus()
+
+            try:
+                apply_skin_to_window(self)
+            except Exception:
+                pass
+
+        def _reload(self):
+            self.entries = read_notifications()
+            self.listbox.Clear()
+            for entry in self.entries:
+                self.listbox.Append("{} {} - {}: {}".format(
+                    entry['date'], entry['time'],
+                    entry['appname'], entry['content']).strip())
+            if self.listbox.GetCount():
+                self.listbox.SetSelection(0)
+                speaker.speak(_("Notification center, {} items").format(
+                    self.listbox.GetCount()))
+            else:
+                speaker.speak(_("Notification center, no notifications"))
+
+        def _on_read(self, event):
+            index = self.listbox.GetSelection()
+            if index != wx.NOT_FOUND:
+                speaker.speak(self.listbox.GetString(index))
+
+        def _on_clear(self, event):
+            if clear_notifications():
+                self._reload()
+            self.listbox.SetFocus()
+
+        def _on_char_hook(self, event):
+            if event.GetKeyCode() == wx.WXK_ESCAPE:
+                self.EndModal(wx.ID_CANCEL)
+            elif event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+                self._on_read(event)
+            else:
+                event.Skip()
+
+    dialog = NotificationCenterDialog(parent)
+    try:
+        # Opened from a global shortcut the dialog has to ask Windows for the
+        # foreground explicitly, like the Titan Menu does.
+        from src.titan_core.tce_system import force_foreground
+        wx.CallAfter(force_foreground, dialog)
+    except Exception:
+        pass
+    dialog.ShowModal()
+    dialog.Destroy()

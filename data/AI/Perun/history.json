@@ -303,5 +303,105 @@
     "role": "assistant",
     "content": "Odtwarzam dżingle Radia ZET z 2006 roku. Niech dźwięk dawnych lat niesie się jak grzmot!",
     "timestamp": 1785152928.7110431
+  },
+  {
+    "role": "user",
+    "content": "przypomnij mi za minutę żebym poszedł coś żreć",
+    "timestamp": 1785224544.581177
+  },
+  {
+    "role": "assistant",
+    "content": "Ustawiono! Za minutę powiadomię Cię, byś udał się na posiłek i nabrał sił, jak na wojownika przystało!",
+    "timestamp": 1785224560.45838
+  },
+  {
+    "role": "user",
+    "content": "odtwórz bass hunter - dota",
+    "timestamp": 1785224639.4175882
+  },
+  {
+    "role": "assistant",
+    "content": "Pieśń zabrzmiała! Grzmoty i rytm wypełniają przestrzeń.",
+    "timestamp": 1785224651.8027048
+  },
+  {
+    "role": "user",
+    "content": "jaki mam model dysku i na co to jest, na nvme, pcie, czy jaki port",
+    "timestamp": 1785224721.6455112
+  },
+  {
+    "role": "assistant",
+    "content": "Twoje urządzenie mieści dysk SSD **Samsung MZAL81T0HFLB-00BL2** o pojemności 1 TB. Jest to dysk typu **NVMe**, podłączony przez szybką magistralę **PCIe** (gniazdo M.2 NVMe na płycie głównej).",
+    "timestamp": 1785224743.4478545
+  },
+  {
+    "role": "user",
+    "content": "Jaka jest pogoda w Warszawie?",
+    "timestamp": 1785224819.2909799
+  },
+  {
+    "role": "assistant",
+    "content": "W Warszawie panuje częściowe zachmurzenie. Temperatura wynosi 17 stopni Celsjusza, lecz przez wiatr wiejący z prędkością 21 kilometrów na godzinę, odczuwalne jest zaledwie 9 stopni. Wilgotność powietrza sięga 59 procent.",
+    "timestamp": 1785224841.0138304
+  },
+  {
+    "role": "user",
+    "content": "jakie są najlepsze promocje w supermarketach? Gdzie najtaniej w Warszawie kupię Matchę?",
+    "timestamp": 1785224872.273849
+  },
+  {
+    "role": "assistant",
+    "content": "Oto co objawiły moje pioruny po przeszukaniu ofert:\n\n**1. Najlepsze promocje w supermarketach:**\n* W Biedronce, Lidlu, Auchan i Carrefourze promocje zmieniają się co tydzień. Najlepiej sprawdzać je w aplikacjach mobilnych **Blix**, **Lidl Plus** oraz **Moja Biedronka**, gdzie znajdziesz aktualne kupony i rabaty na nabiał, mięso oraz warzywa.\n\n**2. Gdzie najtaniej kupisz Matchę w Warszawie:**\n* **Action i Dealz:** Najtańsza matcha do codziennego picia lub wypieków (już od około 10–15 zł za opakowanie).\n* **Supermarkety (Auchan, Carrefour, Rossmann):** Dział zdrowej żywności / Bio oferuje matchę kulinarną w cenie około 15–25 zł.\n* **Sklepy azjatyckie (np. Kuchnie Świata w Złotych Tarasach, punkty przy ul. Bakalarskiej lub Hali Mirowskiej):** Mają najszerszy wybór i najlepszy stosunek ceny do ilości przy zakupie większych paczek (np. 100g matchy kulinarnej od około 20–30 zł).",
+    "timestamp": 1785224923.9277115
+  },
+  {
+    "role": "user",
+    "content": "a gdzie najtaniej kupię Jajka?",
+    "timestamp": 1785224944.998086
+  },
+  {
+    "role": "assistant",
+    "content": "By pioruny wskazały ścieżkę! Najtaniej jaja kupisz w dużych sieciach dyskontowych – przede wszystkim w Biedronce, Lidlu oraz Kauflandzie. Regularnie pojawiają się tam promocje typu „drugie opakowanie 50% taniej” lub akcje rabatowe z aplikacją sklepu na jaja z chowu ściółkowego marek własnych (np. Moja Kurka czy Wesoły Kurnik). W promocji cena za 10 sztuk spada do około 6–7 złotych.",
+    "timestamp": 1785225008.5467863
+  },
+  {
+    "role": "user",
+    "content": "jak przejść z dymińskiej 2 w Warszawie do najbliższego carefour express",
+    "timestamp": 1785225098.4216685
+  },
+  {
+    "role": "assistant",
+    "content": "Moc gromu wskazuje drogę! Najbliższy Carrefour Express znajduje się tuż obok, pod adresem Dymińska 4. \n\nWystarczy wyjść z budynku przy Dymińskiej 2 i przejść zaledwie kilkanaście metrów wzdłuż ulicy do sąsiedniego numeru 4. To dosłownie kilka kroków!",
+    "timestamp": 1785225123.6974394
+  },
+  {
+    "role": "user",
+    "content": "jakie fajne miejsca można znaleść bez przejścia przez światła, ewenntualnie krótkim spacerkiem",
+    "timestamp": 1785225166.944508
+  },
+  {
+    "role": "assistant",
+    "content": "Mężny wędrowcze! W tej okolicy żadna sygnalizacja świetlna nie spęta twoich kroków. Bez przechodzenia przez światła, krótkim spacerem możesz udać się na pobliskie polne ścieżki, do okolicznych lasów oraz na łono natury, gdzie włada wiatr i spokój drzew. \n\nJeśli znajdujesz się w konkretnym miejscu lub mieście i szukasz lokalnych punktów – powiedz mi, skąd ruszasz, a wyznaczę ci ścieżkę godną wojownika!",
+    "timestamp": 1785225201.312382
+  },
+  {
+    "role": "user",
+    "content": "Dymińska 2",
+    "timestamp": 1785225209.5924623
+  },
+  {
+    "role": "assistant",
+    "content": "Dymińska 2 to adres na warszawskim Żoliborzu, tuż obok Dworca Gdańskiego. Powiedz, co mam dla Ciebie uczynić z tą lokalizacją — sprawdzić pogodę, wyszukać trasy, czy potrzebujesz czegoś innego?",
+    "timestamp": 1785225227.4085057
+  },
+  {
+    "role": "user",
+    "content": "to jakie są fajne miejsca bez długiego spaceru w okolicach dymińskiej 2",
+    "timestamp": 1785225250.3718724
+  },
+  {
+    "role": "assistant",
+    "content": "Oto najciekawsze miejsca tuż obok Dymińskiej 2, do których dotrzesz bez długiego marszu:\n\n1. **Cytadela Warszawska oraz Park Fosa i Stoki Cytadeli** – znajdują się dosłownie po drugiej stronie ulicy. To potężne, zielone tereny spacerowe otoczone zabytkowymi murami.\n2. **Muzeum Historii Polski oraz Muzeum Wojska Polskiego** – mieszczą się na terenie Cytadeli, tuż przy wejściu od strony Dymińskiej. Wybitne miejsca pełne oręża i historii.\n3. **Park im. Romualda Traugutta** – piękny, cichy park usytuowany krok od ulicy Słomińskiego.\n4. **Plac Inwalidów i Stary Żoliborz** – zaledwie kilka minut spokojnego spaceru ulicą Mickiewicza, gdzie znajdziesz świetne kawiarnie i restauracje, takie jak kultowa *Havana*.\n\nJeśli pragniesz natury lub historii, Cytadela i jej parki stoją przed Tobą otworem! Czy chcesz dowiedzieć się więcej o którymś z tych miejsc?",
+    "timestamp": 1785225297.1006825
   }
 ]

@@ -1052,3 +1052,15 @@ msgstr "Let the AI word the reminder announcement in the assistant's own style (
 #~ msgid "Stereo sounds"
 #~ msgstr "Stereo sounds"
 
+
+#: src/ui/settingsgui.py:509
+msgid "Titan shell"
+msgstr "Titan shell"
+
+#: src/ui/settingsgui.py:1055
+msgid "These shortcuts are active only when \"Modify system interface\" is enabled under Environment."
+msgstr "These shortcuts are active only when \"Modify system interface\" is enabled under Environment."
+
+#: src/ui/settingsgui.py:1075
+msgid "Windows+L keeps locking the workstation and shortcuts using Control are left to Windows."
+msgstr "Windows+L keeps locking the workstation and shortcuts using Control are left to Windows."

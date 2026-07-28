@@ -1042,3 +1042,15 @@ msgstr "Pozwól AI ułożyć treść przypomnienia w stylu asystenta (w przeciwn
 #~ msgid "Stereo sounds"
 #~ msgstr "Dźwięki stereo"
 
+
+#: src/ui/settingsgui.py:509
+msgid "Titan shell"
+msgstr "Powłoka Titana"
+
+#: src/ui/settingsgui.py:1055
+msgid "These shortcuts are active only when \"Modify system interface\" is enabled under Environment."
+msgstr "Te skróty działają tylko wtedy, gdy w kategorii Środowisko włączona jest opcja \"Modyfikuj interfejs systemu\"."
+
+#: src/ui/settingsgui.py:1075
+msgid "Windows+L keeps locking the workstation and shortcuts using Control are left to Windows."
+msgstr "Windows+L nadal blokuje stację roboczą, a skróty z klawiszem Control są pozostawione systemowi Windows."

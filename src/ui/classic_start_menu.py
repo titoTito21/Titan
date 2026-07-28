@@ -93,7 +93,11 @@ class ClassicMenuItem:
 
 class ClassicStartMenu(wx.Frame):
     """Klasyczne Menu Start w stylu Windows 95/98"""
-    
+
+    # How long after opening the menu ignores focus loss, so a menu opened
+    # from a global shortcut is not hidden before Windows gives it focus.
+    FOCUS_GRACE_SECONDS = 0.5
+
     def __init__(self, parent):
         try:
             super().__init__(parent, title="Titan Menu",
@@ -110,6 +114,7 @@ class ClassicStartMenu(wx.Frame):
         self.is_windows = IS_WINDOWS
         self.menu_items = []
         self.current_submenu = None
+        self._shown_at = 0.0
 
         # Cache for applications and games to avoid reloading
         self._apps_cache = None
@@ -1152,13 +1157,30 @@ class ClassicStartMenu(wx.Frame):
     def on_kill_focus(self, event):
         """Ukryj menu gdy straci focus"""
         wx.CallLater(100, self.check_and_hide)
-    
+
     def check_and_hide(self):
         """Sprawdź czy ukryć menu"""
+        # Opened from a global shortcut the menu needs a moment before Windows
+        # hands it the foreground; hiding on the focus loss that happens in
+        # between would close the menu the instant it appears.
+        if time.time() - getattr(self, '_shown_at', 0) < self.FOCUS_GRACE_SECONDS:
+            return
+
         focus_window = wx.Window.FindFocus()
-        if not focus_window or not self.IsDescendant(focus_window):
-            self.Hide()
-    
+        if focus_window and self.IsDescendant(focus_window):
+            return
+
+        # FindFocus() only knows about our own process, so also accept the
+        # case where this window is the system foreground window.
+        if IS_WINDOWS and WIN32_AVAILABLE:
+            try:
+                if win32gui.GetForegroundWindow() == self.GetHandle():
+                    return
+            except Exception:
+                pass
+
+        self.Hide()
+
     def position_menu(self):
         """Umieszczenie menu w lewym dolnym rogu"""
         screen_size = wx.GetDisplaySize()
@@ -1173,10 +1195,19 @@ class ClassicStartMenu(wx.Frame):
         """Pokaż menu"""
         # Re-apply skin on every open so Alt+F1 always reflects current theme.
         self.apply_skin_settings()
+        self._shown_at = time.time()
+        self.position_menu()
         self.Show()
         self.Raise()
+        # Global shortcuts fire while another application owns the foreground,
+        # so ask for it explicitly instead of relying on Raise().
+        try:
+            from src.titan_core.tce_system import force_foreground
+            force_foreground(self)
+        except Exception as e:
+            print(f"Warning: could not foreground the Titan Menu: {e}")
         wx.CallAfter(self.menu_tree.SetFocus)
-    
+
     def toggle_menu(self):
         """Przełącz widoczność menu"""
         if self.IsShown():

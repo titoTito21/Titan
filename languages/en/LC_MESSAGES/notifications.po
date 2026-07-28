@@ -65,3 +65,27 @@ msgstr ""
 msgid "Notifications"
 msgstr ""
 
+
+#: src/ui/notificationcenter.py:213
+msgid "Notification center"
+msgstr "Notification center"
+
+#: src/ui/notificationcenter.py:222
+msgid "Notifications:"
+msgstr "Notifications:"
+
+#: src/ui/notificationcenter.py:229
+msgid "Clear all"
+msgstr "Clear all"
+
+#: src/ui/notificationcenter.py:230
+msgid "Close"
+msgstr "Close"
+
+#: src/ui/notificationcenter.py:262
+msgid "Notification center, {} items"
+msgstr "Notification center, {} items"
+
+#: src/ui/notificationcenter.py:265
+msgid "Notification center, no notifications"
+msgstr "Notification center, no notifications"
