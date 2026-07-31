@@ -1688,6 +1688,11 @@ class TitanNetMainWindow(wx.Frame):
         # background after connect via refresh_blocked_users().
         self.blocked_user_ids = set()
 
+        # Screens this server defines for itself (Remote UI). Fetched in the
+        # background after connect; the Server menu is built from the cache so
+        # opening a menu never waits on the network.
+        self.remote_screens = []
+
         # Auto-refresh settings
         self.auto_refresh_enabled = True
         self.auto_refresh_interval = 15  # seconds - faster refresh for responsive UI
@@ -2199,6 +2204,26 @@ class TitanNetMainWindow(wx.Frame):
                     components_menu.AppendSubMenu(submenu, name)
             menubar.Append(components_menu, _("Components"))
 
+        # Server menu — screens this server defines for itself, rendered by
+        # the generic Remote UI renderer. The entries come from the server,
+        # so a brand new tool appears here without updating Titan.
+        server_screens = getattr(self, 'remote_screens', []) or []
+        if server_screens or self.is_moderator or self.is_developer:
+            server_menu = wx.Menu()
+            for screen in server_screens:
+                item = server_menu.Append(wx.ID_ANY, screen.get('title') or screen['slug'])
+                self.Bind(wx.EVT_MENU,
+                          lambda e, s=screen['slug']: self._open_remote_screen(s), item)
+            if server_screens and (self.is_moderator or self.is_developer):
+                server_menu.AppendSeparator()
+            if self.is_moderator or self.is_developer:
+                sounds_item = server_menu.Append(wx.ID_ANY, _("Server Sounds"))
+                self.Bind(wx.EVT_MENU, lambda e: self._show_server_sounds(), sounds_item)
+            refresh_item = server_menu.Append(wx.ID_ANY, _("Refresh Server Screens"))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self.refresh_remote_screens(announce=True), refresh_item)
+            menubar.Append(server_menu, _("Server"))
+
         self.SetMenuBar(menubar)
 
     def apply_skin(self):
@@ -2220,6 +2245,79 @@ class TitanNetMainWindow(wx.Frame):
             except Exception as e:
                 print(f"Error loading blocked users: {e}")
         threading.Thread(target=_fetch, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # Remote UI + server sounds
+    # ------------------------------------------------------------------
+
+    def refresh_remote_screens(self, announce: bool = False):
+        """Reload the server's screen list and rebuild the Server menu.
+
+        Runs in the background: a server that has no Remote UI screens (or is
+        an older build that never heard of them) simply contributes nothing.
+        """
+        def _fetch():
+            try:
+                from src.network import remote_ui
+                screens = remote_ui.list_menu_screens(self.titan_client)
+            except Exception as e:
+                print(f"Error loading remote screens: {e}")
+                screens = []
+            wx.CallAfter(self._apply_remote_screens, screens, announce)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _apply_remote_screens(self, screens, announce: bool = False):
+        self.remote_screens = screens or []
+        try:
+            self.update_menu_bar()
+        except Exception as e:
+            print(f"Error rebuilding menu for remote screens: {e}")
+        if announce:
+            count = len(self.remote_screens)
+            if count:
+                speak_notification(
+                    _("{n} server screens available").format(n=count), 'success')
+            else:
+                speak_notification(_("This server has no screens"), 'info')
+
+    def _open_remote_screen(self, slug: str):
+        try:
+            from src.network import remote_ui
+            remote_ui.open_screen(self, self.titan_client, slug)
+        except Exception as e:
+            print(f"Error opening remote screen {slug}: {e}")
+            speak_notification(_("Could not open that screen"), 'error')
+
+    def _on_remote_screen_push(self, message):
+        """The server opened one of its screens on us, unprompted."""
+        try:
+            from src.network import remote_ui
+            remote_ui.handle_push(self, self.titan_client, message)
+        except Exception as e:
+            print(f"Error handling pushed remote screen: {e}")
+
+    def _on_server_sound(self, message):
+        """The server asked this machine to play one of its sounds."""
+        try:
+            from src.network import server_sounds
+            server_sounds.play(self.titan_client, message)
+        except Exception as e:
+            print(f"Error playing server sound: {e}")
+
+    def _show_server_sounds(self):
+        """Staff: manage the server's sound registry and play sounds at users."""
+        try:
+            from src.network.server_sounds_gui import ServerSoundsDialog
+        except Exception as e:
+            print(f"Error loading server sounds dialog: {e}")
+            speak_notification(_("Could not open server sounds"), 'error')
+            return
+        dlg = ServerSoundsDialog(self, self.titan_client)
+        try:
+            dlg.ShowModal()
+        finally:
+            dlg.Destroy()
 
     def load_user_role(self):
         """Load user role - use cached role from login response first, then fetch from server"""
@@ -2326,6 +2424,14 @@ class TitanNetMainWindow(wx.Frame):
 
         # New user broadcast callback
         self.titan_client.on_new_user_broadcast = self.on_new_user_broadcast
+
+        # Remote UI: the server may open one of its own screens on us, and
+        # may ask us to play one of its sounds. Both arrive as plain data —
+        # a screen description and a sound name — so a server feature added
+        # after this client was built still works here.
+        self.titan_client.on_remote_screen_push = self._on_remote_screen_push
+        self.titan_client.on_server_sound = self._on_server_sound
+        self.refresh_remote_screens()
 
         # Moderator component runtime (event bus). Loads enabled components so
         # their hooks (on_message/on_tick/...) fire on live Titan-Net events.

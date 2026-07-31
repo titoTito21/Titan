@@ -1325,6 +1325,66 @@ class Database:
             )
             """)
 
+            # ---- Remote UI: screens the SERVER defines, clients render ----
+            # A server-side component that needs a new dialog stores a
+            # declarative JSON definition here instead of shipping Python.
+            # Every client has one generic renderer, so a brand new screen
+            # reaches users who never updated Titan. 'handler' names the
+            # server-side function that processes submits (see remote_ui.py);
+            # 'store' is the built-in that just records the values.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS remote_screens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE NOT NULL,
+                title TEXT NOT NULL,
+                definition TEXT NOT NULL,
+                handler TEXT NOT NULL DEFAULT 'store',
+                audience TEXT NOT NULL DEFAULT 'everyone',
+                in_menu INTEGER NOT NULL DEFAULT 1,
+                active INTEGER NOT NULL DEFAULT 1,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+            """)
+
+            # What users sent back from a remote screen handled by 'store'.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS remote_screen_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remote_sub_slug "
+                           "ON remote_screen_submissions(slug, created_at)")
+
+            # ---- Server sound registry ----
+            # Sounds uploaded by staff and played on demand at one user, a
+            # role, a room or everybody. Audio lives on disk under
+            # server_sounds/; the row keeps the metadata plus a sha256 so
+            # clients can cache by content and never re-download.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS server_sounds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                filename TEXT NOT NULL,
+                mime TEXT,
+                size INTEGER NOT NULL DEFAULT 0,
+                sha256 TEXT NOT NULL,
+                uploaded_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (uploaded_by) REFERENCES users(id)
+            )
+            """)
+
             # Room bans table (extended with ban types)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS room_bans (
@@ -4792,9 +4852,25 @@ class Database:
         return self.get_user_role(user_id) == 'developer'
 
     def is_moderator(self, user_id: int) -> bool:
-        """Check if user is a moderator or developer"""
-        role = self.get_user_role(user_id)
-        return role in ('moderator', 'developer')
+        """Check if user holds a staff role: moderator, developer or admin.
+
+        'admin' used to be missing here even though ``register_user`` gives the
+        first account exactly that role, and the desktop client decides whether
+        to OFFER moderator actions from ``is_admin``. The two disagreed, so an
+        admin saw the Delete button in the Feedback Hub, confirmed the dialog,
+        and the server answered "Permission denied" - the entry simply stayed.
+        The legacy ``is_admin`` column is honoured too, for accounts created
+        before roles existed.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT role, is_admin FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return False
+        role = row['role'] or 'user'
+        return role in ('moderator', 'developer', 'admin') or bool(row['is_admin'])
 
     @_serialized_write
     def promote_to_moderator(self, user_id: int, appointed_by: int, title: str = "Moderator") -> Dict[str, Any]:
@@ -5858,6 +5934,231 @@ class Database:
             "title": row['title'],
             "attachment_path": row['attachment_path'],
         }
+
+    # =====================================================================
+    # REMOTE UI (server-defined screens)
+    # =====================================================================
+    # Screens are declarative JSON, never code. The server owns them, every
+    # client renders them with the same generic renderer, so adding a dialog
+    # to Titan-Net never means shipping a new Titan build.
+    REMOTE_SCREEN_AUDIENCES = ('everyone', 'moderators', 'admins')
+
+    def _remote_screen_visible(self, row: Dict[str, Any], viewer_role: str,
+                               viewer_is_admin: bool) -> bool:
+        audience = (row.get('audience') or 'everyone').lower()
+        if audience == 'everyone':
+            return True
+        if audience == 'admins':
+            return viewer_is_admin or viewer_role == 'developer'
+        if audience == 'moderators':
+            return (viewer_is_admin
+                    or viewer_role in ('moderator', 'developer', 'admin'))
+        return False
+
+    @_serialized_write
+    def save_remote_screen(self, slug: str, title: str, definition: str,
+                           created_by: int, handler: str = 'store',
+                           audience: str = 'everyone', in_menu: bool = True,
+                           active: bool = True) -> Dict[str, Any]:
+        """Create or replace a remote screen. Bumps ``version`` on update so
+        clients can tell a cached definition is stale."""
+        slug = (slug or '').strip().lower()
+        if not re.match(r'^[a-z0-9][a-z0-9_-]{1,63}$', slug):
+            return {"success": False, "error": "Invalid slug"}
+        if not (title or '').strip():
+            return {"success": False, "error": "Title is required"}
+        if audience not in self.REMOTE_SCREEN_AUDIENCES:
+            return {"success": False, "error": "Invalid audience"}
+
+        now = datetime.now().isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, version FROM remote_screens WHERE slug = ?", (slug,))
+        row = cursor.fetchone()
+        if row:
+            version = int(row['version'] or 1) + 1
+            cursor.execute("""
+                UPDATE remote_screens
+                   SET title = ?, definition = ?, handler = ?, audience = ?,
+                       in_menu = ?, active = ?, version = ?, updated_at = ?
+                 WHERE id = ?
+            """, (title.strip(), definition, handler or 'store', audience,
+                  1 if in_menu else 0, 1 if active else 0, version, now, row['id']))
+            screen_id = row['id']
+        else:
+            version = 1
+            cursor.execute("""
+                INSERT INTO remote_screens
+                    (slug, title, definition, handler, audience, in_menu,
+                     active, version, created_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (slug, title.strip(), definition, handler or 'store', audience,
+                  1 if in_menu else 0, 1 if active else 0, version,
+                  created_by, now, now))
+            screen_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "screen_id": screen_id, "slug": slug,
+                "version": version}
+
+    def get_remote_screen(self, slug: str) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM remote_screens WHERE slug = ?", ((slug or '').lower(),))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def list_remote_screens(self, viewer_id: Optional[int] = None,
+                            include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """Screens the viewer is allowed to see, newest first.
+
+        Only metadata - the full definition is fetched when a screen opens,
+        so a menu listing stays small even with many screens."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        where = "" if include_inactive else "WHERE active = 1"
+        cursor.execute(f"""
+            SELECT id, slug, title, handler, audience, in_menu, active, version,
+                   created_by, created_at, updated_at
+            FROM remote_screens {where} ORDER BY title COLLATE NOCASE ASC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+
+        viewer_role, viewer_is_admin = 'user', False
+        if viewer_id:
+            user = self.get_user_by_id(viewer_id) or {}
+            viewer_role = user.get('role') or 'user'
+            viewer_is_admin = bool(user.get('is_admin'))
+        return [r for r in rows
+                if self._remote_screen_visible(r, viewer_role, viewer_is_admin)]
+
+    def can_view_remote_screen(self, slug: str, viewer_id: int) -> bool:
+        row = self.get_remote_screen(slug)
+        if not row or not row.get('active'):
+            return False
+        user = self.get_user_by_id(viewer_id) or {}
+        return self._remote_screen_visible(row, user.get('role') or 'user',
+                                           bool(user.get('is_admin')))
+
+    @_serialized_write
+    def delete_remote_screen(self, slug: str) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM remote_screens WHERE slug = ?", ((slug or '').lower(),))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        if not deleted:
+            return {"success": False, "error": "Screen not found"}
+        return {"success": True, "slug": slug}
+
+    @_serialized_write
+    def record_remote_submission(self, slug: str, user_id: int, action: str,
+                                 payload: str) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO remote_screen_submissions (slug, user_id, action, payload, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (slug, user_id, action, payload, datetime.now().isoformat()))
+        submission_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "submission_id": submission_id}
+
+    def list_remote_submissions(self, slug: str, limit: int = 200) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.*, u.username
+            FROM remote_screen_submissions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.slug = ? ORDER BY s.created_at DESC LIMIT ?
+        """, (slug, limit))
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    # =====================================================================
+    # SERVER SOUNDS
+    # =====================================================================
+    SERVER_SOUND_DIR = 'server_sounds'
+    SERVER_SOUND_MAX_BYTES = 5 * 1024 * 1024
+    SERVER_SOUND_EXTENSIONS = ('.ogg', '.wav', '.mp3', '.opus', '.flac')
+
+    @_serialized_write
+    def add_server_sound(self, name: str, filename: str, sha256: str, size: int,
+                         uploaded_by: int, mime: Optional[str] = None,
+                         description: Optional[str] = None) -> Dict[str, Any]:
+        """Register an already-written sound file. Re-uploading the same name
+        replaces the metadata (the caller replaces the file on disk)."""
+        name = (name or '').strip().lower()
+        if not re.match(r'^[a-z0-9][a-z0-9_.-]{0,63}$', name):
+            return {"success": False, "error": "Invalid sound name"}
+        now = datetime.now().isoformat()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, filename FROM server_sounds WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        old_filename = row['filename'] if row else None
+        if row:
+            cursor.execute("""
+                UPDATE server_sounds
+                   SET filename = ?, sha256 = ?, size = ?, mime = ?,
+                       description = ?, uploaded_by = ?, created_at = ?
+                 WHERE id = ?
+            """, (filename, sha256, size, mime, description, uploaded_by, now, row['id']))
+            sound_id = row['id']
+        else:
+            cursor.execute("""
+                INSERT INTO server_sounds
+                    (name, description, filename, mime, size, sha256, uploaded_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, description, filename, mime, size, sha256, uploaded_by, now))
+            sound_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {"success": True, "sound_id": sound_id, "name": name,
+                "sha256": sha256, "replaced": old_filename}
+
+    def get_server_sound(self, name: str) -> Optional[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM server_sounds WHERE name = ?", ((name or '').lower(),))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def list_server_sounds(self) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.id, s.name, s.description, s.mime, s.size, s.sha256,
+                   s.created_at, u.username AS uploaded_by_username
+            FROM server_sounds s
+            LEFT JOIN users u ON s.uploaded_by = u.id
+            ORDER BY s.name ASC
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    @_serialized_write
+    def delete_server_sound(self, name: str) -> Dict[str, Any]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM server_sounds WHERE name = ?", ((name or '').lower(),))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return {"success": False, "error": "Sound not found"}
+        filename = row['filename']
+        cursor.execute("DELETE FROM server_sounds WHERE name = ?", ((name or '').lower(),))
+        conn.commit()
+        conn.close()
+        return {"success": True, "name": name, "filename": filename}
 
     # =====================================================================
     # INTERACTIVE GAMES (Entertainment tab)

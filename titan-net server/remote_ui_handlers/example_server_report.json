@@ -1,0 +1,48 @@
+{
+  "title": "Report a user",
+  "description": "Tell the moderators about a problem. Everything on this screen is described by the server, so it works on any Titan build.",
+  "size": [640, 520],
+  "fields": [
+    {
+      "type": "static",
+      "id": "summary",
+      "label": "Server",
+      "text": "Loading server information..."
+    },
+    {
+      "type": "choice",
+      "id": "about_user",
+      "label": "Which user is this about?",
+      "items": [],
+      "required": true
+    },
+    {
+      "type": "multiline",
+      "id": "details",
+      "label": "What happened?",
+      "required": true,
+      "max_length": 4000,
+      "hint": "Describe the problem in your own words."
+    },
+    {
+      "type": "checkbox",
+      "id": "urgent",
+      "label": "This needs attention right now",
+      "default": false
+    },
+    {"type": "separator"},
+    {
+      "type": "number",
+      "id": "days",
+      "label": "How many days has this been going on?",
+      "min": 0,
+      "max": 365,
+      "default": 1
+    }
+  ],
+  "buttons": [
+    {"id": "send", "label": "Send report", "action": "submit", "default": true},
+    {"id": "refresh", "label": "Refresh", "action": "action"},
+    {"id": "cancel", "label": "Cancel", "action": "cancel"}
+  ]
+}

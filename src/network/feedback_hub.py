@@ -657,7 +657,12 @@ class FeedbackDetailDialog(wx.Dialog):
 
     def _on_delete_result(self, result: Dict, title: str):
         if not result.get('success'):
-            speak_notification(result.get('error') or _("Failed to delete"), 'error')
+            # Show the server's reason as well as speaking it - a refusal that
+            # only gets spoken reads as "the button does nothing".
+            reason = result.get('error') or _("Failed to delete")
+            speak_notification(reason, 'error')
+            _show_skinned_message(reason, _("Delete feedback"),
+                                  wx.OK | wx.ICON_ERROR, self)
             return
         self.deleted = True
         speak_notification(_("Deleted: {title}").format(title=title), 'success')
@@ -1291,7 +1296,10 @@ class FeedbackHubFrame(wx.Frame):
 
     def _on_delete_result(self, result: Dict, title: str):
         if not result.get('success'):
-            speak_notification(result.get('error') or _("Failed to delete"), 'error')
+            reason = result.get('error') or _("Failed to delete")
+            speak_notification(reason, 'error')
+            _show_skinned_message(reason, _("Delete feedback"),
+                                  wx.OK | wx.ICON_ERROR, self)
             return
         speak_notification(_("Deleted: {title}").format(title=title), 'success')
         self._refresh_items(announce=False)

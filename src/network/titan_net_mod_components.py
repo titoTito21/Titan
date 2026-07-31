@@ -1021,8 +1021,13 @@ def _current_region():
 
 
 def _user_is_moderator(titan_client):
-    role = getattr(titan_client, 'user_role', 'user') if titan_client is not None else 'user'
-    return role in ('moderator', 'developer')
+    # Mirrors Database.is_moderator() server-side: admins are staff too.
+    if titan_client is None:
+        return False
+    if getattr(titan_client, 'is_admin', False):
+        return True
+    role = getattr(titan_client, 'user_role', 'user')
+    return role in ('moderator', 'developer', 'admin')
 
 
 def _component_server_slug(component):

@@ -224,6 +224,57 @@ Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, 
 - Audio notifications from `sfx/*/titannet/` directory
 - SQLite database for users and messages
 - Server runs on `ws://0.0.0.0:8001`, client connects to `ws://localhost:8001` by default
+- **Remote UI (server-defined screens and whole services)**: the server
+  describes a screen as declarative JSON and every client renders it with one
+  generic renderer, so a new Titan-Net GUI never requires users to update
+  Titan. Nothing executable crosses the wire — the client renders data and
+  skips what it does not recognise, which is what keeps old clients working.
+  - Two screen kinds:
+    - `dialog` — a form (fields + buttons), shown modally
+    - `view` — a **service**: a window with a menu bar, tab bar, list and
+      controls. Views nest, so a service is a tree of them
+  - Server: `titan-net server/remote_ui.py` (schema, validation, handler
+    registry, result builders `view` / `refresh` / `back` / `goto` / `close`
+    / `error` / `update`), `remote_screens` +
+    `remote_screen_submissions` tables, WS messages `list_remote_screens` /
+    `open_remote_screen` / `remote_screen_action`, HTTP `/api/remote-screens/*`
+  - A service author drops a handler in `titan-net server/remote_ui_handlers/`
+    (auto-imported at startup) — `example_server_report.py` is a form,
+    `example_service.py` is a full service (tabs, menus, drill-down, search,
+    per-row actions); each has a matching `.json`
+  - Handler contract: `ctx.action` is `'open'` first, then the fired
+    row/button/menu id, or the built-ins `'refresh'` (F5 + auto-refresh) and
+    `'tab'`. `ctx.item` / `ctx.row` give the focused row, `ctx.values` the
+    controls. `ctx.rows(...)` / `ctx.fill(...)` inject live data at open time
+  - Publish with `python remote_ui_admin.py save <file.json> --slug <slug>
+    --handler <handler>` or `POST /api/remote-screens`. The CLI runs from any
+    machine: it WS-logs-in as staff and drives the HTTP API, and never opens
+    the database directly (a second `Database()` next to the live server
+    corrupts SQLCipher — the PID lock enforces this). Same commands manage
+    sounds (`sounds`, `add-sound`, `play --to <user>`, `del-sound`) and can
+    `push` a screen at somebody
+  - Client: `src/network/remote_ui.py` — `RemoteScreenDialog` for forms,
+    `RemoteServiceFrame` for services. Interaction is deliberately identical
+    to `gui.py` / `feedback_hub.py`: row 0 is the tab bar, Left/Right cycles
+    it, Enter opens, Escape goes back one level then closes, F5 refreshes,
+    with the same stereo focus cues. Screens appear in Titan-Net's **Server**
+    menu
+  - Navigation state is a stack the server also keeps (it validates against
+    its own copy of the screen); the client pops instantly and notifies via
+    the reserved `__back__` action
+  - The server can push a screen at a user unprompted (`push_remote_screen`,
+    `POST /api/remote-screens/<slug>/push`)
+- **Server sounds**: audio uploaded to the server once, then played at one
+  user, a role, a room, or everybody.
+  - Server: `server_sounds` table, files under `server_sounds/`, HTTP
+    `/api/sounds/*` (upload / list / download / delete /
+    `<name>/play`), WS `list_server_sounds` / `play_server_sound`,
+    `TitanNetServer.push_server_sound(name, target)` for component code
+  - Client: `src/network/server_sounds.py` caches by sha256 and plays through
+    the normal TCE pipeline; `src/network/server_sounds_gui.py` is the
+    moderator manager (Server menu -> Server Sounds)
+  - Users can refuse server audio: Settings -> Titan-Net -> "Allow sounds
+    sent by the server"; pushes are rate limited per recipient
 - **App repository**: generic upload/browse/download catalog for distributable
   content (apps, components, games, and now `.TCA`/`.TCD` packages of any
   add-on kind), backed by the `app_repository` table (`titan-net server/models.py`),

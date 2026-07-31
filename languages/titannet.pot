@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-07-31 11:16+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,203 +17,208 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/network/titan_net.py:426
+#: src/network/titan_net.py:433
 msgid "Account created successfully"
 msgstr ""
 
-#: src/network/titan_net.py:433 src/network/titan_net_gui.py:1231
+#: src/network/titan_net.py:440 src/network/titan_net_gui.py:1231
 msgid "Registration failed"
 msgstr ""
 
-#: src/network/titan_net.py:439 src/network/titan_net.py:564
+#: src/network/titan_net.py:446 src/network/titan_net.py:571
 msgid "Cannot connect to Titan-Net server"
 msgstr ""
 
-#: src/network/titan_net.py:445 src/network/titan_net.py:459
+#: src/network/titan_net.py:452 src/network/titan_net.py:466
 #, python-brace-format
 msgid "Registration error: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:541 src/system/klangomode.py:1026
+#: src/network/titan_net.py:548 src/system/klangomode.py:1026
 #: src/system/klangomode.py:2096
 msgid "Login successful"
 msgstr ""
 
-#: src/network/titan_net.py:558 src/network/titan_net_gui.py:430
+#: src/network/titan_net.py:565 src/network/titan_net_gui.py:430
 msgid "Login failed"
 msgstr ""
 
-#: src/network/titan_net.py:570 src/network/titan_net.py:578
+#: src/network/titan_net.py:577 src/network/titan_net.py:585
 #, python-brace-format
 msgid "Login error: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:591 src/network/titan_net.py:662
-#: src/network/titan_net.py:704 src/network/titan_net.py:759
-#: src/network/titan_net.py:810 src/network/titan_net.py:848
-#: src/network/titan_net.py:898 src/network/titan_net.py:934
-#: src/network/titan_net.py:975 src/network/titan_net.py:1011
-#: src/network/titan_net.py:1027 src/network/titan_net.py:1043
-#: src/network/titan_net.py:1090 src/network/titan_net.py:1365
-#: src/network/titan_net.py:1413 src/network/titan_net.py:3737
-#: src/network/titan_net.py:3764 src/network/titan_net.py:3778
-#: src/network/titan_net.py:3792 src/network/titan_net.py:3813
-#: src/network/titan_net.py:3827 src/network/titan_net.py:3845
-#: src/network/titan_net.py:3881 src/network/titan_net.py:3928
-#: src/network/titan_net.py:3942 src/network/titan_net.py:3956
-#: src/network/titan_net.py:3970 src/network/titan_net.py:3991
-#: src/network/titan_net.py:4005 src/network/titan_net.py:4019
-#: src/network/titan_net.py:4033 src/network/titan_net.py:4047
-#: src/network/titan_net.py:4061 src/network/titan_net.py:4086
-#: src/network/titan_net.py:4107 src/network/titan_net.py:4121
-#: src/network/titan_net.py:4139
+#: src/network/titan_net.py:598 src/network/titan_net.py:669
+#: src/network/titan_net.py:711 src/network/titan_net.py:766
+#: src/network/titan_net.py:817 src/network/titan_net.py:855
+#: src/network/titan_net.py:905 src/network/titan_net.py:941
+#: src/network/titan_net.py:982 src/network/titan_net.py:1018
+#: src/network/titan_net.py:1034 src/network/titan_net.py:1050
+#: src/network/titan_net.py:1097 src/network/titan_net.py:1372
+#: src/network/titan_net.py:1420 src/network/titan_net.py:3761
+#: src/network/titan_net.py:3788 src/network/titan_net.py:3802
+#: src/network/titan_net.py:3816 src/network/titan_net.py:3837
+#: src/network/titan_net.py:3851 src/network/titan_net.py:3869
+#: src/network/titan_net.py:3890 src/network/titan_net.py:3904
+#: src/network/titan_net.py:3926 src/network/titan_net.py:3984
+#: src/network/titan_net.py:4004 src/network/titan_net.py:4091
+#: src/network/titan_net.py:4138 src/network/titan_net.py:4152
+#: src/network/titan_net.py:4166 src/network/titan_net.py:4180
+#: src/network/titan_net.py:4201 src/network/titan_net.py:4215
+#: src/network/titan_net.py:4229 src/network/titan_net.py:4243
+#: src/network/titan_net.py:4257 src/network/titan_net.py:4271
+#: src/network/titan_net.py:4296 src/network/titan_net.py:4317
+#: src/network/titan_net.py:4331 src/network/titan_net.py:4349
 msgid "Not logged in"
 msgstr ""
 
-#: src/network/titan_net.py:630
+#: src/network/titan_net.py:637
 msgid "Logout successful"
 msgstr ""
 
-#: src/network/titan_net.py:645
+#: src/network/titan_net.py:652
 #, python-brace-format
 msgid "Logout error: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:677 src/network/titan_net.py:913
+#: src/network/titan_net.py:684 src/network/titan_net.py:920
 #: src/network/titan_net_gui.py:881
 msgid "Message sent"
 msgstr ""
 
-#: src/network/titan_net.py:685 src/network/titan_net.py:921
+#: src/network/titan_net.py:692 src/network/titan_net.py:928
 #, python-brace-format
 msgid "Error sending message: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:725 src/network/titan_net_gui.py:6795
+#: src/network/titan_net.py:732 src/network/titan_net_gui.py:6970
 msgid "Room created successfully"
 msgstr ""
 
-#: src/network/titan_net.py:730 src/network/titan_net_gui.py:6799
+#: src/network/titan_net.py:737 src/network/titan_net_gui.py:6974
 msgid "Failed to create room"
 msgstr ""
 
-#: src/network/titan_net.py:734 src/network/titan_net.py:786
-#: src/network/titan_net.py:873 src/network/titan_net.py:953
-#: src/network/titan_net.py:994 src/network/titan_net.py:1019
-#: src/network/titan_net.py:1035 src/network/titan_net.py:1050
-#: src/network/titan_net.py:1113 src/network/titan_net.py:1388
-#: src/network/titan_net.py:1432 src/network/titan_net.py:3757
-#: src/network/titan_net.py:3771 src/network/titan_net.py:3785
-#: src/network/titan_net.py:3800 src/network/titan_net.py:3820
-#: src/network/titan_net.py:3838 src/network/titan_net.py:3852
-#: src/network/titan_net.py:3921 src/network/titan_net.py:3935
-#: src/network/titan_net.py:3949 src/network/titan_net.py:3963
-#: src/network/titan_net.py:3978 src/network/titan_net.py:3998
-#: src/network/titan_net.py:4012 src/network/titan_net.py:4026
-#: src/network/titan_net.py:4040 src/network/titan_net.py:4054
-#: src/network/titan_net.py:4070 src/network/titan_net.py:4114
-#: src/network/titan_net.py:4128 src/network/titan_net.py:4146
+#: src/network/titan_net.py:741 src/network/titan_net.py:793
+#: src/network/titan_net.py:880 src/network/titan_net.py:960
+#: src/network/titan_net.py:1001 src/network/titan_net.py:1026
+#: src/network/titan_net.py:1042 src/network/titan_net.py:1057
+#: src/network/titan_net.py:1120 src/network/titan_net.py:1395
+#: src/network/titan_net.py:1439 src/network/titan_net.py:3781
+#: src/network/titan_net.py:3795 src/network/titan_net.py:3809
+#: src/network/titan_net.py:3824 src/network/titan_net.py:3844
+#: src/network/titan_net.py:3862 src/network/titan_net.py:3876
+#: src/network/titan_net.py:3897 src/network/titan_net.py:3912
+#: src/network/titan_net.py:3938 src/network/titan_net.py:3991
+#: src/network/titan_net.py:4019 src/network/titan_net.py:4131
+#: src/network/titan_net.py:4145 src/network/titan_net.py:4159
+#: src/network/titan_net.py:4173 src/network/titan_net.py:4188
+#: src/network/titan_net.py:4208 src/network/titan_net.py:4222
+#: src/network/titan_net.py:4236 src/network/titan_net.py:4250
+#: src/network/titan_net.py:4264 src/network/titan_net.py:4280
+#: src/network/titan_net.py:4324 src/network/titan_net.py:4338
+#: src/network/titan_net.py:4356
 msgid "No response from server"
 msgstr ""
 
-#: src/network/titan_net.py:742
+#: src/network/titan_net.py:749
 #, python-brace-format
 msgid "Error creating room: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:777
+#: src/network/titan_net.py:784
 msgid "Joined room successfully"
 msgstr ""
 
-#: src/network/titan_net.py:782 src/network/titan_net_gui.py:4854
+#: src/network/titan_net.py:789 src/network/titan_net_gui.py:4965
 msgid "Failed to join room"
 msgstr ""
 
-#: src/network/titan_net.py:794
+#: src/network/titan_net.py:801
 #, python-brace-format
 msgid "Error joining room: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:824
+#: src/network/titan_net.py:831
 msgid "Left room"
 msgstr ""
 
-#: src/network/titan_net.py:832
+#: src/network/titan_net.py:839
 #, python-brace-format
 msgid "Error leaving room: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:864 src/network/titan_net_gui.py:7875
-#: src/network/titan_net_gui.py:8677 src/network/titan_net_gui.py:8678
+#: src/network/titan_net.py:871 src/network/titan_net_gui.py:8077
+#: src/network/titan_net_gui.py:8879 src/network/titan_net_gui.py:8880
 msgid "Room deleted"
 msgstr ""
 
-#: src/network/titan_net.py:869 src/network/titan_net_gui.py:7879
-#: src/network/titan_net_gui.py:8680
+#: src/network/titan_net.py:876 src/network/titan_net_gui.py:8081
+#: src/network/titan_net_gui.py:8882
 msgid "Failed to delete room"
 msgstr ""
 
-#: src/network/titan_net.py:881
+#: src/network/titan_net.py:888
 #, python-brace-format
 msgid "Error deleting room: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:948
+#: src/network/titan_net.py:955
 msgid "Rooms retrieved"
 msgstr ""
 
-#: src/network/titan_net.py:962
+#: src/network/titan_net.py:969
 #, python-brace-format
 msgid "Error getting rooms: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:989
+#: src/network/titan_net.py:996
 msgid "Users retrieved"
 msgstr ""
 
-#: src/network/titan_net.py:1003
+#: src/network/titan_net.py:1010
 #, python-brace-format
 msgid "Error getting users: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:1108 src/network/titan_net.py:1383
+#: src/network/titan_net.py:1115 src/network/titan_net.py:1390
 msgid "Messages retrieved"
 msgstr ""
 
-#: src/network/titan_net.py:1122 src/network/titan_net.py:1397
+#: src/network/titan_net.py:1129 src/network/titan_net.py:1404
 #, python-brace-format
 msgid "Error getting messages: {error}"
 msgstr ""
 
-#: src/network/titan_net.py:1428
+#: src/network/titan_net.py:1435
 msgid "Messages marked as read"
 msgstr ""
 
-#: src/network/titan_net.py:1428
+#: src/network/titan_net.py:1435
 msgid "Failed to mark messages as read"
 msgstr ""
 
-#: src/network/titan_net.py:1473 src/network/titan_net_gui.py:1667
+#: src/network/titan_net.py:1480 src/network/titan_net_gui.py:1667
 msgid "Titan-Net"
 msgstr ""
 
-#: src/network/titan_net.py:3742
+#: src/network/titan_net.py:3766
 msgid "Attachment exceeds 12 MB"
 msgstr ""
 
-#: src/network/titan_net.py:3892
+#: src/network/titan_net.py:4102
 msgid "Attachment exceeds 25 MB"
 msgstr ""
 
-#: src/network/titan_net.py:3902
+#: src/network/titan_net.py:4112
 msgid "Total attachments exceed 250 MB"
 msgstr ""
 
-#: src/network/titan_net.py:4063
+#: src/network/titan_net.py:4273
 msgid "Empty action"
 msgstr ""
 
-#: src/network/titan_net.py:4088
+#: src/network/titan_net.py:4298
 msgid "Empty chunk"
 msgstr ""
 
@@ -221,6 +226,7 @@ msgstr ""
 msgid "Titan-Net Login"
 msgstr ""
 
+#: src/network/server_sounds_gui.py:60 src/network/server_sounds_gui.py:91
 #: src/network/titan_net_gui.py:223 src/network/titan_net_gui.py:1094
 msgid "Username:"
 msgstr ""
@@ -262,7 +268,7 @@ msgstr ""
 msgid "Error: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:379 src/network/titan_net_gui.py:2868
+#: src/network/titan_net_gui.py:379 src/network/titan_net_gui.py:2979
 msgid "No reason provided"
 msgstr ""
 
@@ -372,18 +378,19 @@ msgstr ""
 msgid "Reset password"
 msgstr ""
 
-#: src/network/feedback_hub.py:463 src/network/feedback_hub.py:741
-#: src/network/feedback_hub.py:834 src/network/titan_net_forum_gui.py:969
+#: src/network/feedback_hub.py:463 src/network/feedback_hub.py:748
+#: src/network/feedback_hub.py:841 src/network/server_sounds_gui.py:158
+#: src/network/titan_net_forum_gui.py:969
 #: src/network/titan_net_forum_gui.py:1064 src/network/titan_net_gui.py:620
 #: src/network/titan_net_gui.py:737 src/network/titan_net_gui.py:944
 #: src/network/titan_net_gui.py:1029 src/network/titan_net_gui.py:1331
-#: src/network/titan_net_gui.py:5377 src/network/titan_net_gui.py:5538
-#: src/network/titan_net_gui.py:6263 src/network/titan_net_gui.py:6322
-#: src/network/titan_net_gui.py:6375 src/network/titan_net_gui.py:9094
-#: src/network/titan_net_mod_components.py:1361
-#: src/network/titan_net_mod_components.py:1636
-#: src/network/titan_net_mod_components.py:1875
-#: src/network/titan_net_mod_components.py:2040
+#: src/network/titan_net_gui.py:5488 src/network/titan_net_gui.py:5649
+#: src/network/titan_net_gui.py:6438 src/network/titan_net_gui.py:6497
+#: src/network/titan_net_gui.py:6550 src/network/titan_net_gui.py:9297
+#: src/network/titan_net_mod_components.py:1366
+#: src/network/titan_net_mod_components.py:1644
+#: src/network/titan_net_mod_components.py:1883
+#: src/network/titan_net_mod_components.py:2048
 msgid "Close"
 msgstr ""
 
@@ -422,7 +429,7 @@ msgid "Reset failed"
 msgstr ""
 
 #: src/network/titan_net_gui.py:701 src/network/titan_net_gui.py:795
-#: src/network/titan_net_gui.py:800 src/network/titan_net_gui.py:2104
+#: src/network/titan_net_gui.py:800 src/network/titan_net_gui.py:2109
 msgid "Recovery Email"
 msgstr ""
 
@@ -433,7 +440,7 @@ msgid ""
 msgstr ""
 
 #: src/network/titan_net_gui.py:723 src/network/titan_net_gui.py:1284
-#: src/network/titan_net_gui.py:2506
+#: src/network/titan_net_gui.py:2617
 msgid "Loading..."
 msgstr ""
 
@@ -495,14 +502,15 @@ msgstr ""
 msgid "Message:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:841 src/network/titan_net_gui.py:1875
+#: src/network/titan_net_gui.py:841 src/network/titan_net_gui.py:1880
 msgid "Send"
 msgstr ""
 
-#: src/network/feedback_hub.py:289 src/network/titan_net_forum_gui.py:612
+#: src/network/feedback_hub.py:289 src/network/server_sounds_gui.py:75
+#: src/network/titan_net_forum_gui.py:612
 #: src/network/titan_net_forum_gui.py:710 src/network/titan_net_gui.py:845
 #: src/network/titan_net_gui.py:1142
-#: src/network/titan_net_mod_components.py:1787
+#: src/network/titan_net_mod_components.py:1795
 msgid "Cancel"
 msgstr ""
 
@@ -542,7 +550,7 @@ msgstr ""
 msgid "Subject"
 msgstr ""
 
-#: src/network/titan_net_gui.py:934 src/network/titan_net_gui.py:1859
+#: src/network/titan_net_gui.py:934 src/network/titan_net_gui.py:1864
 msgid "Date"
 msgstr ""
 
@@ -554,16 +562,18 @@ msgstr ""
 msgid "Compose"
 msgstr ""
 
-#: src/network/feedback_hub.py:458 src/network/titan_net_gui.py:942
-#: src/network/titan_net_mod_components.py:1870
+#: src/network/feedback_hub.py:458 src/network/server_sounds_gui.py:153
+#: src/network/titan_net_gui.py:942
+#: src/network/titan_net_mod_components.py:1878
 msgid "Delete"
 msgstr ""
 
-#: src/network/feedback_hub.py:830 src/network/titan_net_forum_gui.py:132
+#: src/network/feedback_hub.py:837 src/network/server_sounds_gui.py:154
+#: src/network/titan_net_forum_gui.py:132
 #: src/network/titan_net_forum_gui.py:375
 #: src/network/titan_net_forum_gui.py:825
 #: src/network/titan_net_forum_gui.py:1240 src/network/titan_net_gui.py:943
-#: src/network/titan_net_mod_components.py:1859
+#: src/network/titan_net_mod_components.py:1867
 msgid "Refresh"
 msgstr ""
 
@@ -592,7 +602,7 @@ msgstr ""
 msgid "To"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1021 src/network/titan_net_gui.py:1858
+#: src/network/titan_net_gui.py:1021 src/network/titan_net_gui.py:1863
 msgid "Message"
 msgstr ""
 
@@ -714,19 +724,19 @@ msgstr ""
 #: src/network/titan_net_forum_gui.py:1191
 #: src/network/titan_net_forum_gui.py:1286
 #: src/network/titan_net_forum_gui.py:1349 src/network/titan_net_gui.py:1546
-#: src/network/titan_net_mod_components.py:1675
-#: src/network/titan_net_mod_components.py:1713
-#: src/network/titan_net_mod_components.py:1801
-#: src/network/titan_net_mod_components.py:1806
-#: src/network/titan_net_mod_components.py:1815
-#: src/network/titan_net_mod_components.py:1821
-#: src/network/titan_net_mod_components.py:1935
-#: src/network/titan_net_mod_components.py:1983
-#: src/network/titan_net_mod_components.py:2024
-#: src/network/titan_net_mod_components.py:2065
-#: src/network/titan_net_mod_components.py:2263
-#: src/network/titan_net_mod_components.py:2402
-#: src/network/titan_net_mod_components.py:2430
+#: src/network/titan_net_mod_components.py:1683
+#: src/network/titan_net_mod_components.py:1721
+#: src/network/titan_net_mod_components.py:1809
+#: src/network/titan_net_mod_components.py:1814
+#: src/network/titan_net_mod_components.py:1823
+#: src/network/titan_net_mod_components.py:1829
+#: src/network/titan_net_mod_components.py:1943
+#: src/network/titan_net_mod_components.py:1991
+#: src/network/titan_net_mod_components.py:2032
+#: src/network/titan_net_mod_components.py:2073
+#: src/network/titan_net_mod_components.py:2271
+#: src/network/titan_net_mod_components.py:2410
+#: src/network/titan_net_mod_components.py:2438
 msgid "Error"
 msgstr ""
 
@@ -767,8 +777,8 @@ msgid ""
 "Content: {content}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1625 src/network/titan_net_gui.py:7634
-#: src/network/titan_net_gui.py:7867
+#: src/network/titan_net_gui.py:1625 src/network/titan_net_gui.py:7836
+#: src/network/titan_net_gui.py:8069
 msgid "Confirm Delete"
 msgstr ""
 
@@ -784,384 +794,413 @@ msgstr ""
 msgid "Failed to delete post"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1762
+#: src/network/titan_net_gui.py:1767
 #, python-brace-format
 msgid "Logged in as: {username} (#{titan_number})"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1857
+#: src/network/titan_net_gui.py:1862
 msgid "Nick"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1890
+#: src/network/titan_net_gui.py:1895
 msgid "Voice Activation"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1896
+#: src/network/titan_net_gui.py:1901
 msgid "Push to Talk"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1901 src/network/titan_net_gui.py:4096
+#: src/network/titan_net_gui.py:1906 src/network/titan_net_gui.py:4207
 msgid "Self-Monitor (Test)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1907 src/network/titan_net_gui.py:3798
-#: src/network/titan_net_gui.py:4109
+#: src/network/titan_net_gui.py:1912 src/network/titan_net_gui.py:3909
+#: src/network/titan_net_gui.py:4220
 msgid "Mute"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1915
+#: src/network/titan_net_gui.py:1920
 msgid "Push to Talk (hold Space)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1923
+#: src/network/titan_net_gui.py:1928
 msgid "Voice Volume:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1932 src/network/titan_net_gui.py:3794
+#: src/network/titan_net_gui.py:1937 src/network/titan_net_gui.py:3905
 msgid "Microphone: Off"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1938
+#: src/network/titan_net_gui.py:1943
 msgid "Active Speakers:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1954
+#: src/network/titan_net_gui.py:1959
 msgid "Broadcast Message:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1968
+#: src/network/titan_net_gui.py:1973
 msgid "Start Recording"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1973
+#: src/network/titan_net_gui.py:1978
 msgid "Stop Recording"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1979
+#: src/network/titan_net_gui.py:1984
 msgid "Play Recording"
 msgstr ""
 
-#: src/network/titan_net_gui.py:1988 src/network/titan_net_gui.py:3032
-#: src/network/titan_net_gui.py:3054 src/network/titan_net_gui.py:3429
+#: src/network/titan_net_gui.py:1993 src/network/titan_net_gui.py:3143
+#: src/network/titan_net_gui.py:3165 src/network/titan_net_gui.py:3540
 msgid "Send Broadcast"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2025
+#: src/network/titan_net_gui.py:2030
 msgid "Back"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2032
+#: src/network/titan_net_gui.py:2037
 msgid "Leave Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2059 src/network/titan_net_gui.py:6757
+#: src/network/titan_net_gui.py:2064 src/network/titan_net_gui.py:6932
 msgid "Create New Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2064
+#: src/network/titan_net_gui.py:2069
 msgid "Create New Group"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:1023 src/network/titan_net_gui.py:2070
-#: src/network/titan_net_gui.py:2086
+#: src/network/titan_net_forum_gui.py:1023 src/network/titan_net_gui.py:2075
+#: src/network/titan_net_gui.py:2091
 msgid "Manage Group"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2073
+#: src/network/titan_net_gui.py:2078
 msgid "Leave Group"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2076
+#: src/network/titan_net_gui.py:2081
 msgid "Join Group"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2082 src/network/titan_net_gui.py:6949
+#: src/network/titan_net_gui.py:2087 src/network/titan_net_gui.py:7124
 msgid "Create New Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2084
+#: src/network/titan_net_gui.py:2089
 msgid "Manage Pending Members"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2090 src/network/titan_net_gui.py:6816
+#: src/network/titan_net_gui.py:2095 src/network/titan_net_gui.py:6991
 msgid "Create New Thread"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2097 src/network/titan_net_gui.py:2117
+#: src/network/titan_net_gui.py:2102 src/network/titan_net_gui.py:2122
 msgid "Delete Thread"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2101
+#: src/network/titan_net_gui.py:2106
 msgid "View All Users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2107
+#: src/network/titan_net_gui.py:2112
 msgid "Actions"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2118
+#: src/network/titan_net_gui.py:2123
 msgid "Lock/Unlock Thread"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2119
+#: src/network/titan_net_gui.py:2124
 msgid "Pin/Unpin Thread"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2120 src/network/titan_net_gui.py:7056
-#: src/network/titan_net_gui.py:7074
+#: src/network/titan_net_gui.py:2125 src/network/titan_net_gui.py:7241
+#: src/network/titan_net_gui.py:7255 src/network/titan_net_gui.py:7276
 msgid "Move Thread to Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2129
+#: src/network/titan_net_gui.py:2134
 msgid "Delete Selected Message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2130 src/network/titan_net_gui.py:8408
+#: src/network/titan_net_gui.py:2135 src/network/titan_net_gui.py:8610
 msgid "Kick User from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2131 src/network/titan_net_gui.py:8409
+#: src/network/titan_net_gui.py:2136 src/network/titan_net_gui.py:8611
 msgid "Ban User from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2140 src/network/titan_net_gui.py:8412
-#: src/network/titan_net_gui.py:8658
+#: src/network/titan_net_gui.py:2145 src/network/titan_net_gui.py:8614
+#: src/network/titan_net_gui.py:8860
 msgid "Delete Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2145 src/network/titan_net_gui.py:3034
-#: src/network/titan_net_gui.py:3433
+#: src/network/titan_net_gui.py:2150 src/network/titan_net_gui.py:3145
+#: src/network/titan_net_gui.py:3544
 msgid "Pending Packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2146
+#: src/network/titan_net_gui.py:2151
 msgid "Review Pending Packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2152
+#: src/network/titan_net_gui.py:2157
 msgid "Ban User (Global)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2159
+#: src/network/titan_net_gui.py:2164
 msgid "General Moderation"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2162 src/network/titan_net_gui.py:2409
-#: src/network/titan_net_gui.py:3007 src/network/titan_net_gui.py:3342
-#: src/network/titan_net_gui.py:5209
+#: src/network/titan_net_gui.py:2167 src/network/titan_net_gui.py:2520
+#: src/network/titan_net_gui.py:3118 src/network/titan_net_gui.py:3453
+#: src/network/titan_net_gui.py:5320
 msgid "Moderation"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2167 src/network/titan_net_gui.py:5215
-#: src/network/titan_net_gui.py:6693
+#: src/network/titan_net_gui.py:2172 src/network/titan_net_gui.py:5326
+#: src/network/titan_net_gui.py:6868
 msgid "Promote to Moderator"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2168 src/network/titan_net_gui.py:3106
-#: src/network/titan_net_gui.py:3448 src/network/titan_net_gui.py:5218
-#: src/network/titan_net_gui.py:6724
+#: src/network/titan_net_gui.py:2173 src/network/titan_net_gui.py:3217
+#: src/network/titan_net_gui.py:3559 src/network/titan_net_gui.py:5329
+#: src/network/titan_net_gui.py:6899
 msgid "Demote Moderator"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2169
+#: src/network/titan_net_gui.py:2174
 msgid "List Moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2175 src/network/titan_net_gui.py:3027
-#: src/network/titan_net_gui.py:3087 src/network/titan_net_gui.py:3425
-#: src/network/titan_net_gui.py:5221
+#: src/network/titan_net_gui.py:2180 src/network/titan_net_gui.py:3138
+#: src/network/titan_net_gui.py:3198 src/network/titan_net_gui.py:3536
+#: src/network/titan_net_gui.py:5332
 msgid "Administration"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2200 src/system/klangomode.py:211
+#: src/network/titan_net_gui.py:2205 src/system/klangomode.py:211
 #: src/system/klangomode.py:1380
 msgid "Components"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2369
+#: src/network/server_sounds_gui.py:135 src/network/titan_net_gui.py:2220
+msgid "Server Sounds"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2222
+msgid "Refresh Server Screens"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2225
+msgid "Server"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2280
+#, python-brace-format
+msgid "{n} server screens available"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2282
+msgid "This server has no screens"
+msgstr ""
+
+#: src/network/remote_ui.py:1163 src/network/titan_net_gui.py:2290
+msgid "Could not open that screen"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2314
+msgid "Could not open server sounds"
+msgstr ""
+
+#: src/network/titan_net_gui.py:2480
 msgid "Titan-Net - Main Menu"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2387 src/network/titan_net_gui.py:3326
+#: src/network/titan_net_gui.py:2498 src/network/titan_net_gui.py:3437
 msgid "What's New"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2388 src/network/titan_net_gui.py:3328
+#: src/network/titan_net_gui.py:2499 src/network/titan_net_gui.py:3439
 msgid "Chat Rooms"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2389 src/network/titan_net_gui.py:3330
+#: src/network/titan_net_gui.py:2500 src/network/titan_net_gui.py:3441
 msgid "Online Users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2390 src/network/titan_net_gui.py:3332
+#: src/network/titan_net_gui.py:2501 src/network/titan_net_gui.py:3443
 msgid "Private Messages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2391 src/network/titan_net_gui.py:3334
-#: src/network/titan_net_gui.py:5143 src/network/titan_net_gui.py:5149
+#: src/network/titan_net_gui.py:2502 src/network/titan_net_gui.py:3445
+#: src/network/titan_net_gui.py:5254 src/network/titan_net_gui.py:5260
 msgid "Blocked Users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2392 src/network/titan_net_gui.py:3336
+#: src/network/titan_net_gui.py:2503 src/network/titan_net_gui.py:3447
 msgid "Mail"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:205
 #: src/network/titan_net_forum_gui.py:243
-#: src/network/titan_net_forum_gui.py:791 src/network/titan_net_gui.py:2393
-#: src/network/titan_net_gui.py:3338
+#: src/network/titan_net_forum_gui.py:791 src/network/titan_net_gui.py:2504
+#: src/network/titan_net_gui.py:3449
 msgid "Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2394 src/network/titan_net_gui.py:3340
+#: src/network/titan_net_gui.py:2505 src/network/titan_net_gui.py:3451
 msgid "App Repository"
 msgstr ""
 
-#: src/network/feedback_hub.py:771 src/network/feedback_hub.py:821
-#: src/network/titan_net_gui.py:2400 src/network/titan_net_gui.py:3344
+#: src/network/feedback_hub.py:778 src/network/feedback_hub.py:828
+#: src/network/titan_net_gui.py:2511 src/network/titan_net_gui.py:3455
 msgid "Feedback Hub"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2405 src/network/titan_net_gui.py:3346
+#: src/network/titan_net_gui.py:2516 src/network/titan_net_gui.py:3457
 msgid "Interactive Games"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2411 src/network/titan_net_gui.py:3348
+#: src/network/titan_net_gui.py:2522 src/network/titan_net_gui.py:3459
 msgid "Disconnect"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2454
+#: src/network/titan_net_gui.py:2565
 msgid ""
 "Tip: add a recovery email in Actions, Recovery Email, so you can reset "
 "your password if you forget it."
 msgstr ""
 
-#: src/network/titan_net_gui.py:2482
-#: src/network/titan_net_mod_components.py:1340
-#: src/network/titan_net_mod_components.py:1963
-#: src/network/titan_net_mod_components.py:2174
+#: src/network/titan_net_gui.py:2593
+#: src/network/titan_net_mod_components.py:1345
+#: src/network/titan_net_mod_components.py:1971
+#: src/network/titan_net_mod_components.py:2182
 msgid "Run"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2482
+#: src/network/titan_net_gui.py:2593
 #, python-brace-format
 msgid "{component} - {action}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2490
+#: src/network/titan_net_gui.py:2601
 msgid "Titan-Net - What's New"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2525 src/network/titan_net_gui.py:2526
-#: src/network/titan_net_mod_components.py:1898
-#: src/network/titan_net_mod_components.py:1935
-#: src/network/titan_net_mod_components.py:2024
+#: src/network/titan_net_gui.py:2636 src/network/titan_net_gui.py:2637
+#: src/network/titan_net_mod_components.py:1899
+#: src/network/titan_net_mod_components.py:1943
+#: src/network/titan_net_mod_components.py:2032
 msgid "Failed to load"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2538
+#: src/network/titan_net_gui.py:2649
 #, python-brace-format
 msgid "New messages from {sender} ({count})"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2546
+#: src/network/titan_net_gui.py:2657
 #, python-brace-format
 msgid "{title} ({count} new replies)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2554
+#: src/network/titan_net_gui.py:2665
 #, python-brace-format
 msgid "New app: {name} by {author}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2562
+#: src/network/titan_net_gui.py:2673
 #, python-brace-format
 msgid "Updated: {name} v{version}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2566 src/network/titan_net_gui.py:2567
+#: src/network/titan_net_gui.py:2677 src/network/titan_net_gui.py:2678
 msgid "Nothing new"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2587
+#: src/network/titan_net_gui.py:2698
 msgid "New private messages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2588
+#: src/network/titan_net_gui.py:2699
 msgid "Forum topics with new replies"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2589
+#: src/network/titan_net_gui.py:2700
 msgid "New applications"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2590
+#: src/network/titan_net_gui.py:2701
 msgid "Application updates"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2603
+#: src/network/titan_net_gui.py:2714
 msgid "What's new"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2659
+#: src/network/titan_net_gui.py:2770
 msgid "Failed to open item"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2664
+#: src/network/titan_net_gui.py:2775
 msgid "Titan-Net - Chat Rooms"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2689
+#: src/network/titan_net_gui.py:2800
 msgid "Titan-Net - Online Users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2714
+#: src/network/titan_net_gui.py:2825
 msgid "Titan-Net - Select User for Private Chat"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2755
+#: src/network/titan_net_gui.py:2866
 msgid "Titan-Net - Groups"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2771
+#: src/network/titan_net_gui.py:2882
 msgid "owner"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2773
+#: src/network/titan_net_gui.py:2884
 msgid "moderator"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2774
+#: src/network/titan_net_gui.py:2885
 msgid "member"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2776
+#: src/network/titan_net_gui.py:2887
 msgid "pending"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2777
+#: src/network/titan_net_gui.py:2888
 msgid "not joined"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2788
+#: src/network/titan_net_gui.py:2899
 #, python-brace-format
 msgid "{name} ({visibility}, {count} members) - {status}"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:756
-#: src/network/titan_net_forum_gui.py:891 src/network/titan_net_gui.py:2815
+#: src/network/titan_net_forum_gui.py:891 src/network/titan_net_gui.py:2926
 #, python-brace-format
 msgid "Group: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2838
+#: src/network/titan_net_gui.py:2949
 #, python-brace-format
 msgid "{name} ({count} threads)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2871
+#: src/network/titan_net_gui.py:2982
 #, python-brace-format
 msgid ""
 "You are banned from forum\n"
@@ -1169,7 +1208,7 @@ msgid ""
 "Expires: {expires}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2874
+#: src/network/titan_net_gui.py:2985
 #, python-brace-format
 msgid ""
 "You are banned from forum\n"
@@ -1177,468 +1216,469 @@ msgid ""
 "This ban is permanent"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2880
+#: src/network/titan_net_gui.py:2991
 msgid "Titan-Net - Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2905
+#: src/network/titan_net_gui.py:3016
 msgid "You are banned from forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2912
+#: src/network/titan_net_gui.py:3023
 msgid "Titan-Net - App Repository"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2929 src/network/titan_net_gui.py:2955
-#: src/network/titan_net_gui.py:3402
+#: src/network/titan_net_gui.py:3040 src/network/titan_net_gui.py:3066
+#: src/network/titan_net_gui.py:3513
 msgid "Browse Packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2930 src/network/titan_net_gui.py:3404
-#: src/network/titan_net_gui.py:8746 src/network/titan_net_gui.py:8753
+#: src/network/titan_net_gui.py:3041 src/network/titan_net_gui.py:3515
+#: src/network/titan_net_gui.py:8949 src/network/titan_net_gui.py:8956
 msgid "Upload Package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2931 src/network/titan_net_gui.py:3406
-#: src/network/titan_net_gui.py:8952
+#: src/network/titan_net_gui.py:3042 src/network/titan_net_gui.py:3517
+#: src/network/titan_net_gui.py:9155
 msgid "Search Packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2932 src/network/titan_net_gui.py:3408
-#: src/network/titan_net_gui.py:8028
+#: src/network/titan_net_gui.py:3043 src/network/titan_net_gui.py:3519
+#: src/network/titan_net_gui.py:8230
 msgid "Pending Packages (Preview)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2937 src/network/titan_net_gui.py:3410
-#: src/network/titan_net_gui.py:8028
+#: src/network/titan_net_gui.py:3048 src/network/titan_net_gui.py:3521
+#: src/network/titan_net_gui.py:8230
 msgid "Moderate Packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2938 src/network/titan_net_gui.py:3412
+#: src/network/titan_net_gui.py:3049 src/network/titan_net_gui.py:3523
 msgid "Moderate Components"
 msgstr ""
 
-#: src/network/titan_net_gui.py:2985
+#: src/network/titan_net_gui.py:3096
 msgid "Failed to open Feedback Hub"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3002
+#: src/network/titan_net_gui.py:3113
 msgid "Failed to open Interactive Games"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3031 src/network/titan_net_gui.py:3104
-#: src/network/titan_net_gui.py:3427 src/network/titan_net_gui.py:3444
-#: src/network/titan_net_gui.py:6060
+#: src/network/titan_net_gui.py:3142 src/network/titan_net_gui.py:3215
+#: src/network/titan_net_gui.py:3538 src/network/titan_net_gui.py:3555
+#: src/network/titan_net_gui.py:6235
 msgid "Cerberus Protocol"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3033 src/network/titan_net_gui.py:3431
-#: src/network/titan_net_gui.py:8368
+#: src/network/titan_net_gui.py:3144 src/network/titan_net_gui.py:3542
+#: src/network/titan_net_gui.py:8570
 msgid "Edit Broadcast Files"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3035 src/network/titan_net_gui.py:3435
-#: src/network/titan_net_gui.py:8157
+#: src/network/titan_net_gui.py:3146 src/network/titan_net_gui.py:3546
+#: src/network/titan_net_gui.py:8359
 msgid "Moderate Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3036 src/network/titan_net_gui.py:3437
-#: src/network/titan_net_gui.py:8415
+#: src/network/titan_net_gui.py:3147 src/network/titan_net_gui.py:3548
+#: src/network/titan_net_gui.py:8617
 msgid "Moderate Rooms"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3050
+#: src/network/titan_net_gui.py:3161
 msgid "Only moderators can send broadcasts"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3083
+#: src/network/titan_net_gui.py:3194
 msgid "Only developers can access administration"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3105 src/network/titan_net_gui.py:3446
+#: src/network/titan_net_gui.py:3216 src/network/titan_net_gui.py:3557
 msgid "Promote User to Moderator"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3107 src/network/titan_net_gui.py:3450
+#: src/network/titan_net_gui.py:3218 src/network/titan_net_gui.py:3561
 msgid "List All Moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3122
+#: src/network/titan_net_gui.py:3233
 #, python-brace-format
 msgid "Room: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3191
+#: src/network/titan_net_gui.py:3302
 #, python-brace-format
 msgid "Private Chat with: {username}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3457 src/network/titan_net_gui.py:6154
+#: src/network/titan_net_gui.py:3568 src/network/titan_net_gui.py:6329
 msgid "Refresh Status"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3459 src/network/titan_net_gui.py:6155
+#: src/network/titan_net_gui.py:3570 src/network/titan_net_gui.py:6330
 msgid "AI Threat Analysis"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3461 src/network/titan_net_gui.py:6156
+#: src/network/titan_net_gui.py:3572 src/network/titan_net_gui.py:6331
 msgid "View Intrusion Logs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3463 src/network/titan_net_gui.py:6157
+#: src/network/titan_net_gui.py:3574 src/network/titan_net_gui.py:6332
 msgid "View Honeypot Logs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3465 src/network/titan_net_gui.py:6158
+#: src/network/titan_net_gui.py:3576 src/network/titan_net_gui.py:6333
 msgid "Banned IPs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3467 src/network/titan_net_gui.py:6159
+#: src/network/titan_net_gui.py:3578 src/network/titan_net_gui.py:6334
 msgid "Tracked Attackers"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3470 src/network/titan_net_gui.py:6167
-#: src/network/titan_net_gui.py:6452
+#: src/network/titan_net_gui.py:3581 src/network/titan_net_gui.py:6342
+#: src/network/titan_net_gui.py:6627
 msgid "Activate Lockdown"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3472 src/network/titan_net_gui.py:6168
-#: src/network/titan_net_gui.py:6485
+#: src/network/titan_net_gui.py:3583 src/network/titan_net_gui.py:6343
+#: src/network/titan_net_gui.py:6660
 msgid "Activate CERBERUS Mode"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3474 src/network/titan_net_gui.py:6165
-#: src/network/titan_net_gui.py:6522
+#: src/network/titan_net_gui.py:3585 src/network/titan_net_gui.py:6340
+#: src/network/titan_net_gui.py:6697
 msgid "Deactivate Lockdown"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3476 src/network/titan_net_gui.py:6169
-#: src/network/titan_net_gui.py:6549
+#: src/network/titan_net_gui.py:3587 src/network/titan_net_gui.py:6344
+#: src/network/titan_net_gui.py:6724
 msgid "Ban IP"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3478 src/network/titan_net_gui.py:6170
-#: src/network/titan_net_gui.py:6585 src/network/titan_net_gui.py:6587
+#: src/network/titan_net_gui.py:3589 src/network/titan_net_gui.py:6345
+#: src/network/titan_net_gui.py:6760 src/network/titan_net_gui.py:6762
 msgid "Unban IP"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3480 src/network/titan_net_gui.py:6171
-#: src/network/titan_net_gui.py:6618 src/network/titan_net_gui.py:6626
+#: src/network/titan_net_gui.py:3591 src/network/titan_net_gui.py:6346
+#: src/network/titan_net_gui.py:6793 src/network/titan_net_gui.py:6801
 msgid "Whitelist IP"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3500
+#: src/network/titan_net_gui.py:3611
 msgid "Leaving room..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:3889 src/network/titan_net_gui.py:4007
-#: src/network/titan_net_gui.py:4027 src/network/titan_net_gui.py:4113
-#: src/network/titan_net_gui.py:4246
+#: src/network/titan_net_gui.py:4000 src/network/titan_net_gui.py:4118
+#: src/network/titan_net_gui.py:4138 src/network/titan_net_gui.py:4224
+#: src/network/titan_net_gui.py:4357
 msgid "Microphone: On"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3907
+#: src/network/titan_net_gui.py:4018
 msgid "Microphone enabled"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3915
+#: src/network/titan_net_gui.py:4026
 #, python-brace-format
 msgid "Failed to setup voice: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:3931
+#: src/network/titan_net_gui.py:4042
 msgid "Microphone: Speaking..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:4038 src/network/titan_net_gui.py:4071
-#: src/network/titan_net_gui.py:4111
+#: src/network/titan_net_gui.py:4149 src/network/titan_net_gui.py:4182
+#: src/network/titan_net_gui.py:4222
 msgid "Microphone: Push to Talk"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4053
+#: src/network/titan_net_gui.py:4164
 msgid "Microphone: Transmitting..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:4088
+#: src/network/titan_net_gui.py:4199
 msgid "Self-Monitor: ON"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4092
+#: src/network/titan_net_gui.py:4203
 msgid "Enable microphone first"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4106
+#: src/network/titan_net_gui.py:4217
 msgid "Unmute"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4107
+#: src/network/titan_net_gui.py:4218
 msgid "Microphone: Muted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4153
+#: src/network/titan_net_gui.py:4264
 msgid "Moderator components are available to moderators only"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4159
+#: src/network/titan_net_gui.py:4270
 msgid "user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4161
+#: src/network/titan_net_gui.py:4272
 msgid "No new private messages to reply to"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4229
+#: src/network/titan_net_gui.py:4340
 msgid "Microphone: Self-Monitoring Test..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:4261
+#: src/network/titan_net_gui.py:4372
 msgid "Already recording"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4288
+#: src/network/titan_net_gui.py:4399
 msgid "Recording started"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4292
+#: src/network/titan_net_gui.py:4403
 #, python-brace-format
 msgid "Failed to start recording: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4309
+#: src/network/titan_net_gui.py:4420
 #, python-brace-format
 msgid "Recording stopped. {size} KB recorded"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4314
+#: src/network/titan_net_gui.py:4425
 msgid "No audio recorded"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4326
+#: src/network/titan_net_gui.py:4437
 #, python-brace-format
 msgid "Failed to stop recording: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4333
+#: src/network/titan_net_gui.py:4444
 msgid "No recording to play"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4378
+#: src/network/titan_net_gui.py:4489
 msgid "Playing recording"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4384
+#: src/network/titan_net_gui.py:4495
 #, python-brace-format
 msgid "Failed to play recording: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4396
+#: src/network/titan_net_gui.py:4507
 msgid "Broadcast must contain text or voice message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4401
+#: src/network/titan_net_gui.py:4512
 msgid "text and voice"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4403
+#: src/network/titan_net_gui.py:4514
 msgid "text"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4405
+#: src/network/titan_net_gui.py:4516
 msgid "voice"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4411
+#: src/network/titan_net_gui.py:4522
 #, python-brace-format
 msgid "Send broadcast ({type}) to all users?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4412
+#: src/network/titan_net_gui.py:4523
 msgid "Confirm Broadcast"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4425
+#: src/network/titan_net_gui.py:4536
 msgid "Broadcasting message..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:4450
+#: src/network/titan_net_gui.py:4561
 msgid "Broadcast sent successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4464
+#: src/network/titan_net_gui.py:4575
 msgid "Failed to send broadcast"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4471
+#: src/network/titan_net_gui.py:4582
 msgid "Disconnecting from Titan-Net"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4558
+#: src/network/titan_net_gui.py:4669
 msgid "Voice"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4560
+#: src/network/titan_net_gui.py:4671
 msgid "Text+Voice"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4562
+#: src/network/titan_net_gui.py:4673
 msgid "members"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4615
+#: src/network/titan_net_gui.py:4726
 msgid "No users online"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4619 src/network/titan_net_gui.py:7175
+#: src/network/titan_net_gui.py:4730 src/network/titan_net_gui.py:7377
 msgid "Failed to load users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4650
+#: src/network/titan_net_gui.py:4761
 msgid "replies"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4752
+#: src/network/titan_net_gui.py:4863
 msgid "Failed to load app details"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4758
+#: src/network/titan_net_gui.py:4869
 msgid "Name"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4759 src/network/titan_net_gui.py:8800
-#: src/network/titan_net_mod_components.py:1849
+#: src/network/titan_net_gui.py:4870 src/network/titan_net_gui.py:9003
+#: src/network/titan_net_mod_components.py:1857
 msgid "Version"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:115
 #: src/network/titan_net_forum_gui.py:486
-#: src/network/titan_net_forum_gui.py:510 src/network/titan_net_gui.py:4760
-#: src/network/titan_net_mod_components.py:1848
+#: src/network/titan_net_forum_gui.py:510 src/network/titan_net_gui.py:4871
+#: src/network/titan_net_mod_components.py:1856
 msgid "Author"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4761 src/network/titan_net_gui.py:8791
+#: src/network/titan_net_gui.py:4872 src/network/titan_net_gui.py:8994
 msgid "Category"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4762
+#: src/network/titan_net_gui.py:4873
 msgid "Downloads"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:793 src/network/titan_net_gui.py:4763
-#: src/network/titan_net_mod_components.py:2167
+#: src/network/remote_ui.py:388 src/network/remote_ui.py:654
+#: src/network/titan_net_forum_gui.py:793 src/network/titan_net_gui.py:4874
+#: src/network/titan_net_mod_components.py:2175
 msgid "Description"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4763
+#: src/network/titan_net_gui.py:4874
 msgid "No description"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4764
+#: src/network/titan_net_gui.py:4875
 msgid "Do you want to download this app?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4769
+#: src/network/titan_net_gui.py:4880
 msgid "App Details"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4796
+#: src/network/titan_net_gui.py:4907
 msgid ""
 "This room is password-protected.\n"
 "Enter password:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4797 src/network/titan_net_gui.py:6784
+#: src/network/titan_net_gui.py:4908 src/network/titan_net_gui.py:6959
 msgid "Room Password"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4809
+#: src/network/titan_net_gui.py:4920
 msgid "Cancelled joining room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4812
+#: src/network/titan_net_gui.py:4923
 msgid "Joining room..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:4826 src/network/titan_net_gui.py:4827
-#: src/network/titan_net_gui.py:4845 src/network/titan_net_gui.py:4846
+#: src/network/titan_net_gui.py:4937 src/network/titan_net_gui.py:4938
+#: src/network/titan_net_gui.py:4956 src/network/titan_net_gui.py:4957
 msgid "You are banned from this room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4831
+#: src/network/titan_net_gui.py:4942
 #, python-brace-format
 msgid "Joined room: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4839 src/network/titan_net_gui.py:4840
+#: src/network/titan_net_gui.py:4950 src/network/titan_net_gui.py:4951
 msgid "Invalid password"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4850
+#: src/network/titan_net_gui.py:4961
 #, python-brace-format
 msgid "Opening room: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:4992
+#: src/network/titan_net_gui.py:5103
 #, python-brace-format
 msgid "Users in room ({count}):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5019 src/network/titan_net_gui.py:5043
-#: src/network/titan_net_gui.py:5159
+#: src/network/titan_net_gui.py:5130 src/network/titan_net_gui.py:5154
+#: src/network/titan_net_gui.py:5270
 msgid "Send private message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5022 src/network/titan_net_gui.py:5046
-#: src/network/titan_net_gui.py:5162
+#: src/network/titan_net_gui.py:5133 src/network/titan_net_gui.py:5157
+#: src/network/titan_net_gui.py:5273
 msgid "Play avatar"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5029 src/network/titan_net_gui.py:5176
+#: src/network/titan_net_gui.py:5140 src/network/titan_net_gui.py:5287
 msgid "Kick from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5032
+#: src/network/titan_net_gui.py:5143
 msgid "Ban from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5058
+#: src/network/titan_net_gui.py:5169
 msgid "Ban from TCE Community"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5061
+#: src/network/titan_net_gui.py:5172
 msgid "Unban from TCE Community"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5065
+#: src/network/titan_net_gui.py:5176
 msgid "Ban from Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5068 src/network/titan_net_gui.py:5190
+#: src/network/titan_net_gui.py:5179 src/network/titan_net_gui.py:5301
 msgid "Unban from Forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5073
+#: src/network/titan_net_gui.py:5184
 msgid "HARD BAN (IP + Hardware)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5077
+#: src/network/titan_net_gui.py:5188
 msgid "Delete User (PERMANENT)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5092
+#: src/network/titan_net_gui.py:5203
 msgid "Unblock user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5095
+#: src/network/titan_net_gui.py:5206
 msgid "Block user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5118
+#: src/network/titan_net_gui.py:5229
 #, python-brace-format
 msgid "Blocked {user}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5125
+#: src/network/titan_net_gui.py:5236
 #, python-brace-format
 msgid "Unblocked {user}"
 msgstr ""
@@ -1650,899 +1690,954 @@ msgstr ""
 #: src/network/titan_net_forum_gui.py:1144
 #: src/network/titan_net_forum_gui.py:1166
 #: src/network/titan_net_forum_gui.py:1191
-#: src/network/titan_net_forum_gui.py:1349 src/network/titan_net_gui.py:5127
-#: src/network/titan_net_gui.py:6942
-#: src/network/titan_net_mod_components.py:2065
+#: src/network/titan_net_forum_gui.py:1349 src/network/titan_net_gui.py:5238
+#: src/network/titan_net_gui.py:7117
+#: src/network/titan_net_mod_components.py:2073
 msgid "Operation failed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5136
+#: src/network/titan_net_gui.py:5247
 msgid "Could not load blocked users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5142
+#: src/network/titan_net_gui.py:5253
 msgid "You have not blocked anyone."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5149
+#: src/network/titan_net_gui.py:5260
 msgid "Select a user to unblock:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5179
+#: src/network/titan_net_gui.py:5290
 msgid "Ban from Room..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5182
+#: src/network/titan_net_gui.py:5293
 msgid "Unban from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5187
+#: src/network/titan_net_gui.py:5298
 msgid "Ban from Forum..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5197
+#: src/network/titan_net_gui.py:5308
 msgid "Ban Globally..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5200
+#: src/network/titan_net_gui.py:5311
 msgid "Unban Globally"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5206
+#: src/network/titan_net_gui.py:5317
 msgid "HARD BAN"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5365
+#: src/network/titan_net_gui.py:5476
 msgid "(no date)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5366
+#: src/network/titan_net_gui.py:5477
 #, python-brace-format
 msgid "Message from {nick} ({date})"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5411 src/network/titan_net_gui.py:5448
+#: src/network/titan_net_gui.py:5522 src/network/titan_net_gui.py:5559
 #, python-brace-format
 msgid "{user}: {message}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5512
+#: src/network/titan_net_gui.py:5623
 msgid "Loading avatar..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5518
+#: src/network/titan_net_gui.py:5629
 #, python-brace-format
 msgid "No avatar available for {user}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5525 src/network/titan_net_gui.py:5534
+#: src/network/titan_net_gui.py:5636 src/network/titan_net_gui.py:5645
 #, python-brace-format
 msgid "Avatar - {user}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5561
+#: src/network/titan_net_gui.py:5672
 #, python-brace-format
 msgid "New message from {user}. Press Ctrl+O to reply."
 msgstr ""
 
-#: src/network/titan_net_gui.py:5569
+#: src/network/titan_net_gui.py:5680
 #, python-brace-format
 msgid "{user} is now online"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5577
+#: src/network/titan_net_gui.py:5688
 #, python-brace-format
 msgid "{user} is now offline"
 msgstr ""
 
-#: src/network/feedback_hub.py:953 src/network/titan_net_gui.py:5596
+#: src/network/feedback_hub.py:960 src/network/titan_net_gui.py:5707
 #, python-brace-format
 msgid "Feedback Hub: 1 new idea from {user}: {title}"
 msgstr ""
 
-#: src/network/feedback_hub.py:955 src/network/titan_net_gui.py:5598
+#: src/network/feedback_hub.py:962 src/network/titan_net_gui.py:5709
 #, python-brace-format
 msgid "Feedback Hub: 1 new feedback from {user}: {title}"
 msgstr ""
 
-#: src/network/feedback_hub.py:982 src/network/titan_net_gui.py:5613
+#: src/network/titan_net_gui.py:5716 src/network/titan_net_gui.py:5733
+msgid "another forum"
+msgstr ""
+
+#: src/network/titan_net_gui.py:5717
+msgid "its previous forum"
+msgstr ""
+
+#: src/network/titan_net_gui.py:5718 src/network/titan_net_gui.py:5734
+msgid "a moderator"
+msgstr ""
+
+#: src/network/titan_net_gui.py:5723
+#, python-brace-format
+msgid "Your thread {title} was moved from {source} to {destination} by {user}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:5732
+msgid "your forum"
+msgstr ""
+
+#: src/network/titan_net_gui.py:5739
+#, python-brace-format
+msgid ""
+"{user} asks to move the thread {title} from {source} into {destination}. "
+"Approve or reject it in the move requests list."
+msgstr ""
+
+#: src/network/feedback_hub.py:989 src/network/titan_net_gui.py:5755
 #, python-brace-format
 msgid "Idea {title} accepted"
 msgstr ""
 
-#: src/network/feedback_hub.py:988 src/network/titan_net_gui.py:5619
+#: src/network/feedback_hub.py:995 src/network/titan_net_gui.py:5761
 #, python-brace-format
 msgid "Idea {title} rejected"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5625
+#: src/network/titan_net_gui.py:5767
 #, python-brace-format
 msgid "Feedback {title}: status changed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5643
+#: src/network/titan_net_gui.py:5785
 #, python-brace-format
 msgid "App Repository: new package {app} from {user}, waiting for moderation"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5659
+#: src/network/titan_net_gui.py:5801
 #, python-brace-format
 msgid "App Repository: {app} from {user} approved by {moderator}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:5915
+#: src/network/titan_net_gui.py:6057
 msgid "(No active speakers)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6077
+#: src/network/titan_net_gui.py:6252
 msgid "Loading Cerberus Protocol status..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6092
+#: src/network/titan_net_gui.py:6267
 #, python-brace-format
 msgid "Could not load Cerberus status: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6117
+#: src/network/titan_net_gui.py:6292
 #, python-brace-format
 msgid "STATUS: {level} - LOCKDOWN ACTIVE ({mins}m {secs}s) - {reason}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6123
+#: src/network/titan_net_gui.py:6298
 #, python-brace-format
 msgid "STATUS: {level}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6128
+#: src/network/titan_net_gui.py:6303
 #, python-brace-format
 msgid ""
 "Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: "
 "{threats}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6133
+#: src/network/titan_net_gui.py:6308
 #, python-brace-format
 msgid ""
 "Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
 "Attackers tracked: {attackers}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6145
+#: src/network/titan_net_gui.py:6320
 #, python-brace-format
 msgid ""
 "Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | "
 "IDOR: {idor} | Privilege-escalation: {privesc}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6180
+#: src/network/titan_net_gui.py:6355
 #, python-brace-format
 msgid ""
 "Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs "
 "banned."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6187
+#: src/network/titan_net_gui.py:6362
 msgid "Running Cerberus AI threat analysis. This can take a few seconds..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6202
+#: src/network/titan_net_gui.py:6377
 #, python-brace-format
 msgid "Could not run AI analysis: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6210
+#: src/network/titan_net_gui.py:6385
 msgid ""
 "Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the "
 "server to enable it."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6212
+#: src/network/titan_net_gui.py:6387
 msgid "Cerberus AI"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6217
+#: src/network/titan_net_gui.py:6392
 #, python-brace-format
 msgid "Analysis error: {err}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6220
+#: src/network/titan_net_gui.py:6395
 #, python-brace-format
 msgid "Severity: {sev}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6222
+#: src/network/titan_net_gui.py:6397
 msgid "Summary:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6227
+#: src/network/titan_net_gui.py:6402
 msgid "Notable actors:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6236
+#: src/network/titan_net_gui.py:6411
 msgid "Recommended actions:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6243
+#: src/network/titan_net_gui.py:6418
 msgid "Top risk IPs (score):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6251
+#: src/network/titan_net_gui.py:6426
 #, python-brace-format
 msgid "Model: {m}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6254
+#: src/network/titan_net_gui.py:6429
 #, python-brace-format
 msgid "Analysis ready. Severity {sev}."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6257
+#: src/network/titan_net_gui.py:6432
 msgid "Cerberus AI Threat Analysis"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6277
+#: src/network/titan_net_gui.py:6452
 msgid "Loading intrusion logs..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6292
+#: src/network/titan_net_gui.py:6467
 #, python-brace-format
 msgid "Could not load logs: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6297
+#: src/network/titan_net_gui.py:6472
 msgid "No intrusion logs found"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6310
+#: src/network/titan_net_gui.py:6485
 msgid "Cerberus Intrusion Logs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6314
+#: src/network/titan_net_gui.py:6489
 #, python-brace-format
 msgid "Showing {count} log entries (most recent first)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6332
+#: src/network/titan_net_gui.py:6507
 msgid "Loading honeypot logs..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6347
+#: src/network/titan_net_gui.py:6522
 #, python-brace-format
 msgid "Could not load honeypot logs: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6352
+#: src/network/titan_net_gui.py:6527
 msgid "No honeypot logs found. SSH honeypot may not be active."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6357
+#: src/network/titan_net_gui.py:6532
 msgid "Honeypot log is empty - no SSH intrusion attempts detected"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6363
+#: src/network/titan_net_gui.py:6538
 msgid "SSH Honeypot Logs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6367
+#: src/network/titan_net_gui.py:6542
 #, python-brace-format
 msgid "SSH Honeypot session logs ({count} entries, most recent first)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6387 src/network/titan_net_gui.py:6418
+#: src/network/titan_net_gui.py:6562 src/network/titan_net_gui.py:6593
 msgid "No cached status. Refresh first."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6396
+#: src/network/titan_net_gui.py:6571
 #, python-brace-format
 msgid "{ip} (permanent ban)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6399
+#: src/network/titan_net_gui.py:6574
 #, python-brace-format
 msgid "{ip} (temporary ban)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6404
+#: src/network/titan_net_gui.py:6579
 #, python-brace-format
 msgid "{ip} (whitelisted)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6407
+#: src/network/titan_net_gui.py:6582
 msgid "No banned or whitelisted IPs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6410
+#: src/network/titan_net_gui.py:6585
 msgid "Banned and whitelisted IPs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6410
+#: src/network/titan_net_gui.py:6585
 msgid "Cerberus IP List"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6431
+#: src/network/titan_net_gui.py:6606
 #, python-brace-format
 msgid "{ip} | Score: {score} | Type: {type} | Level: {level} | Since: {since}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6439
+#: src/network/titan_net_gui.py:6614
 msgid "No tracked attackers"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6442
+#: src/network/titan_net_gui.py:6617
 msgid "Tracked attackers"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6442
+#: src/network/titan_net_gui.py:6617
 msgid "Cerberus Attackers"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6449
+#: src/network/titan_net_gui.py:6624
 msgid "Only developers can activate lockdown"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6452
+#: src/network/titan_net_gui.py:6627
 msgid "Enter reason for lockdown:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6457
+#: src/network/titan_net_gui.py:6632
 msgid "Activating lockdown..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6463
+#: src/network/titan_net_gui.py:6638
 msgid "Lockdown activated"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6467 src/network/titan_net_gui.py:6508
-#: src/network/titan_net_gui.py:6535 src/network/titan_net_gui.py:6564
-#: src/network/titan_net_gui.py:6603 src/network/titan_net_gui.py:6643
+#: src/network/titan_net_gui.py:6642 src/network/titan_net_gui.py:6683
+#: src/network/titan_net_gui.py:6710 src/network/titan_net_gui.py:6739
+#: src/network/titan_net_gui.py:6778 src/network/titan_net_gui.py:6818
 #, python-brace-format
 msgid "Failed: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6478
+#: src/network/titan_net_gui.py:6653
 msgid "Only developers can activate CERBERUS mode"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6483
+#: src/network/titan_net_gui.py:6658
 msgid ""
 "CERBERUS mode is the maximum threat level. All new connections will be "
 "blocked. Are you sure you want to activate CERBERUS mode?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6493
+#: src/network/titan_net_gui.py:6668
 msgid "Enter reason:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6493
+#: src/network/titan_net_gui.py:6668
 msgid "Activate CERBERUS"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6498
+#: src/network/titan_net_gui.py:6673
 msgid "Activating CERBERUS mode..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6504
+#: src/network/titan_net_gui.py:6679
 msgid "CERBERUS mode activated"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6519
+#: src/network/titan_net_gui.py:6694
 msgid "Only developers can deactivate lockdown"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6522
+#: src/network/titan_net_gui.py:6697
 msgid "Enter reason for deactivation:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6531
+#: src/network/titan_net_gui.py:6706
 msgid "Lockdown deactivated"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6546
+#: src/network/titan_net_gui.py:6721
 msgid "Only developers can ban IPs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6549
+#: src/network/titan_net_gui.py:6724
 msgid "Enter IP address to ban:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6560
+#: src/network/titan_net_gui.py:6735
 #, python-brace-format
 msgid "IP {ip} banned"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6575
+#: src/network/titan_net_gui.py:6750
 msgid "Only developers can unban IPs"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6585
+#: src/network/titan_net_gui.py:6760
 msgid "Select IP to unban:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6587
+#: src/network/titan_net_gui.py:6762
 msgid "Enter IP address to unban:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6599
+#: src/network/titan_net_gui.py:6774
 #, python-brace-format
 msgid "IP {ip} unbanned"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6614
+#: src/network/titan_net_gui.py:6789
 msgid "Only developers can manage whitelist"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6617
+#: src/network/titan_net_gui.py:6792
 msgid "Add IP to whitelist"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6617
+#: src/network/titan_net_gui.py:6792
 msgid "Remove IP from whitelist"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6618
+#: src/network/titan_net_gui.py:6793
 msgid "Whitelist action:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6626
+#: src/network/titan_net_gui.py:6801
 msgid "Enter IP address:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6637
+#: src/network/titan_net_gui.py:6812
 msgid "added to"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6637
+#: src/network/titan_net_gui.py:6812
 msgid "removed from"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6639
+#: src/network/titan_net_gui.py:6814
 #, python-brace-format
 msgid "IP {ip} {action} whitelist"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6656
+#: src/network/titan_net_gui.py:6831
 msgid "Only developers can manage moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6672
+#: src/network/titan_net_gui.py:6847
 msgid "Could not load moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6683
+#: src/network/titan_net_gui.py:6858
 msgid "No moderators appointed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6686
+#: src/network/titan_net_gui.py:6861
 msgid "List of all moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6686
+#: src/network/titan_net_gui.py:6861
 msgid "Moderators"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6693
+#: src/network/titan_net_gui.py:6868
 msgid "Enter username to promote:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6699 src/network/titan_net_gui.py:7230
+#: src/network/titan_net_gui.py:6874 src/network/titan_net_gui.py:7432
 msgid "Enter moderator title:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6699 src/network/titan_net_gui.py:7230
+#: src/network/titan_net_gui.py:6874 src/network/titan_net_gui.py:7432
 msgid "Moderator Title"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6709 src/network/titan_net_gui.py:7239
+#: src/network/titan_net_gui.py:6884 src/network/titan_net_gui.py:7441
 msgid "User promoted to moderator"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6710 src/network/titan_net_gui.py:7240
+#: src/network/titan_net_gui.py:6885 src/network/titan_net_gui.py:7442
 msgid "User promoted successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6712 src/network/titan_net_gui.py:7242
+#: src/network/titan_net_gui.py:6887 src/network/titan_net_gui.py:7444
 msgid "Failed to promote user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6724
+#: src/network/titan_net_gui.py:6899
 msgid "Enter username to demote:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6731 src/network/titan_net_gui.py:7253
+#: src/network/titan_net_gui.py:6906 src/network/titan_net_gui.py:7455
 #, python-brace-format
 msgid "Are you sure you want to demote {user}?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6732 src/network/titan_net_gui.py:7254
+#: src/network/titan_net_gui.py:6907 src/network/titan_net_gui.py:7456
 msgid "Confirm Demotion"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6741 src/network/titan_net_gui.py:7262
+#: src/network/titan_net_gui.py:6916 src/network/titan_net_gui.py:7464
 msgid "User demoted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6742 src/network/titan_net_gui.py:7263
+#: src/network/titan_net_gui.py:6917 src/network/titan_net_gui.py:7465
 msgid "User demoted successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6744 src/network/titan_net_gui.py:7265
+#: src/network/titan_net_gui.py:6919 src/network/titan_net_gui.py:7467
 msgid "Failed to demote user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6757
+#: src/network/titan_net_gui.py:6932
 msgid "Enter room name:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6763
+#: src/network/titan_net_gui.py:6938
 msgid "Room name cannot be empty"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6768
+#: src/network/titan_net_gui.py:6943
 msgid "Enter room description (optional):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6768
+#: src/network/titan_net_gui.py:6943
 msgid "Room Description"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6775
+#: src/network/titan_net_gui.py:6950
 msgid "Select room type:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6776
+#: src/network/titan_net_gui.py:6951
 msgid "Room Type"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6777
+#: src/network/titan_net_gui.py:6952
 msgid "Text Chat"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6777
+#: src/network/titan_net_gui.py:6952
 msgid "Voice Chat"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6777
+#: src/network/titan_net_gui.py:6952
 msgid "Mixed (Text + Voice)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6784
+#: src/network/titan_net_gui.py:6959
 msgid "Enter password for private room (leave empty for public):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6794
+#: src/network/titan_net_gui.py:6969
 msgid "Room created"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6816
+#: src/network/titan_net_gui.py:6991
 msgid "Enter topic title:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6822
+#: src/network/titan_net_gui.py:6997
 msgid "Topic title cannot be empty"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6827
+#: src/network/titan_net_gui.py:7002
 msgid "Topic Content"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6831
+#: src/network/titan_net_gui.py:7006
 msgid "Enter topic content:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6852
+#: src/network/titan_net_gui.py:7027
 msgid "Topic content cannot be empty"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6863
+#: src/network/titan_net_gui.py:7038
 msgid "Thread created"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6864
+#: src/network/titan_net_gui.py:7039
 msgid "Thread created successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6868
+#: src/network/titan_net_gui.py:7043
 msgid "Failed to create thread"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:101
-#: src/network/titan_net_forum_gui.py:167 src/network/titan_net_gui.py:6880
+#: src/network/titan_net_forum_gui.py:167 src/network/titan_net_gui.py:7055
 msgid "General"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:102
-#: src/network/titan_net_forum_gui.py:168 src/network/titan_net_gui.py:6880
+#: src/network/titan_net_forum_gui.py:168 src/network/titan_net_gui.py:7055
 #: src/system/klangomode.py:208 src/system/klangomode.py:1377
 msgid "Help"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6880
+#: src/network/titan_net_gui.py:7055
 msgid "Off-Topic"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:103
-#: src/network/titan_net_forum_gui.py:169 src/network/titan_net_gui.py:6880
+#: src/network/titan_net_forum_gui.py:169 src/network/titan_net_gui.py:7055
 msgid "Announcements"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6880
+#: src/network/titan_net_gui.py:7055
 msgid "Development"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6882 src/network/titan_net_gui.py:8791
+#: src/network/titan_net_gui.py:7057 src/network/titan_net_gui.py:8994
 msgid "Select category:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6883
+#: src/network/titan_net_gui.py:7058
 msgid "Topic Category"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6909
+#: src/network/titan_net_gui.py:7084
 #, python-brace-format
 msgid "Could not open the new group dialog: {error}"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:1345 src/network/titan_net_gui.py:6938
+#: src/network/titan_net_forum_gui.py:1345 src/network/titan_net_gui.py:7113
 msgid "Join request sent. Awaiting approval."
 msgstr ""
 
-#: src/network/titan_net_gui.py:6949
+#: src/network/titan_net_gui.py:7124
 msgid "Enter forum name:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6961
+#: src/network/titan_net_gui.py:7136
 msgid "Forum created successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6965
+#: src/network/titan_net_gui.py:7140
 msgid "Failed to create forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:6987
+#: src/network/titan_net_gui.py:7162
 msgid "Could not open Mail"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7040
-msgid "Move request sent for approval by the target group moderators"
+#: src/network/titan_net_gui.py:7212
+msgid "this thread"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7042
-msgid "Thread moved"
+#: src/network/titan_net_gui.py:7213
+msgid "its current forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7046
+#: src/network/titan_net_gui.py:7219
+#, python-brace-format
+msgid "Move request sent to the moderators of {group} for approval"
+msgstr ""
+
+#: src/network/titan_net_gui.py:7220
+msgid "the target group"
+msgstr ""
+
+#: src/network/titan_net_gui.py:7224
+#, python-brace-format
+msgid "Thread moved from {source} to {destination}"
+msgstr ""
+
+#: src/network/titan_net_gui.py:7226
+msgid "the selected forum"
+msgstr ""
+
+#: src/network/titan_net_gui.py:7231
 msgid "Failed to move thread"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:847 src/network/titan_net_gui.py:7050
+#: src/network/titan_net_forum_gui.py:847 src/network/titan_net_gui.py:7235
 msgid "Failed to load forums"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7054
+#: src/network/titan_net_gui.py:7239
 msgid "This group has no forums"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7056
+#: src/network/titan_net_gui.py:7241
 msgid "Select destination forum:"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:1286 src/network/titan_net_gui.py:7069
+#: src/network/titan_net_gui.py:7253
+#, python-brace-format
+msgid "Move the thread '{title}' from '{source}' to '{destination}'?"
+msgstr ""
+
+#: src/network/titan_net_gui.py:7260
+msgid "Move cancelled"
+msgstr ""
+
+#: src/network/titan_net_forum_gui.py:1286 src/network/titan_net_gui.py:7271
 msgid "Failed to load groups"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7074
+#: src/network/titan_net_gui.py:7276
 msgid "Select destination group:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7105
+#: src/network/titan_net_gui.py:7307
 msgid "Only moderators can moderate components"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7121
+#: src/network/titan_net_gui.py:7323
 msgid "All TCE Users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7167
+#: src/network/titan_net_gui.py:7369
 msgid "Registered"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7173
+#: src/network/titan_net_gui.py:7375
 #, python-brace-format
 msgid "{count} users total"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7183
+#: src/network/titan_net_gui.py:7385
 msgid "Are you sure you want to kick this user from the room?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7184 src/network/titan_net_gui.py:7776
+#: src/network/titan_net_gui.py:7386 src/network/titan_net_gui.py:7978
 msgid "Confirm Kick"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7192 src/network/titan_net_gui.py:7783
-#: src/network/titan_net_gui.py:8474
+#: src/network/titan_net_gui.py:7394 src/network/titan_net_gui.py:7985
+#: src/network/titan_net_gui.py:8676
 msgid "User kicked from room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7193 src/network/titan_net_gui.py:7784
+#: src/network/titan_net_gui.py:7395 src/network/titan_net_gui.py:7986
 msgid "User kicked successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7195 src/network/titan_net_gui.py:8476
+#: src/network/titan_net_gui.py:7397 src/network/titan_net_gui.py:8678
 msgid "Failed to kick user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7208 src/network/titan_net_gui.py:7308
-#: src/network/titan_net_gui.py:7392 src/network/titan_net_gui.py:7833
+#: src/network/titan_net_gui.py:7410 src/network/titan_net_gui.py:7510
+#: src/network/titan_net_gui.py:7594 src/network/titan_net_gui.py:8035
 msgid "Enter ban reason (optional):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7208 src/network/titan_net_gui.py:7308
-#: src/network/titan_net_gui.py:7392 src/network/titan_net_gui.py:7476
-#: src/network/titan_net_gui.py:7833 src/network/titan_net_gui.py:7936
-#: src/network/titan_net_gui.py:8525
+#: src/network/titan_net_gui.py:7410 src/network/titan_net_gui.py:7510
+#: src/network/titan_net_gui.py:7594 src/network/titan_net_gui.py:7678
+#: src/network/titan_net_gui.py:8035 src/network/titan_net_gui.py:8138
+#: src/network/titan_net_gui.py:8727
 msgid "Ban Reason"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7217 src/network/titan_net_gui.py:7319
-#: src/network/titan_net_gui.py:7843 src/network/titan_net_gui.py:8536
+#: src/network/titan_net_gui.py:7419 src/network/titan_net_gui.py:7521
+#: src/network/titan_net_gui.py:8045 src/network/titan_net_gui.py:8738
 msgid "User banned from room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7218 src/network/titan_net_gui.py:7320
-#: src/network/titan_net_gui.py:7844
+#: src/network/titan_net_gui.py:7420 src/network/titan_net_gui.py:7522
+#: src/network/titan_net_gui.py:8046
 msgid "User banned successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7220 src/network/titan_net_gui.py:7325
-#: src/network/titan_net_gui.py:7409 src/network/titan_net_gui.py:7502
-#: src/network/titan_net_gui.py:7981 src/network/titan_net_gui.py:8538
+#: src/network/titan_net_gui.py:7422 src/network/titan_net_gui.py:7527
+#: src/network/titan_net_gui.py:7611 src/network/titan_net_gui.py:7704
+#: src/network/titan_net_gui.py:8183 src/network/titan_net_gui.py:8740
 msgid "Failed to ban user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7282 src/network/titan_net_gui.py:7368
-#: src/network/titan_net_gui.py:7449 src/network/titan_net_gui.py:7807
-#: src/network/titan_net_gui.py:7898
+#: src/network/titan_net_gui.py:7484 src/network/titan_net_gui.py:7570
+#: src/network/titan_net_gui.py:7651 src/network/titan_net_gui.py:8009
+#: src/network/titan_net_gui.py:8100
 msgid "Temporary Ban (1 hour)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7283 src/network/titan_net_gui.py:7369
-#: src/network/titan_net_gui.py:7450 src/network/titan_net_gui.py:7808
-#: src/network/titan_net_gui.py:7899
+#: src/network/titan_net_gui.py:7485 src/network/titan_net_gui.py:7571
+#: src/network/titan_net_gui.py:7652 src/network/titan_net_gui.py:8010
+#: src/network/titan_net_gui.py:8101
 msgid "Temporary Ban (24 hours)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7284 src/network/titan_net_gui.py:7370
-#: src/network/titan_net_gui.py:7451 src/network/titan_net_gui.py:7809
-#: src/network/titan_net_gui.py:7900
+#: src/network/titan_net_gui.py:7486 src/network/titan_net_gui.py:7572
+#: src/network/titan_net_gui.py:7653 src/network/titan_net_gui.py:8011
+#: src/network/titan_net_gui.py:8102
 msgid "Temporary Ban (7 days)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7285 src/network/titan_net_gui.py:7371
-#: src/network/titan_net_gui.py:7452 src/network/titan_net_gui.py:7810
-#: src/network/titan_net_gui.py:7901
+#: src/network/titan_net_gui.py:7487 src/network/titan_net_gui.py:7573
+#: src/network/titan_net_gui.py:7654 src/network/titan_net_gui.py:8012
+#: src/network/titan_net_gui.py:8103
 msgid "Temporary Ban (30 days)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7286 src/network/titan_net_gui.py:7372
-#: src/network/titan_net_gui.py:7453 src/network/titan_net_gui.py:7811
-#: src/network/titan_net_gui.py:7902
+#: src/network/titan_net_gui.py:7488 src/network/titan_net_gui.py:7574
+#: src/network/titan_net_gui.py:7655 src/network/titan_net_gui.py:8013
+#: src/network/titan_net_gui.py:8104
 msgid "Permanent Ban"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7287 src/network/titan_net_gui.py:7454
-#: src/network/titan_net_gui.py:7812 src/network/titan_net_gui.py:7903
+#: src/network/titan_net_gui.py:7489 src/network/titan_net_gui.py:7656
+#: src/network/titan_net_gui.py:8014 src/network/titan_net_gui.py:8105
 msgid "IP Ban"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7290 src/network/titan_net_gui.py:7375
-#: src/network/titan_net_gui.py:7457 src/network/titan_net_gui.py:7815
-#: src/network/titan_net_gui.py:7907
+#: src/network/titan_net_gui.py:7492 src/network/titan_net_gui.py:7577
+#: src/network/titan_net_gui.py:7659 src/network/titan_net_gui.py:8017
+#: src/network/titan_net_gui.py:8109
 msgid "Select ban type:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7290 src/network/titan_net_gui.py:7815
+#: src/network/titan_net_gui.py:7492 src/network/titan_net_gui.py:8017
 msgid "Ban Type"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7341
+#: src/network/titan_net_gui.py:7543
 #, python-brace-format
 msgid "Are you sure you want to unban {user} from this room?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7342 src/network/titan_net_gui.py:7423
+#: src/network/titan_net_gui.py:7544 src/network/titan_net_gui.py:7625
 msgid "Confirm Unban"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7350 src/network/titan_net_gui.py:8589
+#: src/network/titan_net_gui.py:7552 src/network/titan_net_gui.py:8791
 msgid "User unbanned from room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7351
+#: src/network/titan_net_gui.py:7553
 msgid "User unbanned successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7356 src/network/titan_net_gui.py:7437
-#: src/network/titan_net_gui.py:7532 src/network/titan_net_gui.py:8591
+#: src/network/titan_net_gui.py:7558 src/network/titan_net_gui.py:7639
+#: src/network/titan_net_gui.py:7734 src/network/titan_net_gui.py:8793
 msgid "Failed to unban user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7375
+#: src/network/titan_net_gui.py:7577
 msgid "Forum Ban Type"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7403
+#: src/network/titan_net_gui.py:7605
 msgid "User banned from forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7404
+#: src/network/titan_net_gui.py:7606
 msgid "User banned from forum successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7422
+#: src/network/titan_net_gui.py:7624
 #, python-brace-format
 msgid "Are you sure you want to unban {user} from the forum?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7431
+#: src/network/titan_net_gui.py:7633
 msgid "User unbanned from forum"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7432
+#: src/network/titan_net_gui.py:7634
 msgid "User unbanned from forum successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7457 src/network/titan_net_gui.py:7907
+#: src/network/titan_net_gui.py:7659 src/network/titan_net_gui.py:8109
 msgid "Global Ban Type"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7474 src/network/titan_net_gui.py:7934
+#: src/network/titan_net_gui.py:7676 src/network/titan_net_gui.py:8136
 msgid ""
 "Enter ban reason:\n"
 "(This is a serious action - user will be banned from entire TCE Community)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7482 src/network/titan_net_gui.py:7952
+#: src/network/titan_net_gui.py:7684 src/network/titan_net_gui.py:8154
 #, python-brace-format
 msgid ""
 "Are you sure you want to ban {user} from the ENTIRE TCE Community?\n"
 "This will prevent them from accessing Titan-Net completely."
 msgstr ""
 
-#: src/network/titan_net_gui.py:7486 src/network/titan_net_gui.py:7954
+#: src/network/titan_net_gui.py:7688 src/network/titan_net_gui.py:8156
 msgid "Confirm Global Ban"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7496 src/network/titan_net_gui.py:7974
+#: src/network/titan_net_gui.py:7698 src/network/titan_net_gui.py:8176
 msgid "User banned globally"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7497
+#: src/network/titan_net_gui.py:7699
 msgid "User banned from TCE Community"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7517
+#: src/network/titan_net_gui.py:7719
 #, python-brace-format
 msgid "Are you sure you want to unban {user} globally?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7518
+#: src/network/titan_net_gui.py:7720
 msgid "Confirm Global Unban"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7526
+#: src/network/titan_net_gui.py:7728
 msgid "User unbanned globally"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7527
+#: src/network/titan_net_gui.py:7729
 msgid "User unbanned from TCE Community"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7543 src/network/titan_net_gui.py:7926
+#: src/network/titan_net_gui.py:7745 src/network/titan_net_gui.py:8128
 msgid "Only developers can issue HARD BANS"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7547 src/network/titan_net_gui.py:7932
+#: src/network/titan_net_gui.py:7749 src/network/titan_net_gui.py:8134
 msgid ""
 "Enter ban reason (REQUIRED for HARD BAN):\n"
 "\n"
@@ -2555,15 +2650,15 @@ msgid ""
 "This is IRREVERSIBLE!"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7549
+#: src/network/titan_net_gui.py:7751
 msgid "Hard Ban Reason"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7556 src/network/titan_net_gui.py:7943
+#: src/network/titan_net_gui.py:7758 src/network/titan_net_gui.py:8145
 msgid "Reason is required for HARD BAN"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7561 src/network/titan_net_gui.py:7950
+#: src/network/titan_net_gui.py:7763 src/network/titan_net_gui.py:8152
 #, python-brace-format
 msgid ""
 "CRITICAL ACTION\n"
@@ -2579,27 +2674,27 @@ msgid ""
 "THIS CANNOT BE UNDONE!"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7565 src/network/titan_net_gui.py:7954
+#: src/network/titan_net_gui.py:7767 src/network/titan_net_gui.py:8156
 msgid "Confirm HARD BAN"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7573
+#: src/network/titan_net_gui.py:7775
 msgid "HARD BAN issued"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7574 src/network/titan_net_gui.py:7968
+#: src/network/titan_net_gui.py:7776 src/network/titan_net_gui.py:8170
 msgid "HARD BAN issued - User completely excluded from TCE"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7579
+#: src/network/titan_net_gui.py:7781
 msgid "Failed to issue HARD BAN"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7592
+#: src/network/titan_net_gui.py:7794
 msgid "Only moderators/developers can delete users"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7596
+#: src/network/titan_net_gui.py:7798
 #, python-brace-format
 msgid ""
 "CRITICAL ACTION - DELETE USER\n"
@@ -2617,214 +2712,214 @@ msgid ""
 "Note: To prevent new account creation, use HARD BAN instead."
 msgstr ""
 
-#: src/network/titan_net_gui.py:7600
+#: src/network/titan_net_gui.py:7802
 msgid "Confirm USER DELETION"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7608
+#: src/network/titan_net_gui.py:7810
 msgid "User deleted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7609
+#: src/network/titan_net_gui.py:7811
 #, python-brace-format
 msgid "User {username} deleted successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7614
+#: src/network/titan_net_gui.py:7816
 msgid "Failed to delete user"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7629 src/network/titan_net_gui.py:7659
-#: src/network/titan_net_gui.py:7695 src/network/titan_net_gui.py:7731
+#: src/network/titan_net_gui.py:7831 src/network/titan_net_gui.py:7861
+#: src/network/titan_net_gui.py:7897 src/network/titan_net_gui.py:7933
 msgid "Please select a topic first"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7633
+#: src/network/titan_net_gui.py:7835
 #, python-brace-format
 msgid "Are you sure you want to delete topic '{title}'?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7642 src/network/titan_net_gui.py:8275
-#: src/network/titan_net_gui.py:8276
+#: src/network/titan_net_gui.py:7844 src/network/titan_net_gui.py:8477
+#: src/network/titan_net_gui.py:8478
 msgid "Topic deleted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7643
+#: src/network/titan_net_gui.py:7845
 msgid "Topic deleted successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7646 src/network/titan_net_gui.py:8278
+#: src/network/titan_net_gui.py:7848 src/network/titan_net_gui.py:8480
 msgid "Failed to delete topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7662
+#: src/network/titan_net_gui.py:7864
 msgid "unlock"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7662
+#: src/network/titan_net_gui.py:7864
 msgid "lock"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7665 src/network/titan_net_gui.py:7701
+#: src/network/titan_net_gui.py:7867 src/network/titan_net_gui.py:7903
 #, python-brace-format
 msgid "Are you sure you want to {action} topic '{title}'?"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:284
-#: src/network/titan_net_forum_gui.py:919 src/network/titan_net_gui.py:7666
-#: src/network/titan_net_gui.py:7702
+#: src/network/titan_net_forum_gui.py:919 src/network/titan_net_gui.py:7868
+#: src/network/titan_net_gui.py:7904
 msgid "Confirm"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7678
+#: src/network/titan_net_gui.py:7880
 #, python-brace-format
 msgid "Topic {action}ed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7679
+#: src/network/titan_net_gui.py:7881
 #, python-brace-format
 msgid "Topic {action}ed successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7682 src/network/titan_net_gui.py:7718
+#: src/network/titan_net_gui.py:7884 src/network/titan_net_gui.py:7920
 #, python-brace-format
 msgid "Failed to {action} topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7698
+#: src/network/titan_net_gui.py:7900
 msgid "unpin"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7698
+#: src/network/titan_net_gui.py:7900
 msgid "pin"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7714
+#: src/network/titan_net_gui.py:7916
 #, python-brace-format
 msgid "Topic {action}ned"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7715
+#: src/network/titan_net_gui.py:7917
 #, python-brace-format
 msgid "Topic {action}ned successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7736
+#: src/network/titan_net_gui.py:7938
 msgid "Select new category:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7736 src/network/titan_net_gui.py:8203
+#: src/network/titan_net_gui.py:7938 src/network/titan_net_gui.py:8405
 msgid "Move Topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7745 src/network/titan_net_gui.py:8315
-#: src/network/titan_net_gui.py:8316
+#: src/network/titan_net_gui.py:7947 src/network/titan_net_gui.py:8517
+#: src/network/titan_net_gui.py:8518
 msgid "Topic moved"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7746
+#: src/network/titan_net_gui.py:7948
 msgid "Topic moved successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7749 src/network/titan_net_gui.py:8318
+#: src/network/titan_net_gui.py:7951 src/network/titan_net_gui.py:8520
 msgid "Failed to move topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7760
+#: src/network/titan_net_gui.py:7962
 msgid "Select a message and use context menu to delete"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7768 src/network/titan_net_gui.py:8464
+#: src/network/titan_net_gui.py:7970 src/network/titan_net_gui.py:8666
 msgid "Enter username to kick:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7768 src/network/titan_net_gui.py:8453
-#: src/network/titan_net_gui.py:8464
+#: src/network/titan_net_gui.py:7970 src/network/titan_net_gui.py:8655
+#: src/network/titan_net_gui.py:8666
 msgid "Kick User"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7775
+#: src/network/titan_net_gui.py:7977
 #, python-brace-format
 msgid "Are you sure you want to kick {user} from this room?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7800 src/network/titan_net_gui.py:8517
+#: src/network/titan_net_gui.py:8002 src/network/titan_net_gui.py:8719
 msgid "Enter username to ban:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7800 src/network/titan_net_gui.py:8506
-#: src/network/titan_net_gui.py:8517
+#: src/network/titan_net_gui.py:8002 src/network/titan_net_gui.py:8708
+#: src/network/titan_net_gui.py:8719
 msgid "Ban User"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7860
+#: src/network/titan_net_gui.py:8062
 msgid "Please select a room first"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7866
+#: src/network/titan_net_gui.py:8068
 #, python-brace-format
 msgid ""
 "Are you sure you want to delete room '{name}'? This will remove all "
 "messages and members."
 msgstr ""
 
-#: src/network/titan_net_gui.py:7876
+#: src/network/titan_net_gui.py:8078
 msgid "Room deleted successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7891
+#: src/network/titan_net_gui.py:8093
 msgid "Please select a user first"
 msgstr ""
 
-#: src/network/titan_net_gui.py:7904
+#: src/network/titan_net_gui.py:8106
 msgid "HARD BAN - Complete Exclusion"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8014
+#: src/network/titan_net_gui.py:8216
 msgid "Could not load pending packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8020
+#: src/network/titan_net_gui.py:8222
 msgid "No pending packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8029
+#: src/network/titan_net_gui.py:8231
 msgid "Select package:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8037 src/network/titan_net_gui.py:8058
+#: src/network/titan_net_gui.py:8239 src/network/titan_net_gui.py:8260
 msgid "View Details"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8037
+#: src/network/titan_net_gui.py:8239
 msgid "Download (Not Approved - CAUTION!)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8039
+#: src/network/titan_net_gui.py:8241
 #, python-brace-format
 msgid "Package: {name}"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:963 src/network/titan_net_gui.py:8058
-#: src/network/titan_net_mod_components.py:1857
+#: src/network/titan_net_forum_gui.py:963 src/network/titan_net_gui.py:8260
+#: src/network/titan_net_mod_components.py:1865
 msgid "Approve"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:966 src/network/titan_net_gui.py:8058
-#: src/network/titan_net_mod_components.py:1858
+#: src/network/titan_net_forum_gui.py:966 src/network/titan_net_gui.py:8260
+#: src/network/titan_net_mod_components.py:1866
 msgid "Reject"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8060
+#: src/network/titan_net_gui.py:8262
 #, python-brace-format
 msgid "Action for: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8061
+#: src/network/titan_net_gui.py:8263
 msgid "Moderate Package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8085
+#: src/network/titan_net_gui.py:8287
 msgid ""
 "WARNING: This package has NOT been approved by moderators!\n"
 "\n"
@@ -2838,459 +2933,459 @@ msgid ""
 "Do you want to continue?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8095
+#: src/network/titan_net_gui.py:8297
 msgid "Security Warning - Unapproved Package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8102
+#: src/network/titan_net_gui.py:8304
 msgid "Download cancelled"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8116
+#: src/network/titan_net_gui.py:8318
 msgid "Package approved"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8117
+#: src/network/titan_net_gui.py:8319
 msgid "Package approved successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8119
+#: src/network/titan_net_gui.py:8321
 msgid "Failed to approve package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8128
+#: src/network/titan_net_gui.py:8330
 #, python-brace-format
 msgid "Are you sure you want to reject {name}?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8129
+#: src/network/titan_net_gui.py:8331
 msgid "Confirm Rejection"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8137 src/network/titan_net_gui.py:8138
+#: src/network/titan_net_gui.py:8339 src/network/titan_net_gui.py:8340
 msgid "Package rejected"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8140
+#: src/network/titan_net_gui.py:8342
 msgid "Failed to reject package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8151
+#: src/network/titan_net_gui.py:8353
 msgid "Lock/Unlock Topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8152
+#: src/network/titan_net_gui.py:8354
 msgid "Pin/Unpin Topic"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:143 src/network/titan_net_gui.py:8153
+#: src/network/titan_net_forum_gui.py:143 src/network/titan_net_gui.py:8355
 msgid "Delete Topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8154
+#: src/network/titan_net_gui.py:8356
 msgid "Move Topic to Category"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8157 src/network/titan_net_gui.py:8415
+#: src/network/titan_net_gui.py:8359 src/network/titan_net_gui.py:8617
 msgid "Select moderation action:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8163
+#: src/network/titan_net_gui.py:8365
 msgid "Loading topics..."
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:209 src/network/titan_net_gui.py:8172
+#: src/network/titan_net_forum_gui.py:209 src/network/titan_net_gui.py:8374
 msgid "Failed to load topics"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:205 src/network/titan_net_gui.py:8183
+#: src/network/titan_net_forum_gui.py:205 src/network/titan_net_gui.py:8385
 msgid "No topics found"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8189
+#: src/network/titan_net_gui.py:8391
 msgid "Select topic:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8189
+#: src/network/titan_net_gui.py:8391
 msgid "Moderate Topic"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8203
+#: src/network/titan_net_gui.py:8405
 msgid "Enter new category:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8213
+#: src/network/titan_net_gui.py:8415
 msgid "Lock or unlock topic?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8213
+#: src/network/titan_net_gui.py:8415
 msgid "Topic Lock"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8213
+#: src/network/titan_net_gui.py:8415
 msgid "Lock"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8213
+#: src/network/titan_net_gui.py:8415
 msgid "Unlock"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8226 src/network/titan_net_gui.py:8252
+#: src/network/titan_net_gui.py:8428 src/network/titan_net_gui.py:8454
 msgid "Topic updated"
 msgstr ""
 
 #: src/network/titan_net_forum_gui.py:543
 #: src/network/titan_net_forum_gui.py:651
-#: src/network/titan_net_forum_gui.py:743 src/network/titan_net_gui.py:8227
-#: src/network/titan_net_gui.py:8253
+#: src/network/titan_net_forum_gui.py:743 src/network/titan_net_gui.py:8429
+#: src/network/titan_net_gui.py:8455
 msgid "Success"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8229 src/network/titan_net_gui.py:8255
+#: src/network/titan_net_gui.py:8431 src/network/titan_net_gui.py:8457
 msgid "Failed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8239
+#: src/network/titan_net_gui.py:8441
 msgid "Pin or unpin topic?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8239
+#: src/network/titan_net_gui.py:8441
 msgid "Topic Pin"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8239
+#: src/network/titan_net_gui.py:8441
 msgid "Pin"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8239
+#: src/network/titan_net_gui.py:8441
 msgid "Unpin"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8266
+#: src/network/titan_net_gui.py:8468
 #, python-brace-format
 msgid "Are you sure you want to delete topic #{id}?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8267 src/network/titan_net_gui.py:8290
-#: src/network/titan_net_gui.py:8610 src/network/titan_net_gui.py:8669
+#: src/network/titan_net_gui.py:8469 src/network/titan_net_gui.py:8492
+#: src/network/titan_net_gui.py:8812 src/network/titan_net_gui.py:8871
 msgid "Confirm Deletion"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8289
+#: src/network/titan_net_gui.py:8491
 #, python-brace-format
 msgid "Are you sure you want to delete reply #{id}?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8298 src/network/titan_net_gui.py:8299
+#: src/network/titan_net_gui.py:8500 src/network/titan_net_gui.py:8501
 msgid "Reply deleted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8301
+#: src/network/titan_net_gui.py:8503
 msgid "Failed to delete reply"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8327
+#: src/network/titan_net_gui.py:8529
 msgid "Only moderators can edit broadcast files"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8330
+#: src/network/titan_net_gui.py:8532
 msgid "Loading broadcast files..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8345
+#: src/network/titan_net_gui.py:8547
 msgid "Failed to load broadcast files"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8350 src/network/titan_net_gui.py:8364
+#: src/network/titan_net_gui.py:8552 src/network/titan_net_gui.py:8566
 msgid "No broadcast files found"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8360
+#: src/network/titan_net_gui.py:8562
 #, python-brace-format
 msgid "{name} ({size} bytes)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8367
+#: src/network/titan_net_gui.py:8569
 msgid "Select a file to edit:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8379
+#: src/network/titan_net_gui.py:8581
 #, python-brace-format
 msgid "Loading {name}..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8393
+#: src/network/titan_net_gui.py:8595
 msgid "Failed to load file"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8410
+#: src/network/titan_net_gui.py:8612
 msgid "Unban User from Room"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8411
+#: src/network/titan_net_gui.py:8613
 msgid "Delete Room Message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8435 src/network/titan_net_gui.py:8488
-#: src/network/titan_net_gui.py:8550 src/network/titan_net_gui.py:8634
+#: src/network/titan_net_gui.py:8637 src/network/titan_net_gui.py:8690
+#: src/network/titan_net_gui.py:8752 src/network/titan_net_gui.py:8836
 msgid "Loading rooms..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8449 src/network/titan_net_gui.py:8502
-#: src/network/titan_net_gui.py:8564 src/network/titan_net_gui.py:8652
+#: src/network/titan_net_gui.py:8651 src/network/titan_net_gui.py:8704
+#: src/network/titan_net_gui.py:8766 src/network/titan_net_gui.py:8854
 msgid "No rooms found"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8453 src/network/titan_net_gui.py:8506
-#: src/network/titan_net_gui.py:8568
+#: src/network/titan_net_gui.py:8655 src/network/titan_net_gui.py:8708
+#: src/network/titan_net_gui.py:8770
 msgid "Select room:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8473
+#: src/network/titan_net_gui.py:8675
 msgid "User kicked"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8525
+#: src/network/titan_net_gui.py:8727
 msgid "Ban reason (optional):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8535
+#: src/network/titan_net_gui.py:8737
 msgid "User banned"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8568 src/network/titan_net_gui.py:8579
+#: src/network/titan_net_gui.py:8770 src/network/titan_net_gui.py:8781
 msgid "Unban User"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8579
+#: src/network/titan_net_gui.py:8781
 msgid "Enter username to unban:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8588
+#: src/network/titan_net_gui.py:8790
 msgid "User unbanned"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8603
+#: src/network/titan_net_gui.py:8805
 msgid "Enter message ID:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8603
+#: src/network/titan_net_gui.py:8805
 msgid "Message ID:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8603
+#: src/network/titan_net_gui.py:8805
 msgid "Delete Message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8609
+#: src/network/titan_net_gui.py:8811
 #, python-brace-format
 msgid "Are you sure you want to delete message #{id}?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8618 src/network/titan_net_gui.py:8619
+#: src/network/titan_net_gui.py:8820 src/network/titan_net_gui.py:8821
 msgid "Message deleted"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8621
+#: src/network/titan_net_gui.py:8823
 msgid "Failed to delete message"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8643
+#: src/network/titan_net_gui.py:8845
 msgid "Failed to load rooms"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8658
+#: src/network/titan_net_gui.py:8860
 msgid "Select room to delete:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8668
+#: src/network/titan_net_gui.py:8870
 #, python-brace-format
 msgid ""
 "Are you sure you want to delete room '{name}' (ID: {id})? This cannot be "
 "undone!"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8730
+#: src/network/titan_net_gui.py:8933
 msgid "Select package file (.TCA/.TCD)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8746
+#: src/network/titan_net_gui.py:8949
 msgid "Package name:"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:683 src/network/titan_net_gui.py:8753
+#: src/network/titan_net_forum_gui.py:683 src/network/titan_net_gui.py:8956
 msgid "Description:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8800
+#: src/network/titan_net_gui.py:9003
 msgid "Version (e.g. 1.0.0):"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8805
+#: src/network/titan_net_gui.py:9008
 msgid "Uploading package..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8807
+#: src/network/titan_net_gui.py:9010
 msgid "Uploading Package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8808
+#: src/network/titan_net_gui.py:9011
 msgid "Starting upload..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8814
+#: src/network/titan_net_gui.py:9017
 #, python-brace-format
 msgid "Uploading: {percent}%"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8878
+#: src/network/titan_net_gui.py:9081
 msgid "Package uploaded successfully"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8880
+#: src/network/titan_net_gui.py:9083
 msgid "Package uploaded and awaiting approval"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8883
+#: src/network/titan_net_gui.py:9086
 msgid "Failed to upload package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8905
+#: src/network/titan_net_gui.py:9108
 #, python-brace-format
 msgid "Failed to prepare download: {error}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8909
+#: src/network/titan_net_gui.py:9112
 msgid "Downloading package..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8912
+#: src/network/titan_net_gui.py:9115
 msgid "Downloading Package"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8913
+#: src/network/titan_net_gui.py:9116
 msgid "Starting download..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8919
+#: src/network/titan_net_gui.py:9122
 #, python-brace-format
 msgid "Downloading: {percent}%"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8941
+#: src/network/titan_net_gui.py:9144
 msgid "Download complete"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8943
+#: src/network/titan_net_gui.py:9146
 #, python-brace-format
 msgid ""
 "Package downloaded successfully to:\n"
 "{path}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8948
+#: src/network/titan_net_gui.py:9151
 msgid "Download failed"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:262 src/network/titan_net_gui.py:8952
+#: src/network/titan_net_forum_gui.py:262 src/network/titan_net_gui.py:9155
 msgid "Enter search query:"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8961
+#: src/network/titan_net_gui.py:9164
 msgid "Searching..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:8974
+#: src/network/titan_net_gui.py:9177
 msgid "Search failed"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8980
+#: src/network/titan_net_gui.py:9183
 #, python-brace-format
 msgid "No packages found for: {query}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8986
+#: src/network/titan_net_gui.py:9189
 #, python-brace-format
 msgid "Search Results: {query}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8990
+#: src/network/titan_net_gui.py:9193
 msgid "Approved"
 msgstr ""
 
-#: src/network/titan_net_forum_gui.py:1279 src/network/titan_net_gui.py:8990
-#: src/network/titan_net_mod_components.py:1889
+#: src/network/titan_net_forum_gui.py:1279 src/network/titan_net_gui.py:9193
+#: src/network/titan_net_mod_components.py:1903
 msgid "Pending"
 msgstr ""
 
-#: src/network/titan_net_gui.py:8998
+#: src/network/titan_net_gui.py:9201
 #, python-brace-format
 msgid "Found {count} packages"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9005
+#: src/network/titan_net_gui.py:9208
 msgid "Message of the Day"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9019
+#: src/network/titan_net_gui.py:9222
 msgid "OK"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9058
+#: src/network/titan_net_gui.py:9261
 #, python-brace-format
 msgid "Edit: {name}"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9072
+#: src/network/titan_net_gui.py:9275
 msgid "Press Ctrl+S to save. Enter inserts a new line."
 msgstr ""
 
-#: src/network/titan_net_gui.py:9090
+#: src/network/titan_net_gui.py:9293
 msgid "Save (Ctrl+S)"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9131
+#: src/network/titan_net_gui.py:9334
 msgid "You have unsaved changes. Discard them?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9132
+#: src/network/titan_net_gui.py:9335
 msgid "Unsaved changes"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9153
+#: src/network/titan_net_gui.py:9356
 #, python-brace-format
 msgid "Saving {name}..."
 msgstr ""
 
-#: src/network/titan_net_gui.py:9172
+#: src/network/titan_net_gui.py:9375
 msgid "Broadcast file saved"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9175
+#: src/network/titan_net_gui.py:9378
 msgid "Failed to save broadcast file"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9194
+#: src/network/titan_net_gui.py:9397
 msgid ""
 "Titan-Net server is not available. Would you like to continue in offline "
 "mode?"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9199
+#: src/network/titan_net_gui.py:9402
 msgid ""
 "Titan-Net server is not available.\n"
 "You can continue in offline mode without messaging features."
 msgstr ""
 
-#: src/network/titan_net_gui.py:9200
+#: src/network/titan_net_gui.py:9403
 msgid "Server Not Available"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9249
+#: src/network/remote_ui.py:1154 src/network/titan_net_gui.py:9452
 msgid "Not connected to Titan-Net"
 msgstr ""
 
-#: src/network/titan_net_gui.py:9290 src/system/klangomode.py:1055
+#: src/network/titan_net_gui.py:9493 src/system/klangomode.py:1055
 #: src/system/klangomode.py:1065 src/system/klangomode.py:2125
 #: src/system/klangomode.py:2135
 msgid "Error opening Titan-Net"
@@ -3643,339 +3738,339 @@ msgstr ""
 #: src/network/titan_net_mod_components.py:751
 #: src/network/titan_net_mod_components.py:755
 #: src/network/titan_net_mod_components.py:761
-#: src/network/titan_net_mod_components.py:1847
-#: src/network/titan_net_mod_components.py:2165
+#: src/network/titan_net_mod_components.py:1855
+#: src/network/titan_net_mod_components.py:2173
 msgid "Component"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1351
+#: src/network/titan_net_mod_components.py:1356
 msgid "Component API Documentation"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1586
+#: src/network/titan_net_mod_components.py:1594
 msgid "Create Component with AI"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1599
+#: src/network/titan_net_mod_components.py:1607
 msgid ""
 "Describe precisely the Titan-Net add-on you want, then Generate. After "
 "the first result you can keep refining in the same box."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1605
+#: src/network/titan_net_mod_components.py:1613
 msgid "AI provider:"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1614
+#: src/network/titan_net_mod_components.py:1622
 msgid "Conversation:"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1619
+#: src/network/titan_net_mod_components.py:1627
 msgid "Your request:"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1629
+#: src/network/titan_net_mod_components.py:1637
 msgid "Generate"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1632
+#: src/network/titan_net_mod_components.py:1640
 msgid "Open in Editor"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1660
+#: src/network/titan_net_mod_components.py:1668
 #, python-brace-format
 msgid "Enter your {provider} API key. It is stored locally for future use."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1661
+#: src/network/titan_net_mod_components.py:1669
 msgid "AI API key"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1675
+#: src/network/titan_net_mod_components.py:1683
 msgid "Please type a request"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1688
+#: src/network/titan_net_mod_components.py:1696
 msgid "You"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1691
+#: src/network/titan_net_mod_components.py:1699
 msgid "Generating… this can take a moment."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1712
+#: src/network/titan_net_mod_components.py:1720
 #, python-brace-format
 msgid "AI generation failed: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1717
+#: src/network/titan_net_mod_components.py:1725
 msgid "AI"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1717
+#: src/network/titan_net_mod_components.py:1725
 #, python-brace-format
 msgid "(updated the component code — {n} lines)"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1719
+#: src/network/titan_net_mod_components.py:1727
 msgid "Generated. Refine further, or Open in Editor to review and save."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1721
+#: src/network/titan_net_mod_components.py:1729
 msgid "Refine (what should change?):"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1743
+#: src/network/titan_net_mod_components.py:1751
 msgid "Edit Component"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1743
-#: src/network/titan_net_mod_components.py:2183
+#: src/network/titan_net_mod_components.py:1751
+#: src/network/titan_net_mod_components.py:2191
 msgid "New Component"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1757
+#: src/network/titan_net_mod_components.py:1765
 msgid "File name (.py):"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1763
-#: src/network/titan_net_mod_components.py:2192
+#: src/network/titan_net_mod_components.py:1771
+#: src/network/titan_net_mod_components.py:2200
 msgid "Documentation"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1784
+#: src/network/titan_net_mod_components.py:1792
 msgid "Save"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1801
+#: src/network/titan_net_mod_components.py:1809
 msgid "File name is required"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1806
+#: src/network/titan_net_mod_components.py:1814
 msgid "File name cannot start with an underscore"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1814
+#: src/network/titan_net_mod_components.py:1822
 #, python-brace-format
 msgid "Syntax error on line {line}: {msg}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1821
+#: src/network/titan_net_mod_components.py:1829
 #, python-brace-format
 msgid "Could not save: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1832
+#: src/network/titan_net_mod_components.py:1840
 msgid "Moderate Network Components"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1850
+#: src/network/titan_net_mod_components.py:1858
 msgid "Status"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1855
+#: src/network/titan_net_mod_components.py:1863
 msgid "View Code"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1856
-#: src/network/titan_net_mod_components.py:1957
-#: src/network/titan_net_mod_components.py:1973
+#: src/network/titan_net_mod_components.py:1864
+#: src/network/titan_net_mod_components.py:1965
+#: src/network/titan_net_mod_components.py:1981
 msgid "Run (preview)"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1868
-#: src/network/titan_net_mod_components.py:2074
+#: src/network/titan_net_mod_components.py:1876
+#: src/network/titan_net_mod_components.py:2082
 msgid "Disable"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1869
-#: src/network/titan_net_mod_components.py:2089
+#: src/network/titan_net_mod_components.py:1877
+#: src/network/titan_net_mod_components.py:2097
 msgid "Enable"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1890
+#: src/network/titan_net_mod_components.py:1904
 msgid "Active"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1891
+#: src/network/titan_net_mod_components.py:1905
 msgid "Disabled"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1892
+#: src/network/titan_net_mod_components.py:1906
 msgid "Rejected"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1909
+#: src/network/titan_net_mod_components.py:1917
 msgid "No components to moderate."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1911
+#: src/network/titan_net_mod_components.py:1919
 msgid "Approve pending components, or disable/delete active ones."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1956
+#: src/network/titan_net_mod_components.py:1964
 msgid "This extension has no runnable component."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1972
+#: src/network/titan_net_mod_components.py:1980
 msgid "Choose what to run (as it would appear in the menu):"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:1982
+#: src/network/titan_net_mod_components.py:1990
 #, python-brace-format
 msgid "Preview failed: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2002
+#: src/network/titan_net_mod_components.py:2010
 #, python-brace-format
 msgid "Folder extension. Entry: {entry}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2005
+#: src/network/titan_net_mod_components.py:2013
 #, python-brace-format
 msgid "Files: {files}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2016
+#: src/network/titan_net_mod_components.py:2024
 msgid "(binary file, not shown)"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2020
+#: src/network/titan_net_mod_components.py:2028
 #, python-brace-format
 msgid "Could not read bundle: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2031
+#: src/network/titan_net_mod_components.py:2039
 msgid "Extension Code"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2073
+#: src/network/titan_net_mod_components.py:2081
 msgid "Only active components can be disabled."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2088
+#: src/network/titan_net_mod_components.py:2096
 msgid "Only disabled components can be enabled."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2103
+#: src/network/titan_net_mod_components.py:2111
 #, python-brace-format
 msgid ""
 "Permanently delete '{name}'? This removes it from Titan-Net for everyone "
 "and cannot be undone."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2105
+#: src/network/titan_net_mod_components.py:2113
 msgid "Delete Component"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2118
-#: src/network/titan_net_mod_components.py:2155
+#: src/network/titan_net_mod_components.py:2126
+#: src/network/titan_net_mod_components.py:2163
 msgid "Titan-Net Moderator Components"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2161
+#: src/network/titan_net_mod_components.py:2169
 msgid ""
 "Program your own moderator tools. Components live in your user data "
 "folder."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2166
+#: src/network/titan_net_mod_components.py:2174
 msgid "Enabled"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2177
+#: src/network/titan_net_mod_components.py:2185
 msgid "Enable/Disable"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2180
-#: src/network/titan_net_mod_components.py:2294
+#: src/network/titan_net_mod_components.py:2188
+#: src/network/titan_net_mod_components.py:2302
 msgid "Test Locally"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2186
+#: src/network/titan_net_mod_components.py:2194
 msgid "Create with AI"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2189
+#: src/network/titan_net_mod_components.py:2197
 msgid "Edit Code"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2195
+#: src/network/titan_net_mod_components.py:2203
 msgid "Reload"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2198
+#: src/network/titan_net_mod_components.py:2206
 msgid "Open Components Folder"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2205
-#: src/network/titan_net_mod_components.py:2409
-#: src/network/titan_net_mod_components.py:2426
+#: src/network/titan_net_mod_components.py:2213
+#: src/network/titan_net_mod_components.py:2417
+#: src/network/titan_net_mod_components.py:2434
 msgid "Submit to Network"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2208
+#: src/network/titan_net_mod_components.py:2216
 msgid "Review Network Extensions"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2214
+#: src/network/titan_net_mod_components.py:2222
 msgid "Component actions:"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2230
+#: src/network/titan_net_mod_components.py:2238
 msgid "Yes"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2230
+#: src/network/titan_net_mod_components.py:2238
 msgid "No"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2235
+#: src/network/titan_net_mod_components.py:2243
 msgid "[local test]"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2235
+#: src/network/titan_net_mod_components.py:2243
 msgid "[server add-on]"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2262
+#: src/network/titan_net_mod_components.py:2270
 #, python-brace-format
 msgid "Component error: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2292
+#: src/network/titan_net_mod_components.py:2300
 msgid "This component is not a server add-on; it already runs locally."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2299
+#: src/network/titan_net_mod_components.py:2307
 #, python-brace-format
 msgid "Local testing turned off for '{name}'."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2302
+#: src/network/titan_net_mod_components.py:2310
 #, python-brace-format
 msgid ""
 "Local testing turned on for '{name}'. It now runs in your client as it "
 "would on the server."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2401
+#: src/network/titan_net_mod_components.py:2409
 #, python-brace-format
 msgid "Could not read component: {error}"
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2407
+#: src/network/titan_net_mod_components.py:2415
 #, python-brace-format
 msgid ""
 "Submit '{name}' to the network? Another moderator/admin must approve it "
 "before it affects all of Titan-Net."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2426
+#: src/network/titan_net_mod_components.py:2434
 msgid "Submitted for approval."
 msgstr ""
 
-#: src/network/titan_net_mod_components.py:2430
+#: src/network/titan_net_mod_components.py:2438
 msgid "Submit failed"
 msgstr ""
 
@@ -4123,7 +4218,7 @@ msgstr ""
 msgid "Change status"
 msgstr ""
 
-#: src/network/feedback_hub.py:487 src/network/feedback_hub.py:1060
+#: src/network/feedback_hub.py:487 src/network/feedback_hub.py:1067
 msgid "Failed to load feedback"
 msgstr ""
 
@@ -4187,96 +4282,298 @@ msgstr ""
 msgid "Failed to change status"
 msgstr ""
 
-#: src/network/feedback_hub.py:642 src/network/feedback_hub.py:1276
+#: src/network/feedback_hub.py:642 src/network/feedback_hub.py:1283
 #, python-brace-format
 msgid "Delete '{title}'? This cannot be undone."
 msgstr ""
 
-#: src/network/feedback_hub.py:643 src/network/feedback_hub.py:1277
+#: src/network/feedback_hub.py:643 src/network/feedback_hub.py:664
+#: src/network/feedback_hub.py:1284 src/network/feedback_hub.py:1301
 msgid "Delete feedback"
 msgstr ""
 
-#: src/network/feedback_hub.py:658 src/network/feedback_hub.py:1291
+#: src/network/feedback_hub.py:662 src/network/feedback_hub.py:1299
 msgid "Failed to delete"
 msgstr ""
 
-#: src/network/feedback_hub.py:661 src/network/feedback_hub.py:1293
+#: src/network/feedback_hub.py:668 src/network/feedback_hub.py:1304
 #, python-brace-format
 msgid "Deleted: {title}"
 msgstr ""
 
-#: src/network/feedback_hub.py:683
+#: src/network/feedback_hub.py:690
 msgid "Failed to load attachment"
 msgstr ""
 
-#: src/network/feedback_hub.py:709
+#: src/network/feedback_hub.py:716
 #, python-brace-format
 msgid "Playing recording: {name}"
 msgstr ""
 
-#: src/network/feedback_hub.py:726
+#: src/network/feedback_hub.py:733
 #, python-brace-format
 msgid "Cannot open attachment: {error}"
 msgstr ""
 
-#: src/network/feedback_hub.py:733
+#: src/network/feedback_hub.py:740
 #, python-brace-format
 msgid "Attachment: {name}"
 msgstr ""
 
-#: src/network/feedback_hub.py:826
+#: src/network/feedback_hub.py:833
 msgid "New feedback"
 msgstr ""
 
-#: src/network/feedback_hub.py:841
+#: src/network/feedback_hub.py:848
 msgid "Feedback and ideas list:"
 msgstr ""
 
-#: src/network/feedback_hub.py:967
+#: src/network/feedback_hub.py:974
 #, python-brace-format
 msgid "{title} upvoted by {user}"
 msgstr ""
 
-#: src/network/feedback_hub.py:969
+#: src/network/feedback_hub.py:976
 #, python-brace-format
 msgid "{title}: upvote removed by {user}"
 msgstr ""
 
-#: src/network/feedback_hub.py:994
+#: src/network/feedback_hub.py:1001
 #, python-brace-format
 msgid "{title}: status changed to {status}"
 msgstr ""
 
-#: src/network/feedback_hub.py:1022
+#: src/network/feedback_hub.py:1029 src/network/remote_ui.py:716
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr ""
 
-#: src/network/feedback_hub.py:1041
+#: src/network/feedback_hub.py:1048
 #, python-brace-format
 msgid "{title} by {author}, {n} upvotes, status: {status}"
 msgstr ""
 
-#: src/network/feedback_hub.py:1043
+#: src/network/feedback_hub.py:1050
 #, python-brace-format
 msgid "{title} by {author}, status: {status}"
 msgstr ""
 
-#: src/network/feedback_hub.py:1092
+#: src/network/feedback_hub.py:1099
 #, python-brace-format
 msgid "{tab}: {n} entries"
 msgstr ""
 
-#: src/network/feedback_hub.py:1322
+#: src/network/feedback_hub.py:1333
 msgid "Failed to send feedback"
 msgstr ""
 
-#: src/network/feedback_hub.py:1347
+#: src/network/feedback_hub.py:1358
 msgid "You must be connected to Titan-Net"
 msgstr ""
 
-#: src/network/feedback_hub.py:1353
+#: src/network/feedback_hub.py:1364
 msgid "Titan-Net: Feedback Hub"
+msgstr ""
+
+#: src/network/remote_ui.py:227
+msgid "This field is required"
+msgstr ""
+
+#: src/network/remote_ui.py:230
+#, python-brace-format
+msgid "Maximum {n} characters"
+msgstr ""
+
+#: src/network/remote_ui.py:233
+msgid "Choose an option"
+msgstr ""
+
+#: src/network/remote_ui.py:255
+msgid "Information"
+msgstr ""
+
+#: src/network/remote_ui.py:300
+msgid "(no options)"
+msgstr ""
+
+#: src/network/remote_ui.py:349
+msgid "Server screen"
+msgstr ""
+
+#: src/network/remote_ui.py:503 src/network/remote_ui.py:1016
+msgid "The server could not complete that"
+msgstr ""
+
+#: src/network/remote_ui.py:598 src/network/remote_ui.py:641
+msgid "Service"
+msgstr ""
+
+#: src/network/remote_ui.py:758
+msgid "This list is empty"
+msgstr ""
+
+#: src/network/remote_ui.py:1107
+msgid "Tab bar"
+msgstr ""
+
+#: src/network/remote_ui.py:1130
+msgid "The server sent a screen this client cannot show"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:41
+#, python-brace-format
+msgid "Play '{name}'"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:51
+msgid "Play to:"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:55
+msgid "Everyone online"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:55
+msgid "One user"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:56
+msgid "Everyone with a role"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:56
+msgid "A chat room"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:65
+msgid "Spoken message (optional):"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:71
+msgid "Play"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:90
+msgid "Nothing else needed"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:92
+msgid "Role (user, moderator, developer, admin):"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:93
+msgid "Room id:"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:109
+msgid "Enter a username"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:115
+msgid "Enter a role"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:123
+msgid "Room id must be a number"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:143
+msgid "Sounds on this server:"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:150
+msgid "Play at..."
+msgstr ""
+
+#: src/network/server_sounds_gui.py:151
+msgid "Preview here"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:152
+msgid "Upload"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:187
+msgid "Could not load sounds"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:194
+#, python-brace-format
+msgid "{name} - {size} KB"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:202
+#, python-brace-format
+msgid "{n} sounds"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:207
+msgid "Select a sound first"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:243
+msgid "Could not play the sound"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:246
+#, python-brace-format
+msgid "Played to {n} listeners"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:264
+msgid "Could not download that sound"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:275
+msgid "Choose a sound file"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:282
+msgid "Name for this sound:"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:283 src/network/server_sounds_gui.py:292
+#: src/network/server_sounds_gui.py:306
+msgid "Upload sound"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:288
+msgid "A name is required"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:291
+msgid "Description (optional):"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:299
+msgid "Uploading..."
+msgstr ""
+
+#: src/network/server_sounds_gui.py:304
+msgid "Upload failed"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:308
+#, python-brace-format
+msgid "Uploaded: {name}"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:317
+#, python-brace-format
+msgid "Delete the sound '{name}'? This cannot be undone."
+msgstr ""
+
+#: src/network/server_sounds_gui.py:318 src/network/server_sounds_gui.py:333
+msgid "Delete sound"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:331
+msgid "Could not delete the sound"
+msgstr ""
+
+#: src/network/server_sounds_gui.py:335
+#, python-brace-format
+msgid "Deleted: {name}"
 msgstr ""
 
 #: src/system/klangomode.py:191 src/system/klangomode.py:232

@@ -1,0 +1,9 @@
+{
+  "kind": "view",
+  "title": "Noticeboard",
+  "description": "An example Titan-Net service. Everything you see here is built on the server; the client only renders it.",
+  "items": [],
+  "status": "Loading...",
+  "empty": "Nothing posted here yet.",
+  "size": [820, 620]
+}

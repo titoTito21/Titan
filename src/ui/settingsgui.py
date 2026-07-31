@@ -1646,8 +1646,36 @@ class SettingsFrame(wx.Frame):
         self.notify_chat_msg_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.notify_chat_msg_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        vbox.AddSpacer(15)
+
+        # Sounds the SERVER plays on this machine (moderator announcements,
+        # component alerts). On by default, but nobody has to accept audio
+        # from a remote server if they would rather not.
+        self.server_sounds_cb = wx.CheckBox(panel, label=_("Allow sounds sent by the server"))
+        self.server_sounds_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.server_sounds_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.server_sounds_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.clear_sound_cache_btn = wx.Button(panel, label=_("Clear downloaded server sounds"))
+        self.clear_sound_cache_btn.Bind(wx.EVT_BUTTON, self.OnClearServerSoundCache)
+        self.clear_sound_cache_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(self.clear_sound_cache_btn, flag=wx.LEFT | wx.TOP, border=10)
+
         panel.SetSizer(vbox)
         panel.Layout()
+
+    def OnClearServerSoundCache(self, event):
+        """Throw away every server sound cached on this machine."""
+        try:
+            from src.network import server_sounds
+            removed = server_sounds.clear_cache()
+        except Exception as e:
+            print(f"[SettingsFrame] Could not clear server sound cache: {e}")
+            return
+        play_sound('ui/switch_category.ogg')
+        _show_skinned_message(
+            _("Removed {n} cached sounds.").format(n=removed),
+            _("Server sounds"), wx.OK | wx.ICON_INFORMATION, self)
 
     def OnBusinessCardToggle(self, event):
         """Enable/disable business card controls."""
@@ -2031,6 +2059,7 @@ class SettingsFrame(wx.Frame):
             self.notify_new_apps_cb.SetValue(tn.get('notify_new_apps', True))
             self.notify_private_msg_cb.SetValue(tn.get('notify_private_messages', True))
             self.notify_chat_msg_cb.SetValue(tn.get('notify_chat_messages', True))
+            self.server_sounds_cb.SetValue(tn.get('server_sounds_enabled', True))
         except Exception as e:
             print(f"[SettingsFrame] Error loading Titan-Net settings: {e}")
 
@@ -2062,6 +2091,7 @@ class SettingsFrame(wx.Frame):
                 'notify_new_apps': self.notify_new_apps_cb.GetValue(),
                 'notify_private_messages': self.notify_private_msg_cb.GetValue(),
                 'notify_chat_messages': self.notify_chat_msg_cb.GetValue(),
+                'server_sounds_enabled': self.server_sounds_cb.GetValue(),
             }
 
             config['titannet_settings'] = tn_settings

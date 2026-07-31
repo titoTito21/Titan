@@ -122,6 +122,42 @@ class ConfirmDialogResultTest(unittest.TestCase):
         self.assertEqual(calls, [], "a declined confirmation still deleted")
 
 
+class StaffRoleTest(unittest.TestCase):
+    """The client offers moderator actions to admins - the server must agree.
+
+    Deleting feedback stayed broken after the dialog fix because
+    ``Database.is_moderator()`` only accepted 'moderator' / 'developer', while
+    the first registered account gets role 'admin'. The client showed Delete,
+    the server answered "Permission denied", and the entry never disappeared.
+    """
+
+    def _models_source(self):
+        path = os.path.join(REPO, 'titan-net server', 'models.py')
+        with open(path, encoding='utf-8', errors='replace') as fh:
+            return fh.read()
+
+    def test_server_is_moderator_accepts_admin(self):
+        source = self._models_source()
+        start = source.index('def is_moderator(self, user_id: int)')
+        body = source[start:source.index('\n    @', start)]
+        self.assertIn("'admin'", body,
+                      "is_moderator() still refuses the admin role")
+        self.assertIn('is_admin', body,
+                      "is_moderator() ignores the legacy is_admin column")
+
+    def test_client_component_gate_accepts_admin(self):
+        from src.network import titan_net_mod_components as mc
+
+        admin = types.SimpleNamespace(is_admin=True, user_role='admin')
+        moderator = types.SimpleNamespace(is_admin=False, user_role='moderator')
+        plain = types.SimpleNamespace(is_admin=False, user_role='user')
+
+        self.assertTrue(mc._user_is_moderator(admin))
+        self.assertTrue(mc._user_is_moderator(moderator))
+        self.assertFalse(mc._user_is_moderator(plain))
+        self.assertFalse(mc._user_is_moderator(None))
+
+
 # ---------------------------------------------------------------------------
 # 2 + 3. Telegram voice calls
 # ---------------------------------------------------------------------------

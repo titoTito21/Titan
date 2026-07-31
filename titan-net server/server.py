@@ -16,6 +16,7 @@ from typing import Dict, Set, Optional, List, Any
 import secrets
 import hashlib
 from models import Database
+import remote_ui
 from cerberus import CerberusProtocol, THREAT_NAMES
 from dangerous_cerberus import DangerousCerberus
 from hackback import HackBackProtocol, identify_cloud_provider
@@ -149,6 +150,22 @@ class TitanNetServer:
         # Maps session_id -> GeminiGameWorker. Cleanup runs in
         # _cleanup_game_sessions / _cleanup_game_sessions_by_id.
         self._game_session_workers: Dict[int, Any] = {}
+
+        # Remote UI: per-session open screens, so a submit can only act on a
+        # screen the client actually opened (and the definition the server
+        # handed out, not one the client made up).
+        self._open_screens: Dict[str, Dict[str, Any]] = {}
+
+        # Server sounds: per-user timestamps for rate limiting. A component
+        # bug (or a bored moderator) must not be able to machine-gun audio at
+        # somebody using a screen reader.
+        self._sound_pushes: Dict[int, List[float]] = {}
+
+        # Load any server-side Remote UI handlers a component installed.
+        try:
+            self._load_remote_ui_handlers()
+        except Exception as e:
+            logger.error(f"[REMOTE-UI] could not initialise: {e}", exc_info=True)
 
         # --- Dangerous Cerberus Protocol (Enhanced Intrusion Detection) ---
         self.cerberus = DangerousCerberus(log_dir='logs', db_dir='database')
@@ -413,6 +430,8 @@ class TitanNetServer:
                     logger.error(f"unregister_client: update_user_status failed: {e}")
 
             del self.clients[session_id]
+            # Drop any Remote UI screens this session had open.
+            self._open_screens.pop(session_id, None)
             logger.info(f"Client unregistered: {username} (Session: {session_id}){' (other sessions still active)' if other_sessions else ''}")
 
             # Only broadcast offline if no other sessions remain
@@ -2281,6 +2300,361 @@ class TitanNetServer:
         return {"type": "delete_feedback_response", **result}
 
     # ================================================================
+    # REMOTE UI - screens the server defines, clients render
+    # ================================================================
+    # Nothing executable crosses the wire: the client receives a JSON
+    # description of a dialog and renders it with its own generic widgets.
+    # That is the whole point - a component author adds a screen on the
+    # server and every existing Titan install can open it, with no update.
+    REMOTE_UI_HANDLER_DIR = 'remote_ui_handlers'
+    # How deep a service may drill before the oldest screens are forgotten.
+    REMOTE_UI_MAX_DEPTH = 24
+    # Reserved action id: the client popped its own back stack, pop ours too.
+    REMOTE_UI_BACK_ACTION = '__back__'
+
+    def _load_remote_ui_handlers(self):
+        """Import every ``remote_ui_handlers/*.py`` so components can register
+        their own screen handlers without editing this file."""
+        import importlib.util
+        directory = self.REMOTE_UI_HANDLER_DIR
+        if not os.path.isdir(directory):
+            return
+        for name in sorted(os.listdir(directory)):
+            if not name.endswith('.py') or name.startswith('_'):
+                continue
+            path = os.path.join(directory, name)
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    f"remote_ui_handlers.{name[:-3]}", path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                logger.info(f"[REMOTE-UI] loaded handler module {name}")
+            except Exception as e:
+                logger.error(f"[REMOTE-UI] handler module {name} failed: {e}",
+                             exc_info=True)
+
+    async def handle_list_remote_screens(self, session_id: str, data: Dict) -> Dict:
+        """Screens this user may open - the client builds a menu from them."""
+        if session_id not in self.clients:
+            return {"type": "list_remote_screens_response", "success": False,
+                    "error": "Not authenticated"}
+        user_id = self.clients[session_id]['user_id']
+        loop = asyncio.get_event_loop()
+        try:
+            screens = await loop.run_in_executor(
+                None, self.db.list_remote_screens, user_id, False)
+        except Exception as e:
+            logger.error(f"[REMOTE-UI] list failed: {e}", exc_info=True)
+            return {"type": "list_remote_screens_response", "success": False,
+                    "error": "Database error"}
+        return {"type": "list_remote_screens_response", "success": True,
+                "screens": screens, "schema": remote_ui.SCHEMA_VERSION}
+
+    async def _build_screen(self, session_id: str, slug: str, action: str,
+                            values: Dict, validate: bool = True) -> Dict:
+        """Shared open/action path: load, gate, run the handler, return result."""
+        client = self.clients[session_id]
+        user_id = client['user_id']
+        loop = asyncio.get_event_loop()
+
+        row = await loop.run_in_executor(None, self.db.get_remote_screen, slug)
+        if not row or not row.get('active'):
+            return {"success": False, "error": "Screen not found"}
+
+        user = await loop.run_in_executor(None, self.db.get_user_by_id, user_id)
+        if not user:
+            return {"success": False, "error": "Not authenticated"}
+        if not self.db._remote_screen_visible(row, user.get('role') or 'user',
+                                              bool(user.get('is_admin'))):
+            return {"success": False, "error": "Permission denied"}
+
+        ok, why, definition = remote_ui.validate_definition(row['definition'])
+        if not ok:
+            logger.error(f"[REMOTE-UI] stored screen '{slug}' is invalid: {why}")
+            return {"success": False, "error": "This screen is misconfigured"}
+
+        # On a submit the SERVER's copy of the definition decides what the
+        # fields are - a client cannot invent extra ones or widen a range.
+        stack = self._open_screens.setdefault(session_id, {}).setdefault(slug, [])
+        if action != 'open':
+            if stack:
+                definition = stack[-1]
+            # ``validate`` is True only for an explicit submit. Firing a row,
+            # switching a tab or pressing Refresh still gets typed values,
+            # but a half-filled form must not block navigating a service.
+            values, errors = remote_ui.coerce_values(definition, values,
+                                                     strict=validate)
+            if errors:
+                return {"success": True, "result": remote_ui.error(errors)}
+        else:
+            values = {}
+            # Opening a service starts a fresh navigation stack.
+            stack.clear()
+
+        ctx = remote_ui.ScreenContext(self, self.db, user, row, definition,
+                                      action, values)
+        try:
+            result = await remote_ui.run_handler(row.get('handler') or 'store', ctx)
+        except Exception as e:
+            logger.error(f"[REMOTE-UI] handler '{row.get('handler')}' for "
+                         f"'{slug}' crashed: {e}", exc_info=True)
+            return {"success": False, "error": "The server could not complete that"}
+
+        # Track what the user is now looking at, as a stack, so a service can
+        # drill down and come back. The server keeps its own copy because it
+        # is what validates the next action - the client's copy is only for
+        # drawing.
+        shown = result.get('screen')
+        if isinstance(shown, dict):
+            stack.append(shown)
+            # Bound it: a service that loops would otherwise grow forever.
+            del stack[:-self.REMOTE_UI_MAX_DEPTH]
+        elif result.get('back'):
+            if len(stack) > 1:
+                stack.pop()
+            # Hand the client the screen it is returning to, so both sides
+            # agree on what is on screen even after a reconnect.
+            if stack:
+                result = dict(result)
+                result['screen'] = stack[-1]
+                result['restored'] = True
+        elif result.get('refresh'):
+            # Update the top of the stack in place, keeping the user's
+            # position in the list instead of redrawing from scratch.
+            if stack:
+                if isinstance(result.get('items'), list):
+                    stack[-1]['items'] = result['items']
+                if result.get('status') is not None:
+                    stack[-1]['status'] = result['status']
+        elif result.get('close'):
+            self._open_screens.get(session_id, {}).pop(slug, None)
+
+        return {"success": True, "result": result, "slug": slug,
+                "version": row.get('version', 1)}
+
+    async def handle_open_remote_screen(self, session_id: str, data: Dict) -> Dict:
+        if session_id not in self.clients:
+            return {"type": "open_remote_screen_response", "success": False,
+                    "error": "Not authenticated"}
+        slug = str(data.get('slug') or '').strip().lower()
+        if not slug:
+            return {"type": "open_remote_screen_response", "success": False,
+                    "error": "No screen requested"}
+        result = await self._build_screen(session_id, slug, 'open', {})
+        return {"type": "open_remote_screen_response", **result}
+
+    async def handle_remote_screen_action(self, session_id: str, data: Dict) -> Dict:
+        if session_id not in self.clients:
+            return {"type": "remote_screen_action_response", "success": False,
+                    "error": "Not authenticated"}
+        slug = str(data.get('slug') or '').strip().lower()
+        action = str(data.get('action') or '').strip()[:64]
+        if not slug or not action or action == 'open':
+            return {"type": "remote_screen_action_response", "success": False,
+                    "error": "Invalid action"}
+        # Escape in a service view is local navigation - the client already
+        # popped its own stack and is just keeping ours in step. No handler
+        # runs, so going back stays instant even on a slow link.
+        if action == self.REMOTE_UI_BACK_ACTION:
+            stack = self._open_screens.get(session_id, {}).get(slug)
+            if stack and len(stack) > 1:
+                stack.pop()
+            return {"type": "remote_screen_action_response", "success": True,
+                    "result": {}, "slug": slug}
+
+        values = data.get('values') if isinstance(data.get('values'), dict) else {}
+        # 'submit' buttons carry the form; 'action' buttons do not, and must
+        # not be judged against required fields.
+        validate = str(data.get('kind') or 'submit').lower() == 'submit'
+        result = await self._build_screen(session_id, slug, action, values, validate)
+        username = self.clients[session_id]['username']
+        logger.info(f"[REMOTE-UI] {username} -> {slug}.{action}")
+        return {"type": "remote_screen_action_response", **result}
+
+    async def push_remote_screen(self, target: Dict, slug: str) -> int:
+        """Open a server screen on somebody's client without being asked.
+
+        ``target`` is ``{'type': 'user'|'role'|'room'|'all', ...}``. Returns
+        how many sessions the screen was pushed to. Used for things like an
+        acknowledgement dialog a moderator needs to see right now.
+        """
+        loop = asyncio.get_event_loop()
+        row = await loop.run_in_executor(None, self.db.get_remote_screen, slug)
+        if not row or not row.get('active'):
+            logger.warning(f"[REMOTE-UI] cannot push unknown screen '{slug}'")
+            return 0
+        sessions = self._sessions_for_target(target)
+        sent = 0
+        for session_id in sessions:
+            built = await self._build_screen(session_id, slug, 'open', {})
+            screen = (built.get('result') or {}).get('screen')
+            if not built.get('success') or not screen:
+                continue
+            try:
+                await self.clients[session_id]['websocket'].send(json.dumps({
+                    "type": "remote_screen_push",
+                    "slug": slug,
+                    "screen": screen,
+                    "timestamp": datetime.now().isoformat(),
+                }))
+                sent += 1
+            except Exception:
+                continue
+        return sent
+
+    # ================================================================
+    # SERVER SOUNDS
+    # ================================================================
+    # Staff upload sounds once; the server can then play any of them at a
+    # single user, a role, a room, or everyone. Clients cache by sha256, so
+    # a sound travels over the wire once per machine no matter how often it
+    # is played.
+    SOUND_PUSH_LIMIT = 6          # pushes ...
+    SOUND_PUSH_WINDOW = 10.0      # ... per this many seconds, per recipient
+
+    def _sessions_for_target(self, target: Optional[Dict]) -> List[str]:
+        """Resolve a target spec to the session ids it covers."""
+        target = target or {'type': 'all'}
+        kind = str(target.get('type') or 'all').lower()
+
+        if kind == 'all':
+            return list(self.clients.keys())
+
+        if kind == 'user':
+            user_id = target.get('user_id')
+            username = (target.get('username') or '').lower()
+            return [sid for sid, c in self.clients.items()
+                    if (user_id and c['user_id'] == user_id)
+                    or (username and (c['username'] or '').lower() == username)]
+
+        if kind == 'users':
+            ids = set(target.get('user_ids') or [])
+            names = {str(n).lower() for n in (target.get('usernames') or [])}
+            return [sid for sid, c in self.clients.items()
+                    if c['user_id'] in ids or (c['username'] or '').lower() in names]
+
+        if kind == 'role':
+            wanted = str(target.get('role') or '').lower()
+            out = []
+            for sid, c in self.clients.items():
+                try:
+                    user = self.db.get_user_by_id(c['user_id']) or {}
+                except Exception:
+                    continue
+                role = (user.get('role') or 'user').lower()
+                if role == wanted or (wanted == 'moderator' and self.db.is_moderator(c['user_id'])):
+                    out.append(sid)
+            return out
+
+        if kind == 'room':
+            room_id = target.get('room_id')
+            members = self._room_websockets.get(room_id, {})
+            return [sid for sid, c in self.clients.items() if c['user_id'] in members]
+
+        logger.warning(f"[SOUNDS] unknown target type '{kind}'")
+        return []
+
+    def _sound_rate_ok(self, user_id: int) -> bool:
+        """True while this user is under the push limit (sliding window)."""
+        now = time.time()
+        recent = [t for t in self._sound_pushes.get(user_id, [])
+                  if now - t < self.SOUND_PUSH_WINDOW]
+        if len(recent) >= self.SOUND_PUSH_LIMIT:
+            self._sound_pushes[user_id] = recent
+            return False
+        recent.append(now)
+        self._sound_pushes[user_id] = recent
+        return True
+
+    async def push_server_sound(self, name: str, target: Optional[Dict] = None,
+                                volume: float = 1.0, loop_sound: bool = False,
+                                announce: Optional[str] = None) -> int:
+        """Play a registered server sound at whoever ``target`` selects.
+
+        The message carries the sha256, so a client that already has the file
+        cached plays it instantly and never downloads it again.
+        """
+        loop = asyncio.get_event_loop()
+        sound = await loop.run_in_executor(None, self.db.get_server_sound, name)
+        if not sound:
+            logger.warning(f"[SOUNDS] no server sound named '{name}'")
+            return 0
+
+        payload = {
+            "type": "play_server_sound",
+            "name": sound['name'],
+            "sha256": sound['sha256'],
+            "size": sound['size'],
+            "mime": sound.get('mime'),
+            "volume": max(0.0, min(1.0, float(volume))),
+            "loop": bool(loop_sound),
+            "timestamp": datetime.now().isoformat(),
+        }
+        if announce:
+            payload['announce'] = str(announce)
+
+        sent = 0
+        for session_id in self._sessions_for_target(target):
+            client = self.clients.get(session_id)
+            if not client:
+                continue
+            if not self._sound_rate_ok(client['user_id']):
+                logger.info(f"[SOUNDS] rate limit hit for {client['username']}")
+                continue
+            try:
+                await client['websocket'].send(json.dumps(payload))
+                sent += 1
+            except Exception:
+                continue
+        logger.info(f"[SOUNDS] '{name}' played at {sent} session(s)")
+        return sent
+
+    async def handle_list_server_sounds(self, session_id: str, data: Dict) -> Dict:
+        if session_id not in self.clients:
+            return {"type": "list_server_sounds_response", "success": False,
+                    "error": "Not authenticated"}
+        loop = asyncio.get_event_loop()
+        try:
+            sounds = await loop.run_in_executor(None, self.db.list_server_sounds)
+        except Exception as e:
+            logger.error(f"[SOUNDS] list failed: {e}", exc_info=True)
+            return {"type": "list_server_sounds_response", "success": False,
+                    "error": "Database error"}
+        return {"type": "list_server_sounds_response", "success": True,
+                "sounds": sounds}
+
+    async def handle_play_server_sound(self, session_id: str, data: Dict) -> Dict:
+        """Staff asks the server to play a sound at somebody."""
+        if session_id not in self.clients:
+            return {"type": "play_server_sound_response", "success": False,
+                    "error": "Not authenticated"}
+        client = self.clients[session_id]
+        loop = asyncio.get_event_loop()
+        is_staff = await loop.run_in_executor(None, self.db.is_moderator,
+                                              client['user_id'])
+        if not is_staff:
+            return {"type": "play_server_sound_response", "success": False,
+                    "error": "Permission denied"}
+
+        name = str(data.get('name') or '').strip().lower()
+        target = data.get('target') if isinstance(data.get('target'), dict) else {'type': 'all'}
+        try:
+            volume = float(data.get('volume', 1.0))
+        except Exception:
+            volume = 1.0
+
+        sent = await self.push_server_sound(name, target, volume,
+                                            bool(data.get('loop')),
+                                            data.get('announce'))
+        if not sent:
+            return {"type": "play_server_sound_response", "success": False,
+                    "error": "Nobody heard it - unknown sound or nobody online"}
+        logger.info(f"[SOUNDS] {client['username']} played '{name}' at "
+                    f"{target.get('type')} ({sent} session(s))")
+        return {"type": "play_server_sound_response", "success": True,
+                "played_to": sent}
+
+    # ================================================================
     # INTERACTIVE GAMES (Entertainment tab)
     # ================================================================
     # Game definitions (catalog) live in interactive_games. API keys are
@@ -3640,6 +4014,28 @@ class TitanNetServer:
 
                         elif msg_type == 'delete_feedback':
                             response = await self.handle_delete_feedback(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        # --- Remote UI (server-defined screens) ---
+                        elif msg_type == 'list_remote_screens':
+                            response = await self.handle_list_remote_screens(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'open_remote_screen':
+                            response = await self.handle_open_remote_screen(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'remote_screen_action':
+                            response = await self.handle_remote_screen_action(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        # --- Server sounds ---
+                        elif msg_type == 'list_server_sounds':
+                            response = await self.handle_list_server_sounds(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'play_server_sound':
+                            response = await self.handle_play_server_sound(session_id, data)
                             await websocket.send(json.dumps(response))
 
                         # --- Interactive Games (Entertainment tab) ---
