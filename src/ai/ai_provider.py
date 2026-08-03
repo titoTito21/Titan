@@ -19,6 +19,7 @@ Legacy plaintext keys from the moderator-component creator
 (``titannet_component_ai_key_<provider>``) are still read for back-compat.
 """
 
+import base64
 import os
 import re
 import shutil
@@ -42,6 +43,12 @@ METHODS = (
     ('claude_cli', 'Claude CLI'),
     ('codex', 'Codex CLI'),
 )
+
+# The provider the voice assistant is built on. Everything that needs the
+# assistant's own configuration (its key, its models) reads this rather than
+# repeating the literal, so the assistant and AI OCR can never end up pointed
+# at different accounts.
+ASSISTANT_PROVIDER = 'gemini'
 
 # Fallback model per provider, used only when the newest model cannot be
 # resolved from the provider (offline, old SDK, etc.).
@@ -212,6 +219,133 @@ def resolve_assistant_tts():
     if main in with_key:
         return main
     return with_key[0] if with_key else 'titan'
+
+
+# --------------------------------------------------------------------------- #
+# AI OCR (the accessible mimic of an inaccessible app - src/ai/ocr/)
+# --------------------------------------------------------------------------- #
+def get_ocr_enabled():
+    """Master switch for AI OCR. Off by default: it sends pictures of the
+    screen to the model, which is a decision the user has to make knowingly."""
+    val = get_setting('ocr_enabled', False, section=_SETTINGS_SECTION)
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off', '')
+
+
+def set_ocr_enabled(enabled):
+    set_setting('ocr_enabled', bool(enabled), section=_SETTINGS_SECTION)
+
+
+def get_ocr_hotkey():
+    """Global AI OCR shortcut (normalized 'ctrl+alt+o' form). '' = unset."""
+    return get_setting('ocr_hotkey', '', section=_SETTINGS_SECTION) or ''
+
+
+def set_ocr_hotkey(hotkey):
+    set_setting('ocr_hotkey', hotkey or '', section=_SETTINGS_SECTION)
+
+
+def get_ocr_titan_hotkey():
+    """AI OCR shortcut active only while the Titan UI is on. '' = unset."""
+    return get_setting('ocr_titan_hotkey', '', section=_SETTINGS_SECTION) or ''
+
+
+def set_ocr_titan_hotkey(hotkey):
+    set_setting('ocr_titan_hotkey', hotkey or '', section=_SETTINGS_SECTION)
+
+
+OCR_SCOPES = (
+    ('window', 'The window in front (recommended)'),
+    ('screen', 'The whole screen'),
+)
+
+
+def get_ocr_scope():
+    """What a scan looks at: the foreground window (default) or the screen."""
+    val = get_setting('ocr_scope', 'window', section=_SETTINGS_SECTION)
+    return val if val in dict(OCR_SCOPES) else 'window'
+
+
+def set_ocr_scope(scope):
+    set_setting('ocr_scope', scope if scope in dict(OCR_SCOPES) else 'window',
+                section=_SETTINGS_SECTION)
+
+
+OCR_VIEWS = (
+    ('overlay', 'On the real window itself, control by control (recommended)'),
+    ('list', 'In a Titan window, as a list to read'),
+)
+
+
+def get_ocr_open_as():
+    """What the AI OCR shortcut opens: the overlay, or the reading list.
+
+    The overlay by default. It is what the feature is for - the program the
+    user is already in gains an accessible surface where its own controls are,
+    and no window of Titan's appears at all. The list is still one keystroke
+    away (Escape) and is the better shape for a wall of text, for a window that
+    is not on screen, and for anything the overlay could not place.
+    """
+    value = get_setting('ocr_open_as', 'overlay', section=_SETTINGS_SECTION)
+    return value if value in dict(OCR_VIEWS) else 'overlay'
+
+
+def set_ocr_open_as(view):
+    set_setting('ocr_open_as', view if view in dict(OCR_VIEWS) else 'overlay',
+                section=_SETTINGS_SECTION)
+
+
+def get_ocr_live_seconds():
+    """Seconds between automatic re-scans in the mimic's live mode; 0 = off.
+
+    Live mode only spends a request when the picture actually changed, but the
+    interval is still the ceiling on how much a forgotten window can cost.
+    """
+    try:
+        value = int(get_setting('ocr_live_seconds', 0, section=_SETTINGS_SECTION))
+    except (TypeError, ValueError):
+        value = 0
+    if value <= 0:
+        return 0
+    return max(3, min(600, value))
+
+
+def set_ocr_live_seconds(seconds):
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = 0
+    set_setting('ocr_live_seconds', max(0, min(600, seconds)),
+                section=_SETTINGS_SECTION)
+
+
+def get_ocr_can_act():
+    """Whether Enter in the mimic may really click/type in the target app.
+
+    On by default - a mimic you cannot press anything in is only half the
+    feature - but it is the one thing here that touches another program, so it
+    is switchable.
+    """
+    val = get_setting('ocr_can_act', True, section=_SETTINGS_SECTION)
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def set_ocr_can_act(enabled):
+    set_setting('ocr_can_act', bool(enabled), section=_SETTINGS_SECTION)
+
+
+def get_ocr_use_uia():
+    """Merge UI Automation geometry into the model's reading (default on).
+
+    Where a control really is on screen is something Windows can answer
+    exactly; asking a vision model to guess pixel rectangles is the weakest
+    part of the pipeline. When both agree on a control, Windows wins.
+    """
+    val = get_setting('ocr_use_uia', True, section=_SETTINGS_SECTION)
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def set_ocr_use_uia(enabled):
+    set_setting('ocr_use_uia', bool(enabled), section=_SETTINGS_SECTION)
 
 
 # --------------------------------------------------------------------------- #
@@ -448,6 +582,124 @@ def generate(system, conversation, method=None, provider=None, model=None,
         raise RuntimeError(f"Unsupported provider: {provider}")
 
     return _strip_fences(''.join(parts))
+
+
+# Providers whose API can be shown a picture. All three current ones can; a
+# provider that could not would simply be left out here.
+VISION_PROVIDERS = ('gemini', 'anthropic', 'openai')
+
+
+def resolve_vision_provider():
+    """Which provider AI OCR should use - resolved exactly as the assistant is.
+
+    The voice assistant never asks the user to configure it twice: it ignores
+    the "communication method" radio (which is about the *creation kit*, and
+    where a CLI cannot carry a picture anyway) and goes straight to the API key
+    it needs. AI OCR does the same, so a user whose assistant already works has
+    nothing further to set up.
+
+    Order: the assistant's own provider, then the main configured provider,
+    then any provider that has a key at all. '' when none has one.
+    """
+    if get_ai_key(ASSISTANT_PROVIDER):
+        return ASSISTANT_PROVIDER
+    main = get_ai_provider()
+    if main in VISION_PROVIDERS and get_ai_key(main):
+        return main
+    for provider in VISION_PROVIDERS:
+        if get_ai_key(provider):
+            return provider
+    return ''
+
+
+def generate_vision(system, prompt, images, provider=None, model=None,
+                    max_tokens=8000, temperature=0.0):
+    """One-shot VISION call: send ``images`` plus ``prompt``, get text back.
+
+    ``images`` is a list of raw PNG ``bytes``. Unlike :func:`generate` this does
+    not stream, and the provider defaults to :func:`resolve_vision_provider` -
+    the assistant's configuration - rather than to the creation kit's method
+    radio, which has nothing to say about looking at a picture.
+
+    Kept here rather than in the caller because the three SDKs disagree about
+    everything: the block shape, the field names and how the system prompt is
+    passed. ``temperature`` defaults to 0 - reading a screen is a transcription
+    task, and creativity in it is called hallucination.
+    """
+    provider = provider or resolve_vision_provider() or get_ai_provider()
+    api_key = get_ai_key(provider)
+    if not api_key:
+        raise RuntimeError(f"No API key configured for provider '{provider}'")
+    if not model:
+        model = (get_setting(provider + '_model', '',
+                             section=_SETTINGS_SECTION) or '').strip() or None
+    if not model:
+        model = resolve_latest_model(provider, api_key)
+
+    pngs = [png for png in (images or []) if png]
+    if not pngs:
+        raise RuntimeError("No image to look at")
+
+    if provider == 'anthropic':
+        anthropic = _import_sdk('anthropic')
+        client = anthropic.Anthropic(api_key=api_key)
+        blocks = [{'type': 'image',
+                   'source': {'type': 'base64', 'media_type': 'image/png',
+                              'data': base64.b64encode(png).decode('ascii')}}
+                  for png in pngs]
+        blocks.append({'type': 'text', 'text': prompt})
+        resp = client.messages.create(
+            model=model, system=system, max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{'role': 'user', 'content': blocks}])
+        return _strip_fences(''.join(getattr(b, 'text', '') for b in resp.content
+                                     if getattr(b, 'type', '') == 'text'))
+
+    if provider == 'openai':
+        openai = _import_sdk('openai')
+        client = openai.OpenAI(api_key=api_key)
+        content = [{'type': 'text', 'text': prompt}]
+        for png in pngs:
+            b64 = base64.b64encode(png).decode('ascii')
+            content.append({'type': 'image_url',
+                            'image_url': {'url': 'data:image/png;base64,' + b64,
+                                          'detail': 'high'}})
+        resp = client.chat.completions.create(
+            model=model, max_tokens=max_tokens, temperature=temperature,
+            messages=[{'role': 'system', 'content': system},
+                      {'role': 'user', 'content': content}])
+        return _strip_fences(resp.choices[0].message.content or '')
+
+    if provider == 'gemini':
+        genai = _import_sdk('gemini')
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        parts = [types.Part(inline_data=types.Blob(mime_type='image/png', data=png))
+                 for png in pngs]
+        parts.append(types.Part(text=prompt))
+        resp = client.models.generate_content(
+            model=model, contents=[types.Content(role='user', parts=parts)],
+            config=types.GenerateContentConfig(system_instruction=system,
+                                               temperature=temperature,
+                                               max_output_tokens=max_tokens))
+        return _strip_fences(getattr(resp, 'text', '') or '')
+
+    raise RuntimeError(f"Unsupported provider: {provider}")
+
+
+def vision_unavailable_reason():
+    """Why a vision call cannot run right now, or '' when it can.
+
+    Returns an untranslated English sentence; the UI wraps it in ``_()``.
+    """
+    if not is_ai_enabled():
+        return "AI features are switched off in Settings, AI features."
+    if not resolve_vision_provider():
+        return ("No API key is configured. AI OCR uses the same key as the AI "
+                "Assistant - add one in Settings, AI features (a "
+                f"{provider_label(ASSISTANT_PROVIDER)} key is what the "
+                "assistant uses).")
+    return ''
 
 
 def _flatten_conversation(system, messages):

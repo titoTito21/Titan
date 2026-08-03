@@ -726,6 +726,10 @@ class IMBackend:
     def self_test(self, callback=None) -> None:
         self._call('__self_test', {}, callback)
 
+    def dom_report(self, callback=None) -> None:
+        """What the agent currently sees on the page. Optional per service."""
+        self._call('dom_report', {}, callback)
+
     def show_page(self) -> None:
         if self.bridge is not None:
             self.bridge.show_page()

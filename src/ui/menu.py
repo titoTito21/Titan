@@ -93,6 +93,18 @@ class MenuBar(wx.MenuBar):
                 wx.ID_ANY, _("AI Assistant (Live mode)..."))
             self.Bind(wx.EVT_MENU,
                       lambda e: self.on_open_ai_assistant('live'), assistant_live_item)
+            # AI OCR - an accessible stand-in for a program that has no
+            # accessibility at all. Its own switch, because a scan sends a
+            # picture of the screen to the provider.
+            try:
+                from src.ai.ai_provider import get_ocr_enabled
+                _ocr_on = get_ocr_enabled()
+            except Exception:
+                _ocr_on = False
+            if _ocr_on:
+                ocr_item = program_menu.Append(
+                    wx.ID_ANY, _("AI OCR (read this screen)..."))
+                self.Bind(wx.EVT_MENU, self.on_open_ai_ocr, ocr_item)
 
         program_menu.AppendSeparator()
 
@@ -215,6 +227,20 @@ class MenuBar(wx.MenuBar):
             traceback.print_exc()
             _show_skinned_message(
                 _("Could not open the AI Agent: {error}").format(error=e),
+                _("Error"), wx.OK | wx.ICON_ERROR)
+
+    def on_open_ai_ocr(self, event):
+        # Deliberately does NOT restore Titan from the tray first: the whole
+        # point is to read the program the user was just in, and putting the
+        # Titan window in front would make that program stop being it.
+        try:
+            from src.ai.ocr.mimic import show_ai_ocr
+            show_ai_ocr(self.parent)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _show_skinned_message(
+                _("Could not open AI OCR: {error}").format(error=e),
                 _("Error"), wx.OK | wx.ICON_ERROR)
 
     def on_open_ai_assistant(self, mode='turn'):

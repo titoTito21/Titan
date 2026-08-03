@@ -654,6 +654,14 @@ class TitanApp(wx.Frame):
             _assistant_hotkeys.register()
         except Exception as e:
             print(f"[gui] assistant hotkey registration failed: {e}")
+        # The AI OCR shortcuts (global and Titan-UI). Registered next to the
+        # assistant's because they are the same kind of thing and share the
+        # same "nothing happens unless it is configured" behaviour.
+        try:
+            from src.ai.ocr import hotkeys as _ocr_hotkeys
+            _ocr_hotkeys.register()
+        except Exception as e:
+            print(f"[gui] AI OCR hotkey registration failed: {e}")
         # Automatic announcements of due tReminder reminders (no-op when the
         # feature is switched off in Settings, AI features).
         try:

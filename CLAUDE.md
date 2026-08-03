@@ -347,6 +347,107 @@ login checkpoint, a captcha, diagnostics).
   `messenger_client.py`, `whatsapp_client.py`, `src/ai/titan_tools.py`) now
   opens the accessible clients instead.
 
+### AI OCR: an accessible mimic of an inaccessible program
+
+Some programs cannot be read at all - a game's custom-drawn menu, an installer
+that paints its own widgets, an app that exposes no accessibility tree. AI OCR
+photographs the window, has the AI **read** it into a structured description,
+and renders that as an ordinary accessible Titan window whose rows press the
+real controls. It lives in `src/ai/ocr/`.
+
+- **The pipeline** (`recognizer.py`): capture -> skip if the picture has not
+  changed -> vision call -> merge with UI Automation -> validate. Step 2 is
+  what makes watching a screen affordable; step 4 is what makes clicking safe.
+- **Coordinates** (`capture.py`): the model is shown a downscaled PNG and
+  answers in *image* pixels, and `Capture` - which alone knows the scale factor
+  and the origin - is the only thing that converts them to screen points. The
+  model is never asked to do arithmetic, and a rectangle that cannot be inside
+  the picture loses its position (the entry stays readable, but unpressable).
+- **The Screen model** (`model.py`): `Screen` -> `Region` -> `Element`, which
+  maps one-to-one onto Titan's tab-bar-and-list interaction. `from_ai` never
+  raises: prose, a bare array, a missing `regions` key and unknown role names
+  all still produce the best Screen that can be salvaged, plus a warning.
+- **The UIA merge** (`uia_snapshot.py`): where Windows *can* answer, its answer
+  is exact, so a control matched by name takes Windows' rectangle and enabled
+  state over the model's guess. On a genuinely inaccessible window this returns
+  nothing and costs nothing.
+- **Acting** (`actions.py`): one click per keypress, only into the window that
+  was read (raised first, ownership re-checked at the point), only when
+  "Let AI OCR press controls" is on; the mouse is put back afterwards. Whole
+  keys (Escape, arrows, Enter) can be sent instead, which needs no coordinates
+  at all.
+- **The overlay** (`overlay.py`, Ctrl+O in the mimic; what the AI OCR shortcut
+  opens by default): the reading rendered **onto the real window** instead of
+  into a window of Titan's - every control a real wx control at the exact
+  coordinates of the real one, control over control, window over window (a
+  region read as a dialog gets its own surface over the real dialog, focused
+  first). There is no second window: the surface is `SetParent`-ed into the
+  target's own `HWND` as a `WS_CHILD`, so Windows moves, clips, minimises and
+  closes it with the target, and `AttachThreadInput` is what lets a child of
+  another process take keyboard focus. It falls back to an *owned* window and
+  then to a floating always-on-top one that follows with a timer. Two details
+  carry it: **cloaking** (fully transparent plus `WS_EX_TRANSPARENT` while a
+  picture is taken or a click is sent, so AI OCR never reads its own controls
+  or clicks its own buttons - Ctrl+H does it on demand), and **a measured
+  scale** (a DPI-aware target adopting a DPI-unaware Titan window silently
+  rescales it, so the surface is placed, read back, and everything scaled by
+  the difference). A surface is titled with the **window's own title** and
+  nothing else - the overlay is that window made readable, not a Titan window
+  about it.
+  - **Every control appears as itself**: text and headings as read-only
+    (focusable) text boxes, fields as `wx.TextCtrl`, tick boxes as `wx.CheckBox`
+    (three-state when the reading could not tell), option buttons as real
+    *groups* of `wx.RadioButton` (`controls.py`'s `cluster_radio_runs` +
+    `group_starts` keep a region's options contiguous and give the first
+    `RB_GROUP`, because wx groups by creation order), sliders as `wx.Slider`
+    when the range is known and Less/More buttons when it is not, meters as
+    `wx.Gauge`, combo boxes as a button that opens the real one, and the
+    **menu bar** as a real `wx.Menu` on F10 (plus its titles in place).
+  - **Alt+Tab brings the controls with the window**: the follow timer notices
+    the target coming back to the front, shows the surfaces, puts the focus on
+    the control the user left, and only re-reads if a *locally* compared
+    picture says the screen changed while they were away (never a request just
+    for switching windows).
+  - **The AI OCR shortcut hides and restores the overlay** once one is up
+    (`toggle_hidden`), so the real window can always be used as it is; Escape
+    removes it for good, Ctrl+H puts it out of the way without hiding it.
+  - Keys: Tab/Enter as anywhere, F5 re-read, F6 next surface, F10 menu bar,
+    Ctrl+R read this control, Ctrl+S the summary, Escape back to the list.
+  - Settings -> AI features -> "Where the controls appear" picks this or the
+    list; the shortcut opens this by default.
+- **Two in-window views** (Ctrl+M, and a fresh reading picks one by itself):
+  - the **reading list** (`mimic.py`): `TabbedListFrame` from `im_ui_common`,
+    reused rather than copied so the interaction cannot drift from the rest of
+    Titan. Regions are tabs (plus **Everything** and **Summary**), Enter
+    presses, F5 re-reads, Ctrl+L watches and announces only the *diff*, Ctrl+F
+    asks a free-text question. Best for menus and walls of text.
+  - the **rebuilt controls** (`form_view.py`): the screen re-created out of
+    real wx widgets - `wx.TextCtrl` for a field, `wx.Slider` for a slider,
+    `wx.CheckBox` for a tick box, `wx.Gauge` for a meter, buttons for the rest
+    - reachable with Tab and announced like any Titan dialog. Changing one
+    changes the real control. A screen with editable controls opens here.
+    Rules: a control appears **as itself or not at all** (a slider with no
+    known range becomes Less/More buttons rather than an invented 0-100 scale;
+    a closed combo box becomes a button that opens it and re-reads); nothing is
+    sent until the user commits (Enter or leaving a field, slider release);
+    every change is followed by a re-read so the form shows what the program
+    actually did. Escape goes back to the list before it closes.
+- **Vision calls** go through `ai_provider.generate_vision()` (all three
+  providers, non-streaming, temperature 0), and the provider is resolved by
+  `resolve_vision_provider()` **the same way the voice assistant resolves
+  its own** - the assistant's key first, then the configured provider, then any
+  provider with a key. The "communication method" radio is deliberately ignored
+  (it is about the creation kit, and a CLI cannot carry a picture), so a user
+  whose assistant already works has nothing more to configure.
+  `vision_unavailable_reason()` is what the UI says when nothing is set up.
+- **Switching it on**: Settings -> AI features -> "Enable AI OCR", which also
+  carries the scope, the two shortcuts (global and Titan-UI, registered by
+  `src/ai/ocr/hotkeys.py` exactly like the assistant's), the live interval and
+  the two safety switches. Off by default: a scan sends a picture of the user's
+  screen to their provider. Also in Program -> AI OCR (read this screen).
+- The `titan_talk` gamepad mode does a much simpler Gemini-only flat-list
+  version of the same idea for audio games; this package is the general one.
+
 ### Key Dependencies
 - wxPython for GUI
 - accessible_output3 for screen reader output

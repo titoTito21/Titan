@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  Titan\n"
 "Report-Msgid-Bugs-To: klaldekwypych@gmail.com\n"
-"POT-Creation-Date: 2026-08-03 14:03+0200\n"
+"POT-Creation-Date: 2026-08-03 17:48+0200\n"
 "PO-Revision-Date: 2026-07-21 09:03+0200\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,9 +20,8 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/ai/ai_creation_kit.py:60
-#, fuzzy
 msgid "Creation kit"
-msgstr "Tworzenie {file}"
+msgstr "Zestaw do tworzenia"
 
 #: src/ai/ai_creation_kit.py:77
 msgid "Application"
@@ -175,7 +174,7 @@ msgid "Save..."
 msgstr "Zapisz..."
 
 #: src/ai/ai_agent_gui.py:70 src/ai/ai_creation_kit.py:888
-#: src/ai/assistant/assistant_gui.py:98
+#: src/ai/assistant/assistant_gui.py:98 src/ai/ocr/mimic.py:137
 msgid "Close"
 msgstr "Zamknij"
 
@@ -967,6 +966,470 @@ msgstr "Przypomnienie: {body}"
 msgid "Reminders"
 msgstr "Przypomnienia"
 
+#: src/ai/ocr/mimic.py:53
+msgid "Escape"
+msgstr "Escape"
+
+#: src/ai/ocr/mimic.py:54
+msgid "Enter"
+msgstr "Enter"
+
+#: src/ai/ocr/mimic.py:55
+msgid "Tab"
+msgstr "Tab"
+
+#: src/ai/ocr/mimic.py:56
+msgid "Up arrow"
+msgstr "Strzałka w górę"
+
+#: src/ai/ocr/mimic.py:57
+msgid "Down arrow"
+msgstr "Strzałka w dół"
+
+#: src/ai/ocr/mimic.py:58
+msgid "Left arrow"
+msgstr "Strzałka w lewo"
+
+#: src/ai/ocr/mimic.py:59
+msgid "Right arrow"
+msgstr "Strzałka w prawo"
+
+#: src/ai/ocr/mimic.py:60
+msgid "Space"
+msgstr "Spacja"
+
+#: src/ai/ocr/mimic.py:76
+msgid "What is on the screen:"
+msgstr "Co jest na ekranie:"
+
+#: src/ai/ocr/mimic.py:112
+msgid "Everything"
+msgstr "Wszystko"
+
+#: src/ai/ocr/mimic.py:112
+msgid "Summary"
+msgstr "Podsumowanie"
+
+#: src/ai/ocr/mimic.py:121
+msgid "Read the screen again"
+msgstr "Odczytaj ekran ponownie"
+
+#: src/ai/ocr/mimic.py:125 src/ai/ocr/mimic.py:696 src/ai/ocr/mimic.py:730
+msgid "Ask about this screen"
+msgstr "Zapytaj o ten ekran"
+
+#: src/ai/ocr/form_view.py:47 src/ai/ocr/mimic.py:129 src/ai/ocr/mimic.py:532
+#: src/ai/ocr/mimic.py:543
+msgid "Rebuilt controls"
+msgstr "Odtworzone kontrolki"
+
+#: src/ai/ocr/mimic.py:133
+msgid "Put controls on the real window"
+msgstr "Umieść kontrolki na prawdziwym oknie"
+
+#: src/ai/ocr/mimic.py:146
+msgid "Part of the screen:"
+msgstr "Część ekranu:"
+
+#: src/ai/ocr/mimic.py:150
+msgid "Part of the screen"
+msgstr "Część ekranu"
+
+#: src/ai/ocr/mimic.py:165
+msgid "Read the screen again\tF5"
+msgstr "Odczytaj ekran ponownie\tF5"
+
+#: src/ai/ocr/mimic.py:166
+msgid "Read a different window..."
+msgstr "Odczytaj inne okno..."
+
+#: src/ai/ocr/mimic.py:167
+msgid "Read the whole screen instead\tCtrl+W"
+msgstr "Czytaj zamiast tego cały ekran\tCtrl+W"
+
+#: src/ai/ocr/mimic.py:171
+msgid "Watch this screen and tell me what changes\tCtrl+L"
+msgstr "Obserwuj ten ekran i mów, co się zmienia\tCtrl+L"
+
+#: src/ai/ocr/mimic.py:175
+msgid "Rebuild the controls instead of listing them\tCtrl+M"
+msgstr "Odtwórz kontrolki zamiast je wypisywać\tCtrl+M"
+
+#: src/ai/ocr/mimic.py:178
+msgid "Put the controls on the real window itself\tCtrl+O"
+msgstr "Umieść kontrolki na samym prawdziwym oknie\tCtrl+O"
+
+#: src/ai/ocr/mimic.py:181
+msgid "Ask about this screen...\tCtrl+F"
+msgstr "Zapytaj o ten ekran...\tCtrl+F"
+
+#: src/ai/ocr/mimic.py:182
+msgid "Copy everything\tCtrl+Shift+C"
+msgstr "Kopiuj wszystko\tCtrl+Shift+C"
+
+#: src/ai/ocr/mimic.py:184
+msgid "Close\tEscape"
+msgstr "Zamknij\tEscape"
+
+#: src/ai/ocr/mimic.py:185
+msgid "&Screen"
+msgstr "E&kran"
+
+#: src/ai/ocr/mimic.py:188
+msgid "Press\tEnter"
+msgstr "Naciśnij\tEnter"
+
+#: src/ai/ocr/mimic.py:189
+msgid "Read this entry in full\tCtrl+R"
+msgstr "Przeczytaj całą pozycję\tCtrl+R"
+
+#: src/ai/ocr/mimic.py:191
+msgid "Copy this entry\tCtrl+C"
+msgstr "Kopiuj tę pozycję\tCtrl+C"
+
+#: src/ai/ocr/mimic.py:192
+msgid "&Control"
+msgstr "&Element"
+
+#: src/ai/ocr/mimic.py:197
+msgid "Send &key"
+msgstr "Wyślij &klawisz"
+
+#: src/ai/ocr/mimic.py:207
+#, python-brace-format
+msgid "AI OCR: {window}"
+msgstr "AI OCR: {window}"
+
+#: src/ai/ocr/mimic.py:208
+msgid "AI OCR"
+msgstr "AI OCR"
+
+#: src/ai/ocr/form_view.py:86 src/ai/ocr/mimic.py:217
+msgid "Nothing has been read yet. Press F5 to read the screen."
+msgstr "Nic jeszcze nie odczytano. Naciśnij F5, aby odczytać ekran."
+
+#: src/ai/ocr/mimic.py:223
+#, python-brace-format
+msgid "Kind of screen: {kind}"
+msgstr "Rodzaj ekranu: {kind}"
+
+#: src/ai/ocr/mimic.py:225
+#, python-brace-format
+msgid "Read {n} seconds ago"
+msgstr "Odczytano {n} sekund temu"
+
+#: src/ai/ocr/mimic.py:247
+#, python-brace-format
+msgid "Note: {text}"
+msgstr "Uwaga: {text}"
+
+#: src/ai/ocr/mimic.py:260
+#, python-brace-format
+msgid "{text} (position unknown, cannot be pressed)"
+msgstr "{text} (nieznane położenie, nie można nacisnąć)"
+
+#: src/ai/ocr/mimic.py:265 src/ai/ocr/mimic.py:382
+msgid "Reading the screen..."
+msgstr "Odczytuję ekran..."
+
+#: src/ai/ocr/mimic.py:267
+msgid "Nothing read yet"
+msgstr "Nic jeszcze nie odczytano"
+
+#: src/ai/ocr/mimic.py:268 src/ai/ocr/mimic.py:272 src/ai/ocr/overlay.py:513
+msgid "Screen"
+msgstr "Ekran"
+
+#: src/ai/ocr/mimic.py:271
+#, python-brace-format
+msgid "{title}, {region}: {n} rebuilt controls"
+msgstr "{title}, {region}: {n} odtworzonych kontrolek"
+
+#: src/ai/ocr/mimic.py:275
+#, python-brace-format
+msgid "{title}: {n} entries, {k} can be pressed"
+msgstr "{title}: {n} pozycji, {k} można nacisnąć"
+
+#: src/ai/ocr/mimic.py:296
+#, python-brace-format
+msgid "Could not press it: {error}"
+msgstr "Nie udało się nacisnąć: {error}"
+
+#: src/ai/ocr/mimic.py:307
+msgid "Read this entry in full"
+msgstr "Przeczytaj całą pozycję"
+
+#: src/ai/ocr/mimic.py:308
+msgid "Copy this entry"
+msgstr "Kopiuj tę pozycję"
+
+#: src/ai/ocr/mimic.py:310
+msgid "Press"
+msgstr "Naciśnij"
+
+#: src/ai/ocr/mimic.py:311
+msgid "Right-click it"
+msgstr "Kliknij prawym przyciskiem"
+
+#: src/ai/ocr/mimic.py:369 src/ai/ocr/mimic.py:703
+msgid "Already reading the screen."
+msgstr "Ekran jest już odczytywany."
+
+#: src/ai/ocr/mimic.py:440
+msgid "Nothing readable was found on this screen."
+msgstr "Na tym ekranie nie znaleziono nic do odczytania."
+
+#: src/ai/ocr/mimic.py:453
+#, python-brace-format
+msgid "new: {text}"
+msgstr "nowe: {text}"
+
+#: src/ai/ocr/mimic.py:455
+#, python-brace-format
+msgid "gone: {text}"
+msgstr "zniknęło: {text}"
+
+#: src/ai/ocr/mimic.py:470
+msgid "Reading the whole screen"
+msgstr "Czytam cały ekran"
+
+#: src/ai/ocr/mimic.py:471
+msgid "Reading the window in front"
+msgstr "Czytam okno na pierwszym planie"
+
+#: src/ai/ocr/mimic.py:478
+msgid "Stopped watching this screen."
+msgstr "Zatrzymano obserwowanie tego ekranu."
+
+#: src/ai/ocr/mimic.py:490
+#, python-brace-format
+msgid ""
+"Watching this screen. I will tell you what changes, about every {n} "
+"seconds. A reading only costs a request when the picture actually "
+"changed."
+msgstr ""
+"Obserwuję ten ekran. Będę mówić, co się zmienia, mniej więcej co {n} "
+"sekund. Odczyt zużywa zapytanie tylko wtedy, gdy obraz naprawdę się "
+"zmienił."
+
+#: src/ai/ocr/mimic.py:531
+msgid "Read as a list"
+msgstr "Czytaj jako listę"
+
+#: src/ai/ocr/mimic.py:543
+msgid "Reading list"
+msgstr "Lista do czytania"
+
+#: src/ai/ocr/mimic.py:555
+msgid "(nothing read yet)"
+msgstr "(nic jeszcze nie odczytano)"
+
+#: src/ai/ocr/mimic.py:602 src/ai/ocr/overlay.py:564
+#, python-brace-format
+msgid "Could not do that: {error}"
+msgstr "Nie udało się tego zrobić: {error}"
+
+#: src/ai/ocr/mimic.py:622
+msgid "Nothing has been read yet. Press F5 first."
+msgstr "Nic jeszcze nie zostało odczytane. Najpierw naciśnij F5."
+
+#: src/ai/ocr/mimic.py:626
+msgid "The overlay is already on."
+msgstr "Nakładka jest już włączona."
+
+#: src/ai/ocr/mimic.py:652
+msgid "Back to the reading list."
+msgstr "Powrót do listy odczytu."
+
+#: src/ai/ocr/mimic.py:669
+msgid "No other windows are open."
+msgstr "Nie ma otwartych innych okien."
+
+#: src/ai/ocr/mimic.py:672
+msgid "Which window should I read?"
+msgstr "Które okno mam odczytać?"
+
+#: src/ai/ocr/mimic.py:672
+msgid "Read a different window"
+msgstr "Odczytaj inne okno"
+
+#: src/ai/ocr/mimic.py:695
+msgid "What would you like to know about this screen?"
+msgstr "Czego chcesz się dowiedzieć o tym ekranie?"
+
+#: src/ai/ocr/mimic.py:707
+msgid "Looking..."
+msgstr "Patrzę..."
+
+#: src/ai/ocr/mimic.py:727
+msgid "See the list for what I found."
+msgstr "To, co znalazłem, jest na liście."
+
+#: src/ai/ocr/mimic.py:729
+#, python-brace-format
+msgid ""
+"You asked: {question}\n"
+"\n"
+"{answer}"
+msgstr ""
+"Pytanie: {question}\n"
+"\n"
+"{answer}"
+
+#: src/ai/ocr/mimic.py:769
+msgid "Nothing has been read yet."
+msgstr "Nic jeszcze nie odczytano."
+
+#: src/ai/ocr/mimic.py:779
+msgid "Copied"
+msgstr "Skopiowano"
+
+#: src/ai/ocr/mimic.py:841 src/ai/ocr/mimic.py:893
+msgid "AI features are switched off in Settings, AI features."
+msgstr ""
+"Składniki sztucznej inteligencji są wyłączone w Ustawieniach, Składniki "
+"sztucznej inteligencji."
+
+#: src/ai/ocr/mimic.py:845 src/ai/ocr/mimic.py:897
+msgid "AI OCR is switched off. Turn it on in Settings, AI features."
+msgstr ""
+"AI OCR jest wyłączone. Włącz je w Ustawieniach, Składniki sztucznej "
+"inteligencji."
+
+#: src/ai/ocr/form_view.py:87
+msgid "Nothing in this part of the screen could be rebuilt as a control."
+msgstr "W tej części ekranu nie udało się odtworzyć żadnej kontrolki."
+
+#: src/ai/ocr/form_view.py:104
+#, python-brace-format
+msgid "({hint})"
+msgstr "({hint})"
+
+#: src/ai/ocr/form_view.py:109
+msgid "Field"
+msgstr "Pole"
+
+#: src/ai/ocr/controls.py:125
+#, python-brace-format
+msgid "unlabelled {role}"
+msgstr "nieopisany element typu {role}"
+
+#: src/ai/ocr/controls.py:139 src/ai/ocr/controls.py:446
+msgid "(unnamed)"
+msgstr "(bez nazwy)"
+
+#: src/ai/ocr/controls.py:156
+msgid "Drop-down list"
+msgstr "Lista rozwijana"
+
+#: src/ai/ocr/controls.py:166 src/ai/ocr/controls.py:196
+msgid "Option"
+msgstr "Opcja"
+
+#: src/ai/ocr/controls.py:336
+msgid "Slider"
+msgstr "Suwak"
+
+#: src/ai/ocr/controls.py:338
+msgid "Less"
+msgstr "Mniej"
+
+#: src/ai/ocr/controls.py:339
+#, python-brace-format
+msgid "{name}, less"
+msgstr "{name}, mniej"
+
+#: src/ai/ocr/controls.py:340
+msgid "More"
+msgstr "Więcej"
+
+#: src/ai/ocr/controls.py:341
+#, python-brace-format
+msgid "{name}, more"
+msgstr "{name}, więcej"
+
+#: src/ai/ocr/overlay.py:438
+msgid "There is no reading to build an overlay from. Read the screen first."
+msgstr ""
+"Nie ma odczytu, z którego można zbudować nakładkę. Najpierw odczytaj "
+"ekran."
+
+#: src/ai/ocr/overlay.py:446
+msgid ""
+"Nothing on this screen could be placed where it really is, so there is "
+"nothing to overlay. Use the reading list instead."
+msgstr ""
+"Niczego na tym ekranie nie dało się umieścić tam, gdzie naprawdę jest, "
+"więc nie ma czego nakładać. Skorzystaj z listy odczytu."
+
+#: src/ai/ocr/overlay.py:460
+#,, python-brace-format
+msgid ""
+"{title}: {n} controls, where the real ones are. Tab moves between them, "
+"Enter presses, F5 reads the screen again, Escape removes the overlay."
+msgstr "{title}: {n} kontrolek, w miejscach prawdziwych. Tab przechodzi między nimi, Enter naciska, F5 ponownie odczytuje ekran, Escape usuwa nakładkę."
+
+
+#: src/ai/ocr/overlay.py:589
+msgid "Reading the screen again..."
+msgstr "Ponownie odczytuję ekran..."
+
+#: src/ai/ocr/overlay.py:648
+#, python-brace-format
+msgid "{n} controls"
+msgstr "{n} kontrolek"
+
+#: src/ai/ocr/overlay.py:670
+msgid "The window this overlay was part of has been closed."
+msgstr "Okno, którego częścią była ta nakładka, zostało zamknięte."
+
+#: src/ai/ocr/overlay.py:696
+msgid "The window changed size, reading it again."
+msgstr "Okno zmieniło rozmiar, odczytuję je ponownie."
+
+#: src/ai/ocr/overlay.py:768
+msgid "This screen changed while you were away, reading it again."
+msgstr "Ten ekran zmienił się pod Twoją nieobecność, odczytuję go ponownie."
+
+
+#: src/ai/ocr/overlay.py:821
+msgid "This overlay has only one area."
+msgstr "Ta nakładka ma tylko jeden obszar."
+
+#: src/ai/ocr/overlay.py:845
+#, python-brace-format
+msgid "{n} controls, read {seconds} seconds ago"
+msgstr "{n} kontrolek, odczytane {seconds} sekund temu"
+
+#: src/ai/ocr/overlay.py:861
+msgid "This window has no menu bar that could be read."
+msgstr "To okno nie ma paska menu, który dałoby się odczytać."
+
+
+#: src/ai/ocr/overlay.py:866
+msgid "Menu bar"
+msgstr "Pasek menu"
+
+
+#: src/ai/ocr/overlay.py:885
+msgid "Overlay hidden. Press the AI OCR shortcut again to bring it back."
+msgstr "Nakładka schowana. Naciśnij skrót AI OCR ponownie, aby ją przywrócić."
+
+
+#: src/ai/ocr/overlay.py:891
+#, python-brace-format
+msgid "{title}: the controls are back."
+msgstr "{title}: kontrolki wróciły."
+
+
+#: src/ai/ocr/overlay.py:903
+msgid "Overlay out of the way"
+msgstr "Nakładka usunięta z drogi"
+
+#: src/ai/ocr/overlay.py:904
+msgid "Overlay back"
+msgstr "Nakładka z powrotem"
+
 #~ msgid "Performing: {action}"
 #~ msgstr "Wykonuję: {action}"
 
@@ -975,4 +1438,43 @@ msgstr "Przypomnienia"
 
 #~ msgid "Send"
 #~ msgstr "Wyślij"
+
+#~ msgid "Nothing to show here yet. Press F5 to read the screen."
+#~ msgstr "Nie ma tu jeszcze nic do pokazania. Naciśnij F5, aby odczytać ekran."
+
+#~ msgid "{name} (position unknown)"
+#~ msgstr "{name} (nieznane położenie)"
+
+#~ msgid "{name}, {value} of {low} to {high}"
+#~ msgstr "{name}, {value} z zakresu {low} do {high}"
+
+#~ msgid "{value} - open the list"
+#~ msgstr "{value} - otwórz listę"
+
+#~ msgid "not set"
+#~ msgstr "nie ustawiono"
+
+#~ msgid "{name}, {value}, opens the list"
+#~ msgstr "{name}, {value}, otwiera listę"
+
+#~ msgid "{name}, state unknown"
+#~ msgstr "{name}, stan nieznany"
+
+#~ msgid "this window"
+#~ msgstr "to okno"
+
+#~ msgid "inside {title} itself"
+#~ msgstr "wewnątrz samego okna {title}"
+
+#~ msgid "on {title}"
+#~ msgstr "na oknie {title}"
+
+#~ msgid "over {title}, following it"
+#~ msgstr "nad oknem {title}, podążając za nim"
+
+#~ msgid "{title} - {region}"
+#~ msgstr "{title} - {region}"
+
+#~ msgid "Accessible controls: {title}"
+#~ msgstr "Dostępne kontrolki: {title}"
 

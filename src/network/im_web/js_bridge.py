@@ -181,6 +181,35 @@ BRIDGE_CORE = r"""
     return [];
   }
 
+  // ``qa`` stops at the first selector that matches, which is what you want
+  // when the candidates are alternative spellings of the same thing. When they
+  // describe *parts* of one answer - a page that marks some rows one way and
+  // some another - the union is what is wanted instead. Document order is
+  // preserved and duplicates are dropped, so callers can mix both kinds freely.
+  function qaAll(selectors, root) {
+    var list = (typeof selectors === 'string') ? [selectors] : (selectors || []);
+    var scope = root || document;
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var found;
+      try { found = scope.querySelectorAll(list[i]); }
+      catch (e) { continue; }
+      for (var j = 0; j < found.length; j++) {
+        if (out.indexOf(found[j]) === -1) { out.push(found[j]); }
+      }
+    }
+    if (out.length > 1) {
+      out.sort(function (a, b) {
+        if (a === b) { return 0; }
+        var mask = a.compareDocumentPosition(b);
+        if (mask & Node.DOCUMENT_POSITION_FOLLOWING) { return -1; }
+        if (mask & Node.DOCUMENT_POSITION_PRECEDING) { return 1; }
+        return 0;
+      });
+    }
+    return out;
+  }
+
   function text(el) {
     if (!el) { return ''; }
     return (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -401,7 +430,7 @@ BRIDGE_CORE = r"""
     blobs: blobs,
     putBlob: putBlob,
     dom: {
-      q: q, qa: qa, text: text, visible: visible, click: click,
+      q: q, qa: qa, qaAll: qaAll, text: text, visible: visible, click: click,
       typeInto: typeInto, pressEnter: pressEnter, waitFor: waitFor,
       toBase64: toBase64, toFile: toFile
     }

@@ -48,6 +48,17 @@ HOST_SIZE = (1280, 900)
 DEFAULT_TIMEOUT = 20.0          # seconds before a command is answered with an error
 _SWEEP_INTERVAL_MS = 2000       # how often pending commands are checked for timeout
 
+# A page navigation destroys the document a command was running in, so its
+# reply never arrives. Read-only commands are simply asked again of the new
+# document; anything that changes state on the service is not, because "did it
+# already happen?" is unanswerable from here and sending a message twice is
+# worse than reporting that it may not have gone.
+_REPLAYABLE_COMMANDS = frozenset({
+    '__ping', '__self_test', '__eval',
+    'auth_state', 'list_chats', 'open_chat', 'load_history', 'search',
+    'list_participants', 'list_contacts', 'mark_read', 'dom_report',
+})
+
 
 class WebBridgeUnavailable(RuntimeError):
     """Raised when the Edge (WebView2) backend is missing on this machine."""
@@ -370,6 +381,29 @@ class WebBridge:
         else:
             wx.CallAfter(_run)
 
+    def _replay_lost(self) -> None:
+        """Deal with commands that were sent into a document that is now gone.
+
+        The agent announcing itself again means a new document: every command
+        already handed to the old one will never be answered. Waiting out the
+        timeout for those is what made "open a conversation" fail with nothing
+        but a timeout whenever the page had to navigate to reach it.
+        """
+        with self._lock:
+            lost = [entry for entry in self._pending.values()
+                    if entry.get('sent') and entry not in self._queued]
+
+        now = time.time()
+        for entry in lost:
+            if entry['deadline'] <= now:
+                continue        # the sweeper is about to report this anyway
+            if entry['cmd'] in _REPLAYABLE_COMMANDS:
+                entry['sent'] = False
+                self._dispatch(entry)
+            else:
+                self._finish(entry['id'], False,
+                             f"the page reloaded before '{entry['cmd']}' finished")
+
     def _flush_queued(self, internal_only: bool = False) -> None:
         with self._lock:
             still_waiting = []
@@ -489,6 +523,7 @@ class WebBridge:
             elif event_type == 'ready':
                 self._bridge_loaded = True
                 self._agent_ready = True
+                self._replay_lost()
                 self._flush_queued()
             self._fire(event_type, payload)
 

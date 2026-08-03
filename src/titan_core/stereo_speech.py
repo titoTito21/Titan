@@ -654,12 +654,18 @@ _bundled_exe_name = 'espeak-ng.exe' if IS_WINDOWS else 'espeak-ng'
 bundled_espeak_exe = os.path.join(bundled_espeak_dir, _bundled_exe_name)
 bundled_espeak_data = os.path.join(bundled_espeak_dir, 'espeak-ng-data')
 
-if os.path.exists(bundled_espeak_exe):
+# The executable is only ever a fallback for the DLL, and probing it costs a
+# process launch on every start. On a machine where the DLL loaded, that probe
+# is pure delay - and the bundled espeak-ng.exe waits on its own voice-list
+# enumeration long enough to blow the timeout, which is why every startup
+# printed "Bundled eSpeak test failed ... timed out after 2 seconds" for a
+# capability Titan was not going to use anyway.
+if not ESPEAK_DLL_AVAILABLE and os.path.exists(bundled_espeak_exe):
     try:
         # Test bundled eSpeak
         result = subprocess.run([bundled_espeak_exe, '--version'],
                               capture_output=True,
-                              timeout=2,
+                              timeout=8,
                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if result.returncode == 0:
             ESPEAK_AVAILABLE = True
@@ -667,23 +673,23 @@ if os.path.exists(bundled_espeak_exe):
             if os.path.exists(bundled_espeak_data):
                 ESPEAK_DATA_PATH = bundled_espeak_data
             print(f"[StereoSpeech] Found bundled eSpeak exe: {bundled_espeak_exe}")
-    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         print(f"[StereoSpeech] Bundled eSpeak test failed: {e}")
 
 # If bundled eSpeak not found, try system eSpeak
-if not ESPEAK_AVAILABLE:
+if not ESPEAK_AVAILABLE and not ESPEAK_DLL_AVAILABLE:
     for espeak_cmd in ['espeak-ng', 'espeak']:
         try:
             result = subprocess.run([espeak_cmd, '--version'],
                                   capture_output=True,
-                                  timeout=2,
+                                  timeout=8,
                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             if result.returncode == 0:
                 ESPEAK_AVAILABLE = True
                 ESPEAK_PATH = espeak_cmd
                 print(f"[StereoSpeech] Found system eSpeak: {espeak_cmd}")
                 break
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        except Exception:
             continue
 
 # Platform-specific native TTS detection
@@ -846,6 +852,31 @@ def trim_silence(sound, silence_threshold=-50.0, chunk_size=10,
     except Exception as e:
         print(f"Warning: Error during silence trimming: {e}")
         return sound
+
+
+def _sapi_error_text(exc):
+    """Turn a COM failure into something a log reader can act on.
+
+    pywin32 reports a failed SAPI call as ``DISP_E_EXCEPTION`` with the real
+    reason buried in the nested EXCEPINFO tuple, so the raw repr says nothing
+    beyond "an exception occurred" - in whatever language Windows is in.
+    """
+    try:
+        args = getattr(exc, 'args', None) or ()
+        if len(args) >= 3 and isinstance(args[2], (tuple, list)) and args[2]:
+            info = args[2]
+            description = info[2] if len(info) > 2 and info[2] else ''
+            code = info[5] if len(info) > 5 and isinstance(info[5], int) else None
+            if code is not None:
+                detail = f"0x{code & 0xFFFFFFFF:08X}"
+                return f"{description} ({detail})" if description else detail
+            if description:
+                return str(description)
+        if args and isinstance(args[0], int):
+            return f"0x{args[0] & 0xFFFFFFFF:08X}"
+    except Exception:
+        pass
+    return str(exc)
 
 
 class _SAPIWorker:
@@ -1282,38 +1313,66 @@ Loop
         elif cmd_type == 'stop':
             self._sapi.Speak("", 3)  # SVSFlagsAsync | SVSFPurgeBeforeSpeak
         elif cmd_type == 'set_voice':
+            # Asking for the voice that is already loaded is a no-op. Startup
+            # syncs the saved voice to this worker more than once (settings
+            # load, then engine switch), and re-running the whole COM dance
+            # for it is what produced a bare DISP_E_EXCEPTION in the console.
+            if cmd[1] == self._voice_id:
+                return
+
+            prev_voice = None
+            prev_id = self._voice_id
+            direct_ok = False
+            direct_error = None
             try:
                 token = win32com.client.Dispatch("SAPI.SpObjectToken")
                 token.SetId(cmd[1])
                 # Save previous voice in case the new one is incompatible
                 prev_voice = self._sapi.Voice
-                prev_id = self._voice_id
                 self._sapi.Voice = token
                 # Validate: test-speak to memory stream
-                if self._test_voice():
-                    self._voice_id = cmd[1]
-                else:
-                    # Voice engine incompatible (e.g. x86 voice on x64 Python)
-                    # Try subprocess bridge for this voice
-                    print(f"[SAPIWorker] Voice incompatible via direct COM, trying subprocess bridge...")
-                    self._sapi.Voice = prev_voice
-                    self._voice_id = prev_id
-                    if not self._use_subprocess:
-                        if self._setup_subprocess_bridge():
-                            # Set the voice in the bridge subprocess
-                            self._voice_id = cmd[1]
-                            self._bridge_send(f"VOICE\t{cmd[1]}")
-                            resp = self._bridge_read_response(timeout=5.0)
-                            if resp != 'VOICE_OK':
-                                print(f"[SAPIWorker] Bridge voice set response: {resp}")
-                            self._switch_to_subprocess()
-                            return
-                        else:
-                            print(f"[SAPIWorker] set_voice failed: no bridge available, keeping previous voice")
-                    else:
-                        self._voice_id = cmd[1]
+                direct_ok = bool(self._test_voice())
             except Exception as e:
-                print(f"[SAPIWorker] set_voice error: {e}")
+                # A voice whose engine refuses to load in this process throws
+                # here rather than failing the test speak. Both mean the same
+                # thing - it cannot be driven directly - so both take the
+                # bridge, instead of leaving the worker on the old voice with
+                # only a COM error code to show for it.
+                direct_error = _sapi_error_text(e)
+
+            if direct_ok:
+                self._voice_id = cmd[1]
+                return
+
+            if direct_error:
+                print(f"[SAPIWorker] Voice rejected by direct COM ({direct_error}), "
+                      f"trying subprocess bridge...")
+            else:
+                # Voice engine incompatible (e.g. x86 voice on x64 Python)
+                print("[SAPIWorker] Voice incompatible via direct COM, "
+                      "trying subprocess bridge...")
+
+            try:
+                if prev_voice is not None:
+                    self._sapi.Voice = prev_voice
+            except Exception:
+                pass
+            self._voice_id = prev_id
+
+            if not self._use_subprocess:
+                if self._setup_subprocess_bridge():
+                    # Set the voice in the bridge subprocess
+                    self._voice_id = cmd[1]
+                    self._bridge_send(f"VOICE\t{cmd[1]}")
+                    resp = self._bridge_read_response(timeout=5.0)
+                    if resp != 'VOICE_OK':
+                        print(f"[SAPIWorker] Bridge voice set response: {resp}")
+                    self._switch_to_subprocess()
+                    return
+                print("[SAPIWorker] set_voice failed: no bridge available, "
+                      "keeping previous voice")
+            else:
+                self._voice_id = cmd[1]
         elif cmd_type == 'set_rate':
             self._sapi.Rate = cmd[1]
             self._rate = cmd[1]

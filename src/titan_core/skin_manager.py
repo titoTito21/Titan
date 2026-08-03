@@ -32,6 +32,31 @@ PROJECT_ROOT = get_project_root()
 SKINS_DIR = os.path.join(PROJECT_ROOT, 'skins')
 DEFAULT_SKIN_NAME = "Default"
 
+# The settings GUI offers the default skin under its *translated* label and
+# saves whatever the user picked, so a Polish install stores "Domyślny" where
+# this module expects "Default". Without this the default skin was reported
+# missing on every single startup - a warning about the one skin that always
+# exists. Older builds wrote "Domyślna", which is why it is listed too.
+_DEFAULT_SKIN_ALIASES = {'default', 'domyślny', 'domyslny',
+                         'domyślna', 'domyslna'}
+
+
+def _resolve_default_alias(skin_name):
+    """Map any spelling of "the default skin" onto DEFAULT_SKIN_NAME."""
+    if not skin_name:
+        return DEFAULT_SKIN_NAME
+    if str(skin_name).strip().lower() in _DEFAULT_SKIN_ALIASES:
+        return DEFAULT_SKIN_NAME
+    try:
+        from src.titan_core.translation import set_language
+        from src.settings.settings import get_setting
+        translate = set_language(get_setting('language', 'pl'))
+        if str(skin_name).strip() == translate("Default"):
+            return DEFAULT_SKIN_NAME
+    except Exception:
+        pass
+    return skin_name
+
 
 def _discover_skins():
     """Discover available skins across bundled `skins/` and per-user overlay
@@ -324,6 +349,7 @@ class SkinManager:
 
     def load_skin(self, skin_name):
         """Load a skin by name."""
+        skin_name = _resolve_default_alias(skin_name)
         if skin_name not in self.available_skins:
             print(f"Warning: Skin '{skin_name}' not found, using default")
             skin_name = DEFAULT_SKIN_NAME

@@ -1314,7 +1314,85 @@ class SettingsFrame(wx.Frame):
             "Let the AI word the reminder announcement in the assistant's own "
             "style (a fixed wording is used otherwise)"))
         self.reminder_ai_phrasing_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-        vbox.Add(_dep(self.reminder_ai_phrasing_cb), flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
+        vbox.Add(_dep(self.reminder_ai_phrasing_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        # ---------------------------------------------------------------- #
+        # AI OCR: an accessible stand-in for a program that has none.
+        # ---------------------------------------------------------------- #
+        vbox.Add(wx.StaticText(panel, label=_("AI OCR (reading a screen that a "
+                                              "screen reader cannot)")),
+                 flag=wx.LEFT | wx.TOP, border=10)
+
+        self.ocr_enabled_cb = wx.CheckBox(panel, label=_(
+            "Enable AI OCR (a scan sends a picture of the window to the AI "
+            "provider you configured above)"))
+        self.ocr_enabled_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ocr_enabled_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(_dep(self.ocr_enabled_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        self._ocr_scopes = list(ap.OCR_SCOPES)
+        self.ocr_scope_radio = wx.RadioBox(
+            panel, label=_("What a scan looks at"),
+            choices=[_("The window in front (recommended)"),
+                     _("The whole screen")],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.ocr_scope_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ocr_scope_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
+        self._ocr_views = list(ap.OCR_VIEWS)
+        self.ocr_view_radio = wx.RadioBox(
+            panel, label=_("Where the controls appear"),
+            choices=[_("On the real window itself, control by control "
+                       "(recommended)"),
+                     _("In a Titan window, as a list to read")],
+            majorDimension=1, style=wx.RA_SPECIFY_COLS)
+        self.ocr_view_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ocr_view_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND,
+                 border=10)
+
+        # Global AI OCR hotkey.
+        self._ocr_hotkey_value = ''
+        vbox.Add(_dep(wx.StaticText(panel, label=_(
+            "Global AI OCR shortcut (arrows and Tab are not allowed):"))),
+            flag=wx.LEFT | wx.TOP, border=10)
+        self.ocr_hotkey_btn = wx.Button(panel, label=self._ocr_hotkey_label(False, ''))
+        self.ocr_hotkey_btn.SetName(_("Global AI OCR shortcut"))
+        self.ocr_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ocr_hotkey_btn.Bind(wx.EVT_BUTTON,
+                                 lambda e: self._capture_ocr_hotkey(False))
+        vbox.Add(_dep(self.ocr_hotkey_btn), flag=wx.LEFT | wx.TOP, border=10)
+
+        # Titan UI AI OCR hotkey - the one the feature was asked for.
+        self._ocr_titan_hotkey_value = ''
+        vbox.Add(_dep(wx.StaticText(panel, label=_(
+            "Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab "
+            "are not allowed):"))), flag=wx.LEFT | wx.TOP, border=10)
+        self.ocr_titan_hotkey_btn = wx.Button(
+            panel, label=self._ocr_hotkey_label(True, ''))
+        self.ocr_titan_hotkey_btn.SetName(_("Titan UI AI OCR shortcut"))
+        self.ocr_titan_hotkey_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ocr_titan_hotkey_btn.Bind(wx.EVT_BUTTON,
+                                       lambda e: self._capture_ocr_hotkey(True))
+        vbox.Add(_dep(self.ocr_titan_hotkey_btn), flag=wx.LEFT | wx.TOP, border=10)
+
+        self.ocr_can_act_cb = wx.CheckBox(panel, label=_(
+            "Let AI OCR press controls (Enter on an entry clicks it in the real "
+            "program; with this off the screen is only read out)"))
+        self.ocr_can_act_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ocr_can_act_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        self.ocr_use_uia_cb = wx.CheckBox(panel, label=_(
+            "Check what the AI read against Windows itself (more exact "
+            "positions and states where the program exposes any)"))
+        self.ocr_use_uia_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ocr_use_uia_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        vbox.Add(_dep(wx.StaticText(panel, label=_(
+            "Re-read a watched screen every (seconds, 0 = only when I ask):"))),
+            flag=wx.LEFT | wx.TOP, border=10)
+        self.ocr_live_spin = wx.SpinCtrl(panel, min=0, max=600, initial=0)
+        self.ocr_live_spin.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ocr_live_spin), flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=10)
 
         # In-memory per-provider keys (decrypted), swapped as the provider
         # choice changes; persisted (re-encrypted) only on Save.
@@ -1330,6 +1408,32 @@ class SettingsFrame(wx.Frame):
         base = (_("Titan UI assistant shortcut") if titan_ui
                 else _("Global assistant shortcut"))
         return "{name}: {key}".format(name=base, key=value or _("Not set"))
+
+    def _ocr_hotkey_label(self, titan_ui, value):
+        """Same descriptive labelling as the assistant shortcuts, so a screen
+        reader announces which shortcut a button is, not just its key."""
+        base = (_("Titan UI AI OCR shortcut") if titan_ui
+                else _("Global AI OCR shortcut"))
+        return "{name}: {key}".format(name=base, key=value or _("Not set"))
+
+    def _capture_ocr_hotkey(self, titan_ui):
+        """Open a key-capture dialog for an AI OCR shortcut (no arrows/Tab)."""
+        current = (self._ocr_titan_hotkey_value if titan_ui
+                   else self._ocr_hotkey_value)
+        dlg = KeyCaptureDialog(
+            self, current_label=current,
+            title=_("Capture AI OCR shortcut"),
+            exclude_bases={'tab', 'up', 'down', 'left', 'right'})
+        if dlg.ShowModal() == wx.ID_OK and dlg.captured_key:
+            if titan_ui:
+                self._ocr_titan_hotkey_value = dlg.captured_key
+                self.ocr_titan_hotkey_btn.SetLabel(
+                    self._ocr_hotkey_label(True, dlg.captured_key))
+            else:
+                self._ocr_hotkey_value = dlg.captured_key
+                self.ocr_hotkey_btn.SetLabel(
+                    self._ocr_hotkey_label(False, dlg.captured_key))
+        dlg.Destroy()
 
     def _capture_assistant_hotkey(self, titan_ui):
         """Open a key-capture dialog for an assistant shortcut (no arrows/Tab)."""
@@ -1434,6 +1538,27 @@ class SettingsFrame(wx.Frame):
             self._reminder_announce_values.index(announce)
             if announce in self._reminder_announce_values else 0)
         self.reminder_ai_phrasing_cb.SetValue(ap.get_reminder_ai_phrasing())
+
+        # AI OCR
+        self.ocr_enabled_cb.SetValue(ap.get_ocr_enabled())
+        scope = ap.get_ocr_scope()
+        scope_ids = [sid for sid, _label in self._ocr_scopes]
+        self.ocr_scope_radio.SetSelection(
+            scope_ids.index(scope) if scope in scope_ids else 0)
+        view = ap.get_ocr_open_as()
+        view_ids = [vid for vid, _label in self._ocr_views]
+        self.ocr_view_radio.SetSelection(
+            view_ids.index(view) if view in view_ids else 0)
+        self._ocr_hotkey_value = ap.get_ocr_hotkey()
+        self.ocr_hotkey_btn.SetLabel(
+            self._ocr_hotkey_label(False, self._ocr_hotkey_value))
+        self._ocr_titan_hotkey_value = ap.get_ocr_titan_hotkey()
+        self.ocr_titan_hotkey_btn.SetLabel(
+            self._ocr_hotkey_label(True, self._ocr_titan_hotkey_value))
+        self.ocr_can_act_cb.SetValue(ap.get_ocr_can_act())
+        self.ocr_use_uia_cb.SetValue(ap.get_ocr_use_uia())
+        self.ocr_live_spin.SetValue(ap.get_ocr_live_seconds())
+
         self._update_ai_controls_state()
 
     def _save_ai_features(self, panel):
@@ -1466,9 +1591,24 @@ class SettingsFrame(wx.Frame):
             if 0 <= sel < len(self._reminder_announce_values):
                 ap.set_reminder_announce(self._reminder_announce_values[sel])
             ap.set_reminder_ai_phrasing(self.reminder_ai_phrasing_cb.GetValue())
+            # AI OCR
+            ap.set_ocr_enabled(self.ocr_enabled_cb.GetValue())
+            sel = self.ocr_scope_radio.GetSelection()
+            if 0 <= sel < len(self._ocr_scopes):
+                ap.set_ocr_scope(self._ocr_scopes[sel][0])
+            sel = self.ocr_view_radio.GetSelection()
+            if 0 <= sel < len(self._ocr_views):
+                ap.set_ocr_open_as(self._ocr_views[sel][0])
+            ap.set_ocr_hotkey(self._ocr_hotkey_value)
+            ap.set_ocr_titan_hotkey(self._ocr_titan_hotkey_value)
+            ap.set_ocr_can_act(self.ocr_can_act_cb.GetValue())
+            ap.set_ocr_use_uia(self.ocr_use_uia_cb.GetValue())
+            ap.set_ocr_live_seconds(self.ocr_live_spin.GetValue())
             # Re-register the global hotkeys so changes take effect immediately.
             from src.ai.assistant import hotkeys as _assistant_hotkeys
             _assistant_hotkeys.register()
+            from src.ai.ocr import hotkeys as _ocr_hotkeys
+            _ocr_hotkeys.register()
             # Start/stop the automatic reminder announcer to match the new mode.
             from src.ai.assistant import reminder_watcher
             reminder_watcher.refresh()

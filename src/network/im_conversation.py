@@ -112,7 +112,10 @@ class ConversationFrame(TabbedListFrame):
         bar = wx.MenuBar()
 
         conversation = wx.Menu()
-        conversation.Append(wx.ID_ANY, _("Refresh\tF5"))
+        # Bound, not just listed: an unbound item still claims the F5
+        # accelerator, so the key was being swallowed before the list's own
+        # handler ever saw it and refreshing a conversation did nothing.
+        self._menu_bind(conversation, _("Refresh\tF5"), self.refresh)
         self._menu_bind(conversation, _("Load earlier messages\tCtrl+Up"),
                         self._load_earlier)
         self._menu_bind(conversation, _("Send attachment...\tCtrl+O"),
@@ -149,6 +152,15 @@ class ConversationFrame(TabbedListFrame):
         self.Bind(wx.EVT_MENU, lambda e: handler(), item)
 
     # -------------------------------------------------------------------- rows
+    def refresh(self, background: bool = False) -> None:
+        # A deliberate refresh (F5, the menu) re-reads the thread rather than
+        # re-rendering what is already here - which is exactly what the user
+        # wants when the first read caught the page mid-render. Switching tabs
+        # still costs nothing, and a background poll never disturbs the list.
+        if not background and self.current_tab == TAB_MESSAGES:
+            self.messages = []
+        super().refresh(background=background)
+
     def load_items(self, tab_id: str, background: bool = False) -> None:
         if tab_id == TAB_PARTICIPANTS:
             self.backend.list_participants(
@@ -194,6 +206,19 @@ class ConversationFrame(TabbedListFrame):
         # Land on the newest message, not on the top of the history.
         if self.current_tab == TAB_MESSAGES and self.items:
             self.select_item_index(len(self.items) - 1)
+
+        if not self.messages:
+            # An empty list with no explanation is the worst outcome for a
+            # screen reader user: it is indistinguishable from "still loading".
+            if result.get('navigating'):
+                speak_notification(
+                    _("The service is still opening this conversation. "
+                      "Press F5 in a moment."), 'warning')
+            else:
+                speak_notification(
+                    _("No messages could be read from this conversation. "
+                      "Open the service menu and choose Connection diagnostics "
+                      "to see what the page is showing."), 'warning')
 
     def _apply_participants(self, result: Dict, tab_id: str,
                             background: bool = False) -> None:

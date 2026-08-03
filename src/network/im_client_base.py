@@ -322,9 +322,24 @@ class WebIMClientFrame(TabbedListFrame):
             if self.backend.last_error:
                 lines += ['', _("Last error: {error}").format(
                     error=self.backend.last_error)]
-            show_message(self, '\n'.join(lines), _("Diagnostics"))
+            # The page report is what says whether an empty conversation means
+            # "no messages" or "this page no longer looks the way we read it".
+            # A service that does not offer one simply contributes nothing.
+            self.backend.dom_report(
+                callback=lambda page: self._show_diagnostics_text(lines, page))
 
         self.backend.self_test(callback=_done)
+
+    def _show_diagnostics_text(self, lines: List[str], page: Dict) -> None:
+        if page.get('success'):
+            lines += ['', _("Open conversation:")]
+            for key in ('thread_id', 'thread_rows', 'thread_strategy',
+                        'thread_root', 'conversation_rows', 'composer'):
+                if key in page:
+                    lines.append(f"  {key}: {page.get(key)}")
+            for row in page.get('sample') or []:
+                lines.append(f"  > {row}")
+        show_message(self, '\n'.join(lines), _("Diagnostics"))
 
     def log_out(self) -> None:
         answer = show_message(

@@ -55,22 +55,159 @@ MESSENGER_AGENT = r"""
   }
 
   // ------------------------------------------------------------------ selectors
+  // Candidates for the inbox rail. Matching on the word "conversation" is a
+  // trap: Messenger labels the *thread* grid "Messages in conversation with X"
+  // ("Wiadomości w rozmowie z X"), so a selector looking for it happily
+  // returned the open conversation's messages as if they were the chat list.
+  // The candidates are therefore deliberately loose and ``conversationRows``
+  // decides what actually is a rail row.
   function ROWS_CONVERSATIONS() {
     return [
-      'div[role="grid"][aria-label*="Conversation" i] div[role="row"]',
-      'div[role="grid"][aria-label*="Rozmow" i] div[role="row"]',
-      'div[aria-label*="Chats" i] div[role="row"]',
+      'div[role="grid"][aria-label*="Chats" i] div[role="row"]',
+      'div[role="grid"][aria-label*="Czaty" i] div[role="row"]',
       'div[role="navigation"] div[role="row"]',
-      'div[role="grid"] div[role="row"]'
+      'div[role="grid"] div[role="row"]',
+      'div[role="row"]',
+      'div[role="listitem"]'
     ];
   }
 
-  function THREAD_ROWS() {
-    return [
-      'div[role="main"] div[role="row"]',
-      'div[aria-label*="Messages" i] div[role="row"]',
-      'div[aria-label*="Wiadomo" i] div[role="row"]'
-    ];
+  function conversationRows() {
+    var candidates = D.qaAll(ROWS_CONVERSATIONS());
+    var out = [];
+    for (var i = 0; i < candidates.length; i++) {
+      if (isListRow(candidates[i])) { out.push(candidates[i]); }
+    }
+    return dropNested(out);
+  }
+
+  // The open conversation's region. messenger.com normally puts the thread in
+  // ``role="main"`` and the inbox rail in ``role="navigation"``, but that split
+  // is not something Meta guarantees - so the rail is excluded explicitly below
+  // rather than by trusting the region alone, and ``document.body`` is a legal
+  // last resort.
+  function threadRoot() {
+    return D.q(['div[role="grid"][aria-label*="Messages" i]',
+                'div[role="grid"][aria-label*="Wiadomo" i]',
+                'div[role="main"]',
+                'div[role="application"]']) || document.body;
+  }
+
+  // Is this a row of the conversation *list* rather than a message? Rows in
+  // the rail link to a thread, which is the one thing about them that has
+  // never moved. The order of the tests matters: the thread's own grid is
+  // ruled out first, because a message that happens to quote a messenger.com
+  // link would otherwise look exactly like a rail row.
+  function isListRow(el) {
+    if (!el) { return false; }
+    try {
+      var grid = el.closest('div[role="grid"], div[role="listbox"]');
+      var label = grid ? (grid.getAttribute('aria-label') || '') : '';
+      // "Messages in conversation with X" / "Wiadomości w rozmowie z X" is the
+      // thread, so the word "conversation" alone may not decide this.
+      if (/message|wiadomo/i.test(label)) { return false; }
+      if (el.closest('div[role="navigation"]')) { return true; }
+      if (/conversation|rozmow|chats|czaty/i.test(label)) { return true; }
+      if (el.querySelector('a[href*="/t/"]')) { return true; }
+    } catch (e) { /* an unreadable element is not a list row */ }
+    return false;
+  }
+
+  // Keep only the outermost of any nested candidates, so one message cannot be
+  // reported once as a row and again as the cell inside it.
+  function dropNested(list) {
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var nested = false;
+      for (var j = 0; j < list.length; j++) {
+        if (i === j) { continue; }
+        try {
+          if (list[j].contains(list[i])) { nested = true; break; }
+        } catch (e) { /* detached */ }
+      }
+      if (!nested) { out.push(list[i]); }
+    }
+    return out;
+  }
+
+  // Last resort when nothing on the page is marked up semantically any more:
+  // the deepest block whose children each carry text is the message list.
+  function repeatedTextList(root) {
+    var best = null;
+    var bestScore = 0;
+    var nodes = root.querySelectorAll('div');
+    var limit = Math.min(nodes.length, 4000);
+    for (var i = 0; i < limit; i++) {
+      var el = nodes[i];
+      var kids = el.children;
+      if (!kids || kids.length < 3) { continue; }
+      var withText = 0;
+      for (var j = 0; j < kids.length; j++) {
+        var value = D.text(kids[j]);
+        if (value && value.length > 1) { withText++; }
+      }
+      // ``>=`` on purpose: querySelectorAll is in document order, so a
+      // descendant that scores the same as its ancestor wins - which is the
+      // list itself rather than the wrapper around it.
+      if (withText >= 3 && withText >= bestScore) { bestScore = withText; best = el; }
+    }
+    return best;
+  }
+
+  // Which strategy last produced the thread. Reported by the diagnostics
+  // command so a future Meta redesign can be identified without guessing.
+  var lastThreadStrategy = 'none';
+
+  function threadRows() {
+    var root = threadRoot();
+
+    function take(list, strategy) {
+      var kept = [];
+      for (var i = 0; i < list.length; i++) {
+        if (isListRow(list[i])) { continue; }
+        kept.push(list[i]);
+      }
+      if (kept.length) { lastThreadStrategy = strategy; }
+      return kept;
+    }
+
+    // 1. The accessible structure Messenger normally exposes.
+    var rows = take(D.qaAll(['div[role="row"]', '[role="row"]'], root), 'row');
+    if (rows.length) { return dropNested(rows); }
+
+    // 2. Builds that only mark the cells (this is what the old visible-window
+    //    integration read, and it is still what some experiments ship).
+    rows = take(D.qaAll(['div[role="gridcell"]', '[role="listitem"]',
+                         '[data-scope="messages_table"] > div'], root), 'gridcell');
+    if (rows.length) { return dropNested(rows); }
+
+    // 3. Nothing semantic left at all - read the rendered blocks. This is what
+    //    keeps the client working through a redesign instead of showing the
+    //    user an empty conversation.
+    var list = repeatedTextList(root);
+    if (list) {
+      rows = take(Array.prototype.slice.call(list.children), 'heuristic');
+      if (rows.length) { return rows; }
+    }
+
+    lastThreadStrategy = 'none';
+    return [];
+  }
+
+  // The element the thread scrolls in - needed to pull older messages in.
+  function threadScroller() {
+    var root = threadRoot();
+    var nodes = root.querySelectorAll('div');
+    var limit = Math.min(nodes.length, 4000);
+    for (var i = 0; i < limit; i++) {
+      var el = nodes[i];
+      try {
+        var style = window.getComputedStyle(el);
+        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            el.scrollHeight > el.clientHeight + 40) { return el; }
+      } catch (e) { /* keep looking */ }
+    }
+    return root;
   }
 
   function COMPOSER() {
@@ -148,14 +285,24 @@ MESSENGER_AGENT = r"""
     };
   }
 
+  // Messenger nests ``dir="auto"`` several deep on every bubble and puts the
+  // timestamp, the sender and the delivery state in siblings of the body. The
+  // longest distinct block is the message; a row with no marked-up text at all
+  // (a redesign, a system notice) still yields its rendered text.
+  function rowText(row) {
+    var nodes = D.qaAll(['div[dir="auto"]', 'span[dir="auto"]'], row);
+    var best = '';
+    for (var i = 0; i < nodes.length; i++) {
+      var value = D.text(nodes[i]);
+      if (value.length > best.length) { best = value; }
+    }
+    if (!best) { best = D.text(row); }
+    return best;
+  }
+
   function messageFromRow(row) {
     var label = row.getAttribute('aria-label') || '';
-    var bubbles = D.qa(['div[dir="auto"]', 'span[dir="auto"]'], row);
-    var text = '';
-    for (var i = 0; i < bubbles.length; i++) {
-      var value = D.text(bubbles[i]);
-      if (value.length > text.length) { text = value; }
-    }
+    var text = rowText(row);
 
     var outgoing = OWN_RE.test(label);
     if (!outgoing) {
@@ -196,17 +343,17 @@ MESSENGER_AGENT = r"""
       reactions.push({ emoji: D.text(reactionEl) || '?', count: 1 });
     }
 
-    // No stable id in Messenger's DOM: derive one from author+text+geometry so
-    // the same rendered row is not announced twice.
+    // No stable id in Messenger's DOM: derive one from author+text so the same
+    // rendered row is not announced twice.
     var id = row.getAttribute('data-testid') || '';
     if (!id) {
       id = 'msg:' + currentThreadId() + ':' + (author || (outgoing ? 'me' : '?')) +
-           ':' + text.slice(0, 48);
+           ':' + text.slice(0, 64);
     }
 
     return {
       id: id,
-      chat_id: currentThreadId(),
+      chat_id: aliasOf(currentThreadId()),
       text: text,
       author: outgoing ? '' : author,
       timestamp: 0,
@@ -224,7 +371,7 @@ MESSENGER_AGENT = r"""
   var lastChats = {};
 
   function listChats(scope) {
-    var rows = D.qa(ROWS_CONVERSATIONS());
+    var rows = conversationRows();
     var out = [];
     var seenIds = {};
     for (var i = 0; i < rows.length; i++) {
@@ -249,48 +396,88 @@ MESSENGER_AGENT = r"""
   }
 
   function readThread(limit) {
-    var rows = D.qa(THREAD_ROWS());
+    var rows = threadRows();
     var out = [];
+    var used = {};
     for (var i = 0; i < rows.length; i++) {
       var msg = messageFromRow(rows[i]);
       if (!msg.text && msg.kind === 'text') { continue; }
+      // Two rows really can carry the same author and text ("ok" twice). The
+      // derived id would then collide, and the client - which keys on it -
+      // would drop the second one.
+      if (used[msg.id]) {
+        used[msg.id] += 1;
+        msg.id = msg.id + '#' + used[msg.id];
+      } else {
+        used[msg.id] = 1;
+      }
       out.push(msg);
     }
     if (limit && out.length > limit) { out = out.slice(out.length - limit); }
     return out;
   }
 
+  // The client addresses a conversation by the id it was given in the list,
+  // which is not always the id in the address bar (a row with no link becomes
+  // ``dom:<name>``). Everything read out of the open thread is reported under
+  // the id the client knows, so its "is this my conversation?" checks hold.
+  var chatAlias = {};
+
+  function aliasOf(threadId) {
+    return chatAlias[threadId] || threadId;
+  }
+
+  function bindAlias(chatId) {
+    var current = currentThreadId();
+    if (current && chatId) { chatAlias[current] = String(chatId); }
+  }
+
   function openThread(chatId) {
-    var wanted = String(chatId || '').replace(/^dom:/, '');
+    var raw = String(chatId || '');
+    var domOnly = raw.indexOf('dom:') === 0;
+    var wanted = domOnly ? raw.slice(4) : raw;
     if (!wanted) { throw new Error('no conversation given'); }
 
-    if (currentThreadId() === wanted) { return { opened: true, via: 'current' }; }
+    if (!domOnly && currentThreadId() === wanted) {
+      bindAlias(raw);
+      return { opened: true, via: 'current' };
+    }
 
-    var rows = D.qa(ROWS_CONVERSATIONS());
+    var rows = conversationRows();
     for (var i = 0; i < rows.length; i++) {
       var id = threadIdFromRow(rows[i]);
       var name = '';
       var nameEl = D.q(['span[dir="auto"]'], rows[i]);
       if (nameEl) { name = D.text(nameEl); }
-      if ((id && id === wanted) || (name && name === wanted)) {
+      if ((id && id === wanted) || (domOnly && name && name === wanted)) {
         var link = rows[i].querySelector('a[href*="/t/"]') || rows[i];
+        var before = currentThreadId();
         D.click(link);
         return D.waitFor(function () {
-          return currentThreadId() === (id || currentThreadId());
+          var now = currentThreadId();
+          // With a known id, wait for exactly that thread. Without one, any
+          // change of thread is the confirmation - the old predicate compared
+          // the address with itself and so was always instantly true, which is
+          // how a read could land on the previous conversation.
+          return id ? (now === id) : !!(now && now !== before);
         }, 8000, 150).then(function () {
+          bindAlias(raw);
           return { opened: true, via: 'dom' };
         }, function () {
+          bindAlias(raw);
           return { opened: true, via: 'dom', unconfirmed: true };
         });
       }
     }
 
-    // Not rendered (older conversation): a real navigation is the only way in.
-    // The agent is injected at document start, so it survives the reload - but
-    // this document does not, so nothing may be awaited afterwards. The caller
-    // gets ``navigating`` and Titan re-asks once the new page is up.
-    if (/^\d+$/.test(wanted) || wanted.indexOf('cid.') === 0) {
-      location.assign('https://www.messenger.com/t/' + wanted + '/');
+    // Not rendered (the list is virtualised, so an older conversation simply
+    // is not there): a real navigation is the only way in. The agent is
+    // injected at document start, so it survives the reload - but this document
+    // does not, so nothing may be awaited afterwards. The caller gets
+    // ``navigating`` and Titan re-asks once the new page is up.
+    if (!domOnly) {
+      location.assign('https://www.messenger.com/t/' +
+                      encodeURIComponent(wanted) + '/');
       return { opened: false, navigating: true, via: 'navigate' };
     }
     throw new Error('conversation not found: ' + chatId);
@@ -328,7 +515,7 @@ MESSENGER_AGENT = r"""
 
   function scanThread() {
     try {
-      var rows = D.qa(THREAD_ROWS());
+      var rows = threadRows();
       for (var i = Math.max(0, rows.length - 8); i < rows.length; i++) {
         var msg = messageFromRow(rows[i]);
         if (!msg.text && msg.kind === 'text') { continue; }
@@ -348,7 +535,7 @@ MESSENGER_AGENT = r"""
                            '[aria-label*="typing" i]']);
       var typing = !!(indicator && !OWN_RE.test(indicator.getAttribute('aria-label') || ''));
       if (!typing) {
-        var rows = D.qa(THREAD_ROWS());
+        var rows = threadRows();
         var last = rows.length ? rows[rows.length - 1] : null;
         var label = last ? (last.getAttribute('aria-label') || '') : '';
         typing = !!(label && TYPING_RE.test(label) && !OWN_RE.test(label));
@@ -363,7 +550,7 @@ MESSENGER_AGENT = r"""
 
   function scanPresence() {
     try {
-      var rows = D.qa(ROWS_CONVERSATIONS());
+      var rows = conversationRows();
       for (var i = 0; i < rows.length; i++) {
         var chat = chatFromRow(rows[i], i);
         if (!chat || !chat.online) { continue; }
@@ -598,7 +785,7 @@ MESSENGER_AGENT = r"""
   function watchdog() {
     if (!sawChatsOnce) { return; }
     var now = Date.now();
-    if (D.qa(ROWS_CONVERSATIONS()).length) { gridSeenAt = now; return; }
+    if (conversationRows().length) { gridSeenAt = now; return; }
     if (!gridSeenAt) { gridSeenAt = now; return; }
     if (now - gridSeenAt < 25000) { return; }
     // A thread and the requests page are places the user asked to be in - but
@@ -732,23 +919,30 @@ MESSENGER_AGENT = r"""
         // out. Titan asks again as soon as the new page's agent is ready.
         return { navigating: true };
       }
-      return D.waitFor(function () { return D.qa(THREAD_ROWS()).length > 0; }, 10000)
-        .catch(function () { return true; });
+      return D.waitFor(function () { return threadRows().length > 0; }, 12000, 200)
+        .then(function () {
+          // The rows exist, but Messenger fills a freshly opened thread in two
+          // paints. Reading on the first one is how the client used to end up
+          // with a few placeholder rows - or with the tail of the conversation
+          // that was open before this one.
+          return new Promise(function (resolve) { setTimeout(resolve, 400); });
+        }, function () { return null; });
     }).then(function (state) {
       if (state && state.navigating) { return state; }
       if (args.before_id) {
         // Older messages: Messenger loads them when the thread is scrolled up.
-        var scroller = D.q(['div[role="main"] div[style*="overflow"]',
-                            'div[role="main"]']);
+        var scroller = threadScroller();
         if (scroller) { scroller.scrollTop = 0; }
         return new Promise(function (resolve) { setTimeout(resolve, 900); });
       }
-      return true;
+      return null;
     }).then(function (state) {
       if (state && state.navigating) { return state; }
+      bindAlias(args.chat_id);
       var messages = readThread(limit);
       messages.forEach(function (m) { seen(m.id); });
-      return { messages: messages, has_more: true, via: 'dom' };
+      return { messages: messages, has_more: true, via: lastThreadStrategy,
+               thread_id: currentThreadId(), href: location.href };
     });
   });
 
@@ -764,7 +958,7 @@ MESSENGER_AGENT = r"""
   });
 
   B.command('react', function (args) {
-    var rows = D.qa(THREAD_ROWS());
+    var rows = threadRows();
     var target = null;
     for (var i = rows.length - 1; i >= 0; i--) {
       if (messageFromRow(rows[i]).id === args.msg_id) { target = rows[i]; break; }
@@ -785,7 +979,7 @@ MESSENGER_AGENT = r"""
   });
 
   B.command('delete_message', function (args) {
-    var rows = D.qa(THREAD_ROWS());
+    var rows = threadRows();
     var target = null;
     for (var i = rows.length - 1; i >= 0; i--) {
       if (messageFromRow(rows[i]).id === args.msg_id) { target = rows[i]; break; }
@@ -807,9 +1001,18 @@ MESSENGER_AGENT = r"""
   });
 
   B.command('mark_read', function (args) {
-    return Promise.resolve(openThread(args.chat_id)).then(function () {
-      return { done: true, via: 'dom' };
-    });
+    // Deliberately never navigates. The conversation window marks a chat read
+    // and then immediately asks for its history, and two ``openThread`` calls
+    // racing each other tore the document down under the second one - which is
+    // exactly the case where the messages never arrived. Opening the thread
+    // (which ``load_history`` does anyway) is what marks it read on Meta's side.
+    var raw = String(args.chat_id || '');
+    var wanted = raw.indexOf('dom:') === 0 ? raw.slice(4) : raw;
+    if (wanted && currentThreadId() === wanted) {
+      bindAlias(raw);
+      return { done: true, via: 'current' };
+    }
+    return { done: false, via: 'skipped' };
   });
 
   B.command('set_typing', function () { return { done: false }; });
@@ -831,7 +1034,7 @@ MESSENGER_AGENT = r"""
     return Promise.resolve(openThread(args.chat_id)).then(function () {
       var out = [];
       var names = {};
-      var rows = D.qa(THREAD_ROWS());
+      var rows = threadRows();
       for (var i = 0; i < rows.length; i++) {
         var msg = messageFromRow(rows[i]);
         if (msg.author && !names[msg.author]) {
@@ -845,7 +1048,7 @@ MESSENGER_AGENT = r"""
 
   B.command('list_contacts', function () {
     var out = [];
-    var rows = D.qa(ROWS_CONVERSATIONS());
+    var rows = conversationRows();
     for (var i = 0; i < rows.length; i++) {
       var chat = chatFromRow(rows[i], i);
       if (chat && !chat.is_group) {
@@ -875,7 +1078,7 @@ MESSENGER_AGENT = r"""
   });
 
   B.command('download_media', function (args) {
-    var rows = D.qa(THREAD_ROWS());
+    var rows = threadRows();
     var target = null;
     for (var i = rows.length - 1; i >= 0; i--) {
       if (messageFromRow(rows[i]).id === args.msg_id) { target = rows[i]; break; }
@@ -920,9 +1123,32 @@ MESSENGER_AGENT = r"""
   B.command('accept_call', function () { return callControl('accept'); });
   B.command('end_call', function () { return callControl('end'); });
 
+  // What the agent can actually see right now. Reading a conversation depends
+  // on markup Meta rewrites without warning, so this reports which strategy
+  // found the thread and what the last rows look like - enough to tell "not
+  // logged in" from "the thread is empty" from "the page changed shape".
+  B.command('dom_report', function () {
+    var rows = threadRows();
+    var sample = [];
+    for (var i = Math.max(0, rows.length - 5); i < rows.length; i++) {
+      sample.push(D.text(rows[i]).slice(0, 120));
+    }
+    return {
+      href: location.href,
+      thread_id: currentThreadId(),
+      thread_alias: aliasOf(currentThreadId()),
+      conversation_rows: conversationRows().length,
+      thread_rows: rows.length,
+      thread_strategy: lastThreadStrategy,
+      thread_root: (threadRoot().getAttribute('role') || 'body'),
+      composer: !!D.q(COMPOSER()),
+      sample: sample
+    };
+  });
+
   // ------------------------------------------------------------------- probes
-  B.probe('dom.conversations', function () { return D.qa(ROWS_CONVERSATIONS()).length > 0; });
-  B.probe('dom.thread', function () { return D.qa(THREAD_ROWS()).length > 0; });
+  B.probe('dom.conversations', function () { return conversationRows().length > 0; });
+  B.probe('dom.thread', function () { return threadRows().length > 0; });
   B.probe('dom.composer', function () { return !!D.q(COMPOSER()); });
   B.probe('traffic.fetch', function () { return !!(window.fetch && window.fetch.__titanWrapped); });
   B.probe('traffic.xhr', function () {

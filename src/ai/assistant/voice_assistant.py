@@ -32,7 +32,10 @@ except Exception:  # pragma: no cover
     def play_sound(*_a, **_k):
         pass
 
-_ASSISTANT_PROVIDER = 'gemini'
+# Shared with everything else that has to use the assistant's own account -
+# AI OCR resolves its vision provider from the same constant, so the two can
+# never drift onto different keys.
+_ASSISTANT_PROVIDER = ai_provider.ASSISTANT_PROVIDER
 
 SOUND_INITIALIZED = 'ai/initialized.ogg'   # assistant launched / listening
 SOUND_DICTATION_END = 'ai/ui1.ogg'         # end of dictation

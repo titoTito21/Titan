@@ -1358,17 +1358,19 @@ if __name__ == "__main__":
         from src.settings.titan_im_config import load_titan_im_config
 
         # Get Titan-Net server configuration from settings
+        # Whichever source answers, the auto-connect thread below reads its
+        # settings from titan_net_settings - so both branches have to bind it.
+        # Only the fallback branch used to, which made every normal startup end
+        # in "Error during Titan-Net auto-connect: name 'titan_net_settings' is
+        # not defined" and silently skip auto-connect altogether.
         try:
             im_config = load_titan_im_config()
-            tn = im_config.get('titannet_settings', {})
-            server_host = tn.get('server_host', 'titosofttitan.com')
-            server_port = int(tn.get('server_port', 8001))
-            http_port = int(tn.get('http_port', 8000))
+            titan_net_settings = im_config.get('titannet_settings', {}) or {}
         except Exception:
-            titan_net_settings = settings.get('titan_net', {})
-            server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
-            server_port = int(titan_net_settings.get('server_port', 8001))
-            http_port = int(titan_net_settings.get('http_port', 8000))
+            titan_net_settings = settings.get('titan_net', {}) or {}
+        server_host = titan_net_settings.get('server_host', 'titosofttitan.com')
+        server_port = int(titan_net_settings.get('server_port', 8001))
+        http_port = int(titan_net_settings.get('http_port', 8000))
 
         print(f"Titan-Net configuration: host={server_host}, ws_port={server_port}, http_port={http_port}")
 
