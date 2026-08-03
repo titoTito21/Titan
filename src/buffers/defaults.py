@@ -62,6 +62,43 @@ def remove_telegram():
     buffer_bus.remove_category('telegram')
 
 
+# --- WhatsApp / Messenger (Titan IM web backends) -------------------------- #
+def _register_web_im(cat_id, cat_name, with_channels=False):
+    """Shared buffer layout for the two web-backed Titan IM services.
+
+    Both are registered from ``src/network/im_web/base.py`` the moment the
+    engine reports a logged-in session, and removed on logout - so the category
+    only shows up in the review cycle while the service is really live.
+    ``channels`` appears only when the backend reports that capability.
+    """
+    _ = _t()
+    buffers = [
+        ('pm', _("Private messages"), 'private'),
+        ('groups', _("Group chats"), 'message'),
+        ('calls', _("Calls"), 'notification'),
+        ('notifications', _("Notifications"), 'notification'),
+    ]
+    if with_channels:
+        buffers.insert(2, ('channels', _("Channels and status updates"), 'message'))
+    _register(cat_id, cat_name, buffers)
+
+
+def register_whatsapp(with_channels=False):
+    _register_web_im('whatsapp', "WhatsApp", with_channels=with_channels)
+
+
+def remove_whatsapp():
+    buffer_bus.remove_category('whatsapp')
+
+
+def register_messenger(with_channels=False):
+    _register_web_im('messenger', "Messenger", with_channels=with_channels)
+
+
+def remove_messenger():
+    buffer_bus.remove_category('messenger')
+
+
 # --- Elten ----------------------------------------------------------------- #
 def register_elten():
     _ = _t()

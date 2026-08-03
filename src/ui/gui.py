@@ -3443,40 +3443,36 @@ class TitanApp(wx.Frame):
             )
         
     def show_messenger_login(self):
-        """Show Facebook Messenger WebView interface"""
+        """Open the accessible Messenger client (messenger.com runs offscreen)."""
         try:
-            messenger_window = messenger_webview.show_messenger_webview(self)
+            from src.network.messenger_titan_gui import show_messenger_client
+            messenger_window = show_messenger_client(self)
             if messenger_window:
                 register_window("Messenger", window=messenger_window, category='messenger')
-                # Add Messenger to active services when successfully connected
-                # This will be handled by callback from messenger_window
-                self.setup_messenger_callbacks(messenger_window)
         except Exception as e:
-            print(f"WebView Messenger error: {e}")
+            print(f"Messenger client error: {e}")
             _show_skinned_message(
-                _("Cannot launch Messenger WebView.\n"
+                _("Cannot launch Messenger.\n"
                   "Check if WebView2 is installed."),
-                _("Messenger WebView Error"),
+                _("Messenger Error"),
                 wx.OK | wx.ICON_ERROR
             )
-    
+
     def show_whatsapp_login(self):
-        """Show WhatsApp WebView interface"""
+        """Open the accessible WhatsApp client (WhatsApp Web runs offscreen)."""
         try:
-            whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+            from src.network.whatsapp_titan_gui import show_whatsapp_client
+            whatsapp_window = show_whatsapp_client(self)
             if whatsapp_window:
                 register_window("WhatsApp", window=whatsapp_window, category='messenger')
-                # Add WhatsApp to active services when successfully connected
-                # This will be handled by callback from whatsapp_window
-                self.setup_whatsapp_callbacks(whatsapp_window)
         except Exception as e:
-            print(f"WebView WhatsApp error: {e}")
+            print(f"WhatsApp client error: {e}")
             # Only show MessageBox if we have a running wx.App
             if wx.GetApp():
                 _show_skinned_message(
-                    _("Cannot launch WhatsApp WebView.\n"
+                    _("Cannot launch WhatsApp.\n"
                       "Check if WebView2 is installed."),
-                    _("WhatsApp WebView Error"),
+                    _("WhatsApp Error"),
                     wx.OK | wx.ICON_ERROR
                 )
         
@@ -3845,31 +3841,22 @@ class TitanApp(wx.Frame):
         client.on_user_offline = on_user_offline
 
     def open_messenger_webview(self):
-        """Open Messenger WebView window"""
+        """Open the accessible Messenger client (kept name: old callers use it)."""
         try:
             if "messenger" in self.active_services:
-                # If already have a messenger service, try to show existing window
-                messenger_instance = self.active_services["messenger"]["client"]
+                # Already running - raise the existing client window.
+                messenger_instance = self.active_services["messenger"].get("window") or \
+                    self.active_services["messenger"].get("client")
                 if hasattr(messenger_instance, 'Show'):
                     messenger_instance.Show()
                     messenger_instance.Raise()
                     return
-            
-            # Open new Messenger WebView
-            import messenger_webview
-            messenger_window = messenger_webview.show_messenger_webview(self)
-            if messenger_window:
-                register_window("Messenger", window=messenger_window, category='messenger')
-                self.setup_messenger_callbacks(messenger_window)
-                _show_skinned_message(
-                    _("Messenger WebView opened.\nPlease log in to see your contacts in Titan IM."),
-                    _("Messenger WebView"),
-                    wx.OK | wx.ICON_INFORMATION
-                )
+
+            self.show_messenger_login()
         except Exception as e:
-            print(f"Error opening Messenger WebView: {e}")
+            print(f"Error opening the Messenger client: {e}")
             _show_skinned_message(
-                _("Failed to open Messenger WebView.\nCheck if WebView2 is installed."),
+                _("Failed to open Messenger.\nCheck if WebView2 is installed."),
                 _("Error"),
                 wx.OK | wx.ICON_ERROR
             )

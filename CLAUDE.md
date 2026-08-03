@@ -282,6 +282,71 @@ Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, 
   web UI (`titan-net server/web/repository.html`), and the desktop client's
   Upload Package / Package Folder and Upload dialogs (`src/network/titan_net_gui.py`)
 
+### Titan IM: WhatsApp and Messenger (web as backend)
+
+WhatsApp Web and messenger.com are **engines, not interfaces**. A WebView2 host
+lives offscreen, an injected JavaScript agent talks to the page and *pushes*
+structured events, and Titan renders them in its own accessible client - the
+same interaction as Titan-Net / Elten / the Feedback Hub. The user never has to
+touch Meta's UI; the raw page is brought on screen only on request (a Messenger
+login checkpoint, a captcha, diagnostics).
+
+- **Engine layer** (`src/network/im_web/`):
+  - `bridge.py` - offscreen `wx.Frame` (parked at -32000,-32000, shown with
+    `ShowWithoutActivating`), `AddUserScript` at document start so the agent
+    survives reloads/SPA navigation, `AddScriptMessageHandler` for push events,
+    `RunScriptAsync` envelopes with ids/timeouts/queueing-until-ready.
+    Sets `WEBVIEW2_USER_DATA_FOLDER` to
+    `%APPDATA%/titosoft/Titan/IM COOKIES/WebView2` (cookies/session in user
+    data, never next to the exe) plus the flags that stop Chromium throttling
+    an "occluded" window. Called at import time - it must run before any
+    WebView2 in the process.
+  - `base.py` - the service-agnostic contract: `Chat` / `Message` / `Contact` /
+    `CallState`, events (`ready`, `auth_state`, `chats`, `chat_updated`,
+    `messages`, `message_new`, `message_updated`, `typing`, `presence`, `call`,
+    `media_ready`, `error`) and commands (`list_chats`, `load_history`,
+    `send_text`, `reply_to`, `react`, `edit_message`, `delete_message`,
+    `mark_read`, `search`, `list_participants`, `send_attachment`,
+    `download_media`, `start_call`, ...). Attachments travel as base64 in
+    bounded chunks through the `__blob_*` commands. Media received over a CDN
+    URL is fetched in Python when the page cannot read it cross-origin.
+  - `js_bridge.py` / `js_whatsapp.py` / `js_messenger.py` - the agents, kept as
+    Python strings like `call_detection_js.py` (no extra PyInstaller `datas`).
+    WhatsApp is **store-first**: the page's own module registry
+    (`window.require('__debug').modulesMap`, or the webpack chunk-push trick)
+    gives real collections and actions, discovered by *shape* rather than by
+    module name, with a `MutationObserver` DOM fallback. Messenger has no
+    readable store, so it is DOM-first (real thread ids come from the
+    `/t/<id>/` row links) with `fetch`/`XHR`/`WebSocket` wrapped at document
+    start purely as a "something changed, re-read now" hint.
+  - **Capabilities**: the agent reports what the live page actually supports;
+    clients hide tabs and menu items for anything missing, which is how the
+    whole thing degrades instead of raising when Meta reshuffles its internals.
+  - Calls reuse `src/network/call_detection_js.py` unchanged - its state machine
+    is what fixed the phantom "incoming call" - and only drain its event queue
+    into the bridge, so nothing polls the page from wx any more.
+- **Clients**: `whatsapp_titan_gui.py` (`show_whatsapp_client`) and
+  `messenger_titan_gui.py` (`show_messenger_client`) are deliberately separate
+  windows with their own tabs, menus and login flows. Shared plumbing lives in
+  `im_ui_common.py` (row 0 = virtual tab bar, Left/Right cycling, stereo focus
+  cues, F5, Escape-one-level), `im_client_base.py`, `im_conversation.py`
+  (Messages / Media / Files / Links / Participants) and `im_call_ui.py`.
+- **Login without a QR code**: WhatsApp asks for the 8-character link-device
+  pairing code and Titan reads it out; Messenger fills its own form from a
+  Titan dialog and only offers the page for a checkpoint/2FA/captcha.
+  Remembered phone number / e-mail go into the encrypted `titan.IM` file
+  (`src/settings/titan_im_config.py`, `get_web_im_value` / `set_web_im_value`).
+- **Sounds** come from the Titan-Net set via `src/network/titanim_sound_api.py`.
+- **Buffers**: `IMBackend._emit` pushes into the Titan Buffer System
+  (`register_whatsapp` / `register_messenger` in `src/buffers/defaults.py`:
+  `pm`, `groups`, `calls`, `notifications`, plus `channels` when reported), from
+  the *backend* - so buffers keep filling while the client window is closed.
+- The legacy visible windows (`messenger_webview.py`, `whatsapp_webview.py`)
+  are still in the tree and importable, but every entry point (`gui.py`,
+  `invisibleui.py`, `klangomode.py`, `launcher_manager.py`,
+  `messenger_client.py`, `whatsapp_client.py`, `src/ai/titan_tools.py`) now
+  opens the accessible clients instead.
+
 ### Key Dependencies
 - wxPython for GUI
 - accessible_output3 for screen reader output

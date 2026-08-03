@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 13:02+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -128,7 +128,8 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: src/network/messenger_gui.py:78 src/network/telegram_gui.py:155
+#: src/network/messenger_gui.py:78 src/network/messenger_titan_gui.py:67
+#: src/network/telegram_gui.py:155 src/network/whatsapp_titan_gui.py:63
 msgid "Cancel"
 msgstr ""
 
@@ -136,7 +137,8 @@ msgstr ""
 msgid "Search conversations:"
 msgstr ""
 
-#: src/network/messenger_gui.py:149
+#: src/network/messenger_gui.py:149 src/network/messenger_titan_gui.py:80
+#: src/network/whatsapp_titan_gui.py:80
 msgid "Conversations:"
 msgstr ""
 
@@ -152,7 +154,8 @@ msgstr ""
 msgid "Time"
 msgstr ""
 
-#: src/network/messenger_gui.py:156
+#: src/network/messenger_gui.py:156 src/network/messenger_titan_gui.py:86
+#: src/network/whatsapp_titan_gui.py:86
 msgid "Unread"
 msgstr ""
 
@@ -165,7 +168,8 @@ msgstr ""
 msgid "Select a conversation to start chatting"
 msgstr ""
 
-#: src/network/messenger_gui.py:191 src/network/telegram_windows.py:735
+#: src/network/im_conversation.py:104 src/network/messenger_gui.py:191
+#: src/network/telegram_windows.py:735
 msgid "Send"
 msgstr ""
 
@@ -291,11 +295,13 @@ msgstr ""
 msgid "Dalej"
 msgstr ""
 
-#: src/network/messenger_webview.py:133
+#: src/network/im_client_base.py:120 src/network/messenger_webview.py:133
 msgid "Refresh"
 msgstr ""
 
-#: src/network/messenger_webview.py:134 src/network/messenger_webview.py:298
+#: src/network/messenger_titan_gui.py:190
+#: src/network/messenger_titan_gui.py:196 src/network/messenger_webview.py:134
+#: src/network/messenger_webview.py:298
 msgid "Messenger"
 msgstr ""
 
@@ -321,6 +327,7 @@ msgstr ""
 msgid "WebView is not available"
 msgstr ""
 
+#: src/network/im_client_base.py:79 src/network/im_conversation.py:113
 #: src/network/messenger_webview.py:264
 msgid "Refresh\tF5"
 msgstr ""
@@ -425,8 +432,8 @@ msgstr ""
 msgid "Włącz obsługę połączeń głosowych"
 msgstr ""
 
-#: src/network/messenger_webview.py:325 src/network/messenger_webview.py:2057
-#: src/network/messenger_webview.py:2081
+#: src/network/messenger_webview.py:325 src/network/messenger_webview.py:1673
+#: src/network/messenger_webview.py:1697
 msgid "Status połączenia"
 msgstr ""
 
@@ -508,7 +515,7 @@ msgid "Załadowano {}"
 msgstr ""
 
 #: src/network/messenger_webview.py:744 src/network/messenger_webview.py:751
-#: src/network/whatsapp_webview.py:1949 src/network/whatsapp_webview.py:1956
+#: src/network/whatsapp_webview.py:1822 src/network/whatsapp_webview.py:1829
 msgid "Błąd ładowania strony"
 msgstr ""
 
@@ -524,7 +531,7 @@ msgstr ""
 msgid "Narzędzia deweloperskie mogą nie być dostępne w tej wersji WebView."
 msgstr ""
 
-#: src/network/messenger_webview.py:854 src/network/messenger_webview.py:2007
+#: src/network/messenger_webview.py:854 src/network/messenger_webview.py:1632
 msgid "Informacja"
 msgstr ""
 
@@ -563,44 +570,44 @@ msgstr ""
 msgid "Nowa wiadomość"
 msgstr ""
 
-#: src/network/messenger_webview.py:1889
+#: src/network/messenger_webview.py:1514
 msgid "Łączenie..."
 msgstr ""
 
-#: src/network/messenger_webview.py:1902
+#: src/network/messenger_webview.py:1527
 msgid "Przychodzące połączenie"
 msgstr ""
 
-#: src/network/messenger_webview.py:1921
+#: src/network/messenger_webview.py:1546
 msgid "Dzwonię..."
 msgstr ""
 
-#: src/network/messenger_webview.py:1943
+#: src/network/messenger_webview.py:1568
 msgid "Połączenie nawiązane"
 msgstr ""
 
-#: src/network/messenger_webview.py:1950
+#: src/network/messenger_webview.py:1575
 msgid "Aktywne połączenie głosowe"
 msgstr ""
 
-#: src/network/messenger_webview.py:1980
+#: src/network/messenger_webview.py:1605
 #, python-brace-format
 msgid "Połączenie zakończone. Czas trwania: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:1982 src/network/messenger_webview.py:1996
+#: src/network/messenger_webview.py:1607 src/network/messenger_webview.py:1621
 msgid "Połączenie zakończone"
 msgstr ""
 
-#: src/network/messenger_webview.py:2007 src/network/messenger_webview.py:2057
+#: src/network/messenger_webview.py:1632 src/network/messenger_webview.py:1673
 msgid "Brak aktywnego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2061 src/network/messenger_webview.py:2076
+#: src/network/messenger_webview.py:1677 src/network/messenger_webview.py:1692
 msgid "Nieznany"
 msgstr ""
 
-#: src/network/messenger_webview.py:2070
+#: src/network/messenger_webview.py:1686
 #, python-brace-format
 msgid ""
 "Status połączenia głosowego:\n"
@@ -611,252 +618,252 @@ msgid ""
 "Status: Aktywne"
 msgstr ""
 
-#: src/network/messenger_webview.py:2077
+#: src/network/messenger_webview.py:1693
 msgid "Przychodzące"
 msgstr ""
 
-#: src/network/messenger_webview.py:2077
+#: src/network/messenger_webview.py:1693
 msgid "Wychodzące"
 msgstr ""
 
-#: src/network/messenger_webview.py:2087
+#: src/network/messenger_webview.py:1703
 msgid "Test dźwięku przychodzącego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2093
+#: src/network/messenger_webview.py:1709
 msgid "Test dźwięku wychodzącego połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2099
+#: src/network/messenger_webview.py:1715
 msgid "Test dźwięku nawiązania połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2105
+#: src/network/messenger_webview.py:1721
 msgid "Test dźwięku zakończenia połączenia"
 msgstr ""
 
-#: src/network/messenger_webview.py:2141
+#: src/network/messenger_webview.py:1759
 msgid "Error fetching debug info"
 msgstr ""
 
-#: src/network/messenger_webview.py:2141 src/network/messenger_webview.py:2186
+#: src/network/messenger_webview.py:1759 src/network/messenger_webview.py:1804
 msgid "Debug"
 msgstr ""
 
-#: src/network/messenger_webview.py:2146
+#: src/network/messenger_webview.py:1764
 msgid ""
 "Voice Call Debug Info:\n"
 "\n"
 msgstr ""
 
-#: src/network/messenger_webview.py:2149 src/network/telegram_gui.py:569
+#: src/network/messenger_webview.py:1767 src/network/telegram_gui.py:569
 #: src/network/telegram_gui.py:584 src/network/telegram_gui.py:768
 #: src/network/telegram_gui.py:786 src/network/telegram_windows.py:604
 #: src/network/telegram_windows.py:900
 msgid "Error"
 msgstr ""
 
-#: src/network/messenger_webview.py:2151
+#: src/network/messenger_webview.py:1769
 msgid "Monitoring configured"
 msgstr ""
 
-#: src/network/messenger_webview.py:2152
+#: src/network/messenger_webview.py:1770
 msgid "RTCPeerConnection available"
 msgstr ""
 
-#: src/network/messenger_webview.py:2153
+#: src/network/messenger_webview.py:1771
 msgid "getUserMedia available"
 msgstr ""
 
-#: src/network/messenger_webview.py:2154
+#: src/network/messenger_webview.py:1772
 msgid "Observer active"
 msgstr ""
 
-#: src/network/messenger_webview.py:2157
+#: src/network/messenger_webview.py:1775
 msgid "Call state"
 msgstr ""
 
-#: src/network/messenger_webview.py:2158 src/network/telegram_windows.py:702
+#: src/network/messenger_webview.py:1776 src/network/telegram_windows.py:702
 msgid "Active"
 msgstr ""
 
-#: src/network/messenger_webview.py:2159
+#: src/network/messenger_webview.py:1777
 msgid "Type"
 msgstr ""
 
-#: src/network/messenger_webview.py:2159
+#: src/network/messenger_webview.py:1777
 msgid "none"
 msgstr ""
 
-#: src/network/messenger_webview.py:2160
+#: src/network/messenger_webview.py:1778
 msgid "UI visible"
 msgstr ""
 
-#: src/network/messenger_webview.py:2161
+#: src/network/messenger_webview.py:1779
 msgid "Streams"
 msgstr ""
 
-#: src/network/messenger_webview.py:2163
+#: src/network/messenger_webview.py:1781
 msgid "DOM elements"
 msgstr ""
 
-#: src/network/messenger_webview.py:2164
+#: src/network/messenger_webview.py:1782
 msgid "Call elements"
 msgstr ""
 
-#: src/network/messenger_webview.py:2165
+#: src/network/messenger_webview.py:1783
 msgid "Voice elements"
 msgstr ""
 
-#: src/network/messenger_webview.py:2166
+#: src/network/messenger_webview.py:1784
 msgid "Messenger elements"
 msgstr ""
 
-#: src/network/messenger_webview.py:2168
+#: src/network/messenger_webview.py:1786
 msgid "Local settings"
 msgstr ""
 
-#: src/network/messenger_webview.py:2169
+#: src/network/messenger_webview.py:1787
 msgid "Calls enabled"
 msgstr ""
 
-#: src/network/messenger_webview.py:2170
+#: src/network/messenger_webview.py:1788
 msgid "Notifications"
 msgstr ""
 
-#: src/network/messenger_webview.py:2172
+#: src/network/messenger_webview.py:1790
 msgid "Logged in"
 msgstr ""
 
-#: src/network/messenger_webview.py:2173
+#: src/network/messenger_webview.py:1791
 msgid "Local call active"
 msgstr ""
 
-#: src/network/messenger_webview.py:2177
+#: src/network/messenger_webview.py:1795
 msgid "Voice Call Debug"
 msgstr ""
 
-#: src/network/messenger_webview.py:2185
+#: src/network/messenger_webview.py:1803
 #, python-brace-format
 msgid ""
 "Błąd pobierania informacji debug:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2211
+#: src/network/messenger_webview.py:1829
 msgid "Otwarto folder cookies"
 msgstr ""
 
-#: src/network/messenger_webview.py:2216
+#: src/network/messenger_webview.py:1834
 #, python-brace-format
 msgid ""
 "Nie można otworzyć folderu cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2217 src/network/messenger_webview.py:2247
-#: src/network/messenger_webview.py:2277 src/network/messenger_webview.py:2285
-#: src/network/messenger_webview.py:3376 src/network/telegram_windows.py:340
-#: src/network/whatsapp_webview.py:2004
+#: src/network/messenger_webview.py:1835 src/network/messenger_webview.py:1865
+#: src/network/messenger_webview.py:1895 src/network/messenger_webview.py:1903
+#: src/network/messenger_webview.py:2992 src/network/telegram_windows.py:340
+#: src/network/whatsapp_webview.py:1877
 msgid "Błąd"
 msgstr ""
 
-#: src/network/messenger_webview.py:2226
+#: src/network/messenger_webview.py:1844
 msgid ""
 "Czy na pewno chcesz usunąć wszystkie cookies i dane logowania?\n"
 "\n"
 "To spowoduje wylogowanie z Messenger i konieczność ponownego logowania."
 msgstr ""
 
-#: src/network/messenger_webview.py:2228
+#: src/network/messenger_webview.py:1846
 msgid "Potwierdź usunięcie cookies"
 msgstr ""
 
-#: src/network/messenger_webview.py:2246
+#: src/network/messenger_webview.py:1864
 #, python-brace-format
 msgid ""
 "Błąd podczas czyszczenia cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2260
+#: src/network/messenger_webview.py:1878
 msgid ""
 "Cookies zostały usunięte pomyślnie.\n"
 "Przeładuj stronę aby zastosować zmiany."
 msgstr ""
 
-#: src/network/messenger_webview.py:2262 src/network/messenger_webview.py:2271
+#: src/network/messenger_webview.py:1880 src/network/messenger_webview.py:1889
 msgid "Cookies usunięte"
 msgstr ""
 
-#: src/network/messenger_webview.py:2275
+#: src/network/messenger_webview.py:1893
 msgid ""
 "Nie można usunąć cookies.\n"
 "Może być potrzebne zamknięcie wszystkich okien Messenger."
 msgstr ""
 
-#: src/network/messenger_webview.py:2284
+#: src/network/messenger_webview.py:1902
 #, python-brace-format
 msgid ""
 "Błąd podczas usuwania cookies:\n"
 "{}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2310
+#: src/network/messenger_webview.py:1928
 msgid "Fokus na obszar czatu"
 msgstr ""
 
-#: src/network/messenger_webview.py:2605 src/network/messenger_webview.py:2609
-#: src/network/messenger_webview.py:2638
+#: src/network/messenger_webview.py:2223 src/network/messenger_webview.py:2227
+#: src/network/messenger_webview.py:2256
 #, python-brace-format
 msgid "Messenger message from {}: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2622
+#: src/network/messenger_webview.py:2240
 #, python-brace-format
 msgid "Messenger: {} new messages from {} contacts"
 msgstr ""
 
-#: src/network/messenger_webview.py:2640 src/network/messenger_webview.py:2696
-#: src/network/messenger_webview.py:2707
+#: src/network/messenger_webview.py:2258 src/network/messenger_webview.py:2314
+#: src/network/messenger_webview.py:2325
 #, python-brace-format
 msgid "Messenger: {} new messages"
 msgstr ""
 
-#: src/network/messenger_webview.py:2686
+#: src/network/messenger_webview.py:2304
 #, python-brace-format
 msgid "New messages from Messenger: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:2688
+#: src/network/messenger_webview.py:2306
 msgid "New message from Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:2698 src/network/messenger_webview.py:2709
+#: src/network/messenger_webview.py:2316 src/network/messenger_webview.py:2327
 msgid "Messenger: new message"
 msgstr ""
 
-#: src/network/messenger_webview.py:3347
+#: src/network/messenger_webview.py:2963
 msgid "Rozłączono z Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:3349
+#: src/network/messenger_webview.py:2965
 msgid "Zamykanie Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:3374
+#: src/network/messenger_webview.py:2990
 msgid ""
 "Nie można otworzyć Messenger WebView.\n"
 "Sprawdź czy WebView2 jest zainstalowany."
 msgstr ""
 
-#: src/network/messenger_webview.py:3489 src/network/whatsapp_webview.py:2148
+#: src/network/messenger_webview.py:3105 src/network/whatsapp_webview.py:2021
 msgid ""
 "WebView nie jest dostępny na tym systemie.\n"
 "Zainstaluj Microsoft Edge WebView2 Runtime."
 msgstr ""
 
-#: src/network/messenger_webview.py:3491 src/network/whatsapp_webview.py:2150
+#: src/network/messenger_webview.py:3107 src/network/whatsapp_webview.py:2023
 msgid "Błąd WebView"
 msgstr ""
 
@@ -892,9 +899,11 @@ msgstr ""
 msgid "2FA Password"
 msgstr ""
 
-#: src/network/telegram_client.py:348 src/network/telegram_client.py:409
-#: src/network/telegram_client.py:841 src/network/telegram_windows.py:416
-#: src/network/telegram_windows.py:977
+#: src/network/im_call_ui.py:129 src/network/im_call_ui.py:161
+#: src/network/im_client_base.py:162 src/network/im_client_base.py:405
+#: src/network/im_web/base.py:870 src/network/telegram_client.py:348
+#: src/network/telegram_client.py:409 src/network/telegram_client.py:841
+#: src/network/telegram_windows.py:416 src/network/telegram_windows.py:977
 msgid "Unknown"
 msgstr ""
 
@@ -991,8 +1000,9 @@ msgstr ""
 msgid "Contacts"
 msgstr ""
 
-#: src/network/telegram_gui.py:291 src/network/telegram_gui.py:338
-#: src/network/telegram_gui.py:477
+#: src/network/messenger_titan_gui.py:87 src/network/telegram_gui.py:291
+#: src/network/telegram_gui.py:338 src/network/telegram_gui.py:477
+#: src/network/whatsapp_titan_gui.py:87
 msgid "Groups"
 msgstr ""
 
@@ -1002,7 +1012,7 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
-#: src/network/telegram_gui.py:509
+#: src/network/im_web/base.py:858 src/network/telegram_gui.py:509
 msgid "Message"
 msgstr ""
 
@@ -1010,8 +1020,8 @@ msgstr ""
 msgid "Voice Call"
 msgstr ""
 
-#: src/network/telegram_gui.py:535 src/network/telegram_voice.py:210
-#: src/network/telegram_voice.py:408 src/network/telegram_windows.py:434
+#: src/network/telegram_gui.py:535 src/network/telegram_voice.py:220
+#: src/network/telegram_voice.py:553 src/network/telegram_windows.py:434
 msgid "Call already in progress"
 msgstr ""
 
@@ -1056,23 +1066,33 @@ msgstr ""
 msgid "Failed to start connection. Please try again."
 msgstr ""
 
-#: src/network/telegram_voice.py:215 src/network/telegram_voice.py:413
+#: src/network/telegram_voice.py:225 src/network/telegram_voice.py:558
 msgid "Voice calls require py-tgcalls. Install with: pip install py-tgcalls"
 msgstr ""
 
-#: src/network/telegram_voice.py:227 src/network/telegram_voice.py:423
+#: src/network/telegram_voice.py:245 src/network/telegram_voice.py:576
 msgid "Could not start voice system"
 msgstr ""
 
-#: src/network/telegram_voice.py:232
+#: src/network/telegram_voice.py:250
 msgid "Could not create voice chat group"
 msgstr ""
 
-#: src/network/telegram_voice.py:239
+#: src/network/telegram_voice.py:257
 msgid "Could not start voice chat"
 msgstr ""
 
-#: src/network/telegram_voice.py:429
+#: src/network/telegram_voice.py:304
+msgid "The microphone is not available."
+msgstr ""
+
+#: src/network/telegram_voice.py:316
+msgid ""
+"Your microphone could not be opened, so the other person will not hear "
+"you. Check that no other program is using it."
+msgstr ""
+
+#: src/network/telegram_voice.py:582
 msgid "Could not join voice chat"
 msgstr ""
 
@@ -1092,7 +1112,8 @@ msgstr ""
 msgid "Nie udało się wysłać wiadomości"
 msgstr ""
 
-#: src/network/telegram_windows.py:360 src/network/telegram_windows.py:920
+#: src/network/im_web/base.py:852 src/network/telegram_windows.py:360
+#: src/network/telegram_windows.py:920
 msgid "Voice message"
 msgstr ""
 
@@ -1104,8 +1125,10 @@ msgstr ""
 msgid "Voice calls not available"
 msgstr ""
 
-#: src/network/telegram_windows.py:466 src/network/telegram_windows.py:1019
-#: src/network/telegram_windows.py:1116
+#: src/network/im_call_ui.py:46 src/network/im_call_ui.py:160
+#: src/network/im_client_base.py:156 src/network/im_client_base.py:228
+#: src/network/im_web/base.py:863 src/network/telegram_windows.py:466
+#: src/network/telegram_windows.py:1019 src/network/telegram_windows.py:1116
 msgid "Voice call"
 msgstr ""
 
@@ -1113,7 +1136,8 @@ msgstr ""
 msgid "Outgoing call"
 msgstr ""
 
-#: src/network/telegram_windows.py:512 src/network/telegram_windows.py:1037
+#: src/network/im_call_ui.py:38 src/network/telegram_windows.py:512
+#: src/network/telegram_windows.py:1037
 msgid "Incoming call"
 msgstr ""
 
@@ -1121,6 +1145,7 @@ msgstr ""
 msgid "Incoming call (native)"
 msgstr ""
 
+#: src/network/im_client_base.py:204 src/network/im_client_base.py:209
 #: src/network/telegram_windows.py:521
 msgid "Connecting..."
 msgstr ""
@@ -1137,7 +1162,7 @@ msgstr ""
 msgid "Mute"
 msgstr ""
 
-#: src/network/telegram_windows.py:550
+#: src/network/im_call_ui.py:135 src/network/telegram_windows.py:550
 msgid "End call"
 msgstr ""
 
@@ -1149,7 +1174,7 @@ msgstr ""
 msgid "Connected - call active"
 msgstr ""
 
-#: src/network/telegram_windows.py:585
+#: src/network/im_call_ui.py:188 src/network/telegram_windows.py:585
 msgid "Call connected"
 msgstr ""
 
@@ -1221,7 +1246,7 @@ msgstr ""
 msgid "WhatsApp Error"
 msgstr ""
 
-#: src/network/whatsapp_client.py:531 src/network/whatsapp_webview.py:2093
+#: src/network/whatsapp_client.py:531 src/network/whatsapp_webview.py:1966
 msgid "Disconnected from WhatsApp Web"
 msgstr ""
 
@@ -1242,7 +1267,7 @@ msgstr ""
 msgid "Odśwież stronę"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:210 src/network/whatsapp_webview.py:1993
+#: src/network/whatsapp_webview.py:210 src/network/whatsapp_webview.py:1866
 msgid "Wyczyść dane sesji"
 msgstr ""
 
@@ -1254,6 +1279,7 @@ msgstr ""
 msgid "Zamknij okno"
 msgstr ""
 
+#: src/network/whatsapp_titan_gui.py:192 src/network/whatsapp_titan_gui.py:198
 #: src/network/whatsapp_webview.py:218
 msgid "WhatsApp"
 msgstr ""
@@ -1351,53 +1377,53 @@ msgstr ""
 msgid "WhatsApp: new message"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1773
+#: src/network/whatsapp_webview.py:1646
 msgid "Incoming WhatsApp call"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1790
+#: src/network/whatsapp_webview.py:1663
 msgid "WhatsApp call connecting"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1807
+#: src/network/whatsapp_webview.py:1680
 msgid "WhatsApp call connected"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1824
+#: src/network/whatsapp_webview.py:1697
 msgid "WhatsApp call ended"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1984
+#: src/network/whatsapp_webview.py:1857
 msgid "Odświeżanie WhatsApp Web..."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1992
+#: src/network/whatsapp_webview.py:1865
 msgid ""
 "Czy na pewno chcesz wyczyścić wszystkie dane sesji WhatsApp?\n"
 "Będziesz musiał zalogować się ponownie."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:1999
+#: src/network/whatsapp_webview.py:1872
 msgid ""
 "Dane sesji zostały wyczyszczone.\n"
 "Odśwież stronę, aby zalogować się ponownie."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2000
+#: src/network/whatsapp_webview.py:1873
 msgid "Sukces"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2003
+#: src/network/whatsapp_webview.py:1876
 msgid "Nie udało się wyczyścić danych sesji."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2013
+#: src/network/whatsapp_webview.py:1886
 msgid ""
 "Integracja WhatsApp Web z systemem Titan IM.\n"
 "Umożliwia korzystanie z WhatsApp w ramach TCE Launcher."
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2134
+#: src/network/whatsapp_webview.py:2007
 #, python-brace-format
 msgid ""
 "Nie można uruchomić WhatsApp WebView.\n"
@@ -1405,8 +1431,866 @@ msgid ""
 "Błąd: {}"
 msgstr ""
 
-#: src/network/whatsapp_webview.py:2137
+#: src/network/whatsapp_webview.py:2010
 msgid "Błąd WhatsApp WebView"
+msgstr ""
+
+#: src/network/im_conversation.py:260 src/network/im_ui_common.py:211
+#, python-brace-format
+msgid "{tab}: {n} entries"
+msgstr ""
+
+#: src/network/im_ui_common.py:228
+#, python-brace-format
+msgid "{}, {} of {}"
+msgstr ""
+
+#: src/network/im_client_base.py:80
+msgid "Search...\tCtrl+F"
+msgstr ""
+
+#: src/network/im_client_base.py:82
+msgid "Log in..."
+msgstr ""
+
+#: src/network/im_client_base.py:83 src/network/im_client_base.py:308
+msgid "Log out"
+msgstr ""
+
+#: src/network/im_client_base.py:85
+msgid "Show the web page (advanced)"
+msgstr ""
+
+#: src/network/im_client_base.py:86
+msgid "Connection diagnostics..."
+msgstr ""
+
+#: src/network/im_client_base.py:88 src/network/im_conversation.py:126
+msgid "Close\tEscape"
+msgstr ""
+
+#: src/network/im_client_base.py:89
+msgid "&Service"
+msgstr ""
+
+#: src/network/im_client_base.py:102
+msgid "Open\tEnter"
+msgstr ""
+
+#: src/network/im_client_base.py:103 src/network/im_client_base.py:225
+#: src/network/im_conversation.py:118
+msgid "Mark as read"
+msgstr ""
+
+#: src/network/im_client_base.py:105 src/network/im_conversation.py:121
+msgid "Voice call\tCtrl+T"
+msgstr ""
+
+#: src/network/im_client_base.py:108 src/network/im_conversation.py:123
+msgid "Video call\tCtrl+Shift+T"
+msgstr ""
+
+#: src/network/im_client_base.py:110 src/network/im_conversation.py:127
+msgid "&Conversation"
+msgstr ""
+
+#: src/network/im_client_base.py:124 src/network/im_client_base.py:254
+msgid "Search"
+msgstr ""
+
+#: src/network/im_client_base.py:128
+msgid "Close"
+msgstr ""
+
+#: src/network/im_client_base.py:148
+msgid "Could not load conversations"
+msgstr ""
+
+#: src/network/im_call_ui.py:46 src/network/im_call_ui.py:160
+#: src/network/im_client_base.py:156 src/network/im_client_base.py:230
+#: src/network/im_web/base.py:863
+msgid "Video call"
+msgstr ""
+
+#: src/network/im_client_base.py:158 src/network/im_web/base.py:865
+msgid "incoming"
+msgstr ""
+
+#: src/network/im_client_base.py:158 src/network/im_web/base.py:866
+msgid "outgoing"
+msgstr ""
+
+#: src/network/im_client_base.py:159
+msgid "answered"
+msgstr ""
+
+#: src/network/im_client_base.py:159 src/network/im_web/base.py:868
+msgid "ended"
+msgstr ""
+
+#: src/network/im_client_base.py:161
+#, python-brace-format
+msgid "{kind}, {peer}, {direction}, {time}"
+msgstr ""
+
+#: src/network/im_client_base.py:170
+#, python-brace-format
+msgid "{n} unread"
+msgstr ""
+
+#: src/network/im_client_base.py:178
+msgid "active now"
+msgstr ""
+
+#: src/network/im_client_base.py:180
+msgid "muted"
+msgstr ""
+
+#: src/network/im_client_base.py:196
+#, python-brace-format
+msgid "{tab}: {n} conversations, {unread} unread"
+msgstr ""
+
+#: src/network/im_client_base.py:198
+#, python-brace-format
+msgid "{tab}: {n} conversations"
+msgstr ""
+
+#: src/network/im_client_base.py:205
+msgid "Not logged in"
+msgstr ""
+
+#: src/network/im_client_base.py:206
+msgid "Waiting for the login code"
+msgstr ""
+
+#: src/network/im_client_base.py:207
+msgid "Waiting for device pairing"
+msgstr ""
+
+#: src/network/im_client_base.py:208
+msgid "Additional confirmation required"
+msgstr ""
+
+#: src/network/im_client_base.py:224
+msgid "Open"
+msgstr ""
+
+#: src/network/im_client_base.py:237
+msgid "Marked as read"
+msgstr ""
+
+#: src/network/im_client_base.py:247 src/network/im_conversation.py:515
+#, python-brace-format
+msgid "Calling {name}"
+msgstr ""
+
+#: src/network/im_client_base.py:249
+msgid "Cannot start the call"
+msgstr ""
+
+#: src/network/im_client_base.py:254
+msgid "What are you looking for?"
+msgstr ""
+
+#: src/network/im_client_base.py:264
+msgid "Search failed"
+msgstr ""
+
+#: src/network/im_client_base.py:269
+msgid "Nothing found"
+msgstr ""
+
+#: src/network/im_client_base.py:272
+#, python-brace-format
+msgid "Found {chats} conversations and {messages} messages"
+msgstr ""
+
+#: src/network/im_client_base.py:277
+msgid ""
+"The service page is now on screen. Close it to return to Titan; the "
+"connection stays up."
+msgstr ""
+
+#: src/network/im_client_base.py:283
+msgid "Diagnostics unavailable"
+msgstr ""
+
+#: src/network/im_client_base.py:284 src/network/im_client_base.py:301
+msgid "Diagnostics"
+msgstr ""
+
+#: src/network/im_client_base.py:287
+#, python-brace-format
+msgid "Service: {service}"
+msgstr ""
+
+#: src/network/im_client_base.py:288
+#, python-brace-format
+msgid "Address: {url}"
+msgstr ""
+
+#: src/network/im_client_base.py:289
+#, python-brace-format
+msgid "Login state: {state}"
+msgstr ""
+
+#: src/network/im_client_base.py:291
+#, python-brace-format
+msgid "Capabilities: {caps}"
+msgstr ""
+
+#: src/network/im_client_base.py:294
+msgid "Data sources:"
+msgstr ""
+
+#: src/network/im_client_base.py:299
+#, python-brace-format
+msgid "Last error: {error}"
+msgstr ""
+
+#: src/network/im_client_base.py:307
+#, python-brace-format
+msgid "Log out of {service}?"
+msgstr ""
+
+#: src/network/im_client_base.py:316
+msgid "Logged out"
+msgstr ""
+
+#: src/network/im_client_base.py:419
+#, python-brace-format
+msgid "{service}, {who}: {text}"
+msgstr ""
+
+#: src/network/im_client_base.py:466
+#, python-brace-format
+msgid "Connected to {service}"
+msgstr ""
+
+#: src/network/im_client_base.py:476
+#, python-brace-format
+msgid ""
+"{service} needs an extra confirmation that cannot be completed from "
+"Titan.\n"
+"Show the service page so you can finish logging in?"
+msgstr ""
+
+#: src/network/im_client_base.py:480 src/network/messenger_titan_gui.py:162
+msgid "Confirmation required"
+msgstr ""
+
+#: src/network/im_client_base.py:500 src/network/whatsapp_titan_gui.py:164
+#, python-brace-format
+msgid "Pairing code: {code}"
+msgstr ""
+
+#: src/network/im_client_base.py:501
+#, python-brace-format
+msgid ""
+"Enter this code on your phone:\n"
+"\n"
+"{code}"
+msgstr ""
+
+#: src/network/im_client_base.py:502
+msgid "Pairing code"
+msgstr ""
+
+#: src/network/im_conversation.py:44
+msgid "Thumbs up"
+msgstr ""
+
+#: src/network/im_conversation.py:45
+msgid "Heart"
+msgstr ""
+
+#: src/network/im_conversation.py:46
+msgid "Laughing"
+msgstr ""
+
+#: src/network/im_conversation.py:47
+msgid "Surprised"
+msgstr ""
+
+#: src/network/im_conversation.py:48
+msgid "Sad"
+msgstr ""
+
+#: src/network/im_conversation.py:49
+msgid "Thanks"
+msgstr ""
+
+#: src/network/im_conversation.py:67
+#, python-brace-format
+msgid "{name} - {service}"
+msgstr ""
+
+#: src/network/im_conversation.py:70
+msgid "Messages:"
+msgstr ""
+
+#: src/network/im_conversation.py:86
+msgid "Messages"
+msgstr ""
+
+#: src/network/im_conversation.py:87
+msgid "Media"
+msgstr ""
+
+#: src/network/im_conversation.py:88
+msgid "Files"
+msgstr ""
+
+#: src/network/im_conversation.py:89
+msgid "Links"
+msgstr ""
+
+#: src/network/im_conversation.py:92
+msgid "Participants"
+msgstr ""
+
+#: src/network/im_conversation.py:96
+msgid "Your message:"
+msgstr ""
+
+#: src/network/im_conversation.py:114
+msgid "Load earlier messages\tCtrl+Up"
+msgstr ""
+
+#: src/network/im_conversation.py:116
+msgid "Send attachment...\tCtrl+O"
+msgstr ""
+
+#: src/network/im_conversation.py:130
+msgid "Read whole message\tCtrl+R"
+msgstr ""
+
+#: src/network/im_conversation.py:132
+msgid "Copy text\tCtrl+C"
+msgstr ""
+
+#: src/network/im_conversation.py:133
+msgid "Reply\tCtrl+Enter"
+msgstr ""
+
+#: src/network/im_conversation.py:135 src/network/im_conversation.py:281
+msgid "React..."
+msgstr ""
+
+#: src/network/im_conversation.py:137 src/network/im_conversation.py:283
+msgid "Edit..."
+msgstr ""
+
+#: src/network/im_conversation.py:139
+msgid "Delete\tDelete"
+msgstr ""
+
+#: src/network/im_conversation.py:140 src/network/im_conversation.py:287
+msgid "Download attachment"
+msgstr ""
+
+#: src/network/im_conversation.py:141
+msgid "&Message"
+msgstr ""
+
+#: src/network/im_conversation.py:177
+msgid "Could not load the conversation"
+msgstr ""
+
+#: src/network/im_conversation.py:192
+msgid "Could not load participants"
+msgstr ""
+
+#: src/network/im_conversation.py:203
+#, python-brace-format
+msgid "{name} (administrator)"
+msgstr ""
+
+#: src/network/im_conversation.py:206 src/network/im_conversation.py:380
+msgid "You"
+msgstr ""
+
+#: src/network/im_conversation.py:211
+msgid "(message deleted)"
+msgstr ""
+
+#: src/network/im_conversation.py:214
+msgid "photo"
+msgstr ""
+
+#: src/network/im_conversation.py:214
+msgid "video"
+msgstr ""
+
+#: src/network/im_conversation.py:214
+msgid "audio"
+msgstr ""
+
+#: src/network/im_conversation.py:215
+msgid "voice message"
+msgstr ""
+
+#: src/network/im_conversation.py:215
+msgid "sticker"
+msgstr ""
+
+#: src/network/im_conversation.py:216
+msgid "file"
+msgstr ""
+
+#: src/network/im_conversation.py:217
+msgid "attachment"
+msgstr ""
+
+#: src/network/im_conversation.py:221
+msgid "[call]"
+msgstr ""
+
+#: src/network/im_conversation.py:230
+msgid "edited"
+msgstr ""
+
+#: src/network/im_conversation.py:233
+#, python-brace-format
+msgid "replying to: {text}"
+msgstr ""
+
+#: src/network/im_conversation.py:237
+#, python-brace-format
+msgid "reaction {emoji}"
+msgstr ""
+
+#: src/network/im_conversation.py:240
+msgid "sending"
+msgstr ""
+
+#: src/network/im_conversation.py:240
+msgid "sent"
+msgstr ""
+
+#: src/network/im_conversation.py:241
+msgid "delivered"
+msgstr ""
+
+#: src/network/im_conversation.py:241
+msgid "read"
+msgstr ""
+
+#: src/network/im_conversation.py:242
+msgid "not sent"
+msgstr ""
+
+#: src/network/im_conversation.py:258
+#, python-brace-format
+msgid "{name}: {n} messages"
+msgstr ""
+
+#: src/network/im_conversation.py:276
+msgid "Read whole message"
+msgstr ""
+
+#: src/network/im_conversation.py:277
+msgid "Copy text"
+msgstr ""
+
+#: src/network/im_conversation.py:278 src/network/im_conversation.py:345
+msgid "Reply"
+msgstr ""
+
+#: src/network/im_conversation.py:285
+msgid "Delete"
+msgstr ""
+
+#: src/network/im_conversation.py:330
+#, python-brace-format
+msgid "Message not sent: {error}"
+msgstr ""
+
+#: src/network/im_conversation.py:344
+#, python-brace-format
+msgid "Reply to: {text}"
+msgstr ""
+
+#: src/network/im_conversation.py:352
+msgid "Reply sent"
+msgstr ""
+
+#: src/network/im_conversation.py:356
+msgid "Choose a file to send"
+msgstr ""
+
+#: src/network/im_conversation.py:361
+#, python-brace-format
+msgid "Sending {name}"
+msgstr ""
+
+#: src/network/im_conversation.py:364
+msgid "Attachment sent"
+msgstr ""
+
+#: src/network/im_conversation.py:373
+msgid "Operation failed"
+msgstr ""
+
+#: src/network/im_conversation.py:390
+msgid "Copied"
+msgstr ""
+
+#: src/network/im_conversation.py:397
+msgid "Choose a reaction"
+msgstr ""
+
+#: src/network/im_conversation.py:398
+msgid "React"
+msgstr ""
+
+#: src/network/im_conversation.py:404
+msgid "Reaction sent"
+msgstr ""
+
+#: src/network/im_conversation.py:410
+msgid "Only your own messages can be edited"
+msgstr ""
+
+#: src/network/im_conversation.py:412
+msgid "New message text"
+msgstr ""
+
+#: src/network/im_conversation.py:412
+msgid "Edit message"
+msgstr ""
+
+#: src/network/im_conversation.py:418
+msgid "Message edited"
+msgstr ""
+
+#: src/network/im_conversation.py:428
+msgid ""
+"Delete this message for everyone?\n"
+"Choosing No deletes it only for you."
+msgstr ""
+
+#: src/network/im_conversation.py:430
+msgid "Delete message"
+msgstr ""
+
+#: src/network/im_conversation.py:437
+msgid "Message deleted"
+msgstr ""
+
+#: src/network/im_conversation.py:447
+msgid "Downloading attachment"
+msgstr ""
+
+#: src/network/im_conversation.py:453
+msgid "Download failed"
+msgstr ""
+
+#: src/network/im_conversation.py:463
+#, python-brace-format
+msgid "Saved as {path}"
+msgstr ""
+
+#: src/network/im_conversation.py:482
+#, python-brace-format
+msgid "Cannot open the file: {error}"
+msgstr ""
+
+#: src/network/im_conversation.py:487 src/network/im_conversation.py:500
+msgid "No earlier messages"
+msgstr ""
+
+#: src/network/im_conversation.py:489
+msgid "Loading earlier messages"
+msgstr ""
+
+#: src/network/im_conversation.py:493
+msgid "Could not load history"
+msgstr ""
+
+#: src/network/im_conversation.py:506
+#, python-brace-format
+msgid "Loaded {n} earlier messages"
+msgstr ""
+
+#: src/network/im_conversation.py:559
+#, python-brace-format
+msgid "Attachment ready: {name}"
+msgstr ""
+
+#: src/network/im_call_ui.py:47
+msgid "Unknown caller"
+msgstr ""
+
+#: src/network/im_call_ui.py:49 src/network/im_call_ui.py:72
+#, python-brace-format
+msgid "{kind} from {caller}"
+msgstr ""
+
+#: src/network/im_call_ui.py:53
+msgid "Answer"
+msgstr ""
+
+#: src/network/im_call_ui.py:57
+msgid "Decline"
+msgstr ""
+
+#: src/network/im_call_ui.py:120 src/network/im_web/base.py:856
+msgid "Call"
+msgstr ""
+
+#: src/network/im_call_ui.py:163
+#, python-brace-format
+msgid "{kind} with {peer}, {duration}"
+msgstr ""
+
+#: src/network/im_call_ui.py:166
+#, python-brace-format
+msgid "{kind} to {peer}: ringing"
+msgstr ""
+
+#: src/network/im_call_ui.py:167
+#, python-brace-format
+msgid "{kind} with {peer}"
+msgstr ""
+
+#: src/network/im_call_ui.py:171
+#, python-brace-format
+msgid "{minutes} min {seconds} s"
+msgstr ""
+
+#: src/network/im_call_ui.py:204
+msgid "Ending the call"
+msgstr ""
+
+#: src/network/im_call_ui.py:221
+#, python-brace-format
+msgid "Call ended, {duration}"
+msgstr ""
+
+#: src/network/im_call_ui.py:223
+msgid "Call ended"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:39
+msgid "Log in to WhatsApp"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:45
+msgid ""
+"Enter the phone number of the WhatsApp account, with the country code and"
+" no spaces, for example 48123456789.\n"
+"Titan will show an eight-character code to type on your phone."
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:50
+msgid "Phone number:"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:55
+msgid "Remember this number"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:60
+msgid "Get the code"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:79
+msgid "WhatsApp - Titan IM"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:85 src/network/whatsapp_titan_gui.py:85
+msgid "Chats"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:90
+msgid "Channels"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:92
+msgid "Status updates"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:92 src/network/whatsapp_titan_gui.py:93
+msgid "Calls"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:94
+msgid "Archived"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:109
+msgid "&WhatsApp"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:124
+msgid "Login cancelled. WhatsApp needs a linked device to work."
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:133
+msgid "No phone number given"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:142
+msgid "Asking WhatsApp for a pairing code..."
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:149
+#, python-brace-format
+msgid ""
+"WhatsApp did not return a pairing code.\n"
+"Error: {error}\n"
+"\n"
+"Show the web page so you can log in there instead?"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:151 src/network/whatsapp_titan_gui.py:152
+msgid "Login"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:161
+msgid "Waiting for the pairing code..."
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:167
+#, python-brace-format
+msgid ""
+"Enter this code on your phone:\n"
+"\n"
+"{code}\n"
+"\n"
+"On the phone: WhatsApp, Settings, Linked devices, Link a device, then "
+"\"Link with phone number instead\"."
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:170
+msgid "WhatsApp pairing code"
+msgstr ""
+
+#: src/network/whatsapp_titan_gui.py:190
+msgid ""
+"WhatsApp needs Microsoft WebView2, which is not installed on this "
+"computer."
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:38
+msgid "Log in to Messenger"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:44
+msgid ""
+"Enter your Facebook credentials. Titan fills in the Messenger login form "
+"for you - nothing is sent anywhere else.\n"
+"If Facebook asks for an extra confirmation, Titan will offer to show the "
+"page so you can finish it."
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:49
+msgid "E-mail address or phone number:"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:54
+msgid "Password:"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:59
+msgid "Remember the e-mail address"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:64
+msgid "Log in"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:79
+msgid "Messenger - Titan IM"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:88
+msgid "Active now"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:91
+msgid "Message requests"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:106
+msgid "&Messenger"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:121
+msgid "Login cancelled."
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:130
+msgid "Both the e-mail address and the password are needed"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:140
+msgid "Logging in to Messenger..."
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:148
+#, python-brace-format
+msgid ""
+"Messenger login failed.\n"
+"Error: {error}\n"
+"\n"
+"Show the web page so you can log in there instead?"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:159
+msgid ""
+"Facebook is asking for an extra confirmation (a code, a captcha or a "
+"device check).\n"
+"Show the page so you can finish logging in?"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:167
+msgid "Connected to Messenger"
+msgstr ""
+
+#: src/network/messenger_titan_gui.py:188
+msgid ""
+"Messenger needs Microsoft WebView2, which is not installed on this "
+"computer."
+msgstr ""
+
+#: src/network/im_web/base.py:849
+msgid "Photo"
+msgstr ""
+
+#: src/network/im_web/base.py:850
+msgid "Video"
+msgstr ""
+
+#: src/network/im_web/base.py:851
+msgid "Audio"
+msgstr ""
+
+#: src/network/im_web/base.py:853
+msgid "Document"
+msgstr ""
+
+#: src/network/im_web/base.py:854
+msgid "Sticker"
+msgstr ""
+
+#: src/network/im_web/base.py:855
+msgid "Location"
+msgstr ""
+
+#: src/network/im_web/base.py:857
+msgid "System message"
+msgstr ""
+
+#: src/network/im_web/base.py:867
+msgid "connected"
+msgstr ""
+
+#: src/network/im_web/base.py:871
+#, python-brace-format
+msgid "{kind} with {peer}: {state}"
 msgstr ""
 
 #~ msgid "Titan-Net Login"

@@ -892,8 +892,8 @@ class KlangoMode:
         """Open Facebook Messenger."""
         try:
             try:
-                from src.network import messenger_webview
-                messenger_window = messenger_webview.show_messenger_webview(self)
+                from src.network.messenger_titan_gui import show_messenger_client
+                messenger_window = show_messenger_client(self)
                 if messenger_window:
                     try:
                         from src.ui.window_switcher import register_window
@@ -912,8 +912,8 @@ class KlangoMode:
         """Open WhatsApp."""
         try:
             try:
-                from src.network import whatsapp_webview
-                whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+                from src.network.whatsapp_titan_gui import show_whatsapp_client
+                whatsapp_window = show_whatsapp_client(self)
                 if whatsapp_window:
                     try:
                         from src.ui.window_switcher import register_window
@@ -1962,8 +1962,8 @@ class KlangoFrame(wx.Frame):
         """Open Facebook Messenger."""
         try:
             try:
-                from src.network import messenger_webview
-                messenger_window = messenger_webview.show_messenger_webview(self)
+                from src.network.messenger_titan_gui import show_messenger_client
+                messenger_window = show_messenger_client(self)
                 if messenger_window:
                     try:
                         from src.ui.window_switcher import register_window
@@ -1982,8 +1982,8 @@ class KlangoFrame(wx.Frame):
         """Open WhatsApp."""
         try:
             try:
-                from src.network import whatsapp_webview
-                whatsapp_window = whatsapp_webview.show_whatsapp_webview(self)
+                from src.network.whatsapp_titan_gui import show_whatsapp_client
+                whatsapp_window = show_whatsapp_client(self)
                 if whatsapp_window:
                     try:
                         from src.ui.window_switcher import register_window

@@ -3808,7 +3808,7 @@ class InvisibleUI:
                 self.speak(_("Cannot open Messenger - application not ready"))
                 return
 
-            from src.network import messenger_webview
+            from src.network.messenger_titan_gui import show_messenger_client
             
             # Auto-disable Titan UI when webview opens
             if self.titan_ui_mode:
@@ -3823,7 +3823,7 @@ class InvisibleUI:
                     if self._shutdown_in_progress or not self.main_frame:
                         return
                         
-                    messenger_window = messenger_webview.show_messenger_webview(self.main_frame)
+                    messenger_window = show_messenger_client(self.main_frame)
                     if messenger_window and not messenger_window.IsBeingDeleted():
                         # Safely bind close event to re-enable Titan UI when webview closes
                         try:
@@ -3927,7 +3927,7 @@ class InvisibleUI:
                 self.speak(_("Cannot open WhatsApp - application not ready"))
                 return
 
-            from src.network import whatsapp_webview
+            from src.network.whatsapp_titan_gui import show_whatsapp_client
             
             # Auto-disable Titan UI when webview opens
             if self.titan_ui_mode:
@@ -3942,7 +3942,7 @@ class InvisibleUI:
                     if self._shutdown_in_progress or not self.main_frame:
                         return
                         
-                    whatsapp_window = whatsapp_webview.show_whatsapp_webview(self.main_frame)
+                    whatsapp_window = show_whatsapp_client(self.main_frame)
                     if whatsapp_window and not whatsapp_window.IsBeingDeleted():
                         # Safely bind close event to re-enable Titan UI when webview closes
                         try:

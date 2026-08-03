@@ -498,44 +498,66 @@ def _service_label(svc):
     return 'WhatsApp' if svc == 'whatsapp' else 'Messenger'
 
 
-def _webview_service(svc):
-    """Return (get_instance, show_window, logged_in_attr) for a WebView IM, or
-    None if ``svc`` is not a WebView-based service."""
+def _im_backend(svc):
+    """The Titan IM web backend object for ``svc`` without starting an engine.
+
+    ``start=False`` matters: the AI must not silently spin up a WhatsApp or
+    Messenger session the user never opened. It only rides along on an engine
+    that is already running and signed in.
+    """
     if svc == 'whatsapp':
-        from src.network import whatsapp_webview as wv
-        return (wv.get_whatsapp_instance, wv.show_whatsapp_webview,
-                'whatsapp_logged_in')
+        from src.network.im_web.whatsapp_backend import get_whatsapp_backend
+        return get_whatsapp_backend(start=False)
     if svc == 'messenger':
-        from src.network import messenger_webview as mv
-        return (mv.get_messenger_instance, mv.show_messenger_webview, None)
+        from src.network.im_web.messenger_backend import get_messenger_backend
+        return get_messenger_backend(start=False)
     return None
 
 
 def _titan_im_window_ready(svc):
-    """The open Titan IM WebView for ``svc`` if it exists and is signed in (so it
-    can send right away), else None."""
+    """The running, signed-in backend for ``svc`` (so it can send right away)."""
     try:
-        get_instance, _show, logged_in_attr = _webview_service(svc)
+        backend = _im_backend(svc)
     except Exception:
         return None
-    inst = get_instance()
-    if inst is None:
+    if backend is None or not backend.running or not backend.logged_in:
         return None
-    if logged_in_attr and not getattr(inst, logged_in_attr, False):
-        return None
-    return inst
+    return backend
+
+
+def _backend_call(fn, timeout=30.0):
+    """Run one asynchronous backend command and wait for its result dict."""
+    import threading
+    done = threading.Event()
+    box = {}
+
+    def _callback(result):
+        box.update(result or {})
+        done.set()
+
+    fn(_callback)
+    if not done.wait(timeout):
+        return {'success': False, 'error': 'timed out'}
+    return box
 
 
 def _webview_send(svc, recipient, message):
-    """Try to send through an already-open, signed-in Titan IM WebView. Returns
-    (sent: bool, text)."""
+    """Send through an already-open, signed-in Titan IM client. Returns
+    (sent: bool, text).
+
+    The backends accept a conversation name where an id is expected (both page
+    agents resolve a display name), so the AI can keep saying "send to Anna".
+    """
     label = _service_label(svc)
-    inst = _titan_im_window_ready(svc)
-    if inst is None:
+    backend = _titan_im_window_ready(svc)
+    if backend is None:
         return False, ''
-    ok, res = _run_on_gui(lambda: bool(inst.send_message_to_chat(recipient, message)))
-    if ok and res:
-        return True, f"Message sent to {recipient} on {label} (Titan IM window)."
+    result = _backend_call(
+        lambda cb: backend.send_text(recipient, message, callback=cb), timeout=45.0)
+    if result.get('success'):
+        return True, f"Message sent to {recipient} on {label} (Titan IM)."
+    error = result.get('error') or ''
+    print(f"[titan_tools] {label} send failed: {error}")
     return False, ''
 
 
@@ -680,13 +702,30 @@ def titan_im_login(service, username, password="", **_):
         return f"Telegram login result: {res}"
     if svc in ('whatsapp', 'messenger'):
         label = _service_label(svc)
+        # Prefer Titan's own accessible client: it signs in without a QR code
+        # (WhatsApp pairing code) or in a normal dialog (Messenger), and once it
+        # is up the AI can send and read through the backend directly.
+        opened = False
+        try:
+            if svc == 'whatsapp':
+                from src.network.whatsapp_titan_gui import show_whatsapp_client as _show
+            else:
+                from src.network.messenger_titan_gui import show_messenger_client as _show
+            ok, res = _run_on_gui(lambda: bool(_show(None)))
+            opened = bool(ok and res)
+        except Exception as e:
+            print(f"[titan_tools] could not open the {label} client: {e}")
+        if opened:
+            return (f"Opened the Titan {label} client. Sign in there (Titan asks "
+                    f"for what it needs - no QR code); after that I can list "
+                    f"conversations and send messages directly.")
+
         url = ('https://web.whatsapp.com/' if svc == 'whatsapp'
                else 'https://www.messenger.com/')
         _open_uri(url)
-        return (f"Opened {label} in the browser so you can sign in (or just use "
-                f"the {label} desktop app if you have it installed). Once you are "
-                f"signed in there, I can send messages - I'll use the desktop app, "
-                f"the browser, or the Titan IM window, whatever is available.")
+        return (f"The Titan {label} client could not be opened, so I opened "
+                f"{label} in the browser instead. Sign in there and I will send "
+                f"through the browser or the desktop app.")
     return (f"Don't know how to log in to '{service}'. Known services: "
             "titan_net, telegram, whatsapp, messenger.")
 
@@ -779,23 +818,23 @@ def titan_list_im_contacts(service, **_):
         return f"Telegram contacts: {str(res)[:2000]}"
     if svc in ('whatsapp', 'messenger'):
         label = 'WhatsApp' if svc == 'whatsapp' else 'Messenger'
-        try:
-            get_instance, _show, _attr = _webview_service(svc)
-        except Exception as e:
-            return f"{label} is not available in this session: {e}"
-        inst = get_instance()
-        if inst is None:
-            return (f"{label} is not open. Open it first (titan_im_login with "
-                    f"service '{svc}') and sign in.")
-        getter = getattr(inst, 'get_chat_list', None) or getattr(
-            inst, 'get_conversations', None)
-        if not callable(getter):
-            return (f"{label} is open; you can send by recipient name without "
-                    f"listing contacts first.")
-        ok, res = _run_on_gui(getter)
-        if not ok:
-            return f"Could not list {label} chats: {res}"
-        return f"{label} chats: {str(res)[:2000]}"
+        backend = _titan_im_window_ready(svc)
+        if backend is None:
+            return (f"{label} is not open (or not signed in). Open it first "
+                    f"(titan_im_login with service '{svc}') and sign in.")
+        result = _backend_call(lambda cb: backend.list_chats(callback=cb), timeout=45.0)
+        if not result.get('success'):
+            return f"Could not list {label} chats: {result.get('error') or ''}"
+        chats = result.get('chats') or []
+        lines = []
+        for chat in chats[:60]:
+            entry = chat.name
+            if chat.unread:
+                entry += f" ({chat.unread} unread)"
+            if chat.last_message:
+                entry += f": {chat.last_message}"
+            lines.append(entry)
+        return f"{label} chats: " + ("; ".join(lines) if lines else "(none)")
     return "Known services: titan_net, telegram, whatsapp, messenger."
 
 

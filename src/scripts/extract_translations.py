@@ -22,7 +22,12 @@ DOMAIN_FILES = {
         'src/network/messenger_client.py', 'src/network/messenger_gui.py', 'src/network/messenger_webview.py',
         'src/network/telegram_client.py', 'src/network/telegram_gui.py', 'src/network/telegram_voice.py', 'src/network/telegram_windows.py',
         'src/network/whatsapp_client.py', 'src/network/whatsapp_webview.py',
-        'src/settings/titan_im_config.py', 'src/network/run_messenger.py'
+        'src/settings/titan_im_config.py', 'src/network/run_messenger.py',
+        # Titan IM web-as-backend layer: accessible clients + shared UI
+        'src/network/im_ui_common.py', 'src/network/im_client_base.py',
+        'src/network/im_conversation.py', 'src/network/im_call_ui.py',
+        'src/network/whatsapp_titan_gui.py', 'src/network/messenger_titan_gui.py',
+        'src/network/im_web/base.py',
     ],
     'titannet': [
         'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/titan_net_mod_components.py', 'src/network/feedback_hub.py', 'src/network/remote_ui.py', 'src/network/server_sounds.py', 'src/network/server_sounds_gui.py', 'src/system/klangomode.py'

@@ -268,6 +268,35 @@ DEFAULT_CONFIG = {
     }
 }
 
+def get_web_im_config(service: str) -> dict:
+    """Get the configuration of a web-backed Titan IM service.
+
+    ``service`` is 'whatsapp' or 'messenger'. Everything lives in the encrypted
+    titan.IM file inside the per-user data directory - the same place as the
+    Telegram and EltenLink credentials, and never next to the executable.
+    """
+    config = load_titan_im_config()
+    return config.get(service, {})
+
+
+def save_web_im_config(service: str, service_config: dict):
+    """Save the configuration of a web-backed Titan IM service."""
+    config = load_titan_im_config()
+    config[service] = service_config
+    save_titan_im_config(config)
+
+
+def set_web_im_value(service: str, key: str, value):
+    """Store one value (last phone number, remembered e-mail, ...)."""
+    service_config = get_web_im_config(service)
+    service_config[key] = value
+    save_web_im_config(service, service_config)
+
+
+def get_web_im_value(service: str, key: str, default=None):
+    return get_web_im_config(service).get(key, default)
+
+
 def initialize_config():
     """Initialize configuration with default values if not exists"""
     if not os.path.exists(get_titan_im_config_path()):

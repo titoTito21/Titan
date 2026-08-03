@@ -57,10 +57,10 @@ class WhatsAppClient:
         self.typing_callbacks.append(callback)
     
     def open_whatsapp_web(self):
-        """Open WhatsApp Web in WebView (integrated with Titan IM)"""
+        """Open the accessible WhatsApp client (WhatsApp Web runs offscreen)"""
         try:
-            # Use the existing WebView integration
-            whatsapp_window = whatsapp_webview.show_whatsapp_webview(None)
+            from src.network.whatsapp_titan_gui import show_whatsapp_client
+            whatsapp_window = show_whatsapp_client(None)
             if whatsapp_window:
                 return True
             else:
