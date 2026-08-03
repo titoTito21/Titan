@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -66,27 +66,28 @@ msgstr ""
 msgid "Notifications"
 msgstr ""
 
-
-#: src/ui/notificationcenter.py:213
+#: src/ui/notificationcenter.py:210
 msgid "Notification center"
 msgstr "Centrum powiadomień"
 
-#: src/ui/notificationcenter.py:222
+#: src/ui/notificationcenter.py:218
 msgid "Notifications:"
 msgstr "Powiadomienia:"
 
-#: src/ui/notificationcenter.py:229
+#: src/ui/notificationcenter.py:225
 msgid "Clear all"
 msgstr "Wyczyść wszystko"
 
-#: src/ui/notificationcenter.py:230
+#: src/ui/notificationcenter.py:226
 msgid "Close"
 msgstr "Zamknij"
 
-#: src/ui/notificationcenter.py:262
+#: src/ui/notificationcenter.py:254
+#, python-brace-format
 msgid "Notification center, {} items"
 msgstr "Centrum powiadomień, elementów: {}"
 
-#: src/ui/notificationcenter.py:265
+#: src/ui/notificationcenter.py:257
 msgid "Notification center, no notifications"
 msgstr "Centrum powiadomień, brak powiadomień"
+

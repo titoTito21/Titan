@@ -218,6 +218,11 @@ MESSENGER_AGENT = r"""
   }
 
   // ------------------------------------------------------------------ reading
+  // Last good read per scope. Messenger unmounts the conversation grid while
+  // it re-renders (and when a thread takes over the view), and a read taken at
+  // that moment returns nothing - which used to wipe the whole list in Titan.
+  var lastChats = {};
+
   function listChats(scope) {
     var rows = D.qa(ROWS_CONVERSATIONS());
     var out = [];
@@ -231,6 +236,15 @@ MESSENGER_AGENT = r"""
       if (scope === 'active' && !chat.online) { continue; }
       out.push(chat);
     }
+
+    if (!rows.length) {
+      // No rows at all means the list is not on the page right now, not that
+      // the user has no conversations. An empty scope (no unread, say) still
+      // has rows and is reported honestly.
+      var cached = lastChats[scope];
+      if (cached && cached.length) { return cached; }
+    }
+    if (out.length) { lastChats[scope] = out; }
     return out;
   }
 
@@ -272,10 +286,12 @@ MESSENGER_AGENT = r"""
     }
 
     // Not rendered (older conversation): a real navigation is the only way in.
-    // The agent is injected at document start, so it survives the reload.
+    // The agent is injected at document start, so it survives the reload - but
+    // this document does not, so nothing may be awaited afterwards. The caller
+    // gets ``navigating`` and Titan re-asks once the new page is up.
     if (/^\d+$/.test(wanted) || wanted.indexOf('cid.') === 0) {
       location.assign('https://www.messenger.com/t/' + wanted + '/');
-      return { opened: true, via: 'navigate' };
+      return { opened: false, navigating: true, via: 'navigate' };
     }
     throw new Error('conversation not found: ' + chatId);
   }
@@ -326,13 +342,16 @@ MESSENGER_AGENT = r"""
     try {
       var chatId = currentThreadId();
       if (!chatId) { return; }
-      var indicator = D.q(['[aria-label*="typing" i]', '[aria-label*="pisze" i]',
-                           'div[role="main"] [data-visualcompletion="loading-state"]']);
-      var typing = !!indicator;
+      // Only the other side counts. A generic loading spinner used to match
+      // here, which made Titan announce "typing" while *we* were sending.
+      var indicator = D.q(['[aria-label*="is typing" i]', '[aria-label*="pisze" i]',
+                           '[aria-label*="typing" i]']);
+      var typing = !!(indicator && !OWN_RE.test(indicator.getAttribute('aria-label') || ''));
       if (!typing) {
         var rows = D.qa(THREAD_ROWS());
         var last = rows.length ? rows[rows.length - 1] : null;
-        typing = !!(last && TYPING_RE.test(last.getAttribute('aria-label') || ''));
+        var label = last ? (last.getAttribute('aria-label') || '') : '';
+        typing = !!(label && TYPING_RE.test(label) && !OWN_RE.test(label));
       }
       var now = Date.now();
       if (typing && lastTyping[chatId] && (now - lastTyping[chatId]) < 4000) { return; }
@@ -456,24 +475,140 @@ MESSENGER_AGENT = r"""
   }
 
   // -------------------------------------------------------------------- auth
+  // Meta reshuffles this markup constantly, so no single selector may decide
+  // the login state: the session cookie, the address and several independent
+  // pieces of the logged-in UI all get a vote. Missing one of them must never
+  // be enough to tell an actually-logged-in user that they are logged out.
+  function sessionUserId() {
+    try {
+      var match = /(?:^|;\s*)c_user=(\d+)/.exec(document.cookie || '');
+      return match ? match[1] : '';
+    } catch (e) { return ''; }
+  }
+
+  function loginFormVisible() {
+    var box = D.q(['input[name="pass"]', 'input[id="pass"]',
+                   'form[action*="login" i] input[type="password"]']);
+    if (!box) { return false; }
+    // A hidden/detached form left over from a completed login does not count.
+    try {
+      if (!box.offsetParent && !box.getClientRects().length) { return false; }
+    } catch (e) { /* treat an unreadable box as visible */ }
+    return true;
+  }
+
+  function loggedInMarkers() {
+    return !!D.q(['div[role="grid"][aria-label*="Conversation" i]',
+                  'div[role="grid"][aria-label*="Rozmow" i]',
+                  'div[role="grid"][aria-label*="Chat" i]',
+                  'div[role="grid"][aria-label*="Czat" i]',
+                  'a[href*="messenger.com/t/"]',
+                  'div[role="navigation"] a[href*="/t/"]',
+                  'div[role="grid"] a[href*="/t/"]',
+                  'div[role="main"] div[role="textbox"][contenteditable="true"]',
+                  '[aria-label*="New message" i]',
+                  '[aria-label*="Nowa wiadomo" i]']);
+  }
+
   function detectAuth() {
     var url = String(location.href || '');
-    if (/checkpoint|two_factor|two-step/i.test(url) ||
-        D.q(['input[name="approvals_code"]', 'input[autocomplete="one-time-code"]'])) {
-      return { state: 'challenge', reason: 'two_factor' };
+    var host = String(location.hostname || '');
+    var challenge = /checkpoint|two_factor|two-step|recover|confirmemail/i.test(url) ||
+                    !!D.q(['input[name="approvals_code"]',
+                           'input[autocomplete="one-time-code"]']);
+    if (challenge) { return { state: 'challenge', reason: 'two_factor' }; }
+
+    var hasSession = !!sessionUserId();
+
+    // Logging in on the visible page often finishes on facebook.com. The
+    // session is shared, so the honest answer is "logged in" - and the agent
+    // walks the view back to Messenger by itself.
+    if (hasSession && !/messenger\.com$/i.test(host) && /facebook\.com$/i.test(host)) {
+      if (!loginFormVisible()) {
+        goHome();
+        return { state: 'loading', reason: 'returning_to_messenger' };
+      }
     }
-    if (D.q(['div[role="grid"][aria-label*="Conversation" i]',
-             'div[role="grid"][aria-label*="Rozmow" i]',
-             'div[role="navigation"] a[href*="/t/"]'])) {
+
+    if (loggedInMarkers()) { sawChatsOnce = true; return { state: 'logged_in' }; }
+    if (/messenger\.com\/(t|e2ee|requests|marketplace)\//i.test(url) && hasSession) {
+      sawChatsOnce = true;
       return { state: 'logged_in' };
     }
-    if (D.q(['input[name="pass"]', 'input[type="password"]'])) {
-      return { state: 'logged_out' };
-    }
-    if (D.q(['[role="progressbar"]', 'div[data-visualcompletion="loading-state"]'])) {
+    // ``c_user`` may be http-only depending on how Meta sets it, so a loaded
+    // messenger.com that is not showing a login form counts as well: the
+    // logged-out landing page always has that form.
+    var settled = (document.readyState === 'complete') &&
+                  /messenger\.com$/i.test(host);
+    if ((hasSession || settled) && !loginFormVisible()) {
+      // The cookie says the session is live and no login form is asking for
+      // anything, so the chat list is merely still rendering. Give it a few
+      // seconds, then trust the cookie: a markup change on Meta's side must
+      // not tell a logged-in user that they are logged out.
+      if (sawChatsOnce) { return { state: 'logged_in' }; }
+      if (!sessionSeenAt) { sessionSeenAt = Date.now(); }
+      if (Date.now() - sessionSeenAt > 8000) {
+        sawChatsOnce = true;
+        return { state: 'logged_in' };
+      }
       return { state: 'loading' };
     }
+    sessionSeenAt = 0;
+    if (loginFormVisible()) { return { state: 'logged_out' }; }
+
+    // Nothing recognisable on the page. If this session was logged in a moment
+    // ago it still is - Messenger re-renders itself constantly, and reporting
+    // "connecting" here made the client throw the loaded chat list away.
+    if (sawChatsOnce) { return { state: 'logged_in' }; }
     return { state: 'loading' };
+  }
+
+  // Messenger takes its time before the grid exists; once it has been seen the
+  // cookie alone is trusted, so a re-render can never flip the client back to
+  // "not logged in" mid-session.
+  var sawChatsOnce = false;
+  var sessionSeenAt = 0;
+  var homeSentAt = 0;
+  var HOME_URL = 'https://www.messenger.com/';
+  var REQUESTS_URL = 'https://www.messenger.com/requests/';
+
+  function atRequests() {
+    return /message_requests|\/requests/i.test(String(location.href || ''));
+  }
+
+  function atThread() {
+    return /messenger\.com\/(t|e2ee)\//i.test(String(location.href || ''));
+  }
+
+  function goHome(force) {
+    var now = Date.now();
+    if (!force && now - homeSentAt < 15000) { return; }
+    homeSentAt = now;
+    try { location.assign(HOME_URL); } catch (e) { /* blocked */ }
+  }
+
+  // The engine can end up stranded on a page that simply has no conversation
+  // list (message requests, marketplace, a settings screen someone opened).
+  // Every read there is empty, which is what emptied the client's list after a
+  // while. If that lasts, walk back to the inbox.
+  var lastScopeAsked = 'all';
+  var lastScopeAskedAt = 0;
+  var gridSeenAt = 0;
+
+  function watchdog() {
+    if (!sawChatsOnce) { return; }
+    var now = Date.now();
+    if (D.qa(ROWS_CONVERSATIONS()).length) { gridSeenAt = now; return; }
+    if (!gridSeenAt) { gridSeenAt = now; return; }
+    if (now - gridSeenAt < 25000) { return; }
+    // A thread and the requests page are places the user asked to be in - but
+    // only while they are still there. A client window closed on the requests
+    // tab must not leave the engine parked there, blind to everything else.
+    if (atThread()) { return; }
+    if (atRequests() && lastScopeAsked === 'requests' &&
+        now - lastScopeAskedAt < 120000) { return; }
+    gridSeenAt = now;
+    goHome();
   }
 
   function pushAuth(force) {
@@ -569,12 +704,20 @@ MESSENGER_AGENT = r"""
 
   B.command('list_chats', function (args) {
     var scope = args.scope || 'all';
+    lastScopeAsked = scope;
+    lastScopeAskedAt = Date.now();
     if (scope === 'requests') {
       // Message requests live on their own page.
-      if (!/message_requests|requests/i.test(location.href)) {
-        location.assign('https://www.messenger.com/requests/');
+      if (!atRequests()) {
+        location.assign(REQUESTS_URL);
         return { chats: [], navigating: true };
       }
+    } else if (atRequests()) {
+      // Leaving the requests page again. Without this the engine stayed on
+      // /requests/ for good, where the conversation grid does not exist - so
+      // every later read came back empty and the whole list vanished.
+      goHome(true);
+      return { chats: lastChats[scope] || [], navigating: true };
     }
     return { chats: listChats(scope), via: 'dom' };
   });
@@ -583,10 +726,16 @@ MESSENGER_AGENT = r"""
 
   B.command('load_history', function (args) {
     var limit = args.limit || 50;
-    return Promise.resolve(openThread(args.chat_id)).then(function () {
+    return Promise.resolve(openThread(args.chat_id)).then(function (opened) {
+      if (opened && opened.navigating) {
+        // This document is on its way out - awaiting anything here would time
+        // out. Titan asks again as soon as the new page's agent is ready.
+        return { navigating: true };
+      }
       return D.waitFor(function () { return D.qa(THREAD_ROWS()).length > 0; }, 10000)
         .catch(function () { return true; });
-    }).then(function () {
+    }).then(function (state) {
+      if (state && state.navigating) { return state; }
       if (args.before_id) {
         // Older messages: Messenger loads them when the thread is scrolled up.
         var scroller = D.q(['div[role="main"] div[style*="overflow"]',
@@ -595,7 +744,8 @@ MESSENGER_AGENT = r"""
         return new Promise(function (resolve) { setTimeout(resolve, 900); });
       }
       return true;
-    }).then(function () {
+    }).then(function (state) {
+      if (state && state.navigating) { return state; }
       var messages = readThread(limit);
       messages.forEach(function (m) { seen(m.id); });
       return { messages: messages, has_more: true, via: 'dom' };
@@ -796,6 +946,7 @@ MESSENGER_AGENT = r"""
     }
 
     pushAuth(false);
+    watchdog();
     drainCallEvents();
   }
 

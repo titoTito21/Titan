@@ -34,7 +34,8 @@ TAB_REQUESTS = 'requests'
 class MessengerLoginDialog(wx.Dialog):
     """E-mail and password, typed into Messenger's own login form for us."""
 
-    def __init__(self, parent, default_email: str = ''):
+    def __init__(self, parent, default_email: str = '',
+                 default_password: str = ''):
         super().__init__(parent, title=_("Log in to Messenger"), size=(470, 300))
 
         panel = wx.Panel(self)
@@ -53,12 +54,20 @@ class MessengerLoginDialog(wx.Dialog):
 
         sizer.Add(wx.StaticText(panel, label=_("Password:")),
                   flag=wx.LEFT | wx.RIGHT, border=10)
-        self.password = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        self.password = wx.TextCtrl(panel, value=default_password,
+                                    style=wx.TE_PASSWORD)
         sizer.Add(self.password, flag=wx.EXPAND | wx.ALL, border=10)
 
-        self.remember = wx.CheckBox(panel, label=_("Remember the e-mail address"))
+        self.remember = wx.CheckBox(panel, label=_(
+            "Remember the e-mail address and the password"))
+        # Ticked by default, and already ticked when there is something saved.
         self.remember.SetValue(True)
         sizer.Add(self.remember, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
+
+        sizer.Add(wx.StaticText(panel, label=_(
+            "The password is kept in the encrypted Titan IM file, the same "
+            "place as the other messenger credentials.")),
+            flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         ok = wx.Button(panel, wx.ID_OK, _("Log in"))
@@ -110,12 +119,14 @@ class MessengerClientFrame(WebIMClientFrame):
         from src.settings.titan_im_config import get_web_im_value, set_web_im_value
 
         remembered = ''
+        remembered_password = ''
         try:
             remembered = get_web_im_value('messenger', 'email', '') or ''
+            remembered_password = get_web_im_value('messenger', 'password', '') or ''
         except Exception as exc:
-            print(f"[Messenger] could not read the remembered e-mail: {exc}")
+            print(f"[Messenger] could not read the remembered credentials: {exc}")
 
-        dialog = MessengerLoginDialog(self, remembered)
+        dialog = MessengerLoginDialog(self, remembered, remembered_password)
         try:
             if dialog.ShowModal() != wx.ID_OK:
                 speak_titannet(_("Login cancelled."))
@@ -131,37 +142,34 @@ class MessengerClientFrame(WebIMClientFrame):
                                'warning')
             return
 
-        if remember:
-            try:
-                set_web_im_value('messenger', 'email', email)
-            except Exception as exc:
-                print(f"[Messenger] could not save the e-mail: {exc}")
+        # Remembering means both halves: an e-mail without its password still
+        # makes the user type the password on every single login.
+        try:
+            set_web_im_value('messenger', 'email', email if remember else '')
+            set_web_im_value('messenger', 'password', password if remember else '')
+        except Exception as exc:
+            print(f"[Messenger] could not save the credentials: {exc}")
 
         speak_titannet(_("Logging in to Messenger..."))
         self.backend.login_with_credentials(email, password,
                                             callback=self._on_login_result)
 
     def _on_login_result(self, result: Dict) -> None:
+        # The agent pushes the auth state before this result comes back, so the
+        # question about showing the page may already have been asked - it goes
+        # through ask_to_show_page, which asks at most once per challenge.
         if not result.get('success'):
-            answer = show_message(
-                self,
+            self.ask_to_show_page(
                 _("Messenger login failed.\nError: {error}\n\n"
                   "Show the web page so you can log in there instead?").format(
-                      error=result.get('error') or ''),
-                _("Login"), wx.YES_NO | wx.ICON_WARNING)
-            if answer == wx.ID_YES:
-                self.show_web_page()
+                      error=result.get('error') or ''))
             return
 
         if result.get('needs_page'):
-            answer = show_message(
-                self,
+            self.ask_to_show_page(
                 _("Facebook is asking for an extra confirmation (a code, a "
                   "captcha or a device check).\nShow the page so you can finish "
-                  "logging in?"),
-                _("Confirmation required"), wx.YES_NO | wx.ICON_WARNING)
-            if answer == wx.ID_YES:
-                self.show_web_page()
+                  "logging in?"))
             return
 
         speak_notification(_("Connected to Messenger"), 'success')

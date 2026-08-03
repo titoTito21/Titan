@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -117,31 +117,31 @@ msgstr ""
 msgid "Enter"
 msgstr ""
 
-#: src/controller/controller_modes.py:542
+#: src/controller/controller_modes.py:554
 msgid "System mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:543
+#: src/controller/controller_modes.py:555
 msgid "Controller mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:544
+#: src/controller/controller_modes.py:556
 msgid "Screen reader mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:545
+#: src/controller/controller_modes.py:557
 msgid "Screen keyboard mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:547
+#: src/controller/controller_modes.py:559
 msgid "Unknown mode"
 msgstr ""
 
-#: src/controller/controller_modes.py:824
+#: src/controller/controller_modes.py:836
 msgid "Exiting screen reader"
 msgstr ""
 
-#: src/controller/controller_modes.py:868
+#: src/controller/controller_modes.py:880
 msgid "Backspace"
 msgstr ""
 

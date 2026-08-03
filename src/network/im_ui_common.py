@@ -180,9 +180,25 @@ class TabbedListFrame(wx.Frame):
     def build_footer(self, sizer: wx.BoxSizer) -> None:
         """Optional controls below the list (a message input, for example)."""
 
-    def load_items(self, tab_id: str) -> None:
-        """Fetch the rows for ``tab_id`` and hand them to ``apply_items``."""
-        self.apply_items([], tab_id)
+    def load_items(self, tab_id: str, background: bool = False) -> None:
+        """Fetch the rows for ``tab_id`` and hand them to ``apply_items``.
+
+        ``background`` marks a refresh the user did not ask for (live data
+        arriving on its own): it must never move focus or take it away.
+        """
+        self.apply_items([], tab_id, background=background)
+
+    def row_key(self, item: Any) -> str:
+        """Stable identity of a row, used to keep focus across a refresh.
+
+        Live lists reorder - a chat that gets a message jumps to the top - so
+        the row the user is reading is followed by identity, not by index.
+        """
+        for attribute in ('id', 'chat_id', 'msg_id'):
+            value = getattr(item, attribute, None)
+            if value:
+                return f"{attribute}:{value}"
+        return ''
 
     def format_row(self, item: Any) -> str:
         return str(item)
@@ -266,31 +282,61 @@ class TabbedListFrame(wx.Frame):
             self.listbox.SetString(0, self.tab_bar_text())
 
     # ---------------------------------------------------------------- rows
-    def refresh(self) -> None:
-        self.load_items(self.current_tab)
+    def refresh(self, background: bool = False) -> None:
+        self.load_items(self.current_tab, background=background)
 
     def apply_items(self, items: Sequence[Any], tab_id: str = '',
-                    keep_focus: bool = False) -> None:
-        """Replace the rows. Row 0 is always the tab bar."""
+                    keep_focus: bool = False, background: bool = False) -> None:
+        """Replace the rows. Row 0 is always the tab bar.
+
+        A ``background`` refresh is data arriving by itself. It rewrites the
+        rows underneath the user: the row they are on keeps the focus (matched
+        by identity, so a reordered list does not move them), focus is never
+        taken, and an unchanged list is not touched at all - the same quiet
+        behaviour Elten has.
+        """
         if self._closing:
             return
         if tab_id and tab_id != self.current_tab:
             return  # the user switched tabs while the request was in flight
 
+        items = list(items)
+        rows = [self.format_row(item) for item in items]
+
+        if background and not self._rows_changed(rows):
+            # Same list as on screen: rebuilding it would only make the screen
+            # reader re-read the row and reset the caret for nothing.
+            self.items = items
+            self.SetStatusText(self.status_text())
+            return
+
+        keep_focus = keep_focus or background
         previous = self.listbox.GetSelection() if keep_focus else 0
-        self.items = list(items)
+        focused_key = ''
+        if keep_focus and previous > 0:
+            position = previous - 1
+            if 0 <= position < len(self.items):
+                focused_key = self.row_key(self.items[position])
+
+        self.items = items
         self.listbox.Freeze()
         try:
             self.listbox.Clear()
             self.listbox.Append(self.tab_bar_text(), dict(TAB_BAR_MARKER))
-            for item in self.items:
-                self.listbox.Append(self.format_row(item), item)
+            for index, item in enumerate(self.items):
+                self.listbox.Append(rows[index], item)
         finally:
             self.listbox.Thaw()
 
         target = 0
-        if keep_focus and 0 <= previous < self.listbox.GetCount():
-            target = previous
+        if keep_focus:
+            moved = self._index_of_key(focused_key) if focused_key else -1
+            if moved > 0:
+                target = moved
+            elif 0 <= previous < self.listbox.GetCount():
+                target = previous
+            else:
+                target = max(0, self.listbox.GetCount() - 1)
         self.listbox.SetSelection(target)
         self._last_focus_idx = target
         if not keep_focus:
@@ -298,6 +344,22 @@ class TabbedListFrame(wx.Frame):
             # contract as TitanApp's list views, so Left/Right keeps cycling.
             self.listbox.SetFocus()
         self.SetStatusText(self.status_text())
+
+    def _rows_changed(self, rows: Sequence[str]) -> bool:
+        """True when the rendered rows differ from what is on screen."""
+        if self.listbox.GetCount() != len(rows) + 1:
+            return True
+        for index, text in enumerate(rows):
+            if self.listbox.GetString(index + 1) != text:
+                return True
+        return False
+
+    def _index_of_key(self, key: str) -> int:
+        """Listbox row (tab bar included) holding the item with ``key``."""
+        for position, item in enumerate(self.items):
+            if self.row_key(item) == key:
+                return position + 1
+        return -1
 
     def selected_item(self) -> Optional[Any]:
         index = self.listbox.GetSelection()

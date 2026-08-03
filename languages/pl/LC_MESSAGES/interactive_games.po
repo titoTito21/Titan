@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TCE Launcher\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2026-04-30 14:51+0200\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -229,11 +229,11 @@ msgid "Download attachment"
 msgstr "Pobierz załącznik"
 
 #: src/network/interactive_games.py:611 src/network/interactive_games.py:749
-#: src/network/interactive_games.py:1209
+#: src/network/interactive_games.py:1211
 msgid "Delete game"
 msgstr "Usuń grę"
 
-#: src/network/interactive_games.py:616 src/network/interactive_games.py:821
+#: src/network/interactive_games.py:616 src/network/interactive_games.py:823
 msgid "Close"
 msgstr "Zamknij"
 
@@ -306,126 +306,126 @@ msgstr "Nie można otworzyć załącznika: {error}"
 msgid "Delete '{name}' and all its sessions? This cannot be undone."
 msgstr "Usunąć „{name}” i wszystkie jego sesje? Tej operacji nie można cofnąć."
 
-#: src/network/interactive_games.py:762 src/network/interactive_games.py:1223
+#: src/network/interactive_games.py:764 src/network/interactive_games.py:1226
 msgid "Failed to delete"
 msgstr "Nie udało się usunąć"
 
-#: src/network/interactive_games.py:764
+#: src/network/interactive_games.py:766
 msgid "Game deleted"
 msgstr "Gra usunięta"
 
-#: src/network/interactive_games.py:789
+#: src/network/interactive_games.py:791
 msgid "Interactive Games"
 msgstr "Gry interaktywne"
 
-#: src/network/interactive_games.py:811
+#: src/network/interactive_games.py:813
 msgid "Interactive Games (Entertainment)"
 msgstr "Gry interaktywne (Rozrywka)"
 
-#: src/network/interactive_games.py:815
+#: src/network/interactive_games.py:817
 msgid "New game"
 msgstr "Nowa gra"
 
 #: src/network/interactive_game_session.py:720
-#: src/network/interactive_games.py:818
+#: src/network/interactive_games.py:820
 msgid "Refresh"
 msgstr "Odśwież"
 
-#: src/network/interactive_games.py:826
+#: src/network/interactive_games.py:828
 msgid "Catalog:"
 msgstr "Katalog:"
 
-#: src/network/interactive_games.py:899
+#: src/network/interactive_games.py:901
 #, python-brace-format
 msgid "New game: {name} by {user}"
 msgstr "Nowa gra: {name} (autor: {user})"
 
-#: src/network/interactive_games.py:916
+#: src/network/interactive_games.py:918
 #, python-brace-format
 msgid "New session for {name}: hosted by {user}"
 msgstr "Nowa sesja gry {name}: prowadzi {user}"
 
 #: src/network/interactive_game_session.py:1186
-#: src/network/interactive_games.py:937
+#: src/network/interactive_games.py:939
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} z {}"
 
-#: src/network/interactive_games.py:949
+#: src/network/interactive_games.py:951
 #, python-brace-format
 msgid "{name} by {user} ({provider}), {n} active session(s)"
 msgstr "{name} (autor: {user}, {provider}), aktywnych sesji: {n}"
 
-#: src/network/interactive_games.py:957
+#: src/network/interactive_games.py:959
 #, python-brace-format
 msgid "{game} hosted by {user}, {n} player(s), status: {status}"
 msgstr "{game} prowadzona przez {user}, graczy: {n}, status: {status}"
 
-#: src/network/interactive_games.py:980
+#: src/network/interactive_games.py:982
 msgid "Failed to load games"
 msgstr "Nie udało się wczytać gier"
 
-#: src/network/interactive_games.py:991
+#: src/network/interactive_games.py:993
 msgid "(no games yet)"
 msgstr "(brak gier)"
 
-#: src/network/interactive_games.py:1004
+#: src/network/interactive_games.py:1006
 msgid "Failed to load sessions"
 msgstr "Nie udało się wczytać sesji"
 
-#: src/network/interactive_games.py:1012
+#: src/network/interactive_games.py:1014
 msgid "(no active sessions)"
 msgstr "(brak aktywnych sesji)"
 
-#: src/network/interactive_games.py:1027
+#: src/network/interactive_games.py:1029
 #, python-brace-format
 msgid "{tab}: {n} entries"
 msgstr "{tab}: liczba wpisów: {n}"
 
-#: src/network/interactive_games.py:1166
+#: src/network/interactive_games.py:1168
 msgid "Joining session..."
 msgstr "Dołączanie do sesji..."
 
-#: src/network/interactive_games.py:1175
+#: src/network/interactive_games.py:1177
 msgid "Failed to join"
 msgstr "Nie udało się dołączyć"
 
-#: src/network/interactive_games.py:1188
+#: src/network/interactive_games.py:1190
 msgid "Failed to open session window"
 msgstr "Nie udało się otworzyć okna sesji"
 
-#: src/network/interactive_games.py:1205
+#: src/network/interactive_games.py:1207
 msgid "You can only delete your own games"
 msgstr "Możesz usuwać tylko własne gry"
 
-#: src/network/interactive_games.py:1208
+#: src/network/interactive_games.py:1210
 #, python-brace-format
 msgid "Delete '{name}'? This cannot be undone."
 msgstr "Usunąć „{name}”? Tej operacji nie można cofnąć."
 
-#: src/network/interactive_games.py:1225
+#: src/network/interactive_games.py:1228
 #, python-brace-format
 msgid "Deleted: {name}"
 msgstr "Usunięto: {name}"
 
-#: src/network/interactive_games.py:1238
+#: src/network/interactive_games.py:1241
 msgid "Publishing game..."
 msgstr "Publikowanie gry..."
 
-#: src/network/interactive_games.py:1257
+#: src/network/interactive_games.py:1260
 msgid "Failed to publish"
 msgstr "Nie udało się opublikować"
 
-#: src/network/interactive_games.py:1259
+#: src/network/interactive_games.py:1262
 msgid "Game published"
 msgstr "Gra opublikowana"
 
-#: src/network/interactive_game_session.py:1500
-#: src/network/interactive_games.py:1278
+#: src/network/interactive_game_session.py:1503
+#: src/network/interactive_games.py:1281
 msgid "You must be connected to Titan-Net"
 msgstr "Musisz być połączony z Titan-Net"
 
-#: src/network/interactive_games.py:1284
+#: src/network/interactive_games.py:1287
 msgid "Titan-Net: Interactive Games"
 msgstr "Titan-Net: Gry interaktywne"
 
@@ -613,16 +613,16 @@ msgstr "Mów (mikrofon WŁ.)"
 msgid "Leave this session?"
 msgstr "Opuścić tę sesję?"
 
-#: src/network/interactive_game_session.py:1456
+#: src/network/interactive_game_session.py:1458
 msgid "End the session for everyone?"
 msgstr "Zakończyć sesję dla wszystkich?"
 
-#: src/network/interactive_game_session.py:1457
+#: src/network/interactive_game_session.py:1459
 #, fuzzy
 msgid "End Session"
 msgstr "Zakończ sesję"
 
-#: src/network/interactive_game_session.py:1507
+#: src/network/interactive_game_session.py:1510
 #, python-brace-format
 msgid "Titan-Net: Game Session #{sid}"
 msgstr "Titan-Net: Sesja gry #{sid}"

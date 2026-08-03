@@ -118,11 +118,19 @@ def ensure_webview2_environment() -> None:
 
 
 class _HostFrame(wx.Frame):
-    """The window the WebView lives in. Normally parked offscreen."""
+    """The window the WebView lives in. Normally parked offscreen.
+
+    It has to stay a real, shown window (an occluded WebView2 gets throttled by
+    Chromium), but the user must never meet it: FRAME_TOOL_WINDOW keeps it out
+    of Alt+Tab and out of Titan's own window switcher, which skips
+    WS_EX_TOOLWINDOW. It is only ever *seen* when the client brings the service
+    page up for a login checkpoint.
+    """
 
     def __init__(self, title: str, on_user_close: Callable[[], None]):
         super().__init__(None, title=title, size=HOST_SIZE,
-                         style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_NO_TASKBAR)
+                         style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_NO_TASKBAR
+                         | wx.FRAME_TOOL_WINDOW)
         self._on_user_close = on_user_close
         self.Bind(wx.EVT_CLOSE, self._on_close)
 
@@ -273,8 +281,14 @@ class WebBridge:
         def _hide():
             if self.frame is None:
                 return
+            was_visible = self._page_visible
             self._page_visible = False
             self.frame.SetPosition(OFFSCREEN_POS)
+            # The user was most likely logging in there, so whoever is
+            # listening gets a chance to re-read the login state right away
+            # instead of waiting for the page's own poll.
+            if was_visible:
+                self._fire('page_hidden', {'service': self.service})
         wx.CallAfter(_hide)
 
     @property

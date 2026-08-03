@@ -8,12 +8,13 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 11:16+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2025-11-22 19:24+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
+"(n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -377,8 +378,12 @@ msgid "Recover Password"
 msgstr "Odzyskiwanie hasła"
 
 #: src/network/titan_net_gui.py:581
-msgid "Enter your username or the email on your account. If a verified email is on file, we will send a reset link to it."
-msgstr "Podaj nazwę użytkownika lub e-mail przypisany do konta. Jeśli mamy zweryfikowany adres, wyślemy na niego link resetujący."
+msgid ""
+"Enter your username or the email on your account. If a verified email is "
+"on file, we will send a reset link to it."
+msgstr ""
+"Podaj nazwę użytkownika lub e-mail przypisany do konta. Jeśli mamy "
+"zweryfikowany adres, wyślemy na niego link resetujący."
 
 #: src/network/titan_net_gui.py:586
 msgid "Username or email:"
@@ -389,8 +394,12 @@ msgid "Send reset link"
 msgstr "Wyślij link resetujący"
 
 #: src/network/titan_net_gui.py:598
-msgid "Already have the reset link/token from your email? Paste it below with a new password."
-msgstr "Masz już link lub token resetu z e-maila? Wklej go poniżej wraz z nowym hasłem."
+msgid ""
+"Already have the reset link/token from your email? Paste it below with a "
+"new password."
+msgstr ""
+"Masz już link lub token resetu z e-maila? Wklej go poniżej wraz z nowym "
+"hasłem."
 
 #: src/network/titan_net_gui.py:603
 msgid "Reset token:"
@@ -429,8 +438,12 @@ msgid "Sending..."
 msgstr "Wysyłanie..."
 
 #: src/network/titan_net_gui.py:655
-msgid "If an account with a verified email matches, a reset link has been sent. Check your inbox, then paste the token below."
-msgstr "Jeśli istnieje konto ze zweryfikowanym adresem e-mail, link resetujący został wysłany. Sprawdź skrzynkę i wklej token poniżej."
+msgid ""
+"If an account with a verified email matches, a reset link has been sent. "
+"Check your inbox, then paste the token below."
+msgstr ""
+"Jeśli istnieje konto ze zweryfikowanym adresem e-mail, link resetujący "
+"został wysłany. Sprawdź skrzynkę i wklej token poniżej."
 
 #: src/network/titan_net_gui.py:666
 msgid "Enter the reset token and a new password"
@@ -458,8 +471,12 @@ msgid "Recovery Email"
 msgstr "E-mail do odzyskiwania"
 
 #: src/network/titan_net_gui.py:718
-msgid "A recovery email lets you reset your password if you forget it. We send a verification link to confirm the address is yours."
-msgstr "E-mail do odzyskiwania pozwala zresetować hasło, gdy je zapomnisz. Wysyłamy link weryfikacyjny, aby potwierdzić, że adres należy do Ciebie."
+msgid ""
+"A recovery email lets you reset your password if you forget it. We send a"
+" verification link to confirm the address is yours."
+msgstr ""
+"E-mail do odzyskiwania pozwala zresetować hasło, gdy je zapomnisz. "
+"Wysyłamy link weryfikacyjny, aby potwierdzić, że adres należy do Ciebie."
 
 #: src/network/titan_net_gui.py:723 src/network/titan_net_gui.py:1284
 #: src/network/titan_net_gui.py:2617
@@ -1105,8 +1122,12 @@ msgid "Disconnect"
 msgstr "Rozłącz"
 
 #: src/network/titan_net_gui.py:2565
-msgid "Tip: add a recovery email in Actions, Recovery Email, so you can reset your password if you forget it."
-msgstr "Wskazówka: dodaj e-mail do odzyskiwania w menu Akcje, E-mail do odzyskiwania, aby móc zresetować hasło, gdy je zapomnisz."
+msgid ""
+"Tip: add a recovery email in Actions, Recovery Email, so you can reset "
+"your password if you forget it."
+msgstr ""
+"Wskazówka: dodaj e-mail do odzyskiwania w menu Akcje, E-mail do "
+"odzyskiwania, aby móc zresetować hasło, gdy je zapomnisz."
 
 #: src/network/titan_net_gui.py:2593
 #: src/network/titan_net_mod_components.py:1345
@@ -1857,7 +1878,9 @@ msgstr "moderator"
 #: src/network/titan_net_gui.py:5723
 #, python-brace-format
 msgid "Your thread {title} was moved from {source} to {destination} by {user}"
-msgstr "Twój wątek {title} został przeniesiony z {source} do {destination} przez {user}"
+msgstr ""
+"Twój wątek {title} został przeniesiony z {source} do {destination} przez "
+"{user}"
 
 #: src/network/titan_net_gui.py:5732
 msgid "your forum"
@@ -1865,8 +1888,12 @@ msgstr "Twoje forum"
 
 #: src/network/titan_net_gui.py:5739
 #, python-brace-format
-msgid "{user} asks to move the thread {title} from {source} into {destination}. Approve or reject it in the move requests list."
-msgstr "{user} prosi o przeniesienie wątku {title} z {source} do {destination}. Zatwierdź lub odrzuć to na liście próśb o przeniesienie."
+msgid ""
+"{user} asks to move the thread {title} from {source} into {destination}. "
+"Approve or reject it in the move requests list."
+msgstr ""
+"{user} prosi o przeniesienie wątku {title} z {source} do {destination}. "
+"Zatwierdź lub odrzuć to na liście próśb o przeniesienie."
 
 #: src/network/feedback_hub.py:989 src/network/titan_net_gui.py:5755
 #, python-brace-format
@@ -1920,23 +1947,39 @@ msgstr "STATUS: {level}"
 
 #: src/network/titan_net_gui.py:6303
 #, python-brace-format
-msgid "Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: {threats}"
-msgstr "Zablokowane włamania: {count} | Zablokowane DDoS: {ddos} | Aktywne zagrożenia: {threats}"
+msgid ""
+"Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: "
+"{threats}"
+msgstr ""
+"Zablokowane włamania: {count} | Zablokowane DDoS: {ddos} | Aktywne "
+"zagrożenia: {threats}"
 
 #: src/network/titan_net_gui.py:6308
 #, python-brace-format
-msgid "Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers tracked: {attackers}"
-msgstr "Zbanowane IP: {banned} ({perma} permanentne) | Biała lista: {white} | Śledzeni atakujący: {attackers}"
+msgid ""
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
+"Attackers tracked: {attackers}"
+msgstr ""
+"Zbanowane IP: {banned} ({perma} permanentne) | Biała lista: {white} | "
+"Śledzeni atakujący: {attackers}"
 
 #: src/network/titan_net_gui.py:6320
 #, python-brace-format
-msgid "Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | IDOR: {idor} | Privilege-escalation: {privesc}"
-msgstr "Account Guard: zablokowane konta: {locked} | IP podszywające się: {forged} | IDOR: {idor} | Eskalacja uprawnień: {privesc}"
+msgid ""
+"Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | "
+"IDOR: {idor} | Privilege-escalation: {privesc}"
+msgstr ""
+"Account Guard: zablokowane konta: {locked} | IP podszywające się: "
+"{forged} | IDOR: {idor} | Eskalacja uprawnień: {privesc}"
 
 #: src/network/titan_net_gui.py:6355
 #, python-brace-format
-msgid "Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs banned."
-msgstr "Protokół Cerberus: {level}. Zablokowano {blocked} włamań. Zbanowano {banned} adresów IP."
+msgid ""
+"Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs "
+"banned."
+msgstr ""
+"Protokół Cerberus: {level}. Zablokowano {blocked} włamań. Zbanowano "
+"{banned} adresów IP."
 
 #: src/network/titan_net_gui.py:6362
 msgid "Running Cerberus AI threat analysis. This can take a few seconds..."
@@ -1948,8 +1991,12 @@ msgid "Could not run AI analysis: {error}"
 msgstr "Nie można uruchomić analizy AI: {error}"
 
 #: src/network/titan_net_gui.py:6385
-msgid "Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the server to enable it."
-msgstr "Cerberus AI jest wyłączony. Ustaw klucz API Gemini (CERBERUS_AI_KEY) na serwerze, aby go włączyć."
+msgid ""
+"Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the "
+"server to enable it."
+msgstr ""
+"Cerberus AI jest wyłączony. Ustaw klucz API Gemini (CERBERUS_AI_KEY) na "
+"serwerze, aby go włączyć."
 
 #: src/network/titan_net_gui.py:6387
 msgid "Cerberus AI"
@@ -2122,8 +2169,12 @@ msgid "Only developers can activate CERBERUS mode"
 msgstr "Tylko deweloperzy mogą aktywować tryb CERBERUS"
 
 #: src/network/titan_net_gui.py:6658
-msgid "CERBERUS mode is the maximum threat level. All new connections will be blocked. Are you sure you want to activate CERBERUS mode?"
-msgstr "Tryb CERBERUS to najwyższy poziom zagrożenia. Wszystkie nowe połączenia zostaną zablokowane. Czy na pewno chcesz aktywować tryb CERBERUS?"
+msgid ""
+"CERBERUS mode is the maximum threat level. All new connections will be "
+"blocked. Are you sure you want to activate CERBERUS mode?"
+msgstr ""
+"Tryb CERBERUS to najwyższy poziom zagrożenia. Wszystkie nowe połączenia "
+"zostaną zablokowane. Czy na pewno chcesz aktywować tryb CERBERUS?"
 
 #: src/network/titan_net_gui.py:6668
 msgid "Enter reason:"
@@ -2430,7 +2481,9 @@ msgstr "jego obecne forum"
 #: src/network/titan_net_gui.py:7219
 #, python-brace-format
 msgid "Move request sent to the moderators of {group} for approval"
-msgstr "Prośba o przeniesienie wysłana do moderatorów grupy {group} do zatwierdzenia"
+msgstr ""
+"Prośba o przeniesienie wysłana do moderatorów grupy {group} do "
+"zatwierdzenia"
 
 #: src/network/titan_net_gui.py:7220
 msgid "the target group"
@@ -2961,8 +3014,12 @@ msgstr "Najpierw wybierz pokój"
 # #, python-brace-format
 #: src/network/titan_net_gui.py:8068
 #, python-brace-format
-msgid "Are you sure you want to delete room '{name}'? This will remove all messages and members."
-msgstr "Czy na pewno chcesz usunąć pokój '{name}'? To usunie wszystkie wiadomości i członków."
+msgid ""
+"Are you sure you want to delete room '{name}'? This will remove all "
+"messages and members."
+msgstr ""
+"Czy na pewno chcesz usunąć pokój '{name}'? To usunie wszystkie wiadomości"
+" i członków."
 
 #: src/network/titan_net_gui.py:8078
 msgid "Room deleted successfully"
@@ -3306,8 +3363,12 @@ msgstr "Wybierz pokój do usunięcia:"
 
 #: src/network/titan_net_gui.py:8870
 #, python-brace-format
-msgid "Are you sure you want to delete room '{name}' (ID: {id})? This cannot be undone!"
-msgstr "Czy na pewno chcesz usunąć pokój '{name}' (ID: {id})? Tej operacji nie można cofnąć!"
+msgid ""
+"Are you sure you want to delete room '{name}' (ID: {id})? This cannot be "
+"undone!"
+msgstr ""
+"Czy na pewno chcesz usunąć pokój '{name}' (ID: {id})? Tej operacji nie "
+"można cofnąć!"
 
 #: src/network/titan_net_gui.py:8933
 msgid "Select package file (.TCA/.TCD)"
@@ -3475,8 +3536,12 @@ msgid "Failed to save broadcast file"
 msgstr "Nie udało się zapisać pliku broadcastu"
 
 #: src/network/titan_net_gui.py:9397
-msgid "Titan-Net server is not available. Would you like to continue in offline mode?"
-msgstr "Serwer Titan-Net jest niedostępny. Czy chcesz kontynuować w trybie offline?"
+msgid ""
+"Titan-Net server is not available. Would you like to continue in offline "
+"mode?"
+msgstr ""
+"Serwer Titan-Net jest niedostępny. Czy chcesz kontynuować w trybie "
+"offline?"
 
 #: src/network/titan_net_gui.py:9402
 msgid ""
@@ -3781,8 +3846,12 @@ msgid "Manage Members"
 msgstr "Zarządzaj członkami"
 
 #: src/network/titan_net_forum_gui.py:1123
-msgid "Transfer ownership of this group to the selected member? You will become a moderator and can no longer manage moderators or delete the group."
-msgstr "Przekazać własność tej grupy wybranemu członkowi? Staniesz się moderatorem i nie będziesz już zarządzać moderatorami ani usuwać grupy."
+msgid ""
+"Transfer ownership of this group to the selected member? You will become "
+"a moderator and can no longer manage moderators or delete the group."
+msgstr ""
+"Przekazać własność tej grupy wybranemu członkowi? Staniesz się "
+"moderatorem i nie będziesz już zarządzać moderatorami ani usuwać grupy."
 
 #: src/network/titan_net_forum_gui.py:1138
 msgid "Ownership transferred."
@@ -3860,8 +3929,13 @@ msgid "Create Component with AI"
 msgstr "Utwórz komponent z AI"
 
 #: src/network/titan_net_mod_components.py:1607
-msgid "Describe precisely the Titan-Net add-on you want, then Generate. After the first result you can keep refining in the same box."
-msgstr "Opisz precyzyjnie dodatek do Titan-Net, którego chcesz, a potem kliknij Generuj. Po pierwszym wyniku możesz dalej doprecyzowywać w tym samym polu."
+msgid ""
+"Describe precisely the Titan-Net add-on you want, then Generate. After "
+"the first result you can keep refining in the same box."
+msgstr ""
+"Opisz precyzyjnie dodatek do Titan-Net, którego chcesz, a potem kliknij "
+"Generuj. Po pierwszym wyniku możesz dalej doprecyzowywać w tym samym "
+"polu."
 
 #: src/network/titan_net_mod_components.py:1613
 msgid "AI provider:"
@@ -3886,7 +3960,9 @@ msgstr "Otwórz w edytorze"
 #: src/network/titan_net_mod_components.py:1668
 #, python-brace-format
 msgid "Enter your {provider} API key. It is stored locally for future use."
-msgstr "Wprowadź swój klucz API {provider}. Zostanie zapisany lokalnie do przyszłego użytku."
+msgstr ""
+"Wprowadź swój klucz API {provider}. Zostanie zapisany lokalnie do "
+"przyszłego użytku."
 
 #: src/network/titan_net_mod_components.py:1669
 msgid "AI API key"
@@ -3921,7 +3997,9 @@ msgstr "(zaktualizowano kod komponentu — {n} linii)"
 
 #: src/network/titan_net_mod_components.py:1727
 msgid "Generated. Refine further, or Open in Editor to review and save."
-msgstr "Wygenerowano. Doprecyzuj dalej lub otwórz w edytorze, aby przejrzeć i zapisać."
+msgstr ""
+"Wygenerowano. Doprecyzuj dalej lub otwórz w edytorze, aby przejrzeć i "
+"zapisać."
 
 #: src/network/titan_net_mod_components.py:1729
 msgid "Refine (what should change?):"
@@ -4064,8 +4142,12 @@ msgstr "Tylko wyłączone komponenty można włączyć."
 
 #: src/network/titan_net_mod_components.py:2111
 #, python-brace-format
-msgid "Permanently delete '{name}'? This removes it from Titan-Net for everyone and cannot be undone."
-msgstr "Trwale usunąć '{name}'? Spowoduje to usunięcie go z Titan-Net dla wszystkich i nie można tego cofnąć."
+msgid ""
+"Permanently delete '{name}'? This removes it from Titan-Net for everyone "
+"and cannot be undone."
+msgstr ""
+"Trwale usunąć '{name}'? Spowoduje to usunięcie go z Titan-Net dla "
+"wszystkich i nie można tego cofnąć."
 
 # Forum post moderation strings
 #: src/network/titan_net_mod_components.py:2113
@@ -4078,8 +4160,12 @@ msgid "Titan-Net Moderator Components"
 msgstr "Komponenty moderatora Titan-Net"
 
 #: src/network/titan_net_mod_components.py:2169
-msgid "Program your own moderator tools. Components live in your user data folder."
-msgstr "Programuj własne narzędzia moderatora. Komponenty znajdują się w Twoim folderze danych użytkownika."
+msgid ""
+"Program your own moderator tools. Components live in your user data "
+"folder."
+msgstr ""
+"Programuj własne narzędzia moderatora. Komponenty znajdują się w Twoim "
+"folderze danych użytkownika."
 
 #: src/network/titan_net_mod_components.py:2174
 msgid "Enabled"
@@ -4158,8 +4244,12 @@ msgstr "Testowanie lokalne wyłączone dla „{name}”."
 
 #: src/network/titan_net_mod_components.py:2310
 #, python-brace-format
-msgid "Local testing turned on for '{name}'. It now runs in your client as it would on the server."
-msgstr "Testowanie lokalne włączone dla „{name}”. Działa teraz w Twoim kliencie tak, jak działałby na serwerze."
+msgid ""
+"Local testing turned on for '{name}'. It now runs in your client as it "
+"would on the server."
+msgstr ""
+"Testowanie lokalne włączone dla „{name}”. Działa teraz w Twoim kliencie "
+"tak, jak działałby na serwerze."
 
 #: src/network/titan_net_mod_components.py:2409
 #, python-brace-format
@@ -4168,8 +4258,12 @@ msgstr "Nie można odczytać komponentu: {error}"
 
 #: src/network/titan_net_mod_components.py:2415
 #, python-brace-format
-msgid "Submit '{name}' to the network? Another moderator/admin must approve it before it affects all of Titan-Net."
-msgstr "Zgłosić '{name}' do sieci? Inny moderator/administrator musi to zatwierdzić, zanim zacznie działać dla całego Titan-Net."
+msgid ""
+"Submit '{name}' to the network? Another moderator/admin must approve it "
+"before it affects all of Titan-Net."
+msgstr ""
+"Zgłosić '{name}' do sieci? Inny moderator/administrator musi to "
+"zatwierdzić, zanim zacznie działać dla całego Titan-Net."
 
 #: src/network/titan_net_mod_components.py:2434
 msgid "Submitted for approval."
@@ -4938,7 +5032,9 @@ msgstr "Błąd otwierania ustawień"
 
 #: src/system/klangomode.py:1189 src/system/klangomode.py:2272
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr "Nie można załadować Menedżera komponentów (nie znaleziono componentmanagergui.py)"
+msgstr ""
+"Nie można załadować Menedżera komponentów (nie znaleziono "
+"componentmanagergui.py)"
 
 #: src/system/klangomode.py:1191 src/system/klangomode.py:2274
 msgid "Component Manager has not been initialized."
@@ -5031,7 +5127,9 @@ msgstr "Titan App Suite"
 #~ msgstr "Utracono połączenie z Titan-Net"
 
 #~ msgid "Forum topic viewing is not yet implemented.\\nTopic: {title}"
-#~ msgstr "Przeglądanie tematu forum nie jest jeszcze zaimplementowane.\\nTemat: {title}"
+#~ msgstr ""
+#~ "Przeglądanie tematu forum nie jest "
+#~ "jeszcze zaimplementowane.\\nTemat: {title}"
 
 #~ msgid "Application downloaded successfully to:\\n{path}"
 #~ msgstr "Aplikacja pobrana pomyślnie do:\\n{path}"
@@ -5857,8 +5955,14 @@ msgstr "Titan App Suite"
 #~ "THIS CANNOT BE UNDONE!"
 #~ msgstr ""
 
-#~ msgid "Showing online users. To ban offline users, use their User ID in the General Moderation menu."
-#~ msgstr "Pokazuję użytkowników online. Aby zbanować użytkowników offline, użyj ich ID użytkownika w menu Ogólna moderacja."
+#~ msgid ""
+#~ "Showing online users. To ban offline "
+#~ "users, use their User ID in the"
+#~ " General Moderation menu."
+#~ msgstr ""
+#~ "Pokazuję użytkowników online. Aby zbanować "
+#~ "użytkowników offline, użyj ich ID "
+#~ "użytkownika w menu Ogólna moderacja."
 
 #~ msgid "Banned"
 #~ msgstr "Użytkownik zbanowany"
@@ -5930,7 +6034,9 @@ msgstr "Titan App Suite"
 #~ msgstr "Łączenie z Titan-Net..."
 
 #~ msgid "Voice Activity Detection enabled: Will auto-transmit when speaking"
-#~ msgstr "Wykrywanie aktywności głosu włączone: Będzie automatycznie transmitować gdy mówisz"
+#~ msgstr ""
+#~ "Wykrywanie aktywności głosu włączone: Będzie"
+#~ " automatycznie transmitować gdy mówisz"
 
 #~ msgid "VAD Mode disabled"
 #~ msgstr "Tryb VAD wyłączony"
@@ -6056,7 +6162,10 @@ msgstr "Titan App Suite"
 #~ msgstr "Brak oczekujących rozszerzeń."
 
 #~ msgid "Move request sent for approval by the target group moderators"
-#~ msgstr "Wysłano prośbę o przeniesienie do zatwierdzenia przez moderatorów grupy docelowej"
+#~ msgstr ""
+#~ "Wysłano prośbę o przeniesienie do "
+#~ "zatwierdzenia przez moderatorów grupy "
+#~ "docelowej"
 
 #~ msgid "Thread moved"
 #~ msgstr "Wątek przeniesiony"

@@ -781,7 +781,14 @@ WHATSAPP_AGENT = r"""
       if (mode === 'SYNCING' || mode === 'RESUMING') { return { state: 'loading' }; }
     }
 
-    if (D.q(['#pane-side'])) { return { state: 'logged_in' }; }
+    // The chat list under any of the shapes WhatsApp has shipped for it.
+    if (D.q(['#pane-side', '#side [role="textbox"]',
+             'div[data-testid="chat-list"]',
+             'div[aria-label*="Chat list" i]',
+             'div[aria-label*="Lista czat" i]',
+             'div[id="main"] footer'])) {
+      return { state: 'logged_in' };
+    }
 
     var code = readPairingCode();
     if (code) { return { state: 'pairing', pairing_code: code }; }

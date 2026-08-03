@@ -131,10 +131,11 @@ class _ModuleBufferAPI:
         return ensure_buffer(self._cid, buffer_id, name, kind=kind)
 
     def push(self, buffer_id, text, author=None, kind=None, raw=None,
-             buffer_name=None, timestamp=None):
+             buffer_name=None, timestamp=None, silent=False):
         return push(self._cid, buffer_id, text, author=author, kind=kind,
                     raw=raw, category_name=self._cname,
-                    buffer_name=buffer_name, timestamp=timestamp)
+                    buffer_name=buffer_name, timestamp=timestamp,
+                    silent=silent)
 
 
 def make_module_api(category_id, category_name=None):
@@ -143,12 +144,15 @@ def make_module_api(category_id, category_name=None):
 
 
 def push(category_id, buffer_id, text, author=None, kind=None, raw=None,
-         category_name=None, buffer_name=None, timestamp=None):
+         category_name=None, buffer_name=None, timestamp=None, silent=False):
     """Append one element to (category, buffer) and ping if it is active.
 
     Categories/buffers are auto-created on first use. Pass category_name /
     buffer_name to give them human-readable labels (otherwise the ids are
-    used). Safe to call from any thread and any process; never raises.
+    used). Pass silent=True for something the user did themselves (their own
+    outgoing message, for instance): it is still recorded for review, but it
+    does not ping - a ping is the "look, something new arrived" cue.
+    Safe to call from any thread and any process; never raises.
 
     Returns True if the element landed in the user's active category+buffer
     (always False in a forwarding child, where the host owns that decision).
@@ -163,6 +167,7 @@ def push(category_id, buffer_id, text, author=None, kind=None, raw=None,
         "buffer_name": buffer_name,
         "timestamp": timestamp,
         "raw": raw,
+        "silent": silent,
     }
 
     if _is_forwarding_client():
@@ -173,8 +178,13 @@ def push(category_id, buffer_id, text, author=None, kind=None, raw=None,
 
 
 def _push_local(category_id, buffer_id, text, author=None, kind=None, raw=None,
-                category_name=None, buffer_name=None, timestamp=None):
-    """Apply a push to the in-process BufferManager and play the ping."""
+                category_name=None, buffer_name=None, timestamp=None,
+                silent=False, **_ignored):
+    """Apply a push to the in-process BufferManager and play the ping.
+
+    ``**_ignored`` keeps an older host tolerant of keys a newer child sends
+    over IPC - a buffer element is never worth an exception.
+    """
     try:
         mgr = get_buffer_manager()
         if category_name:
@@ -186,7 +196,7 @@ def _push_local(category_id, buffer_id, text, author=None, kind=None, raw=None,
                                     author=author, kind=kind, raw=raw,
                                     timestamp=timestamp)
 
-        if is_active:
+        if is_active and not silent:
             ps = _ensure_play_sound()
             if ps:
                 try:

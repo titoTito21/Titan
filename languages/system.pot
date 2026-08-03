@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,34 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: src/titan_core/tce_system.py:61
+msgid "Open the Titan Menu"
+msgstr ""
+
+#: src/titan_core/tce_system.py:62
+msgid "Open the Titan file manager"
+msgstr ""
+
+#: src/titan_core/tce_system.py:63
+msgid "Open the system tray list"
+msgstr ""
+
+#: src/titan_core/tce_system.py:64
+msgid "Show or hide the Titan window"
+msgstr ""
+
+#: src/titan_core/tce_system.py:65
+msgid "Open the Run dialog"
+msgstr ""
+
+#: src/titan_core/tce_system.py:66
+msgid "Open the notification center"
+msgstr ""
+
+#: src/titan_core/tce_system.py:67
+msgid "Open the window switcher"
+msgstr ""
 
 #: src/titan_core/tce_system_net.py:650
 msgid "Connect to WiFi Network"
@@ -197,7 +225,7 @@ msgstr ""
 msgid "Connection Timeout"
 msgstr ""
 
-#: src/system/system_monitor.py:752 src/titan_core/tce_system_net.py:1028
+#: src/system/system_monitor.py:766 src/titan_core/tce_system_net.py:1028
 #: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
 #, python-brace-format
 msgid "Connected to {}"
@@ -381,39 +409,39 @@ msgid ""
 "{}"
 msgstr ""
 
-#: src/system/system_monitor.py:325
+#: src/system/system_monitor.py:339
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:330
+#: src/system/system_monitor.py:344
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:333
+#: src/system/system_monitor.py:347
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:336
+#: src/system/system_monitor.py:350
 msgid "Battery is fully charged"
 msgstr ""
 
-#: src/system/system_monitor.py:399
+#: src/system/system_monitor.py:413
 msgid "Low battery, please connect to charger"
 msgstr ""
 
-#: src/system/system_monitor.py:404
+#: src/system/system_monitor.py:418
 msgid "Critical battery level, connect to charger now!"
 msgstr ""
 
-#: src/system/system_monitor.py:500
+#: src/system/system_monitor.py:514
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr ""
 
-#: src/system/system_monitor.py:756
+#: src/system/system_monitor.py:770
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr ""
@@ -450,52 +478,52 @@ msgstr ""
 msgid "Downloading update..."
 msgstr ""
 
-#: src/system/updater.py:260
+#: src/system/updater.py:287
 msgid "Unable to retrieve changelog."
 msgstr ""
 
-#: src/system/updater.py:293
+#: src/system/updater.py:320
 msgid "Download failed"
 msgstr ""
 
-#: src/system/updater.py:365
+#: src/system/updater.py:531
 #, python-brace-format
 msgid "Extracting files... {}%"
 msgstr ""
 
-#: src/system/updater.py:372
+#: src/system/updater.py:538
 msgid "Extraction complete"
 msgstr ""
 
-#: src/system/updater.py:392
+#: src/system/updater.py:570
 msgid "Extracting update..."
 msgstr ""
 
-#: src/system/updater.py:398 src/system/updater.py:415
+#: src/system/updater.py:577 src/system/updater.py:594
 msgid "Downloading Python interpreter..."
 msgstr ""
 
-#: src/system/updater.py:422
+#: src/system/updater.py:601
 msgid "Interpreter download failed"
 msgstr ""
 
-#: src/system/updater.py:435
+#: src/system/updater.py:615
 msgid "Extracting Python interpreter..."
 msgstr ""
 
-#: src/system/updater.py:487
+#: src/system/updater.py:720
 msgid "Update completed successfully! Please restart the application."
 msgstr ""
 
-#: src/system/updater.py:488
+#: src/system/updater.py:721
 msgid "Update Complete"
 msgstr ""
 
-#: src/system/updater.py:503
+#: src/system/updater.py:730
 msgid "Update failed. Please try again later."
 msgstr ""
 
-#: src/system/updater.py:504
+#: src/system/updater.py:731
 msgid "Update Error"
 msgstr ""
 
@@ -513,5 +541,34 @@ msgstr ""
 
 #: src/ui/shutdown_question.py:15
 msgid "Confirm Exit"
+msgstr ""
+
+#: src/system/mic_permission.py:117
+msgid ""
+"Microphone access is turned off for this computer. Open Settings, Privacy"
+" and security, Microphone, and turn on Microphone access."
+msgstr ""
+
+#: src/system/mic_permission.py:121
+msgid ""
+"Windows is blocking desktop applications from using the microphone. Open "
+"Settings, Privacy and security, Microphone, and turn on Let desktop apps "
+"access your microphone."
+msgstr ""
+
+#: src/system/mic_permission.py:125
+msgid "No microphone was found. Connect a microphone or headset and try again."
+msgstr ""
+
+#: src/system/mic_permission.py:127
+msgid "The microphone is not available."
+msgstr ""
+
+#: src/system/mic_permission.py:183
+msgid "Do you want to open microphone settings now?"
+msgstr ""
+
+#: src/system/mic_permission.py:184
+msgid "Microphone blocked"
 msgstr ""
 

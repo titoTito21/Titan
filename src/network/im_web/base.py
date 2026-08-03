@@ -88,6 +88,11 @@ AUTH_LOGGED_IN = 'logged_in'
 _UPLOAD_CHUNK = 192 * 1024       # base64 characters per RunScriptAsync call
 _DOWNLOAD_CHUNK = 192 * 1024
 
+# Opening a conversation the page has not rendered costs a navigation: the
+# command is re-asked after the new document has had time to bring its agent up.
+NAV_RETRY_MS = 2500
+MAX_NAV_RETRIES = 4
+
 
 def media_dir(service: str) -> str:
     """Where received attachments are written: inside the per-user Titan data dir."""
@@ -232,6 +237,10 @@ class IMBackend:
 
         self._listeners: List[Callable[[str, Any], None]] = []
         self._buffers_registered = False
+        # Last good conversation list per scope, and histories per chat: the
+        # page loses these on every reload, this process does not.
+        self._chat_cache: Dict[str, List[Chat]] = {}
+        self._history_cache: Dict[str, List[Message]] = {}
 
     # ------------------------------------------------------------- lifecycle
     def build_agent_js(self) -> str:
@@ -248,9 +257,11 @@ class IMBackend:
                 self.refresh_auth_state()
             return
 
+        # The title is only ever read when the page is deliberately shown for a
+        # login step, so it names what the user is looking at.
         self.bridge = bridge_mod.WebBridge(
             service=self.SERVICE, url=self.URL, agent_js=self.build_agent_js(),
-            title=f"Titan IM engine - {self.SERVICE_LABEL or self.SERVICE}")
+            title=_page_title_label(self.SERVICE_LABEL or self.SERVICE))
         self.bridge.add_listener(self._on_bridge_event)
         bridge_mod.register_bridge(self.SERVICE, self.bridge)
         self.bridge.start()
@@ -343,6 +354,12 @@ class IMBackend:
 
             elif event_type == 'bridge_loaded':
                 return
+
+            elif event_type == 'page_hidden':
+                # Closing the visible page usually means "I have just logged in
+                # there" - ask the agent immediately rather than waiting.
+                self.refresh_auth_state()
+                return
         except Exception as exc:
             print(f"[{self.SERVICE}] failed to translate '{event_type}': {exc}")
             return
@@ -363,6 +380,13 @@ class IMBackend:
 
     def _apply_chats(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         chats = [Chat.from_dict(c) for c in (payload.get('chats') or [])]
+        if not chats and self.chats:
+            # An empty snapshot from a page that had conversations a moment ago
+            # is the list being re-rendered - it must not clear the model.
+            payload = dict(payload)
+            payload['chats'] = []
+            payload['stale'] = True
+            return payload
         if payload.get('partial'):
             for chat in chats:
                 self.chats[chat.id] = chat
@@ -477,7 +501,10 @@ class IMBackend:
                     author=author, kind='private' if not (chat and chat.is_group) else 'message',
                     raw={'service': self.SERVICE, 'chat_id': message.chat_id,
                          'msg_id': message.id},
-                    timestamp=message.timestamp or None)
+                    timestamp=message.timestamp or None,
+                    # What we sent ourselves belongs in the review buffer, but
+                    # pinging the user about their own typing is just noise.
+                    silent=bool(message.outgoing))
 
             elif event_type == EV_CALL:
                 call = payload.get('call')
@@ -559,23 +586,72 @@ class IMBackend:
 
     # -- chats & messages ----------------------------------------------------
     def list_chats(self, scope: str = 'all', callback=None) -> None:
+        """Read the conversation list, falling back to the last good read.
+
+        The page is not a reliable source: it re-renders, navigates and gets
+        reloaded, and a read taken at the wrong moment comes back empty or
+        times out. This process outlives all of that, so the last non-empty
+        answer per scope is kept here and handed out (marked ``stale``) rather
+        than reporting "no conversations" to a logged-in user.
+        """
         def _parse(data):
             chats = [Chat.from_dict(c) for c in (data or {}).get('chats') or []]
             return {'chats': chats}
-        self._call('list_chats', {'scope': scope}, callback, _parse, timeout=45.0)
+
+        def _relay(result: Dict[str, Any]) -> None:
+            chats = result.get('chats') or []
+            if chats:
+                self._chat_cache[scope] = list(chats)
+            else:
+                cached = self._chat_cache.get(scope) or []
+                if cached:
+                    result = {'success': True, 'chats': list(cached), 'stale': True}
+            if callback:
+                callback(result)
+
+        self._call('list_chats', {'scope': scope}, _relay, _parse, timeout=45.0)
 
     def open_chat(self, chat_id: str, callback=None) -> None:
         self._call('open_chat', {'chat_id': chat_id}, callback, timeout=30.0)
 
     def load_history(self, chat_id: str, before_id: str = '', limit: int = 50,
-                     callback=None) -> None:
+                     callback=None, _attempt: int = 0) -> None:
+        """Read a conversation, waiting out a page navigation if one is needed.
+
+        Opening a conversation the page has not rendered means a real
+        navigation, which tears down the document the command was running in.
+        The agent says ``navigating`` instead of dying in a timeout, and the
+        question is simply asked again once the new page has its agent.
+        """
         def _parse(data):
-            messages = [Message.from_dict(m) for m in (data or {}).get('messages') or []]
+            data = data or {}
+            messages = [Message.from_dict(m) for m in data.get('messages') or []]
             return {'messages': messages,
-                    'has_more': bool((data or {}).get('has_more'))}
+                    'has_more': bool(data.get('has_more')),
+                    'navigating': bool(data.get('navigating'))}
+
+        def _relay(result: Dict[str, Any]) -> None:
+            if result.get('navigating') and _attempt < MAX_NAV_RETRIES:
+                wx.CallLater(NAV_RETRY_MS, self.load_history, chat_id,
+                             before_id, limit, callback, _attempt + 1)
+                return
+
+            messages = result.get('messages') or []
+            if messages and not before_id:
+                self._history_cache[chat_id] = list(messages)
+            elif not messages and not before_id:
+                cached = self._history_cache.get(chat_id) or []
+                if cached:
+                    # Same rule as the conversation list: a read taken while
+                    # the thread is not rendered is not an empty conversation.
+                    result = {'success': True, 'messages': list(cached),
+                              'has_more': True, 'stale': True}
+            if callback:
+                callback(result)
+
         self._call('load_history',
                    {'chat_id': chat_id, 'before_id': before_id, 'limit': limit},
-                   callback, _parse, timeout=45.0)
+                   _relay, _parse, timeout=45.0)
 
     def send_text(self, chat_id: str, text: str, callback=None) -> None:
         self._call('send_text', {'chat_id': chat_id, 'text': text},
@@ -831,16 +907,26 @@ def _t():
         return lambda text: text
 
 
+# These bind ``_`` first: the string extractor only recognises the _("...")
+# form, so ``_t()("...")`` would silently stay untranslated.
 def _not_running_label() -> str:
-    return _t()("The service engine is not running")
+    _ = _t()
+    return _("The service engine is not running")
 
 
 def _no_media_label() -> str:
-    return _t()("This message has no downloadable media")
+    _ = _t()
+    return _("This message has no downloadable media")
 
 
 def _me_label() -> str:
-    return _t()("Me")
+    _ = _t()
+    return _("Me")
+
+
+def _page_title_label(service_label: str) -> str:
+    _ = _t()
+    return _("{service} web page - Titan IM").format(service=service_label)
 
 
 def _media_label(kind: str) -> str:

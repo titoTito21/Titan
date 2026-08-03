@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -290,7 +290,7 @@ msgstr ""
 #: src/eltenlink_client/accountmanagement.py:750
 #: src/eltenlink_client/accountmanagement.py:803
 #: src/eltenlink_client/accountmanagement.py:912
-#: src/eltenlink_client/accountmanagement.py:1280
+#: src/eltenlink_client/accountmanagement.py:1283
 #: src/eltenlink_client/elten_gui.py:207 src/eltenlink_client/elten_gui.py:3702
 #: src/eltenlink_client/elten_gui.py:3828
 #: src/eltenlink_client/elten_gui.py:4371
@@ -510,10 +510,10 @@ msgstr ""
 #: src/eltenlink_client/accountmanagement.py:193
 #: src/eltenlink_client/accountmanagement.py:867
 #: src/eltenlink_client/accountmanagement.py:992
-#: src/eltenlink_client/accountmanagement.py:1067
-#: src/eltenlink_client/accountmanagement.py:1159
-#: src/eltenlink_client/accountmanagement.py:1231
-#: src/eltenlink_client/accountmanagement.py:1344
+#: src/eltenlink_client/accountmanagement.py:1069
+#: src/eltenlink_client/accountmanagement.py:1161
+#: src/eltenlink_client/accountmanagement.py:1234
+#: src/eltenlink_client/accountmanagement.py:1348
 #: src/eltenlink_client/elten_gui.py:865
 msgid "Close"
 msgstr ""
@@ -761,7 +761,7 @@ msgstr ""
 msgid "{count} posts"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1338
+#: src/eltenlink_client/accountmanagement.py:1342
 #: src/eltenlink_client/elten_gui.py:1660
 #: src/eltenlink_client/elten_gui.py:1699
 #: src/eltenlink_client/elten_gui.py:1749
@@ -1966,7 +1966,7 @@ msgid "Select an option:"
 msgstr ""
 
 #: src/eltenlink_client/accountmanagement.py:668
-#: src/eltenlink_client/accountmanagement.py:1266
+#: src/eltenlink_client/accountmanagement.py:1269
 msgid "Archive this account"
 msgstr ""
 
@@ -2103,14 +2103,14 @@ msgid "Backup codes generated. Save them in a safe place."
 msgstr ""
 
 #: src/eltenlink_client/accountmanagement.py:1009
-#: src/eltenlink_client/accountmanagement.py:1125
-#: src/eltenlink_client/accountmanagement.py:1199
+#: src/eltenlink_client/accountmanagement.py:1127
+#: src/eltenlink_client/accountmanagement.py:1202
 msgid "Enter your password:"
 msgstr ""
 
 #: src/eltenlink_client/accountmanagement.py:1009
 #: src/eltenlink_client/accountmanagement.py:1036
-#: src/eltenlink_client/accountmanagement.py:1057
+#: src/eltenlink_client/accountmanagement.py:1059
 msgid "Mail Events"
 msgstr ""
 
@@ -2119,8 +2119,8 @@ msgid "Checking mail events status..."
 msgstr ""
 
 #: src/eltenlink_client/accountmanagement.py:1019
-#: src/eltenlink_client/accountmanagement.py:1135
-#: src/eltenlink_client/accountmanagement.py:1209
+#: src/eltenlink_client/accountmanagement.py:1137
+#: src/eltenlink_client/accountmanagement.py:1212
 msgid "Authentication error. Check your password."
 msgstr ""
 
@@ -2130,100 +2130,100 @@ msgid ""
 "your email now?"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1044
+#: src/eltenlink_client/accountmanagement.py:1046
 msgid "Failed to send verification code"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1051
+#: src/eltenlink_client/accountmanagement.py:1053
 msgid "Mail events reporting is enabled."
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1052
+#: src/eltenlink_client/accountmanagement.py:1054
 msgid "Disable mail events reporting"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1054
+#: src/eltenlink_client/accountmanagement.py:1056
 msgid "Mail events reporting is disabled."
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1055
+#: src/eltenlink_client/accountmanagement.py:1057
 msgid "Enable mail events reporting"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1089
+#: src/eltenlink_client/accountmanagement.py:1091
 msgid "Mail events reporting enabled"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1091
+#: src/eltenlink_client/accountmanagement.py:1093
 msgid "Mail events reporting disabled"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1093
+#: src/eltenlink_client/accountmanagement.py:1095
 msgid "Failed to update mail events setting"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1107
+#: src/eltenlink_client/accountmanagement.py:1109
 msgid "The verification code has been sent to your email. Please enter it:"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1108
+#: src/eltenlink_client/accountmanagement.py:1110
 msgid "Verify Email"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1116
+#: src/eltenlink_client/accountmanagement.py:1118
 msgid "Email verified successfully"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1118
+#: src/eltenlink_client/accountmanagement.py:1120
 msgid "Verification failed"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1125
-#: src/eltenlink_client/accountmanagement.py:1144
+#: src/eltenlink_client/accountmanagement.py:1127
+#: src/eltenlink_client/accountmanagement.py:1146
 msgid "Auto-login Tokens"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1129
+#: src/eltenlink_client/accountmanagement.py:1131
 msgid "Loading auto-login tokens..."
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1151
+#: src/eltenlink_client/accountmanagement.py:1153
 msgid "No auto-login tokens"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1158
-#: src/eltenlink_client/accountmanagement.py:1178
+#: src/eltenlink_client/accountmanagement.py:1160
+#: src/eltenlink_client/accountmanagement.py:1180
 msgid "Log out all sessions"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1177
+#: src/eltenlink_client/accountmanagement.py:1179
 msgid ""
 "Are you sure you want to remove all auto-login tokens and log out all "
 "sessions?"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1184
+#: src/eltenlink_client/accountmanagement.py:1187
 msgid "All sessions logged out"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1186
+#: src/eltenlink_client/accountmanagement.py:1189
 msgid "Failed to log out sessions"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1199
-#: src/eltenlink_client/accountmanagement.py:1218
+#: src/eltenlink_client/accountmanagement.py:1202
+#: src/eltenlink_client/accountmanagement.py:1221
 msgid "Last Logins"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1203
+#: src/eltenlink_client/accountmanagement.py:1206
 msgid "Loading login history..."
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1225
+#: src/eltenlink_client/accountmanagement.py:1228
 msgid "No login history"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1254
+#: src/eltenlink_client/accountmanagement.py:1257
 msgid ""
 "Archiving your account will have the following effects:\n"
 "- An indication that the account is archived will be placed next to all "
@@ -2240,60 +2240,60 @@ msgid ""
 "but removed data will not be restored."
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1270
+#: src/eltenlink_client/accountmanagement.py:1273
 msgid "Information:"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1274
+#: src/eltenlink_client/accountmanagement.py:1277
 msgid "Enter your password to confirm:"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1279
+#: src/eltenlink_client/accountmanagement.py:1282
 msgid "Archive"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1296
+#: src/eltenlink_client/accountmanagement.py:1299
 msgid "Please enter your password"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1299
+#: src/eltenlink_client/accountmanagement.py:1302
 msgid "Are you sure you want to archive this account?"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1300
+#: src/eltenlink_client/accountmanagement.py:1303
 msgid "Confirm"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1319
+#: src/eltenlink_client/accountmanagement.py:1323
 msgid "Black list"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1342
+#: src/eltenlink_client/accountmanagement.py:1346
 msgid "Add"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1343
+#: src/eltenlink_client/accountmanagement.py:1347
 msgid "Remove"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1372
+#: src/eltenlink_client/accountmanagement.py:1376
 msgid "Blacklist is empty"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1381
+#: src/eltenlink_client/accountmanagement.py:1385
 msgid "Enter the username to add to the blacklist:"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1382
+#: src/eltenlink_client/accountmanagement.py:1386
 msgid "Add to blacklist"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1411
+#: src/eltenlink_client/accountmanagement.py:1415
 #, python-brace-format
 msgid "Are you sure you want to remove {user} from the blacklist?"
 msgstr ""
 
-#: src/eltenlink_client/accountmanagement.py:1412
+#: src/eltenlink_client/accountmanagement.py:1416
 msgid "Remove from blacklist"
 msgstr ""
 

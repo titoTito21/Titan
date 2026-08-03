@@ -144,19 +144,15 @@ class WhatsAppClientFrame(WebIMClientFrame):
 
     def _on_pairing_result(self, result: Dict) -> None:
         if not result.get('success'):
-            answer = show_message(
-                self,
+            self.ask_to_show_page(
                 _("WhatsApp did not return a pairing code.\nError: {error}\n\n"
                   "Show the web page so you can log in there instead?").format(
-                      error=result.get('error') or ''),
-                _("Login"), wx.YES_NO | wx.ICON_WARNING)
-            if answer == wx.ID_YES:
-                self.show_web_page()
+                      error=result.get('error') or ''))
             return
 
         code = result.get('pairing_code') or ''
         if code:
-            self.show_pairing_code(code)
+            self.announce_pairing_code(code)
         else:
             speak_titannet(_("Waiting for the pairing code..."))
 

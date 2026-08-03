@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -45,6 +45,7 @@ msgid "{author}: {text}"
 msgstr ""
 
 #: src/buffers/buffer_announcer.py:341 src/buffers/buffer_announcer.py:342
+#: src/buffers/buffer_announcer.py:346
 msgid "message"
 msgstr ""
 
@@ -52,19 +53,26 @@ msgstr ""
 msgid "notification"
 msgstr ""
 
+#: src/buffers/buffer_announcer.py:347
+msgid "action"
+msgstr ""
+
 #: src/buffers/buffer_system.py:412
 msgid "All"
 msgstr ""
 
-#: src/buffers/tts_buffer.py:153 src/buffers/tts_buffer.py:273
+#: src/buffers/ai_buffer.py:219 src/buffers/tts_buffer.py:153
+#: src/buffers/tts_buffer.py:273
 msgid "On"
 msgstr ""
 
+#: src/buffers/ai_buffer.py:219 src/buffers/ai_buffer.py:227
 #: src/buffers/tts_buffer.py:153 src/buffers/tts_buffer.py:273
 msgid "Off"
 msgstr ""
 
-#: src/buffers/tts_buffer.py:169
+#: src/buffers/ai_buffer.py:260 src/buffers/ai_buffer.py:262
+#: src/buffers/ai_buffer.py:286 src/buffers/tts_buffer.py:169
 msgid "None"
 msgstr ""
 
@@ -86,5 +94,77 @@ msgstr ""
 
 #: src/buffers/tts_buffer.py:219
 msgid "No voices"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:82
+msgid "AI"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:84
+msgid "Conversation"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:85
+msgid "Actions"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:88
+msgid "Notifications"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:96
+msgid "AI settings"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:121 src/buffers/ai_buffer.py:123
+msgid "Assistant"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:217
+msgid "Automatic"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:221
+msgid "Assistant voice"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:222
+msgid "Confirmations"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:223
+msgid "Risky actions"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:223
+msgid "Every action"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:224
+msgid "Autonomous"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:226
+msgid "Reminder announcements"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:227
+msgid "Spoken"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:227
+msgid "Text"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:229
+msgid "AI wording of reminders"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:231
+msgid "Dictation into text fields"
+msgstr ""
+
+#: src/buffers/ai_buffer.py:263
+msgid "Assistant persona"
 msgstr ""
 

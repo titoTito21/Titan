@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Titan Buffers System\n"
 "Report-Msgid-Bugs-To: klaldekwypych@gmail.com\n"
-"POT-Creation-Date: 2026-07-24 13:19+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2026-06-16 00:00+0000\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -46,6 +46,7 @@ msgid "{author}: {text}"
 msgstr "{author}: {text}"
 
 #: src/buffers/buffer_announcer.py:341 src/buffers/buffer_announcer.py:342
+#: src/buffers/buffer_announcer.py:346
 msgid "message"
 msgstr "message"
 
@@ -53,19 +54,26 @@ msgstr "message"
 msgid "notification"
 msgstr "notification"
 
+#: src/buffers/buffer_announcer.py:347
+msgid "action"
+msgstr "action"
+
 #: src/buffers/buffer_system.py:412
 msgid "All"
 msgstr "All"
 
-#: src/buffers/tts_buffer.py:153 src/buffers/tts_buffer.py:273
+#: src/buffers/ai_buffer.py:219 src/buffers/tts_buffer.py:153
+#: src/buffers/tts_buffer.py:273
 msgid "On"
 msgstr "On"
 
+#: src/buffers/ai_buffer.py:219 src/buffers/ai_buffer.py:227
 #: src/buffers/tts_buffer.py:153 src/buffers/tts_buffer.py:273
 msgid "Off"
 msgstr "Off"
 
-#: src/buffers/tts_buffer.py:169
+#: src/buffers/ai_buffer.py:260 src/buffers/ai_buffer.py:262
+#: src/buffers/ai_buffer.py:286 src/buffers/tts_buffer.py:169
 msgid "None"
 msgstr "None"
 
@@ -89,76 +97,79 @@ msgstr "Volume"
 msgid "No voices"
 msgstr "No voices"
 
-#: src/buffers/ai_buffer.py
-msgid "AI settings"
-msgstr "AI settings"
+#: src/buffers/ai_buffer.py:82
+msgid "AI"
+msgstr ""
 
-#: src/buffers/ai_buffer.py
-msgid "Assistant"
-msgstr "Assistant"
-
-#: src/buffers/ai_buffer.py
-msgid "Creation kit"
-msgstr "Creation kit"
-
-#: src/buffers/ai_buffer.py
-msgid "Assistant persona"
-msgstr "Assistant persona"
-
-#: src/buffers/ai_buffer.py
-msgid "Assistant voice"
-msgstr "Assistant voice"
-
-#: src/buffers/ai_buffer.py
-msgid "Automatic"
-msgstr "Automatic"
-
-#: src/buffers/ai_buffer.py
-msgid "Confirmations"
+#: src/buffers/ai_buffer.py:84
+#, fuzzy
+msgid "Conversation"
 msgstr "Confirmations"
 
-#: src/buffers/ai_buffer.py
-msgid "Risky actions"
-msgstr "Risky actions"
-
-#: src/buffers/ai_buffer.py
-msgid "Every action"
-msgstr "Every action"
-
-#: src/buffers/ai_buffer.py
-msgid "Autonomous"
-msgstr "Autonomous"
-
-#: src/buffers/ai_buffer.py
-msgid "Reminder announcements"
-msgstr "Reminder announcements"
-
-#: src/buffers/ai_buffer.py
-msgid "Spoken"
-msgstr "Spoken"
-
-#: src/buffers/ai_buffer.py
-msgid "Text"
-msgstr "Text"
-
-#: src/buffers/ai_buffer.py
-msgid "AI wording of reminders"
-msgstr "AI wording of reminders"
-
-#: src/buffers/ai_buffer.py
-msgid "Dictation into text fields"
-msgstr "Dictation into text fields"
-
-#: src/buffers/buffer_announcer.py
-msgid "action"
+#: src/buffers/ai_buffer.py:85
+#, fuzzy
+msgid "Actions"
 msgstr "action"
-#: src/buffers/ai_buffer.py
+
+#: src/buffers/ai_buffer.py:88
 msgid "Notifications"
 msgstr "Notifications"
 
-#: src/buffers/buffer_announcer.py
-msgid "setting"
-msgstr "setting"
+#: src/buffers/ai_buffer.py:96
+msgid "AI settings"
+msgstr "AI settings"
+
+#: src/buffers/ai_buffer.py:121 src/buffers/ai_buffer.py:123
+msgid "Assistant"
+msgstr "Assistant"
+
+#: src/buffers/ai_buffer.py:217
+msgid "Automatic"
+msgstr "Automatic"
+
+#: src/buffers/ai_buffer.py:221
+msgid "Assistant voice"
+msgstr "Assistant voice"
+
+#: src/buffers/ai_buffer.py:222
+msgid "Confirmations"
+msgstr "Confirmations"
+
+#: src/buffers/ai_buffer.py:223
+msgid "Risky actions"
+msgstr "Risky actions"
+
+#: src/buffers/ai_buffer.py:223
+msgid "Every action"
+msgstr "Every action"
+
+#: src/buffers/ai_buffer.py:224
+msgid "Autonomous"
+msgstr "Autonomous"
+
+#: src/buffers/ai_buffer.py:226
+msgid "Reminder announcements"
+msgstr "Reminder announcements"
+
+#: src/buffers/ai_buffer.py:227
+msgid "Spoken"
+msgstr "Spoken"
+
+#: src/buffers/ai_buffer.py:227
+msgid "Text"
+msgstr "Text"
+
+#: src/buffers/ai_buffer.py:229
+msgid "AI wording of reminders"
+msgstr "AI wording of reminders"
+
+#: src/buffers/ai_buffer.py:231
+msgid "Dictation into text fields"
+msgstr "Dictation into text fields"
+
+#: src/buffers/ai_buffer.py:263
+msgid "Assistant persona"
+msgstr "Assistant persona"
 
 #~ msgid "Titan"
 #~ msgstr "Titan"
@@ -180,4 +191,10 @@ msgstr "setting"
 
 #~ msgid "{name}, {index} of {total}"
 #~ msgstr "{name}, {index} of {total}"
+
+#~ msgid "Creation kit"
+#~ msgstr "Creation kit"
+
+#~ msgid "setting"
+#~ msgstr "setting"
 

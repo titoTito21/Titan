@@ -51,6 +51,11 @@ class WebIMClientFrame(TabbedListFrame):
         self.backend = backend
         self.call_log: List[CallState] = []
         self._pending_login = False
+        # One login attempt produces both an auth_state push and a command
+        # result, and each used to raise its own "show the page?" box. The
+        # question is asked once per challenge, by whichever arrives first.
+        self._page_question_asked = False
+        self._pairing_code_shown = ''
 
         super().__init__(parent, title=self.SERVICE_TITLE or backend.SERVICE_LABEL)
 
@@ -131,25 +136,42 @@ class WebIMClientFrame(TabbedListFrame):
         sizer.Add(row, flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=8)
 
     # ------------------------------------------------------------------- rows
-    def load_items(self, tab_id: str) -> None:
+    def load_items(self, tab_id: str, background: bool = False) -> None:
         if tab_id == TAB_CALLS:
-            self.apply_items(list(reversed(self.call_log)), tab_id)
+            self.apply_items(list(reversed(self.call_log)), tab_id,
+                             background=background)
             return
         if not self.backend.logged_in:
-            self.apply_items([], tab_id)
+            # Only say "nothing here" when there is genuinely nothing to show.
+            # A session that is briefly re-checked must not wipe the list the
+            # user is reading.
+            if not self.items:
+                self.apply_items([], tab_id, background=background)
             self.SetStatusText(self._auth_status_text())
             return
         self.backend.list_chats(
             scope=self.scope_for(tab_id),
-            callback=lambda result: self._apply_chats(result, tab_id))
+            callback=lambda result: self._apply_chats(result, tab_id, background))
 
-    def _apply_chats(self, result: Dict, tab_id: str) -> None:
+    def _apply_chats(self, result: Dict, tab_id: str,
+                     background: bool = False) -> None:
         if not result.get('success'):
-            speak_notification(result.get('error') or _("Could not load conversations"),
-                               'error')
-            self.apply_items([], tab_id)
+            if not background:
+                # A background poll that fails is not worth interrupting for.
+                speak_notification(result.get('error') or
+                                   _("Could not load conversations"), 'error')
+                self.apply_items([], tab_id)
             return
-        self.apply_items(list(result.get('chats') or []), tab_id)
+
+        chats = list(result.get('chats') or [])
+        if (not chats and self.items and self.backend.logged_in
+                and self.scope_for(tab_id) == 'all'):
+            # A logged-in account whose full conversation list suddenly reads
+            # empty is the page re-rendering, not an empty inbox. Keep what is
+            # on screen. Filtered tabs (unread, groups) may legitimately empty
+            # out, so they are still reported as they are.
+            return
+        self.apply_items(chats, tab_id, background=background)
 
     def format_row(self, item: Any) -> str:
         if isinstance(item, CallState):
@@ -183,7 +205,9 @@ class WebIMClientFrame(TabbedListFrame):
     def row_sound(self, item: Any, index: int) -> None:
         if isinstance(item, Chat) and item.unread:
             try:
-                play_sound('ui/notify.ogg')
+                # The Titan-Net "unread replies" cue, the same one Titan-Net and
+                # the Feedback Hub use for a row that still has something new.
+                play_sound('titannet/newreplies.ogg')
             except Exception:
                 pass
 
@@ -376,13 +400,14 @@ class WebIMClientFrame(TabbedListFrame):
         self.backend.refresh_auth_state()
 
     def _on_chats_pushed(self, payload: Dict) -> None:
-        # A push snapshot only refreshes the view the user is actually on, and
-        # only when they are not reading a row (focus stays where it was).
+        # The page pushes a snapshot whenever anything changes. That must never
+        # be felt: it refreshes in the background, keeping the row the user is
+        # reading and never grabbing focus.
         if self._closing or self.current_tab == TAB_CALLS:
             return
-        if not self.backend.logged_in:
+        if not self.backend.logged_in or payload.get('stale'):
             return
-        self.refresh()
+        self.refresh(background=True)
 
     def _on_chat_updated(self, chat) -> None:
         if self._closing or not isinstance(chat, Chat):
@@ -430,6 +455,11 @@ class WebIMClientFrame(TabbedListFrame):
             print(f"[{self.backend.SERVICE}] notification center write failed: {exc}")
 
     def _on_typing(self, payload: Dict) -> None:
+        # The conversation window plays its own typing cue, so a chat the user
+        # is reading must not get two of them.
+        from src.network.im_conversation import _open_windows
+        if (self.backend.SERVICE, payload.get('chat_id')) in _open_windows:
+            return
         if sounds:
             try:
                 sounds.typing()
@@ -450,7 +480,7 @@ class WebIMClientFrame(TabbedListFrame):
                                        started_at=stamp))
         del self.call_log[:-100]
         if self.current_tab == TAB_CALLS:
-            self.refresh()
+            self.refresh(background=True)
 
     # -------------------------------------------------------------- auth flow
     def _announce_auth(self, auth: Dict, initial: bool) -> None:
@@ -459,38 +489,80 @@ class WebIMClientFrame(TabbedListFrame):
         state = (auth or {}).get('state')
         self.SetStatusText(self._auth_status_text())
 
+        if state != AUTH_CHALLENGE:
+            # A new challenge later on deserves its own question again.
+            self._page_question_asked = False
+
         if state == AUTH_LOGGED_IN:
             self.rebuild_tabs()
-            self.refresh()
+            # Only the first load may place the focus; a session re-confirmed
+            # later must not pull the user out of the row they are reading.
+            self.refresh(background=not initial)
             if not initial:
                 speak_notification(_("Connected to {service}").format(
                     service=self.backend.SERVICE_LABEL), 'success')
             return
 
+        if state != AUTH_PAIRING:
+            self._pairing_code_shown = ''
+
         if state == AUTH_PAIRING and auth.get('pairing_code'):
-            self.show_pairing_code(auth['pairing_code'])
+            self.announce_pairing_code(auth['pairing_code'])
             return
 
         if state == AUTH_CHALLENGE:
-            answer = show_message(
-                self, _("{service} needs an extra confirmation that cannot be "
-                        "completed from Titan.\nShow the service page so you can "
-                        "finish logging in?").format(
-                            service=self.backend.SERVICE_LABEL),
-                _("Confirmation required"), wx.YES_NO | wx.ICON_WARNING)
-            if answer == wx.ID_YES:
-                self.show_web_page()
+            self.ask_to_show_page(
+                _("{service} needs an extra confirmation that cannot be "
+                  "completed from Titan.\nShow the service page so you can "
+                  "finish logging in?").format(service=self.backend.SERVICE_LABEL))
             return
 
         if state in (AUTH_LOGGED_OUT, AUTH_QR) and not self._pending_login:
             self._pending_login = True
             wx.CallAfter(self._offer_login)
 
+    def ask_to_show_page(self, message: str) -> bool:
+        """Ask once whether to bring the service page up, and do it on yes.
+
+        Every route into a login problem - the auth push, the login command's
+        result, a failed login - ends in the same question, so it is asked
+        here and only once until the login state moves on. Returns True when
+        the question was actually put to the user.
+        """
+        if self._closing or self._page_question_asked:
+            return False
+        if self.backend.page_visible:
+            # The page is already up: there is nothing left to ask about.
+            self._page_question_asked = True
+            return False
+        self._page_question_asked = True
+        answer = show_message(self, message, _("Confirmation required"),
+                              wx.YES_NO | wx.ICON_WARNING)
+        if answer == wx.ID_YES:
+            self.show_web_page()
+        return True
+
     def _offer_login(self) -> None:
         self._pending_login = False
         if self._closing or self.backend.logged_in:
             return
+        if self.backend.page_visible:
+            # The user is logging in on the service page itself - a modal login
+            # dialog on top of it would only get in the way.
+            return
         self.start_login()
+
+    def announce_pairing_code(self, code: str) -> bool:
+        """Show a pairing code once, whichever route reported it first.
+
+        The agent pushes the code as an auth state *and* returns it as the
+        result of the pairing command; the user must still see one dialog.
+        """
+        if self._closing or not code or code == self._pairing_code_shown:
+            return False
+        self._pairing_code_shown = code
+        self.show_pairing_code(code)
+        return True
 
     def show_pairing_code(self, code: str) -> None:
         """Show a link-device code as text - the accessible alternative to a QR.

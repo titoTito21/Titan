@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 13:02+0200\n"
+"POT-Creation-Date: 2026-08-03 14:03+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -129,7 +129,7 @@ msgstr "Serwer: localhost:8001 (WebSocket), localhost:8000 (HTTP)"
 msgid "Connect"
 msgstr "Połącz"
 
-#: src/network/messenger_gui.py:78 src/network/messenger_titan_gui.py:67
+#: src/network/messenger_gui.py:78 src/network/messenger_titan_gui.py:76
 #: src/network/telegram_gui.py:155 src/network/whatsapp_titan_gui.py:63
 msgid "Cancel"
 msgstr "Anuluj"
@@ -138,7 +138,7 @@ msgstr "Anuluj"
 msgid "Search conversations:"
 msgstr "Szukaj rozmów:"
 
-#: src/network/messenger_gui.py:149 src/network/messenger_titan_gui.py:80
+#: src/network/messenger_gui.py:149 src/network/messenger_titan_gui.py:89
 #: src/network/whatsapp_titan_gui.py:80
 msgid "Conversations:"
 msgstr "Rozmowy:"
@@ -155,7 +155,7 @@ msgstr "Ostatnia wiadomość"
 msgid "Time"
 msgstr "Czas"
 
-#: src/network/messenger_gui.py:156 src/network/messenger_titan_gui.py:86
+#: src/network/messenger_gui.py:156 src/network/messenger_titan_gui.py:95
 #: src/network/whatsapp_titan_gui.py:86
 msgid "Unread"
 msgstr "Nieprzeczytane"
@@ -169,7 +169,7 @@ msgstr "Status: Rozłączony"
 msgid "Select a conversation to start chatting"
 msgstr "Wybierz rozmowę, aby rozpocząć czat"
 
-#: src/network/im_conversation.py:104 src/network/messenger_gui.py:191
+#: src/network/im_conversation.py:106 src/network/messenger_gui.py:191
 #: src/network/telegram_windows.py:735
 msgid "Send"
 msgstr "Wyślij"
@@ -299,12 +299,12 @@ msgstr "Wstecz"
 msgid "Dalej"
 msgstr "Dalej"
 
-#: src/network/im_client_base.py:120 src/network/messenger_webview.py:133
+#: src/network/im_client_base.py:125 src/network/messenger_webview.py:133
 msgid "Refresh"
 msgstr "Odśwież"
 
-#: src/network/messenger_titan_gui.py:190
-#: src/network/messenger_titan_gui.py:196 src/network/messenger_webview.py:134
+#: src/network/messenger_titan_gui.py:198
+#: src/network/messenger_titan_gui.py:204 src/network/messenger_webview.py:134
 #: src/network/messenger_webview.py:298
 msgid "Messenger"
 msgstr "Messenger"
@@ -337,7 +337,7 @@ msgstr "Zamknij"
 msgid "WebView is not available"
 msgstr "WebView niedostępny"
 
-#: src/network/im_client_base.py:79 src/network/im_conversation.py:113
+#: src/network/im_client_base.py:84 src/network/im_conversation.py:115
 #: src/network/messenger_webview.py:264
 msgid "Refresh\tF5"
 msgstr "Odśwież\tF5"
@@ -916,8 +916,8 @@ msgid "2FA Password"
 msgstr "Hasło 2FA"
 
 #: src/network/im_call_ui.py:129 src/network/im_call_ui.py:161
-#: src/network/im_client_base.py:162 src/network/im_client_base.py:405
-#: src/network/im_web/base.py:870 src/network/telegram_client.py:348
+#: src/network/im_client_base.py:184 src/network/im_client_base.py:430
+#: src/network/im_web/base.py:956 src/network/telegram_client.py:348
 #: src/network/telegram_client.py:409 src/network/telegram_client.py:841
 #: src/network/telegram_windows.py:416 src/network/telegram_windows.py:977
 msgid "Unknown"
@@ -1016,7 +1016,7 @@ msgstr ""
 msgid "Contacts"
 msgstr "Kontakty"
 
-#: src/network/messenger_titan_gui.py:87 src/network/telegram_gui.py:291
+#: src/network/messenger_titan_gui.py:96 src/network/telegram_gui.py:291
 #: src/network/telegram_gui.py:338 src/network/telegram_gui.py:477
 #: src/network/whatsapp_titan_gui.py:87
 msgid "Groups"
@@ -1028,7 +1028,7 @@ msgstr "Grupy"
 msgid "Back"
 msgstr ""
 
-#: src/network/im_web/base.py:858 src/network/telegram_gui.py:509
+#: src/network/im_web/base.py:944 src/network/telegram_gui.py:509
 msgid "Message"
 msgstr "Wiadomość"
 
@@ -1130,7 +1130,7 @@ msgstr ""
 msgid "Nie udało się wysłać wiadomości"
 msgstr ""
 
-#: src/network/im_web/base.py:852 src/network/telegram_windows.py:360
+#: src/network/im_web/base.py:938 src/network/telegram_windows.py:360
 #: src/network/telegram_windows.py:920
 msgid "Voice message"
 msgstr "Wiadomość głosowa"
@@ -1144,8 +1144,8 @@ msgid "Voice calls not available"
 msgstr "Połączenia głosowe niedostępne"
 
 #: src/network/im_call_ui.py:46 src/network/im_call_ui.py:160
-#: src/network/im_client_base.py:156 src/network/im_client_base.py:228
-#: src/network/im_web/base.py:863 src/network/telegram_windows.py:466
+#: src/network/im_client_base.py:178 src/network/im_client_base.py:252
+#: src/network/im_web/base.py:949 src/network/telegram_windows.py:466
 #: src/network/telegram_windows.py:1019 src/network/telegram_windows.py:1116
 msgid "Voice call"
 msgstr "Połączenie głosowe"
@@ -1163,7 +1163,7 @@ msgstr "Połączenie przychodzące"
 msgid "Incoming call (native)"
 msgstr ""
 
-#: src/network/im_client_base.py:204 src/network/im_client_base.py:209
+#: src/network/im_client_base.py:228 src/network/im_client_base.py:233
 #: src/network/telegram_windows.py:521
 msgid "Connecting..."
 msgstr "Łączenie..."
@@ -1220,7 +1220,7 @@ msgstr "Łączenie"
 msgid "Group chat"
 msgstr ""
 
-#: src/network/telegram_windows.py:895
+#: src/network/im_web/base.py:924 src/network/telegram_windows.py:895
 msgid "Me"
 msgstr ""
 
@@ -1297,7 +1297,7 @@ msgstr "Wyczyść cookies i dane"
 msgid "Zamknij okno"
 msgstr "Zamknij okno"
 
-#: src/network/whatsapp_titan_gui.py:192 src/network/whatsapp_titan_gui.py:198
+#: src/network/whatsapp_titan_gui.py:188 src/network/whatsapp_titan_gui.py:194
 #: src/network/whatsapp_webview.py:218
 msgid "WhatsApp"
 msgstr "WhatsApp"
@@ -1453,178 +1453,178 @@ msgstr ""
 msgid "Błąd WhatsApp WebView"
 msgstr ""
 
-#: src/network/im_conversation.py:260 src/network/im_ui_common.py:211
+#: src/network/im_conversation.py:271 src/network/im_ui_common.py:227
 #, python-brace-format
 msgid "{tab}: {n} entries"
 msgstr "{tab}: {n} pozycji"
 
-#: src/network/im_ui_common.py:228
+#: src/network/im_ui_common.py:244
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} z {}"
 
-#: src/network/im_client_base.py:80
+#: src/network/im_client_base.py:85
 msgid "Search...\tCtrl+F"
 msgstr "Szukaj...\tCtrl+F"
 
-#: src/network/im_client_base.py:82
+#: src/network/im_client_base.py:87
 msgid "Log in..."
 msgstr "Zaloguj się..."
 
-#: src/network/im_client_base.py:83 src/network/im_client_base.py:308
+#: src/network/im_client_base.py:88 src/network/im_client_base.py:332
 msgid "Log out"
 msgstr "Wyloguj się"
 
-#: src/network/im_client_base.py:85
+#: src/network/im_client_base.py:90
 msgid "Show the web page (advanced)"
 msgstr "Pokaż stronę web (zaawansowane)"
 
-#: src/network/im_client_base.py:86
+#: src/network/im_client_base.py:91
 msgid "Connection diagnostics..."
 msgstr "Diagnostyka połączenia..."
 
-#: src/network/im_client_base.py:88 src/network/im_conversation.py:126
+#: src/network/im_client_base.py:93 src/network/im_conversation.py:128
 msgid "Close\tEscape"
 msgstr "Zamknij\tEscape"
 
-#: src/network/im_client_base.py:89
+#: src/network/im_client_base.py:94
 msgid "&Service"
 msgstr "&Usługa"
 
-#: src/network/im_client_base.py:102
+#: src/network/im_client_base.py:107
 msgid "Open\tEnter"
 msgstr "Otwórz\tEnter"
 
-#: src/network/im_client_base.py:103 src/network/im_client_base.py:225
-#: src/network/im_conversation.py:118
+#: src/network/im_client_base.py:108 src/network/im_client_base.py:249
+#: src/network/im_conversation.py:120
 msgid "Mark as read"
 msgstr "Oznacz jako przeczytane"
 
-#: src/network/im_client_base.py:105 src/network/im_conversation.py:121
+#: src/network/im_client_base.py:110 src/network/im_conversation.py:123
 msgid "Voice call\tCtrl+T"
 msgstr "Połączenie głosowe\tCtrl+T"
 
-#: src/network/im_client_base.py:108 src/network/im_conversation.py:123
+#: src/network/im_client_base.py:113 src/network/im_conversation.py:125
 msgid "Video call\tCtrl+Shift+T"
 msgstr "Połączenie wideo\tCtrl+Shift+T"
 
-#: src/network/im_client_base.py:110 src/network/im_conversation.py:127
+#: src/network/im_client_base.py:115 src/network/im_conversation.py:129
 msgid "&Conversation"
 msgstr "&Rozmowa"
 
-#: src/network/im_client_base.py:124 src/network/im_client_base.py:254
+#: src/network/im_client_base.py:129 src/network/im_client_base.py:278
 msgid "Search"
 msgstr "Szukaj"
 
-#: src/network/im_client_base.py:128
+#: src/network/im_client_base.py:133
 msgid "Close"
 msgstr "Zamknij"
 
-#: src/network/im_client_base.py:148
+#: src/network/im_client_base.py:162
 msgid "Could not load conversations"
 msgstr "Nie udało się wczytać rozmów"
 
 #: src/network/im_call_ui.py:46 src/network/im_call_ui.py:160
-#: src/network/im_client_base.py:156 src/network/im_client_base.py:230
-#: src/network/im_web/base.py:863
+#: src/network/im_client_base.py:178 src/network/im_client_base.py:254
+#: src/network/im_web/base.py:949
 msgid "Video call"
 msgstr "Połączenie wideo"
 
-#: src/network/im_client_base.py:158 src/network/im_web/base.py:865
+#: src/network/im_client_base.py:180 src/network/im_web/base.py:951
 msgid "incoming"
 msgstr "przychodzące"
 
-#: src/network/im_client_base.py:158 src/network/im_web/base.py:866
+#: src/network/im_client_base.py:180 src/network/im_web/base.py:952
 msgid "outgoing"
 msgstr "wychodzące"
 
-#: src/network/im_client_base.py:159
+#: src/network/im_client_base.py:181
 msgid "answered"
 msgstr "odebrane"
 
-#: src/network/im_client_base.py:159 src/network/im_web/base.py:868
+#: src/network/im_client_base.py:181 src/network/im_web/base.py:954
 msgid "ended"
 msgstr "zakończone"
 
-#: src/network/im_client_base.py:161
+#: src/network/im_client_base.py:183
 #, python-brace-format
 msgid "{kind}, {peer}, {direction}, {time}"
 msgstr "{kind}, {peer}, {direction}, {time}"
 
-#: src/network/im_client_base.py:170
+#: src/network/im_client_base.py:192
 #, python-brace-format
 msgid "{n} unread"
 msgstr "{n} nieprzeczytanych"
 
-#: src/network/im_client_base.py:178
+#: src/network/im_client_base.py:200
 msgid "active now"
 msgstr "aktywny teraz"
 
-#: src/network/im_client_base.py:180
+#: src/network/im_client_base.py:202
 msgid "muted"
 msgstr "wyciszona"
 
-#: src/network/im_client_base.py:196
+#: src/network/im_client_base.py:220
 #, python-brace-format
 msgid "{tab}: {n} conversations, {unread} unread"
 msgstr "{tab}: {n} rozmów, {unread} nieprzeczytanych"
 
-#: src/network/im_client_base.py:198
+#: src/network/im_client_base.py:222
 #, python-brace-format
 msgid "{tab}: {n} conversations"
 msgstr "{tab}: {n} rozmów"
 
-#: src/network/im_client_base.py:205
+#: src/network/im_client_base.py:229
 msgid "Not logged in"
 msgstr "Nie zalogowano"
 
-#: src/network/im_client_base.py:206
+#: src/network/im_client_base.py:230
 msgid "Waiting for the login code"
 msgstr "Oczekiwanie na kod logowania"
 
-#: src/network/im_client_base.py:207
+#: src/network/im_client_base.py:231
 msgid "Waiting for device pairing"
 msgstr "Oczekiwanie na sparowanie urządzenia"
 
-#: src/network/im_client_base.py:208
+#: src/network/im_client_base.py:232
 msgid "Additional confirmation required"
 msgstr "Wymagane dodatkowe potwierdzenie"
 
-#: src/network/im_client_base.py:224
+#: src/network/im_client_base.py:248
 msgid "Open"
 msgstr "Otwórz"
 
-#: src/network/im_client_base.py:237
+#: src/network/im_client_base.py:261
 msgid "Marked as read"
 msgstr "Oznaczono jako przeczytane"
 
-#: src/network/im_client_base.py:247 src/network/im_conversation.py:515
+#: src/network/im_client_base.py:271 src/network/im_conversation.py:526
 #, python-brace-format
 msgid "Calling {name}"
 msgstr "Dzwonię do {name}"
 
-#: src/network/im_client_base.py:249
+#: src/network/im_client_base.py:273
 msgid "Cannot start the call"
 msgstr "Nie można rozpocząć połączenia"
 
-#: src/network/im_client_base.py:254
+#: src/network/im_client_base.py:278
 msgid "What are you looking for?"
 msgstr "Czego szukasz?"
 
-#: src/network/im_client_base.py:264
+#: src/network/im_client_base.py:288
 msgid "Search failed"
 msgstr "Wyszukiwanie nie udało się"
 
-#: src/network/im_client_base.py:269
+#: src/network/im_client_base.py:293
 msgid "Nothing found"
 msgstr "Nic nie znaleziono"
 
-#: src/network/im_client_base.py:272
+#: src/network/im_client_base.py:296
 #, python-brace-format
 msgid "Found {chats} conversations and {messages} messages"
 msgstr "Znaleziono {chats} rozmów i {messages} wiadomości"
 
-#: src/network/im_client_base.py:277
+#: src/network/im_client_base.py:301
 msgid ""
 "The service page is now on screen. Close it to return to Titan; the "
 "connection stays up."
@@ -1632,63 +1632,63 @@ msgstr ""
 "Strona usługi jest teraz na ekranie. Zamknij ją, aby wrócić do Titana; "
 "połączenie pozostanie aktywne."
 
-#: src/network/im_client_base.py:283
+#: src/network/im_client_base.py:307
 msgid "Diagnostics unavailable"
 msgstr "Diagnostyka niedostępna"
 
-#: src/network/im_client_base.py:284 src/network/im_client_base.py:301
+#: src/network/im_client_base.py:308 src/network/im_client_base.py:325
 msgid "Diagnostics"
 msgstr "Diagnostyka"
 
-#: src/network/im_client_base.py:287
+#: src/network/im_client_base.py:311
 #, python-brace-format
 msgid "Service: {service}"
 msgstr "Usługa: {service}"
 
-#: src/network/im_client_base.py:288
+#: src/network/im_client_base.py:312
 #, python-brace-format
 msgid "Address: {url}"
 msgstr "Adres: {url}"
 
-#: src/network/im_client_base.py:289
+#: src/network/im_client_base.py:313
 #, python-brace-format
 msgid "Login state: {state}"
 msgstr "Stan logowania: {state}"
 
-#: src/network/im_client_base.py:291
+#: src/network/im_client_base.py:315
 #, python-brace-format
 msgid "Capabilities: {caps}"
 msgstr "Dostępne funkcje: {caps}"
 
-#: src/network/im_client_base.py:294
+#: src/network/im_client_base.py:318
 msgid "Data sources:"
 msgstr "Źródła danych:"
 
-#: src/network/im_client_base.py:299
+#: src/network/im_client_base.py:323
 #, python-brace-format
 msgid "Last error: {error}"
 msgstr "Ostatni błąd: {error}"
 
-#: src/network/im_client_base.py:307
+#: src/network/im_client_base.py:331
 #, python-brace-format
 msgid "Log out of {service}?"
 msgstr "Wylogować się z {service}?"
 
-#: src/network/im_client_base.py:316
+#: src/network/im_client_base.py:340
 msgid "Logged out"
 msgstr "Wylogowano"
 
-#: src/network/im_client_base.py:419
+#: src/network/im_client_base.py:444
 #, python-brace-format
 msgid "{service}, {who}: {text}"
 msgstr "{service}, {who}: {text}"
 
-#: src/network/im_client_base.py:466
+#: src/network/im_client_base.py:502
 #, python-brace-format
 msgid "Connected to {service}"
 msgstr "Połączono z {service}"
 
-#: src/network/im_client_base.py:476
+#: src/network/im_client_base.py:515
 #, python-brace-format
 msgid ""
 "{service} needs an extra confirmation that cannot be completed from "
@@ -1699,16 +1699,16 @@ msgstr ""
 "Titana.\n"
 "Pokazać stronę usługi, aby dokończyć logowanie?"
 
-#: src/network/im_client_base.py:480 src/network/messenger_titan_gui.py:162
+#: src/network/im_client_base.py:539
 msgid "Confirmation required"
 msgstr "Wymagane potwierdzenie"
 
-#: src/network/im_client_base.py:500 src/network/whatsapp_titan_gui.py:164
+#: src/network/im_client_base.py:572 src/network/whatsapp_titan_gui.py:160
 #, python-brace-format
 msgid "Pairing code: {code}"
 msgstr "Kod parowania: {code}"
 
-#: src/network/im_client_base.py:501
+#: src/network/im_client_base.py:573
 #, python-brace-format
 msgid ""
 "Enter this code on your phone:\n"
@@ -1719,7 +1719,7 @@ msgstr ""
 "\n"
 "{code}"
 
-#: src/network/im_client_base.py:502
+#: src/network/im_client_base.py:574
 msgid "Pairing code"
 msgstr "Kod parowania"
 
@@ -1747,251 +1747,255 @@ msgstr "Smutek"
 msgid "Thanks"
 msgstr "Dziękuję"
 
-#: src/network/im_conversation.py:67
+#: src/network/im_conversation.py:59
+msgid "Messages:"
+msgstr "Wiadomości:"
+
+#: src/network/im_conversation.py:70
 #, python-brace-format
 msgid "{name} - {service}"
 msgstr "{name} - {service}"
 
-#: src/network/im_conversation.py:70
-msgid "Messages:"
-msgstr "Wiadomości:"
-
-#: src/network/im_conversation.py:86
+#: src/network/im_conversation.py:88
 msgid "Messages"
 msgstr "Wiadomości"
 
-#: src/network/im_conversation.py:87
+#: src/network/im_conversation.py:89
 msgid "Media"
 msgstr "Multimedia"
 
-#: src/network/im_conversation.py:88
+#: src/network/im_conversation.py:90
 msgid "Files"
 msgstr "Pliki"
 
-#: src/network/im_conversation.py:89
+#: src/network/im_conversation.py:91
 msgid "Links"
 msgstr "Linki"
 
-#: src/network/im_conversation.py:92
+#: src/network/im_conversation.py:94
 msgid "Participants"
 msgstr "Uczestnicy"
 
-#: src/network/im_conversation.py:96
+#: src/network/im_conversation.py:98
 msgid "Your message:"
 msgstr "Twoja wiadomość:"
 
-#: src/network/im_conversation.py:114
+#: src/network/im_conversation.py:116
 msgid "Load earlier messages\tCtrl+Up"
 msgstr "Wczytaj wcześniejsze wiadomości\tCtrl+Up"
 
-#: src/network/im_conversation.py:116
+#: src/network/im_conversation.py:118
 msgid "Send attachment...\tCtrl+O"
 msgstr "Wyślij załącznik...\tCtrl+O"
 
-#: src/network/im_conversation.py:130
+#: src/network/im_conversation.py:132
 msgid "Read whole message\tCtrl+R"
 msgstr "Przeczytaj całą wiadomość\tCtrl+R"
 
-#: src/network/im_conversation.py:132
+#: src/network/im_conversation.py:134
 msgid "Copy text\tCtrl+C"
 msgstr "Kopiuj tekst\tCtrl+C"
 
-#: src/network/im_conversation.py:133
+#: src/network/im_conversation.py:135
 msgid "Reply\tCtrl+Enter"
 msgstr "Odpowiedz\tCtrl+Enter"
 
-#: src/network/im_conversation.py:135 src/network/im_conversation.py:281
+#: src/network/im_conversation.py:137 src/network/im_conversation.py:292
 msgid "React..."
 msgstr "Zareaguj..."
 
-#: src/network/im_conversation.py:137 src/network/im_conversation.py:283
+#: src/network/im_conversation.py:139 src/network/im_conversation.py:294
 msgid "Edit..."
 msgstr "Edytuj..."
 
-#: src/network/im_conversation.py:139
+#: src/network/im_conversation.py:141
 msgid "Delete\tDelete"
 msgstr "Usuń\tDelete"
 
-#: src/network/im_conversation.py:140 src/network/im_conversation.py:287
+#: src/network/im_conversation.py:142 src/network/im_conversation.py:298
 msgid "Download attachment"
 msgstr "Pobierz załącznik"
 
-#: src/network/im_conversation.py:141
+#: src/network/im_conversation.py:143
 msgid "&Message"
 msgstr "&Wiadomość"
 
-#: src/network/im_conversation.py:177
+#: src/network/im_conversation.py:165
+msgid "Loading the conversation..."
+msgstr "Wczytywanie rozmowy..."
+
+#: src/network/im_conversation.py:185
 msgid "Could not load the conversation"
 msgstr "Nie udało się wczytać rozmowy"
 
-#: src/network/im_conversation.py:192
+#: src/network/im_conversation.py:203
 msgid "Could not load participants"
 msgstr "Nie udało się wczytać uczestników"
 
-#: src/network/im_conversation.py:203
+#: src/network/im_conversation.py:214
 #, python-brace-format
 msgid "{name} (administrator)"
 msgstr "{name} (administrator)"
 
-#: src/network/im_conversation.py:206 src/network/im_conversation.py:380
+#: src/network/im_conversation.py:217 src/network/im_conversation.py:391
 msgid "You"
 msgstr "Ty"
 
-#: src/network/im_conversation.py:211
+#: src/network/im_conversation.py:222
 msgid "(message deleted)"
 msgstr "(wiadomość usunięta)"
 
-#: src/network/im_conversation.py:214
+#: src/network/im_conversation.py:225
 msgid "photo"
 msgstr "zdjęcie"
 
-#: src/network/im_conversation.py:214
+#: src/network/im_conversation.py:225
 msgid "video"
 msgstr "wideo"
 
-#: src/network/im_conversation.py:214
+#: src/network/im_conversation.py:225
 msgid "audio"
 msgstr "dźwięk"
 
-#: src/network/im_conversation.py:215
+#: src/network/im_conversation.py:226
 msgid "voice message"
 msgstr "wiadomość głosowa"
 
-#: src/network/im_conversation.py:215
+#: src/network/im_conversation.py:226
 msgid "sticker"
 msgstr "naklejka"
 
-#: src/network/im_conversation.py:216
+#: src/network/im_conversation.py:227
 msgid "file"
 msgstr "plik"
 
-#: src/network/im_conversation.py:217
+#: src/network/im_conversation.py:228
 msgid "attachment"
 msgstr "załącznik"
 
-#: src/network/im_conversation.py:221
+#: src/network/im_conversation.py:232
 msgid "[call]"
 msgstr "[połączenie]"
 
-#: src/network/im_conversation.py:230
+#: src/network/im_conversation.py:241
 msgid "edited"
 msgstr "edytowana"
 
-#: src/network/im_conversation.py:233
+#: src/network/im_conversation.py:244
 #, python-brace-format
 msgid "replying to: {text}"
 msgstr "w odpowiedzi na: {text}"
 
-#: src/network/im_conversation.py:237
+#: src/network/im_conversation.py:248
 #, python-brace-format
 msgid "reaction {emoji}"
 msgstr "reakcja {emoji}"
 
-#: src/network/im_conversation.py:240
+#: src/network/im_conversation.py:251
 msgid "sending"
 msgstr "wysyłanie"
 
-#: src/network/im_conversation.py:240
+#: src/network/im_conversation.py:251
 msgid "sent"
 msgstr "wysłana"
 
-#: src/network/im_conversation.py:241
+#: src/network/im_conversation.py:252
 msgid "delivered"
 msgstr "dostarczona"
 
-#: src/network/im_conversation.py:241
+#: src/network/im_conversation.py:252
 msgid "read"
 msgstr "odczytana"
 
-#: src/network/im_conversation.py:242
+#: src/network/im_conversation.py:253
 msgid "not sent"
 msgstr "niewysłana"
 
-#: src/network/im_conversation.py:258
+#: src/network/im_conversation.py:269
 #, python-brace-format
 msgid "{name}: {n} messages"
 msgstr "{name}: {n} wiadomości"
 
-#: src/network/im_conversation.py:276
+#: src/network/im_conversation.py:287
 msgid "Read whole message"
 msgstr "Przeczytaj całą wiadomość"
 
-#: src/network/im_conversation.py:277
+#: src/network/im_conversation.py:288
 msgid "Copy text"
 msgstr "Kopiuj tekst"
 
-#: src/network/im_conversation.py:278 src/network/im_conversation.py:345
+#: src/network/im_conversation.py:289 src/network/im_conversation.py:356
 msgid "Reply"
 msgstr "Odpowiedz"
 
-#: src/network/im_conversation.py:285
+#: src/network/im_conversation.py:296
 msgid "Delete"
 msgstr "Usuń"
 
-#: src/network/im_conversation.py:330
+#: src/network/im_conversation.py:341
 #, python-brace-format
 msgid "Message not sent: {error}"
 msgstr "Wiadomość nie została wysłana: {error}"
 
-#: src/network/im_conversation.py:344
+#: src/network/im_conversation.py:355
 #, python-brace-format
 msgid "Reply to: {text}"
 msgstr "Odpowiedź na: {text}"
 
-#: src/network/im_conversation.py:352
+#: src/network/im_conversation.py:363
 msgid "Reply sent"
 msgstr "Odpowiedź wysłana"
 
-#: src/network/im_conversation.py:356
+#: src/network/im_conversation.py:367
 msgid "Choose a file to send"
 msgstr "Wybierz plik do wysłania"
 
-#: src/network/im_conversation.py:361
+#: src/network/im_conversation.py:372
 #, python-brace-format
 msgid "Sending {name}"
 msgstr "Wysyłanie {name}"
 
-#: src/network/im_conversation.py:364
+#: src/network/im_conversation.py:375
 msgid "Attachment sent"
 msgstr "Załącznik wysłany"
 
-#: src/network/im_conversation.py:373
+#: src/network/im_conversation.py:384
 msgid "Operation failed"
 msgstr "Operacja nie udała się"
 
-#: src/network/im_conversation.py:390
+#: src/network/im_conversation.py:401
 msgid "Copied"
 msgstr "Skopiowano"
 
-#: src/network/im_conversation.py:397
+#: src/network/im_conversation.py:408
 msgid "Choose a reaction"
 msgstr "Wybierz reakcję"
 
-#: src/network/im_conversation.py:398
+#: src/network/im_conversation.py:409
 msgid "React"
 msgstr "Reakcja"
 
-#: src/network/im_conversation.py:404
+#: src/network/im_conversation.py:415
 msgid "Reaction sent"
 msgstr "Reakcja wysłana"
 
-#: src/network/im_conversation.py:410
+#: src/network/im_conversation.py:421
 msgid "Only your own messages can be edited"
 msgstr "Edytować można tylko własne wiadomości"
 
-#: src/network/im_conversation.py:412
+#: src/network/im_conversation.py:423
 msgid "New message text"
 msgstr "Nowa treść wiadomości"
 
-#: src/network/im_conversation.py:412
+#: src/network/im_conversation.py:423
 msgid "Edit message"
 msgstr "Edytuj wiadomość"
 
-#: src/network/im_conversation.py:418
+#: src/network/im_conversation.py:429
 msgid "Message edited"
 msgstr "Wiadomość zedytowana"
 
-#: src/network/im_conversation.py:428
+#: src/network/im_conversation.py:439
 msgid ""
 "Delete this message for everyone?\n"
 "Choosing No deletes it only for you."
@@ -1999,50 +2003,50 @@ msgstr ""
 "Usunąć tę wiadomość u wszystkich?\n"
 "Wybór Nie usuwa ją tylko u Ciebie."
 
-#: src/network/im_conversation.py:430
+#: src/network/im_conversation.py:441
 msgid "Delete message"
 msgstr "Usuń wiadomość"
 
-#: src/network/im_conversation.py:437
+#: src/network/im_conversation.py:448
 msgid "Message deleted"
 msgstr "Wiadomość usunięta"
 
-#: src/network/im_conversation.py:447
+#: src/network/im_conversation.py:458
 msgid "Downloading attachment"
 msgstr "Pobieranie załącznika"
 
-#: src/network/im_conversation.py:453
+#: src/network/im_conversation.py:464
 msgid "Download failed"
 msgstr "Pobieranie nie udało się"
 
-#: src/network/im_conversation.py:463
+#: src/network/im_conversation.py:474
 #, python-brace-format
 msgid "Saved as {path}"
 msgstr "Zapisano jako {path}"
 
-#: src/network/im_conversation.py:482
+#: src/network/im_conversation.py:493
 #, python-brace-format
 msgid "Cannot open the file: {error}"
 msgstr "Nie można otworzyć pliku: {error}"
 
-#: src/network/im_conversation.py:487 src/network/im_conversation.py:500
+#: src/network/im_conversation.py:498 src/network/im_conversation.py:511
 msgid "No earlier messages"
 msgstr "Brak wcześniejszych wiadomości"
 
-#: src/network/im_conversation.py:489
+#: src/network/im_conversation.py:500
 msgid "Loading earlier messages"
 msgstr "Wczytywanie wcześniejszych wiadomości"
 
-#: src/network/im_conversation.py:493
+#: src/network/im_conversation.py:504
 msgid "Could not load history"
 msgstr "Nie udało się wczytać historii"
 
-#: src/network/im_conversation.py:506
+#: src/network/im_conversation.py:517
 #, python-brace-format
 msgid "Loaded {n} earlier messages"
 msgstr "Wczytano {n} wcześniejszych wiadomości"
 
-#: src/network/im_conversation.py:559
+#: src/network/im_conversation.py:570
 #, python-brace-format
 msgid "Attachment ready: {name}"
 msgstr "Załącznik gotowy: {name}"
@@ -2064,7 +2068,7 @@ msgstr "Odbierz"
 msgid "Decline"
 msgstr "Odrzuć"
 
-#: src/network/im_call_ui.py:120 src/network/im_web/base.py:856
+#: src/network/im_call_ui.py:120 src/network/im_web/base.py:942
 msgid "Call"
 msgstr "Połączenie"
 
@@ -2131,7 +2135,7 @@ msgstr "Pobierz kod"
 msgid "WhatsApp - Titan IM"
 msgstr "WhatsApp - Titan IM"
 
-#: src/network/messenger_titan_gui.py:85 src/network/whatsapp_titan_gui.py:85
+#: src/network/messenger_titan_gui.py:94 src/network/whatsapp_titan_gui.py:85
 msgid "Chats"
 msgstr "Rozmowy"
 
@@ -2143,7 +2147,7 @@ msgstr "Kanały"
 msgid "Status updates"
 msgstr "Statusy"
 
-#: src/network/messenger_titan_gui.py:92 src/network/whatsapp_titan_gui.py:93
+#: src/network/messenger_titan_gui.py:101 src/network/whatsapp_titan_gui.py:93
 msgid "Calls"
 msgstr "Połączenia"
 
@@ -2167,7 +2171,7 @@ msgstr "Nie podano numeru telefonu"
 msgid "Asking WhatsApp for a pairing code..."
 msgstr "Proszę WhatsAppa o kod parowania..."
 
-#: src/network/whatsapp_titan_gui.py:149
+#: src/network/whatsapp_titan_gui.py:148
 #, python-brace-format
 msgid ""
 "WhatsApp did not return a pairing code.\n"
@@ -2180,15 +2184,11 @@ msgstr ""
 "\n"
 "Pokazać stronę web, aby zalogować się tam?"
 
-#: src/network/messenger_titan_gui.py:151 src/network/whatsapp_titan_gui.py:152
-msgid "Login"
-msgstr "Logowanie"
-
-#: src/network/whatsapp_titan_gui.py:161
+#: src/network/whatsapp_titan_gui.py:157
 msgid "Waiting for the pairing code..."
 msgstr "Oczekiwanie na kod parowania..."
 
-#: src/network/whatsapp_titan_gui.py:167
+#: src/network/whatsapp_titan_gui.py:163
 #, python-brace-format
 msgid ""
 "Enter this code on your phone:\n"
@@ -2205,11 +2205,11 @@ msgstr ""
 "Na telefonie: WhatsApp, Ustawienia, Urządzenia połączone, Połącz "
 "urządzenie, a następnie \"Połącz przy użyciu numeru telefonu\"."
 
-#: src/network/whatsapp_titan_gui.py:170
+#: src/network/whatsapp_titan_gui.py:166
 msgid "WhatsApp pairing code"
 msgstr "Kod parowania WhatsAppa"
 
-#: src/network/whatsapp_titan_gui.py:190
+#: src/network/whatsapp_titan_gui.py:186
 msgid ""
 "WhatsApp needs Microsoft WebView2, which is not installed on this "
 "computer."
@@ -2217,11 +2217,11 @@ msgstr ""
 "WhatsApp wymaga Microsoft WebView2, który nie jest zainstalowany na tym "
 "komputerze."
 
-#: src/network/messenger_titan_gui.py:38
+#: src/network/messenger_titan_gui.py:39
 msgid "Log in to Messenger"
 msgstr "Zaloguj się do Messengera"
 
-#: src/network/messenger_titan_gui.py:44
+#: src/network/messenger_titan_gui.py:45
 msgid ""
 "Enter your Facebook credentials. Titan fills in the Messenger login form "
 "for you - nothing is sent anywhere else.\n"
@@ -2233,51 +2233,59 @@ msgstr ""
 "Jeśli Facebook poprosi o dodatkowe potwierdzenie, Titan zaproponuje "
 "pokazanie strony, abyś mógł je dokończyć."
 
-#: src/network/messenger_titan_gui.py:49
+#: src/network/messenger_titan_gui.py:50
 msgid "E-mail address or phone number:"
 msgstr "Adres e-mail lub numer telefonu:"
 
-#: src/network/messenger_titan_gui.py:54
+#: src/network/messenger_titan_gui.py:55
 msgid "Password:"
 msgstr "Hasło:"
 
-#: src/network/messenger_titan_gui.py:59
-msgid "Remember the e-mail address"
-msgstr "Zapamiętaj adres e-mail"
+#: src/network/messenger_titan_gui.py:62
+msgid "Remember the e-mail address and the password"
+msgstr "Zapamiętaj adres e-mail i hasło"
 
-#: src/network/messenger_titan_gui.py:64
+#: src/network/messenger_titan_gui.py:68
+msgid ""
+"The password is kept in the encrypted Titan IM file, the same place as "
+"the other messenger credentials."
+msgstr ""
+"Hasło jest przechowywane w zaszyfrowanym pliku Titan IM, w tym samym "
+"miejscu co pozostałe dane logowania komunikatorów."
+
+#: src/network/messenger_titan_gui.py:73
 msgid "Log in"
 msgstr "Zaloguj się"
 
-#: src/network/messenger_titan_gui.py:79
+#: src/network/messenger_titan_gui.py:88
 msgid "Messenger - Titan IM"
 msgstr "Messenger - Titan IM"
 
-#: src/network/messenger_titan_gui.py:88
+#: src/network/messenger_titan_gui.py:97
 msgid "Active now"
 msgstr "Aktywni teraz"
 
-#: src/network/messenger_titan_gui.py:91
+#: src/network/messenger_titan_gui.py:100
 msgid "Message requests"
 msgstr "Prośby o wiadomość"
 
-#: src/network/messenger_titan_gui.py:106
+#: src/network/messenger_titan_gui.py:115
 msgid "&Messenger"
 msgstr "&Messenger"
 
-#: src/network/messenger_titan_gui.py:121
+#: src/network/messenger_titan_gui.py:132
 msgid "Login cancelled."
 msgstr "Logowanie anulowane."
 
-#: src/network/messenger_titan_gui.py:130
+#: src/network/messenger_titan_gui.py:141
 msgid "Both the e-mail address and the password are needed"
 msgstr "Potrzebne są zarówno adres e-mail, jak i hasło"
 
-#: src/network/messenger_titan_gui.py:140
+#: src/network/messenger_titan_gui.py:153
 msgid "Logging in to Messenger..."
 msgstr "Logowanie do Messengera..."
 
-#: src/network/messenger_titan_gui.py:148
+#: src/network/messenger_titan_gui.py:163
 #, python-brace-format
 msgid ""
 "Messenger login failed.\n"
@@ -2290,7 +2298,7 @@ msgstr ""
 "\n"
 "Pokazać stronę web, aby zalogować się tam?"
 
-#: src/network/messenger_titan_gui.py:159
+#: src/network/messenger_titan_gui.py:170
 msgid ""
 "Facebook is asking for an extra confirmation (a code, a captcha or a "
 "device check).\n"
@@ -2300,11 +2308,11 @@ msgstr ""
 "urządzenia).\n"
 "Pokazać stronę, aby dokończyć logowanie?"
 
-#: src/network/messenger_titan_gui.py:167
+#: src/network/messenger_titan_gui.py:175
 msgid "Connected to Messenger"
 msgstr "Połączono z Messengerem"
 
-#: src/network/messenger_titan_gui.py:188
+#: src/network/messenger_titan_gui.py:196
 msgid ""
 "Messenger needs Microsoft WebView2, which is not installed on this "
 "computer."
@@ -2312,39 +2320,52 @@ msgstr ""
 "Messenger wymaga Microsoft WebView2, który nie jest zainstalowany na tym "
 "komputerze."
 
-#: src/network/im_web/base.py:849
+#: src/network/im_web/base.py:914
+msgid "The service engine is not running"
+msgstr "Silnik usługi nie jest uruchomiony"
+
+#: src/network/im_web/base.py:919
+msgid "This message has no downloadable media"
+msgstr "Ta wiadomość nie zawiera multimediów do pobrania"
+
+#: src/network/im_web/base.py:929
+#, python-brace-format
+msgid "{service} web page - Titan IM"
+msgstr "{service} - strona internetowa - Titan IM"
+
+#: src/network/im_web/base.py:935
 msgid "Photo"
 msgstr "Zdjęcie"
 
-#: src/network/im_web/base.py:850
+#: src/network/im_web/base.py:936
 msgid "Video"
 msgstr "Wideo"
 
-#: src/network/im_web/base.py:851
+#: src/network/im_web/base.py:937
 msgid "Audio"
 msgstr "Dźwięk"
 
-#: src/network/im_web/base.py:853
+#: src/network/im_web/base.py:939
 msgid "Document"
 msgstr "Dokument"
 
-#: src/network/im_web/base.py:854
+#: src/network/im_web/base.py:940
 msgid "Sticker"
 msgstr "Naklejka"
 
-#: src/network/im_web/base.py:855
+#: src/network/im_web/base.py:941
 msgid "Location"
 msgstr "Lokalizacja"
 
-#: src/network/im_web/base.py:857
+#: src/network/im_web/base.py:943
 msgid "System message"
 msgstr "Wiadomość systemowa"
 
-#: src/network/im_web/base.py:867
+#: src/network/im_web/base.py:953
 msgid "connected"
 msgstr "połączone"
 
-#: src/network/im_web/base.py:871
+#: src/network/im_web/base.py:957
 #, python-brace-format
 msgid "{kind} with {peer}: {state}"
 msgstr "{kind} z {peer}: {state}"
@@ -2365,7 +2386,7 @@ msgstr "{kind} z {peer}: {state}"
 #~ msgstr "Utwórz konto"
 
 #~ msgid "Login"
-#~ msgstr "Zaloguj"
+#~ msgstr "Logowanie"
 
 #~ msgid "Continue in Offline Mode"
 #~ msgstr "Kontynuuj w trybie offline"
@@ -2750,4 +2771,7 @@ msgstr "{kind} z {peer}: {state}"
 #~ "Informacje debug połączeń głosowych:\n"
 #~ "\n"
 #~ msgstr ""
+
+#~ msgid "Remember the e-mail address"
+#~ msgstr "Zapamiętaj adres e-mail"
 

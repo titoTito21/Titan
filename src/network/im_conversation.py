@@ -149,20 +149,26 @@ class ConversationFrame(TabbedListFrame):
         self.Bind(wx.EVT_MENU, lambda e: handler(), item)
 
     # -------------------------------------------------------------------- rows
-    def load_items(self, tab_id: str) -> None:
+    def load_items(self, tab_id: str, background: bool = False) -> None:
         if tab_id == TAB_PARTICIPANTS:
             self.backend.list_participants(
                 self.chat.id,
-                lambda result: self._apply_participants(result, tab_id))
+                lambda result: self._apply_participants(result, tab_id,
+                                                        background))
             return
 
         if tab_id == TAB_MESSAGES and not self.messages:
+            if not background:
+                # Opening a conversation the page has not rendered takes a
+                # navigation and a couple of seconds - say so instead of
+                # leaving the user in front of an empty list.
+                speak_titannet(_("Loading the conversation..."))
             self.backend.load_history(
                 self.chat.id, limit=60,
                 callback=lambda result: self._apply_history(result, tab_id))
             return
 
-        self.apply_items(self._filtered(tab_id), tab_id)
+        self.apply_items(self._filtered(tab_id), tab_id, background=background)
 
     def _filtered(self, tab_id: str) -> List[Any]:
         if tab_id == TAB_MEDIA:
@@ -189,13 +195,16 @@ class ConversationFrame(TabbedListFrame):
         if self.current_tab == TAB_MESSAGES and self.items:
             self.select_item_index(len(self.items) - 1)
 
-    def _apply_participants(self, result: Dict, tab_id: str) -> None:
+    def _apply_participants(self, result: Dict, tab_id: str,
+                            background: bool = False) -> None:
         if not result.get('success'):
-            speak_notification(result.get('error') or _("Could not load participants"),
-                               'error')
-            self.apply_items([], tab_id)
+            if not background:
+                speak_notification(result.get('error') or
+                                   _("Could not load participants"), 'error')
+                self.apply_items([], tab_id)
             return
-        self.apply_items(list(result.get('contacts') or []), tab_id)
+        self.apply_items(list(result.get('contacts') or []), tab_id,
+                         background=background)
 
     def format_row(self, item: Any) -> str:
         if not isinstance(item, Message):
