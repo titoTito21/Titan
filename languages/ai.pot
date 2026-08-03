@@ -863,3 +863,50 @@ msgstr ""
 msgid "Dictation"
 msgstr ""
 
+#: src/ai/agent_tools.py
+msgid "Checking what is on screen and what can be clicked"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Looking for {what} on screen"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Clicking {name}"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction} in {area}"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction}"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {area} all the way to the end"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Scrolling all the way to the end"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "Dragging from {x}, {y} to {tx}, {ty}"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "down"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "up"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "left"
+msgstr ""
+
+#: src/ai/agent_tools.py
+msgid "right"
+msgstr ""

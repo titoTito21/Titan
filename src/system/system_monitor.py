@@ -21,6 +21,20 @@ from src.platform_utils import get_subprocess_kwargs, IS_WINDOWS
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
 
+
+def _get_bool_setting(key, default=True, section='system_monitor'):
+    """Read a checkbox-style setting as a real boolean.
+
+    Settings are stored as plain strings, so an unchecked box comes back as the
+    string "False" - which is truthy. Every switch that decides whether an
+    announcement happens must go through this helper, otherwise turning the
+    option off in Settings changes nothing.
+    """
+    value = get_setting(key, default, section=section)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('true', '1', 'yes', 'on')
+
 # Speaker initialization moved to avoid TTS conflicts.
 # Both the ao3 speaker and StereoSpeech are created lazily: building StereoSpeech
 # at import time forced the whole TTS stack (SAPI worker, engine registry, voice
@@ -174,8 +188,8 @@ class SystemMonitor:
             # Start ChargerMonitor if charger monitoring or battery alerts are
             # enabled and a battery is available
             try:
-                if ((get_setting('monitor_charger', True, section='system_monitor') or
-                     get_setting('monitor_battery_alerts', True, section='system_monitor')) and
+                if ((_get_bool_setting('monitor_charger', True) or
+                     _get_bool_setting('monitor_battery_alerts', True)) and
                     psutil and hasattr(psutil, 'sensors_battery') and
                     psutil.sensors_battery() is not None):
                     charger_monitor = ChargerMonitor()
@@ -211,7 +225,7 @@ class SystemMonitor:
             # Start NetworkMonitor on Windows if enabled
             try:
                 if (platform.system() == 'Windows' and
-                        get_setting('monitor_network', True, section='system_monitor')):
+                        _get_bool_setting('monitor_network', True)):
                     network_monitor = NetworkMonitor()
                     network_monitor.start()
                     self.monitors.append(network_monitor)
@@ -271,7 +285,7 @@ class ChargerMonitor(threading.Thread):
                 if battery:
                     current_status = battery.power_plugged
                     current_percentage = battery.percent
-                    charger_alerts = get_setting('monitor_charger', True, section='system_monitor')
+                    charger_alerts = _get_bool_setting('monitor_charger', True)
 
                     # Check for charger connection/disconnection
                     if self.previous_status is not None and current_status != self.previous_status:
@@ -345,7 +359,7 @@ class ChargerMonitor(threading.Thread):
         connected or the level recovers above the threshold.
         """
         try:
-            if not get_setting('monitor_battery_alerts', True, section='system_monitor'):
+            if not _get_bool_setting('monitor_battery_alerts', True):
                 return
 
             power_saving = is_power_saving_active()

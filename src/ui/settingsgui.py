@@ -782,6 +782,15 @@ class SettingsFrame(wx.Frame):
         self.speech_haptic_sync_cb.Bind(wx.EVT_CHECKBOX, self.OnSpeechHapticSyncChanged)
         vbox.Add(self.speech_haptic_sync_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        # Gamepad mode persistence. Off by default: Titan then always starts in
+        # system mode, the mode that does not intercept the gamepad.
+        self.remember_gamepad_mode_cb = wx.CheckBox(
+            panel,
+            label=_("Remember the gamepad mode between sessions (otherwise Titan always starts in system mode)"))
+        self.remember_gamepad_mode_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.remember_gamepad_mode_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.remember_gamepad_mode_cb, flag=wx.LEFT | wx.TOP, border=10)
+
         panel.SetSizer(vbox)
         panel.Layout()
         # This panel is registered as a category manually (see
@@ -1858,6 +1867,8 @@ class SettingsFrame(wx.Frame):
         self.haptic_strength_slider.SetValue(max(0, min(100, strength_pct)))
         speech_haptic_value = controller_settings.get('speech_haptic_sync', 'False')
         self.speech_haptic_sync_cb.SetValue(str(speech_haptic_value).lower() in ['true', '1'])
+        remember_mode_value = controller_settings.get('remember_mode', 'False')
+        self.remember_gamepad_mode_cb.SetValue(str(remember_mode_value).lower() in ['true', '1'])
 
         general_settings = self.settings.get('general', {})
         quick_start_value = general_settings.get('quick_start', 'False')
@@ -2774,6 +2785,7 @@ class SettingsFrame(wx.Frame):
             'haptic_mode': haptic_mode_value,
             'vibration_strength': str(self.haptic_strength_slider.GetValue() / 100.0),
             'speech_haptic_sync': str(self.speech_haptic_sync_cb.GetValue()),
+            'remember_mode': str(self.remember_gamepad_mode_cb.GetValue()),
         })
         self.settings['controller'] = controller_section
 

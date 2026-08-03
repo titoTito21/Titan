@@ -904,6 +904,54 @@ msgstr "Przypomnienie: {body}"
 #: src/ai/assistant/reminder_watcher.py:222
 msgid "Reminders"
 msgstr "Przypomnienia"
+#: src/ai/agent_tools.py
+msgid "Checking what is on screen and what can be clicked"
+msgstr "Sprawdzam, co jest na ekranie i w co można kliknąć"
+
+#: src/ai/agent_tools.py
+msgid "Looking for {what} on screen"
+msgstr "Szukam na ekranie: {what}"
+
+#: src/ai/agent_tools.py
+msgid "Clicking {name}"
+msgstr "Klikam {name}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction} in {area}"
+msgstr "Przewijam {direction} w obszarze {area}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction}"
+msgstr "Przewijam {direction}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {area} all the way to the end"
+msgstr "Przewijam {area} do samego końca"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling all the way to the end"
+msgstr "Przewijam do samego końca"
+
+#: src/ai/agent_tools.py
+msgid "Dragging from {x}, {y} to {tx}, {ty}"
+msgstr "Przeciągam z {x}, {y} do {tx}, {ty}"
+
+#: src/ai/agent_tools.py
+msgid "down"
+msgstr "w dół"
+
+#: src/ai/agent_tools.py
+msgid "up"
+msgstr "w górę"
+
+#: src/ai/agent_tools.py
+msgid "left"
+msgstr "w lewo"
+
+#: src/ai/agent_tools.py
+msgid "right"
+msgstr "w prawo"
+
 #~ msgid "Performing: {action}"
 #~ msgstr "Wykonuję: {action}"
 

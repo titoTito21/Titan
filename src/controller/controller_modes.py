@@ -395,12 +395,28 @@ class ControllerModeManager:
         return None
 
     def _load_settings(self):
-        """Load controller mode settings"""
+        """Load controller mode settings.
+
+        Titan always starts in System mode - the only mode that leaves the pad
+        alone instead of translating it into global key presses - so an
+        intercepting mode left active in a previous session never comes back by
+        surprise. Users who want the last mode restored can enable
+        controller/remember_mode in the Game controller settings.
+        """
         try:
             from src.settings.settings import load_settings
             settings = load_settings()
 
-            mode_str = settings.get('controller', {}).get('controller_mode', 'system')
+            controller_settings = settings.get('controller', {})
+            self.stereo_enabled = settings.get('invisible_interface', {}).get('stereo_speech', 'False').lower() in ['true', '1']
+
+            remember_mode = str(controller_settings.get('remember_mode', 'False')).strip().lower() in ['true', '1']
+            if not remember_mode:
+                self.current_mode = ControllerMode.SYSTEM
+                self.active_custom_mode = None
+                return
+
+            mode_str = controller_settings.get('controller_mode', 'system')
             if mode_str.startswith('custom:'):
                 # Restore a previously-selected custom mode if it still exists.
                 custom = self._find_custom_mode(mode_str)
@@ -409,15 +425,11 @@ class ControllerModeManager:
                     self.active_custom_mode = custom
                 else:
                     self.current_mode = ControllerMode.SYSTEM
-                self.stereo_enabled = settings.get('invisible_interface', {}).get('stereo_speech', 'False').lower() in ['true', '1']
                 return
             try:
                 self.current_mode = ControllerMode(mode_str)
             except ValueError:
                 self.current_mode = ControllerMode.SYSTEM
-
-            # Check if stereo speech is enabled
-            self.stereo_enabled = settings.get('invisible_interface', {}).get('stereo_speech', 'False').lower() in ['true', '1']
         except Exception as e:
             print(f"Error loading controller mode settings: {e}")
             self.current_mode = ControllerMode.SYSTEM

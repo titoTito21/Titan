@@ -187,6 +187,12 @@ msgid ""
 "(experimental)"
 msgstr ""
 
+#: src/ui/settingsgui.py:788
+msgid ""
+"Remember the gamepad mode between sessions (otherwise Titan always starts "
+"in system mode)"
+msgstr ""
+
 #: src/ui/settingsgui.py:798
 msgid "Language:"
 msgstr ""

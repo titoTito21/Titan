@@ -903,6 +903,54 @@ msgstr "Reminder: {body}"
 #: src/ai/assistant/reminder_watcher.py:222
 msgid "Reminders"
 msgstr "Reminders"
+#: src/ai/agent_tools.py
+msgid "Checking what is on screen and what can be clicked"
+msgstr "Checking what is on screen and what can be clicked"
+
+#: src/ai/agent_tools.py
+msgid "Looking for {what} on screen"
+msgstr "Looking for {what} on screen"
+
+#: src/ai/agent_tools.py
+msgid "Clicking {name}"
+msgstr "Clicking {name}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction} in {area}"
+msgstr "Scrolling {direction} in {area}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {direction}"
+msgstr "Scrolling {direction}"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling {area} all the way to the end"
+msgstr "Scrolling {area} all the way to the end"
+
+#: src/ai/agent_tools.py
+msgid "Scrolling all the way to the end"
+msgstr "Scrolling all the way to the end"
+
+#: src/ai/agent_tools.py
+msgid "Dragging from {x}, {y} to {tx}, {ty}"
+msgstr "Dragging from {x}, {y} to {tx}, {ty}"
+
+#: src/ai/agent_tools.py
+msgid "down"
+msgstr "down"
+
+#: src/ai/agent_tools.py
+msgid "up"
+msgstr "up"
+
+#: src/ai/agent_tools.py
+msgid "left"
+msgstr "left"
+
+#: src/ai/agent_tools.py
+msgid "right"
+msgstr "right"
+
 #~ msgid "Generating... {n} chars, {s}s"
 #~ msgstr "Generating... {n} chars, {s}s"
 

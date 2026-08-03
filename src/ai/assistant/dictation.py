@@ -61,7 +61,10 @@ def focused_editable():
         except Exception:
             pass
         el = uia.GetFocusedElement()
-        if el is None:
+        # "Nothing focused" arrives as a NULL interface pointer, which comtypes
+        # wraps in an object rather than returning None; releasing one of those
+        # later is an access violation, so treat it as no element at all.
+        if el is None or not bool(el):
             return False
         try:
             ctype = el.CurrentControlType
@@ -72,10 +75,12 @@ def focused_editable():
         # If a Value pattern says the field is read-only, it is not dictatable.
         try:
             pattern = el.GetCurrentPattern(_UIA_PATTERN_VALUE)
-            if pattern is not None:
-                from comtypes import cast, POINTER
+            if pattern is not None and bool(pattern):
                 from comtypes.gen import UIAutomationClient as _UIA
-                val = cast(pattern, POINTER(_UIA.IUIAutomationValuePattern))
+                # QueryInterface, never comtypes.cast: cast is ctypes' cast and
+                # does NOT take a reference, so both wrappers call Release on
+                # the same pointer and the second one corrupts the heap.
+                val = pattern.QueryInterface(_UIA.IUIAutomationValuePattern)
                 if val.CurrentIsReadOnly:
                     return False
         except Exception:

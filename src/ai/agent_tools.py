@@ -32,6 +32,14 @@ def _clip(value, limit=80):
     return s if len(s) <= limit else s[:limit] + '...'
 
 
+def _direction_label(direction):
+    """'down' -> a translated direction phrase for the narrated sentence."""
+    return {
+        'down': _("down"), 'up': _("up"),
+        'left': _("left"), 'right': _("right"),
+    }.get(str(direction or 'down').lower(), _("down"))
+
+
 def describe_action(name, args):
     """A short, human-readable sentence for a tool call, for the on-screen
     transcript / spoken narration / confirm dialogs - so the user never sees a
@@ -54,8 +62,11 @@ def describe_action(name, args):
         'titan_list_tts_engines': _("Listing the TTS engines"),
         'titan_open_settings': _("Opening Titan settings"),
         'list_tce_items': _("Listing Titan apps and games"),
+        'list_elements': _("Checking what is on screen and what can be clicked"),
     }
-    if name in simple and not (name == 'titan_list_settings' and a.get('section')):
+    detailed = ((name == 'titan_list_settings' and a.get('section'))
+                or (name == 'list_elements' and a.get('filter')))
+    if name in simple and not detailed:
         return simple[name]
 
     handlers = {
@@ -95,6 +106,19 @@ def describe_action(name, args):
         'titan_list_im_contacts': lambda: _("Listing {service} contacts").format(service=g('service')),
         'titan_send_message': lambda: _("Sending a message to {recipient} on {service}").format(
             recipient=g('recipient'), service=g('service')),
+        'list_elements': lambda: _("Looking for {what} on screen").format(what=g('filter')),
+        'click_element': lambda: _("Clicking {name}").format(name=g('name')),
+        'scroll': lambda: (
+            _("Scrolling {direction} in {area}").format(
+                direction=_direction_label(a.get('direction')), area=g('target'))
+            if a.get('target') else
+            _("Scrolling {direction}").format(
+                direction=_direction_label(a.get('direction')))),
+        'scroll_to_end': lambda: (
+            _("Scrolling {area} all the way to the end").format(area=g('target'))
+            if a.get('target') else _("Scrolling all the way to the end")),
+        'drag_mouse': lambda: _("Dragging from {x}, {y} to {tx}, {ty}").format(
+            x=a.get('x'), y=a.get('y'), tx=a.get('to_x'), ty=a.get('to_y')),
         'ask_user': lambda: _("Asking you: {question}").format(question=g('question')),
         'browser_open': lambda: _("Opening the web page {url}").format(url=g('url')),
         'browser_read': lambda: _("Reading the web page"),
@@ -233,32 +257,87 @@ def _encode_png(arr):
     return sig + chunk(b'IHDR', ihdr) + chunk(b'IDAT', compressed) + chunk(b'IEND', b'')
 
 
-def _capture_primary_screen():
-    """Grab the primary monitor via GDI. Returns (rgb_ndarray, screen_w, screen_h)."""
+def _capture_rect(left, top, width, height):
+    """Grab a screen region via GDI. Returns an (h, w, 3) uint8 RGB array."""
     import numpy as np
     import win32gui
     import win32ui
     import win32con
-    import win32api
-    sw = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
-    sh = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+    left, top = int(left), int(top)
+    width, height = max(1, int(width)), max(1, int(height))
     hwnd = win32gui.GetDesktopWindow()
     hwnd_dc = win32gui.GetWindowDC(hwnd)
     mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
     save_dc = mfc_dc.CreateCompatibleDC()
     bmp = win32ui.CreateBitmap()
-    bmp.CreateCompatibleBitmap(mfc_dc, sw, sh)
+    bmp.CreateCompatibleBitmap(mfc_dc, width, height)
     save_dc.SelectObject(bmp)
-    save_dc.BitBlt((0, 0), (sw, sh), mfc_dc, (0, 0), win32con.SRCCOPY)
+    save_dc.BitBlt((0, 0), (width, height), mfc_dc, (left, top), win32con.SRCCOPY)
     bits = bmp.GetBitmapBits(True)  # BGRA, top-down
-    arr = np.frombuffer(bits, dtype=np.uint8).reshape(sh, sw, 4)
+    arr = np.frombuffer(bits, dtype=np.uint8).reshape(height, width, 4)
     rgb = arr[:, :, [2, 1, 0]].copy()  # BGRA -> RGB
     # Clean up GDI resources.
     win32gui.DeleteObject(bmp.GetHandle())
     save_dc.DeleteDC()
     mfc_dc.DeleteDC()
     win32gui.ReleaseDC(hwnd, hwnd_dc)
-    return rgb, sw, sh
+    return rgb
+
+
+def _capture_primary_screen():
+    """Grab the primary monitor via GDI. Returns (rgb_ndarray, screen_w, screen_h)."""
+    import win32con
+    import win32api
+    sw = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+    sh = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+    return _capture_rect(0, 0, sw, sh), sw, sh
+
+
+def _looks_blank(rgb):
+    """A capture with (almost) no variation at all - what a desktop grab of an
+    exclusive full-screen game returns."""
+    try:
+        return bool(rgb[::8, ::8].std() < 1.0)
+    except Exception:
+        return False
+
+
+def _capture_foreground_window():
+    """Ask the foreground window to draw itself (PrintWindow with
+    PW_RENDERFULLCONTENT). Some windows the desktop grab returns black for -
+    hardware-composited or full-screen ones - still render this way. Returns
+    (rgb_ndarray, left, top) or None."""
+    try:
+        import ctypes
+        import numpy as np
+        import win32gui
+        import win32ui
+        hwnd = win32gui.GetForegroundWindow()
+        if not hwnd:
+            return None
+        l, t, r, b = win32gui.GetWindowRect(hwnd)
+        w, h = r - l, b - t
+        if w < 8 or h < 8:
+            return None
+        hwnd_dc = win32gui.GetWindowDC(hwnd)
+        mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc = mfc_dc.CreateCompatibleDC()
+        bmp = win32ui.CreateBitmap()
+        bmp.CreateCompatibleBitmap(mfc_dc, w, h)
+        save_dc.SelectObject(bmp)
+        ok = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 3)
+        bits = bmp.GetBitmapBits(True)
+        arr = np.frombuffer(bits, dtype=np.uint8).reshape(h, w, 4)
+        rgb = arr[:, :, [2, 1, 0]].copy()
+        win32gui.DeleteObject(bmp.GetHandle())
+        save_dc.DeleteDC()
+        mfc_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+        if not ok or _looks_blank(rgb):
+            return None
+        return rgb, l, t
+    except Exception:
+        return None
 
 
 def screenshot(**_):
@@ -270,15 +349,40 @@ def screenshot(**_):
     try:
         import math
         rgb, sw, sh = _capture_primary_screen()
+        offset = None
+        if _looks_blank(rgb):
+            # Full-screen games usually come back black through the desktop DC;
+            # asking the window itself to render often still works.
+            window = _capture_foreground_window()
+            if window is not None:
+                rgb, ox, oy = window
+                offset = (ox, oy)
         # Downscale so the longest side is <= 1568 px (keeps tokens sane).
-        factor = max(1, math.ceil(max(sw, sh) / 1568))
+        h0, w0 = rgb.shape[0], rgb.shape[1]
+        factor = max(1, math.ceil(max(w0, h0) / 1568))
         if factor > 1:
             rgb = rgb[::factor, ::factor]
         ih, iw = rgb.shape[0], rgb.shape[1]
         png = _encode_png(rgb)
-        note = (f"Screenshot captured. The image is {iw}x{ih} pixels; the ACTUAL "
-                f"screen is {sw}x{sh} pixels. Give click/move coordinates in "
-                f"ACTUAL screen pixels (0..{sw} wide, 0..{sh} tall).")
+        if offset is not None:
+            note = (f"Screenshot of the focused window only (the full-screen "
+                    f"capture came back blank, which is normal for a full-screen "
+                    f"game). The image is {iw}x{ih} pixels and shows the window "
+                    f"area {w0}x{h0} starting at screen position "
+                    f"({offset[0]}, {offset[1]}). To click something, multiply "
+                    f"its image coordinates by {factor} and add "
+                    f"({offset[0]}, {offset[1]}).")
+        else:
+            note = (f"Screenshot captured. The image is {iw}x{ih} pixels; the "
+                    f"ACTUAL screen is {sw}x{sh} pixels. Give click/move "
+                    f"coordinates in ACTUAL screen pixels (0..{sw} wide, "
+                    f"0..{sh} tall).")
+            if _looks_blank(rgb):
+                note += (" WARNING: this capture is blank/black - the app is "
+                         "drawing in a way that cannot be captured (exclusive "
+                         "full-screen). Do not guess from it; work by keyboard "
+                         "instead, or ask the user to switch the game to "
+                         "windowed/borderless mode.")
         return {'text': note, 'image_png': png}
     except Exception as e:
         return f"Error taking screenshot: {e}"
@@ -377,15 +481,18 @@ def _mouse():
     return Controller, Button
 
 
-def click(x, y, button="left", **_):
-    """Move the mouse to (x, y) and click. button is 'left', 'right' or 'middle'."""
+def click(x, y, button="left", clicks=1, **_):
+    """Move the mouse to (x, y) and click. button is 'left', 'right' or 'middle';
+    clicks=2 double-clicks."""
     try:
         Controller, Button = _mouse()
         m = Controller()
         m.position = (int(x), int(y))
         btn = {'left': Button.left, 'right': Button.right, 'middle': Button.middle}.get(str(button), Button.left)
-        m.click(btn, 1)
-        return f"Clicked {button} at ({int(x)}, {int(y)})."
+        n = max(1, min(int(clicks or 1), 3))
+        m.click(btn, n)
+        what = "Double-clicked" if n == 2 else "Clicked"
+        return f"{what} {button} at ({int(x)}, {int(y)})."
     except Exception as e:
         return f"Error clicking: {e}"
 
@@ -564,9 +671,11 @@ def get_tools():
         _tool('press_keys', "Press a key or chord, e.g. 'enter', 'ctrl+s', 'alt+F4'.",
               press_keys, properties={'keys': dict(S, description="Key or chord.")},
               required=['keys']),
-        _tool('click', "Move the mouse and click at screen coordinates.", click,
+        _tool('click', "Move the mouse and click at screen coordinates. Prefer "
+              "click_element when the control has a visible name.", click,
               properties={'x': N, 'y': N,
-                          'button': dict(S, description="left, right or middle.")},
+                          'button': dict(S, description="left, right or middle."),
+                          'clicks': dict(N, description="1 (default) or 2 for a double click.")},
               required=['x', 'y']),
         _tool('move_mouse', "Move the mouse cursor to screen coordinates.", move_mouse,
               properties={'x': N, 'y': N}, required=['x', 'y']),
@@ -594,7 +703,19 @@ def get_tools():
         _tool('delete_path', "Delete a file or an empty directory.", delete_path,
               risk='confirm', properties={'path': dict(S, description="Path to delete.")},
               required=['path']),
-    ] + _browser_tools() + _titan_tools()
+    ] + _ui_tools() + _browser_tools() + _titan_tools()
+
+
+def _ui_tools():
+    """Screen-element and scrolling tools (scroll and verify, click by name).
+    Imported lazily so a missing comtypes / UI Automation never breaks the rest
+    of the toolset."""
+    try:
+        from src.ai.ui_tools import get_ui_tools
+        return get_ui_tools()
+    except Exception as e:
+        print(f"[agent_tools] Screen-element tools unavailable: {e}")
+        return []
 
 
 def _browser_tools():

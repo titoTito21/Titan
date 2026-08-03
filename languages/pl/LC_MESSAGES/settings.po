@@ -187,6 +187,10 @@ msgstr "Testuj wibracje"
 msgid "Synchronize vibration with speech, for deaf and hard of hearing (experimental)"
 msgstr "Synchronizuj wibracje z mową, dla osób niesłyszących i słabosłyszących (eksperymentalne)"
 
+#: src/ui/settingsgui.py:788
+msgid "Remember the gamepad mode between sessions (otherwise Titan always starts in system mode)"
+msgstr "Zapamiętuj tryb gamepada między sesjami (w przeciwnym razie Titan zawsze uruchamia się w trybie systemowym)"
+
 #: src/ui/settingsgui.py:798
 msgid "Language:"
 msgstr "Język:"
