@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -499,14 +499,14 @@ msgid "Spotlight on you (slot {n})"
 msgstr ""
 
 #: src/network/interactive_game_session.py:869
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Spotlight on {user} (slot {n})"
-msgstr "Turn: {user} (slot {n})"
+msgstr "Spotlight on {user} (slot {n})"
 
 #: src/network/interactive_game_session.py:980
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "stop {layer}"
-msgstr "Players"
+msgstr "stop {layer}"
 
 #: src/network/interactive_game_session.py:1001
 #, python-brace-format
@@ -519,9 +519,9 @@ msgid "[{layer}] {label} (cached)"
 msgstr ""
 
 #: src/network/interactive_game_session.py:1054
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "[{layer}] {label}"
-msgstr "[{actor}] {text}"
+msgstr "[{layer}] {label}"
 
 #: src/network/interactive_game_session.py:1068
 #, python-brace-format
@@ -611,9 +611,8 @@ msgid "End the session for everyone?"
 msgstr "End the session for everyone?"
 
 #: src/network/interactive_game_session.py:1459
-#, fuzzy
 msgid "End Session"
-msgstr "End session"
+msgstr "End Session"
 
 #: src/network/interactive_game_session.py:1510
 #, python-brace-format

@@ -859,17 +859,37 @@ MESSENGER_AGENT = r"""
     }
   }
 
+  // The conversation header first, so we never press another thread's button.
+  function callRoots() {
+    return [D.q(['div[role="main"] div[role="banner"]',
+                 'div[role="main"] header']),
+            D.q(['div[role="main"]']), document];
+  }
+
+  function callInProgress() {
+    var state = window.__titanCallState;
+    if (state && state.active) { return true; }
+    if (/\/call\/|\/videocall\/|\/groupcall\//.test(location.pathname)) { return true; }
+    // Until the monitor is armed the page itself is the only source of truth.
+    // Only hang-up controls count - "Odrzuć"/"Reject" also lives on a consent
+    // banner, and reading that as a live call would refuse every call for the
+    // first seconds after the page loads.
+    if (state) { return false; }
+    return !!D.findLabelled(D.words.hangup, null, [document]);
+  }
+
+  function callButton(video) {
+    var wanted = video ? D.words.video : D.words.voice;
+    var avoid = D.words.notACall.concat(video ? [] : D.words.video);
+    return D.findLabelled(wanted, avoid, callRoots());
+  }
+
   function callControl(kind) {
-    var patterns = {
-      accept: ['[aria-label*="Accept" i]', '[aria-label*="Answer" i]',
-               '[aria-label*="Odbierz" i]', '[aria-label*="Join" i]'],
-      end: ['[aria-label*="End call" i]', '[aria-label*="Leave" i]',
-            '[aria-label*="Hang up" i]', '[aria-label*="Zako" i]',
-            '[aria-label*="Decline" i]', '[aria-label*="Odrzu" i]']
-    }[kind] || [];
-    var button = D.q(patterns);
-    if (!button) { throw new Error('call control not available: ' + kind); }
-    D.click(button.closest('button') || button);
+    var words = (kind === 'accept') ? D.words.accept : D.words.end;
+    var avoid = (kind === 'accept') ? D.words.end : null;
+    var button = D.findLabelled(words, avoid, [document]);
+    if (!button) { throw new Error('call_control_not_found:' + kind); }
+    D.click(D.pressable(button));
     return { done: true };
   }
 
@@ -1107,16 +1127,27 @@ MESSENGER_AGENT = r"""
   });
 
   B.command('start_call', function (args) {
-    return Promise.resolve(openThread(args.chat_id)).then(function () {
-      var patterns = args.video
-        ? ['[aria-label*="video call" i]', '[aria-label*="Rozmowa wideo" i]',
-           '[aria-label*="Start a video call" i]']
-        : ['[aria-label*="audio call" i]', '[aria-label*="voice call" i]',
-           '[aria-label*="Połączenie" i]', '[aria-label*="Start a call" i]'];
-      return D.waitFor(function () { return D.q(patterns); }, 8000);
+    if (callInProgress()) { throw new Error('call_already_running'); }
+
+    return Promise.resolve(openThread(args.chat_id)).then(null, function () {
+      throw new Error('chat_not_found');
+    }).then(function (opened) {
+      // ``openThread`` answers ``navigating`` when the conversation is not in
+      // the (virtualised) list and only a real page load can reach it. This
+      // document is about to be destroyed, so nothing may be awaited in it -
+      // waiting anyway is how pressing call used to end in a bare timeout.
+      // Titan re-asks once the new page has its agent up.
+      if (opened && opened.navigating) { throw new Error('chat_opening'); }
+      return D.waitFor(function () { return callButton(args.video); }, 10000, 200)
+        .then(null, function () { throw new Error('call_button_not_found'); });
     }).then(function (button) {
-      D.click(button.closest('div[role="button"]') || button);
-      return { started: true };
+      D.click(D.pressable(button));
+      // Messenger opens the call in a window of its own, so this document may
+      // show nothing at all afterwards. Not finding a call here is therefore
+      // not a failure - Titan's call window reports what the call itself does.
+      return D.waitFor(callInProgress, 6000, 250).then(
+        function () { return { started: true, confirmed: true }; },
+        function () { return { started: true, confirmed: false }; });
     });
   });
 

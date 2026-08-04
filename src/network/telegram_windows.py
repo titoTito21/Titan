@@ -528,11 +528,15 @@ class TelegramVoiceCallWindow(wx.Frame):
         sizer.Add(self.duration_label, 0, wx.ALL | wx.CENTER, 10)
 
         # Audio info
-        has_audio = telegram_client.is_voice_calls_available()
-        if has_audio:
-            audio_text = _("Audio: group voice chat")
-        else:
-            audio_text = _("Audio: limited (py-tgcalls not installed)")
+        # What the audio really travels over. This said "group voice chat" for
+        # every call, including the native ones that are not one.
+        try:
+            from src.network import telegram_voice
+            audio_text = telegram_voice.call_transport_label()
+        except Exception:
+            audio_text = (_("Audio: Telegram call")
+                          if telegram_client.is_voice_calls_available()
+                          else _("Audio: unavailable (py-tgcalls is not installed)"))
 
         audio_label = wx.StaticText(panel, label=audio_text)
         audio_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
@@ -1107,11 +1111,12 @@ class IncomingCallDialog(wx.Dialog):
         caller_label.SetFont(wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         info_sizer.Add(caller_label, 0, wx.ALL | wx.CENTER, 5)
 
-        # Show call type info
+        # Show call type info. A native call is no longer "signalling only" -
+        # py-tgcalls carries the audio both ways.
         if self.is_tce_call:
-            type_text = _("Voice chat call (full audio)")
+            type_text = _("Group voice chat")
         elif self.is_native_call:
-            type_text = _("Telegram call (signaling only)")
+            type_text = _("Telegram call")
         else:
             type_text = _("Voice call")
 

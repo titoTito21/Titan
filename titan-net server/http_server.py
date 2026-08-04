@@ -1637,6 +1637,11 @@ class TitanNetHTTPServer:
             to_addr = (data.get('to') or '').strip()
             subject = (data.get('subject') or '').strip()
             body = data.get('body') or ''
+            # A rich message carries both parts: `body` is the readable
+            # plain-text version (what every client can show), `body_html` the
+            # formatted alternative. Clients that predate this send neither.
+            body_html = data.get('body_html') or ''
+            content_type = (data.get('content_type') or 'text/plain').strip()
             if not to_addr:
                 return web.json_response({'success': False, 'error': 'Recipient is required'}, status=400)
             loop = asyncio.get_event_loop()
@@ -1651,7 +1656,8 @@ class TitanNetHTTPServer:
                 msgid_domain = None
             message_id = make_msgid(domain=msgid_domain)
             result = await loop.run_in_executor(
-                None, self.db.send_user_mail, user['id'], to_addr, subject, body, message_id
+                None, self.db.send_user_mail, user['id'], to_addr, subject, body,
+                message_id, body_html, content_type
             )
             # If the recipient is remote, hand the message to the outbound mailer.
             if result.get('success') and result.get('external_recipient'):
@@ -1674,6 +1680,11 @@ class TitanNetHTTPServer:
                         msg['In-Reply-To'] = result['in_reply_to']
                         msg['References'] = result['in_reply_to']
                     msg.set_content(body)
+                    if body_html:
+                        # multipart/alternative: the recipient's mail program
+                        # picks the HTML, anything that refuses it (or reads it
+                        # aloud) still has the plain text above.
+                        msg.add_alternative(body_html, subtype='html')
                     await loop.run_in_executor(
                         None, mailer.send_message, msg, result.get('from_addr'),
                         [result['external_recipient']],
@@ -1699,6 +1710,11 @@ class TitanNetHTTPServer:
             sender = (data.get('sender') or '').strip()
             subject = (data.get('subject') or '').strip()
             body = data.get('body') or ''
+            # The delivery pipe now keeps the HTML part of a multipart message
+            # instead of flattening it away, so the Mail client can render the
+            # message the way its sender wrote it.
+            body_html = data.get('body_html') or ''
+            content_type = (data.get('content_type') or 'text/plain').strip()
             message_id = (data.get('message_id') or '').strip()
             in_reply_to = (data.get('in_reply_to') or '').strip()
             loop = asyncio.get_event_loop()
@@ -1708,7 +1724,7 @@ class TitanNetHTTPServer:
                 return web.json_response({'success': True, 'delivered': False})
             result = await loop.run_in_executor(
                 None, self.db.store_incoming_mail, local['id'], sender, recipient, subject, body,
-                None, message_id, in_reply_to
+                None, message_id, in_reply_to, body_html, content_type
             )
             return web.json_response({'success': True, 'delivered': True,
                                       'mail_id': result.get('mail_id'),

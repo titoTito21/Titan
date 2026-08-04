@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -52,7 +52,7 @@ msgid "Connect to WiFi Network"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:662
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Network: {}"
 msgstr "Network: {}"
 
@@ -80,9 +80,8 @@ msgstr ""
 #: src/titan_core/tce_system_net.py:702 src/titan_core/tce_system_net.py:942
 #: src/titan_core/tce_system_net.py:1032 src/titan_core/tce_system_net.py:1040
 #: src/titan_core/tce_system_net.py:1757 src/titan_core/tce_system_net.py:1816
-#, fuzzy
 msgid "Error"
-msgstr "WiFi Manager"
+msgstr "Error"
 
 #: src/titan_core/tce_system_net.py:717
 msgid "Click 'Refresh' to scan for WiFi networks"
@@ -108,9 +107,8 @@ msgid "WiFi"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:750
-#, fuzzy
 msgid "Network Name"
-msgstr "Network: {}"
+msgstr "Network Name"
 
 #: src/titan_core/tce_system_net.py:751
 msgid "Signal"
@@ -133,9 +131,8 @@ msgid "Disconnect"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:812
-#, fuzzy
 msgid "WiFi Scanner"
-msgstr "WiFi Manager"
+msgstr "WiFi Scanner"
 
 #: src/titan_core/tce_system_net.py:813
 msgid "Scanning for networks..."
@@ -146,9 +143,8 @@ msgid "Processing results..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:839
-#, fuzzy
 msgid "Complete!"
-msgstr "Computer..."
+msgstr "Complete!"
 
 #: src/titan_core/tce_system_net.py:887
 msgid ""
@@ -166,9 +162,8 @@ msgid "WiFi scan failed: {}"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:896
-#, fuzzy
 msgid "Scan Error"
-msgstr "WiFi Manager"
+msgstr "Scan Error"
 
 #: src/titan_core/tce_system_net.py:907 src/titan_core/tce_system_net.py:1178
 #: src/titan_core/tce_system_net.py:1627 src/titan_core/tce_system_net.py:1732
@@ -182,9 +177,8 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:908 src/titan_core/tce_system_net.py:1177
 #: src/titan_core/tce_system_net.py:1626 src/titan_core/tce_system_net.py:1731
-#, fuzzy
 msgid "Connected"
-msgstr "Already connected to {}"
+msgstr "Connected"
 
 #: src/titan_core/tce_system_net.py:922 src/titan_core/tce_system_net.py:1153
 msgid "No WiFi networks found"
@@ -204,9 +198,9 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:962 src/titan_core/tce_system_net.py:1284
 #: src/titan_core/tce_system_net.py:1667
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Connecting to {}..."
-msgstr "Already connected to {}"
+msgstr "Connecting to {}..."
 
 #: src/titan_core/tce_system_net.py:972
 msgid "Authenticating..."
@@ -217,9 +211,8 @@ msgid "Establishing connection..."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:988
-#, fuzzy
 msgid "Connected!"
-msgstr "Already connected to {}"
+msgstr "Connected!"
 
 #: src/titan_core/tce_system_net.py:988
 msgid "Failed!"
@@ -246,9 +239,9 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:1032 src/titan_core/tce_system_net.py:1294
 #: src/titan_core/tce_system_net.py:1676
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Failed to connect to {}"
-msgstr "Already connected to {}"
+msgstr "Failed to connect to {}"
 
 #: src/titan_core/tce_system_net.py:1037
 msgid "Disconnected from network"
@@ -292,18 +285,15 @@ msgid "checkbox"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1195
-#, fuzzy
 msgid "Scanning for WiFi networks..."
-msgstr "Error opening WiFi interface"
+msgstr "Scanning for WiFi networks..."
 
 #: src/titan_core/tce_system_net.py:1198 src/titan_core/tce_system_net.py:1738
-#, fuzzy
 msgid "No WiFi networks available"
 msgstr "No WiFi networks available"
 
 #: src/titan_core/tce_system_net.py:1200 src/titan_core/tce_system_net.py:1355
 #: src/titan_core/tce_system_net.py:1762 src/titan_core/tce_system_net.py:1799
-#, fuzzy
 msgid "WiFi Manager"
 msgstr "WiFi Manager"
 
@@ -312,7 +302,7 @@ msgid "Cannot connect: missing network name"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1272 src/titan_core/tce_system_net.py:1649
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Already connected to {}"
 msgstr "Already connected to {}"
 
@@ -322,7 +312,6 @@ msgid "Network {} requires a password"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1281
-#, fuzzy
 msgid "Connection cancelled"
 msgstr "Connection cancelled"
 
@@ -356,11 +345,12 @@ msgid "Password required"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1664
-#, fuzzy
 msgid ""
 "\n"
 "Connection cancelled"
-msgstr "Connection cancelled"
+msgstr ""
+"\n"
+"Connection cancelled"
 
 #: src/titan_core/tce_system_net.py:1697
 msgid "WiFi manager closed"
@@ -381,9 +371,8 @@ msgid ""
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1763
-#, fuzzy
 msgid "Initializing WiFi interface..."
-msgstr "Error opening WiFi interface"
+msgstr "Initializing WiFi interface..."
 
 #: src/titan_core/tce_system_net.py:1770
 msgid "Creating network manager..."
@@ -394,14 +383,12 @@ msgid "WiFi initialization timed out. Please try again."
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1785
-#, fuzzy
 msgid "Timeout Error"
-msgstr "WiFi Manager"
+msgstr "Timeout Error"
 
 #: src/titan_core/tce_system_net.py:1788
-#, fuzzy
 msgid "Checking WiFi interfaces..."
-msgstr "Error opening WiFi interface"
+msgstr "Checking WiFi interfaces..."
 
 #: src/titan_core/tce_system_net.py:1792
 msgid "No WiFi interfaces available or WiFi initialization failed."
@@ -409,23 +396,24 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:1793
 msgid "WiFi Error"
-msgstr "WiFi Manager"
+msgstr "WiFi Error"
 
 #: src/titan_core/tce_system_net.py:1796
-#, fuzzy
 msgid "Creating GUI interface..."
-msgstr "Error opening WiFi interface"
+msgstr "Creating GUI interface..."
 
 #: src/titan_core/tce_system_net.py:1802
 msgid "Ready!"
 msgstr ""
 
 #: src/titan_core/tce_system_net.py:1815
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid ""
 "Error creating WiFi interface:\n"
 "{}"
-msgstr "Error opening WiFi interface"
+msgstr ""
+"Error creating WiFi interface:\n"
+"{}"
 
 #: src/system/system_monitor.py:339
 #, python-brace-format
@@ -526,9 +514,8 @@ msgid "Interpreter download failed"
 msgstr ""
 
 #: src/system/updater.py:615
-#, fuzzy
 msgid "Extracting Python interpreter..."
-msgstr "Connecting to network..."
+msgstr "Extracting Python interpreter..."
 
 #: src/system/updater.py:720
 msgid "Update completed successfully! Please restart the application."

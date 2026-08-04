@@ -87,6 +87,22 @@ def _html_to_text(source: str) -> str:
     return text.strip()
 
 
+def _html_body(msg) -> str:
+    """The message's HTML part, kept verbatim, or '' when there is none.
+
+    The plain-text flattening below is what the mailbox stores as the body, but
+    throwing the markup away loses the headings, lists and links the sender
+    wrote - the Mail client parses this into a readable structure instead."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == 'text/html' and not part.get_filename():
+                return _part_text(part)
+        return ''
+    if msg.get_content_type() == 'text/html':
+        return _part_text(msg)
+    return ''
+
+
 def _plain_body(msg) -> str:
     """Extract a readable text body, preferring text/plain over text/html."""
     if msg.is_multipart():
@@ -156,12 +172,15 @@ def main() -> int:
     sender = _address(_header(msg, 'From'))
     subject = _header(msg, 'Subject')
     body = _plain_body(msg)
+    body_html = _html_body(msg)
 
     payload = json.dumps({
         'recipient': recipient,
         'sender': sender,
         'subject': subject,
         'body': body,
+        'body_html': body_html,
+        'content_type': 'text/html' if body_html else 'text/plain',
         # Threading + de-duplication. Postfix retries this pipe whenever we
         # exit EX_TEMPFAIL, which includes the case where the server stored the
         # message but the HTTP response never made it back; the ingest endpoint

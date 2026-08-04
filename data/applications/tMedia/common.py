@@ -101,6 +101,20 @@ def save_config():
         config.write(configfile)
 
 
+def format_time(ms):
+    """Milliseconds as ``M:SS`` / ``H:MM:SS`` - the form used for every
+    position TMedia shows or speaks (labels, bookmarks, resume points)."""
+    try:
+        total = int(max(0, ms)) // 1000
+    except (TypeError, ValueError):
+        return '0:00'
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return '%d:%02d:%02d' % (hours, minutes, seconds)
+    return '%d:%02d' % (minutes, seconds)
+
+
 def tts_enabled():
     return config.getboolean('DEFAULT', 'tts_enabled', fallback=False)
 

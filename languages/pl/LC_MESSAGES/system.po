@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -349,7 +349,9 @@ msgstr ""
 msgid ""
 "\n"
 "Connection cancelled"
-msgstr "Łączenie anulowane"
+msgstr ""
+"\n"
+"Łączenie anulowane"
 
 #: src/titan_core/tce_system_net.py:1697
 msgid "WiFi manager closed"
@@ -410,7 +412,9 @@ msgstr "Nieprzeczytane"
 msgid ""
 "Error creating WiFi interface:\n"
 "{}"
-msgstr "Błąd podczas otwierania interfejsu WiFi"
+msgstr ""
+"Błąd tworzenia interfejsu WiFi:\n"
+"{}"
 
 #: src/system/system_monitor.py:339
 #, python-brace-format
@@ -490,14 +494,13 @@ msgid "Download failed"
 msgstr "Pobieranie nieudane"
 
 #: src/system/updater.py:531
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Extracting files... {}%"
-msgstr "Rozpakowywanie aktualizacji..."
+msgstr "Rozpakowywanie plików... {}%"
 
 #: src/system/updater.py:538
-#, fuzzy
 msgid "Extraction complete"
-msgstr "Rozpakowywanie aktualizacji..."
+msgstr "Rozpakowywanie zakończone"
 
 #: src/system/updater.py:570
 msgid "Extracting update..."

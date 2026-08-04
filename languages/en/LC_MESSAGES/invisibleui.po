@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -49,7 +49,7 @@ msgstr "Volume: {}%"
 #: src/ui/invisibleui.py:1103
 #, python-brace-format
 msgid "Unmute, {}"
-msgstr "Unmute"
+msgstr "Unmute, {}"
 
 #: src/ui/invisibleui.py:1105
 msgid "Unmute"
@@ -58,7 +58,7 @@ msgstr "Unmute"
 #: src/ui/invisibleui.py:1108
 #, python-brace-format
 msgid "Mute, {}"
-msgstr "Mute"
+msgstr "Mute, {}"
 
 #: src/ui/invisibleui.py:1110
 msgid "Mute"
@@ -346,7 +346,7 @@ msgstr ""
 #: src/ui/invisibleui.py:2844
 #, python-brace-format
 msgid "Error checking connection to {}"
-msgstr "Connecting to {}..."
+msgstr "Error checking connection to {}"
 
 #: src/ui/invisibleui.py:2848
 #, python-brace-format
@@ -508,8 +508,8 @@ msgid ""
 "WiFi functionality requires pywifi library. Install with: pip install "
 "pywifi"
 msgstr ""
-"WiFi functionality requires pywifi library.\n"
-"Install with: pip install pywifi"
+"WiFi functionality requires pywifi library. Install with: pip install "
+"pywifi"
 
 #: src/ui/invisibleui.py:3898 src/ui/invisibleui.py:3917
 msgid "WiFi Manager"
@@ -545,9 +545,8 @@ msgid "Titan-Net client not available"
 msgstr ""
 
 #: src/ui/invisibleui.py:4092 src/ui/invisibleui.py:4131
-#, fuzzy
 msgid "Titan-Net, application"
-msgstr "No applications"
+msgstr "Titan-Net, application"
 
 #: src/ui/invisibleui.py:4140
 msgid "Offline mode selected"
@@ -559,9 +558,8 @@ msgstr ""
 
 #: src/ui/invisibleui.py:4153 src/ui/invisibleui.py:4164
 #: src/ui/invisibleui.py:4178
-#, fuzzy
 msgid "Error opening Titan-Net"
-msgstr "Error opening WiFi interface"
+msgstr "Error opening Titan-Net"
 
 #: src/ui/invisibleui.py:4170
 msgid "Titan-Net not available"
@@ -572,15 +570,13 @@ msgid "Cannot open EltenLink (Beta) - application not ready"
 msgstr ""
 
 #: src/ui/invisibleui.py:4220
-#, fuzzy
 msgid "EltenLink (Beta), application"
-msgstr "No applications"
+msgstr "EltenLink (Beta), application"
 
 #: src/ui/invisibleui.py:4237 src/ui/invisibleui.py:4248
 #: src/ui/invisibleui.py:4262
-#, fuzzy
 msgid "Error opening EltenLink (Beta)"
-msgstr "Error opening WiFi interface"
+msgstr "Error opening EltenLink (Beta)"
 
 #: src/ui/invisibleui.py:4254
 msgid "EltenLink (Beta) not available"

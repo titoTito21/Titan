@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -642,7 +642,7 @@ msgstr ""
 
 #: src/ui/gui.py:4639
 msgid "WiFi Warning"
-msgstr "WiFi Manager"
+msgstr "WiFi Warning"
 
 #: src/ui/gui.py:4651
 #, python-brace-format
@@ -654,7 +654,7 @@ msgstr ""
 
 #: src/ui/gui.py:4652
 msgid "WiFi Error"
-msgstr "WiFi Manager"
+msgstr "WiFi Error"
 
 #: src/ui/gui.py:4663 src/ui/gui.py:4711 src/ui/gui.py:4716
 #, python-brace-format

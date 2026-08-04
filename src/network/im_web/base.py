@@ -712,15 +712,52 @@ class IMBackend:
         self._call('set_typing', {'chat_id': chat_id, 'typing': typing}, callback)
 
     # -- calls ---------------------------------------------------------------
-    def start_call(self, chat_id: str, video: bool = False, callback=None) -> None:
+    def start_call(self, chat_id: str, video: bool = False, callback=None,
+                   _attempt: int = 0) -> None:
+        """Ask the page to place a call, and say plainly when it cannot.
+
+        Every failure here used to reach the user as the word ``timeout`` - the
+        message ``waitFor`` throws when a selector never matched. The agent now
+        reports *why* with a code, and this is where that becomes a sentence.
+        """
+        def _relay(result: Dict[str, Any]) -> None:
+            if not result.get('success'):
+                code = str(result.get('error') or '')
+                # The conversation was not on the page and the agent had to
+                # navigate to it. Nothing can be pressed in a document that is
+                # being torn down, so we simply ask again once it is up.
+                if code == 'chat_opening' and _attempt < MAX_NAV_RETRIES:
+                    wx.CallLater(NAV_RETRY_MS, self.start_call, chat_id,
+                                 video, callback, _attempt + 1)
+                    return
+                result = dict(result)
+                result['error'] = _call_error_text(code)
+            if callback:
+                callback(result)
+
         self._call('start_call', {'chat_id': chat_id, 'video': video},
-                   callback, timeout=30.0)
+                   _relay, timeout=45.0)
 
     def accept_call(self, callback=None) -> None:
-        self._call('accept_call', {}, callback)
+        self._call('accept_call', {}, self._call_control_relay(callback))
 
     def end_call(self, callback=None) -> None:
-        self._call('end_call', {}, callback)
+        self._call('end_call', {}, self._call_control_relay(callback))
+        # Messenger runs a call in a window of its own. Once the call is over
+        # that window has no reason to exist, and leaving it open would keep a
+        # second engine running for the rest of the session.
+        if self.bridge is not None:
+            wx.CallLater(2000, self.bridge.close_call_view)
+
+    @staticmethod
+    def _call_control_relay(callback):
+        def _relay(result: Dict[str, Any]) -> None:
+            if not result.get('success'):
+                result = dict(result)
+                result['error'] = _call_error_text(str(result.get('error') or ''))
+            if callback:
+                callback(result)
+        return _relay
 
     # -- diagnostics ---------------------------------------------------------
     def self_test(self, callback=None) -> None:
@@ -931,6 +968,29 @@ def _me_label() -> str:
 def _page_title_label(service_label: str) -> str:
     _ = _t()
     return _("{service} web page - Titan IM").format(service=service_label)
+
+
+def _call_error_text(code: str) -> str:
+    """Turn an agent failure code into something worth reading aloud.
+
+    Anything unrecognised is passed through, so a genuine engine message is
+    never swallowed - but the two that used to reach the user as ``timeout``
+    now say what actually went wrong and what can be done about it.
+    """
+    _ = _t()
+    if code.startswith('call_control_not_found'):
+        return _("The call controls are not on the page. Open the service page "
+                 "to see what the call is doing.")
+    return {
+        'call_button_not_found': _(
+            "There is no call button in this conversation. Calling may not be "
+            "available for it, or the service has changed its page - open the "
+            "service page to check."),
+        'chat_not_found': _("This conversation could not be opened."),
+        'chat_opening': _("The conversation is still opening. Try again in a moment."),
+        'call_already_running': _("A call is already in progress."),
+        'no_active_call': _("There is no call in progress."),
+    }.get(code, code or _("The call could not be started"))
 
 
 def _media_label(kind: str) -> str:

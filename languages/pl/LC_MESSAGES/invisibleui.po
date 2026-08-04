@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -50,7 +50,7 @@ msgstr "Głośność: {}%"
 #: src/ui/invisibleui.py:1103
 #, python-brace-format
 msgid "Unmute, {}"
-msgstr "Wyłącz wyciszenie"
+msgstr "Wyłącz wyciszenie, {}"
 
 #: src/ui/invisibleui.py:1105
 msgid "Unmute"
@@ -59,7 +59,7 @@ msgstr "Wyłącz wyciszenie"
 #: src/ui/invisibleui.py:1108
 #, python-brace-format
 msgid "Mute, {}"
-msgstr "Wycisz"
+msgstr "Wycisz, {}"
 
 #: src/ui/invisibleui.py:1110
 msgid "Mute"
@@ -180,7 +180,7 @@ msgstr "Komponenty"
 
 #: src/ui/invisibleui.py:1546
 msgid "Component not found"
-msgstr "Komponent '{}' nie jest załadowany."
+msgstr "Nie znaleziono komponentu"
 
 #: src/ui/invisibleui.py:1670 src/ui/invisibleui.py:1697
 #, python-brace-format
@@ -235,7 +235,7 @@ msgstr "Wiadomości się ładują, proszę czekać"
 
 #: src/ui/invisibleui.py:2181
 msgid "Error during activation"
-msgstr "Błąd podczas aktywacji: {}"
+msgstr "Błąd podczas aktywacji"
 
 #: src/ui/invisibleui.py:2188
 msgid "Activation error"
@@ -265,7 +265,7 @@ msgstr ""
 
 #: src/ui/invisibleui.py:2371
 msgid "Error entering widget mode"
-msgstr "Błąd ładowania widżetu: {}"
+msgstr "Błąd przy przechodzeniu do trybu widżetów"
 
 #: src/ui/invisibleui.py:2415
 msgid "Out of widget"
@@ -347,7 +347,7 @@ msgstr "Titan-Net"
 #: src/ui/invisibleui.py:2844
 #, python-brace-format
 msgid "Error checking connection to {}"
-msgstr "Błąd wykonywania funkcji komponentu"
+msgstr "Błąd sprawdzania połączenia z {}"
 
 #: src/ui/invisibleui.py:2848
 #, python-brace-format
@@ -489,7 +489,7 @@ msgstr "Titan UI wyłączony"
 
 #: src/ui/invisibleui.py:3808
 msgid "Cannot open Messenger - application not ready"
-msgstr "Messenger, aplikacja internetowa"
+msgstr "Nie można otworzyć Messengera - aplikacja nie jest gotowa"
 
 #: src/ui/invisibleui.py:3839
 msgid "Messenger, web application"
@@ -502,7 +502,7 @@ msgstr "Błąd otwierania Messenger WebView"
 
 #: src/ui/invisibleui.py:3868
 msgid "Messenger WebView not available"
-msgstr "WebView niedostępny"
+msgstr "WebView Messengera jest niedostępny"
 
 #: src/ui/invisibleui.py:3893
 msgid ""
@@ -522,7 +522,7 @@ msgstr "Błąd podczas otwierania interfejsu WiFi"
 
 #: src/ui/invisibleui.py:3927
 msgid "Cannot open WhatsApp - application not ready"
-msgstr "WhatsApp, aplikacja internetowa"
+msgstr "Nie można otworzyć WhatsAppa - aplikacja nie jest gotowa"
 
 #: src/ui/invisibleui.py:3958
 msgid "WhatsApp, web application"
@@ -535,7 +535,7 @@ msgstr "Błąd otwierania WhatsApp WebView"
 
 #: src/ui/invisibleui.py:3987
 msgid "WhatsApp WebView not available"
-msgstr "WebView niedostępny"
+msgstr "WebView WhatsAppa jest niedostępny"
 
 #: src/ui/invisibleui.py:4002
 msgid "Cannot open Titan-Net - application not ready"

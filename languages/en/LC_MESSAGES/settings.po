@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 17:28+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -590,28 +590,24 @@ msgid "In a Titan window, as a list to read"
 msgstr ""
 
 #: src/ui/settingsgui.py:1356
-#, fuzzy
 msgid "Global AI OCR shortcut (arrows and Tab are not allowed):"
-msgstr "Global assistant shortcut (arrows and Tab are not allowed):"
+msgstr "Global AI OCR shortcut (arrows and Tab are not allowed):"
 
 #: src/ui/settingsgui.py:1359 src/ui/settingsgui.py:1416
-#, fuzzy
 msgid "Global AI OCR shortcut"
-msgstr "Global assistant shortcut"
+msgstr "Global AI OCR shortcut"
 
 #: src/ui/settingsgui.py:1368
-#, fuzzy
 msgid ""
 "Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab are not"
 " allowed):"
 msgstr ""
-"Titan UI assistant shortcut (active only in Titan UI; arrows and Tab are "
-"not allowed):"
+"Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab are not"
+" allowed):"
 
 #: src/ui/settingsgui.py:1372 src/ui/settingsgui.py:1415
-#, fuzzy
 msgid "Titan UI AI OCR shortcut"
-msgstr "Titan UI assistant shortcut"
+msgstr "Titan UI AI OCR shortcut"
 
 #: src/ui/settingsgui.py:1379
 msgid ""
@@ -635,9 +631,8 @@ msgid "Not set"
 msgstr "Not set"
 
 #: src/ui/settingsgui.py:1425
-#, fuzzy
 msgid "Capture AI OCR shortcut"
-msgstr "Capture assistant shortcut"
+msgstr "Capture AI OCR shortcut"
 
 #: src/ui/settingsgui.py:1444
 msgid "Capture assistant shortcut"
@@ -733,9 +728,8 @@ msgid "Removed {n} cached sounds."
 msgstr ""
 
 #: src/ui/settingsgui.py:1827
-#, fuzzy
 msgid "Server sounds"
-msgstr "Server host:"
+msgstr "Server sounds"
 
 #: src/ui/settingsgui.py:1852
 #, python-brace-format

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -269,9 +269,8 @@ msgid "Volume:"
 msgstr "Głośność:"
 
 #: src/ui/gui.py:2051 src/ui/gui.py:2081 src/ui/gui.py:2116
-#, fuzzy
 msgid "Tab bar"
-msgstr "Pasek stanu"
+msgstr "Pasek kart"
 
 #: src/ui/gui.py:2052 src/ui/gui.py:2077 src/ui/gui.py:2573 src/ui/gui.py:2716
 #: src/ui/gui.py:2760
@@ -360,32 +359,28 @@ msgid "Telegram Error"
 msgstr "Błąd Telegrama"
 
 #: src/ui/gui.py:3463
-#, fuzzy
 msgid ""
 "Cannot launch Messenger.\n"
 "Check if WebView2 is installed."
 msgstr ""
-"Nie można uruchomić Messenger WebView.\n"
+"Nie można uruchomić Messengera.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
 #: src/ui/gui.py:3465
-#, fuzzy
 msgid "Messenger Error"
-msgstr "Błąd Messenger WebView"
+msgstr "Błąd Messengera"
 
 #: src/ui/gui.py:3481
-#, fuzzy
 msgid ""
 "Cannot launch WhatsApp.\n"
 "Check if WebView2 is installed."
 msgstr ""
-"Nie można uruchomić WhatsApp WebView.\n"
+"Nie można uruchomić WhatsAppa.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
 #: src/ui/gui.py:3483
-#, fuzzy
 msgid "WhatsApp Error"
-msgstr "Błąd WhatsApp WebView"
+msgstr "Błąd WhatsAppa"
 
 #: src/ui/gui.py:3537
 #, python-brace-format
@@ -484,12 +479,11 @@ msgid "EltenLink (Beta) Error"
 msgstr "Błąd EltenLink (Beta)"
 
 #: src/ui/gui.py:3867
-#, fuzzy
 msgid ""
 "Failed to open Messenger.\n"
 "Check if WebView2 is installed."
 msgstr ""
-"Nie udało się otworzyć Messenger WebView.\n"
+"Nie udało się otworzyć Messengera.\n"
 "Sprawdź, czy WebView2 jest zainstalowany."
 
 #: src/ui/gui.py:3929
@@ -582,7 +576,8 @@ msgid ""
 "\n"
 "{}"
 msgstr ""
-"Nie można otworzyć ustawień daty/godziny:\n"
+"Aktualne ustawienia czasu:\n"
+"\n"
 "{}"
 
 #: src/ui/gui.py:4488
@@ -712,9 +707,8 @@ msgid "Could not open network settings. Please use your system's network manager
 msgstr ""
 
 #: src/ui/gui.py:4955
-#, fuzzy
 msgid "Network settings - coming soon"
-msgstr "Informacja"
+msgstr "Ustawienia sieci - wkrótce"
 
 #: src/ui/gui.py:4962
 msgid "Zalogowany jako"

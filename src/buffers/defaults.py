@@ -41,6 +41,7 @@ def register_titannet():
     _register('titannet', _("Titan-Net"), [
         ('chat', _("Chat"), 'message'),
         ('pm', _("Private messages"), 'private'),
+        ('mail', _("Mail"), 'message'),
         ('notifications', _("Notifications"), 'notification'),
     ])
 

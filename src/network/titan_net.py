@@ -2315,13 +2315,24 @@ class TitanNetClient:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def send_mail(self, to_addr: str, subject: str, body: str) -> Dict:
+    def send_mail(self, to_addr: str, subject: str, body: str,
+                  body_html: str = '', content_type: str = 'text/plain') -> Dict:
         """Send mail from the user's username@domain identity. Local recipients
-        are delivered internally; remote ones go out via the server's mailer."""
+        are delivered internally; remote ones go out via the server's mailer.
+
+        ``body`` is always the readable plain-text version - it is what an old
+        server stores, what a client that cannot render markup shows, and what a
+        recipient whose mail program refuses HTML reads. ``body_html`` is the
+        formatted alternative sent beside it, and ``content_type`` records what
+        the author actually wrote (text/plain, text/markdown, text/html) so the
+        Mail client can show it back the same way."""
         try:
+            payload = {'to': to_addr, 'subject': subject, 'body': body,
+                       'content_type': content_type}
+            if body_html:
+                payload['body_html'] = body_html
             response = requests.post(
-                f"{self.http_url}/api/mail/send",
-                json={'to': to_addr, 'subject': subject, 'body': body},
+                f"{self.http_url}/api/mail/send", json=payload,
                 headers=self._http_headers(), timeout=15)
             return response.json()
         except Exception as e:

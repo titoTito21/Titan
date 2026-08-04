@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  Titan\n"
 "Report-Msgid-Bugs-To: klaldekwypych@gmail.com\n"
-"POT-Creation-Date: 2026-08-03 17:48+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2026-07-21 09:03+0200\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -1363,12 +1363,13 @@ msgstr ""
 "więc nie ma czego nakładać. Skorzystaj z listy odczytu."
 
 #: src/ai/ocr/overlay.py:460
-#,, python-brace-format
+#, , python-brace-format
 msgid ""
 "{title}: {n} controls, where the real ones are. Tab moves between them, "
 "Enter presses, F5 reads the screen again, Escape removes the overlay."
-msgstr "{title}: {n} kontrolek, w miejscach prawdziwych. Tab przechodzi między nimi, Enter naciska, F5 ponownie odczytuje ekran, Escape usuwa nakładkę."
-
+msgstr ""
+"{title}: {n} kontrolek, w miejscach prawdziwych. Tab przechodzi między "
+"nimi, Enter naciska, F5 ponownie odczytuje ekran, Escape usuwa nakładkę."
 
 #: src/ai/ocr/overlay.py:589
 msgid "Reading the screen again..."
@@ -1391,7 +1392,6 @@ msgstr "Okno zmieniło rozmiar, odczytuję je ponownie."
 msgid "This screen changed while you were away, reading it again."
 msgstr "Ten ekran zmienił się pod Twoją nieobecność, odczytuję go ponownie."
 
-
 #: src/ai/ocr/overlay.py:821
 msgid "This overlay has only one area."
 msgstr "Ta nakładka ma tylko jeden obszar."
@@ -1405,22 +1405,18 @@ msgstr "{n} kontrolek, odczytane {seconds} sekund temu"
 msgid "This window has no menu bar that could be read."
 msgstr "To okno nie ma paska menu, który dałoby się odczytać."
 
-
 #: src/ai/ocr/overlay.py:866
 msgid "Menu bar"
 msgstr "Pasek menu"
-
 
 #: src/ai/ocr/overlay.py:885
 msgid "Overlay hidden. Press the AI OCR shortcut again to bring it back."
 msgstr "Nakładka schowana. Naciśnij skrót AI OCR ponownie, aby ją przywrócić."
 
-
 #: src/ai/ocr/overlay.py:891
 #, python-brace-format
 msgid "{title}: the controls are back."
 msgstr "{title}: kontrolki wróciły."
-
 
 #: src/ai/ocr/overlay.py:903
 msgid "Overlay out of the way"

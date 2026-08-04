@@ -494,12 +494,17 @@ class MessengerWebViewFrame(wx.Frame):
             # Set environment variables for WebView2 to allow media access
             import os
             
-            # These might help with permissions
-            os.environ.setdefault('WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS', 
+            # These might help with permissions.
+            # --use-fake-device-for-media-stream used to be here and must not
+            # come back: it replaces the microphone with a synthesised test
+            # tone, so the person on the other end hears a beep instead of the
+            # user. --use-fake-ui-for-media-stream (kept) fakes the permission
+            # *dialog*, which is what is needed - WebView2 draws that dialog
+            # inside the view, where an offscreen host can never show it.
+            os.environ.setdefault('WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS',
                 '--allow-running-insecure-content '
                 '--disable-web-security '
                 '--use-fake-ui-for-media-stream '
-                '--use-fake-device-for-media-stream '
                 '--allow-file-access-from-files '
                 '--disable-features=VizDisplayCompositor '
                 '--enable-media-stream '

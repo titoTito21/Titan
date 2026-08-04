@@ -905,17 +905,50 @@ WHATSAPP_AGENT = r"""
     }
   }
 
+  // Where a call button can be: the conversation header first (so we never
+  // press the identically named button of a different conversation), then the
+  // header's overflow menu, then anywhere on the page.
+  function callRoots() {
+    return [D.q(['#main header', 'header[data-testid="conversation-header"]']),
+            D.q(['#main']), document];
+  }
+
+  function callInProgress() {
+    var state = window.__titanCallState;
+    if (state && state.active) { return true; }
+    // The monitor mutes itself for a warm-up window after injection, so until
+    // it is armed the page itself is the only source of truth. Only hang-up
+    // controls count here - "Odrzuć"/"Reject" also lives on a consent banner,
+    // and reading that as a live call would refuse every call for 10 seconds
+    // after the page loads.
+    if (state) { return false; }
+    return !!D.findLabelled(D.words.hangup, null, [document]);
+  }
+
+  function callButton(video) {
+    var wanted = video ? D.words.video : D.words.voice;
+    var avoid = D.words.notACall.concat(video ? [] : D.words.video);
+    return D.findLabelled(wanted, avoid, callRoots());
+  }
+
+  // WhatsApp moves the call buttons into the header's overflow menu on a narrow
+  // layout. Opening it costs one click and is the difference between "calling"
+  // and "there is no call button here".
+  function openHeaderMenu() {
+    var menu = D.q(['#main header [data-icon="menu"]',
+                    '#main header [aria-label="Menu" i]',
+                    '#main header div[role="button"][aria-haspopup="true"]']);
+    if (!menu) { return false; }
+    D.click(D.pressable(menu));
+    return true;
+  }
+
   function callControl(kind) {
-    var patterns = {
-      accept: ['[aria-label*="Accept" i]', '[aria-label*="Answer" i]',
-               '[data-testid*="accept-call" i]', '[aria-label*="Odbierz" i]'],
-      end: ['[aria-label*="End call" i]', '[aria-label*="Hang up" i]',
-            '[aria-label*="Leave call" i]', '[data-testid*="end-call" i]',
-            '[aria-label*="Zako" i]', '[aria-label*="Decline" i]']
-    }[kind] || [];
-    var button = D.q(patterns);
-    if (!button) { throw new Error('call control not available: ' + kind); }
-    D.click(button.closest('button') || button);
+    var words = (kind === 'accept') ? D.words.accept : D.words.end;
+    var avoid = (kind === 'accept') ? D.words.end : null;
+    var button = D.findLabelled(words, avoid, [document]);
+    if (!button) { throw new Error('call_control_not_found:' + kind); }
+    D.click(D.pressable(button));
     return { done: true };
   }
 
@@ -1171,16 +1204,30 @@ WHATSAPP_AGENT = r"""
   });
 
   B.command('start_call', function (args) {
-    return Promise.resolve(openChat(args.chat_id)).then(function () {
-      var patterns = args.video
-        ? ['[aria-label*="Video call" i]', '[aria-label*="Rozmowa wideo" i]',
-           '[data-testid="video-call-btn"]']
-        : ['[aria-label*="Voice call" i]', '[aria-label*="Połączenie" i]',
-           '[data-testid="audio-call-btn"]'];
-      return D.waitFor(function () { return D.q(patterns); }, 8000);
+    if (callInProgress()) { throw new Error('call_already_running'); }
+
+    return Promise.resolve(openChat(args.chat_id)).then(null, function () {
+      throw new Error('chat_not_found');
+    }).then(function () {
+      // The header repaints after the conversation switches, so the button is
+      // waited for rather than read once.
+      return D.waitFor(function () { return callButton(args.video); }, 10000, 200)
+        .then(null, function () {
+          // Not in the header: it may have been folded into the overflow menu.
+          if (!openHeaderMenu()) { throw new Error('call_button_not_found'); }
+          return D.waitFor(function () { return callButton(args.video); }, 4000, 200)
+            .then(null, function () { throw new Error('call_button_not_found'); });
+        });
     }).then(function (button) {
-      D.click(button.closest('button') || button);
-      return { started: true };
+      D.click(D.pressable(button));
+      // Pressing is not proof. WhatsApp refuses to call some conversations
+      // (business accounts, groups over the participant limit, a peer who has
+      // blocked calls) and simply does nothing, and the microphone may be
+      // unavailable. Wait for the page to show a call actually running, and
+      // tell the client which of the two happened rather than claiming success.
+      return D.waitFor(callInProgress, 8000, 250).then(
+        function () { return { started: true, confirmed: true }; },
+        function () { return { started: true, confirmed: false }; });
     });
   });
 

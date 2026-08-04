@@ -155,7 +155,13 @@
     mailbox(folder) { return request('/mail/' + (folder === 'sent' ? 'sent' : 'inbox')); },
     getMail(mailId) { return request('/mail/' + encodeURIComponent(mailId)); },
     deleteMail(mailId) { return request('/mail/' + encodeURIComponent(mailId), { method: 'DELETE' }); },
-    sendMail(to, subject, body) { return request('/mail/send', { method: 'POST', body: { to, subject, body } }); },
+    // `body` is always the readable plain text; `bodyHtml` is the formatted
+    // alternative sent beside it (multipart/alternative on the way out).
+    sendMail(to, subject, body, bodyHtml, contentType) {
+      const payload = { to, subject, body, content_type: contentType || 'text/plain' };
+      if (bodyHtml) payload.body_html = bodyHtml;
+      return request('/mail/send', { method: 'POST', body: payload });
+    },
     listGroupForums(groupId) {
       return request('/groups/' + encodeURIComponent(groupId) + '/forums');
     },

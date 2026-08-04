@@ -59,6 +59,10 @@ _REPLAYABLE_COMMANDS = frozenset({
     'list_participants', 'list_contacts', 'mark_read', 'dom_report',
 })
 
+# Commands that belong to the window a call is running in rather than to the
+# chat page, once the service has moved the call into a window of its own.
+_CALL_VIEW_COMMANDS = frozenset({'accept_call', 'end_call', 'call_state'})
+
 
 class WebBridgeUnavailable(RuntimeError):
     """Raised when the Edge (WebView2) backend is missing on this machine."""
@@ -83,7 +87,40 @@ _KEEPALIVE_ARGS = (
     '--disable-ipc-flooding-protection',
 )
 
+# Calls: the page owns the WebRTC session, so it has to be allowed to open the
+# microphone and the camera. WebView2 answers ``getUserMedia`` with its own
+# permission bubble drawn *inside* the view - and this view lives at -32000,
+# -32000, where nobody can ever click it. The call would then sit waiting for an
+# answer that cannot come, which is exactly the "I press call and nothing
+# happens" symptom. ``--use-fake-ui-for-media-stream`` fakes the *dialog*, not
+# the hardware: the real microphone is used, the unreachable prompt is not.
+_MEDIA_ARGS = (
+    '--use-fake-ui-for-media-stream',
+    '--autoplay-policy=no-user-gesture-required',
+)
+
+# ...and this one must never be set. It replaces the microphone with a
+# synthesised test tone, so the other side hears a beep instead of the user.
+# ``messenger_webview`` (the legacy visible window) used to add it next to the
+# flag above, which is why its calls carried no voice.
+_FORBIDDEN_ARGS = (
+    '--use-fake-device-for-media-stream',
+)
+
+# A popup whose address looks like this is a call, not a login checkpoint.
+# Messenger opens calls in a separate window; hosting one in the engine's own
+# WebView would throw away the logged-in chat page mid-call.
+_CALL_URL_HINTS = (
+    '/call/', '/videocall/', '/groupcall/', '/calls/', '/rtc/',
+    'call.messenger.com', 'msngr.com/call',
+)
+
 _env_configured = False
+
+
+def looks_like_call_url(url: str) -> bool:
+    lowered = (url or '').lower()
+    return any(hint in lowered for hint in _CALL_URL_HINTS)
 
 
 def engine_profile_dir() -> str:
@@ -116,11 +153,12 @@ def ensure_webview2_environment() -> None:
     _env_configured = True
 
     key = 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'
-    current = os.environ.get(key, '')
-    present = current.split()
-    missing = [flag for flag in _KEEPALIVE_ARGS if flag not in present]
-    if missing:
-        os.environ[key] = (current + ' ' + ' '.join(missing)).strip()
+    present = [flag for flag in os.environ.get(key, '').split()
+               if not flag.startswith(_FORBIDDEN_ARGS)]
+    for flag in _KEEPALIVE_ARGS + _MEDIA_ARGS:
+        if flag not in present:
+            present.append(flag)
+    os.environ[key] = ' '.join(present)
 
     try:
         os.environ.setdefault('WEBVIEW2_USER_DATA_FOLDER', engine_profile_dir())
@@ -181,6 +219,10 @@ class WebBridge:
         self._page_visible = False
         self._stopped = False
         self._sweeper: Optional[wx.Timer] = None
+        # A live call hosted in its own view (see ``_open_call_view``). Only the
+        # main bridge ever has one; the call view itself never nests.
+        self._call_view: Optional['WebBridge'] = None
+        self._is_call_view = False
 
     # ------------------------------------------------------------------ start
     def start(self) -> None:
@@ -249,6 +291,7 @@ class WebBridge:
     def stop(self) -> None:
         """Tear the engine down and fail everything still in flight."""
         self._stopped = True
+        self.close_call_view()
         with self._lock:
             pending = list(self._pending.values())
             self._pending.clear()
@@ -272,7 +315,15 @@ class WebBridge:
 
     # --------------------------------------------------------------- visibility
     def show_page(self) -> None:
-        """Bring the raw service page on screen (login checkpoint, diagnostics)."""
+        """Bring the raw service page on screen (login checkpoint, diagnostics).
+
+        During a call the page worth showing is the call window, not the chat
+        list behind it - that is where the service puts its own controls.
+        """
+        if self._call_view is not None:
+            self._call_view.show_page()
+            return
+
         def _show():
             if self.frame is None:
                 return
@@ -341,6 +392,12 @@ class WebBridge:
             if callback:
                 wx.CallAfter(callback, False, 'bridge stopped')
             return -1
+
+        # Answering or hanging up belongs to the window the call is actually in.
+        # Sending it to the chat page would look for controls that only exist in
+        # the call window, and fail with "call control not available".
+        if self._call_view is not None and cmd in _CALL_VIEW_COMMANDS:
+            return self._call_view.call(cmd, args, callback, timeout)
 
         with self._lock:
             call_id = self._next_id
@@ -477,15 +534,83 @@ class WebBridge:
         self._fire('error', {'where': 'navigation', 'message': message})
 
     def _on_new_window(self, event) -> None:
-        # Login checkpoints and OAuth flows open popups. Keeping them in the
-        # same view means the session, the agent and "show page" all still apply.
         try:
             target = event.GetURL()
         except Exception:
             target = ''
+
+        # A call is the one popup that must NOT take over this view. Messenger
+        # opens calls in a window of their own, and loading that here would
+        # navigate the logged-in chat page away: the conversation list would
+        # vanish, the agent would boot again on a page that has no chat list,
+        # and every command already in flight would be answered with "the page
+        # reloaded". The call gets its own offscreen view instead.
+        if looks_like_call_url(target) and not self._is_call_view:
+            self._open_call_view(target)
+            self._fire('popup', {'url': target, 'kind': 'call'})
+            return
+
+        # Login checkpoints and OAuth flows do belong here: keeping them in the
+        # same view means the session, the agent and "show page" all still apply.
         if target and self.webview is not None:
             self.webview.LoadURL(target)
-        self._fire('popup', {'url': target})
+        self._fire('popup', {'url': target, 'kind': 'page'})
+
+    # ------------------------------------------------------------- call window
+    def _open_call_view(self, url: str) -> None:
+        """Host a call popup in a second offscreen view of its own."""
+        if self._call_view is not None:
+            self._call_view.navigate(url)
+            return
+
+        view = WebBridge(self.service, url, self.agent_js,
+                         title=f"{self.title} - call",
+                         handler_name=self.handler_name)
+        view._is_call_view = True
+        view.add_listener(self._on_call_view_event)
+        try:
+            view.start()
+        except Exception as exc:
+            self._fire('error', {'where': 'call_window', 'message': str(exc)})
+            return
+        self._call_view = view
+
+    def _on_call_view_event(self, event_type: str, payload: Any) -> None:
+        """Only call news crosses over from the call window.
+
+        Its agent boots on a page with no conversation list and no login form,
+        so its ``ready`` / ``auth_state`` / ``chats`` would tell the client the
+        user had been logged out and had no conversations. Those stay here.
+        """
+        if event_type == 'call':
+            self._fire('call', payload)
+            if isinstance(payload, dict) and payload.get('state') == 'ended':
+                wx.CallAfter(self.close_call_view)
+            return
+        if event_type in ('error', 'log'):
+            self._fire(event_type, payload)
+
+    def close_call_view(self) -> None:
+        view, self._call_view = self._call_view, None
+        if view is not None:
+            view.remove_listener(self._on_call_view_event)
+            view.stop()
+
+    @property
+    def call_view(self) -> Optional['WebBridge']:
+        return self._call_view
+
+    def navigate(self, url: str) -> None:
+        """Point this view at another address, keeping the agent installed."""
+        self.url = url
+
+        def _go():
+            if self.webview is not None:
+                try:
+                    self.webview.LoadURL(url)
+                except Exception as exc:
+                    self._fire('error', {'where': 'navigate', 'message': str(exc)})
+        wx.CallAfter(_go)
 
     def _on_script_message(self, event) -> None:
         try:

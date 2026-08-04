@@ -474,7 +474,16 @@ class TelegramClient:
             print(f"Error handling user update: {e}")
     
     async def _handle_call_update(self, event):
-        """Handle native Telegram call updates (signaling only)."""
+        """React to native Telegram call updates - notification only.
+
+        The call *protocol* belongs entirely to py-tgcalls (see
+        ``telegram_voice``): it requests, accepts, confirms and discards calls
+        and relays the signalling data. This handler used to run its own
+        Diffie-Hellman exchange on the same updates, so two clients were
+        answering the same call at once - which is a call that rings, reports
+        itself connected, and carries no audio. Nothing here may call
+        ``AcceptCallRequest`` or ``ConfirmCallRequest`` again.
+        """
         try:
             from telethon.tl.types import UpdatePhoneCall
 
@@ -542,54 +551,10 @@ class TelegramClient:
                         pass
 
             elif call_type == 'phoneCallAccepted':
-                # Our outgoing native call was accepted - complete DH exchange
-                print("Native call accepted - completing DH exchange")
-                if telegram_voice.telegram_voice_client and telegram_voice.telegram_voice_client.dh_params:
-                    try:
-                        from telethon.tl.functions.phone import ConfirmCallRequest
-                        from telethon.tl.types import InputPhoneCall
-                        import hashlib
-
-                        dh = telegram_voice.telegram_voice_client.dh_params
-                        if 'g_a' in dh:
-                            g_a_bytes = dh['g_a'].to_bytes(256, byteorder='big')
-                            p = dh['p']
-                            a = dh['a']
-                            g_b_int = int.from_bytes(phone_call.g_b, byteorder='little')
-                            shared_key = pow(g_b_int, a, p)
-                            shared_bytes = shared_key.to_bytes((shared_key.bit_length() + 7) // 8, byteorder='big')
-                            fingerprint = int.from_bytes(
-                                hashlib.sha1(shared_bytes).digest()[-8:],
-                                byteorder='little', signed=True
-                            )
-
-                            input_call = InputPhoneCall(id=phone_call.id, access_hash=phone_call.access_hash)
-
-                            def do_confirm():
-                                try:
-                                    if self.event_loop and self.event_loop.is_running():
-                                        future = asyncio.run_coroutine_threadsafe(
-                                            self.client(ConfirmCallRequest(
-                                                peer=input_call,
-                                                g_a=g_a_bytes,
-                                                key_fingerprint=fingerprint,
-                                                protocol=dh['protocol']
-                                            )),
-                                            self.event_loop
-                                        )
-                                        result = future.result(timeout=10)
-                                        if hasattr(result, 'phone_call') and telegram_voice.telegram_voice_client:
-                                            telegram_voice.telegram_voice_client.current_call_object = result.phone_call
-                                except Exception as e:
-                                    print(f"DH confirm failed: {e}")
-
-                            import threading
-                            threading.Thread(target=do_confirm, daemon=True).start()
-
-                    except Exception as e:
-                        print(f"DH exchange failed: {e}")
-
-                play_sound('titannet/callsuccess.ogg')
+                # The peer picked up. py-tgcalls is already completing the key
+                # exchange on this same update; confirming it a second time from
+                # here is what used to break the call.
+                print("Native call accepted")
 
                 for callback in self.call_callbacks:
                     try:
@@ -598,15 +563,13 @@ class TelegramClient:
                         pass
 
             elif call_type == 'phoneCallWaiting':
-                # Outgoing call is ringing
-                play_sound('titannet/ring_out.ogg')
+                # Outgoing call is ringing. The ringback earcon is played by
+                # telegram_voice when it places the call - playing it here too
+                # meant two overlapping copies of it.
+                pass
 
             elif call_type == 'phoneCall':
                 # Call fully established
-                play_sound('titannet/callsuccess.ogg')
-                if telegram_voice.telegram_voice_client:
-                    telegram_voice.telegram_voice_client.current_call_object = phone_call
-
                 for callback in self.call_callbacks:
                     try:
                         wx.CallAfter(callback, 'call_active', {'call_id': phone_call.id})
@@ -614,16 +577,12 @@ class TelegramClient:
                         pass
 
             elif call_type == 'phoneCallDiscarded':
-                # Call ended
+                # Call ended. Tearing our own side down is py-tgcalls' job (it
+                # reports the same discard as a LEFT_CALL update, which
+                # ``telegram_voice`` acts on); calling end_voice_call from here
+                # as well raced with that and left the state machine confused.
                 reason = getattr(phone_call, 'reason', None)
                 print(f"Native call discarded (reason: {reason})")
-                play_sound('titannet/bye.ogg')
-
-                if telegram_voice.telegram_voice_client:
-                    # Only end if the voice client still thinks it's a native call
-                    vc = telegram_voice.telegram_voice_client
-                    if vc.current_call_object and not vc.current_group_id:
-                        telegram_voice.end_voice_call()
 
                 self.current_incoming_call = None
 

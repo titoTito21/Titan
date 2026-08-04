@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -105,9 +105,9 @@ msgid "Could not open the AI Agent: {error}"
 msgstr "Could not open the AI Agent: {error}"
 
 #: src/ui/menu.py:243
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Could not open AI OCR: {error}"
-msgstr "Could not open the AI creator: {error}"
+msgstr "Could not open AI OCR: {error}"
 
 #: src/ui/menu.py:259
 #, python-brace-format

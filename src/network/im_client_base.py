@@ -265,13 +265,21 @@ class WebIMClientFrame(TabbedListFrame):
         item = self.selected_item()
         if not isinstance(item, Chat):
             return
-        self.backend.start_call(
-            item.id, video=video,
-            callback=lambda result: (
-                speak_titannet(_("Calling {name}").format(name=item.name))
-                if result.get('success')
-                else speak_notification(result.get('error') or _("Cannot start the call"),
-                                        'error')))
+
+        def _done(result: Dict) -> None:
+            if not result.get('success'):
+                speak_notification(result.get('error') or _("Cannot start the call"),
+                                   'error')
+                return
+            if not result.get('confirmed'):
+                # Pressed, but the page never showed a call starting.
+                speak_notification(
+                    _("The call was requested but the service has not started "
+                      "it. Open the service page to see what happened."), 'error')
+                return
+            speak_titannet(_("Calling {name}").format(name=item.name))
+
+        self.backend.start_call(item.id, video=video, callback=_done)
 
     # ------------------------------------------------------------------ tools
     def search(self) -> None:

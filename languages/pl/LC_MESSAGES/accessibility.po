@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -53,9 +53,8 @@ msgid "Space"
 msgstr ""
 
 #: src/accessibility/messages.py:153
-#, fuzzy
 msgid "Tab"
-msgstr "Pasek kart"
+msgstr "Tab"
 
 #: src/accessibility/messages.py:154
 msgid "Enter"

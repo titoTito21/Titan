@@ -1,9 +1,12 @@
 import wx
 import os
 import sys
+from threading import Thread
 from translation import _
 
 import common
+import playlist
+from bookmarks_gui import BookmarksPanel
 from MediaCatalog import MediaCatalogPanel
 from Settings import SettingsWindow
 from player import PlayerPanel
@@ -11,14 +14,16 @@ from YoutubeSearch import YoutubeSearchPanel
 
 
 class FunctionListPanel(wx.Panel):
-    """Root view: pick Media Catalog or YouTube Search."""
+    """Root view: pick Media Catalog, YouTube Search or Bookmarks."""
 
     def __init__(self, parent, owner, *args, **kwargs):
         super(FunctionListPanel, self).__init__(parent, *args, **kwargs)
         self.owner = owner
 
         vbox = wx.BoxSizer(wx.VERTICAL)
-        self.function_list = wx.ListBox(self, choices=[_("Media Catalog"), _("YouTube Search")])
+        self.function_list = wx.ListBox(self, choices=[_("Media Catalog"),
+                                                       _("YouTube Search"),
+                                                       _("Bookmarks")])
         self.function_list.SetName(_("TMedia functions"))
         vbox.Add(self.function_list, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
 
@@ -40,6 +45,8 @@ class FunctionListPanel(wx.Panel):
                 self.owner.show_view('media_catalog')
             elif selection == 1:
                 self.owner.show_view('youtube_search')
+            elif selection == 2:
+                self.owner.show_view('bookmarks')
 
     def on_key_down(self, event):
         if event.GetKeyCode() == wx.WXK_RETURN:
@@ -80,11 +87,13 @@ class TMediaApp(wx.Frame):
 
         menubar = wx.MenuBar()
         fileMenu = wx.Menu()
+        bookmarks_item = fileMenu.Append(wx.ID_ANY, _('Bookmarks...'))
         settings_item = fileMenu.Append(wx.ID_ANY, _('Settings...'))
         menubar.Append(fileMenu, _('&Application'))
         self.SetMenuBar(menubar)
 
         self.Bind(wx.EVT_MENU, self.open_settings, settings_item)
+        self.Bind(wx.EVT_MENU, self.open_bookmarks, bookmarks_item)
 
         self.show_view('function_list')
 
@@ -93,13 +102,24 @@ class TMediaApp(wx.Frame):
 
     def _start_initial_media(self, media):
         """Handle the startup argument. A normal file path or URL plays directly;
-        a ``ytsearch:<query>`` argument (or a bare, non-file, non-URL string, e.g.
+        a FOLDER (or an ``audiobook:<folder>`` argument) plays as an audiobook -
+        the whole folder as one item, continuing from its saved position; a
+        ``ytsearch:<query>`` argument (or a bare, non-file, non-URL string, e.g.
         one sent by the Titan assistant) triggers a YouTube search that
         auto-plays the first result; a ``radio:<country>:<query>`` argument opens
         the radio list for that country (skipping the country picker) and
         auto-plays the first station matching the query."""
         m = (media or '').strip()
         if not m:
+            return
+        audiobook_prefix = 'audiobook:'
+        if m.lower().startswith(audiobook_prefix):
+            target = m[len(audiobook_prefix):].strip()
+            if target:
+                self.play_folder(target)
+            return
+        if playlist.looks_like_folder(m):
+            self.play_folder(m)
             return
         radio_prefix = 'radio:'
         if m.lower().startswith(radio_prefix):
@@ -152,6 +172,8 @@ class TMediaApp(wx.Frame):
             return MediaCatalogPanel(self.view_container, owner=self)
         if name == 'youtube_search':
             return YoutubeSearchPanel(self.view_container, owner=self)
+        if name == 'bookmarks':
+            return BookmarksPanel(self.view_container, owner=self)
         raise ValueError(name)
 
     def _get_or_create_view(self, name):
@@ -164,7 +186,9 @@ class TMediaApp(wx.Frame):
         return panel
 
     def show_view(self, name, push=True):
-        if self.current_view == name:
+        # The player view is destroyed and rebuilt for every new item, so
+        # "already showing it" is only true while its panel still exists.
+        if self.current_view == name and self.views.get(name) is not None:
             return
         if self.current_view == 'player' and name != 'player':
             self._destroy_player_view()
@@ -175,7 +199,7 @@ class TMediaApp(wx.Frame):
                 existing.Hide()
         panel.Show()
 
-        if push and self.current_view is not None:
+        if push and self.current_view is not None and self.current_view != name:
             self.view_stack.append(self.current_view)
         self.current_view = name
 
@@ -203,21 +227,70 @@ class TMediaApp(wx.Frame):
             self.view_sizer.Detach(panel)
             panel.Destroy()
 
-    def play_media(self, url, title=None):
+    def play_media(self, url, title=None, start_position=None):
         """Switch to the embedded player and start playback. This is what
         the media catalog / YouTube search views call instead of opening a
         second top-level Player window."""
+        panel = self._new_player()
+        panel.play_file(url, title, start_position=start_position)
+        self.show_view('player')
+
+    def play_playlist(self, tracks, title=None, media_id=None, kind='audiobook',
+                      start=None):
+        """Play a whole track list (an audiobook folder) as one item."""
+        panel = self._new_player()
+        panel.play_playlist(tracks, title=title, media_id=media_id, kind=kind,
+                            start=start)
+        self.show_view('player')
+
+    def play_folder(self, url, title=None, start=None, fallback_tracks=None):
+        """Play a folder as an audiobook: list it (which can take a moment on
+        a network catalog, so it happens off the UI thread) and hand the whole
+        track list to the player, which resumes it where it was left.
+
+        ``fallback_tracks`` is the list saved with a bookmark, used when the
+        folder itself can no longer be reached (an offline network catalog),
+        so a saved book still opens."""
+        name = title or playlist.folder_display_name(url)
+        common.speak(_("Loading audiobook: %s") % name)
+        channel = common.play_sound('loading', loop=True)
+
+        def work():
+            try:
+                tracks = playlist.list_folder_tracks(url)
+            except Exception as e:
+                print(f"[tMedia] audiobook listing failed: {e}")
+                tracks = []
+            wx.CallAfter(done, tracks)
+
+        def done(tracks):
+            common.stop_sound(channel=channel)
+            if not tracks:
+                tracks = [t for t in (fallback_tracks or []) if t.get('url')]
+            if not tracks:
+                common.speak(_("No media files in this folder"))
+                wx.MessageBox(_("No media files in this folder."),
+                              _("Audiobook"), wx.OK | wx.ICON_INFORMATION)
+                return
+            self.play_playlist(tracks, title=name, media_id=url,
+                               kind='audiobook', start=start)
+
+        Thread(target=work, daemon=True).start()
+
+    def _new_player(self):
         self._destroy_player_view()
         panel = PlayerPanel(self.view_container, owner=self)
         self.views['player'] = panel
         self.view_sizer.Add(panel, proportion=1, flag=wx.EXPAND)
         panel.Hide()
-        panel.play_file(url, title)
-        self.show_view('player')
+        return panel
 
     def open_settings(self, event):
         settings_window = SettingsWindow(self)
         settings_window.Show()
+
+    def open_bookmarks(self, event=None):
+        self.show_view('bookmarks')
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -122,11 +122,12 @@ msgid "Select data package"
 msgstr "Wybierz pakiet danych"
 
 #: src/ui/menu.py:263
-#, fuzzy
 msgid ""
 "Data packages "
 "(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
-msgstr "Pakiety danych (*.zip;*.7z;*.tcepackage)|*.zip;*.7z;*.tcepackage"
+msgstr ""
+"Pakiety danych "
+"(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
 
 #: src/ui/menu.py:268
 msgid "Package installation"

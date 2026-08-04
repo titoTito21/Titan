@@ -403,5 +403,15 @@
     "role": "assistant",
     "content": "Oto najciekawsze miejsca tuż obok Dymińskiej 2, do których dotrzesz bez długiego marszu:\n\n1. **Cytadela Warszawska oraz Park Fosa i Stoki Cytadeli** – znajdują się dosłownie po drugiej stronie ulicy. To potężne, zielone tereny spacerowe otoczone zabytkowymi murami.\n2. **Muzeum Historii Polski oraz Muzeum Wojska Polskiego** – mieszczą się na terenie Cytadeli, tuż przy wejściu od strony Dymińskiej. Wybitne miejsca pełne oręża i historii.\n3. **Park im. Romualda Traugutta** – piękny, cichy park usytuowany krok od ulicy Słomińskiego.\n4. **Plac Inwalidów i Stary Żoliborz** – zaledwie kilka minut spokojnego spaceru ulicą Mickiewicza, gdzie znajdziesz świetne kawiarnie i restauracje, takie jak kultowa *Havana*.\n\nJeśli pragniesz natury lub historii, Cytadela i jej parki stoją przed Tobą otworem! Czy chcesz dowiedzieć się więcej o którymś z tych miejsc?",
     "timestamp": 1785225297.1006825
+  },
+  {
+    "role": "user",
+    "content": "Sałowe z Glovo, frytki z McDonalda, przez Microsoft Edge z Glovo.",
+    "timestamp": 1785780876.4164696
+  },
+  {
+    "role": "assistant",
+    "content": "Reached the step limit before finishing.",
+    "timestamp": 1785781035.0573573
   }
 ]

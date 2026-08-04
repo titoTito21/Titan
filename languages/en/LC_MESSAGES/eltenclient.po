@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2026-02-05 13:47+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -651,9 +651,8 @@ msgstr "No feed posts"
 
 #: src/eltenlink_client/elten_gui.py:1456
 #: src/eltenlink_client/elten_gui.py:1641
-#, fuzzy
 msgid "likes"
-msgstr "Like"
+msgstr "likes"
 
 #: src/eltenlink_client/elten_gui.py:1458
 msgid "Feed Post"
@@ -1305,9 +1304,9 @@ msgstr "No members"
 
 #: src/eltenlink_client/elten_gui.py:3009
 #: src/eltenlink_client/elten_gui.py:3010
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{count} members"
-msgstr "No members"
+msgstr "{count} members"
 
 #: src/eltenlink_client/elten_gui.py:3016
 msgid "Enter search query:"
@@ -1335,9 +1334,9 @@ msgid "Thread #{thread_id} ({post_count} posts)"
 msgstr ""
 
 #: src/eltenlink_client/elten_gui.py:3040
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{count} results"
-msgstr "{count} posts"
+msgstr "{count} results"
 
 #: src/eltenlink_client/elten_gui.py:3041
 msgid "Search Results"

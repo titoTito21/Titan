@@ -36,36 +36,75 @@ the one polled by the wx timer. Both are plain strings so callers keep using
 from __future__ import annotations
 
 # Controls that only exist while a call is live/ringing. Case-insensitive.
-_IN_CALL_SELECTORS = [
-    '[aria-label*="End call" i]',
-    '[aria-label*="Leave call" i]',
-    '[aria-label*="Hang up" i]',
-    '[aria-label*="Decline" i]',
-    '[aria-label*="Reject" i]',
-    '[aria-label*="Accept call" i]',
-    '[aria-label*="Answer call" i]',
-    '[aria-label*="Join call" i]',
+#
+# These were English-only, which meant that on a service rendered in any other
+# language no call was ever detected: an incoming call never rang in Titan, an
+# outgoing one never turned into a call window, and "connected" never fired.
+# The words below are the ones that cannot also appear on a button that merely
+# *offers* to start a call - "answer" and "reply" are the same word in several
+# languages, so only the unambiguous phrasings are listed.
+_HANG_UP_LABELS = [
+    'End call', 'Leave call', 'Hang up', 'End video call', 'End the call',
+    'Zakończ połączenie', 'Zakończ rozmowę', 'Rozłącz', 'Opuść połączenie',
+    'Finalizar llamada', 'Colgar', 'Salir de la llamada',
+    'Raccrocher', "Terminer l'appel", "Quitter l'appel",
+    'Anruf beenden', 'Auflegen', 'Anruf verlassen',
+    'Termina chiamata', 'Riaggancia', 'Abbandona chiamata',
+    'Encerrar chamada', 'Desligar', 'Ophangen',
+    'Завершить', 'Покинуть звонок', 'Sonlandır', 'Aramayı sonlandır',
+    'إنهاء المكالمة',
+]
+
+_DECLINE_LABELS = [
+    'Decline', 'Reject', 'Decline call',
+    'Odrzuć', 'Rechazar', 'Refuser', 'Ablehnen', 'Rifiuta', 'Recusar',
+    'Weigeren', 'Отклонить', 'Reddet',
+]
+
+_ANSWER_LABELS = [
+    'Accept call', 'Answer call', 'Join call',
+    'Odbierz połączenie', 'Odbierz rozmowę', 'Dołącz do połączenia',
+    'Responder llamada', 'Contestar llamada', 'Aceptar llamada',
+    "Répondre à l'appel", 'Anruf annehmen', 'Rispondi alla chiamata',
+    'Atender chamada', 'Oproep beantwoorden',
+    'Принять звонок', 'Ответить на звонок', 'Aramayı cevapla',
+]
+
+# Icon / test-id names, which the services keep in English whatever the UI
+# language is - the most reliable handle of the three.
+_CALL_ICON_SELECTORS = [
     '[data-testid*="end-call" i]',
     '[data-testid*="decline" i]',
     '[data-testid*="accept-call" i]',
+    '[data-icon*="hangup" i]',
+    '[data-icon*="end-call" i]',
+    '[data-icon*="call-decline" i]',
+    '[data-icon*="call-accept" i]',
 ]
+
+
+def _label_selectors(labels):
+    return ['[aria-label*="%s" i]' % label for label in labels]
+
+
+_IN_CALL_SELECTORS = (
+    _label_selectors(_HANG_UP_LABELS + _DECLINE_LABELS + _ANSWER_LABELS)
+    + _CALL_ICON_SELECTORS
+)
 
 # Present while an incoming call is ringing (accept/decline pair).
-_INCOMING_SELECTORS = [
-    '[aria-label*="Decline" i]',
-    '[aria-label*="Reject" i]',
-    '[aria-label*="Accept call" i]',
-    '[aria-label*="Answer call" i]',
-    '[data-testid*="decline" i]',
-    '[data-testid*="accept-call" i]',
-]
+_INCOMING_SELECTORS = (
+    _label_selectors(_DECLINE_LABELS + _ANSWER_LABELS)
+    + ['[data-testid*="decline" i]', '[data-testid*="accept-call" i]',
+       '[data-icon*="call-decline" i]', '[data-icon*="call-accept" i]']
+)
 
 # Present once we are the caller and the call is up / ringing out.
-_OUTGOING_SELECTORS = [
-    '[aria-label*="End call" i]',
-    '[aria-label*="Hang up" i]',
-    '[data-testid*="end-call" i]',
-]
+_OUTGOING_SELECTORS = (
+    _label_selectors(_HANG_UP_LABELS)
+    + ['[data-testid*="end-call" i]', '[data-icon*="hangup" i]',
+       '[data-icon*="end-call" i]']
+)
 
 # Deliberately NOT treated as a call: these are the buttons that *start* one.
 _IGNORED_SELECTORS = [

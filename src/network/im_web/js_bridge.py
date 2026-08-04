@@ -285,6 +285,154 @@ BRIDGE_CORE = r"""
     } catch (e) { fail('pressEnter', e); return false; }
   }
 
+  // ---------------------------------------------------------- call vocabulary
+  // Lower-case fragments, matched with indexOf, so one entry covers every
+  // wording built on it ("Rozmowa wideo z Anna" contains "rozmowa wideo").
+  // Kept in one place because a call that cannot be started and a call that
+  // cannot be hung up are the same bug in two directions.
+  var WORDS = {
+    voice: [
+      'voice call', 'audio call', 'start a call', 'start call', 'start voice',
+      'audio-call', 'voice-call', 'audio_call', 'voice_call', 'ptt-call',
+      // Polish inflects the noun after "Rozpocznij ...", so the nominative
+      // alone misses the very label the button carries.
+      'połączenie głosowe', 'połączenia głosowego', 'połączeniem głosowym',
+      'polaczenie glosowe', 'rozmowa głosowa', 'rozmowę głosową',
+      'rozmowy głosowej', 'rozmowa glosowa', 'głosowe połączenie',
+      'zadzwoń', 'zadzwon',
+      'llamada de voz', 'llamada de audio', 'appel vocal', 'appel audio',
+      'sprachanruf', 'audioanruf', 'chiamata vocale', 'chiamata audio',
+      'chamada de voz', 'chamada de áudio', 'spraakoproep', 'audiogesprek',
+      'голосовой вызов', 'голосовой звонок', 'аудиозвонок',
+      'sesli arama', 'مكالمة صوتية'
+    ],
+    video: [
+      'video call', 'videocall', 'video chat', 'start a video',
+      'video-call', 'video_call',
+      'rozmowa wideo', 'rozmowę wideo', 'rozmowy wideo', 'czat wideo',
+      'połączenie wideo', 'połączenia wideo', 'polaczenie wideo',
+      'wideorozmow', 'wideopołączeni',
+      'videollamada', 'llamada de vídeo', 'llamada de video',
+      'appel vidéo', 'appel video', 'videoanruf', 'videochiamata',
+      'chamada de vídeo', 'videogesprek', 'видеозвонок', 'видеовызов',
+      'görüntülü arama', 'مكالمة فيديو'
+    ],
+    accept: [
+      'accept call', 'answer call', 'join call', 'accept',
+      'odbierz', 'dołącz do połączenia', 'dolacz do polaczenia',
+      'responder llamada', 'contestar', 'aceptar llamada',
+      'répondre', 'repondre', 'annehmen', 'anruf annehmen',
+      'rispondi', 'atender', 'aceitar chamada', 'opnemen',
+      'принять', 'ответить на звонок', 'cevapla', 'aramayı cevapla'
+    ],
+    // Hanging up only. Kept apart from declining on purpose: a hang-up control
+    // can exist only during a call, so it is safe to read as "a call is
+    // running", while "Reject"/"Odrzuć" also appears on a cookie banner.
+    hangup: [
+      'end call', 'end-call', 'endcall', 'leave call', 'hang up', 'hangup',
+      'zakończ połączenie', 'zakończ rozmowę', 'rozłącz', 'rozlacz',
+      'opuść połączenie', 'opusc polaczenie',
+      'finalizar llamada', 'colgar', 'salir de la llamada',
+      'raccrocher', "terminer l'appel", 'quitter l\'appel',
+      'anruf beenden', 'auflegen', 'anruf verlassen',
+      'riaggancia', 'termina chiamata', 'abbandona chiamata',
+      'encerrar chamada', 'desligar', 'ophangen',
+      'завершить', 'покинуть звонок',
+      'sonlandır', 'sonlandir', 'aramayı sonlandır',
+      'إنهاء المكالمة'
+    ],
+    // Refusing a call that is ringing.
+    decline: [
+      'decline', 'reject call', 'dismiss call',
+      'odrzuć', 'odrzuc', 'rechazar', 'refuser', 'ablehnen', 'rifiuta',
+      'recusar', 'weigeren', 'отклонить', 'reddet'
+    ],
+    // Labels that contain a call word but are never the button we want.
+    notACall: [
+      'end call', 'leave call', 'hang up', 'hangup', 'decline', 'reject',
+      'mute', 'unmute', 'missed', 'call info', 'call history', 'call details',
+      'zakończ', 'zakoncz', 'rozłącz', 'rozlacz', 'odrzuć', 'odrzuc',
+      'wycisz', 'nieodebrane', 'historia połączeń', 'historia polaczen',
+      'finalizar', 'colgar', 'rechazar', 'perdida', 'silenciar',
+      'raccrocher', 'refuser', 'manqué', 'couper le micro',
+      'beenden', 'auflegen', 'ablehnen', 'verpasst', 'stummschalten',
+      'termina', 'rifiuta', 'persa', 'disattiva',
+      'завершить', 'отклонить', 'пропущен', 'выключить микрофон',
+      'sonlandır', 'sonlandir', 'reddet', 'cevapsız'
+    ]
+  };
+  // Everything that ends a call, however it ends.
+  WORDS.end = WORDS.hangup.concat(WORDS.decline);
+
+  // ------------------------------------------------- finding a named control
+  // Class names on both services are generated and change without warning, so
+  // the only durable handle on a button is what it is *called*. Both agents
+  // used to spell that out as a short list of English (plus two Polish) CSS
+  // selectors, which is why "start a call" found nothing whenever the service
+  // was rendered in any other language - and a control that is not found is
+  // reported to the user as a bare timeout.
+  var LABEL_ATTRS = ['aria-label', 'title', 'data-icon', 'data-testid',
+                     'data-tooltip-content', 'name'];
+
+  // Everything a user could press, in document order.
+  function pressables(root) {
+    return qaAll(['button', '[role="button"]', 'a[role="button"]',
+                  '[role="menuitem"]', 'div[tabindex="0"][aria-label]',
+                  '[data-icon]', '[data-testid]'], root || document);
+  }
+
+  // The element that actually takes the click: an icon inside a button is not
+  // the button.
+  function pressable(el) {
+    if (!el) { return null; }
+    try {
+      return el.closest('button, [role="button"], [role="menuitem"], a') || el;
+    } catch (e) { return el; }
+  }
+
+  function labelOf(el) {
+    if (!el || !el.getAttribute) { return ''; }
+    var parts = [];
+    for (var i = 0; i < LABEL_ATTRS.length; i++) {
+      var value = el.getAttribute(LABEL_ATTRS[i]);
+      if (value) { parts.push(String(value)); }
+    }
+    // Visible text counts too, but only when it is short: a container that
+    // happens to carry data-testid would otherwise "contain" every word on the
+    // page and match everything.
+    var own = text(el);
+    if (own && own.length <= 40) { parts.push(own); }
+    return parts.join(' ').toLowerCase();
+  }
+
+  function hasWord(haystack, words) {
+    for (var i = 0; i < (words || []).length; i++) {
+      if (words[i] && haystack.indexOf(words[i]) !== -1) { return true; }
+    }
+    return false;
+  }
+
+  // First visible control whose label contains one of ``words`` and none of
+  // ``avoid``. ``roots`` are searched in order, so a caller can say "the
+  // conversation header first, then anywhere" and never press the identically
+  // named button of some other conversation.
+  function findLabelled(words, avoid, roots) {
+    var scopes = (roots && roots.length) ? roots : [document];
+    for (var s = 0; s < scopes.length; s++) {
+      if (!scopes[s]) { continue; }
+      var candidates = pressables(scopes[s]);
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (!visible(el)) { continue; }
+        var label = labelOf(el);
+        if (!label || !hasWord(label, words)) { continue; }
+        if (hasWord(label, avoid)) { continue; }
+        return el;
+      }
+    }
+    return null;
+  }
+
   // Poll a predicate until it is truthy. Returned as a Promise so agents can
   // ``await`` page transitions instead of guessing with fixed delays.
   function waitFor(test, timeout, interval) {
@@ -432,7 +580,10 @@ BRIDGE_CORE = r"""
     dom: {
       q: q, qa: qa, qaAll: qaAll, text: text, visible: visible, click: click,
       typeInto: typeInto, pressEnter: pressEnter, waitFor: waitFor,
-      toBase64: toBase64, toFile: toFile
+      toBase64: toBase64, toFile: toFile,
+      pressables: pressables, pressable: pressable, labelOf: labelOf,
+      hasWord: hasWord, findLabelled: findLabelled,
+      words: WORDS
     }
   };
   window.__titanExec = exec;

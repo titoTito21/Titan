@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TCE Launcher\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 16:54+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2026-04-30 14:51+0200\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -503,17 +503,17 @@ msgstr "{user} opuścił(a) sesję"
 #: src/network/interactive_game_session.py:867
 #, python-brace-format
 msgid "Spotlight on you (slot {n})"
-msgstr ""
+msgstr "Wyróżniony: Ty (slot {n})"
 
 #: src/network/interactive_game_session.py:869
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "Spotlight on {user} (slot {n})"
-msgstr "Tura: {user} (slot {n})"
+msgstr "Wyróżniony: {user} (slot {n})"
 
 #: src/network/interactive_game_session.py:980
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "stop {layer}"
-msgstr "Gracze"
+msgstr "zatrzymaj {layer}"
 
 #: src/network/interactive_game_session.py:1001
 #, python-brace-format
@@ -523,12 +523,12 @@ msgstr ""
 #: src/network/interactive_game_session.py:1026
 #, python-brace-format
 msgid "[{layer}] {label} (cached)"
-msgstr ""
+msgstr "[{layer}] {label} (z pamięci)"
 
 #: src/network/interactive_game_session.py:1054
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "[{layer}] {label}"
-msgstr "[{actor}] {text}"
+msgstr "[{layer}] {label}"
 
 #: src/network/interactive_game_session.py:1068
 #, python-brace-format
@@ -618,7 +618,6 @@ msgid "End the session for everyone?"
 msgstr "Zakończyć sesję dla wszystkich?"
 
 #: src/network/interactive_game_session.py:1459
-#, fuzzy
 msgid "End Session"
 msgstr "Zakończ sesję"
 

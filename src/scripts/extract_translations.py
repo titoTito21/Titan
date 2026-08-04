@@ -6,6 +6,7 @@ Each domain has its own .pot file with translations from specific source files.
 
 import subprocess
 import os
+import sys
 
 # Mapping of translation domains to their source files
 DOMAIN_FILES = {
@@ -30,7 +31,9 @@ DOMAIN_FILES = {
         'src/network/im_web/base.py',
     ],
     'titannet': [
-        'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/titan_net_mod_components.py', 'src/network/feedback_hub.py', 'src/network/remote_ui.py', 'src/network/server_sounds.py', 'src/network/server_sounds_gui.py', 'src/system/klangomode.py'
+        'src/network/titan_net.py', 'src/network/titan_net_gui.py', 'src/network/titan_net_forum_gui.py', 'src/network/titan_net_mod_components.py', 'src/network/feedback_hub.py', 'src/network/remote_ui.py', 'src/network/server_sounds.py', 'src/network/server_sounds_gui.py', 'src/system/klangomode.py',
+        # Mail: the mailbox/reader/composer and the rich-body renderer
+        'src/network/mail_gui.py', 'src/network/mail_format.py'
     ],
     'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py', 'src/system/mic_permission.py'],
     'controller': ['src/controller/controller_ui.py', 'src/controller/controller_modes.py', 'src/controller/controller_vibrations.py'],
@@ -124,6 +127,29 @@ def compile_translations(languages=['pl', 'en']):
             print(f"  [ERROR] Error compiling {domain}: {e}")
 
 
+def check_translations():
+    """Report entries that now say the wrong thing.
+
+    ``pybabel update`` never leaves a new string empty - it fills it with the
+    nearest old translation and marks it fuzzy. Left unread, that guess ships:
+    "Notifications" once displayed as "Kod weryfikacyjny". This step is here so
+    the guesses are visible the moment they are made, not months later.
+    """
+    print("\nChecking the catalogs...")
+    try:
+        from src.scripts.check_translations import run as check_run
+    except ImportError:
+        # Also runnable as a loose script, without the package on sys.path.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        try:
+            from check_translations import run as check_run
+        except ImportError as exc:
+            print(f"  [ERROR] Could not load the checker: {exc}")
+            return True
+
+    return check_run(quiet=True) == 0
+
+
 def main():
     """Main extraction process."""
     print("=" * 60)
@@ -134,18 +160,22 @@ def main():
     os.makedirs('languages', exist_ok=True)
 
     # Extract all domains
-    print("\n[1/3] Extracting translatable strings...")
+    print("\n[1/4] Extracting translatable strings...")
     for domain, files in DOMAIN_FILES.items():
         extract_domain(domain, files)
 
     # Update .po files
-    print("\n[2/3] Updating .po files...")
+    print("\n[2/4] Updating .po files...")
     for domain in DOMAIN_FILES.keys():
         update_po_files(domain)
 
     # Compile translations
-    print("\n[3/3] Compiling translations...")
+    print("\n[3/4] Compiling translations...")
     compile_translations()
+
+    # Check what the update just guessed
+    print("\n[4/4] Checking for wrong translations...")
+    clean = check_translations()
 
     print("\n" + "=" * 60)
     print("Translation extraction complete!")
@@ -154,6 +184,11 @@ def main():
     print("1. Edit .po files in languages/*/LC_MESSAGES/")
     print("2. Run 'python extract_translations.py' to recompile")
     print("   or 'pybabel compile -d languages' to just compile")
+    if not clean:
+        print("\n3. Fix the entries listed above - they are text a user will")
+        print("   read that says something other than what the code meant.")
+        print("   Details: python src/scripts/check_translations.py")
+    return 0 if clean else 1
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

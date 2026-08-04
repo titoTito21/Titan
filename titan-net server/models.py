@@ -1574,6 +1574,8 @@ class Database:
                     read INTEGER DEFAULT 0,
                     message_id TEXT,
                     in_reply_to TEXT,
+                    body_html TEXT,
+                    content_type TEXT DEFAULT 'text/plain',
                     FOREIGN KEY (owner_user_id) REFERENCES users(id)
                 )
             """)
@@ -1592,6 +1594,20 @@ class Database:
                     cursor.execute(f"ALTER TABLE mail_messages ADD COLUMN {column} TEXT")
                     print(f"Migration: Added '{column}' column to mail_messages table")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_mail_msgid ON mail_messages(owner_user_id, message_id)")
+
+            # Migration: rich bodies. `body` stays the readable plain-text
+            # version every existing client already reads; `body_html` is the
+            # formatted alternative (kept from an inbound multipart message, or
+            # produced by the composer) and `content_type` records what the
+            # author actually wrote, so the Mail client can render a message the
+            # way it was meant instead of guessing from the text.
+            for column, definition in (('body_html', 'TEXT'),
+                                       ("content_type", "TEXT DEFAULT 'text/plain'")):
+                try:
+                    cursor.execute(f"SELECT {column} FROM mail_messages LIMIT 1")
+                except sqlite3.OperationalError:
+                    cursor.execute(f"ALTER TABLE mail_messages ADD COLUMN {column} {definition}")
+                    print(f"Migration: Added '{column}' column to mail_messages table")
 
             # Backfill: messages delivered before addresses were normalized hold
             # the raw header ("Some One <someone@gmail.com>") in from_addr, which
@@ -2424,7 +2440,9 @@ class Database:
     def store_incoming_mail(self, owner_user_id: int, from_addr: str, to_addr: str,
                             subject: str, body: str, received_at: Optional[str] = None,
                             message_id: Optional[str] = None,
-                            in_reply_to: Optional[str] = None) -> Dict[str, Any]:
+                            in_reply_to: Optional[str] = None,
+                            body_html: Optional[str] = None,
+                            content_type: Optional[str] = None) -> Dict[str, Any]:
         """Persist a delivered message into a user's inbox.
 
         Re-delivery of a message we already hold (same owner + Message-ID) is a
@@ -2448,9 +2466,10 @@ class Database:
                 conn.close()
                 return {"success": True, "mail_id": mail_id, "duplicate": True}
         cursor.execute(
-            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to) "
-            "VALUES (?, 'in', 'inbox', ?, ?, ?, ?, ?, 0, ?, ?)",
-            (owner_user_id, from_addr, to_addr, subject, body, received_at, message_id, in_reply_to),
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to, body_html, content_type) "
+            "VALUES (?, 'in', 'inbox', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)",
+            (owner_user_id, from_addr, to_addr, subject, body, received_at, message_id,
+             in_reply_to, (body_html or '') or None, content_type or 'text/plain'),
         )
         mail_id = cursor.lastrowid
         conn.commit()
@@ -2462,7 +2481,9 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, direction, folder, from_addr, to_addr, subject, received_at, read "
+            # content_type travels with the list so the client can say what kind
+            # of message a row is without fetching every body.
+            "SELECT id, direction, folder, from_addr, to_addr, subject, received_at, read, content_type "
             "FROM mail_messages WHERE owner_user_id = ? AND folder = ? "
             "ORDER BY id DESC LIMIT ?",
             (user_id, folder, limit),
@@ -2547,7 +2568,9 @@ class Database:
         return None
 
     def send_user_mail(self, user_id: int, to_addr: str, subject: str, body: str,
-                       message_id: Optional[str] = None) -> Dict[str, Any]:
+                       message_id: Optional[str] = None,
+                       body_html: Optional[str] = None,
+                       content_type: Optional[str] = None) -> Dict[str, Any]:
         """Persist an outgoing message to the sender's 'sent' folder. If the
         recipient is a local Titan-Net user, also deposit it in their inbox.
         Returns ``external_recipient`` so the caller (HTTP layer) knows whether
@@ -2567,10 +2590,13 @@ class Database:
         in_reply_to = self.find_thread_parent(user_id, to_addr, subject)
         conn = self.get_connection()
         cursor = conn.cursor()
+        body_html = (body_html or '') or None
+        content_type = content_type or 'text/plain'
         cursor.execute(
-            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to) "
-            "VALUES (?, 'out', 'sent', ?, ?, ?, ?, ?, 1, ?, ?)",
-            (user_id, from_addr, to_addr, subject, body, now, message_id, in_reply_to),
+            "INSERT INTO mail_messages (owner_user_id, direction, folder, from_addr, to_addr, subject, body, received_at, read, message_id, in_reply_to, body_html, content_type) "
+            "VALUES (?, 'out', 'sent', ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)",
+            (user_id, from_addr, to_addr, subject, body, now, message_id, in_reply_to,
+             body_html, content_type),
         )
         conn.commit()
         conn.close()
@@ -2578,7 +2604,8 @@ class Database:
         local = self.resolve_local_user_by_address(to_addr)
         if local:
             self.store_incoming_mail(local['id'], from_addr, to_addr, subject, body, now,
-                                     message_id=message_id, in_reply_to=in_reply_to)
+                                     message_id=message_id, in_reply_to=in_reply_to,
+                                     body_html=body_html, content_type=content_type)
         return {"success": True, "from_addr": from_addr, "to_addr": to_addr,
                 "in_reply_to": in_reply_to,
                 "external_recipient": None if local else to_addr}

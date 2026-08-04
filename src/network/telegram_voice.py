@@ -1,31 +1,45 @@
 # -*- coding: utf-8 -*-
 """
-Telegram Voice Call System
+Telegram voice calls
+====================
 
-Uses group voice chat (py-tgcalls) for reliable two-way audio.
+A call to a person is a **real Telegram call** (``phone.RequestCall`` and the
+Diffie-Hellman exchange behind it), placed by py-tgcalls: ``play(user_id, ...)``
+with a positive id is a peer-to-peer call, exactly what the phone app makes.
+The peer's Telegram rings, wherever they are and whatever client they use.
 
-Call flow (TCE-to-TCE):
-1. Create temporary megagroup
-2. Invite the other user
-3. Start group voice call with microphone via py-tgcalls
-4. Send a marker message so the other TCE client shows incoming call dialog
-5. Recipient joins the same group voice chat
-6. Two-way audio through group voice chat
-7. On call end: leave voice chat, delete temporary group
+Why this replaced the previous approach
+---------------------------------------
+Calling someone used to mean: create a throwaway megagroup, invite them to it,
+start a group voice chat inside it, poll the participant count until somebody
+else appeared, and delete the group afterwards. Every part of that was a way to
+fail. The peer got "X added you to a group", not a ringing call; anyone not
+using Titan had no reason to join; Telegram rate-limits channel creation, so a
+few calls in a row ended in "Could not create voice chat group"; and the group
+survived any crash between creation and deletion. py-tgcalls has supported
+native peer-to-peer calls for a long time, so none of it was necessary.
 
-For incoming native Telegram calls:
-- Accept signaling via Telethon (AcceptCallRequest)
-- Audio limited (no Python WebRTC audio transport)
+Group voice chats are still supported - joining one is what ``join_call`` is
+for - but they are now only used when the target really is a group.
+
+Microphone
+----------
+A call the other side cannot hear is worse than a call that fails. The stream is
+built with ``Flags.REQUIRED``, so a microphone that cannot be opened raises here
+instead of quietly becoming a connected, silent call. The two old fallbacks
+(``media_path="default"``, then a generated silent WAV) did exactly that, and
+the WAV was deleted five seconds into the call it was feeding.
+
+Signalling
+----------
+py-tgcalls owns the whole protocol: it requests, accepts, confirms and discards
+calls and relays the signalling data. Nothing here (and nothing in
+``telegram_client``) may answer ``UpdatePhoneCall`` itself - two clients
+completing the same key exchange is a call that never connects.
 """
 
 import asyncio
 import threading
-import time
-import tempfile
-import wave
-import os
-import secrets
-import hashlib
 from datetime import datetime
 
 import wx
@@ -36,7 +50,8 @@ from src.settings.settings import get_setting
 
 _ = set_language(get_setting('language', 'pl'))
 
-# Voice call message markers for TCE-to-TCE signaling
+# Voice call message markers, kept only so old marker messages sent by a
+# previous version are still recognised and not shown as junk text.
 CALL_REQUEST_PREFIX = "[TCE:CALL:"
 CALL_END_PREFIX = "[TCE:CALLEND:"
 CALL_MARKER_SUFFIX = "]"
@@ -44,21 +59,17 @@ CALL_MARKER_SUFFIX = "]"
 # py-tgcalls availability
 try:
     from pytgcalls import PyTgCalls
-    from pytgcalls.types import MediaStream
+    from pytgcalls.types import CallConfig, GroupCallConfig, MediaStream
 
-    # Try multiple import paths for MediaDevices
-    MediaDevices = None
     try:
-        from pytgcalls import MediaDevices as _MD
-        MediaDevices = _MD
-    except ImportError:
-        pass
-    if not MediaDevices:
-        try:
-            from pytgcalls.media_devices import MediaDevices as _MD2
-            MediaDevices = _MD2
-        except ImportError:
-            pass
+        from pytgcalls import MediaDevices
+    except ImportError:                                  # older layouts
+        from pytgcalls.media_devices import MediaDevices
+
+    from pytgcalls.exceptions import (
+        CallBusy, CallDeclined, CallDiscarded, NoActiveGroupCall,
+        NotInCallError, TimedOutAnswer,
+    )
 
     PYTGCALLS_AVAILABLE = True
     print("py-tgcalls loaded for voice calls")
@@ -66,36 +77,33 @@ try:
 except ImportError as e:
     PYTGCALLS_AVAILABLE = False
     PyTgCalls = None
-    MediaStream = None
-    MediaDevices = None
+    CallConfig = GroupCallConfig = MediaStream = MediaDevices = None
+
+    class _Missing(Exception):
+        pass
+
+    CallBusy = CallDeclined = CallDiscarded = _Missing
+    NoActiveGroupCall = NotInCallError = TimedOutAnswer = _Missing
     print(f"py-tgcalls not available: {e}")
 
-# DH parameters (Telegram official, for native call signaling)
-TELEGRAM_DH_PRIME = int(
-    '0xC150023E2F70DB7985DED064759CFECF0AF328E69A41DAF4D6F01B538135A6F91F8F8B2A0EC9BA9720CE352EFCF6C5680FFC'
-    '424BD634864902DE0B4BD6D49F4E580230E3AE97D95C8B19442B3C0A10D8F5633FECEDD6926A7F6DAB0DDB7D457F9EA81B8465FCD6'
-    'FFFEED114011DF91C059CAEDAF97625F6C96ECC74725556934EF781D866B34F011FCE4D835A090196E9A5F0E4449AF7EB697DDB9076'
-    '494CA5F81104A305B6DD27665722C46B60E5DF680FB16B210607EF2E5E0B1C42E1C72030C6F4C7F3B0C0E6DA4B2B0AC03E70020C2D'
-    '7F2ACFB7E6', 16
-)
-TELEGRAM_DH_GENERATOR = 2
+
+class VoiceCallError(Exception):
+    """Something the user needs to be told, already phrased for them."""
 
 
 class TelegramVoiceClient:
-    """Voice call client using group voice chat for two-way audio."""
+    """Native Telegram calls, plus joining a group voice chat."""
 
     # Call states
     IDLE = 'idle'
     SETTING_UP = 'setting_up'
     CONNECTING = 'connecting'
-    RINGING = 'ringing'      # our side is up, waiting for the peer to join
+    RINGING = 'ringing'      # the peer's Telegram is ringing
     CONNECTED = 'connected'
     ENDING = 'ending'
 
-    # How long we wait for the other side to join before giving up.
+    # How long Telegram waits for the peer to pick up.
     ANSWER_TIMEOUT_SECONDS = 60
-    # How often we ask Telegram whether anyone else joined the voice chat.
-    ANSWER_POLL_SECONDS = 2
 
     def __init__(self, telethon_client):
         self.telethon_client = telethon_client
@@ -104,33 +112,41 @@ class TelegramVoiceClient:
         # PyTgCalls
         self.pytgcalls = None
         self._pytgcalls_started = False
+        self._handlers_bound = False
 
-        # Call state
+        # Call state. ``current_chat_id`` is what py-tgcalls is keyed on: a
+        # positive user id for a call, a negative chat id for a voice chat.
         self.current_peer = None
         self.current_peer_name = None
-        self.current_group_id = None
-        self.current_group_entity = None
+        self.current_chat_id = None
+        self.call_transport = None          # 'private' | 'group'
         self.call_start_time = None
         self.is_muted = False
-        # False when we had to fall back to transmitting silence, i.e. the peer
-        # will not hear us. Tracked so the user is told instead of discovering it
-        # by talking to nobody.
         self.mic_active = False
 
-        # Native call state (incoming calls)
-        self.current_call_object = None
-        self.dh_params = None
+        # The call that is ringing at us right now, as py-tgcalls sees it.
+        self.incoming_call = None
 
         # Callbacks
         self.callbacks = []
 
-        # Initialize PyTgCalls
         if PYTGCALLS_AVAILABLE and telethon_client and PyTgCalls:
             try:
+                # Must be constructed where the Telethon loop is running: the
+                # binding captures that loop and delivers every callback on it.
                 self.pytgcalls = PyTgCalls(telethon_client)
                 print("PyTgCalls initialized")
             except Exception as e:
                 print(f"PyTgCalls init failed: {e}")
+
+    # === BACKWARDS COMPATIBILITY ===============================================
+    # The group id of a call used to be public state; keep the name readable for
+    # anything still looking at it.
+    @property
+    def current_group_id(self):
+        if self.call_transport == 'group':
+            return self.current_chat_id
+        return None
 
     # === CALLBACK MANAGEMENT ===
 
@@ -159,130 +175,122 @@ class TelegramVoiceClient:
     # === HELPERS ===
 
     def _get_event_loop(self):
-        """Get the Telegram client's event loop."""
+        """The Telegram client's event loop, only while it is actually running.
+
+        Handing back a loop that is not running invites
+        ``run_until_complete`` from a worker thread on a loop another thread
+        owns, which either deadlocks or corrupts the client's state.
+        """
+        loop = None
         try:
             from src.network import telegram_client as tc_mod
-            if hasattr(tc_mod.telegram_client, 'event_loop') and tc_mod.telegram_client.event_loop:
-                return tc_mod.telegram_client.event_loop
+            loop = getattr(tc_mod.telegram_client, 'event_loop', None)
         except Exception:
-            pass
+            loop = None
 
-        if self.telethon_client and hasattr(self.telethon_client, '_loop'):
-            return self.telethon_client._loop
+        if loop is None and self.telethon_client is not None:
+            loop = getattr(self.telethon_client, '_loop', None)
+
+        if loop is not None and loop.is_running():
+            return loop
         return None
 
     async def _resolve_entity(self, recipient_id):
-        """Resolve username/name to Telethon entity."""
+        """Resolve username/name to a Telethon entity."""
         try:
             from src.network import telegram_client as tc_mod
 
-            # Check cached users
-            if hasattr(tc_mod.telegram_client, 'chat_users') and recipient_id in tc_mod.telegram_client.chat_users:
-                return tc_mod.telegram_client.chat_users[recipient_id]['entity']
+            cached = getattr(tc_mod.telegram_client, 'chat_users', None)
+            if cached and recipient_id in cached:
+                return cached[recipient_id]['entity']
 
-            # Check dialogs
-            if hasattr(tc_mod.telegram_client, 'dialogs'):
-                for dialog in tc_mod.telegram_client.dialogs:
-                    if dialog['name'] == recipient_id or dialog.get('title') == recipient_id:
-                        return dialog['entity']
+            for dialog in getattr(tc_mod.telegram_client, 'dialogs', None) or []:
+                if dialog.get('name') == recipient_id or \
+                        dialog.get('title') == recipient_id:
+                    return dialog['entity']
+        except Exception:
+            pass
 
-            # Last resort: direct resolve
+        try:
             return await self.telethon_client.get_entity(recipient_id)
         except Exception as e:
             print(f"Could not resolve '{recipient_id}': {e}")
             return None
 
     async def _ensure_pytgcalls_started(self):
-        """Start PyTgCalls client if not already running."""
+        """Start the PyTgCalls client (and bind its handlers) once."""
         if not self.pytgcalls:
             return False
 
-        if self._pytgcalls_started:
-            return True
-
-        try:
-            await self.pytgcalls.start()
-            self._pytgcalls_started = True
-            print("PyTgCalls client started")
-            return True
-        except Exception as e:
-            if "already" in str(e).lower():
+        if not self._pytgcalls_started:
+            try:
+                await self.pytgcalls.start()
                 self._pytgcalls_started = True
-                return True
-            print(f"PyTgCalls start failed: {e}")
-            return False
+                print("PyTgCalls client started")
+            except Exception as e:
+                if "already" in str(e).lower():
+                    self._pytgcalls_started = True
+                else:
+                    print(f"PyTgCalls start failed: {e}")
+                    return False
 
-    # === OUTGOING CALL ===
+        self._bind_handlers()
+        return True
 
-    async def start_call(self, recipient_id):
-        """Start voice call with recipient using group voice chat."""
-        if self.state != self.IDLE:
-            self._notify('call_failed', {'error': _('Call already in progress')})
-            return False
+    def _bind_handlers(self):
+        """Listen for what the call itself does.
 
-        if not PYTGCALLS_AVAILABLE or not self.pytgcalls:
-            self._notify('call_failed', {
-                'error': _('Voice calls require py-tgcalls. Install with: pip install py-tgcalls')
-            })
-            return False
-
-        # A call nobody can be heard on is worse than a refused call: check the
-        # Windows microphone Privacy switches first and say exactly what to fix.
-        mic_ok, mic_reason = self._check_microphone()
-        if not mic_ok:
-            self._notify('call_failed', {'error': self._microphone_error(mic_reason)})
-            return False
-
-        self.current_peer = recipient_id
-        self.current_peer_name = recipient_id
-        self.mic_active = False
-        self._set_state(self.SETTING_UP, {'recipient': recipient_id})
-        play_sound('titannet/ring_out.ogg')
-
+        The previous version had to poll Telegram for the participant count to
+        notice an answer, and had no way at all to notice the other side hanging
+        up on a native call. py-tgcalls reports both.
+        """
+        if self._handlers_bound or not self.pytgcalls:
+            return
         try:
-            # Step 1: Start PyTgCalls
-            if not await self._ensure_pytgcalls_started():
-                raise Exception(_("Could not start voice system"))
-
-            # Step 2: Create temporary group
-            group_id = await self._create_voice_group(recipient_id)
-            if not group_id:
-                raise Exception(_("Could not create voice chat group"))
-
-            # Step 3: Start voice chat with microphone
-            self._set_state(self.CONNECTING, {'recipient': recipient_id})
-            voice_ok = await self._start_voice_in_group(group_id)
-
-            if not voice_ok:
-                raise Exception(_("Could not start voice chat"))
-
-            # Step 4: (no marker message is posted - see _send_call_notification)
-            await self._send_call_notification(recipient_id, group_id)
-
-            self._warn_if_microphone_silent()
-
-            # Our side of the voice chat is up, but the recipient has NOT
-            # answered yet. Reporting "connected" here (and playing the success
-            # earcon) was why an unanswered call sounded like a live one. Stay in
-            # RINGING until Telegram tells us somebody else joined.
-            self._set_state(self.RINGING, {'recipient': recipient_id,
-                                           'group_id': group_id})
-            self._notify('call_ringing', {
-                'recipient': recipient_id,
-                'type': 'outgoing',
-                'group_id': group_id,
-            })
-            asyncio.ensure_future(self._await_answer(group_id, recipient_id))
-            return True
-
+            self.pytgcalls.add_handler(self._on_call_update)
+            self._handlers_bound = True
         except Exception as e:
-            print(f"Start call failed: {e}")
-            import traceback
-            traceback.print_exc()
-            await self._safe_cleanup()
-            self._set_state(self.IDLE)
-            self._notify('call_failed', {'error': str(e)})
-            return False
+            print(f"[Telegram voice] could not bind call handlers: {e}")
+
+    async def _on_call_update(self, _client, update):
+        try:
+            from pytgcalls.types import ChatUpdate
+        except Exception:
+            return
+
+        if not isinstance(update, ChatUpdate):
+            return
+
+        status = update.status
+
+        if status & ChatUpdate.Status.INCOMING_CALL:
+            await self._handle_incoming(update.chat_id)
+            return
+
+        if status & ChatUpdate.Status.LEFT_CALL:
+            # Covers the peer hanging up, declining, being busy, and the voice
+            # chat being closed under us.
+            if update.chat_id == self.current_chat_id and self.state != self.IDLE:
+                busy = bool(status & ChatUpdate.Status.BUSY_CALL)
+                await self._finish_call(
+                    _("The other person is busy") if busy else None)
+            elif self.incoming_call and \
+                    self.incoming_call.get('user_id') == update.chat_id:
+                self.incoming_call = None
+                self._notify('incoming_call_cancelled', {})
+
+    async def _handle_incoming(self, user_id):
+        """Somebody is calling us."""
+        name = str(user_id)
+        try:
+            entity = await self.telethon_client.get_entity(user_id)
+            name = (getattr(entity, 'first_name', None) or
+                    getattr(entity, 'username', None) or name)
+        except Exception:
+            pass
+
+        self.incoming_call = {'user_id': user_id, 'name': name}
+        self._notify('incoming_call', {'caller_id': user_id, 'caller_name': name})
 
     # === MICROPHONE ===
 
@@ -303,463 +311,416 @@ class TelegramVoiceClient:
         except Exception:
             return _("The microphone is not available.")
 
-    def _warn_if_microphone_silent(self):
-        """Tell the user when we ended up transmitting silence.
+    def _microphone_stream(self):
+        """The live microphone as a py-tgcalls stream.
 
-        ``_start_voice_in_group`` has a last-resort path that streams a silent
-        WAV so the voice chat can still be established. That path used to be a
-        bare ``print``, so the call looked perfectly normal while the other side
-        heard nothing at all.
+        ``Flags.REQUIRED`` is the whole point: without it a microphone that
+        cannot be opened is dropped from the stream and the call connects with
+        nothing on it, which is how a call used to look perfectly normal while
+        the other side heard silence.
         """
-        if self.mic_active:
-            return
-        message = _("Your microphone could not be opened, so the other person "
-                    "will not hear you. Check that no other program is using it.")
-        print(f"[Telegram voice] {message}")
+        if not MediaDevices or not MediaStream:
+            raise VoiceCallError(
+                _("Voice calls require py-tgcalls. Install it with: "
+                  "pip install py-tgcalls"))
+
         try:
-            play_sound('core/error.ogg')
-        except Exception:
-            pass
-        self._notify('microphone_unavailable', {'message': message})
-
-    # === ANSWER DETECTION ===
-
-    async def _count_call_participants(self, group_id):
-        """How many people are in the group voice chat, or None if unknown.
-
-        None means Telegram did not tell us (old Telethon, no active group call
-        yet, or an API error) - callers must not read that as "nobody joined".
-        """
-        try:
-            from telethon.tl.functions.channels import GetFullChannelRequest
-            from telethon.tl.functions.phone import GetGroupCallRequest
-
-            channel = self.current_group_entity
-            if channel is None:
-                channel = await self.telethon_client.get_entity(group_id)
-
-            full = await self.telethon_client(GetFullChannelRequest(channel=channel))
-            group_call = getattr(full.full_chat, 'call', None)
-            if group_call is None:
-                return None
-
-            call_info = await self.telethon_client(
-                GetGroupCallRequest(call=group_call, limit=8))
-            count = getattr(getattr(call_info, 'call', None), 'participants_count', None)
-            return int(count) if count is not None else None
+            microphones = list(MediaDevices.microphone_devices())
         except Exception as e:
-            print(f"[Telegram voice] participant count unavailable: {e}")
-            return None
+            raise VoiceCallError(
+                _("The microphone list could not be read: {error}").format(error=e))
 
-    async def _await_answer(self, group_id, recipient_id):
-        """Stay in RINGING until the peer joins, then report a real connection.
+        if not microphones:
+            raise VoiceCallError(_("No microphone was found."))
 
-        Falls back to the previous behaviour (treat the call as connected) when
-        Telegram will not report participants, so an API change can never leave a
-        working call stuck in RINGING forever.
-        """
-        deadline = time.time() + self.ANSWER_TIMEOUT_SECONDS
-        unknown_polls = 0
-
-        while self.state == self.RINGING:
-            await asyncio.sleep(self.ANSWER_POLL_SECONDS)
-
-            if self.state != self.RINGING:
-                return
-
-            count = await self._count_call_participants(group_id)
-
-            if count is None:
-                unknown_polls += 1
-                # Three failed reads in a row: we cannot observe the answer, so
-                # don't hold a usable call hostage.
-                if unknown_polls >= 3:
-                    print("[Telegram voice] cannot observe participants - "
-                          "treating the call as connected")
-                    self._mark_connected(recipient_id, group_id)
-                    return
-                continue
-
-            unknown_polls = 0
-            # We are participant #1; anyone else means the call was answered.
-            if count >= 2:
-                self._mark_connected(recipient_id, group_id)
-                return
-
-            if time.time() >= deadline:
-                print("[Telegram voice] call was not answered")
-                self._notify('call_unanswered', {'recipient': recipient_id})
-                await self.end_call()
-                return
-
-    def _mark_connected(self, recipient_id, group_id):
-        """Transition RINGING -> CONNECTED exactly once."""
-        if self.state != self.RINGING:
-            return
-        self.call_start_time = datetime.now()
-        self._set_state(self.CONNECTED, {'recipient': recipient_id})
-        play_sound('titannet/callsuccess.ogg')
-        self._notify('call_started', {
-            'recipient': recipient_id,
-            'type': 'outgoing',
-            'group_id': group_id,
-        })
-
-    async def _create_voice_group(self, recipient_id):
-        """Create temporary megagroup for voice call."""
+        device = self._preferred_microphone(microphones)
         try:
-            from telethon.tl.functions.channels import CreateChannelRequest, InviteToChannelRequest
-
-            group_title = f"Voice Call {datetime.now().strftime('%H:%M:%S')}"
-
-            result = await self.telethon_client(CreateChannelRequest(
-                title=group_title,
-                about="Temporary voice call - auto-deleted after call",
-                megagroup=True
-            ))
-
-            if not result or not result.chats:
-                return None
-
-            group = result.chats[0]
-            self.current_group_id = group.id
-            self.current_group_entity = group
-            print(f"Voice group created: {group.id} ({group_title})")
-
-            # Try to invite recipient
-            try:
-                entity = await self._resolve_entity(recipient_id)
-                if entity:
-                    input_user = await self.telethon_client.get_input_entity(entity)
-                    await self.telethon_client(InviteToChannelRequest(
-                        channel=group,
-                        users=[input_user]
-                    ))
-                    print(f"Invited {recipient_id} to voice group")
-
-                    # Get display name
-                    if hasattr(entity, 'first_name'):
-                        self.current_peer_name = entity.first_name
-                    elif hasattr(entity, 'username') and entity.username:
-                        self.current_peer_name = entity.username
-                else:
-                    print(f"Could not find user: {recipient_id}")
-            except Exception as invite_err:
-                print(f"Could not invite {recipient_id}: {invite_err}")
-                # Group still created, can proceed
-
-            return group.id
-
+            stream = MediaStream(
+                device,
+                audio_flags=MediaStream.Flags.REQUIRED,
+                video_flags=MediaStream.Flags.IGNORE,
+            )
         except Exception as e:
-            print(f"Group creation failed: {e}")
-            return None
+            raise VoiceCallError(
+                _("The microphone could not be opened: {error}").format(error=e))
 
-    def _marked_chat_id(self, channel_id):
-        """Convert raw channel ID to marked chat ID for pytgcalls."""
-        marked = int(f"-100{channel_id}")
-        return marked
+        self.mic_active = True
+        print(f"[Telegram voice] microphone: {device}")
+        return stream
 
-    async def _start_voice_in_group(self, group_id):
-        """Start voice chat in group with microphone capture."""
-        if not self.pytgcalls:
-            return False
+    @staticmethod
+    def _preferred_microphone(microphones):
+        """Windows' own default device, when it names one."""
+        for device in microphones:
+            if str(getattr(device, 'title', '')).lower().startswith('default'):
+                return device
+        return microphones[0]
 
-        chat_id = self._marked_chat_id(group_id)
+    # === OUTGOING CALL ===
 
-        # Method 1: Microphone device
-        if MediaDevices:
-            try:
-                mic = None
-                if hasattr(MediaDevices, 'microphone_devices'):
-                    mics = MediaDevices.microphone_devices()
-                    if mics:
-                        mic = mics[0]
-                elif hasattr(MediaDevices, 'get_audio_device'):
-                    mic = MediaDevices.get_audio_device()
-
-                if mic:
-                    stream = MediaStream(media_path=mic)
-                    await self.pytgcalls.play(chat_id, stream)
-                    print(f"Voice started with microphone: {mic}")
-                    self.mic_active = True
-                    return True
-            except Exception as mic_err:
-                print(f"Microphone method failed: {mic_err}")
-
-        # Method 2: Try default audio (some versions auto-detect mic)
-        try:
-            stream = MediaStream(media_path="default")
-            await self.pytgcalls.play(chat_id, stream)
-            print("Voice started with default audio")
-            self.mic_active = True
-            return True
-        except Exception:
-            pass
-
-        # Method 3: Silent audio fallback (voice chat active but no mic)
-        try:
-            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_path = temp_file.name
-            temp_file.close()
-
-            with wave.open(temp_path, 'wb') as wav:
-                wav.setnchannels(2)
-                wav.setsampwidth(2)
-                wav.setframerate(48000)
-                # 30 seconds of silence (will loop or end)
-                wav.writeframes(b'\x00' * (48000 * 2 * 2 * 30))
-
-            stream = MediaStream(media_path=temp_path)
-            await self.pytgcalls.play(chat_id, stream)
-            print("Voice started with silent audio (microphone not available)")
-            # The voice chat exists but carries nothing from us. Callers report
-            # this to the user via _warn_if_microphone_silent().
-            self.mic_active = False
-
-            # Clean up temp file after delay
-            def cleanup_temp():
-                time.sleep(5)
-                try:
-                    os.unlink(temp_path)
-                except Exception:
-                    pass
-            threading.Thread(target=cleanup_temp, daemon=True).start()
-
-            return True
-
-        except Exception as silent_err:
-            print(f"Silent audio fallback failed: {silent_err}")
-
-        return False
-
-    async def _send_call_notification(self, recipient_id, group_id):
-        """Deliberately does nothing - kept so the call flow reads unchanged.
-
-        This used to post ``[TCE:CALL:<group>:<name>]`` into the recipient's
-        chat as the signalling channel. Nothing ever consumed those markers
-        (``parse_call_message`` has no callers), and to the person on the other
-        end - especially anyone using regular Telegram rather than Titan - they
-        looked like the account had been taken over and was posting junk. The
-        Telegram invite to the voice group is the notification; text in someone's
-        private chat is not ours to write.
-        """
-        return
-
-    # === JOIN CALL (for receiving side) ===
-
-    async def join_call(self, group_id):
-        """Join an existing group voice chat (called by recipient)."""
+    async def start_call(self, recipient_id):
+        """Place a call. A person gets a real Telegram call; a group is joined."""
         if self.state != self.IDLE:
             self._notify('call_failed', {'error': _('Call already in progress')})
             return False
 
         if not PYTGCALLS_AVAILABLE or not self.pytgcalls:
             self._notify('call_failed', {
-                'error': _('Voice calls require py-tgcalls. Install with: pip install py-tgcalls')
+                'error': _('Voice calls require py-tgcalls. Install it with: '
+                           'pip install py-tgcalls')
             })
             return False
 
-        # Same reasoning as start_call: answering into a blocked microphone
-        # produces a call the caller cannot hear.
+        # A call nobody can be heard on is worse than a refused call: check the
+        # Windows microphone Privacy switches first and say exactly what to fix.
         mic_ok, mic_reason = self._check_microphone()
         if not mic_ok:
             self._notify('call_failed', {'error': self._microphone_error(mic_reason)})
             return False
 
-        self.current_group_id = group_id
+        self.current_peer = recipient_id
+        self.current_peer_name = recipient_id
         self.mic_active = False
-        self._set_state(self.CONNECTING, {'group_id': group_id})
+        self._set_state(self.SETTING_UP, {'recipient': recipient_id})
 
         try:
-            # Start PyTgCalls
             if not await self._ensure_pytgcalls_started():
-                raise Exception(_("Could not start voice system"))
+                raise VoiceCallError(_("Could not start voice system"))
 
-            # Join voice chat with microphone
-            voice_ok = await self._start_voice_in_group(group_id)
+            chat_id, display_name, is_private = await self._resolve_target(recipient_id)
+            self.current_peer_name = display_name
+            self.current_chat_id = chat_id
+            self.call_transport = 'private' if is_private else 'group'
 
-            if not voice_ok:
-                raise Exception(_("Could not join voice chat"))
+            stream = self._microphone_stream()
 
-            self._warn_if_microphone_silent()
+            self._set_state(self.CONNECTING, {'recipient': display_name})
+            play_sound('titannet/ring_out.ogg')
 
-            # The recipient joining IS the answer, so this side connects for real.
-            self.call_start_time = datetime.now()
-            self._set_state(self.CONNECTED, {'group_id': group_id})
-            play_sound('titannet/callsuccess.ogg')
-            self._notify('call_started', {
-                'type': 'incoming_accepted',
-                'group_id': group_id
-            })
+            if is_private:
+                # ``play`` returns once the call is really connected, and raises
+                # for every way it can fail to be. Run it alongside the UI so the
+                # call window can appear while the peer's phone is ringing.
+                self._set_state(self.RINGING, {'recipient': display_name})
+                self._notify('call_ringing', {
+                    'recipient': display_name,
+                    'type': 'outgoing',
+                })
+                asyncio.ensure_future(self._run_private_call(chat_id, stream))
+                return True
+
+            await self.pytgcalls.play(chat_id, stream,
+                                      GroupCallConfig(auto_start=True))
+            self._mark_connected(display_name)
             return True
 
+        except VoiceCallError as e:
+            await self._reset(str(e))
+            return False
+        except Exception as e:
+            print(f"Start call failed: {e}")
+            import traceback
+            traceback.print_exc()
+            await self._reset(self._explain(e))
+            return False
+
+    async def _resolve_target(self, recipient_id):
+        """``(chat_id, display_name, is_private)`` for whoever is being called.
+
+        py-tgcalls reads the sign of the id: positive is a person and means a
+        real call, negative is a chat and means its voice chat.
+        """
+        if isinstance(recipient_id, int):
+            return recipient_id, str(recipient_id), recipient_id > 0
+
+        entity = await self._resolve_entity(recipient_id)
+        if entity is None:
+            raise VoiceCallError(
+                _("{name} could not be found on Telegram").format(name=recipient_id))
+
+        name = (getattr(entity, 'first_name', None) or
+                getattr(entity, 'username', None) or
+                getattr(entity, 'title', None) or str(recipient_id))
+
+        from telethon.tl.types import User
+        if isinstance(entity, User):
+            return entity.id, name, True
+
+        from telethon import utils as tg_utils
+        return tg_utils.get_peer_id(entity), name, False
+
+    async def _run_private_call(self, user_id, stream):
+        """Await the outgoing call, and report what actually happened to it."""
+        try:
+            await self.pytgcalls.play(
+                user_id, stream,
+                CallConfig(timeout=self.ANSWER_TIMEOUT_SECONDS))
+        except TimedOutAnswer:
+            self._notify('call_unanswered', {'recipient': self.current_peer_name})
+            await self._reset(_("{name} did not answer").format(
+                name=self.current_peer_name))
+            return
+        except CallDeclined:
+            await self._reset(_("{name} declined the call").format(
+                name=self.current_peer_name))
+            return
+        except CallBusy:
+            await self._reset(_("{name} is busy").format(
+                name=self.current_peer_name))
+            return
+        except CallDiscarded:
+            await self._finish_call(None)
+            return
+        except Exception as e:
+            print(f"[Telegram voice] outgoing call failed: {e}")
+            import traceback
+            traceback.print_exc()
+            await self._reset(self._explain(e))
+            return
+
+        self._mark_connected(self.current_peer_name)
+
+    def _mark_connected(self, peer_name):
+        """RINGING/CONNECTING -> CONNECTED, exactly once."""
+        if self.state in (self.CONNECTED, self.IDLE, self.ENDING):
+            return
+        self.call_start_time = datetime.now()
+        self._set_state(self.CONNECTED, {'recipient': peer_name})
+        play_sound('titannet/callsuccess.ogg')
+        self._notify('call_started', {
+            'recipient': peer_name,
+            'type': 'outgoing',
+            'chat_id': self.current_chat_id,
+        })
+
+    @staticmethod
+    def _explain(error):
+        """Turn a library failure into something worth reading aloud."""
+        text = str(error)
+        if isinstance(error, NoActiveGroupCall):
+            return _("There is no voice chat in this group")
+        if isinstance(error, NotInCallError):
+            return _("There is no call in progress")
+        if 'FLOOD' in text.upper():
+            return _("Telegram is rate-limiting calls. Try again in a moment.")
+        if 'PRIVACY' in text.upper() or 'USER_PRIVACY' in text.upper():
+            return _("This person does not accept calls from you")
+        if 'CALL_PROTOCOL' in text.upper():
+            return _("The other side's Telegram cannot take this call")
+        return text or _("The call could not be started")
+
+    # === INCOMING CALL ===
+
+    async def answer_call(self, user_id=None):
+        """Answer the call that is ringing.
+
+        Answering is simply placing our side of the same call: py-tgcalls knows
+        a call was requested from this user and accepts it instead of starting a
+        new one. The previous version ran its own ``AcceptCallRequest`` with a
+        random g_b and no key exchange, which is why a "connected" incoming call
+        carried no audio at all.
+        """
+        if user_id is None:
+            user_id = (self.incoming_call or {}).get('user_id')
+        if not user_id:
+            self._notify('call_failed', {'error': _("There is no call to answer")})
+            return False
+
+        if not PYTGCALLS_AVAILABLE or not self.pytgcalls:
+            self._notify('call_failed', {
+                'error': _('Voice calls require py-tgcalls. Install it with: '
+                           'pip install py-tgcalls')
+            })
+            return False
+
+        mic_ok, mic_reason = self._check_microphone()
+        if not mic_ok:
+            self._notify('call_failed', {'error': self._microphone_error(mic_reason)})
+            return False
+
+        name = (self.incoming_call or {}).get('name') or str(user_id)
+        self.current_peer = user_id
+        self.current_peer_name = name
+        self.current_chat_id = user_id
+        self.call_transport = 'private'
+        self.mic_active = False
+        self._set_state(self.CONNECTING, {'recipient': name})
+
+        try:
+            if not await self._ensure_pytgcalls_started():
+                raise VoiceCallError(_("Could not start voice system"))
+            stream = self._microphone_stream()
+            await self.pytgcalls.play(
+                user_id, stream, CallConfig(timeout=self.ANSWER_TIMEOUT_SECONDS))
+        except VoiceCallError as e:
+            await self._reset(str(e))
+            return False
+        except Exception as e:
+            print(f"Answer call failed: {e}")
+            await self._reset(self._explain(e))
+            return False
+
+        self.incoming_call = None
+        self.call_start_time = datetime.now()
+        self._set_state(self.CONNECTED, {'recipient': name})
+        play_sound('titannet/callsuccess.ogg')
+        self._notify('call_answered', {'caller': name})
+        self._notify('call_started', {'recipient': name, 'type': 'incoming_accepted'})
+        return True
+
+    # Kept under the old name so existing callers keep working.
+    async def answer_native_call(self, call_data):
+        return await self.answer_call((call_data or {}).get('caller_id'))
+
+    # === GROUP VOICE CHAT ===
+
+    async def join_call(self, group_id):
+        """Join an existing group voice chat."""
+        if self.state != self.IDLE:
+            self._notify('call_failed', {'error': _('Call already in progress')})
+            return False
+
+        if not PYTGCALLS_AVAILABLE or not self.pytgcalls:
+            self._notify('call_failed', {
+                'error': _('Voice calls require py-tgcalls. Install it with: '
+                           'pip install py-tgcalls')
+            })
+            return False
+
+        mic_ok, mic_reason = self._check_microphone()
+        if not mic_ok:
+            self._notify('call_failed', {'error': self._microphone_error(mic_reason)})
+            return False
+
+        # A raw channel id has to be marked before py-tgcalls will read it as a
+        # chat rather than a person.
+        chat_id = int(group_id)
+        if chat_id > 0:
+            chat_id = int(f"-100{chat_id}")
+
+        self.current_chat_id = chat_id
+        self.call_transport = 'group'
+        self.mic_active = False
+        self._set_state(self.CONNECTING, {'group_id': chat_id})
+
+        try:
+            if not await self._ensure_pytgcalls_started():
+                raise VoiceCallError(_("Could not start voice system"))
+            stream = self._microphone_stream()
+            await self.pytgcalls.play(chat_id, stream,
+                                      GroupCallConfig(auto_start=True))
+        except VoiceCallError as e:
+            await self._reset(str(e))
+            return False
         except Exception as e:
             print(f"Join call failed: {e}")
-            self._set_state(self.IDLE)
-            self._notify('call_failed', {'error': str(e)})
+            await self._reset(self._explain(e))
             return False
 
-    # === INCOMING NATIVE CALL (signaling only) ===
-
-    async def answer_native_call(self, call_data):
-        """Answer incoming native Telegram call via signaling.
-
-        Note: Audio does NOT work through native calls in Python.
-        This only accepts the signaling so the caller sees 'connected'.
-        """
-        if not self.telethon_client:
-            return False
-
-        try:
-            call_obj = call_data.get('call_object')
-            if not call_obj:
-                return False
-
-            self.current_peer = call_data.get('caller_id')
-            self.current_call_object = call_obj
-            self.call_start_time = datetime.now()
-
-            from telethon.tl.functions.phone import AcceptCallRequest
-            from telethon.tl.types import PhoneCallProtocol
-
-            p = TELEGRAM_DH_PRIME
-            b = secrets.randbelow(p - 3) + 2
-            g_b = pow(TELEGRAM_DH_GENERATOR, b, p).to_bytes(256, byteorder='big')
-
-            protocol = PhoneCallProtocol(
-                min_layer=65, max_layer=92,
-                udp_p2p=True, udp_reflector=True,
-                library_versions=['2.4.4']
-            )
-
-            await self.telethon_client(AcceptCallRequest(
-                peer=call_obj, g_b=g_b, protocol=protocol
-            ))
-
-            self.dh_params = {'b': b, 'p': p, 'protocol': protocol}
-            self._set_state(self.CONNECTED)
-            play_sound('titannet/callsuccess.ogg')
-            self._notify('call_answered', {'caller': self.current_peer})
-            return True
-
-        except Exception as e:
-            print(f"Answer native call failed: {e}")
-            self._notify('call_failed', {'error': str(e)})
-            return False
+        self.call_start_time = datetime.now()
+        self._set_state(self.CONNECTED, {'group_id': chat_id})
+        play_sound('titannet/callsuccess.ogg')
+        self._notify('call_started', {'type': 'incoming_accepted',
+                                      'group_id': chat_id})
+        return True
 
     # === END CALL ===
 
     async def end_call(self):
-        """End current voice call."""
+        """Hang up, whichever kind of call this is."""
         if self.state == self.IDLE:
+            # Nothing of ours is running, but a call may still be ringing at us.
+            if self.incoming_call:
+                await self._decline_incoming()
+                return True
             return False
 
         self._set_state(self.ENDING)
 
-        try:
-            # No end marker is posted to the peer's chat - see
-            # _send_call_notification for why writing into someone's private
-            # conversation was the wrong signalling channel.
+        if self.pytgcalls and self.current_chat_id is not None:
+            try:
+                await self.pytgcalls.leave_call(self.current_chat_id)
+            except NotInCallError:
+                pass
+            except Exception as e:
+                print(f"[Telegram voice] leave call: {e}")
 
-            # End native call signaling
-            if self.current_call_object and self.telethon_client:
-                try:
-                    from telethon.tl.functions.phone import DiscardCallRequest
-                    from telethon.tl.types import PhoneCallDiscardReasonHangup
-
-                    duration = 0
-                    if self.call_start_time:
-                        duration = int((datetime.now() - self.call_start_time).total_seconds())
-
-                    await self.telethon_client(DiscardCallRequest(
-                        peer=self.current_call_object,
-                        duration=duration,
-                        reason=PhoneCallDiscardReasonHangup(),
-                        connection_id=0
-                    ))
-                except Exception as e:
-                    print(f"Native call discard: {e}")
-
-            # Leave group voice chat
-            if self.pytgcalls and self.current_group_id:
-                try:
-                    chat_id = self._marked_chat_id(self.current_group_id)
-                    if hasattr(self.pytgcalls, 'leave_call'):
-                        await self.pytgcalls.leave_call(chat_id)
-                    elif hasattr(self.pytgcalls, 'leave_group_call'):
-                        await self.pytgcalls.leave_group_call(chat_id)
-                    print("Left group voice chat")
-                except Exception as e:
-                    print(f"Leave voice chat: {e}")
-
-            # Delete temporary group
-            await self._safe_cleanup()
-
-        finally:
-            # Reset state
-            self.state = self.IDLE
-            self.current_peer = None
-            self.current_peer_name = None
-            self.current_group_id = None
-            self.current_group_entity = None
-            self.current_call_object = None
-            self.call_start_time = None
-            self.is_muted = False
-            self.dh_params = None
-
-            play_sound('titannet/bye.ogg')
-            self._notify('call_ended', {})
-
+        await self._finish_call(None)
         return True
 
-    async def _safe_cleanup(self):
-        """Delete temporary voice group."""
-        if not self.current_group_id or not self.telethon_client:
+    async def _decline_incoming(self):
+        """Refuse a call that is ringing without ever answering it."""
+        incoming, self.incoming_call = self.incoming_call, None
+        user_id = (incoming or {}).get('user_id')
+        if not user_id or not self.pytgcalls:
             return
-
         try:
-            from telethon.tl.functions.channels import DeleteChannelRequest
-
-            if self.current_group_entity:
-                await self.telethon_client(DeleteChannelRequest(channel=self.current_group_entity))
-            else:
-                entity = await self.telethon_client.get_entity(self.current_group_id)
-                await self.telethon_client(DeleteChannelRequest(channel=entity))
-            print("Voice group deleted")
+            await self.pytgcalls.leave_call(user_id)
         except Exception as e:
-            print(f"Group cleanup failed: {e}")
+            print(f"[Telegram voice] declining: {e}")
+
+    async def _finish_call(self, reason):
+        """The call is over - announce it once and go back to idle."""
+        if self.state == self.IDLE:
+            return
+        if reason:
+            self._notify('call_failed', {'error': reason})
+        self._reset_state()
+        play_sound('titannet/bye.ogg')
+        self._notify('call_ended', {})
+
+    async def _reset(self, error_message):
+        """A call that never happened: report why and go back to idle."""
+        if self.pytgcalls and self.current_chat_id is not None:
+            try:
+                await self.pytgcalls.leave_call(self.current_chat_id)
+            except Exception:
+                pass
+        self._reset_state()
+        if error_message:
+            self._notify('call_failed', {'error': error_message})
+        self._notify('call_ended', {})
+
+    def _reset_state(self):
+        self.state = self.IDLE
+        self.current_peer = None
+        self.current_peer_name = None
+        self.current_chat_id = None
+        self.call_transport = None
+        self.call_start_time = None
+        self.is_muted = False
+        self.mic_active = False
+        self._notify('state_changed', {'old_state': self.ENDING,
+                                       'new_state': self.IDLE})
 
     # === MUTE ===
 
     async def toggle_mute(self):
-        """Toggle microphone mute."""
-        if self.state != self.CONNECTED or not self.pytgcalls or not self.current_group_id:
+        """Toggle the microphone.
+
+        ``pause``/``resume`` (what this used to call) stop the whole stream
+        rather than muting it, which on a live call reads to the other side as
+        the connection dying.
+        """
+        if self.state != self.CONNECTED or not self.pytgcalls or \
+                self.current_chat_id is None:
             return False
 
         try:
-            chat_id = self._marked_chat_id(self.current_group_id)
             if self.is_muted:
-                # Unmute
-                if hasattr(self.pytgcalls, 'resume'):
-                    await self.pytgcalls.resume(chat_id)
-                elif hasattr(self.pytgcalls, 'unmute_stream'):
-                    await self.pytgcalls.unmute_stream(chat_id)
+                await self.pytgcalls.unmute(self.current_chat_id)
             else:
-                # Mute
-                if hasattr(self.pytgcalls, 'pause'):
-                    await self.pytgcalls.pause(chat_id)
-                elif hasattr(self.pytgcalls, 'mute_stream'):
-                    await self.pytgcalls.mute_stream(chat_id)
-
+                await self.pytgcalls.mute(self.current_chat_id)
             self.is_muted = not self.is_muted
             self._notify('mute_changed', {'muted': self.is_muted})
             return True
-
         except Exception as e:
             print(f"Mute toggle failed: {e}")
             return False
 
     # === STATUS ===
+
+    ACTIVE_STATES = (SETTING_UP, CONNECTING, RINGING, CONNECTED)
 
     def get_status(self):
         """Get current call status."""
@@ -768,14 +729,19 @@ class TelegramVoiceClient:
             duration = (datetime.now() - self.call_start_time).total_seconds()
 
         return {
-            'active': self.state in (self.CONNECTING, self.CONNECTED),
+            # Ringing is a call in progress. Leaving it out (as this used to)
+            # meant a second call could be started over the first, and the call
+            # window could not tell "not answered yet" from "no call".
+            'active': self.state in self.ACTIVE_STATES,
             'state': self.state,
             'peer': self.current_peer,
             'peer_name': self.current_peer_name,
             'duration': duration,
             'muted': self.is_muted,
             'has_audio': PYTGCALLS_AVAILABLE and self.pytgcalls is not None,
-            'group_id': self.current_group_id
+            'transport': self.call_transport,
+            'group_id': self.current_group_id,
+            'chat_id': self.current_chat_id,
         }
 
 
@@ -793,23 +759,46 @@ def initialize_voice_client(telethon_client):
     global _voice_client, telegram_voice_client
     _voice_client = TelegramVoiceClient(telethon_client)
     telegram_voice_client = _voice_client
-    print(f"Voice client initialized (py-tgcalls: {'available' if PYTGCALLS_AVAILABLE else 'not available'})")
+    print(f"Voice client initialized (py-tgcalls: "
+          f"{'available' if PYTGCALLS_AVAILABLE else 'not available'})")
+
+    # Bind the incoming-call handler right away: a call can ring before the user
+    # has ever placed one, and binding only happened on the first outgoing call.
+    loop = _voice_client._get_event_loop()
+    if loop is not None:
+        asyncio.run_coroutine_threadsafe(
+            _voice_client._ensure_pytgcalls_started(), loop)
 
 
 def _run_on_loop(coro, timeout=120):
     """Run async coroutine on the Telegram event loop."""
     if not _voice_client:
+        coro.close()
         raise RuntimeError("Voice client not initialized")
 
     loop = _voice_client._get_event_loop()
-    if not loop:
-        raise RuntimeError("No event loop available")
+    if loop is None:
+        coro.close()
+        raise RuntimeError("The Telegram client is not running")
 
-    if loop.is_running():
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=timeout)
-    else:
-        return loop.run_until_complete(coro)
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result(timeout=timeout)
+
+
+def _in_background(coro_factory, label, timeout=120):
+    """Run a call operation off the GUI thread and never let it raise there."""
+    def _work():
+        try:
+            _run_on_loop(coro_factory(), timeout=timeout)
+        except Exception as e:
+            print(f"{label}: {e}")
+            import traceback
+            traceback.print_exc()
+            if _voice_client:
+                _voice_client._notify('call_failed', {'error': str(e)})
+
+    threading.Thread(target=_work, daemon=True).start()
+    return True
 
 
 def start_voice_call(recipient):
@@ -822,94 +811,54 @@ def start_voice_call(recipient):
         print("Telegram client not connected")
         return False
 
-    def call_async():
-        try:
-            result = _run_on_loop(_voice_client.start_call(recipient))
-            if not result:
-                print(f"Call to {recipient} failed")
-        except Exception as e:
-            print(f"Voice call error: {e}")
-            import traceback
-            traceback.print_exc()
-
-    threading.Thread(target=call_async, daemon=True).start()
-    return True
+    # The whole call is awaited on the Telegram loop, so the timeout has to
+    # outlast ringing - 120 s used to cut a ringing call off mid-ring.
+    return _in_background(lambda: _voice_client.start_call(recipient),
+                          "Voice call error",
+                          timeout=_voice_client.ANSWER_TIMEOUT_SECONDS + 30)
 
 
 def join_voice_call(group_id):
-    """Join an existing group voice chat (for receiving calls)."""
+    """Join an existing group voice chat."""
     if not _voice_client:
         print("Voice client not initialized")
         return False
-
-    def join_async():
-        try:
-            result = _run_on_loop(_voice_client.join_call(group_id))
-            if not result:
-                print(f"Failed to join call in group {group_id}")
-        except Exception as e:
-            print(f"Join call error: {e}")
-            import traceback
-            traceback.print_exc()
-
-    threading.Thread(target=join_async, daemon=True).start()
-    return True
+    return _in_background(lambda: _voice_client.join_call(group_id),
+                          "Join call error")
 
 
 def answer_voice_call(call_data=None):
-    """Answer incoming voice call."""
+    """Answer the incoming call."""
     if not _voice_client:
         print("Voice client not initialized")
         return False
-
-    if not call_data:
-        call_data = {}
-
-    def answer_async():
-        try:
-            _run_on_loop(_voice_client.answer_native_call(call_data))
-        except Exception as e:
-            print(f"Answer call error: {e}")
-
-    threading.Thread(target=answer_async, daemon=True).start()
-    return True
+    caller_id = (call_data or {}).get('caller_id')
+    return _in_background(lambda: _voice_client.answer_call(caller_id),
+                          "Answer call error",
+                          timeout=_voice_client.ANSWER_TIMEOUT_SECONDS + 30)
 
 
 def end_voice_call():
     """End current voice call."""
     if not _voice_client:
         return False
-
-    def end_async():
-        try:
-            _run_on_loop(_voice_client.end_call(), timeout=15)
-        except Exception as e:
-            print(f"End call error: {e}")
-
-    threading.Thread(target=end_async, daemon=True).start()
-    return True
+    return _in_background(lambda: _voice_client.end_call(),
+                          "End call error", timeout=20)
 
 
 def toggle_mute():
     """Toggle microphone mute."""
     if not _voice_client:
         return False
-
-    def mute_async():
-        try:
-            _run_on_loop(_voice_client.toggle_mute(), timeout=5)
-        except Exception as e:
-            print(f"Mute error: {e}")
-
-    threading.Thread(target=mute_async, daemon=True).start()
-    return True
+    return _in_background(lambda: _voice_client.toggle_mute(),
+                          "Mute error", timeout=10)
 
 
 def is_call_active():
-    """Check if voice call is active."""
+    """Check if a call is in progress - including one that is still ringing."""
     if not _voice_client:
         return False
-    return _voice_client.state in (TelegramVoiceClient.CONNECTING, TelegramVoiceClient.CONNECTED)
+    return _voice_client.state in TelegramVoiceClient.ACTIVE_STATES
 
 
 def get_call_status():
@@ -937,14 +886,23 @@ def get_voice_call_status():
     return status
 
 
+def call_transport_label():
+    """What the audio actually travels over, for the call window to show."""
+    if not PYTGCALLS_AVAILABLE:
+        return _("Audio: unavailable (py-tgcalls is not installed)")
+    status = get_call_status()
+    if status.get('transport') == 'group':
+        return _("Audio: group voice chat")
+    return _("Audio: Telegram call")
+
+
 # === TCE CALL MESSAGE DETECTION ===
 
 def parse_call_message(message_text):
-    """Parse a TCE voice call marker message.
+    """Parse a marker message left by an older version of Titan.
 
-    Returns:
-        dict with 'type' ('call_request' or 'call_end'), 'group_id', and optionally 'caller_name'
-        or None if not a call message.
+    Nothing sends these any more - a call is a real Telegram call - but a
+    marker still sitting in somebody's history must not be shown as a message.
     """
     if not message_text:
         return None

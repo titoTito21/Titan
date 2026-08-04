@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 17:28+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -584,17 +584,13 @@ msgstr "Cały ekran"
 msgid "Where the controls appear"
 msgstr "Gdzie pojawiają się kontrolki"
 
-
 #: src/ui/settingsgui.py:1345
-
 msgid "On the real window itself, control by control (recommended)"
 msgstr "Na samym prawdziwym oknie, kontrolka w kontrolkę (zalecane)"
-
 
 #: src/ui/settingsgui.py:1347
 msgid "In a Titan window, as a list to read"
 msgstr "W oknie Titana, jako lista do odczytania"
-
 
 #: src/ui/settingsgui.py:1356
 msgid "Global AI OCR shortcut (arrows and Tab are not allowed):"

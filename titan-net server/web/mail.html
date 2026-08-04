@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="mail.title">Mail — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260526a">
+  <link rel="stylesheet" href="css/titan.css?v=20260804a">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -69,13 +69,25 @@
       <ul id="mail-list" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
     </div>
 
-    <!-- Read dialog -->
+    <!-- Read dialog. An HTML message is shown as the page it is, inside a
+         sandboxed frame whose content policy blocks every remote fetch and
+         every script; anything else is shown as text. -->
     <dialog id="read-dialog" aria-labelledby="read-subject">
-      <div style="display:grid;gap:.75rem;min-width:min(620px,92vw)">
+      <div style="display:grid;gap:.75rem;min-width:min(720px,92vw)">
         <h2 id="read-subject" style="margin:0"></h2>
         <p class="muted" id="read-meta"></p>
+        <p class="muted" id="read-format"></p>
         <pre id="read-body" style="white-space:pre-wrap;max-height:50vh;overflow:auto"></pre>
+        <iframe id="read-frame" title="Message" data-i18n-attr="title:mail.message"
+                sandbox referrerpolicy="no-referrer" hidden
+                style="width:100%;height:50vh;border:1px solid;border-radius:.25rem;background:transparent"></iframe>
+        <details id="read-links-box" hidden>
+          <summary data-i18n="mail.links">Links in this message</summary>
+          <ul id="read-links" role="list" style="display:grid;gap:.25rem;margin:.5rem 0 0"></ul>
+        </details>
         <p style="text-align:right">
+          <button type="button" id="read-text-toggle" class="btn btn-secondary" hidden
+                  data-i18n="mail.show_text">Show as text</button>
           <button type="button" id="read-reply" data-i18n="mail.reply">Reply</button>
           <button type="button" id="read-close" class="btn btn-secondary" data-i18n="pm.close">Close</button>
         </p>
@@ -95,12 +107,22 @@
           <label for="compose-subject" data-i18n="mail.subject">Subject</label>
           <input id="compose-subject" type="text">
         </div>
+        <div class="field" style="max-width:220px">
+          <label for="compose-format" data-i18n="mail.format">Format</label>
+          <select id="compose-format">
+            <option value="plain" data-i18n="mail.format_plain">Plain text</option>
+            <option value="markdown">Markdown</option>
+            <option value="html">HTML</option>
+          </select>
+        </div>
+        <p class="muted" id="compose-hint"></p>
         <div class="field">
           <label for="compose-body" data-i18n="mail.message">Message</label>
           <textarea id="compose-body" rows="8"></textarea>
         </div>
         <p style="text-align:right">
           <button type="submit" id="compose-send" data-i18n="mail.send">Send</button>
+          <button type="button" id="compose-preview" class="btn btn-secondary" data-i18n="mail.preview">Preview</button>
           <button type="button" id="compose-cancel" class="btn btn-secondary" data-i18n="mail.cancel">Cancel</button>
         </p>
       </form>
@@ -113,10 +135,11 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260526a"></script>
-  <script src="js/app.js?v=20260526a"></script>
-  <script src="js/sounds.js?v=20260526a"></script>
-  <script src="js/api.js?v=20260526a"></script>
-  <script src="js/mail.js?v=20260526a"></script>
+  <script src="js/i18n.js?v=20260804a"></script>
+  <script src="js/app.js?v=20260804a"></script>
+  <script src="js/sounds.js?v=20260804a"></script>
+  <script src="js/api.js?v=20260804a"></script>
+  <script src="js/mailformat.js?v=20260804a"></script>
+  <script src="js/mail.js?v=20260804a"></script>
 </body>
 </html>

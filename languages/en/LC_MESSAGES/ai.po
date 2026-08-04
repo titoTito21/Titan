@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-03 17:48+0200\n"
+"POT-Creation-Date: 2026-08-04 14:07+0200\n"
 "PO-Revision-Date: 2026-07-21 09:03+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -19,9 +19,8 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: src/ai/ai_creation_kit.py:60
-#, fuzzy
 msgid "Creation kit"
-msgstr "Creating {file}"
+msgstr "Creation kit"
 
 #: src/ai/ai_creation_kit.py:77
 msgid "Application"
@@ -971,9 +970,8 @@ msgid "Escape"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:54
-#, fuzzy
 msgid "Enter"
-msgstr "Agent error"
+msgstr "Enter"
 
 #: src/ai/ocr/mimic.py:55
 msgid "Tab"
@@ -992,32 +990,28 @@ msgid "Left arrow"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:59
-#, fuzzy
 msgid "Right arrow"
-msgstr "right"
+msgstr "Right arrow"
 
 #: src/ai/ocr/mimic.py:60
-#, fuzzy
 msgid "Space"
-msgstr "Saved"
+msgstr "Space"
 
 #: src/ai/ocr/mimic.py:76
 msgid "What is on the screen:"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:112
-#, fuzzy
 msgid "Everything"
-msgstr "Generating"
+msgstr "Everything"
 
 #: src/ai/ocr/mimic.py:112
 msgid "Summary"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:121
-#, fuzzy
 msgid "Read the screen again"
-msgstr "Reading the current window"
+msgstr "Read the screen again"
 
 #: src/ai/ocr/mimic.py:125 src/ai/ocr/mimic.py:696 src/ai/ocr/mimic.py:730
 msgid "Ask about this screen"
@@ -1033,24 +1027,20 @@ msgid "Put controls on the real window"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:146
-#, fuzzy
 msgid "Part of the screen:"
-msgstr "Reading the current window"
+msgstr "Part of the screen:"
 
 #: src/ai/ocr/mimic.py:150
-#, fuzzy
 msgid "Part of the screen"
-msgstr "Reading the current window"
+msgstr "Part of the screen"
 
 #: src/ai/ocr/mimic.py:165
-#, fuzzy
 msgid "Read the screen again\tF5"
-msgstr "Reading the current window"
+msgstr "Read the screen again\tF5"
 
 #: src/ai/ocr/mimic.py:166
-#, fuzzy
 msgid "Read a different window..."
-msgstr "Reading the current window"
+msgstr "Read a different window..."
 
 #: src/ai/ocr/mimic.py:167
 msgid "Read the whole screen instead\tCtrl+W"
@@ -1101,9 +1091,8 @@ msgid "&Control"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:197
-#, fuzzy
 msgid "Send &key"
-msgstr "Send text"
+msgstr "Send &key"
 
 #: src/ai/ocr/mimic.py:207
 #, python-brace-format
@@ -1139,9 +1128,8 @@ msgid "{text} (position unknown, cannot be pressed)"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:265 src/ai/ocr/mimic.py:382
-#, fuzzy
 msgid "Reading the screen..."
-msgstr "Searching the web..."
+msgstr "Reading the screen..."
 
 #: src/ai/ocr/mimic.py:267
 msgid "Nothing read yet"
@@ -1175,27 +1163,25 @@ msgid "Copy this entry"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:310
-#, fuzzy
 msgid "Press"
-msgstr "Progress"
+msgstr "Press"
 
 #: src/ai/ocr/mimic.py:311
 msgid "Right-click it"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:369 src/ai/ocr/mimic.py:703
-#, fuzzy
 msgid "Already reading the screen."
-msgstr "Reading the current window"
+msgstr "Already reading the screen."
 
 #: src/ai/ocr/mimic.py:440
 msgid "Nothing readable was found on this screen."
 msgstr ""
 
 #: src/ai/ocr/mimic.py:453
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "new: {text}"
-msgstr "Send text"
+msgstr "new: {text}"
 
 #: src/ai/ocr/mimic.py:455
 #, python-brace-format
@@ -1203,14 +1189,12 @@ msgid "gone: {text}"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:470
-#, fuzzy
 msgid "Reading the whole screen"
-msgstr "Reading the web page"
+msgstr "Reading the whole screen"
 
 #: src/ai/ocr/mimic.py:471
-#, fuzzy
 msgid "Reading the window in front"
-msgstr "Reading the current window"
+msgstr "Reading the window in front"
 
 #: src/ai/ocr/mimic.py:478
 msgid "Stopped watching this screen."
@@ -1262,18 +1246,16 @@ msgid "Which window should I read?"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:672
-#, fuzzy
 msgid "Read a different window"
-msgstr "Reading the current window"
+msgstr "Read a different window"
 
 #: src/ai/ocr/mimic.py:695
 msgid "What would you like to know about this screen?"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:707
-#, fuzzy
 msgid "Looking..."
-msgstr "Working..."
+msgstr "Looking..."
 
 #: src/ai/ocr/mimic.py:727
 msgid "See the list for what I found."
@@ -1296,11 +1278,8 @@ msgid "Copied"
 msgstr ""
 
 #: src/ai/ocr/mimic.py:841 src/ai/ocr/mimic.py:893
-#, fuzzy
 msgid "AI features are switched off in Settings, AI features."
-msgstr ""
-"AI features are not configured. Enable them and set a method in Settings,"
-" AI features."
+msgstr "AI features are switched off in Settings, AI features."
 
 #: src/ai/ocr/mimic.py:845 src/ai/ocr/mimic.py:897
 msgid "AI OCR is switched off. Turn it on in Settings, AI features."
@@ -1333,19 +1312,16 @@ msgid "Drop-down list"
 msgstr ""
 
 #: src/ai/ocr/controls.py:166 src/ai/ocr/controls.py:196
-#, fuzzy
 msgid "Option"
-msgstr "Action"
+msgstr "Option"
 
 #: src/ai/ocr/controls.py:336
-#, fuzzy
 msgid "Slider"
-msgstr "Hide"
+msgstr "Slider"
 
 #: src/ai/ocr/controls.py:338
-#, fuzzy
 msgid "Less"
-msgstr "Progress"
+msgstr "Less"
 
 #: src/ai/ocr/controls.py:339
 #, python-brace-format
@@ -1379,9 +1355,8 @@ msgid ""
 msgstr ""
 
 #: src/ai/ocr/overlay.py:589
-#, fuzzy
 msgid "Reading the screen again..."
-msgstr "Searching the web..."
+msgstr "Reading the screen again..."
 
 #: src/ai/ocr/overlay.py:648
 #, python-brace-format

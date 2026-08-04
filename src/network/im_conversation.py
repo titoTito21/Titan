@@ -545,10 +545,18 @@ class ConversationFrame(TabbedListFrame):
                                   limit=50, callback=_done)
 
     def _start_call(self, video: bool) -> None:
-        self.backend.start_call(
-            self.chat.id, video=video,
-            callback=lambda result: self._report(
-                result, _("Calling {name}").format(name=self.chat.name)))
+        def _done(result: Dict) -> None:
+            if result.get('success') and not result.get('confirmed'):
+                # The button was pressed but nothing on the page says a call
+                # started. Saying "Calling" here would be a lie the user only
+                # discovers by waiting in silence.
+                speak_notification(
+                    _("The call was requested but the service has not started "
+                      "it. Open the service page to see what happened."), 'error')
+                return
+            self._report(result, _("Calling {name}").format(name=self.chat.name))
+
+        self.backend.start_call(self.chat.id, video=video, callback=_done)
 
     # ---------------------------------------------------------------- typing
     def _on_input_changed(self, event) -> None:
