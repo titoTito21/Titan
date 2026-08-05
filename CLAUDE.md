@@ -596,7 +596,13 @@ dialog "Write a note"               one window, one variable per control
     check speak_it = "Read it back"
 end
 tnotes.create_note title="{{title}}" text="{{body}}"
+macros.run_macro name="My other macro"      every action the assistant has
 message "Done, {{who}}." title="Example"    also warn / error / confirm / choose
+play "done.ogg" position=-0.8 wait=true     a sound shipped beside the script
+run "helper.tcs"                            another script in the same folder
+voice engine="supertonic" rate=2            borrowed FOR THIS SCRIPT ONLY
+say "one at a time" wait=true               also interrupt=true; `speak` too
+return "what the caller gets"               ends this script, hands that back
 repeat 2
     wait 1s
 end
@@ -611,8 +617,24 @@ end
   'tcs'` refuses to save a script that would not run.
 - **Expressions are parsed, never `eval`'d** - a script is a file on disk and
   must not be able to run arbitrary Python.
-- **Dialogs are real wx controls** on the GUI thread, and closing one ends the
-  script rather than continuing with an empty answer.
+- **Dialogs are real wx controls** on the GUI thread, parented to Titan (so
+  Windows closes them with it), and closing one **ends the script** rather than
+  continuing with an empty answer.
+- **It speaks in the user's own voice.** `say` is `titan.speak`, so there is one
+  answer to "what does Titan sound like". `voice engine=... name=... rate=...`
+  borrows a different one **for that script only**: applied to the live engine,
+  never written to settings, and put back in a `finally` however the script ends
+  - finished, stopped, cancelled or broken. A called script restores its own
+  before returning, since it holds its own copy of the run state.
+- **Its own sounds and its own helpers.** `play "ding.ogg"` and
+  `run "helper.tcs"` look for a bare name *next to the script*, so a macro
+  folder carries everything it needs anywhere. A called script gets its own
+  variables, hands back `{{last}}`, shares the caller's step budget, and cannot
+  call round in a circle (chain + depth guard).
+- **Sound goes through Titan's mixer**, not an audio device of the script's own:
+  the new `titan.play_sound` / `titan.stop_sounds` actions wrap
+  `sound.play_sound_file` with the user's theme volume and stereo/3D
+  positioning, and any add-on can use them.
 - **Pseudocode needs AI features on, everything else does not.** A line that
   does not name an action (or an explicit `do "..."`) is handed to the AI, which
   translates it into the same action steps and runs them through

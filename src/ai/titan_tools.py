@@ -1967,6 +1967,59 @@ def titan_speak(text, interrupt=False, **_):
     return f"Said: {message[:200]}" + ('...' if len(message) > 200 else '')
 
 
+def titan_play_sound(path, position=0.0, wait=False, **_):
+    """Play an audio file through Titan's own sound system.
+
+    Titan already owns the mixer, the theme volume and the stereo/3D
+    positioning the user chose, so an add-on that wants to make a noise should
+    ask for it here rather than opening an audio device of its own and fighting
+    Titan for the sound card. Any file pygame can decode works - a script, a
+    component or a game can ship its own sounds and play them by path.
+    """
+    target = str(path or '').strip().strip('"')
+    if not target:
+        return "Say which sound file to play."
+    target = os.path.abspath(os.path.expandvars(os.path.expanduser(target)))
+    if not os.path.isfile(target):
+        return f"There is no sound file at {target}."
+    try:
+        pan = max(-1.0, min(1.0, float(position or 0.0)))
+    except (TypeError, ValueError):
+        pan = 0.0
+    try:
+        from src.titan_core.sound import play_sound_file
+        played = play_sound_file(target, pan=pan)
+    except Exception as e:
+        return f"Could not play {os.path.basename(target)}: {e}"
+    if not played:
+        return (f"Titan's sound system would not play "
+                f"{os.path.basename(target)} - it may be a format it cannot "
+                f"decode.")
+    if str(wait).strip().lower() in ('1', 'true', 'yes', 'on'):
+        # Waiting is what makes a sequence of sounds a sequence rather than a
+        # chord, so it is offered - bounded, because a caller should never be
+        # able to park Titan on a file that turns out to be an hour long.
+        try:
+            import pygame
+            waited = 0.0
+            while pygame.mixer.get_busy() and waited < 120.0:
+                pygame.time.wait(50)
+                waited += 0.05
+        except Exception:
+            pass
+    return f"Played {os.path.basename(target)}."
+
+
+def titan_stop_sounds(**_):
+    """Stop whatever Titan is playing."""
+    try:
+        import pygame
+        pygame.mixer.stop()
+    except Exception as e:
+        return f"Could not stop the sound: {e}"
+    return "Stopped the sounds that were playing."
+
+
 def titan_open_settings(**_):
     """Open Titan's Settings window."""
     def _open():
@@ -2150,6 +2203,20 @@ def get_titan_tools():
                           'interrupt': dict(B, description="Stop whatever is "
                                             "being said first (default no).")},
               required=['text']),
+        _tool('titan_play_sound',
+              "Play an audio file through Titan's own sound system, with the "
+              "user's theme volume and stereo positioning. Use this rather "
+              "than opening an audio device - a script, component or game can "
+              "play sounds it ships with itself.", titan_play_sound,
+              properties={'path': dict(S, description="The audio file to play."),
+                          'position': {'type': 'number',
+                                       'description': "Where it comes from, "
+                                       "-1 left to 1 right (default centre)."},
+                          'wait': dict(B, description="Wait until it has "
+                                       "finished (default no).")},
+              required=['path']),
+        _tool('titan_stop_sounds', "Stop whatever Titan is playing.",
+              titan_stop_sounds),
         # Titan windows
         _tool('titan_open_settings', "Open Titan's Settings window.",
               titan_open_settings, risk='confirm'),

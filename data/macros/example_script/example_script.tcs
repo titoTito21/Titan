@@ -1,8 +1,11 @@
 # Example Titan Script (.TCS)
 #
 # Everything the language does, in one file: variables and arithmetic, a
-# question, a whole dialog, conditions, a loop, real Titan actions, and speech.
-# Open it in the Macro Manager, press Enter, and it runs.
+# question, a whole dialog, conditions, a loop, its own sound, a second script
+# beside it, real Titan actions - every action the assistant has, including
+# other macros - and speech in the user's own voice.
+#
+# Open it in the Macro Manager and press Enter, or double-click the .tcs file.
 #
 # To have Titan run it by itself, uncomment one of these:
 # when startup
@@ -70,19 +73,56 @@ end
 
 
 # ---------------------------------------------------------------------------
-# 5. Repeating, waiting, and a message box at the end
+# 5. Its own sound, played through Titan's mixer
+#    A bare name is looked for next to this script.
+# ---------------------------------------------------------------------------
+play "done.ogg"
+play "done.ogg" position=-0.8
+play "done.ogg" position=0.8 wait=true
+
+
+# ---------------------------------------------------------------------------
+# 5b. Borrowing a different voice - for this script only.
+#     It is never saved, and Titan goes back to the user's own voice the
+#     moment the script ends, however it ends. Uncomment to hear it.
+# ---------------------------------------------------------------------------
+# voice engine="espeak_dll" rate=2
+# say "This is the borrowed voice."
+# voice reset
+# say "And this is yours again."
+
+
+# ---------------------------------------------------------------------------
+# 6. Another script in the same folder. It gets its own variables and
+#    hands back whatever it finished with.
+# ---------------------------------------------------------------------------
+run "summary.tcs"
+set summary = last
+say "The other script said it {{summary}}." interrupt=true
+
+
+# ---------------------------------------------------------------------------
+# 7. Any other macro, of any type, by name
+# ---------------------------------------------------------------------------
+# macros.run_macro name="test macro"
+
+
+# ---------------------------------------------------------------------------
+# 8. Repeating, waiting, and a message box at the end
 # ---------------------------------------------------------------------------
 repeat 2
     wait 1s
 end
 
-set report = "Done, " + who + ". The volume is " + volume
+# An action answers in a sentence, so it is used as one.
+set report = "Done, " + who + ". " + volume
 
+say "{{report}}" wait=true
 message "{{report}}" title="Example script"
 
 
 # ---------------------------------------------------------------------------
-# 6. Pseudocode - only with AI features switched on.
+# 9. Pseudocode - only with AI features switched on.
 #    Uncomment to let the AI work out which actions this means.
 # ---------------------------------------------------------------------------
 # do "tell me what the weather is like and put it in a note called weather"

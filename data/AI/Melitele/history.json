@@ -338,5 +338,10 @@
     "role": "assistant",
     "content": "Stworzyłam makro AutoHotkey ze skrótem **Ctrl + Shift + M**, które po naciśnięciu wypowiada frazę „jakieś makro”. Plik został zapisany na Pulpicie (`makro.ahk`) i uruchomiony w tle.\n\nRównocześnie rozpoczęłam odtwarzanie filmu **Dzień świra** w odtwarzaczu tMedia.",
     "timestamp": 1785923822.8911848
+  },
+  {
+    "role": "user",
+    "content": "usuń wszystkie notatki",
+    "timestamp": 1785931933.0720098
   }
 ]

@@ -249,6 +249,23 @@ def _init():
         )
 
         if stereo_enabled:
+            # Titan's OWN engine, not a second one. StereoSpeech applies the
+            # user's saved engine, voice, rate, pitch, volume and per-engine
+            # configuration in its constructor, so the live instance already IS
+            # the user's setup. A private instance built here re-resolves all of
+            # that from a cold start - which is how "Natan" became the first
+            # voice of whatever engine happened to load, and how two engines
+            # ended up sharing one pygame TTS channel.
+            try:
+                from src.titan_core.stereo_speech import get_stereo_speech
+                live = get_stereo_speech()
+                if live is not None:
+                    _speaker = live
+                    _uses_stereo = True
+                    _initialized = True
+                    return
+            except Exception as e:
+                print(f"[tce_speech] Titan's speech engine is not reachable: {e}")
             try:
                 from src.titan_core.stereo_speech import StereoSpeech
                 _speaker = StereoSpeech()

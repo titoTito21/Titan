@@ -1,0 +1,11 @@
+# A helper script, called by example_script.tcs with:  run "summary.tcs"
+#
+# It has its own variables - nothing here can disturb the script that called
+# it - and 'return' says exactly what the caller gets back as {{last}}.
+
+set when = now("%H:%M")
+set engines = titan.list_tts_engines
+
+say "Checking, one moment." wait=true
+
+return "checked at " + when

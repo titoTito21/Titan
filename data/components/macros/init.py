@@ -2755,6 +2755,9 @@ def _ai_looks_like_call(line):
     with nothing but name characters in it. 'titan.speak "hi"' is a call;
     'remind me on Tuesday about the dentist' is not, and neither is
     'open the file C:\\notes.txt' - which contains a dot but is prose.
+
+    Each part must also begin like a name rather than a digit, or the number
+    0.8 is read as the action 'eight' of an add-on called '0'.
     """
     head = str(line).strip().split(' ')[0].split('(')[0]
     if '.' not in head:
@@ -2762,7 +2765,8 @@ def _ai_looks_like_call(line):
     parts = head.split('.')
     if len(parts) < 2 or not all(parts):
         return False
-    return all(part.replace('_', '').isalnum() for part in parts)
+    return all(part.replace('_', '').isalnum() and not part[0].isdigit()
+               for part in parts)
 
 
 def _ai_parse_call(line_no, text):
@@ -2852,13 +2856,74 @@ def _ai_parse(text):
                               'seconds': _ai_seconds(number, line[5:])})
                 continue
 
-            if lowered.startswith('say '):
+            if lowered.startswith(('say ', 'speak ')):
+                _word, _sep, rest = line.partition(' ')
+                values, named = _ai_arg_tail(number, rest)
+                unknown = [k for k in named if k not in ('wait', 'interrupt')]
+                if unknown:
+                    raise TCSError(number, "'say' does not know "
+                                   + ", ".join(unknown),
+                                   "It takes wait and interrupt.")
+                if not values:
+                    raise TCSError(number, "'say' wants something to say")
                 block.append({'kind': 'say', 'line': number,
-                              'text': _ai_literal(line[4:].strip())})
+                              'text': values[0],
+                              'wait': named.get('wait'),
+                              'interrupt': named.get('interrupt')})
+                continue
+
+            if lowered.startswith('return '):
+                block.append({'kind': 'return', 'line': number,
+                              'value': _ai_rvalue(number, line[7:])})
+                continue
+
+            if lowered == 'return':
+                block.append({'kind': 'return', 'line': number, 'value': None})
+                continue
+
+            if lowered.startswith('play '):
+                values, named = _ai_arg_tail(number, line[5:])
+                if not values and 'file' not in named:
+                    raise TCSError(number, "'play' wants a sound file, e.g. "
+                                           'play "ding.ogg"')
+                block.append({'kind': 'play', 'line': number,
+                              'file': values[0] if values else named['file'],
+                              'position': named.get('position'),
+                              'wait': named.get('wait')})
                 continue
 
             if lowered == 'stop':
                 block.append({'kind': 'stop', 'line': number})
+                continue
+
+            if lowered == 'voice reset':
+                block.append({'kind': 'voice', 'line': number, 'reset': True})
+                continue
+
+            if lowered.startswith('voice '):
+                _values, named = _ai_arg_tail(number, line[6:])
+                known = ('engine', 'name', 'rate', 'pitch', 'volume')
+                unknown = [k for k in named if k not in known]
+                if unknown:
+                    raise TCSError(number, "'voice' does not know "
+                                   + ", ".join(unknown),
+                                   "It takes engine, name, rate, pitch and "
+                                   "volume.")
+                if not named:
+                    raise TCSError(number, "'voice' wants something to change, "
+                                           'e.g. voice engine="supertonic"')
+                statement = {'kind': 'voice', 'line': number, 'reset': False}
+                statement.update({k: named.get(k) for k in known})
+                block.append(statement)
+                continue
+
+            if lowered.startswith('run '):
+                values, named = _ai_arg_tail(number, line[4:])
+                if not values and 'script' not in named:
+                    raise TCSError(number, "'run' wants another script, e.g. "
+                                           'run "helper.tcs"')
+                block.append({'kind': 'run', 'line': number,
+                              'script': values[0] if values else named['script']})
                 continue
 
             if lowered.startswith('set '):
@@ -3102,7 +3167,11 @@ def _ai_parse_trigger(line_no, text):
 # Running
 # --------------------------------------------------------------------------- #
 class _AIStop(Exception):
-    """The macro said 'stop'."""
+    """The script said 'stop', or 'return' with something to hand back."""
+
+    def __init__(self, value=None):
+        super().__init__()
+        self.value = value
 
 
 def _ai_fill(value, variables):
@@ -3171,6 +3240,72 @@ class _AICancelled(Exception):
     """The user closed a dialog the macro was waiting on."""
 
 
+def _tcs_say(text, wait=False, interrupt=False):
+    """Speak, through whatever Titan itself is actually speaking with.
+
+    `say` must be the same thing as `titan.speak`, not a second voice with its
+    own idea of the settings: Titan TTS when the user has it on - the *live*
+    engine, with their engine, voice, rate and pitch - and the screen reader
+    otherwise. The action is asked first precisely so there is one answer to
+    "what does Titan sound like".
+
+    ``wait`` matters because a script is a sequence: without it, three lines of
+    speech and a sound all start at once. Titan's engine already has a
+    synchronous ``speak`` and an asynchronous one, so waiting is real waiting,
+    not a guess at how long a sentence takes.
+    """
+    message = str(text)
+    if interrupt:
+        try:
+            from src.titan_core.stereo_speech import get_stereo_speech
+            speech = get_stereo_speech()
+            if speech is not None:
+                speech.stop()
+        except Exception:
+            pass
+    if wait:
+        try:
+            from src.titan_core.stereo_speech import get_stereo_speech
+            speech = get_stereo_speech()
+            if speech is not None:
+                speech.speak(message)          # blocks until it has finished
+                return
+        except Exception:
+            pass
+    try:
+        from src.titan_core import actions
+        result = actions.run('titan', 'speak', text=message,
+                             interrupt=bool(interrupt))
+        if result.ok:
+            return
+    except Exception:
+        pass
+    _speak(message)
+
+
+def _tcs_parent():
+    """The window a script's dialog belongs to.
+
+    A dialog with no parent outlives Titan: it stays on screen after the main
+    window has gone, and Alt+Tab treats it as a program of its own. Parenting it
+    to Titan means Windows closes it when Titan closes.
+    """
+    wx = _get_wx()
+    if wx is None:
+        return None
+    try:
+        app = wx.GetApp()
+        if app is None:
+            return None
+        top = app.GetTopWindow()
+        if top is not None and top:
+            return top
+        windows = [w for w in wx.GetTopLevelWindows() if w]
+        return windows[0] if windows else None
+    except Exception:
+        return None
+
+
 def _ai_on_gui(function, timeout=600):
     """Run something on the wx main thread and wait for it."""
     wx = _get_wx()
@@ -3203,7 +3338,8 @@ def _ai_message(text, title='', level='info'):
              'error': wx.ICON_ERROR, 'question': wx.ICON_QUESTION}
 
     def show():
-        dialog = wx.MessageDialog(None, str(text), str(title or _("Macro")),
+        dialog = wx.MessageDialog(_tcs_parent(), str(text),
+                                  str(title or _("Macro")),
                                   wx.OK | icons.get(level, wx.ICON_INFORMATION))
         dialog.ShowModal()
         dialog.Destroy()
@@ -3215,7 +3351,7 @@ def _ai_confirm(question, title=''):
     wx = _get_wx()
 
     def show():
-        dialog = wx.MessageDialog(None, str(question),
+        dialog = wx.MessageDialog(_tcs_parent(), str(question),
                                   str(title or _("Macro")),
                                   wx.YES_NO | wx.ICON_QUESTION)
         answer = dialog.ShowModal()
@@ -3228,7 +3364,8 @@ def _ai_ask(prompt, title='', default=''):
     wx = _get_wx()
 
     def show():
-        dialog = wx.TextEntryDialog(None, str(prompt), str(title or _("Macro")),
+        dialog = wx.TextEntryDialog(_tcs_parent(), str(prompt),
+                                    str(title or _("Macro")),
                                     str(default or ''))
         answer = dialog.ShowModal()
         value = dialog.GetValue()
@@ -3246,7 +3383,7 @@ def _ai_choose(prompt, options, title=''):
         raise ValueError("a choice needs something to choose from")
 
     def show():
-        dialog = wx.SingleChoiceDialog(None, str(prompt),
+        dialog = wx.SingleChoiceDialog(_tcs_parent(), str(prompt),
                                        str(title or _("Macro")), choices)
         answer = dialog.ShowModal()
         value = dialog.GetStringSelection()
@@ -3267,7 +3404,7 @@ def _ai_form(title, fields):
     wx = _get_wx()
 
     def show():
-        dialog = wx.Dialog(None, title=str(title or _("Macro")))
+        dialog = wx.Dialog(_tcs_parent(), title=str(title or _("Macro")))
         panel = wx.Panel(dialog)
         sizer = wx.BoxSizer(wx.VERTICAL)
         controls = []
@@ -3296,14 +3433,18 @@ def _ai_form(title, fields):
             control.Bind(wx.EVT_SET_FOCUS, lambda e: (_play_focus(), e.Skip()))
             controls.append((field, control))
 
-        buttons = dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
-        if buttons:
-            sizer.Add(buttons, 0, wx.ALL | wx.ALIGN_RIGHT, 8)
         panel.SetSizer(sizer)
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(panel, 1, wx.EXPAND)
+        # The buttons belong to the DIALOG, so they go in the dialog's sizer.
+        # Adding them to the panel's sizer instead is what wx refuses: a sizer
+        # can only position windows whose parent is the window it manages.
+        buttons = dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
+        if buttons:
+            outer.Add(buttons, 0, wx.ALL | wx.ALIGN_RIGHT, 8)
         dialog.SetSizer(outer)
-        dialog.SetSize((460, min(520, 140 + 70 * len(fields))))
+        dialog.SetSize((460, min(520, 160 + 70 * len(fields))))
+        dialog.Layout()
         dialog.CenterOnScreen()
         if controls:
             controls[0][1].SetFocus()
@@ -3435,6 +3576,246 @@ def _ai_value_of(node, variables, transcript):
     return _ai_fill(node.get('value', ''), variables)
 
 
+# --------------------------------------------------------------------------- #
+# The voice a script speaks in
+# --------------------------------------------------------------------------- #
+# By default a script speaks in the user's own voice - Titan's live engine with
+# the engine, voice, rate and pitch they configured. A script may borrow a
+# different one, and "borrow" is the whole point: it is applied to the live
+# engine and NEVER written to the settings file, and it is put back when the
+# script ends however it ends - finished, stopped, cancelled or broken. A macro
+# that could leave the user's screen reader in some other voice would be a
+# macro nobody could afford to run.
+
+def _tcs_speech():
+    from src.titan_core.stereo_speech import get_stereo_speech
+    return get_stereo_speech()
+
+
+def _tcs_voice_remember(budget):
+    """Capture the voice Titan is speaking in, once per run."""
+    if 'voice_saved' in budget:
+        return
+    saved = {}
+    try:
+        speech = _tcs_speech()
+        if speech is not None:
+            saved['engine'] = speech.get_engine()
+            saved['voice'] = getattr(speech, 'voice', None)
+    except Exception:
+        pass
+    # rate/pitch/volume are held on the engine in its own units, so they are
+    # put back from the user's settings rather than guessed at.
+    try:
+        from src.settings.settings import get_setting
+        for key in ('rate', 'pitch', 'volume'):
+            saved[key] = get_setting(key, '', section='stereo_speech')
+    except Exception:
+        pass
+    budget['voice_saved'] = saved
+
+
+def _tcs_voice_restore(budget):
+    """Put the user's own voice back."""
+    saved = budget.pop('voice_saved', None)
+    if not saved:
+        return
+    try:
+        speech = _tcs_speech()
+        if speech is None:
+            return
+        if saved.get('engine'):
+            speech.set_engine(saved['engine'])
+        for key, setter in (('rate', 'set_rate'), ('pitch', 'set_pitch'),
+                            ('volume', 'set_volume')):
+            value = saved.get(key)
+            if value not in (None, ''):
+                try:
+                    getattr(speech, setter)(int(value))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        name = saved.get('voice')
+        if name:
+            _tcs_set_voice_by_name(speech, name)
+    except Exception as e:
+        print(f"[tcs] could not put the voice back: {e}")
+
+
+def _tcs_set_voice_by_name(speech, name):
+    """Select a voice on the live engine by its name. True when it matched."""
+    wanted = str(name or '').strip().lower()
+    if not wanted:
+        return False
+    try:
+        voices = speech.get_available_voices() or []
+    except Exception:
+        return False
+    for index, voice in enumerate(voices):
+        label = (voice.get('display_name') or voice.get('name')
+                 or voice.get('id') or '') if isinstance(voice, dict) else str(voice)
+        identifier = (voice.get('id') or '') if isinstance(voice, dict) else str(voice)
+        if wanted in (str(label).lower(), str(identifier).lower()):
+            speech.set_voice(index)
+            return True
+    for index, voice in enumerate(voices):
+        label = (voice.get('display_name') or voice.get('name')
+                 or voice.get('id') or '') if isinstance(voice, dict) else str(voice)
+        if wanted in str(label).lower():
+            speech.set_voice(index)
+            return True
+    return False
+
+
+def _tcs_voice(statement, variables, transcript, budget):
+    """`voice engine="supertonic" name="Nova" rate=2` - for this script only."""
+    speech = _tcs_speech()
+    if speech is None:
+        raise TCSError(statement['line'],
+                       "Titan's speech engine is not running")
+    if statement.get('reset'):
+        _tcs_voice_restore(budget)
+        transcript.append("voice: back to the user's own")
+        return ''
+    _tcs_voice_remember(budget)
+    changed = []
+    engine = statement.get('engine')
+    if engine is not None:
+        wanted = str(_ai_value_of(engine, variables, transcript)).strip()
+        try:
+            speech.set_engine(wanted)
+        except Exception as e:
+            raise TCSError(statement['line'],
+                           f"could not speak with '{wanted}': {e}")
+        if str(speech.get_engine()).lower() != wanted.lower():
+            raise TCSError(statement['line'],
+                           f"'{wanted}' is not an engine Titan can speak with "
+                           f"here", "Run titan.list_tts_engines to see them.")
+        changed.append(f"engine {wanted}")
+    name = statement.get('name')
+    if name is not None:
+        wanted = str(_ai_value_of(name, variables, transcript)).strip()
+        if not _tcs_set_voice_by_name(speech, wanted):
+            raise TCSError(statement['line'],
+                           f"this engine has no voice called '{wanted}'")
+        changed.append(f"voice {wanted}")
+    for key, setter in (('rate', 'set_rate'), ('pitch', 'set_pitch'),
+                        ('volume', 'set_volume')):
+        node = statement.get(key)
+        if node is None:
+            continue
+        value = _ai_number(_ai_value_of(node, variables, transcript))
+        try:
+            getattr(speech, setter)(int(value))
+        except Exception as e:
+            raise TCSError(statement['line'], f"could not set the {key}: {e}")
+        changed.append(f"{key} {int(value)}")
+    transcript.append("voice: " + (", ".join(changed) or "nothing changed")
+                      + " (for this script only)")
+    return ''
+
+
+def _tcs_beside(budget, name):
+    """A file named by a script, found next to that script.
+
+    A macro is a folder, and the sounds and helper scripts an author ships with
+    it live in that folder. Writing an absolute path would mean the macro only
+    worked on the machine it was written on - so a bare name is looked for
+    beside the script first, and only then taken as a path in its own right.
+    """
+    target = str(name or '').strip().strip('"')
+    if not target:
+        return ''
+    expanded = os.path.expandvars(os.path.expanduser(target))
+    base = budget.get('dir') or ''
+    if base and not os.path.isabs(expanded):
+        beside = os.path.join(base, expanded)
+        if os.path.isfile(beside):
+            return os.path.abspath(beside)
+    return os.path.abspath(expanded)
+
+
+def _tcs_play(statement, variables, transcript, budget):
+    """`play "ding.ogg"` - a sound the script ships with itself."""
+    from src.titan_core import actions
+
+    name = _ai_value_of(statement['file'], variables, transcript)
+    path = _tcs_beside(budget, name)
+    if not path or not os.path.isfile(path):
+        raise TCSError(statement['line'],
+                       f"there is no sound file called '{name}'",
+                       "A bare name is looked for next to the script itself.")
+    args = {'path': path}
+    if statement.get('position') is not None:
+        args['position'] = _ai_value_of(statement['position'], variables,
+                                        transcript)
+    if statement.get('wait') is not None:
+        args['wait'] = _ai_value_of(statement['wait'], variables, transcript)
+    result = actions.run('titan', 'play_sound', **args)
+    transcript.append(f"play {os.path.basename(path)}: {result.text}")
+    if not result.ok:
+        raise TCSError(statement['line'], str(result.text))
+    return str(result.text or '')
+
+
+def _tcs_run_script(statement, variables, transcript, budget):
+    """`run "helper.tcs"` - another script, normally one beside this one.
+
+    The called script gets its own variables: a script is a piece of behaviour,
+    not a shared pile of state, and two scripts that happened to use `x` for
+    different things should not corrupt each other. What comes back is its last
+    value, so the caller can use it.
+    """
+    name = _ai_value_of(statement['script'], variables, transcript)
+    path = _tcs_beside(budget, name)
+    if not path.lower().endswith(TCS_EXT):
+        path += TCS_EXT
+    if not os.path.isfile(path):
+        raise TCSError(statement['line'],
+                       f"there is no script called '{name}'",
+                       "A bare name is looked for next to the script itself.")
+    key = os.path.normcase(path)
+    chain = budget.setdefault('chain', [])
+    if key in chain:
+        raise TCSError(statement['line'],
+                       f"'{os.path.basename(path)}' is already running - a "
+                       f"script cannot call itself round in a circle")
+    if len(chain) >= 8:
+        raise TCSError(statement['line'],
+                       "scripts are calling each other too many levels deep")
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            text = handle.read()
+    except OSError as e:
+        raise TCSError(statement['line'],
+                       f"could not read {os.path.basename(path)}: {e}")
+    transcript.append(f"run {os.path.basename(path)}")
+    inner = dict(budget)
+    inner['dir'] = os.path.dirname(path)
+    inner['chain'] = chain + [key]
+    program, errors = _ai_parse(text)
+    if errors:
+        raise TCSError(statement['line'],
+                       f"{os.path.basename(path)} would not run",
+                       "; ".join(e.describe() for e in errors[:4]))
+    scope = {}
+    returned = None
+    try:
+        try:
+            _ai_execute(program['body'], scope, transcript, inner)
+        except _AIStop as stop:
+            # 'return x' says what the helper hands back; 'stop' says nothing,
+            # and then the caller reads its last result as before.
+            returned = stop.value
+    finally:
+        # A called script's borrowed voice ends with the called script - it has
+        # its own copy of the run state, so the caller's finally cannot see it.
+        _tcs_voice_restore(inner)
+        # The step budget is shared, so a called script cannot buy its caller
+        # more room by starting over.
+        budget['steps'] = inner['steps']
+    return str(returned if returned is not None else scope.get('last', ''))
+
+
 def _ai_prompt(statement, variables, transcript):
     """ask / confirm / choose, answered into a variable."""
     prompt = _ai_value_of(statement['prompt'], variables, transcript)
@@ -3522,6 +3903,15 @@ def _ai_compare(left, operator, right):
     return a.strip().lower() == b.strip().lower()
 
 
+def _ai_truth(value):
+    """Whether a script value means yes. Booleans, words and numbers alike."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'tak')
+
+
 def _ai_is_numeric(text):
     try:
         float(str(text).strip())
@@ -3546,9 +3936,20 @@ def _ai_execute(body, variables, transcript, budget):
             variables[statement['name']] = _ai_value_of(
                 statement['value'], variables, transcript)
         elif kind == 'say':
-            spoken = _ai_fill(statement['text'], variables)
-            _speak(str(spoken))
+            spoken = _ai_value_of(statement['text'], variables, transcript)
+            wait = (_ai_truth(_ai_value_of(statement['wait'], variables,
+                                           transcript))
+                    if statement.get('wait') is not None else False)
+            interrupt = (_ai_truth(_ai_value_of(statement['interrupt'],
+                                                variables, transcript))
+                         if statement.get('interrupt') is not None else False)
+            _tcs_say(str(spoken), wait=wait, interrupt=interrupt)
             transcript.append(f"say: {spoken}")
+        elif kind == 'return':
+            raise _AIStop(_ai_value_of(statement['value'], variables,
+                                       transcript)
+                          if statement.get('value') else
+                          variables.get('last', ''))
         elif kind == 'message':
             text = _ai_value_of(statement['text'], variables, transcript)
             title = (_ai_value_of(statement['title'], variables, transcript)
@@ -3564,6 +3965,14 @@ def _ai_execute(body, variables, transcript, budget):
                 variables[name] = value
         elif kind == 'wait':
             _time.sleep(statement['seconds'])
+        elif kind == 'play':
+            variables['last'] = _tcs_play(statement, variables, transcript,
+                                          budget)
+        elif kind == 'run':
+            variables['last'] = _tcs_run_script(statement, variables,
+                                                transcript, budget)
+        elif kind == 'voice':
+            _tcs_voice(statement, variables, transcript, budget)
         elif kind == 'stop':
             raise _AIStop()
         elif kind == 'repeat':
@@ -3578,11 +3987,13 @@ def _ai_execute(body, variables, transcript, budget):
                 _ai_execute(statement['else'], variables, transcript, budget)
 
 
-def check_tcs(text):
-    """[problem, ...] - everything wrong with a macro, without running it.
+def check_tcs(text, base_dir=''):
+    """[problem, ...] - everything wrong with a script, without running it.
 
     Resolution is checked here too, so 'titan.plya.locally' is caught when the
-    macro is written rather than halfway through it at a quarter to twelve.
+    script is written rather than halfway through it at a quarter to twelve.
+    Given ``base_dir``, the sounds and helper scripts it names are checked as
+    well.
     """
     program, errors = _ai_parse(text)
     problems = [e.describe() for e in errors]
@@ -3631,8 +4042,28 @@ def check_tcs(text):
                 walk(statement['fields'])
             elif statement['kind'] == 'prompt':
                 walk([statement['prompt']] + list(statement.get('options') or []))
-            elif statement['kind'] == 'message':
+            elif statement['kind'] in ('message', 'say'):
                 walk([statement['text']])
+            elif statement['kind'] == 'return' and statement.get('value'):
+                walk([statement['value']])
+            elif statement['kind'] == 'voice':
+                walk([node for key, node in statement.items()
+                      if isinstance(node, dict) and node.get('kind')])
+            elif statement['kind'] in ('play', 'run'):
+                node = statement.get('file') or statement.get('script')
+                walk([node])
+                # A file named literally can be checked now; one built from a
+                # variable can only be checked when it is known.
+                if node.get('kind') == 'value' and base_dir:
+                    name = str(node.get('value', ''))
+                    target = _tcs_beside({'dir': base_dir}, name)
+                    if statement['kind'] == 'run' and not target.lower().endswith(TCS_EXT):
+                        target += TCS_EXT
+                    if name and not os.path.isfile(target):
+                        problems.append(
+                            f"line {statement['line']}: there is no "
+                            f"{'script' if statement['kind'] == 'run' else 'sound file'}"
+                            f" called '{name}' next to this one")
     try:
         walk(program['body'])
     except Exception as e:
@@ -3640,33 +4071,44 @@ def check_tcs(text):
     return problems
 
 
-def run_tcs_text(text, announce=True):
-    """(ok, transcript). Runs a macro that is already in memory."""
+def run_tcs_text(text, announce=True, base_dir=''):
+    """(ok, transcript). Runs a script that is already in memory.
+
+    ``base_dir`` is the folder the script came from: the sounds and helper
+    scripts it names by bare filename are looked for there.
+    """
     program, errors = _ai_parse(text)
     if errors:
         return False, [e.describe() for e in errors]
     transcript = []
     variables = {}
     # 'prose' is the per-run translation cache: a pseudocode line inside a
-    # repeat costs one request, not one per turn of the loop.
-    budget = {'steps': 2000, 'prose': {}}
+    # repeat costs one request, not one per turn of the loop. 'chain' is the
+    # scripts already running, so they cannot call each other in a circle.
+    budget = {'steps': 2000, 'prose': {}, 'dir': base_dir, 'chain': []}
     try:
-        _ai_execute(program['body'], variables, transcript, budget)
-    except _AIStop:
-        transcript.append("stopped")
-    except TCSError as e:
-        transcript.append(e.describe())
-        if announce:
-            _speak(_("Macro problem: {}").format(e.message))
-            _play_error()
-        return False, transcript
-    except Exception as e:                           # noqa: BLE001 - reported
-        transcript.append(f"{type(e).__name__}: {e}")
-        if announce:
-            _speak(_("Error running macro: {}").format(str(e)))
-            _play_error()
-        return False, transcript
-    return True, transcript
+        try:
+            _ai_execute(program['body'], variables, transcript, budget)
+        except _AIStop:
+            transcript.append("stopped")
+        except TCSError as e:
+            transcript.append(e.describe())
+            if announce:
+                _speak(_("Macro problem: {}").format(e.message))
+                _play_error()
+            return False, transcript
+        except Exception as e:                       # noqa: BLE001 - reported
+            transcript.append(f"{type(e).__name__}: {e}")
+            if announce:
+                _speak(_("Error running macro: {}").format(str(e)))
+                _play_error()
+            return False, transcript
+        return True, transcript
+    finally:
+        # Whatever happened - finished, stopped, cancelled, crashed - the
+        # user's own voice comes back. A borrowed engine that outlived the
+        # script would leave them listening to somebody else's choice.
+        _tcs_voice_restore(budget)
 
 
 def run_tcs(script_path):
@@ -3681,7 +4123,8 @@ def run_tcs(script_path):
 
     def _run():
         _play_sound('macro/macro_start.ogg')
-        ok, transcript = run_tcs_text(text)
+        ok, transcript = run_tcs_text(
+            text, base_dir=os.path.dirname(os.path.abspath(script_path)))
         for line in transcript:
             print(f"[tcs] {line}")
         if ok:
@@ -3770,7 +4213,7 @@ class TCSScheduler(threading.Thread):
 
     def _fire(self, macro, text):
         print(f"[tcs] trigger fired: {macro.get('name')}")
-        run_tcs_text(text)
+        run_tcs_text(text, base_dir=macro.get('folder_path', ''))
 
     def run(self):
         self._running = True
@@ -4142,10 +4585,14 @@ own actions. Plain text, edited in tEdit like any other script.
 
 One statement per line. # starts a comment.
 
-  ACTIONS - any action any Titan add-on offers, called by name:
+  ACTIONS - every action every Titan add-on offers, exactly the set the
+  assistant has, called by name:
     titan.speak "hello"                 one value, positionally
     titan.play_media title="Nirvana"    the same value, named
     titan.tts.speak("hello")            brackets and extra dots both work
+    macros.run_macro name="My macro"    including other macros
+    tnotes.create_note title="x" text="y"
+    system.set_volume percent=30
   The values an action takes are the ones it declares - run
   macros.macro_actions, or titan_list_actions, to see them.
 
@@ -4187,9 +4634,27 @@ One statement per line. # starts a comment.
     Each control's name becomes a variable. Closing a question or a dialog
     ends the script - a macro must not carry on past something declined.
 
-  SPEAKING AND STOPPING
-    say "anything"                      speaks through Titan
+  SPEAKING, SOUNDS AND STOPPING
+    say "anything"                      Titan's own voice, as titan.speak
+    say "anything" wait=true            wait until it has finished speaking
+    say "anything" interrupt=true       stop what is being said first
+    speak "anything"                    the same word either way
+    voice engine="supertonic" name="Nova" rate=2 pitch=-1
+                                        a different voice FOR THIS SCRIPT ONLY
+    voice reset                         back to the user's own, early
+    play "ding.ogg"                     a sound shipped beside the script
+    play "ding.ogg" position=-1 wait=true    -1 left to 1 right
+    run "helper.tcs"                    another script in the same folder;
+                                        {{last}} is what it returned
+    return "whatever"                   ends this script, handing that back
     stop                                ends the script here
+
+  A bare filename in 'play' and 'run' is looked for next to the script itself,
+  so a macro folder carries its own sounds and helper scripts anywhere.
+
+  A script speaks with whatever the user configured. 'voice' borrows a
+  different one: it is applied to the live engine, never saved, and put back
+  the moment the script ends - finished, stopped, cancelled or broken.
 
   TRIGGERS - put these at the top to have Titan run the macro by itself:
     when startup
@@ -4232,6 +4697,7 @@ def action_macro_actions(addon=""):
 def action_check_macro(script="", name=""):
     """Say whether a Titan Script would run, without running it."""
     text = str(script or '')
+    folder = ''
     if not text.strip():
         if not str(name or '').strip():
             return needs('script', "Which macro should be checked? Pass the "
@@ -4249,7 +4715,8 @@ def action_check_macro(script="", name=""):
                 text = handle.read()
         except Exception as e:
             return fails(f"Could not read '{macro.get('name')}': {e}")
-    problems = check_tcs(text)
+        folder = macro.get('folder_path', '')
+    problems = check_tcs(text, base_dir=folder)
     if not problems:
         return "The macro is fine - every line names something Titan can do."
     return ("The macro would not run:\n"
