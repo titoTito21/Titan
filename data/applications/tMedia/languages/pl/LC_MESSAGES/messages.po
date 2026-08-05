@@ -309,3 +309,231 @@ msgstr "Nie znaleziono prawidłowego adresu URL filmu"
 
 msgid "Searching for: %s"
 msgstr "Wyszukiwanie: %s"
+
+#: player.py
+msgid "Previous track"
+msgstr "Poprzednia ścieżka"
+
+#: player.py
+msgid "Next track"
+msgstr "Następna ścieżka"
+
+#: player.py
+msgid "Add bookmark"
+msgstr "Dodaj zakładkę"
+
+#: player.py
+msgid "Bookmarks..."
+msgstr "Zakładki..."
+
+#: player.py
+msgid "Go to position..."
+msgstr "Przejdź do pozycji..."
+
+#: player.py
+msgid "Nothing to play"
+msgstr "Nie ma czego odtworzyć"
+
+#: player.py
+msgid "Resuming from %s"
+msgstr "Wznawiam od %s"
+
+#: player.py
+msgid "Starting at %s"
+msgstr "Zaczynam od %s"
+
+#: player.py
+msgid "%(book)s - track %(number)d of %(total)d: %(title)s"
+msgstr "%(book)s - ścieżka %(number)d z %(total)d: %(title)s"
+
+#: player.py
+msgid "Track %(number)d of %(total)d: %(title)s"
+msgstr "Ścieżka %(number)d z %(total)d: %(title)s"
+
+#: player.py
+msgid "Last track"
+msgstr "Ostatnia ścieżka"
+
+#: player.py
+msgid "First track"
+msgstr "Pierwsza ścieżka"
+
+#: player.py
+msgid "Starting from the beginning"
+msgstr "Odtwarzam od początku"
+
+#: player.py
+msgid "Jumped to %s"
+msgstr "Przejście do %s"
+
+#: player.py
+msgid "Going to %s"
+msgstr "Przechodzę do %s"
+
+#: player.py
+msgid "Bookmark %s"
+msgstr "Zakładka %s"
+
+#: player.py
+msgid "Bookmark added at %s"
+msgstr "Dodano zakładkę w %s"
+
+#: player.py
+msgid "Finished"
+msgstr "Zakończono"
+
+#: player.py
+msgid "Go to position"
+msgstr "Przejdź do pozycji"
+
+#: player.py
+msgid "Position (for example 50%, 49 minutes, 1:23:45)"
+msgstr "Pozycja (na przykład 50%, 49 minut, 1:23:45)"
+
+#: player.py
+msgid "I did not understand that position"
+msgstr "Nie rozumiem tej pozycji"
+
+#: player.py
+msgid "Space play or pause. Left and right arrows seek ten seconds. Up and down arrows change volume. Control plus left or right changes track. Control plus B adds a bookmark, control plus shift plus B adds a named bookmark, B opens the bookmark list. G goes to any position, such as 50 percent or 49 minutes. Control plus home starts from the beginning. Escape closes the player."
+msgstr "Spacja odtwarza lub pauzuje. Strzałki w lewo i w prawo przewijają o dziesięć sekund. Strzałki w górę i w dół zmieniają głośność. Control ze strzałką w lewo lub w prawo zmienia ścieżkę. Control plus B dodaje zakładkę, control plus shift plus B dodaje zakładkę z nazwą, B otwiera listę zakładek. G przechodzi do dowolnej pozycji, na przykład pięćdziesiąt procent albo czterdzieści dziewięć minut. Control plus home odtwarza od początku. Escape zamyka odtwarzacz."
+
+#: bookmarks_gui.py
+msgid "Track %(number)d of %(total)d"
+msgstr "Ścieżka %(number)d z %(total)d"
+
+#: bookmarks_gui.py
+msgid "Track %d"
+msgstr "Ścieżka %d"
+
+#: bookmarks_gui.py
+msgid "Bookmarks: %s"
+msgstr "Zakładki: %s"
+
+#: bookmarks_gui.py
+msgid "Bookmarks"
+msgstr "Zakładki"
+
+#: bookmarks_gui.py
+msgid "Go to"
+msgstr "Przejdź"
+
+#: bookmarks_gui.py
+msgid "Add here"
+msgstr "Dodaj tutaj"
+
+#: bookmarks_gui.py
+msgid "Rename"
+msgstr "Zmień nazwę"
+
+#: bookmarks_gui.py
+msgid "Delete"
+msgstr "Usuń"
+
+#: bookmarks_gui.py
+msgid "Close"
+msgstr "Zamknij"
+
+#: bookmarks_gui.py
+msgid "Resume point - %s"
+msgstr "Punkt wznowienia - %s"
+
+#: bookmarks_gui.py
+msgid "Bookmark"
+msgstr "Zakładka"
+
+#: bookmarks_gui.py
+msgid "No bookmarks yet"
+msgstr "Brak zakładek"
+
+#: bookmarks_gui.py
+msgid "Bookmark name"
+msgstr "Nazwa zakładki"
+
+#: bookmarks_gui.py
+msgid "Bookmark added"
+msgstr "Dodano zakładkę"
+
+#: bookmarks_gui.py
+msgid "The resume point cannot be renamed"
+msgstr "Punktu wznowienia nie można nazwać"
+
+#: bookmarks_gui.py
+msgid "Rename bookmark"
+msgstr "Zmień nazwę zakładki"
+
+#: bookmarks_gui.py
+msgid "Resume point removed"
+msgstr "Usunięto punkt wznowienia"
+
+#: bookmarks_gui.py
+msgid "Bookmark removed"
+msgstr "Usunięto zakładkę"
+
+#: bookmarks_gui.py
+msgid "Bookmarks and resume points"
+msgstr "Zakładki i punkty wznowienia"
+
+#: bookmarks_gui.py
+msgid "Resume"
+msgstr "Wznów"
+
+#: bookmarks_gui.py
+msgid "Forget"
+msgstr "Zapomnij"
+
+#: bookmarks_gui.py
+msgid "Nothing to resume yet"
+msgstr "Nie ma czego wznowić"
+
+#: bookmarks_gui.py
+msgid "Nothing to resume yet. Positions are saved automatically while you listen."
+msgstr "Nie ma czego wznowić. Pozycje zapisują się automatycznie podczas słuchania."
+
+#: bookmarks_gui.py
+msgid "%d items"
+msgstr "Pozycji: %d"
+
+#: bookmarks_gui.py
+msgid "audiobook"
+msgstr "audiobook"
+
+#: bookmarks_gui.py
+msgid "%d bookmarks"
+msgstr "zakładek: %d"
+
+#: bookmarks_gui.py
+msgid "Removed"
+msgstr "Usunięto"
+
+#: tmedia.py
+msgid "Loading audiobook: %s"
+msgstr "Wczytywanie audiobooka: %s"
+
+#: tmedia.py
+msgid "No media files in this folder"
+msgstr "W tym folderze nie ma plików multimedialnych"
+
+#: tmedia.py
+msgid "No media files in this folder."
+msgstr "W tym folderze nie ma plików multimedialnych."
+
+#: tmedia.py
+msgid "Audiobook"
+msgstr "Audiobook"
+
+#: MediaCatalog.py
+msgid "Play folder as audiobook"
+msgstr "Odtwórz folder jako audiobook"
+
+#: MediaCatalog.py
+msgid "Play from position..."
+msgstr "Odtwórz od pozycji..."
+
+#: MediaCatalog.py
+msgid "Play from position"
+msgstr "Odtwórz od pozycji"
+
+#: MediaCatalog.py
+msgid "Could not start VLC: %s"
+msgstr "Nie udało się uruchomić VLC: %s"

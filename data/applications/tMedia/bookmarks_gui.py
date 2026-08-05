@@ -141,7 +141,10 @@ class BookmarksDialog(wx.Dialog):
             return
         self.result = (int(place.get('track', 0)), int(place.get('position', 0)))
         common.play_sound('enter')
-        self.EndModal(wx.ID_OK)
+        if self.IsModal():
+            self.EndModal(wx.ID_OK)
+        else:
+            self.Hide()
 
     def on_add(self, event):
         if not self.current:

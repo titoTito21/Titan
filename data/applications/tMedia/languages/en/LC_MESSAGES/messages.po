@@ -306,3 +306,231 @@ msgstr ""
 #: YoutubeSearch.py
 msgid "No valid video URL found"
 msgstr ""
+
+#: player.py
+msgid "Previous track"
+msgstr ""
+
+#: player.py
+msgid "Next track"
+msgstr ""
+
+#: player.py
+msgid "Add bookmark"
+msgstr ""
+
+#: player.py
+msgid "Bookmarks..."
+msgstr ""
+
+#: player.py
+msgid "Go to position..."
+msgstr ""
+
+#: player.py
+msgid "Nothing to play"
+msgstr ""
+
+#: player.py
+msgid "Resuming from %s"
+msgstr ""
+
+#: player.py
+msgid "Starting at %s"
+msgstr ""
+
+#: player.py
+msgid "%(book)s - track %(number)d of %(total)d: %(title)s"
+msgstr ""
+
+#: player.py
+msgid "Track %(number)d of %(total)d: %(title)s"
+msgstr ""
+
+#: player.py
+msgid "Last track"
+msgstr ""
+
+#: player.py
+msgid "First track"
+msgstr ""
+
+#: player.py
+msgid "Starting from the beginning"
+msgstr ""
+
+#: player.py
+msgid "Jumped to %s"
+msgstr ""
+
+#: player.py
+msgid "Going to %s"
+msgstr ""
+
+#: player.py
+msgid "Bookmark %s"
+msgstr ""
+
+#: player.py
+msgid "Bookmark added at %s"
+msgstr ""
+
+#: player.py
+msgid "Finished"
+msgstr ""
+
+#: player.py
+msgid "Go to position"
+msgstr ""
+
+#: player.py
+msgid "Position (for example 50%, 49 minutes, 1:23:45)"
+msgstr ""
+
+#: player.py
+msgid "I did not understand that position"
+msgstr ""
+
+#: player.py
+msgid "Space play or pause. Left and right arrows seek ten seconds. Up and down arrows change volume. Control plus left or right changes track. Control plus B adds a bookmark, control plus shift plus B adds a named bookmark, B opens the bookmark list. G goes to any position, such as 50 percent or 49 minutes. Control plus home starts from the beginning. Escape closes the player."
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Track %(number)d of %(total)d"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Track %d"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmarks: %s"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmarks"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Go to"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Add here"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Rename"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Delete"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Close"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Resume point - %s"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmark"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "No bookmarks yet"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmark name"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmark added"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "The resume point cannot be renamed"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Rename bookmark"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Resume point removed"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmark removed"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Bookmarks and resume points"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Resume"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Forget"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Nothing to resume yet"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Nothing to resume yet. Positions are saved automatically while you listen."
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "%d items"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "audiobook"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "%d bookmarks"
+msgstr ""
+
+#: bookmarks_gui.py
+msgid "Removed"
+msgstr ""
+
+#: tmedia.py
+msgid "Loading audiobook: %s"
+msgstr ""
+
+#: tmedia.py
+msgid "No media files in this folder"
+msgstr ""
+
+#: tmedia.py
+msgid "No media files in this folder."
+msgstr ""
+
+#: tmedia.py
+msgid "Audiobook"
+msgstr ""
+
+#: MediaCatalog.py
+msgid "Play folder as audiobook"
+msgstr ""
+
+#: MediaCatalog.py
+msgid "Play from position..."
+msgstr ""
+
+#: MediaCatalog.py
+msgid "Play from position"
+msgstr ""
+
+#: MediaCatalog.py
+msgid "Could not start VLC: %s"
+msgstr ""

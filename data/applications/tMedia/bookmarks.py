@@ -265,13 +265,22 @@ def get_store():
     return _store
 
 
+def end_margin(length):
+    """How close to the end counts as "played to the end". Half a minute for a
+    film, proportionally less for a short chapter - a fixed 30 seconds would
+    mean a two minute track could never be resumed at all."""
+    if not length or length <= 0:
+        return RESUME_END_MARGIN_MS
+    return min(RESUME_END_MARGIN_MS, max(1000, int(length * 0.05)))
+
+
 def should_keep_resume(position, length, kind):
     """Is this position worth remembering? Audiobooks always are - they are
     listened to in sittings - while a single file has to be long enough, and
     anything played (nearly) to the end is forgotten so it restarts."""
     if position is None or position < 0:
         return False
-    if length and position > max(0, length - RESUME_END_MARGIN_MS):
+    if length and position > max(0, length - end_margin(length)):
         return False
     if kind == 'audiobook':
         return position >= 1000

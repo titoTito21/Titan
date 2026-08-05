@@ -100,10 +100,13 @@ class TMediaApp(wx.Frame):
         if initial_media:
             self._start_initial_media(initial_media)
 
-    def _start_initial_media(self, media):
+    def _start_initial_media(self, media, start_spec=None):
         """Handle the startup argument. A normal file path or URL plays directly;
         a FOLDER (or an ``audiobook:<folder>`` argument) plays as an audiobook -
         the whole folder as one item, continuing from its saved position; a
+        ``position:<where>:<rest>`` argument (``where`` being anything
+        positions.py understands: ``50%``, ``49 min``, ``1:23:45``) starts the
+        rest of the argument at that point instead of at its resume point; a
         ``ytsearch:<query>`` argument (or a bare, non-file, non-URL string, e.g.
         one sent by the Titan assistant) triggers a YouTube search that
         auto-plays the first result; a ``radio:<country>:<query>`` argument opens
@@ -112,14 +115,24 @@ class TMediaApp(wx.Frame):
         m = (media or '').strip()
         if not m:
             return
+        position_prefix = 'position:'
+        if m.lower().startswith(position_prefix):
+            rest = m[len(position_prefix):]
+            # The position itself can contain colons ("1:23:45"), so a pipe
+            # separates it from the target; a colon still works for the simple
+            # forms ("position:50%:C:/film.mp4").
+            spec, _sep, target = rest.partition('|' if '|' in rest else ':')
+            if target.strip():
+                self._start_initial_media(target.strip(), start_spec=spec.strip())
+            return
         audiobook_prefix = 'audiobook:'
         if m.lower().startswith(audiobook_prefix):
             target = m[len(audiobook_prefix):].strip()
             if target:
-                self.play_folder(target)
+                self.play_folder(target, start_spec=start_spec)
             return
         if playlist.looks_like_folder(m):
-            self.play_folder(m)
+            self.play_folder(m, start_spec=start_spec)
             return
         radio_prefix = 'radio:'
         if m.lower().startswith(radio_prefix):
@@ -133,7 +146,8 @@ class TMediaApp(wx.Frame):
         if m.lower().startswith(prefix):
             query = m[len(prefix):].strip()
         elif ('://' in m) or os.path.exists(m):
-            self.play_media(m)          # a real URL or local file
+            # A real URL or local file.
+            self.play_media(m, start_spec=start_spec)
             return
         else:
             query = m                   # a bare search phrase
@@ -227,23 +241,25 @@ class TMediaApp(wx.Frame):
             self.view_sizer.Detach(panel)
             panel.Destroy()
 
-    def play_media(self, url, title=None, start_position=None):
+    def play_media(self, url, title=None, start_position=None, start_spec=None):
         """Switch to the embedded player and start playback. This is what
         the media catalog / YouTube search views call instead of opening a
         second top-level Player window."""
         panel = self._new_player()
-        panel.play_file(url, title, start_position=start_position)
+        panel.play_file(url, title, start_position=start_position,
+                        start_spec=start_spec)
         self.show_view('player')
 
     def play_playlist(self, tracks, title=None, media_id=None, kind='audiobook',
-                      start=None):
+                      start=None, start_spec=None):
         """Play a whole track list (an audiobook folder) as one item."""
         panel = self._new_player()
         panel.play_playlist(tracks, title=title, media_id=media_id, kind=kind,
-                            start=start)
+                            start=start, start_spec=start_spec)
         self.show_view('player')
 
-    def play_folder(self, url, title=None, start=None, fallback_tracks=None):
+    def play_folder(self, url, title=None, start=None, start_spec=None,
+                    fallback_tracks=None):
         """Play a folder as an audiobook: list it (which can take a moment on
         a network catalog, so it happens off the UI thread) and hand the whole
         track list to the player, which resumes it where it was left.
@@ -273,7 +289,8 @@ class TMediaApp(wx.Frame):
                               _("Audiobook"), wx.OK | wx.ICON_INFORMATION)
                 return
             self.play_playlist(tracks, title=name, media_id=url,
-                               kind='audiobook', start=start)
+                               kind='audiobook', start=start,
+                               start_spec=start_spec)
 
         Thread(target=work, daemon=True).start()
 

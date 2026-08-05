@@ -65,6 +65,7 @@ from translation import _
 import bookmarks
 from bookmarks_gui import BookmarksDialog, position_label
 import common
+import positions
 
 # How often the resume point is written while something plays. Often enough
 # that a crash or a closed window loses seconds, rarely enough that the JSON
@@ -104,6 +105,9 @@ class PlayerPanel(wx.Panel):
         self.media_kind = 'file'         # 'file' or 'audiobook'
         self._explicit_title = False
         self._pending_seek_ms = 0
+        # A position given as a percentage ("start at 50%") cannot become a
+        # time until VLC reports the length, so it waits here.
+        self._pending_spec = None
         self._resume_save_due = 0
         self._advancing = False
 
@@ -124,7 +128,9 @@ class PlayerPanel(wx.Panel):
         self.add_bookmark_button = wx.Button(self, label=_("Add bookmark"))
         controls.Add(self.add_bookmark_button, flag=wx.RIGHT, border=5)
         self.bookmarks_button = wx.Button(self, label=_("Bookmarks..."))
-        controls.Add(self.bookmarks_button)
+        controls.Add(self.bookmarks_button, flag=wx.RIGHT, border=5)
+        self.goto_button = wx.Button(self, label=_("Go to position..."))
+        controls.Add(self.goto_button)
         vbox.Add(controls, flag=wx.ALL, border=5)
 
         position_label_text = _("Playback position")
@@ -151,6 +157,7 @@ class PlayerPanel(wx.Panel):
         self.next_button.Bind(wx.EVT_BUTTON, lambda e: self.next_track())
         self.add_bookmark_button.Bind(wx.EVT_BUTTON, lambda e: self.add_bookmark())
         self.bookmarks_button.Bind(wx.EVT_BUTTON, lambda e: self.show_bookmarks())
+        self.goto_button.Bind(wx.EVT_BUTTON, lambda e: self.go_to_position())
         self.position_slider.Bind(wx.EVT_SCROLL_THUMBTRACK, self.on_position_thumbtrack)
         self.position_slider.Bind(wx.EVT_SCROLL_THUMBRELEASE, self.on_position_release)
         self.position_slider.Bind(wx.EVT_SLIDER, self.on_position_seek)
@@ -184,7 +191,8 @@ class PlayerPanel(wx.Panel):
     # ------------------------------------------------------------------ #
     # Starting playback
     # ------------------------------------------------------------------ #
-    def play_file(self, filepath: str, title: str = None, start_position=None):
+    def play_file(self, filepath: str, title: str = None, start_position=None,
+                  start_spec=None):
         """Play a single file or stream (the shared-player entry point)."""
         self._explicit_title = title is not None
         display = title or (
@@ -193,14 +201,16 @@ class PlayerPanel(wx.Panel):
         )
         self.play_playlist([{'url': filepath, 'title': display}],
                            title=display, media_id=filepath, kind='file',
-                           start=(0, start_position) if start_position else None)
+                           start=(0, start_position) if start_position else None,
+                           start_spec=start_spec)
 
     def play_playlist(self, tracks, title=None, media_id=None, kind='audiobook',
-                      start=None, resume=True):
+                      start=None, start_spec=None, resume=True):
         """Play ``tracks`` as one item. ``start`` is an explicit
-        ``(track, position)`` (a bookmark the user picked); without it the
-        saved resume point is used, which is what makes a long film or a book
-        continue by itself."""
+        ``(track, position)`` (a bookmark the user picked), ``start_spec`` a
+        position the user described ("50%", "49 minutes", "1:23:45"); without
+        either, the saved resume point is used, which is what makes a long
+        film or a book continue by itself."""
         self.tracks = [t for t in tracks if t.get('url')]
         if not self.tracks:
             self.status.SetLabel(_("Nothing to play"))
@@ -215,7 +225,13 @@ class PlayerPanel(wx.Panel):
 
         index, position = 0, 0
         resumed = False
-        if start:
+        parsed = positions.parse_position(start_spec) if start_spec else None
+        if parsed:
+            if parsed[2] is not None:
+                index = parsed[2]
+            resolved = positions.resolve_position(parsed)
+            position = resolved or 0
+        elif start:
             index, position = int(start[0] or 0), int(start[1] or 0)
         elif resume:
             saved = self.store.get_resume(self.media_id)
@@ -226,6 +242,12 @@ class PlayerPanel(wx.Panel):
 
         self._show_track_controls(len(self.tracks) > 1)
         self._load_track(index, position)
+
+        if parsed:
+            if parsed[0] == 'percent':
+                # Resolved by the timer as soon as the length is known.
+                self._pending_spec = parsed
+            common.speak(_("Starting at %s") % positions.describe_position(parsed))
 
         if resumed:
             where = position_label(self.media_kind, self.track_index,
@@ -254,6 +276,7 @@ class PlayerPanel(wx.Panel):
         self.is_playing = True
         self._advancing = False
         self._pending_seek_ms = max(0, int(position_ms or 0))
+        self._pending_spec = None
         self._resume_save_due = 0
         self.position_slider.SetValue(0)
         self._update_labels()
@@ -378,6 +401,44 @@ class PlayerPanel(wx.Panel):
             self.media_kind, track, self._track_title(track), position,
             len(self.tracks)))
 
+    def go_to_position(self):
+        """Ctrl+G: jump to any position the user can describe - "50%",
+        "49 minutes", "1:23:45", or, in an audiobook, "chapter 3 12 min"."""
+        dlg = wx.TextEntryDialog(
+            self,
+            _("Position (for example 50%, 49 minutes, 1:23:45)"),
+            _("Go to position"), "")
+        if dlg.ShowModal() != wx.ID_OK:
+            dlg.Destroy()
+            return
+        text = dlg.GetValue()
+        dlg.Destroy()
+
+        parsed = positions.parse_position(text)
+        if not parsed:
+            common.speak(_("I did not understand that position"))
+            self.status.SetLabel(_("I did not understand that position"))
+            return
+
+        track = parsed[2] if parsed[2] is not None else self.track_index
+        if track != self.track_index and 0 <= track < len(self.tracks):
+            # A percentage always refers to the track it is applied to, so the
+            # track has to be loaded before it can be resolved.
+            self._load_track(track, 0, announce=False)
+            if parsed[0] == 'percent':
+                self._pending_spec = parsed
+                common.speak(_("Going to %s") % positions.describe_position(parsed))
+                return
+            self.jump_to(track, positions.resolve_position(parsed) or 0)
+            return
+
+        resolved = positions.resolve_position(parsed, self.player.get_length() or 0)
+        if resolved is None:
+            self._pending_spec = parsed
+            common.speak(_("Going to %s") % positions.describe_position(parsed))
+            return
+        self.jump_to(track, resolved)
+
     def change_volume(self, delta):
         """Keyboard-shortcut volume change (Up/Down); see seek() for why
         this announces while the slider's own handler does not."""
@@ -447,17 +508,18 @@ class PlayerPanel(wx.Panel):
         if position is None or position < 0:
             return
         last_track = self.track_index >= len(self.tracks) - 1
+        near_end = bool(length) and position > length - bookmarks.end_margin(length)
         if (bookmarks.should_keep_resume(position, length, self.media_kind)
+                # Inside a book, being at the end of track 7 of 40 is still a
+                # place worth keeping - only the end of the LAST track is not.
                 or (self.media_kind == 'audiobook' and self.track_index > 0
-                    and not (last_track and length
-                             and position > length - bookmarks.RESUME_END_MARGIN_MS))):
+                    and not (last_track and near_end))):
             self.store.set_resume(self.media_id, position,
                                   track=self.track_index,
                                   track_title=self._track_title(self.track_index),
                                   length=length or 0, title=self.media_title,
                                   kind=self.media_kind, tracks=self.tracks)
-        elif force and length and position > length - bookmarks.RESUME_END_MARGIN_MS \
-                and last_track:
+        elif force and near_end and last_track:
             self.store.clear_resume(self.media_id)
 
     # ------------------------------------------------------------------ #
@@ -489,12 +551,18 @@ class PlayerPanel(wx.Panel):
             self.position_slider.SetValue(max(0, min(1000, permille)))
 
     def on_position_timer(self, event):
-        # A resume point can only be applied once VLC has actually opened the
-        # media (before that, set_time is silently dropped).
-        if self._pending_seek_ms and self.player.is_playing():
+        # A resume point (or a percentage, which needs the length) can only be
+        # applied once VLC has actually opened the media - before that,
+        # set_time is silently dropped.
+        if (self._pending_seek_ms or self._pending_spec) and self.player.is_playing():
             length = self.player.get_length()
             if length and length > 0:
-                self.player.set_time(min(self._pending_seek_ms, length - 1000))
+                if self._pending_spec:
+                    self._pending_seek_ms = (
+                        positions.resolve_position(self._pending_spec, length) or 0)
+                    self._pending_spec = None
+                if self._pending_seek_ms:
+                    self.player.set_time(min(self._pending_seek_ms, length - 1000))
                 self._pending_seek_ms = 0
 
         if not self._seeking:
@@ -537,8 +605,10 @@ class PlayerPanel(wx.Panel):
                        "seconds. Up and down arrows change volume. Control "
                        "plus left or right changes track. Control plus B adds "
                        "a bookmark, control plus shift plus B adds a named "
-                       "bookmark, B opens the bookmark list. Control plus home "
-                       "starts from the beginning. Escape closes the player."))
+                       "bookmark, B opens the bookmark list. G goes to any "
+                       "position, such as 50 percent or 49 minutes. Control "
+                       "plus home starts from the beginning. Escape closes "
+                       "the player."))
 
     def on_key_down(self, event):
         key = event.GetKeyCode()
@@ -553,6 +623,10 @@ class PlayerPanel(wx.Panel):
             self.restart()
         elif control and key in (ord('B'), ord('b')):
             self.add_bookmark(ask_name=shift)
+        elif control and key in (ord('G'), ord('g')):
+            self.go_to_position()
+        elif key in (ord('G'), ord('g')) and not event.HasModifiers():
+            self.go_to_position()
         elif key in (ord('B'), ord('b')) and not event.HasModifiers():
             self.show_bookmarks()
         elif key == wx.WXK_F1:

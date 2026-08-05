@@ -23,15 +23,16 @@ from concurrent.futures import ThreadPoolExecutor
 from translation import _
 
 import common
+import playlist
 
 try:
     import win32api
 except ImportError:
     win32api = None
 
-MEDIA_FILE_EXTENSIONS = ('.mp3', '.wav', '.ogg', '.wma', '.flac', '.aac',
-                          '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv',
-                          '.webm', '.m4a')
+# One list of playable extensions for the whole app (the tree and the
+# audiobook playlist builder must agree on what counts as media).
+MEDIA_FILE_EXTENSIONS = playlist.MEDIA_FILE_EXTENSIONS
 
 GOOGLE_DRIVE_MARKER = 'googledrive://'
 
@@ -154,6 +155,7 @@ class MediaCatalogPanel(wx.Panel):
 
         self.media_tree.Bind(wx.EVT_TREE_ITEM_EXPANDING, self.on_item_expanding)
         self.media_tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_tree_item_activated)
+        self.media_tree.Bind(wx.EVT_TREE_ITEM_MENU, self.on_tree_item_menu)
         self.media_tree.Bind(wx.EVT_CHAR_HOOK, self.on_tree_key_down)
 
         self.loading_sound_channel = None
@@ -488,6 +490,19 @@ class MediaCatalogPanel(wx.Panel):
         common.play_sound('ding')
         self.media_tree.Expand(parent_node)
 
+    def _is_audiobook_folder(self, item, data):
+        """Is this tree node a FOLDER of media (an audiobook) rather than a
+        single playable item? Podcast feeds also have children and a URL, so
+        they are excluded explicitly - expanding one lists episodes, it is not
+        a folder that can be played end to end."""
+        if not isinstance(data, str):
+            return False
+        if self.podcast_node is not None:
+            parent = self.media_tree.GetItemParent(item)
+            if parent.IsOk() and parent == self.podcast_node:
+                return False
+        return playlist.looks_like_folder(data)
+
     def on_tree_item_activated(self, event):
         item = event.GetItem()
         if item:
@@ -500,19 +515,93 @@ class MediaCatalogPanel(wx.Panel):
                     url_to_play = media_url
                     display_title = self.media_tree.GetItemText(item)
 
+                # Enter on a folder plays the WHOLE folder as an audiobook
+                # (the tree is still browsed with the arrow keys) - the way a
+                # book split into dozens of files is meant to be listened to.
+                if self._is_audiobook_folder(item, media_url):
+                    self.play_folder(url_to_play, display_title)
+                    return
+
                 self.play_media(url_to_play, display_title)
                 common.play_sound('done')
                 common.speak(_("Playing: %s") % display_title)
 
+    def on_tree_item_menu(self, event):
+        """Context menu (Applications key / right click): everything that can
+        be done to the focused node, so nothing depends on a shortcut."""
+        item = event.GetItem()
+        if not item or not item.IsOk():
+            return
+        data = self.media_tree.GetItemData(item)
+        if not data:
+            return
+        title = self.media_tree.GetItemText(item)
+        is_folder = self._is_audiobook_folder(item, data)
+        url = data[0] if isinstance(data, tuple) else data
+
+        menu = wx.Menu()
+        if is_folder:
+            play_folder_item = menu.Append(wx.ID_ANY, _("Play folder as audiobook"))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self.play_folder(url, title), play_folder_item)
+            resume_item = menu.Append(wx.ID_ANY, _("Play from position..."))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self._play_from_position(url, title, True),
+                      resume_item)
+        else:
+            play_item = menu.Append(wx.ID_ANY, _("Play"))
+            self.Bind(wx.EVT_MENU, lambda e: self.play_media(url, title), play_item)
+            position_item = menu.Append(wx.ID_ANY, _("Play from position..."))
+            self.Bind(wx.EVT_MENU,
+                      lambda e: self._play_from_position(url, title, False),
+                      position_item)
+        self.PopupMenu(menu)
+        menu.Destroy()
+
+    def _play_from_position(self, url, title, is_folder):
+        """Start this item at a position the user types ("50%", "49 min",
+        "1:23:45") instead of at its beginning or its resume point."""
+        dlg = wx.TextEntryDialog(
+            self, _("Position (for example 50%, 49 minutes, 1:23:45)"),
+            _("Play from position"), "")
+        spec = dlg.GetValue().strip() if dlg.ShowModal() == wx.ID_OK else ''
+        dlg.Destroy()
+        if not spec:
+            return
+        if is_folder:
+            self.owner.play_folder(url, title, start_spec=spec)
+        else:
+            common.play_sound('enteringtplayer')
+            self.owner.play_media(url, title, start_spec=spec)
+
     def on_tree_key_down(self, event):
-        if event.GetKeyCode() == wx.WXK_RETURN:
+        key = event.GetKeyCode()
+        if key == wx.WXK_RETURN:
             item = self.media_tree.GetSelection()
             if item:
                 self.on_tree_item_activated(wx.TreeEvent(wx.wxEVT_TREE_ITEM_ACTIVATED, self.media_tree, item))
-        elif event.GetKeyCode() == wx.WXK_ESCAPE:
+        elif key == wx.WXK_ESCAPE:
             self.owner.go_back()
         else:
             event.Skip()
+
+    def play_folder(self, url, title=None):
+        """Play a whole folder as one audiobook. With external VLC selected,
+        VLC gets the folder itself (it builds its own playlist); the built-in
+        player gets a real track list and remembers the place in it."""
+        player = common.config.get('DEFAULT', 'player', fallback='tplayer')
+        if player == 'vlc':
+            target = playlist.url_to_local_path(url) or url
+            try:
+                if os.name == 'nt':
+                    subprocess.Popen(["C:/Program Files/VideoLAN/VLC/vlc.exe", target])
+                else:
+                    subprocess.Popen(["vlc", target])
+            except Exception as e:
+                self.show_error_message(_("Could not start VLC: %s") % e)
+            return
+        common.play_sound('enteringtplayer')
+        self.owner.play_folder(url, title)
 
     def play_media(self, url, title=None):
         player = common.config.get('DEFAULT', 'player', fallback='tplayer')

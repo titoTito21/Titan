@@ -413,5 +413,25 @@
     "role": "assistant",
     "content": "Reached the step limit before finishing.",
     "timestamp": 1785781035.0573573
+  },
+  {
+    "role": "user",
+    "content": "odtwórz lokalnie, kingsajz, od 45 minut",
+    "timestamp": 1785857196.814092
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam Kingsajz od czterdziestej piątej minuty. Grom z Tobą!",
+    "timestamp": 1785857219.014428
+  },
+  {
+    "role": "user",
+    "content": "odtwórz słuchowisko Juliusz Machulski Seksmisja od 50 minut",
+    "timestamp": 1785860420.8034763
+  },
+  {
+    "role": "assistant",
+    "content": "Słuchowisko „Seksmisja” gra od pięćdziesiątej minuty. Moc pioruna niech ci towarzyszy!",
+    "timestamp": 1785860442.0899704
   }
 ]

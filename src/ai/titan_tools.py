@@ -994,7 +994,7 @@ def _media_index_path():
         from src.platform_utils import get_user_data_dir
         base = os.path.join(get_user_data_dir(), 'ai')
     except Exception:
-        base = os.path.join(_reminder_settings_dir(), 'ai')
+        base = os.path.join(_appsettings_dir(), 'ai')
     return os.path.join(base, 'media_index.TCI')
 
 
@@ -1478,12 +1478,15 @@ def titan_reindex_media(**_):
     return f"The media library index is already being built ({count} files so far)."
 
 
-def titan_play_media(query="", url="", **_):
+def titan_play_media(query="", url="", position="", **_):
     """Directly play something from the user's Media Library in tMedia. Give a
     direct ``url``/file to play that exact item (e.g. a url from
     titan_search_media), OR a ``query`` (a title/series/episode/book to find in
     the catalogs, e.g. 'swiat wedlug kiepskich odc 6') - the best match is played
-    straight away. If the query is ambiguous, search first and play by url."""
+    straight away. If the query is ambiguous, search first and play by url.
+
+    ``position`` starts it somewhere other than the beginning/resume point:
+    '50%', '49 minutes', '1:23:45'."""
     target = (url or '').strip()
     title = None
     extra = ''
@@ -1504,16 +1507,270 @@ def titan_play_media(query="", url="", **_):
             others = "; ".join(n for n, _u in results[1:5])
             extra = (f" ({len(results)} matches - playing the first; others: "
                      f"{others}. Use titan_search_media to pick a specific one.)")
-    if not _open_in_tmedia(target):
+    argument = target
+    spec = _sanitize_arg(position)
+    if spec:
+        argument = f"position:{spec}|{target}"
+    if not _open_in_tmedia(argument):
         return "Could not find the Titan media player (tMedia)."
-    return (f"Playing '{title or target}' in the Titan media player (tMedia)."
-            + extra)
+    where = f" from {spec}" if spec else ""
+    return (f"Playing '{title or target}'{where} in the Titan media player "
+            f"(tMedia)." + extra)
 
 
 def _sanitize_arg(text):
     """tMedia's startup argument is inlined into generated code as r'...', so a
     quote/backslash would break it. Country/station names never need those."""
     return (text or '').replace("'", ' ').replace('"', ' ').replace('\\', ' ').strip()
+
+
+# --------------------------------------------------------------------------- #
+# Audiobooks and bookmarks (tMedia)
+# --------------------------------------------------------------------------- #
+# tMedia plays a whole FOLDER as one audiobook and remembers where the user
+# stopped - the resume point automatically, plus any number of named bookmarks -
+# in a JSON file next to its own settings
+# (%APPDATA%/Titosoft/Titan/appsettings/media_bookmarks.json). Reading that file
+# is what lets the assistant answer "what was I listening to?" and "wroc do
+# zakladki" without the app being open; playback itself is always handed to
+# tMedia through its startup argument:
+#   audiobook:<folder>            play a folder as one book (from its resume point)
+#   position:<where>|<target>     start that target at a position instead
+#                                 ("50%", "49 min", "1:23:45", "track 4 12:30")
+_MEDIA_BOOKMARKS_FILE = 'media_bookmarks.json'
+
+
+def media_bookmarks_path():
+    """Full path of tMedia's bookmarks file (the same one the app writes)."""
+    return os.path.join(_appsettings_dir(), _MEDIA_BOOKMARKS_FILE)
+
+
+def _load_media_bookmarks():
+    """[entry, ...] most recently played first; [] when nothing is saved."""
+    try:
+        with open(media_bookmarks_path(), 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"[titan_tools] could not read media bookmarks: {e}")
+        return []
+    items = data.get('items') if isinstance(data, dict) else None
+    if not isinstance(items, dict):
+        return []
+    entries = [e for e in items.values() if isinstance(e, dict)]
+    entries.sort(key=lambda e: e.get('updated', 0), reverse=True)
+    return entries
+
+
+def _format_ms(ms):
+    total = int(max(0, ms or 0)) // 1000
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return '%d:%02d:%02d' % (hours, minutes, seconds)
+    return '%d:%02d' % (minutes, seconds)
+
+
+def _place_text(entry, place):
+    """A resume point / bookmark as text, including the track when the item is
+    an audiobook (a position alone means nothing across 40 files)."""
+    text = _format_ms(place.get('position', 0))
+    if entry.get('kind') != 'audiobook':
+        return text
+    track = int(place.get('track', 0) or 0) + 1
+    total = len(entry.get('tracks') or [])
+    where = f"track {track} of {total}" if total else f"track {track}"
+    if place.get('track_title'):
+        where += f" ({place['track_title']})"
+    return f"{where}, {text}"
+
+
+def _place_spec(entry, place):
+    """The startup position spec for a saved place - tMedia parses
+    'track 4 1:23:45' as well as a bare time."""
+    time_text = _format_ms(place.get('position', 0))
+    if entry.get('kind') == 'audiobook':
+        return f"track {int(place.get('track', 0) or 0) + 1} {time_text}"
+    return time_text
+
+
+def _folder_url(url):
+    """The folder a media URL lives in (an audiobook is its folder)."""
+    u = (url or '').strip()
+    if not u:
+        return ''
+    if '://' in u and not u.lower().startswith('file://'):
+        return u.rsplit('/', 1)[0] + '/'
+    path = _file_uri_to_path(u) if u.lower().startswith('file://') else u
+    parent = os.path.dirname(path.rstrip('\\/'))
+    if not parent:
+        return ''
+    try:
+        return Path(parent).as_uri()
+    except Exception:
+        return parent
+
+
+def _search_media_folders(query, limit=8):
+    """[(name, folder_url, file_count)] for folders whose PATH matches the
+    query - i.e. audiobooks, which are folders of many files rather than one
+    file with the book's name."""
+    tokens = _query_tokens(query)
+    if not tokens:
+        return []
+    items, _ts = _load_media_index()
+    if not items:
+        _ensure_index_building(gui=True)
+        return []
+    folders = {}
+    for it in items:
+        folder = _folder_url(it.get('url', ''))
+        if not folder:
+            continue
+        if folder not in folders:
+            if not _matches_tokens(unquote(folder), tokens):
+                folders[folder] = None      # remembered as "does not match"
+                continue
+            folders[folder] = 0
+        if folders[folder] is None:
+            continue
+        folders[folder] += 1
+    matches = [(f, c) for f, c in folders.items() if c]
+    matches.sort(key=lambda fc: fc[1], reverse=True)
+    results = []
+    for folder, count in matches[:limit]:
+        name = unquote(folder.rstrip('/\\')).replace('\\', '/').rsplit('/', 1)[-1]
+        results.append((name, folder, count))
+    return results
+
+
+def _to_folder_arg(folder):
+    """A folder as something tMedia's startup argument can carry."""
+    if '://' in folder:
+        return folder
+    try:
+        return Path(folder).as_uri()
+    except Exception:
+        return folder
+
+
+def titan_list_media_bookmarks(**_):
+    """List what the user can resume in tMedia: every film, recording and
+    audiobook with a saved position, plus their named bookmarks."""
+    entries = _load_media_bookmarks()
+    if not entries:
+        return ("Nothing is saved yet - tMedia stores a resume point once "
+                "something long has been played, and bookmarks when the user "
+                "presses Ctrl+B.")
+    lines = []
+    for entry in entries[:25]:
+        title = entry.get('title') or entry.get('url') or '?'
+        head = f"- {title}"
+        if entry.get('kind') == 'audiobook':
+            head += f" (audiobook, {len(entry.get('tracks') or [])} tracks)"
+        resume = entry.get('resume')
+        if resume and resume.get('position'):
+            head += f" - stopped at {_place_text(entry, resume)}"
+        lines.append(head)
+        for bookmark in entry.get('bookmarks') or []:
+            lines.append(f"    bookmark '{bookmark.get('name', '')}' at "
+                         f"{_place_text(entry, bookmark)}")
+    return ("Saved positions and bookmarks in tMedia (resume one with "
+            "titan_resume_media):\n" + "\n".join(lines))
+
+
+def titan_play_audiobook(query="", path="", position="", **_):
+    """Play a whole FOLDER as one audiobook in tMedia: every file in it, in
+    order, continuing from where the user stopped last time.
+
+    ``query`` finds the book's folder in the media library; ``path`` names it
+    directly; ``position`` optionally starts somewhere specific instead of at
+    the saved place ('50%', '49 minutes', '1:23:45', 'track 4 12:30')."""
+    folder = (path or '').strip()
+    name = None
+    if not folder:
+        q = (query or '').strip()
+        if not q:
+            return "Give the audiobook's name (query) or its folder (path)."
+        try:
+            results = _search_media_folders(q, limit=8)
+        except Exception as e:
+            return f"Audiobook search failed: {e}"
+        if not results:
+            return (f"Found no folder matching '{q}' in the media library."
+                    + _index_status_note()
+                    + " If it is a single file rather than a folder of files, "
+                      "use titan_play_media.")
+        name, folder, count = results[0]
+        extra = ''
+        if len(results) > 1:
+            others = "; ".join(f"{n} ({c} files)" for n, _f, c in results[1:4])
+            extra = f" (other matches: {others})"
+        argument = f"audiobook:{_to_folder_arg(folder)}"
+        spec = _sanitize_arg(position)
+        if spec:
+            argument = f"position:{spec}|{argument}"
+        if not _open_in_tmedia(argument):
+            return "Could not find the Titan media player (tMedia)."
+        where = f" from {spec}" if spec else " from where it was left"
+        return (f"Playing the audiobook '{name}' ({count} files){where} in "
+                f"tMedia.{extra}")
+
+    argument = f"audiobook:{_to_folder_arg(folder)}"
+    spec = _sanitize_arg(position)
+    if spec:
+        argument = f"position:{spec}|{argument}"
+    if not _open_in_tmedia(argument):
+        return "Could not find the Titan media player (tMedia)."
+    where = f" from {spec}" if spec else " from where it was left"
+    return f"Playing the audiobook in '{folder}'{where} in tMedia."
+
+
+def titan_resume_media(query="", bookmark="", **_):
+    """Carry on with something the user was listening to or watching: pick the
+    saved item matching ``query`` (or the most recent one) and play it from its
+    saved position, or from one of its named bookmarks (``bookmark``)."""
+    entries = _load_media_bookmarks()
+    if not entries:
+        return ("Nothing is saved to resume yet (tMedia saves a position once "
+                "something long has been played).")
+    entry = entries[0]
+    q = (query or '').strip()
+    if q:
+        tokens = _query_tokens(q)
+        matches = [e for e in entries
+                   if _matches_tokens(f"{e.get('title', '')} {unquote(e.get('url', ''))}",
+                                      tokens)]
+        if not matches:
+            titles = "; ".join(e.get('title', '?') for e in entries[:6])
+            return f"Nothing saved matches '{q}'. Saved items: {titles}."
+        entry = matches[0]
+
+    url = entry.get('url') or ''
+    if not url:
+        return "That saved item has no location any more."
+    argument = f"audiobook:{url}" if entry.get('kind') == 'audiobook' else url
+
+    place, place_name = entry.get('resume'), 'the saved position'
+    wanted = (bookmark or '').strip()
+    if wanted:
+        tokens = _query_tokens(wanted)
+        found = [b for b in entry.get('bookmarks') or []
+                 if _matches_tokens(b.get('name', ''), tokens)]
+        if not found:
+            names = "; ".join(b.get('name', '') for b in entry.get('bookmarks') or [])
+            return (f"'{entry.get('title', '')}' has no bookmark matching "
+                    f"'{wanted}'." + (f" Its bookmarks: {names}." if names else ""))
+        place, place_name = found[0], f"bookmark '{found[0].get('name', '')}'"
+    if place and place.get('position'):
+        argument = f"position:{_place_spec(entry, place)}|{argument}"
+
+    if not _open_in_tmedia(argument):
+        return "Could not find the Titan media player (tMedia)."
+    where = _place_text(entry, place) if place else 'the beginning'
+    return (f"Resuming '{entry.get('title') or url}' in tMedia from "
+            f"{place_name} ({where}).")
 
 
 def titan_play_radio(country="", station="", **_):
@@ -1553,7 +1810,9 @@ _REMINDER_REPEAT = {'once': 3, 'raz': 3, 'tylko raz': 3, '15': 2,
                     'every15': 2, 'co15': 2}
 
 
-def _reminder_settings_dir():
+def _appsettings_dir():
+    """Titan's per-user app settings directory - where the bundled apps keep
+    their own data (tReminder's calendar, tMedia's config and bookmarks)."""
     import platform
     plat = platform.system()
     if plat == 'Windows':
@@ -1569,7 +1828,7 @@ def _reminder_settings_dir():
 def reminder_file_path():
     """Full path of tReminder's calendar file (the shared source of truth for
     reminders, read by the app and by the automatic announcer)."""
-    return os.path.join(_reminder_settings_dir(), 'calendar.tcal')
+    return os.path.join(_appsettings_dir(), 'calendar.tcal')
 
 
 def _parse_reminder_datetime(date_str, time_str):
@@ -1623,7 +1882,7 @@ def titan_create_reminder(name, description="", date="", time="", priority="medi
              'date': date_iso, 'time': time_hm, 'priority': prio,
              'repeat': rep, 'done': False}
     try:
-        os.makedirs(_reminder_settings_dir(), exist_ok=True)
+        os.makedirs(_appsettings_dir(), exist_ok=True)
         path = reminder_file_path()
         data = []
         if os.path.exists(path):
@@ -1739,11 +1998,34 @@ def get_titan_tools():
               "Play something from the user's Media Library in tMedia. Give a "
               "'query' to find and play a title/episode/audiobook (e.g. 'swiat "
               "wedlug kiepskich odc 6') or a direct 'url'/file - it plays right "
-              "away. Use this for the user's own media; use titan_play_radio for "
-              "internet radio and play_music for YouTube/Spotify.", titan_play_media,
+              "away. Use this for the user's own media; use titan_play_audiobook "
+              "for a whole folder/book, titan_play_radio for internet radio and "
+              "play_music for YouTube/Spotify.", titan_play_media,
               risk='confirm',
               properties={'query': dict(S, description="Title/series/episode/book to find and play."),
-                          'url': dict(S, description="Direct media URL or file path (optional).")}),
+                          'url': dict(S, description="Direct media URL or file path (optional)."),
+                          'position': dict(S, description="Start here instead of the beginning: '50%', '49 minutes', '1:23:45' (optional).")}),
+        _tool('titan_play_audiobook',
+              "Play a whole FOLDER as one audiobook in tMedia (all its files "
+              "in order, continuing from where the user stopped). 'query' finds "
+              "the book's folder in the media library, 'path' names it directly, "
+              "'position' optionally starts somewhere specific ('50%', '49 "
+              "minutes', '1:23:45', 'track 4 12:30').",
+              titan_play_audiobook, risk='confirm',
+              properties={'query': dict(S, description="Audiobook/folder name to find."),
+                          'path': dict(S, description="Folder path or URL (optional)."),
+                          'position': dict(S, description="Where to start (optional).")}),
+        _tool('titan_list_media_bookmarks',
+              "List what can be resumed in tMedia: films, recordings and "
+              "audiobooks with a saved position, plus their named bookmarks.",
+              titan_list_media_bookmarks),
+        _tool('titan_resume_media',
+              "Carry on with something the user was listening to or watching: "
+              "plays the saved item matching 'query' (or the most recent one) "
+              "from its saved position, or from one of its named bookmarks.",
+              titan_resume_media, risk='confirm',
+              properties={'query': dict(S, description="Which saved item (optional - default the most recent)."),
+                          'bookmark': dict(S, description="Named bookmark to jump to (optional).")}),
         _tool('titan_play_radio',
               "Play internet radio in tMedia for a country, auto-selecting that "
               "country (no manual picker). 'country' is the country in English or "
