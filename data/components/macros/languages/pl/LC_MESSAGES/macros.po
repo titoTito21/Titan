@@ -229,3 +229,42 @@ msgstr "Oznajmiaj dźwiękiem czynności menedżera makr"
 
 msgid "Announce macro actions with speech"
 msgstr "Oznajmiaj mową czynności menedżera makr"
+
+msgid "Macro problem: {}"
+msgstr "Problem z makrem: {}"
+
+msgid "Macro problem on line {line}: {message}"
+msgstr "Problem z makrem w linii {line}: {message}"
+
+msgid "{} more problems - see the macro's check."
+msgstr "Kolejnych problemów: {} - sprawdź makro."
+
+msgid "Check script"
+msgstr "Sprawdź skrypt"
+
+msgid "Could not read the macro: {}"
+msgstr "Nie można odczytać makra: {}"
+
+msgid "The macro is fine - every line names something Titan can do."
+msgstr "Makro jest w porządku - każda linia nazywa coś, co Titan potrafi zrobić."
+
+msgid "{count} problems. The first: {problem}"
+msgstr "Liczba problemów: {count}. Pierwszy: {problem}"
+
+msgid "Titan Script"
+msgstr "Skrypt Titana"
+
+msgid "The Titan Scripting Language (.tcs):"
+msgstr "Język skryptowy Titana (.tcs):"
+
+msgid "Show every action a script can call"
+msgstr "Pokaż wszystkie akcje, które może wywołać skrypt"
+
+msgid "Actions a Titan Script can call"
+msgstr "Akcje, które może wywołać skrypt Titana"
+
+msgid "Macro (Titan Script)"
+msgstr "Makro (skrypt Titana)"
+
+msgid "The macro has no Titan Script (.tcs) file."
+msgstr "Makro nie zawiera pliku skryptu Titana (.tcs)."

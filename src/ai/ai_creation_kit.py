@@ -44,6 +44,30 @@ except Exception:  # pragma: no cover - sound is optional
 _ = set_language(get_setting('language', 'pl'))
 
 
+def _macro_text(text):
+    """Translate wording that belongs to the MACRO MANAGER, not to Titan.
+
+    The Titan Script and its manager are a component with its own catalogue, so
+    the few strings this kit says *about macros* are looked up there rather than
+    copied into Titan's own translations - one component, one set of words for
+    it. Falls back to the English text if the component is not installed.
+    """
+    try:
+        import gettext
+        from src import platform_utils
+        from src.titan_core.translation import language_code
+        for base in platform_utils.iter_resource_paths(
+                os.path.join('data', 'components', 'macros', 'languages'),
+                prefer_user=True):
+            if os.path.isdir(base):
+                return gettext.translation(
+                    'macros', base, languages=[language_code],
+                    fallback=True).gettext(text)
+    except Exception as e:
+        print(f"[AICreationKit] macro translations unavailable: {e}")
+    return text
+
+
 def _speak(text):
     """Announce ``text`` (Titan TTS when enabled, else screen reader / notification
     voice; best effort, never raises).
@@ -83,6 +107,7 @@ KINDS = [
     {'id': 'tts_engine',       'label': _("TTS Engine"),      'subdir': 'titantts engines',  'manifests': ('__engine__.TCE',),                  'package': True},
     {'id': 'widget',           'label': _("Widget"),          'subdir': 'applets',           'manifests': ('applet.json', 'init.py', 'main.py'), 'package': True},
     {'id': 'statusbar_applet', 'label': _("Statusbar Applet"),'subdir': 'statusbar_applets', 'manifests': ('applet.json',),                     'package': True},
+    {'id': 'macro',            'label': _macro_text("Macro (Titan Script)"), 'subdir': 'macros', 'manifests': ('__macro__.TCE',),             'package': False},
     {'id': 'language',         'label': _("Language"),        'subdir': None,                'manifests': (),                                   'package': False},
 ]
 
@@ -107,7 +132,8 @@ _WEB_SEARCH_RESULTS = 5
 _MAX_EXAMPLE_FILES = 6
 _MAX_EXAMPLE_FILE_CHARS = 4000
 _MAX_EXAMPLE_TOTAL_CHARS = 16000
-_TEXT_EXTS = ('.tce', '.py', '.txt', '.po', '.ini', '.json', '.md', '.cfg')
+_TEXT_EXTS = ('.tce', '.py', '.txt', '.po', '.ini', '.json', '.md', '.cfg',
+              '.tcs')
 
 
 def get_kind(kind_id):
@@ -242,6 +268,49 @@ def _questions_protocol_block(kind):
     ])
 
 
+# A macro is not code: it is a Titan Script, checked by the macro manager
+# itself before it is saved. Telling the model to write Python here is how you
+# get a macro that is not a macro, so this kind gets its own requirements.
+_MACRO_REQUIREMENTS = [
+    "- Generate exactly two files: the manifest '__macro__.TCE' and one Titan "
+    "Script whose filename is named by the manifest's 'openfile' key and ends "
+    "in '.tcs'. Add extra .tcs helper scripts only if the user asked for them.",
+    "- Write NO Python. A macro is a Titan Script: one statement per line, "
+    "made of the statements of the language and of actions Titan really has.",
+    "- Use ONLY the statements and the actions in the language reference and "
+    "action list below. Never invent a statement, an argument name, an action "
+    "name or a number outside the range a setting takes - the script is "
+    "checked before it is saved and anything invented is refused with its "
+    "line number.",
+    "- Do NOT write pseudocode. A line in plain words ('do \"...\"', or a line "
+    "that names no action) needs AI features switched on every time the macro "
+    "runs. Speech position, pitch and rate, sounds, dialogs, questions, "
+    "conditions and loops are all part of the language: use them.",
+    "- The manifest's name_en and name_pl are the name the user will see in "
+    "their macro list. Comments (#) in the script are in English.",
+]
+
+
+def _kind_requirements(kind):
+    """The REQUIREMENTS lines that apply to this kind."""
+    if kind['id'] == 'macro':
+        return [_manifest_line(kind)] + _MACRO_REQUIREMENTS
+    return [
+        _manifest_line(kind),
+        "- The code MUST be valid Python with no syntax errors and must import "
+        "cleanly. Any manifest JSON must be valid JSON.",
+        "- All user-facing UI text and messages MUST be in English. Use the "
+        "gettext function _() for translatable strings wherever the guide and "
+        "reference example do.",
+        "- Never use emojis in user-facing text or notifications.",
+        "- Follow the structure, required entry-point functions, manifest keys "
+        "and conventions from the documentation and reference example below.",
+        "- Make the code self-contained and runnable; the entry point named in "
+        "the manifest/guide must exist and have the exact expected signature.",
+        "- Wrap risky work in try/except so a failure never crashes the host.",
+    ]
+
+
 def build_system_prompt(kind, extra_context=None, allow_questions=True):
     """System prompt for the file-generation phase. ``extra_context`` (e.g. web
     search results) is appended verbatim when provided. When ``allow_questions``
@@ -266,18 +335,7 @@ def build_system_prompt(kind, extra_context=None, allow_questions=True):
         "add-on root.",
         "",
         "REQUIREMENTS:",
-        _manifest_line(kind),
-        "- The code MUST be valid Python with no syntax errors and must import "
-        "cleanly. Any manifest JSON must be valid JSON.",
-        "- All user-facing UI text and messages MUST be in English. Use the "
-        "gettext function _() for translatable strings wherever the guide and "
-        "reference example do.",
-        "- Never use emojis in user-facing text or notifications.",
-        "- Follow the structure, required entry-point functions, manifest keys "
-        "and conventions from the documentation and reference example below.",
-        "- Make the code self-contained and runnable; the entry point named in "
-        "the manifest/guide must exist and have the exact expected signature.",
-        "- Wrap risky work in try/except so a failure never crashes the host.",
+    ] + _kind_requirements(kind) + [
         "",
     ]
     if extra_context:
@@ -477,10 +535,46 @@ def format_answers_for_prompt(questions, answers):
 # --------------------------------------------------------------------------- #
 # Static checking (drives the auto-fix loop)
 # --------------------------------------------------------------------------- #
+def check_titan_script(text):
+    """Everything wrong with a generated Titan Script, line by line.
+
+    The macro manager owns the language, so it owns the check too: asking it
+    means a script is judged by the thing that will actually run it, and a
+    model that invented a statement, an action or a number out of range is told
+    which line, instead of the user finding out at a quarter to twelve. Any
+    line still written in words is a problem here as well - a generated macro
+    must run with AI features switched off.
+    """
+    try:
+        from src.titan_core import actions
+    except Exception:
+        return []
+    try:
+        result = actions.run('macros', 'check_macro', script=text)
+    except Exception:
+        return []
+    said = str(getattr(result, 'text', '') or '').strip()
+    ok = bool(getattr(result, 'ok', False))
+    # A script can also be reported as *runnable but written in words*, which is
+    # still a problem for a generated macro: it would stop working the moment
+    # AI features were switched off.
+    if ok and 'written in words' not in said:
+        return []
+    problems = [re.sub(r'^\s*-\s*', '', line).strip()
+                for line in said.splitlines()
+                if re.match(r'\s*-\s*line \d+', line)]
+    if problems and 'written in words' in said and ok:
+        problems = [p + " - write it with real actions instead"
+                    for p in problems]
+    if problems:
+        return problems
+    return [said.splitlines()[0]] if said and not ok else []
+
+
 def static_check(files):
     """Return a list of human-readable problems found by cheap static analysis:
-    Python syntax errors (via :func:`ast.parse`) and invalid JSON manifests.
-    Empty list means the files pass these checks."""
+    Python syntax errors (via :func:`ast.parse`), invalid JSON manifests and
+    Titan Scripts that would not run. Empty list means the files pass."""
     problems = []
     for path, content in files.items():
         low = path.lower()
@@ -497,6 +591,9 @@ def static_check(files):
                 json.loads(content)
             except Exception as e:
                 problems.append(f"{path}: invalid JSON ({e})")
+        elif low.endswith('.tcs'):
+            for problem in check_titan_script(content):
+                problems.append(f"{path}: {problem}")
     return problems
 
 
@@ -596,6 +693,9 @@ def validate_files(kind, files):
             os.path.basename(p) in manifests for p in files):
         return False, _("The manifest file {name} is missing.").format(
             name=" / ".join(manifests))
+    if kind['id'] == 'macro' and not any(
+            p.lower().endswith('.tcs') for p in files):
+        return False, _macro_text("The macro has no Titan Script (.tcs) file.")
     return True, ''
 
 
@@ -606,6 +706,11 @@ def _derive_name(kind, files):
     for path, content in files.items():
         if manifests and os.path.basename(path) in manifests:
             m = re.search(r'^\s*shortname\s*=\s*"?([^"\r\n]+)"?', content, re.M)
+            if m:
+                return _safe_dirname(m.group(1))
+            # A macro's manifest has no shortname; its English name is what the
+            # user will look for, so the folder is named after that.
+            m = re.search(r'^\s*name_en\s*=\s*"?([^"\r\n]+)"?', content, re.M)
             if m:
                 return _safe_dirname(m.group(1))
             # applet.json manifests carry the name under a JSON key instead.
@@ -1254,6 +1359,15 @@ class AICreationWizardDialog(wx.Dialog):
             return
         play_sound('core/SELECT.ogg')
         _speak(_("Saved"))
+        # A macro belongs in the user's macro list, and the macro manager only
+        # reads the folder when it is asked to - so it is asked now, and the
+        # macro is there to run before this dialog has closed.
+        if self.kind['id'] == 'macro':
+            try:
+                from src.titan_core import actions
+                actions.run('macros', 'reload')
+            except Exception as e:
+                print(f"[AICreationKit] could not refresh the macro list: {e}")
         wx.MessageBox(_("Saved to:\n{path}").format(path=dest), _("Saved"),
                       wx.OK | wx.ICON_INFORMATION, self)
         self.EndModal(wx.ID_OK)

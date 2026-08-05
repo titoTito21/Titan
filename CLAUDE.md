@@ -557,8 +557,9 @@ instead of a guess.
 
 **Components declare actions without any manifest.** `zegarynka` (say the time,
 turn the chime on/off, change the interval), `macros` (list, run, **create**,
-read, delete a macro and set its shortcut - "write me a macro" ends with a macro
-in the macro manager, not a script file on the disk), `titan access` (reader
+read, **edit**, delete a macro and set its shortcut - "write me a macro" ends
+with a macro in the macro manager, not a script file on the disk, and "change
+it" changes that one), `titan access` (reader
 on/off/toggle/say), `tips` (search Titan's own written help, say one, change the
 interval), `TTerm` (run a shell command and return its output - the last resort
 for anything with a command line but no API) and `TArticle` (fetch a page and
@@ -602,6 +603,8 @@ play "done.ogg" position=-0.8 wait=true     a sound shipped beside the script
 run "helper.tcs"                            another script in the same folder
 voice engine="supertonic" rate=2            borrowed FOR THIS SCRIPT ONLY
 say "one at a time" wait=true               also interrupt=true; `speak` too
+say "one" position=-1 rate=-6 pitch=2       where the voice is, how fast, how
+                                            high - for that line only
 return "what the caller gets"               ends this script, hands that back
 repeat 2
     wait 1s
@@ -612,9 +615,13 @@ end
   and `titan.speak("x")` all reach the same action; an ambiguous or unknown
   name is an error that names the candidates.
 - **Checked before it runs** (`check_tcs`, action `macros.check_macro`): unknown
-  actions, wrong argument names, wrong arity and unclosed blocks are reported at
-  write time, not at a quarter to twelve. `macros.create_macro` with `kind:
-  'tcs'` refuses to save a script that would not run.
+  actions, wrong argument names, wrong arity, unclosed blocks **and numbers
+  outside what a setting takes** (`voice rate=100` - the ranges live in
+  `_TCS_RANGES`) are reported at write time, not at a quarter to twelve.
+  `macros.create_macro` with `kind: 'tcs'` refuses to save a script that would
+  not run. The Macro Manager offers the same check on any .tcs macro (context
+  menu -> Check script, GUI and Invisible UI), and its **Titan Script** tab is
+  the language reference itself - the same text the AI is given.
 - **Expressions are parsed, never `eval`'d** - a script is a file on disk and
   must not be able to run arbitrary Python.
 - **Dialogs are real wx controls** on the GUI thread, parented to Titan (so
@@ -626,6 +633,17 @@ end
   never written to settings, and put back in a `finally` however the script ends
   - finished, stopped, cancelled or broken. A called script restores its own
   before returning, since it holds its own copy of the run state.
+- **Where the voice is, how fast and how high it is, are part of the language.**
+  `say "one" position=-1 rate=-6 pitch=2` renders that line through
+  `stereo_speech.speak(text, position, pitch_offset)`, which Titan already had:
+  position -1 (left) to 1 (right), rate and pitch -10 to 10. `rate` belongs to
+  the line it is on - the rate in force comes back straight after, so such a
+  line is spoken synchronously (restoring it mid-utterance would give the next
+  line's rate to this one). The same three arguments are on the `titan.speak`
+  action, so any add-on has them too. Without this, "count to ten moving from
+  left to right, getting faster" could only be *described* to the AI - which is
+  exactly the pseudocode a generated macro must not contain.
+  `data/macros/voice_demo/` is that script, written out.
 - **Its own sounds and its own helpers.** `play "ding.ogg"` and
   `run "helper.tcs"` look for a bare name *next to the script*, so a macro
   folder carries everything it needs anywhere. A called script gets its own
@@ -638,8 +656,25 @@ end
 - **Pseudocode needs AI features on, everything else does not.** A line that
   does not name an action (or an explicit `do "..."`) is handed to the AI, which
   translates it into the same action steps and runs them through
-  `run_sequence` - a translation, not an agent. With AI off, such a line is an
-  error and the rest of the language still runs.
+  `run_sequence` - a translation, not an agent. With AI off such a line is an
+  error, and it is an error **before the macro runs**: `run_tcs_text` takes the
+  pseudocode census (`pseudocode_lines`) first and reports every line by number
+  rather than half-running the script and stopping at the first one. A parse
+  error is spoken with its line too (it used to fail silently, which is the
+  worst possible answer for a macro).
+- **A macro written FOR somebody is made of real actions.** Pseudocode is fine
+  in a script a person writes for themselves; a generated one made of it stops
+  working the moment AI features go off, and usually means its author never
+  looked for the action that already existed. So `macros.create_macro` and
+  `macros.edit_macro` refuse a line written in words (`_tcs_write_problems`),
+  naming it, unless `allow_pseudocode` is set - and a refusal comes back with
+  `_TCS_WRITE_RULES`, so the model is corrected with the real language rather
+  than guessing again.
+- **Editing is a first-class action.** `macros.edit_macro` (name, script, keys,
+  append, hotkey) changes the macro the user already has - checked before it is
+  written, shadow-copying a bundled macro into the user overlay first - so "make
+  it also do X" ends with their macro doing X, not a second macro beside it.
+  `create_macro` on an existing name now points at it.
 - **Triggers**: `TCSScheduler` (one slow-ticking thread, started only if some
   script asks for a trigger) fires `when startup` / `when time` / `when every`.
 - **Titan opens a .TCS directly**, compiled or from source:
@@ -649,8 +684,19 @@ end
   `ComponentManager.initialize_components()` - the first moment every action a
   script can name exists, and the one place all three startup modes pass
   through. Without the Macro Manager component it says so plainly.
+- **The AI creation kit builds them too** (Programmer -> AI -> Macro (Titan
+  Script)). The kind writes `__macro__.TCE` + a `.tcs` into the user's
+  `data/macros/`, is told to write **no Python and no pseudocode**, and is
+  grounded on documentation read live from the macro manager itself
+  (`creation_docs.load_macro_docs()` -> `macros.macro_language` +
+  `macros.macro_actions`) rather than on a guide file that could drift. Every
+  generated `.tcs` goes through `check_titan_script()` in `static_check`, so the
+  kit's existing auto-fix loop corrects invented statements, actions and
+  out-of-range numbers by line number before the user ever sees them; saving
+  ends with `macros.reload` so the macro is in the list at once.
 - Actions: `macros.macro_language` (the grammar), `macros.macro_actions` (what
-  can be called), `macros.check_macro`. Example: `data/macros/example_script/`.
+  can be called), `macros.check_macro`, `macros.edit_macro`, `macros.reload`.
+  Examples: `data/macros/example_script/`, `data/macros/voice_demo/`.
 
 **Every add-on is reachable, declaration or not** (`actions/generic.py`). Most
 kinds share one Python interface with every other add-on of that kind, so the

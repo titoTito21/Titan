@@ -1947,18 +1947,86 @@ def titan_create_reminder(name, description="", date="", time="", priority="medi
 # --------------------------------------------------------------------------- #
 # Open Titan's own windows
 # --------------------------------------------------------------------------- #
-def titan_speak(text, interrupt=False, **_):
+def _speech_number(value, low, high):
+    """A number a speech setting will take, or None when it was not given."""
+    if value is None or str(value).strip() == '':
+        return None
+    try:
+        return max(low, min(high, float(str(value).strip())))
+    except (TypeError, ValueError):
+        return None
+
+
+def titan_speak(text, interrupt=False, position=None, pitch=None, rate=None,
+                wait=False, **_):
     """Say something out loud through Titan's own speech.
 
     Windowless by definition: Titan's TTS engines are loaded in Titan's own
     process, so this reads text to the user without opening anything. It is
     what an add-on should use to have something read out - a note, a result, a
     warning - instead of shipping a voice of its own.
+
+    Titan's speech already renders a stereo/3D position and a pitch offset per
+    utterance, so an add-on (or a macro, or the AI) can place a line to the
+    left, raise it, or speed it up without owning a voice of its own.
+    ``rate`` belongs to this one utterance: it is put back straight afterwards,
+    so nobody is left listening to somebody else's choice.
     """
     message = str(text or '').strip()
     if not message:
         return "There is nothing to say."
     stop_first = str(interrupt).strip().lower() in ('1', 'true', 'yes', 'on')
+    hold = str(wait).strip().lower() in ('1', 'true', 'yes', 'on')
+    pan = _speech_number(position, -1.0, 1.0)
+    tone = _speech_number(pitch, -10, 10)
+    speed = _speech_number(rate, -10, 10)
+
+    if pan or tone or speed is not None:
+        speech = None
+        try:
+            from src.titan_core.stereo_speech import get_stereo_speech
+            speech = get_stereo_speech()
+        except Exception:
+            speech = None
+        if speech is not None:
+            previous = None
+            try:
+                if stop_first:
+                    speech.stop()
+                if speed is not None:
+                    try:
+                        from src.settings.settings import get_setting
+                        saved = str(get_setting('rate', '',
+                                                section='stereo_speech')).strip()
+                        previous = int(saved) if saved else 0
+                    except Exception:
+                        previous = 0
+                    speech.set_rate(int(speed))
+                    hold = True     # the rate can only be put back afterwards
+                if hold:
+                    speech.speak(message, position=float(pan or 0.0),
+                                 pitch_offset=int(tone or 0))
+                else:
+                    speech.speak_async(message, position=float(pan or 0.0),
+                                       pitch_offset=int(tone or 0))
+            except Exception as e:
+                return f"Could not speak: {e}"
+            finally:
+                if previous is not None:
+                    try:
+                        speech.set_rate(previous)
+                    except Exception:
+                        pass
+            where = []
+            if pan:
+                where.append(f"position {pan:g}")
+            if tone:
+                where.append(f"pitch {tone:g}")
+            if speed is not None:
+                where.append(f"rate {speed:g}")
+            return (f"Said ({', '.join(where)}): {message[:200]}"
+                    + ('...' if len(message) > 200 else ''))
+        # No Titan TTS running: say it plainly rather than not at all.
     try:
         from src.ai.ai_speech import speak
         speak(message, interrupt=stop_first)
@@ -2198,10 +2266,25 @@ def get_titan_tools():
         _tool('titan_speak',
               "Read text out loud through Titan's own speech. Needs no window "
               "and no add-on: use it to have something read to the user - a "
-              "note, an answer, a warning.", titan_speak,
+              "note, an answer, a warning. It can also place the voice left or "
+              "right, raise or lower it, and speed it up or slow it down for "
+              "that one line.", titan_speak,
               properties={'text': dict(S, description="What to say."),
                           'interrupt': dict(B, description="Stop whatever is "
-                                            "being said first (default no).")},
+                                            "being said first (default no)."),
+                          'position': {'type': 'number',
+                                       'description': "Where the voice comes "
+                                       "from, -1 left to 1 right (default "
+                                       "centre)."},
+                          'pitch': {'type': 'number',
+                                    'description': "Pitch offset for this "
+                                    "line, -10 to 10 (default 0)."},
+                          'rate': {'type': 'number',
+                                   'description': "Speech rate for this line "
+                                   "only, -10 (slow) to 10 (fast). The user's "
+                                   "own rate comes back afterwards."},
+                          'wait': dict(B, description="Wait until it has been "
+                                       "said (default no).")},
               required=['text']),
         _tool('titan_play_sound',
               "Play an audio file through Titan's own sound system, with the "

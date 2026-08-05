@@ -343,5 +343,40 @@
     "role": "user",
     "content": "usuń wszystkie notatki",
     "timestamp": 1785931933.0720098
+  },
+  {
+    "role": "assistant",
+    "content": "Wszystkie notatki zostały pomyślnie usunięte. Twoja lista notatek jest teraz pusta!",
+    "timestamp": 1785931970.4142375
+  },
+  {
+    "role": "user",
+    "content": "stówrz makro, w .tcs, licz do 10, żeby titan mówił od 1 do 10, z poczekaniem, bez interruptu",
+    "timestamp": 1785932150.251888
+  },
+  {
+    "role": "assistant",
+    "content": "Stworzyłam dla Ciebie makro w języku Titan Script (.TCS) o nazwie **„Licz do 10”**. \n\nMakro po uruchomieniu odlicza po kolei od 1 do 10, wypowiadając każdą liczbę z oczekiwaniem na zakończenie mowy i bez przerywania poprzednich wypowiedzi. Znajdziesz je w swoim Menadżerze Makr.",
+    "timestamp": 1785932182.7008755
+  },
+  {
+    "role": "user",
+    "content": "edytuj makro licz do 10, mowa ma być od lewej do prawej, i tymczasowo jak będzie 1, najwolniejsze tempo, jak 10, najszybsze",
+    "timestamp": 1785932362.5772538
+  },
+  {
+    "role": "assistant",
+    "content": "Zaktualizowałam makro **„licz do 10”**. \n\nTeraz mowa przesuwa się płynnie od lewej do prawej strony, a tempo wypowiedzi stopniowo wzrasta – od najwolniejszego przy liczbie 1 aż do najszybszego przy 10. Makro jest gotowe w Twoim Menadżerze Makr!",
+    "timestamp": 1785932422.9469588
+  },
+  {
+    "role": "user",
+    "content": "i jeszcze update do tego makra, po 10 ma być dialog: Czy dobrze obliczyłem, i dwie opcje, Tak, zajebiście i nie, spadaj",
+    "timestamp": 1785932450.6326199
+  },
+  {
+    "role": "assistant",
+    "content": "Zaktualizowałam makro **„licz do 10”**. \n\nTeraz po przeliczeniu do 10 wyświetli się okno dialogowe z pytaniem: *„Czy dobrze obliczyłem?”* oraz dwoma opcjami do wyboru: **„Tak, zajebiście”** oraz **„nie, spadaj”**.",
+    "timestamp": 1785932487.338391
   }
 ]

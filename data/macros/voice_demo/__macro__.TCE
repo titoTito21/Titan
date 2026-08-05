@@ -1,0 +1,7 @@
+[macro]
+name_pl = Demonstracja glosu (licz do dziesieciu)
+name_en = Voice demo (count to ten)
+openfile = voice_demo.tcs
+
+[macrocfg]
+hotkey =

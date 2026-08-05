@@ -29,6 +29,7 @@ KIND_GUIDE = {
     'tts_engine':       'tts_engine_guide_en.md',
     'widget':           'widget_creation_guide_en.md',
     'statusbar_applet': 'statusbar_applet_guide_en.md',
+    'macro':            None,        # documented by the macro manager itself
     'language':         None,
 }
 
@@ -167,11 +168,59 @@ def load_action_guide():
     return ''
 
 
+# --------------------------------------------------------------------------- #
+# Macros: the documentation lives in the macro manager, not in a guide file
+# --------------------------------------------------------------------------- #
+# A macro is a Titan Script, and the component that runs the language is the
+# component that documents it (`macros.macro_language`) and that lists what can
+# be called (`macros.macro_actions`). Asking it, rather than keeping a copy
+# here, is what makes a generated macro match the checker that will judge it:
+# one description of the language, owned by the thing that implements it.
+_MAX_ACTION_CHARS = 24000
+
+
+def _macro_action(name, **kwargs):
+    try:
+        from src.titan_core import actions
+        result = actions.run('macros', name, **kwargs)
+    except Exception as e:
+        return f"(could not read {name} from the macro manager: {e})"
+    if not getattr(result, 'ok', False):
+        return f"(the macro manager could not answer {name})"
+    return str(getattr(result, 'text', '') or '')
+
+
+def load_macro_docs():
+    """The Titan Scripting Language and the actions a script may call.
+
+    Read live from the Macro Manager component, so the generator is grounded on
+    the language as it is today - including every action every installed add-on
+    declares, which no static guide could list."""
+    language = _macro_action('macro_language')
+    catalogue = _macro_action('macro_actions')
+    if len(catalogue) > _MAX_ACTION_CHARS:
+        catalogue = (catalogue[:_MAX_ACTION_CHARS]
+                     + "\n... (more actions exist; ask macros.macro_actions "
+                       "with an add-on id for the rest)\n")
+    return ("# The Titan Scripting Language (.TCS) - authoritative\n\n"
+            + language
+            + "\n\n# Every action a Titan Script may call (add-on.action)\n\n"
+            + catalogue
+            + "\n\nAnything not listed above does not exist. A script that "
+              "names something else, or gives an action an argument it does "
+              "not declare, is refused with its line number before it is "
+              "saved.\n")
+
+
 def build_docs_block(kind_id):
     """The documentation section for a kind: the shared core reference, the
     Action API contract, and the kind's own full programming guide. Returned as
     a single string ready to drop into the system prompt (empty pieces are
     skipped)."""
+    if kind_id == 'macro':
+        # A macro is not code and declares no actions of its own: the language
+        # and the action catalogue are the whole of its documentation.
+        return load_macro_docs()
     parts = [CORE_API_REFERENCE]
     action_guide = load_action_guide()
     if action_guide and kind_id != 'language':

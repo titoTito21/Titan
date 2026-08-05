@@ -1,0 +1,41 @@
+# Voice demo: count to ten, travelling from the left ear to the right one and
+# getting faster with every number.
+#
+# This is the script people try to write in words - "say one from the left,
+# slowly" - and then wonder why it needs the AI. It does not: where the voice
+# comes from, how high it is and how fast it speaks are part of the language.
+#
+#   position   -1 (left) ... 0 (centre) ... 1 (right)
+#   rate       -10 (slow) ... 0 (the user's own) ... 10 (fast)
+#   pitch      -10 ... 10, for that line only
+#
+# rate and pitch belong to the line they are written on: the rate in force
+# comes straight back afterwards, and the user's own voice is restored when the
+# script ends, however it ends.
+#
+# Stereo positioning follows the user's own choice in Settings, Sound: with
+# positioning off, everything below is simply spoken in the centre.
+
+say "Counting to ten, from the left to the right." wait=true
+
+say "one" position=-1 rate=-8 wait=true
+say "two" position=-0.8 rate=-6 wait=true
+say "three" position=-0.6 rate=-4 wait=true
+say "four" position=-0.4 rate=-2 wait=true
+say "five" position=-0.2 rate=0 wait=true
+say "six" position=0.2 rate=2 wait=true
+say "seven" position=0.4 rate=4 wait=true
+say "eight" position=0.6 rate=6 wait=true
+say "nine" position=0.8 rate=8 wait=true
+say "ten" position=1 rate=10 wait=true
+
+# The pitch of one line, without touching the voice itself.
+say "and back down again" pitch=-4 wait=true
+
+choose answer = "Did I count that correctly?" options "Yes", "No"
+
+if answer is "Yes"
+    say "Good." wait=true
+else
+    say "Then something is wrong with my counting." wait=true
+end

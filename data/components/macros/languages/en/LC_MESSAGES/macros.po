@@ -229,3 +229,42 @@ msgstr "Announce macro actions with sound"
 
 msgid "Announce macro actions with speech"
 msgstr "Announce macro actions with speech"
+
+msgid "Macro problem: {}"
+msgstr "Macro problem: {}"
+
+msgid "Macro problem on line {line}: {message}"
+msgstr "Macro problem on line {line}: {message}"
+
+msgid "{} more problems - see the macro's check."
+msgstr "{} more problems - see the macro's check."
+
+msgid "Check script"
+msgstr "Check script"
+
+msgid "Could not read the macro: {}"
+msgstr "Could not read the macro: {}"
+
+msgid "The macro is fine - every line names something Titan can do."
+msgstr "The macro is fine - every line names something Titan can do."
+
+msgid "{count} problems. The first: {problem}"
+msgstr "{count} problems. The first: {problem}"
+
+msgid "Titan Script"
+msgstr "Titan Script"
+
+msgid "The Titan Scripting Language (.tcs):"
+msgstr "The Titan Scripting Language (.tcs):"
+
+msgid "Show every action a script can call"
+msgstr "Show every action a script can call"
+
+msgid "Actions a Titan Script can call"
+msgstr "Actions a Titan Script can call"
+
+msgid "Macro (Titan Script)"
+msgstr "Macro (Titan Script)"
+
+msgid "The macro has no Titan Script (.tcs) file."
+msgstr "The macro has no Titan Script (.tcs) file."

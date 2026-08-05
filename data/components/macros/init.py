@@ -1618,6 +1618,31 @@ def _show_configure_dialog(parent, macro_manager, selected_macro=None):
             new_panel.SetSizer(new_sizer)
             notebook.AddPage(new_panel, _("New Macro"))
 
+            # --- Tab 4: Titan Script (the language, in the manager itself) ---
+            # The documentation belongs where the language is: this is the same
+            # text the AI is given when it writes a macro, so a user reading it
+            # and a model writing one are reading one description, not two.
+            docs_panel = wx.Panel(notebook)
+            docs_sizer = wx.BoxSizer(wx.VERTICAL)
+            docs_sizer.Add(wx.StaticText(
+                docs_panel, label=_("The Titan Scripting Language (.tcs):")),
+                0, wx.ALL, 5)
+            self.docs_text = wx.TextCtrl(
+                docs_panel, value=_MACRO_LANGUAGE,
+                style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+            self.docs_text.Bind(wx.EVT_SET_FOCUS,
+                                lambda e: (_play_focus(), e.Skip()))
+            docs_sizer.Add(self.docs_text, 1, wx.ALL | wx.EXPAND, 5)
+            actions_btn = wx.Button(docs_panel,
+                                    label=_("Show every action a script can "
+                                            "call"))
+            actions_btn.Bind(wx.EVT_BUTTON, self._on_show_actions)
+            actions_btn.Bind(wx.EVT_SET_FOCUS,
+                             lambda e: (_play_focus(), e.Skip()))
+            docs_sizer.Add(actions_btn, 0, wx.ALL, 5)
+            docs_panel.SetSizer(docs_sizer)
+            notebook.AddPage(docs_panel, _("Titan Script"))
+
             sizer.Add(notebook, 1, wx.ALL | wx.EXPAND, 5)
 
             close_btn = wx.Button(self, wx.ID_CANCEL, _("Close"))
@@ -1625,8 +1650,19 @@ def _show_configure_dialog(parent, macro_manager, selected_macro=None):
             sizer.Add(close_btn, 0, wx.ALL | wx.ALIGN_RIGHT, 5)
 
             self.SetSizer(sizer)
-            self.SetSize((500, 420))
+            self.SetSize((640, 520))
             self.CenterOnParent()
+
+        def _on_show_actions(self, event):
+            """Every action installed add-ons offer, in the same window."""
+            _play_select()
+            listing = action_macro_actions()
+            # The action reports "no add-on offers actions" as a Failure, which
+            # is still what the user should read here.
+            self.docs_text.SetValue(str(getattr(listing, 'reason', listing)))
+            self.docs_text.SetInsertionPoint(0)
+            self.docs_text.SetFocus()
+            _speak(_("Actions a Titan Script can call"))
 
         def _on_save_hotkey(self, event):
             if not self.selected_macro:
@@ -1925,6 +1961,14 @@ def _on_macro_context_menu(event):
                            _edit_macro, m),
                        edit_item)
 
+    # Check (a Titan Script can be judged without running it)
+    if macro_info.get('type') == TCS_EXT:
+        check_item = menu.Append(wx.ID_ANY, _("Check script"))
+        _gui_app_ref.Bind(wx.EVT_MENU,
+                          lambda evt, m=macro_info: wx.CallAfter(
+                              _check_macro_dialog, m, _gui_app_ref),
+                          check_item)
+
     # Configure
     cfg_item = menu.Append(wx.ID_ANY, _("Configure"))
     _gui_app_ref.Bind(wx.EVT_MENU,
@@ -1963,6 +2007,39 @@ def _edit_macro(macro_info):
     else:
         _play_select()
         _open_in_tedit(script_path)
+
+
+def _check_macro_dialog(macro_info, parent):
+    """Say what is wrong with a Titan Script, line by line, without running it.
+
+    The line number is the useful part, and a user who has just written a
+    script should be able to ask for it rather than discovering it when the
+    macro fires. It is spoken as well as shown: this is a screen-reader
+    program, and the first problem is usually the only one that matters.
+    """
+    wx = _get_wx()
+    path = macro_info.get('script_path', '')
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            text = handle.read()
+    except OSError as e:
+        _speak(_("Could not read the macro: {}").format(str(e)))
+        _play_error()
+        return
+    problems = check_tcs(text, base_dir=macro_info.get('folder_path', ''))
+    if not problems:
+        _play_select()
+        _speak(_("The macro is fine - every line names something Titan can "
+                 "do."))
+        wx.MessageBox(_("The macro is fine - every line names something Titan "
+                        "can do."), macro_info.get('name', ''),
+                      wx.OK | wx.ICON_INFORMATION, parent)
+        return
+    _play_error()
+    _speak(_("{count} problems. The first: {problem}").format(
+        count=len(problems), problem=problems[0]))
+    wx.MessageBox("\n".join(problems), macro_info.get('name', ''),
+                  wx.OK | wx.ICON_WARNING, parent)
 
 
 def _delete_macro_confirm(macro_info):
@@ -2065,6 +2142,10 @@ def _iui_macro_action(macro_name):
         _("Back"),
         _("Run"),
         _("Edit"),
+    ]
+    if macro_info.get('type') == TCS_EXT:
+        menu_elements.append(_("Check script"))
+    menu_elements += [
         _("Configure"),
         _("Delete"),
     ]
@@ -2103,6 +2184,13 @@ def _iui_macro_context_action(action_name):
     if action_name == _("Edit"):
         _iui_collapse_macro_context()
         _edit_macro(selected)
+        return
+
+    if action_name == _("Check script"):
+        _iui_collapse_macro_context()
+        parent = _iui_ref.main_frame if _iui_ref else None
+        wx = _get_wx()
+        wx.CallAfter(_check_macro_dialog, selected, parent)
         return
 
     if action_name == _("Configure"):
@@ -2859,17 +2947,18 @@ def _ai_parse(text):
             if lowered.startswith(('say ', 'speak ')):
                 _word, _sep, rest = line.partition(' ')
                 values, named = _ai_arg_tail(number, rest)
-                unknown = [k for k in named if k not in ('wait', 'interrupt')]
+                known = ('wait', 'interrupt', 'position', 'pitch', 'rate')
+                unknown = [k for k in named if k not in known]
                 if unknown:
                     raise TCSError(number, "'say' does not know "
                                    + ", ".join(unknown),
-                                   "It takes wait and interrupt.")
+                                   "It takes wait, interrupt, position, pitch "
+                                   "and rate.")
                 if not values:
                     raise TCSError(number, "'say' wants something to say")
-                block.append({'kind': 'say', 'line': number,
-                              'text': values[0],
-                              'wait': named.get('wait'),
-                              'interrupt': named.get('interrupt')})
+                statement = {'kind': 'say', 'line': number, 'text': values[0]}
+                statement.update({key: named.get(key) for key in known})
+                block.append(statement)
                 continue
 
             if lowered.startswith('return '):
@@ -3240,7 +3329,8 @@ class _AICancelled(Exception):
     """The user closed a dialog the macro was waiting on."""
 
 
-def _tcs_say(text, wait=False, interrupt=False):
+def _tcs_say(text, wait=False, interrupt=False, position=None, pitch=None,
+             rate=None, budget=None):
     """Speak, through whatever Titan itself is actually speaking with.
 
     `say` must be the same thing as `titan.speak`, not a second voice with its
@@ -3253,34 +3343,79 @@ def _tcs_say(text, wait=False, interrupt=False):
     speech and a sound all start at once. Titan's engine already has a
     synchronous ``speak`` and an asynchronous one, so waiting is real waiting,
     not a guess at how long a sentence takes.
+
+    ``position``, ``pitch`` and ``rate`` are what a script needs to *count out
+    loud from the left to the right, getting faster* without describing it in
+    words and hoping the AI works it out: Titan's speech already renders a
+    stereo/3D position and a pitch offset per utterance, so the language says so
+    directly. ``rate`` is for this one line - the rate in force before it is put
+    back straight afterwards, and the user's own is restored when the script
+    ends however it ends.
     """
     message = str(text)
-    if interrupt:
+    speech = None
+    positional = (position not in (None, 0.0)) or (pitch not in (None, 0))
+    if interrupt or positional or rate is not None:
         try:
-            from src.titan_core.stereo_speech import get_stereo_speech
-            speech = get_stereo_speech()
-            if speech is not None:
-                speech.stop()
+            speech = _tcs_speech()
+        except Exception:
+            speech = None
+    if interrupt and speech is not None:
+        try:
+            speech.stop()
         except Exception:
             pass
-    if wait:
+    previous_rate = None
+    if rate is not None and speech is not None:
+        # Remembering the voice here too means a rate borrowed by a single line
+        # is still put back if the script dies in the middle of speaking.
+        if budget is not None:
+            _tcs_voice_remember(budget)
+        previous_rate = _tcs_current_rate(budget)
         try:
-            from src.titan_core.stereo_speech import get_stereo_speech
-            speech = get_stereo_speech()
-            if speech is not None:
+            speech.set_rate(int(rate))
+            # A rate that belongs to ONE line can only be put back once that
+            # line has been spoken, so such a line is spoken synchronously.
+            # Restoring it while an asynchronous utterance was still being
+            # generated would give the next line's rate to this one.
+            wait = True
+        except Exception:
+            previous_rate = None
+    try:
+        if speech is not None and (positional or rate is not None):
+            try:
+                if wait:
+                    speech.speak(message,
+                                 position=float(position or 0.0),
+                                 pitch_offset=int(pitch or 0))
+                else:
+                    speech.speak_async(message,
+                                       position=float(position or 0.0),
+                                       pitch_offset=int(pitch or 0))
+                return
+            except Exception:
+                pass                    # fall through to the ordinary paths
+        if wait and speech is not None:
+            try:
                 speech.speak(message)          # blocks until it has finished
+                return
+            except Exception:
+                pass
+        try:
+            from src.titan_core import actions
+            result = actions.run('titan', 'speak', text=message,
+                                 interrupt=bool(interrupt))
+            if result.ok:
                 return
         except Exception:
             pass
-    try:
-        from src.titan_core import actions
-        result = actions.run('titan', 'speak', text=message,
-                             interrupt=bool(interrupt))
-        if result.ok:
-            return
-    except Exception:
-        pass
-    _speak(message)
+        _speak(message)
+    finally:
+        if previous_rate is not None:
+            try:
+                speech.set_rate(int(previous_rate))
+            except Exception:
+                pass
 
 
 def _tcs_parent():
@@ -3592,6 +3727,54 @@ def _tcs_speech():
     return get_stereo_speech()
 
 
+# What each spoken setting actually accepts. These are the ranges Titan's own
+# speech uses (stereo_speech.set_rate / set_pitch / set_volume and the position
+# a clip is panned to), and they are checked at *write* time as well as at run
+# time: a macro saying rate=100 is a macro whose author - person or model -
+# guessed, and a guess that is silently clamped teaches them nothing.
+_TCS_RANGES = {
+    'rate': (-10, 10),
+    'pitch': (-10, 10),
+    'volume': (0, 100),
+    'position': (-1, 1),
+}
+
+
+def _tcs_range(line_no, name, value):
+    """A number a spoken setting will actually take, or a TCSError saying so."""
+    low, high = _TCS_RANGES[name]
+    try:
+        number = float(str(value).strip())
+    except (TypeError, ValueError):
+        raise TCSError(line_no, f"'{value}' is not a number for {name}",
+                       f"{name} goes from {low} to {high}.")
+    if not (low <= number <= high):
+        raise TCSError(line_no,
+                       f"{name} {number:g} is outside what Titan's speech "
+                       f"takes", f"{name} goes from {low} to {high}.")
+    return number
+
+
+def _tcs_current_rate(budget):
+    """The speech rate in force right now, so a borrowed one can be put back.
+
+    A script that has already said `voice rate=` owns the rate; otherwise it is
+    the user's own, which lives in the settings rather than on the engine (the
+    engines keep it in their own units).
+    """
+    if budget is not None and budget.get('voice_rate') is not None:
+        try:
+            return int(budget['voice_rate'])
+        except (TypeError, ValueError):
+            pass
+    try:
+        from src.settings.settings import get_setting
+        value = str(get_setting('rate', '', section='stereo_speech')).strip()
+        return int(value) if value else 0
+    except Exception:
+        return 0
+
+
 def _tcs_voice_remember(budget):
     """Capture the voice Titan is speaking in, once per run."""
     if 'voice_saved' in budget:
@@ -3674,6 +3857,7 @@ def _tcs_voice(statement, variables, transcript, budget):
                        "Titan's speech engine is not running")
     if statement.get('reset'):
         _tcs_voice_restore(budget)
+        budget.pop('voice_rate', None)
         transcript.append("voice: back to the user's own")
         return ''
     _tcs_voice_remember(budget)
@@ -3703,11 +3887,16 @@ def _tcs_voice(statement, variables, transcript, budget):
         node = statement.get(key)
         if node is None:
             continue
-        value = _ai_number(_ai_value_of(node, variables, transcript))
+        value = _tcs_range(statement['line'], key,
+                           _ai_number(_ai_value_of(node, variables,
+                                                   transcript)))
         try:
             getattr(speech, setter)(int(value))
         except Exception as e:
             raise TCSError(statement['line'], f"could not set the {key}: {e}")
+        if key == 'rate':
+            # A later `say ... rate=` borrows for one line and puts *this* back.
+            budget['voice_rate'] = int(value)
         changed.append(f"{key} {int(value)}")
     transcript.append("voice: " + (", ".join(changed) or "nothing changed")
                       + " (for this script only)")
@@ -3746,8 +3935,9 @@ def _tcs_play(statement, variables, transcript, budget):
                        "A bare name is looked for next to the script itself.")
     args = {'path': path}
     if statement.get('position') is not None:
-        args['position'] = _ai_value_of(statement['position'], variables,
-                                        transcript)
+        args['position'] = _tcs_range(
+            statement['line'], 'position',
+            _ai_value_of(statement['position'], variables, transcript))
     if statement.get('wait') is not None:
         args['wait'] = _ai_value_of(statement['wait'], variables, transcript)
     result = actions.run('titan', 'play_sound', **args)
@@ -3943,8 +4133,21 @@ def _ai_execute(body, variables, transcript, budget):
             interrupt = (_ai_truth(_ai_value_of(statement['interrupt'],
                                                 variables, transcript))
                          if statement.get('interrupt') is not None else False)
-            _tcs_say(str(spoken), wait=wait, interrupt=interrupt)
-            transcript.append(f"say: {spoken}")
+            spoken_as = {}
+            for key in ('position', 'pitch', 'rate'):
+                if statement.get(key) is None:
+                    continue
+                spoken_as[key] = _tcs_range(
+                    statement['line'], key,
+                    _ai_number(_ai_value_of(statement[key], variables,
+                                            transcript)))
+            _tcs_say(str(spoken), wait=wait, interrupt=interrupt,
+                     budget=budget, **spoken_as)
+            transcript.append(
+                f"say: {spoken}"
+                + (" (" + ", ".join(f"{k} {v:g}"
+                                    for k, v in spoken_as.items()) + ")"
+                   if spoken_as else ''))
         elif kind == 'return':
             raise _AIStop(_ai_value_of(statement['value'], variables,
                                        transcript)
@@ -3999,6 +4202,38 @@ def check_tcs(text, base_dir=''):
     problems = [e.describe() for e in errors]
     ai_on = _ai_features_on()
 
+    def check_ranges(statement, keys):
+        """Numbers written out in the script itself, checked before it runs.
+
+        `voice rate=100` is the mistake a writer who guessed at the language
+        makes, and every engine silently clamps it - so it is caught here, where
+        it can still be corrected, rather than sounding exactly like rate=10.
+        """
+        for key in keys:
+            node = statement.get(key)
+            if not isinstance(node, dict):
+                continue
+            if node.get('kind') == 'expr':
+                # '-1' and '2 * 3' are expressions, not literals, so a constant
+                # one is worked out here; one that needs a variable comes out
+                # empty (an unset variable is '') and is left to the run.
+                try:
+                    value = node['expr'].evaluate({})
+                except Exception:
+                    continue
+                if value is None or str(value).strip() == '':
+                    continue
+            elif node.get('kind') == 'value':
+                value = node.get('value')
+            else:
+                continue                       # a call: not knowable yet
+            if isinstance(value, str) and '{{' in value:
+                continue
+            try:
+                _tcs_range(statement['line'], key, value)
+            except TCSError as e:
+                problems.append(e.describe())
+
     def walk(body):
         for statement in body:
             if statement['kind'] == 'call':
@@ -4044,14 +4279,19 @@ def check_tcs(text, base_dir=''):
                 walk([statement['prompt']] + list(statement.get('options') or []))
             elif statement['kind'] in ('message', 'say'):
                 walk([statement['text']])
+                if statement['kind'] == 'say':
+                    check_ranges(statement, ('position', 'pitch', 'rate'))
             elif statement['kind'] == 'return' and statement.get('value'):
                 walk([statement['value']])
             elif statement['kind'] == 'voice':
                 walk([node for key, node in statement.items()
                       if isinstance(node, dict) and node.get('kind')])
+                check_ranges(statement, ('rate', 'pitch', 'volume'))
             elif statement['kind'] in ('play', 'run'):
                 node = statement.get('file') or statement.get('script')
                 walk([node])
+                if statement['kind'] == 'play':
+                    check_ranges(statement, ('position',))
                 # A file named literally can be checked now; one built from a
                 # variable can only be checked when it is known.
                 if node.get('kind') == 'value' and base_dir:
@@ -4071,6 +4311,49 @@ def check_tcs(text, base_dir=''):
     return problems
 
 
+def pseudocode_lines(text):
+    """[(line number, what it says), ...] - the lines written in words.
+
+    A pseudocode line is the one thing in the language that needs the AI, so
+    both the runner (to refuse early, by line, when AI features are off) and
+    the writing tools (to insist a generated macro name real actions) have to
+    be able to point at them.
+    """
+    program, _errors = _ai_parse(text)
+    found = []
+
+    def walk(body):
+        for statement in body:
+            kind = statement.get('kind')
+            if kind == 'prose':
+                found.append((statement.get('line', 0),
+                              str(statement.get('text') or '')))
+            elif kind == 'repeat':
+                walk(statement.get('body') or [])
+            elif kind == 'if':
+                walk(statement.get('then') or [])
+                walk(statement.get('else') or [])
+
+    walk(program['body'])
+    return sorted(found)
+
+
+def _tcs_announce_problems(problems, announce):
+    """Say the first thing wrong with a script, with the line it is on.
+
+    A macro that simply does nothing is the worst possible answer: the line
+    number is the whole of the useful information, so it is spoken and not only
+    written to the transcript.
+    """
+    if not announce or not problems:
+        return
+    _speak(_("Macro problem: {}").format(problems[0]))
+    _play_error()
+    if len(problems) > 1:
+        _speak(_("{} more problems - see the macro's check.").format(
+            len(problems) - 1))
+
+
 def run_tcs_text(text, announce=True, base_dir=''):
     """(ok, transcript). Runs a script that is already in memory.
 
@@ -4079,7 +4362,22 @@ def run_tcs_text(text, announce=True, base_dir=''):
     """
     program, errors = _ai_parse(text)
     if errors:
-        return False, [e.describe() for e in errors]
+        problems = [e.describe() for e in errors]
+        _tcs_announce_problems(problems, announce)
+        return False, problems
+    # Pseudocode is the one thing here that cannot run without AI features, and
+    # that is knowable before anything happens - so the macro says which lines
+    # they are instead of half-running and stopping at the first one.
+    if not _ai_features_on():
+        prose = pseudocode_lines(text)
+        if prose:
+            problems = [
+                f"line {number}: '{said}' is written in words, and pseudocode "
+                f"needs AI features switched on (Settings, AI features). Write "
+                f"it as add-on.action to run it without them."
+                for number, said in prose]
+            _tcs_announce_problems(problems, announce)
+            return False, problems
     transcript = []
     variables = {}
     # 'prose' is the per-run translation cache: a pseudocode line inside a
@@ -4094,7 +4392,8 @@ def run_tcs_text(text, announce=True, base_dir=''):
         except TCSError as e:
             transcript.append(e.describe())
             if announce:
-                _speak(_("Macro problem: {}").format(e.message))
+                _speak(_("Macro problem on line {line}: {message}").format(
+                    line=e.line_no, message=e.message))
                 _play_error()
             return False, transcript
         except Exception as e:                       # noqa: BLE001 - reported
@@ -4148,6 +4447,14 @@ TCS_TEMPLATE = """# A Titan Script (.TCS): a script made of Titan's own actions.
 #   repeat 3
 #       wait 2s
 #   end
+#
+# It speaks in the user's own voice, and can move that voice about:
+#   say "on the left" position=-1 wait=true    -1 left to 1 right
+#   say "quickly" rate=8                       this line only, -10 to 10
+#   say "low" pitch=-4                         this line only, -10 to 10
+#   voice engine="supertonic" rate=2           for this script only
+#   voice reset
+#   play "ding.ogg" position=-0.8
 #
 # It can ask, and show windows:
 #   ask who = "What is your name?"
@@ -4436,7 +4743,66 @@ def _folder_name_for(manager, name):
     return candidate
 
 
-def action_create_macro(name, keys='', script='', kind='', hotkey=''):
+# --------------------------------------------------------------------------- #
+# Writing a Titan Script on somebody's behalf
+# --------------------------------------------------------------------------- #
+# A macro written by the AI has to be a *real* script: one that names actions
+# Titan actually has, with the arguments they actually take, and that therefore
+# runs with AI features switched back off. The two failure modes are guessing at
+# the language (rate=100, 'choose' spelled as something else) and writing the
+# whole thing as pseudocode - a wall of `do "say one from the left"` that reads
+# like a script and is really a wall of requests to a model. Both are caught
+# here, before anything is saved, and the reply says exactly which line and what
+# the language really offers.
+
+_TCS_WRITE_RULES = """How to write a Titan Script that will actually be saved:
+- Read macros.macro_language (the language) and macros.macro_actions (every
+  action, with the arguments each one takes) FIRST. Do not invent statements,
+  argument names or action names, and do not guess at numbers.
+- Speech position, pitch and rate are part of the language - use them instead
+  of describing them in words:
+      say "one" position=-1 rate=-6 wait=true
+      say "ten" position=1 rate=8 wait=true
+      voice engine="supertonic" rate=2      (for this script only)
+      play "ding.ogg" position=-0.8
+  rate and pitch go from -10 to 10, volume from 0 to 100, position from -1
+  (left) to 1 (right).
+- Every other line names an action: add-on.action value or name="value".
+- macros.check_macro checks a script without running it."""
+
+
+def _tcs_write_problems(script, base_dir='', allow_pseudocode=False):
+    """Everything that would stop a written script from being a real script.
+
+    On top of what :func:`check_tcs` finds, a line written in words is refused
+    by default when it is somebody *else's* macro being written: pseudocode is
+    a legitimate part of the language for a person writing their own, but a
+    generated macro made of it is a macro that stops working the moment AI
+    features are off, and usually one whose author never looked for the action
+    that already existed.
+    """
+    problems = check_tcs(script, base_dir=base_dir)
+    # With AI features off, check_tcs already reports every pseudocode line.
+    if not allow_pseudocode and _ai_features_on():
+        for number, said in pseudocode_lines(script):
+            problems.append(
+                f"line {number}: '{said}' is written in words, not as an "
+                f"action. Write it with real actions (macros.macro_actions "
+                f"lists them) so the macro runs with AI features off too. If "
+                f"Titan genuinely has no action for that line, pass "
+                f"allow_pseudocode=true.")
+    return problems
+
+
+def _tcs_refusal(problems):
+    """The answer to a script that would not run: the lines, then the rules."""
+    return fails("That macro would not run:\n"
+                 + "\n".join(f"- {p}" for p in problems[:12])
+                 + "\n\n" + _TCS_WRITE_RULES)
+
+
+def action_create_macro(name, keys='', script='', kind='', hotkey='',
+                        allow_pseudocode=''):
     """Create a macro the user can then see, run, edit and give a shortcut."""
     name = str(name or '').strip()
     if not name:
@@ -4457,8 +4823,8 @@ def action_create_macro(name, keys='', script='', kind='', hotkey=''):
 
     manager = _action_manager()
     if manager.find_by_name(name) is not None:
-        return fails(f"There is already a macro called '{name}'. Delete it "
-                     f"first, or choose another name.")
+        return fails(f"There is already a macro called '{name}'. Use "
+                     f"macros.edit_macro to change it, or choose another name.")
 
     if extension == '.macro':
         if not keys:
@@ -4476,10 +4842,10 @@ def action_create_macro(name, keys='', script='', kind='', hotkey=''):
         # Checked before it is written, not the first time it runs: a macro
         # that fires at a quarter to twelve must not be where its author finds
         # out an action name was wrong.
-        problems = check_tcs(script)
+        problems = _tcs_write_problems(
+            script, allow_pseudocode=_ai_truth(allow_pseudocode))
         if problems:
-            return fails("That macro would not run:\n"
-                         + "\n".join(f"- {p}" for p in problems[:8]))
+            return _tcs_refusal(problems)
         body = script
     else:
         if not script:
@@ -4541,6 +4907,97 @@ def action_read_macro(name):
     except Exception as e:
         return f"{header}\n(the file could not be read: {e})"
     return f"{header}\n\n{body}"
+
+
+def action_edit_macro(name, script='', keys='', append='', hotkey='',
+                      allow_pseudocode=''):
+    """Change a macro the user already has, rather than making a second one.
+
+    "Make it count to twenty as well" must end with the macro they already have
+    doing that - not with a new macro beside it and the old one still there. A
+    bundled macro is shadow-copied into the user's own folder first, exactly as
+    the Macro Manager does when it saves a shortcut, so the installation is
+    never written to.
+    """
+    manager = _action_manager()
+    macro, problem = _find_macro(manager, name, 'changed')
+    if problem is not None:
+        return problem
+
+    script = str(script or '').strip()
+    keys = str(keys or '').strip()
+    hotkey_given = str(hotkey or '').strip()
+    if not script and not keys and not hotkey_given:
+        return needs('script', f"What should '{macro.get('name')}' do now? "
+                               f"Pass the new script, or the keys to press. "
+                               f"macros.read_macro shows what it does today.")
+
+    kind = str(macro.get('type', '')).lower()
+    body = None
+    if keys and not script:
+        if kind != '.macro':
+            return fails(f"'{macro.get('name')}' is a {kind} macro, so it is "
+                         f"changed by its script, not by a list of keys.")
+        data, error = _macro_json_from_keys(keys)
+        if error:
+            return fails(error)
+        body = json.dumps(data, indent=2)
+    elif script:
+        body = script
+        if _ai_truth(append):
+            try:
+                with open(macro.get('script_path', ''), 'r',
+                          encoding='utf-8') as handle:
+                    body = handle.read().rstrip('\n') + '\n\n' + script
+            except OSError as e:
+                return fails(f"Could not read '{macro.get('name')}': {e}")
+        if kind == TCS_EXT:
+            problems = _tcs_write_problems(
+                body, base_dir=macro.get('folder_path', ''),
+                allow_pseudocode=_ai_truth(allow_pseudocode))
+            if problems:
+                return _tcs_refusal(problems)
+        elif kind == '.macro':
+            try:
+                json.loads(body)
+            except ValueError as e:
+                return fails(f"A .macro file is the recorded key presses as "
+                             f"JSON, and that is not valid JSON ({e}). Pass "
+                             f"'keys' instead and Titan will write the file.")
+
+    if body is not None:
+        folder_path = manager._ensure_user_copy(macro.get('folder_name'))
+        target = os.path.join(folder_path, macro.get('openfile', ''))
+        try:
+            with open(target, 'w', encoding='utf-8') as handle:
+                handle.write(body)
+        except OSError as e:
+            return fails(f"Could not save '{macro.get('name')}': {e}")
+
+    # An empty 'hotkey' means "leave it alone" - taking one away is
+    # macros.set_macro_hotkey with nothing, which says so plainly.
+    if hotkey_given:
+        try:
+            manager.set_hotkey(macro.get('folder_name'), hotkey_given)
+        except Exception as e:
+            return fails(f"The macro was saved, but its shortcut could not be "
+                         f"changed: {e}")
+        if _macro_hotkey_manager is not None:
+            try:
+                _macro_hotkey_manager.reload()
+            except Exception:
+                pass
+
+    manager.load_macros()
+    _refresh_macro_list()
+    changed = []
+    if body is not None:
+        changed.append("appended to it" if _ai_truth(append)
+                       else "rewrote what it does")
+    if hotkey_given:
+        changed.append(f"gave it the shortcut {hotkey_given}")
+    return (f"Changed the macro '{macro.get('name')}': "
+            + " and ".join(changed) + ".")
 
 
 def action_delete_macro(name):
@@ -4639,8 +5096,15 @@ One statement per line. # starts a comment.
     say "anything" wait=true            wait until it has finished speaking
     say "anything" interrupt=true       stop what is being said first
     speak "anything"                    the same word either way
+    say "here" position=-1               where the voice comes from,
+    say "and here" position=0.8          -1 left to 1 right
+    say "high" pitch=4                   this line only, -10 to 10
+    say "quickly" rate=8                 this line only, -10 to 10; the rate
+                                         in force comes back straight after,
+                                         and such a line waits for itself
     voice engine="supertonic" name="Nova" rate=2 pitch=-1
                                         a different voice FOR THIS SCRIPT ONLY
+                                        (rate/pitch -10..10, volume 0..100)
     voice reset                         back to the user's own, early
     play "ding.ogg"                     a sound shipped beside the script
     play "ding.ogg" position=-1 wait=true    -1 left to 1 right
@@ -4648,6 +5112,15 @@ One statement per line. # starts a comment.
                                         {{last}} is what it returned
     return "whatever"                   ends this script, handing that back
     stop                                ends the script here
+
+  So "count to ten, moving from the left to the right and getting faster" is
+  written out, not described:
+    repeat 1
+        say "one" position=-1 rate=-6 wait=true
+        say "two" position=-0.8 rate=-4 wait=true
+    end
+  A number outside the range a setting takes (rate=100) is refused with the
+  line it is on, rather than quietly clamped.
 
   A bare filename in 'play' and 'run' is looked for next to the script itself,
   so a macro folder carries its own sounds and helper scripts anywhere.
@@ -4665,8 +5138,14 @@ One statement per line. # starts a comment.
   it wants in plain language, and the AI turns it into these same actions:
     do "put today's date in a note called diary"
   A line that does not name an action is treated as pseudocode. Without AI
-  features on, such a line is an error and the macro says so - everything
-  above runs with the AI switched off."""
+  features on, such a line is an error naming its line number, and the macro
+  says so before it runs anything - everything above runs with the AI switched
+  off.
+
+  Pseudocode is for somebody writing their own macro in a hurry. A macro
+  written FOR somebody else (by the AI, or by the creation kit) must name real
+  actions: it is checked before it is saved, and a line left in words is
+  refused with its line number unless there is genuinely no action for it."""
 
 
 def action_macro_language():
@@ -4717,10 +5196,31 @@ def action_check_macro(script="", name=""):
             return fails(f"Could not read '{macro.get('name')}': {e}")
         folder = macro.get('folder_path', '')
     problems = check_tcs(text, base_dir=folder)
-    if not problems:
+    pseudocode = pseudocode_lines(text) if _ai_features_on() else []
+    if not problems and not pseudocode:
         return "The macro is fine - every line names something Titan can do."
+    if not problems:
+        return ("The macro would run, but these lines are written in words and "
+                "need AI features on every time it runs:\n"
+                + "\n".join(f"- line {number}: {said}"
+                            for number, said in pseudocode[:12])
+                + "\n\nWritten as real actions they would work with AI "
+                  "features off too.")
     return ("The macro would not run:\n"
-            + "\n".join(f"- {p}" for p in problems[:12]))
+            + "\n".join(f"- {p}" for p in problems[:12])
+            + "\n\n" + _TCS_WRITE_RULES)
+
+
+def action_reload_macros():
+    """Re-read the macros folder, so a macro just written appears in the list."""
+    manager = _action_manager()
+    _refresh_macro_list()
+    if _macro_hotkey_manager is not None:
+        try:
+            _macro_hotkey_manager.reload()
+        except Exception:
+            pass
+    return f"The macro list has been re-read: {len(manager.macros)} macros."
 
 
 TITAN_ACTIONS = [
@@ -4733,10 +5233,14 @@ TITAN_ACTIONS = [
                          'description': "The macro's name."}},
      'risk': 'confirm', 'promote': True, 'run': action_run_macro},
     {'name': 'create_macro',
-     'summary': "Create a macro in the user's macro manager. Use this whenever "
-                "the user asks for a macro - it appears in their macro list "
-                "with a name and an optional shortcut, instead of a script "
-                "file left somewhere.",
+     'summary': "Create a NEW macro in the user's macro manager. Use this "
+                "whenever the user asks for a macro - it appears in their "
+                "macro list with a name and an optional shortcut, instead of a "
+                "script file left somewhere. To change a macro that already "
+                "exists, use edit_macro instead. For a Titan Script (kind "
+                "'tcs') read macros.macro_language and macros.macro_actions "
+                "first: the script is checked before it is saved and anything "
+                "invented is refused, line by line.",
      'params': {
          'name': {'type': 'string', 'required': True,
                   'description': "What the macro is called."},
@@ -4759,13 +5263,49 @@ TITAN_ACTIONS = [
                                  "'ahk' for AutoHotkey, 'au3' for AutoIt."},
          'hotkey': {'type': 'string',
                     'description': "A shortcut that runs it, e.g. "
-                                   "'ctrl+alt+m' (optional)."}},
+                                   "'ctrl+alt+m' (optional)."},
+         'allow_pseudocode': {'type': 'boolean',
+                              'description': "Only if Titan genuinely has no "
+                                             "action for a line and it must be "
+                                             "left in words for the AI to work "
+                                             "out at run time. Off by default: "
+                                             "a macro made of real actions "
+                                             "runs with AI features off."}},
      'risk': 'confirm', 'promote': True, 'run': action_create_macro},
     {'name': 'read_macro',
-     'summary': "Show what one of the user's macros does.",
+     'summary': "Show what one of the user's macros does. Read this before "
+                "editing a macro, so the change is made to what is really "
+                "there.",
      'params': {'name': {'type': 'string', 'required': True,
                          'description': "The macro's name."}},
      'run': action_read_macro},
+    {'name': 'edit_macro',
+     'summary': "Change a macro the user already has: rewrite what it does, "
+                "add to it, or give it a shortcut. Use this - not "
+                "create_macro - whenever the user asks to change, fix, extend "
+                "or correct an existing macro, so they end up with the macro "
+                "they had rather than a second one beside it. A Titan Script "
+                "is checked before it is saved.",
+     'params': {
+         'name': {'type': 'string', 'required': True,
+                  'description': "The macro to change."},
+         'script': {'type': 'string',
+                    'description': "The new script, complete. Read the macro "
+                                   "first (read_macro) and send the whole file "
+                                   "back, not a fragment - unless 'append' is "
+                                   "set."},
+         'keys': {'type': 'string',
+                  'description': "For a recorded .macro: the keys it should "
+                                 "press instead, e.g. 'ctrl+c, ctrl+v'."},
+         'append': {'type': 'boolean',
+                    'description': "Add 'script' to the end of what is there "
+                                   "instead of replacing it."},
+         'hotkey': {'type': 'string',
+                    'description': "Also give it this shortcut (optional)."},
+         'allow_pseudocode': {'type': 'boolean',
+                              'description': "As in create_macro; off by "
+                                             "default."}},
+     'risk': 'confirm', 'promote': True, 'run': action_edit_macro},
     {'name': 'delete_macro',
      'summary': "Delete one of the user's macros.",
      'params': {'name': {'type': 'string', 'required': True,
@@ -4801,4 +5341,8 @@ TITAN_ACTIONS = [
                          'description': "Or the name of a saved macro to "
                                         "check instead."}},
      'run': action_check_macro},
+    {'name': 'reload',
+     'summary': "Re-read the macros folder so a macro written or changed from "
+                "outside the macro manager appears in the user's list.",
+     'run': action_reload_macros},
 ]
