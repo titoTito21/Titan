@@ -1,0 +1,74 @@
+# Form demo: a whole window of controls, its own buttons, and a script that
+# acts on which one was pressed.
+#
+# This is what a macro needs to automate anything worth automating: several
+# answers at once, and more than one way out of the window. The window is
+# titled with this macro's own name unless the script gives it one - here the
+# title after 'dialog' is used.
+#
+# Every control's name becomes a variable:
+#   field       one line of text
+#   multiline   a box of text
+#   choice      a drop-down list of options
+#   check       a tick box (true or false)
+#   buttons     the window's own buttons; the variable holds the one pressed
+
+# 'title' sets what every window this script puts up is called, from here on.
+# Without it they carry the macro's own name.
+title "New note"
+
+dialog "New note"
+    field title = "Title" default="Note"
+    multiline body = "What should the note say?"
+    choice importance = "How important?" options "normal", "high"
+    check speak_it = "Read it back to me"
+    buttons pressed = "Save", "Save and read", "Read it now", "Cancel"
+
+    # An 'on' block runs WHILE THE WINDOW IS STILL OPEN, with the controls as
+    # they stand - so this button reads back what has been typed so far and
+    # leaves the window up to carry on writing. A button with no 'on' block
+    # (Save, Save and read, Cancel) closes the window and answers with it.
+    on "Read it now"
+        say "{{title}}. {{body}}" interrupt=true
+    end
+end
+
+# An answer picked from options is the text AND knows which one it was, so
+# either names it. The number is what survives a change of wording.
+if pressed = "Cancel"
+    say "Nothing saved." wait=true
+    stop
+end
+
+tnotes.create_note title="{{title}}" text="{{body}}"
+say "Saved a note called {{title}}." wait=true
+
+# "Save and read" is the second button - by name here, by number below.
+if pressed = "2"
+    titan.speak "{{body}}"
+end
+
+if speak_it is true
+    titan.speak "{{body}}"
+end
+
+# A choice compares the same two ways: importance = "high" is importance = "2".
+if importance = "2"
+    treminder.create_reminder name="Look at: {{title}}" date="today" time="18:00"
+    say "I put a reminder on it for six o'clock." wait=true
+end
+
+# A sound that travels from left to right while it plays says "done" without
+# saying anything. With positioning off in Settings, Sound it is simply heard
+# in the centre.
+play "done.ogg" position=-1 to=1 duration=1.5s
+
+# Anything Titan can reach can be driven from here, including a program with
+# no actions of its own - uncomment to have the note typed into Notepad too.
+# desktop.launch_program path="notepad.exe"
+# wait 2s
+# desktop.focus_window title="Notepad"
+# type "{{body}}"
+# keys "ctrl+s"
+
+message "All done."

@@ -464,6 +464,25 @@ def is_playing(src_id):
             return False
 
 
+def move_source(src_id, azimuth_deg, elevation_deg=0.0):
+    """Put an already-playing source somewhere else.
+
+    OpenAL renders a source from wherever it is at that instant, so a sound
+    can be moved while it plays simply by giving it a new position - which is
+    what makes a sound that travels possible at all. Returns True when the
+    source took it.
+    """
+    if not _init_ok or src_id is None:
+        return False
+    with _lock:
+        try:
+            x, y, z = _angles_to_xyz(azimuth_deg, elevation_deg)
+            _al.alSource3f(ctypes.c_uint(src_id), _al.AL_POSITION, x, y, z)
+            return True
+        except Exception:
+            return False
+
+
 def stop_source(src_id):
     """Stop and free a single source returned by play_pcm/play_file."""
     if not _init() or src_id is None:

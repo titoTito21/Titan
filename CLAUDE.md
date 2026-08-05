@@ -512,11 +512,26 @@ dispatch on worker threads so a handler that calls back cannot deadlock.
 reimplements Titan: `titan` (settings, components, add-ons, TTS engines),
 `settings` (find a setting by what it does), `system` (volume, playback device,
 brightness, power plan, theme, Wi-Fi, autostart), `gamepad` (list/read/set/cycle
-the modes), `titannet`, `elten`, `im`, `ocr`, `memory`. These are **adapted, not
-rewritten**: `builtin._addon_from_tools()` turns the tool tables in
-`src/ai/tools/` into ActionSpecs with the callable attached, so there is one
+the modes), `titannet`, `elten`, `im`, `ocr`, `memory`, and — so that
+"everything Titan can do" is true of the API and not only of the agent —
+**`desktop`** (the open windows, the keyboard and mouse, files, launching
+programs; `agent_tools.get_desktop_tools()`, split out of `get_tools()` for
+exactly this), **`ui`** (any window's controls by name, via Windows' own
+accessibility) and **`web`** (the user's browser). These are **adapted, not
+rewritten**: `builtin._addon_from_tools()` turns the tool tables in `src/ai/`
+and `src/ai/tools/` into ActionSpecs with the callable attached, so there is one
 implementation with two audiences. An installed add-on can never shadow one of
 these ids - it is registered as `<id>_addon` with a warning instead.
+
+**An action is gated on the AI only if a model actually does it.** `ActionSpec`
+carries `needs_ai` (manifests may declare `"needs_ai": true`), `dispatch.run()`
+refuses such an action when AI features are off with one plain sentence rather
+than letting it fail inside a provider with no key, and `describe()` marks it
+`[needs AI]` so a macro author can choose the way that still works. The list is
+deliberately per *action*, not per provider: today it is exactly
+`ocr.read_window` and `ocr.ask`, because pressing and typing into what AI OCR
+already read is ordinary UI Automation and the memory tools are a file of
+notes. Living in `src/ai/` is not the same as calling a model.
 
 **`live` is the last resort.** An action must not require the add-on's window
 just because that is where the code was written - "write a note, then read it
@@ -595,6 +610,10 @@ dialog "Write a note"               one window, one variable per control
     multiline body = "Text"
     choice importance = "How important?" options "normal", "high"
     check speak_it = "Read it back"
+    buttons pressed = "Save", "Save and read", "Cancel"
+end
+if pressed = "Cancel"               by what it says, or `= "3"` by which
+    stop                            option it was; `=` needs no spaces
 end
 tnotes.create_note title="{{title}}" text="{{body}}"
 macros.run_macro name="My other macro"      every action the assistant has
@@ -621,12 +640,34 @@ end
   `macros.create_macro` with `kind: 'tcs'` refuses to save a script that would
   not run. The Macro Manager offers the same check on any .tcs macro (context
   menu -> Check script, GUI and Invisible UI), and its **Titan Script** tab is
-  the language reference itself - the same text the AI is given.
+  the language reference itself.
+- **The reference is in the user's own language.** `_MACRO_LANGUAGE` /
+  `_MACRO_LANGUAGE_PL` and `_macro_language_text()`: a Polish Titan shows the
+  Polish reference, and `_tcs_template()` writes a Polish template into a new
+  script. `macros.macro_language language="en"` asks for the English one -
+  which is what `creation_docs` grounds the model on, like every other guide.
+  A document this size is a second text rather than one 140-line msgid that a
+  one-word change in the English would invalidate wholesale.
 - **Expressions are parsed, never `eval`'d** - a script is a file on disk and
   must not be able to run arbitrary Python.
 - **Dialogs are real wx controls** on the GUI thread, parented to Titan (so
   Windows closes them with it), and closing one **ends the script** rather than
-  continuing with an empty answer.
+  continuing with an empty answer. A dialog may name its **own buttons**
+  (`buttons pressed = "Save", "Save and read", "Cancel"`, up to six): each is a
+  real `wx.Button` ending the dialog with its own id, so a form can offer
+  several instructions instead of only OK - which is what "a macro for
+  automation" actually needs. Escape and the close box still cancel.
+  `data/macros/form_demo/` is the whole thing.
+- **An answer picked from options knows which option it was** (`_AIChoice`, a
+  `str` subclass carrying `number` + `options`, returned by `choose`, by a
+  dialog's `choice` and by `buttons`). `_ai_compare` consults it for
+  `is`/`=`/`==`/`is not`/`!=`, so `if answer = "yes"` and `if answer = "1"` are
+  the same option - the wording of a button changes, its position does not.
+  Everything else sees a plain string, so `{{answer}}` still writes the text.
+- **Comparisons may be written tight**: `if option="tak"` is a comparison, not
+  a syntax error. `_ai_tight_operator` scans for the symbol operators outside
+  quotes and brackets, so `if x = "a=b"` and `if tnotes.count(kind="x")>0`
+  still split where they should. Word operators are matched first, as before.
 - **It speaks in the user's own voice.** `say` is `titan.speak`, so there is one
   answer to "what does Titan sound like". `voice engine=... name=... rate=...`
   borrows a different one **for that script only**: applied to the live engine,
@@ -653,6 +694,44 @@ end
   the new `titan.play_sound` / `titan.stop_sounds` actions wrap
   `sound.play_sound_file` with the user's theme volume and stereo/3D
   positioning, and any add-on can use them.
+- **A sound can be placed, and can travel while it plays.**
+  `play "ding.ogg" position=-1 to=1 duration=3s` (plus `elevation` /
+  `to_elevation` in 3D). `sound._start_sound_file()` now hands back whatever is
+  playing - an OpenAL source or a pygame channel - and
+  `sound.play_sound_file_moving()` steps it on one daemon thread
+  (`spatial_audio.move_source()` for HRTF, `channel.set_volume()` for stereo).
+  Both backends could always do this; nothing had ever asked them to.
+  **The static case was also wrong**: everything Titan exposes says -1..1 while
+  `sound.py` has always taken 0..1, and `titan_play_sound` passed one straight
+  into the other - so every position left of centre, *including the centre*,
+  came out hard left. It converts now (`(position + 1) / 2`).
+- **A macro's window carries the macro's name, and the name is editable.**
+  `_tcs_running` (a `threading.local`, since a trigger can fire while the user
+  runs another macro) holds the title and `_tcs_title()` uses it for any window
+  the script does not title itself - "Voice demo", not the word "Macro". The
+  script changes it at any point with `title "..."`, a statement takes its own
+  `title=`, and `macros.edit_macro new_name=` renames the macro itself. A
+  script opened by double-clicking is named after its own file.
+- **A button can do work while its window stays open.** `on "<button>"` blocks
+  inside a `dialog` (`kind: 'handler'`) run on the GUI thread inside the
+  button's event, with the controls as they stand injected into the script's
+  variables; a button with no block closes the window and answers with the
+  values as before. `_ai_form`'s `on_press(label, number, values)` is called
+  once with `values=None` per button to ask whether it has a block at all - that
+  is what decides whether pressing it closes the window. A handler that fails
+  or says `stop` is carried back to the script's own thread rather than raised
+  into wx's event loop. This is what makes a macro a small application instead
+  of a form that can only be submitted.
+- **Anything Titan can reach is callable, including things with no add-on.**
+  `keys "ctrl+s"` / `type "text"` (`desktop.press_keys` / `desktop.type_text`,
+  so there is one implementation for the agent and for a macro), plus
+  `desktop.*`, `ui.*` and `web.*` as ordinary actions - so a program with no
+  actions of its own is driven with focus_window + keys/type + click_element.
+- **The action itself may come from a variable**: `{{app}}.open_file` -
+  `_ai_call` fills the path before resolving it, `_ai_looks_like_call` accepts
+  `{{name}}` segments, and `check_tcs` leaves such a line for run time. A macro
+  that has just asked which application the user meant can act on the answer
+  instead of needing one branch per possibility.
 - **Pseudocode needs AI features on, everything else does not.** A line that
   does not name an action (or an explicit `do "..."`) is handed to the AI, which
   translates it into the same action steps and runs them through
@@ -696,7 +775,11 @@ end
   ends with `macros.reload` so the macro is in the list at once.
 - Actions: `macros.macro_language` (the grammar), `macros.macro_actions` (what
   can be called), `macros.check_macro`, `macros.edit_macro`, `macros.reload`.
-  Examples: `data/macros/example_script/`, `data/macros/voice_demo/`.
+  Examples: `data/macros/example_script/` (everything), `voice_demo/`
+  (positioned, speeding-up speech), `form_demo/` (a form with its own buttons,
+  branching on the option by text and by number, a travelling sound).
+  Tests: `tests/test_tcs_macros.py` (run it directly - `tests/` has no
+  `__init__.py`).
 
 **Every add-on is reachable, declaration or not** (`actions/generic.py`). Most
 kinds share one Python interface with every other add-on of that kind, so the

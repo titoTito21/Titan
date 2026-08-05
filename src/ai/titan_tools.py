@@ -2035,7 +2035,8 @@ def titan_speak(text, interrupt=False, position=None, pitch=None, rate=None,
     return f"Said: {message[:200]}" + ('...' if len(message) > 200 else '')
 
 
-def titan_play_sound(path, position=0.0, wait=False, **_):
+def titan_play_sound(path, position=0.0, wait=False, to=None, duration=2.0,
+                     elevation=0.0, to_elevation=None, **_):
     """Play an audio file through Titan's own sound system.
 
     Titan already owns the mixer, the theme volume and the stereo/3D
@@ -2043,6 +2044,12 @@ def titan_play_sound(path, position=0.0, wait=False, **_):
     ask for it here rather than opening an audio device of its own and fighting
     Titan for the sound card. Any file pygame can decode works - a script, a
     component or a game can ship its own sounds and play them by path.
+
+    ``position`` places it (-1 left to 1 right) and ``to`` makes it *travel*
+    there over ``duration`` seconds while it plays - the difference between a
+    sound at a place and a sound going somewhere, which on an audio-first
+    desktop carries real information. ``elevation`` (-1 down to 1 up) applies
+    in 3D mode.
     """
     target = str(path or '').strip().strip('"')
     if not target:
@@ -2050,13 +2057,42 @@ def titan_play_sound(path, position=0.0, wait=False, **_):
     target = os.path.abspath(os.path.expandvars(os.path.expanduser(target)))
     if not os.path.isfile(target):
         return f"There is no sound file at {target}."
+
+    def _pan(value, fallback=0.0):
+        """A caller's -1..1 position as the mixer's own 0..1 pan.
+
+        Everything Titan exposes speaks in -1..1 (left to right); sound.py has
+        always taken 0..1. Passing one straight into the other is what made
+        every position left of centre - including the centre - come out hard
+        left.
+        """
+        try:
+            place = max(-1.0, min(1.0, float(value)))
+        except (TypeError, ValueError):
+            place = fallback
+        return (place + 1.0) / 2.0
+
+    start = _pan(position)
     try:
-        pan = max(-1.0, min(1.0, float(position or 0.0)))
+        elev = max(-1.0, min(1.0, float(elevation or 0.0)))
     except (TypeError, ValueError):
-        pan = 0.0
+        elev = 0.0
+    moving = to is not None and str(to).strip() != ''
     try:
-        from src.titan_core.sound import play_sound_file
-        played = play_sound_file(target, pan=pan)
+        from src.titan_core.sound import (play_sound_file,
+                                          play_sound_file_moving)
+        if moving:
+            try:
+                seconds = max(0.05, min(300.0, float(duration or 2.0)))
+            except (TypeError, ValueError):
+                seconds = 2.0
+            played = play_sound_file_moving(
+                target, pan=start, to_pan=_pan(to), seconds=seconds,
+                elevation=elev,
+                to_elevation=(None if to_elevation is None
+                              else max(-1.0, min(1.0, float(to_elevation)))))
+        else:
+            played = play_sound_file(target, pan=start, elevation=elev)
     except Exception as e:
         return f"Could not play {os.path.basename(target)}: {e}"
     if not played:
@@ -2075,6 +2111,9 @@ def titan_play_sound(path, position=0.0, wait=False, **_):
                 waited += 0.05
         except Exception:
             pass
+    if moving:
+        return (f"Played {os.path.basename(target)}, travelling from "
+                f"{float(position or 0.0):g} to {float(to):g}.")
     return f"Played {os.path.basename(target)}."
 
 
@@ -2288,13 +2327,28 @@ def get_titan_tools():
               required=['text']),
         _tool('titan_play_sound',
               "Play an audio file through Titan's own sound system, with the "
-              "user's theme volume and stereo positioning. Use this rather "
+              "user's theme volume and stereo/3D positioning. Use this rather "
               "than opening an audio device - a script, component or game can "
-              "play sounds it ships with itself.", titan_play_sound,
+              "play sounds it ships with itself. It can also be placed "
+              "anywhere from left to right, and made to travel while it "
+              "plays.", titan_play_sound,
               properties={'path': dict(S, description="The audio file to play."),
                           'position': {'type': 'number',
                                        'description': "Where it comes from, "
                                        "-1 left to 1 right (default centre)."},
+                          'to': {'type': 'number',
+                                 'description': "Where it should travel to, "
+                                 "-1 to 1. Given this, the sound MOVES from "
+                                 "'position' to here while it plays."},
+                          'duration': {'type': 'number',
+                                       'description': "Seconds the journey "
+                                       "takes (default 2)."},
+                          'elevation': {'type': 'number',
+                                        'description': "Height, -1 down to 1 "
+                                        "up (3D positioning only)."},
+                          'to_elevation': {'type': 'number',
+                                           'description': "Height to travel "
+                                           "to (3D only)."},
                           'wait': dict(B, description="Wait until it has "
                                        "finished (default no).")},
               required=['path']),

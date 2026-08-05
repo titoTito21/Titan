@@ -284,8 +284,13 @@ _MACRO_REQUIREMENTS = [
     "line number.",
     "- Do NOT write pseudocode. A line in plain words ('do \"...\"', or a line "
     "that names no action) needs AI features switched on every time the macro "
-    "runs. Speech position, pitch and rate, sounds, dialogs, questions, "
-    "conditions and loops are all part of the language: use them.",
+    "runs. Speech position, pitch and rate, placed and moving sounds, dialogs, "
+    "questions, conditions and loops are all part of the language: use them.",
+    "- A macro is for automation, so build a real window whenever the user "
+    "needs to give or choose something: 'dialog' with 'field', 'multiline', "
+    "'choice', 'check' and its own 'buttons', then branch on which button was "
+    "pressed (by its text or by its number). Do not settle for one 'ask' when "
+    "the user described a form.",
     "- The manifest's name_en and name_pl are the name the user will see in "
     "their macro list. Comments (#) in the script are in English.",
 ]

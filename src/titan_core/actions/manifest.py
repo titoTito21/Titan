@@ -89,8 +89,14 @@ class ActionSpec:
 
     def __init__(self, name, summary='', params=None, risk='auto', mode='any',
                  promote=False, handler='', addon=None, timeout=0,
-                 launch=None):
+                 launch=None, needs_ai=False):
         self.name = name
+        # Is this action *done by a model*? Such an action cannot work with
+        # Titan's AI features switched off, and the honest answer then is to say
+        # so rather than to fail somewhere inside a provider - see
+        # dispatch.run(). Declared per action, because an add-on may have one
+        # AI-backed action among a dozen ordinary ones.
+        self.needs_ai = bool(needs_ai)
         self.summary = summary
         self.params = params or {}          # ordered: name -> descriptor dict
         self.risk = risk if risk in RISK_LEVELS else 'auto'
@@ -144,7 +150,11 @@ class ActionSpec:
             f"{n}{'' if p.get('required') else '?'}:{p.get('type', 'string')}"
             for n, p in self.params.items())
         risk = '' if self.risk == 'auto' else f" [{self.risk}]"
-        return f"{self.qualified}({args}){risk} - {self.summary}"
+        # Whether an action needs the AI is part of what it is: a macro author
+        # choosing between two ways of doing something should be able to see
+        # which one still works with the AI switched off.
+        needs = " [needs AI]" if self.needs_ai else ''
+        return f"{self.qualified}({args}){risk}{needs} - {self.summary}"
 
     def coerce(self, args):
         """Bring model-supplied arguments to the declared types. Models happily
@@ -289,7 +299,8 @@ def _parse_action(raw, addon, warn):
         params=_parse_params(raw.get('params'), warn),
         risk=risk, mode=mode, promote=bool(raw.get('promote')),
         handler=handler, addon=addon, timeout=timeout,
-        launch=None if launch is None else bool(launch))
+        launch=None if launch is None else bool(launch),
+        needs_ai=bool(raw.get('needs_ai')))
 
 
 def parse_manifest(data, kind, name, path, default_transport='inproc',

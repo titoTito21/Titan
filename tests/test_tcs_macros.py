@@ -297,6 +297,639 @@ class WritingAMacroForSomebody(unittest.TestCase):
             self.assertIn('mine', handle.read())
 
 
+class ActingOnTheOptionThatWasPicked(unittest.TestCase):
+    """`if answer = "yes"` and `if answer = "1"` are the same option."""
+
+    def test_an_answer_is_its_text(self):
+        answer = MACROS._AIChoice('yes', 1, ['yes', 'no'])
+        self.assertEqual('yes', str(answer))
+        self.assertEqual('I said yes', 'I said ' + answer)
+
+    def test_it_can_be_named_by_text_or_by_number(self):
+        answer = MACROS._AIChoice('Save and read', 2,
+                                  ['Save', 'Save and read', 'Cancel'])
+        for operator in ('is', '=', '=='):
+            self.assertTrue(MACROS._ai_compare(answer, operator,
+                                               'Save and read'), operator)
+            self.assertTrue(MACROS._ai_compare(answer, operator, '2'), operator)
+            self.assertTrue(MACROS._ai_compare(answer, operator, 2), operator)
+            self.assertFalse(MACROS._ai_compare(answer, operator, 'Cancel'))
+            self.assertFalse(MACROS._ai_compare(answer, operator, '3'))
+        self.assertTrue(MACROS._ai_compare(answer, 'is not', 'Cancel'))
+        self.assertFalse(MACROS._ai_compare(answer, '!=', '2'))
+
+    def test_it_works_on_either_side(self):
+        answer = MACROS._AIChoice('no', 2, ['yes', 'no'])
+        self.assertTrue(MACROS._ai_compare('2', 'is', answer))
+
+    def test_an_ordinary_string_still_compares_as_text(self):
+        self.assertFalse(MACROS._ai_compare('yes', 'is', '1'))
+        self.assertTrue(MACROS._ai_compare('yes', 'is', 'YES'))
+
+    def test_the_comparison_runs_in_a_script(self):
+        variables = {'answer': MACROS._AIChoice('nie', 2, ['tak', 'nie'])}
+        said = []
+        original = MACROS._tcs_say
+        MACROS._tcs_say = lambda text, **k: said.append(str(text))
+        try:
+            program, errors = MACROS._ai_parse(
+                'if answer="2"\n    say "second"\nelse\n    say "first"\nend')
+            self.assertEqual([], [e.describe() for e in errors])
+            MACROS._ai_execute(program['body'], variables, [],
+                               {'steps': 100, 'prose': {}, 'dir': ''})
+        finally:
+            MACROS._tcs_say = original
+        self.assertEqual(['second'], said)
+
+
+class ComparisonsWrittenTight(unittest.TestCase):
+    """`if option="tak"` is a comparison; refusing it for want of spaces is not
+    something a person writing a macro should have to discover."""
+
+    def test_the_symbols_need_no_spaces(self):
+        for line, operator in (('x="tak"', '='), ('x!="tak"', '!='),
+                               ('x>=3', '>='), ('x<3', '<'), ('x==3', '==')):
+            statement = MACROS._ai_parse_if(1, line)
+            self.assertEqual(operator, statement['op'], line)
+
+    def test_a_quoted_value_is_not_split_on(self):
+        statement = MACROS._ai_parse_if(1, 'x = "a=b"')
+        self.assertEqual('=', statement['op'])
+        self.assertEqual('a=b', statement['right']['value'])
+
+    def test_a_named_argument_in_brackets_is_not_the_comparison(self):
+        found = MACROS._ai_tight_operator('tnotes.count(kind="work")>0')
+        self.assertIsNotNone(found)
+        self.assertEqual('>', found[1])
+
+    def test_words_still_win(self):
+        self.assertEqual('contains', MACROS._ai_parse_if(
+            1, 'x contains "a=b"')['op'])
+
+    def test_a_line_with_no_comparison_still_says_so(self):
+        with self.assertRaises(MACROS.TCSError):
+            MACROS._ai_parse_if(1, 'something entirely')
+
+
+class FormsWithButtons(unittest.TestCase):
+    """A form that can only be accepted or abandoned cannot be automated."""
+
+    def test_buttons_parse_into_the_dialog(self):
+        program, errors = MACROS._ai_parse(
+            'dialog "New note"\n'
+            '    field title = "Title"\n'
+            '    buttons pressed = "Save", "Save and read", "Cancel"\n'
+            'end')
+        self.assertEqual([], [e.describe() for e in errors])
+        fields = program['body'][0]['fields']
+        buttons = [f for f in fields if f.get('control') == 'buttons']
+        self.assertEqual(1, len(buttons))
+        self.assertEqual('pressed', buttons[0]['name'])
+        self.assertEqual(3, len(buttons[0]['options']))
+
+    def test_buttons_belong_in_a_dialog(self):
+        _program, errors = MACROS._ai_parse('buttons x = "One"')
+        self.assertTrue(any('dialog' in e.describe() for e in errors), errors)
+
+    def test_a_dialog_has_one_set_of_buttons(self):
+        _program, errors = MACROS._ai_parse(
+            'dialog "x"\n    buttons a = "One"\n    buttons b = "Two"\nend')
+        self.assertTrue(any('one set of buttons' in e.describe()
+                            for e in errors), [e.describe() for e in errors])
+
+    def test_buttons_need_labels_and_a_name(self):
+        for line in ('buttons pressed', 'buttons pressed ='):
+            _program, errors = MACROS._ai_parse(f'dialog "x"\n    {line}\nend')
+            self.assertTrue(errors, line)
+
+    def test_the_example_form_is_valid(self):
+        path = os.path.join(REPO, 'data', 'macros', 'form_demo',
+                            'form_demo.tcs')
+        with open(path, encoding='utf-8') as handle:
+            text = handle.read()
+        problems = [p for p in MACROS.check_tcs(
+            text, base_dir=os.path.dirname(path))
+            if 'is not something' not in p and 'has no action' not in p
+            and 'no add-on' not in p]
+        self.assertEqual([], problems)
+
+
+class SoundThatCanBePlacedAndMoved(unittest.TestCase):
+    """Positioning, on the fly and in general."""
+
+    def test_play_takes_the_positioning_arguments(self):
+        program, errors = MACROS._ai_parse(
+            'play "a.ogg" position=-1 to=1 duration=3s elevation=0.5')
+        self.assertEqual([], [e.describe() for e in errors])
+        statement = program['body'][0]
+        for key in ('position', 'to', 'duration', 'elevation'):
+            self.assertIsNotNone(statement.get(key), key)
+
+    def test_an_unknown_argument_is_named(self):
+        problems = MACROS.check_tcs('play "a.ogg" speed=2')
+        self.assertTrue(any('does not know' in p for p in problems), problems)
+
+    def test_positions_are_range_checked(self):
+        for line, word in (('play "a.ogg" to=5', 'to'),
+                           ('play "a.ogg" elevation=-9', 'elevation'),
+                           ('play "a.ogg" position=2', 'position')):
+            problems = MACROS.check_tcs(line)
+            self.assertTrue(any(word in p and 'line 1' in p for p in problems),
+                            f"{line} -> {problems}")
+
+    def test_the_action_maps_minus_one_to_one_onto_the_mixers_pan(self):
+        # sound.py has always taken 0..1; everything Titan exposes says
+        # -1..1. Passing one straight into the other made the centre hard left.
+        from src.ai import titan_tools
+        seen = {}
+
+        class _FakeSound(types.ModuleType):
+            @staticmethod
+            def play_sound_file(path, pan=None, elevation=0.0):
+                seen['pan'] = pan
+                return True
+
+            @staticmethod
+            def play_sound_file_moving(path, pan=0.0, to_pan=1.0, seconds=2.0,
+                                       elevation=0.0, to_elevation=None):
+                seen.update(pan=pan, to_pan=to_pan, seconds=seconds)
+                return True
+
+        fake = _FakeSound('src.titan_core.sound')
+        saved = sys.modules.get('src.titan_core.sound')
+        sys.modules['src.titan_core.sound'] = fake
+        try:
+            here = os.path.join(REPO, 'data', 'macros', 'form_demo', 'done.ogg')
+            titan_tools.titan_play_sound(here, position=0.0)
+            self.assertAlmostEqual(0.5, seen['pan'])       # centre is centre
+            titan_tools.titan_play_sound(here, position=-1.0)
+            self.assertAlmostEqual(0.0, seen['pan'])       # hard left
+            titan_tools.titan_play_sound(here, position=1.0)
+            self.assertAlmostEqual(1.0, seen['pan'])       # hard right
+            titan_tools.titan_play_sound(here, position=-1.0, to=1.0,
+                                         duration=3)
+            self.assertAlmostEqual(0.0, seen['pan'])
+            self.assertAlmostEqual(1.0, seen['to_pan'])
+            self.assertAlmostEqual(3.0, seen['seconds'])
+        finally:
+            if saved is not None:
+                sys.modules['src.titan_core.sound'] = saved
+            else:
+                sys.modules.pop('src.titan_core.sound', None)
+
+
+class WindowsAreTitledWithTheMacro(unittest.TestCase):
+    """A macro's window carries the macro's name, not the word "Macro"."""
+
+    def tearDown(self):
+        MACROS._tcs_running.title = ''
+
+    def test_the_macros_own_name_is_the_default(self):
+        MACROS._tcs_running.title = 'Voice demo'
+        self.assertEqual('Voice demo', MACROS._tcs_title(''))
+
+    def test_a_title_in_the_script_wins(self):
+        MACROS._tcs_running.title = 'Voice demo'
+        self.assertEqual('New note', MACROS._tcs_title('New note'))
+
+    def test_running_a_script_sets_it(self):
+        MACROS._tcs_running.title = ''
+        MACROS.run_tcs_text('stop', announce=False, title='Morning routine')
+        self.assertEqual('Morning routine', MACROS._tcs_title(''))
+
+
+class TheDocumentationFollowsTitansLanguage(unittest.TestCase):
+    """Somebody learning the language should not have to learn English first."""
+
+    def test_polish_is_asked_for_by_name(self):
+        polish = MACROS._macro_language_text('pl')
+        english = MACROS._macro_language_text('en')
+        self.assertIn('Język skryptowy Titana', polish)
+        self.assertIn('The Titan Scripting Language', english)
+        self.assertNotEqual(polish, english)
+
+    def test_both_describe_the_same_language(self):
+        for text in (MACROS._macro_language_text('pl'),
+                     MACROS._macro_language_text('en')):
+            for word in ('buttons ', 'position=-1 to=1 duration=3s',
+                         'when startup', 'voice reset', 'repeat 3',
+                         'multiline body', 'choice ', 'check '):
+                self.assertIn(word, text)
+
+    def test_the_action_takes_a_language(self):
+        answer = str(MACROS.action_macro_language(language='pl'))
+        self.assertIn('Język skryptowy Titana', answer)
+
+    def test_the_new_script_template_has_a_polish_version(self):
+        self.assertIn('Skrypt Titana', MACROS.TCS_TEMPLATE_PL)
+        for template in (MACROS.TCS_TEMPLATE, MACROS.TCS_TEMPLATE_PL):
+            body = "\n".join(line for line in template.splitlines()
+                             if not line.startswith('#'))
+            self.assertEqual([], MACROS.check_tcs(body) if body.strip() else [])
+
+
+class AButtonThatDoesSomething(unittest.TestCase):
+    """`on "<button>"` runs while the window is still open."""
+
+    SCRIPT = ('dialog "Notes"\n'
+              '    field query = "Search for"\n'
+              '    buttons pressed = "Search", "Close"\n'
+              '    on "Search"\n'
+              '        say "searching {{query}}"\n'
+              '    end\n'
+              'end')
+
+    def test_it_parses_into_the_dialog(self):
+        program, errors = MACROS._ai_parse(self.SCRIPT)
+        self.assertEqual([], [e.describe() for e in errors])
+        handlers = [f for f in program['body'][0]['fields']
+                    if f['kind'] == 'handler']
+        self.assertEqual(1, len(handlers))
+        self.assertEqual(1, len(handlers[0]['body']))
+
+    def test_on_belongs_in_a_dialog(self):
+        _program, errors = MACROS._ai_parse('on "Search"\n    say "x"\nend')
+        self.assertTrue(any('dialog' in e.describe() for e in errors), errors)
+
+    def test_on_needs_buttons_to_press(self):
+        program, _errors = MACROS._ai_parse(
+            'dialog "x"\n    field a = "A"\n    on "Save"\n        say "x"\n'
+            '    end\nend')
+        MACROS._ai_form = lambda *a, **k: {}
+        with self.assertRaises(MACROS.TCSError):
+            MACROS._ai_dialog(program['body'][0], {}, [], None)
+
+    def test_pressing_it_runs_the_block_with_the_live_controls(self):
+        program, _errors = MACROS._ai_parse(self.SCRIPT)
+        said = []
+        pressed_result = {}
+        original_say, original_form = MACROS._tcs_say, MACROS._ai_form
+
+        def fake_form(title, fields, on_press=None):
+            # What the real form does: ask whether a button has a block, then
+            # call it with the controls as they stand when it is pressed.
+            pressed_result['live'] = on_press('Search', 1, None)
+            pressed_result['dead'] = on_press('Close', 2, None)
+            on_press('Search', 1, {'query': 'invoices'})
+            return {'query': 'invoices',
+                    'pressed': MACROS._AIChoice('Close', 2,
+                                                ['Search', 'Close'])}
+
+        MACROS._tcs_say = lambda text, **k: said.append(str(text))
+        MACROS._ai_form = fake_form
+        try:
+            values = MACROS._ai_dialog(program['body'][0], {}, [],
+                                       {'steps': 100, 'prose': {}, 'dir': ''})
+        finally:
+            MACROS._tcs_say, MACROS._ai_form = original_say, original_form
+        self.assertTrue(pressed_result['live'])       # "Search" has a block
+        self.assertFalse(pressed_result['dead'])      # "Close" has none
+        self.assertEqual(['searching invoices'], said)
+        self.assertEqual('Close', str(values['pressed']))
+
+    def test_a_handler_matches_by_number_too(self):
+        program, _errors = MACROS._ai_parse(
+            self.SCRIPT.replace('on "Search"', 'on "1"'))
+        original = MACROS._ai_form
+        seen = {}
+
+        def fake_form(title, fields, on_press=None):
+            seen['live'] = on_press('Search', 1, None)
+            return {}
+
+        MACROS._ai_form = fake_form
+        try:
+            MACROS._ai_dialog(program['body'][0], {}, [], None)
+        finally:
+            MACROS._ai_form = original
+        self.assertTrue(seen['live'])
+
+
+class DrivingAnythingElse(unittest.TestCase):
+    """keys / type / an action named by a variable / an editable title."""
+
+    def setUp(self):
+        self.calls = []
+        self.fake = types.ModuleType('fake_actions')
+
+        class _R:
+            def __init__(self, ok=True, text='done'):
+                self.ok, self.text = ok, text
+
+        def _run(addon, name='', **kwargs):
+            self.calls.append((addon, name, kwargs))
+            return _R()
+
+        self.fake.run = _run
+
+        class _EmptyRegistry:
+            addons = []
+
+            @staticmethod
+            def by_id(_addon_id):
+                return None
+
+        self.fake.get_registry = lambda: _EmptyRegistry()
+        import src.titan_core as core
+        self._saved = getattr(core, 'actions', None)
+        core.actions = self.fake
+
+    def tearDown(self):
+        import src.titan_core as core
+        if self._saved is not None:
+            core.actions = self._saved
+
+    def _run(self, script, variables=None):
+        program, errors = MACROS._ai_parse(script)
+        self.assertEqual([], [e.describe() for e in errors])
+        MACROS._ai_execute(program['body'], variables if variables is not None
+                           else {}, [], {'steps': 100, 'prose': {}, 'dir': ''})
+
+    def test_keys_presses_each_chord_in_order(self):
+        self._run('keys "ctrl+c, ctrl+v"')
+        self.assertEqual([('desktop', 'press_keys', {'keys': 'ctrl+c'}),
+                          ('desktop', 'press_keys', {'keys': 'ctrl+v'})],
+                         self.calls)
+
+    def test_type_types(self):
+        self._run('type "hello"')
+        self.assertEqual([('desktop', 'type_text', {'text': 'hello'})],
+                         self.calls)
+
+    def test_they_take_variables(self):
+        self._run('type "{{what}}"', {'what': 'from a variable'})
+        self.assertEqual('from a variable', self.calls[0][2]['text'])
+
+    def test_an_action_can_come_from_a_variable(self):
+        asked = {}
+
+        class _Spec:
+            params = {'path': {'type': 'string'}}
+
+        def _resolve(path):
+            asked['path'] = path
+            addon, _dot, action = path.partition('.')
+            return addon, action, _Spec()
+
+        original = MACROS._ai_resolve
+        MACROS._ai_resolve = _resolve
+        try:
+            self._run('{{app}}.open_file path="x"', {'app': 'tedit'})
+        finally:
+            MACROS._ai_resolve = original
+        # The name is filled in from the variable before it is resolved.
+        self.assertEqual('tedit.open_file', asked['path'])
+        self.assertEqual(('tedit', 'open_file'), self.calls[0][:2])
+
+    def test_an_unknown_action_from_a_variable_still_says_so(self):
+        with self.assertRaises(MACROS.TCSError):
+            self._run('{{app}}.open_file path="x"', {'app': 'nosuchaddon'})
+
+    def test_the_title_is_editable(self):
+        MACROS._tcs_running.title = 'Old'
+        try:
+            self._run('title "New windows"')
+            self.assertEqual('New windows', MACROS._tcs_title(''))
+        finally:
+            MACROS._tcs_running.title = ''
+
+
+class OnlyWhatAModelDoesNeedsTheAI(unittest.TestCase):
+    """An action is gated on the AI only if it actually sends something to a
+    provider - living in src/ai/ is not the same as calling a model."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from src.titan_core.actions import builtin, dispatch
+        except Exception as e:                   # pragma: no cover
+            raise unittest.SkipTest(f"the action API is not importable: {e}")
+        cls.builtin, cls.dispatch = builtin, dispatch
+        cls.addons = builtin.build()
+
+    def _actions(self):
+        return {f"{a.addon_id}.{x.name}": x
+                for a in self.addons for x in a.actions}
+
+    def test_the_automation_providers_are_there(self):
+        ids = {a.addon_id for a in self.addons}
+        for provider in ('desktop', 'ui', 'web', 'system', 'titan'):
+            self.assertIn(provider, ids)
+        actions = self._actions()
+        for named in ('desktop.press_keys', 'desktop.type_text',
+                      'desktop.launch_program', 'desktop.focus_window',
+                      'ui.click_element', 'ui.list_elements', 'web.open'):
+            self.assertIn(named, actions)
+
+    def test_only_the_vision_actions_need_the_ai(self):
+        gated = sorted(name for name, spec in self._actions().items()
+                       if spec.needs_ai)
+        self.assertEqual(['ocr.ask', 'ocr.read_window'], gated)
+
+    def test_pressing_what_ocr_already_read_does_not(self):
+        actions = self._actions()
+        for named in ('ocr.press', 'ocr.type', 'ocr.send_key',
+                      'memory.remember', 'memory.recall'):
+            self.assertFalse(actions[named].needs_ai, named)
+
+    def test_a_gated_action_is_refused_with_a_sentence(self):
+        saved = self.dispatch.ai_features_on
+        self.dispatch.ai_features_on = lambda: False
+        try:
+            result = self.dispatch.run('ocr', 'read_window')
+        finally:
+            self.dispatch.ai_features_on = saved
+        self.assertFalse(result.ok)
+        self.assertIn('AI features', result.text)
+        self.assertIn('Settings', result.text)
+
+    def test_an_ordinary_action_still_runs_with_the_ai_off(self):
+        saved = self.dispatch.ai_features_on
+        self.dispatch.ai_features_on = lambda: False
+        try:
+            result = self.dispatch.run('desktop', 'get_foreground_window')
+        finally:
+            self.dispatch.ai_features_on = saved
+        self.assertTrue(result.ok, result.text)
+
+    def test_it_is_visible_in_the_listing(self):
+        actions = self._actions()
+        self.assertIn('[needs AI]', actions['ocr.read_window'].describe())
+        self.assertNotIn('[needs AI]', actions['ocr.press'].describe())
+
+
+class CheckScriptIsARealReview(unittest.TestCase):
+    """"The macro is fine" is a promise. A script can parse, name only real
+    actions, and still be wrong - so the check compares it against the
+    documented language and against what each action declares."""
+
+    HIDDEN = ('set greeting = "Hello"\n'          # 1
+              'say "{{greting}}"\n'               # 2 - misspelt variable
+              'dialog "X"\n'                      # 3
+              '    field a = "A"\n'               # 4
+              '    buttons pressed = "Save", "Cancel"\n'   # 5
+              '    on "Sve"\n'                    # 6 - no such button
+              '        say "{{a}}"\n'             # 7
+              '    end\n'                         # 8
+              'end\n'                             # 9
+              'stop\n'                            # 10
+              'say "never"\n')                    # 11 - unreachable
+
+    def setUp(self):
+        self._ai_on = MACROS._ai_features_on
+        MACROS._ai_features_on = lambda: True
+
+    def tearDown(self):
+        MACROS._ai_features_on = self._ai_on
+
+    def test_it_would_run_but_it_is_wrong(self):
+        self.assertEqual([], MACROS.check_tcs(self.HIDDEN))   # parses, resolves
+        warnings = MACROS.review_warnings(self.HIDDEN)
+        self.assertTrue(any('greting' in w and 'never set' in w
+                            for w in warnings), warnings)
+        self.assertTrue(any("no button called 'Sve'" in w for w in warnings),
+                        warnings)
+        self.assertTrue(any('line 11' in w and 'never run' in w
+                            for w in warnings), warnings)
+
+    def test_a_misspelt_variable_suggests_the_real_one(self):
+        warnings = MACROS.review_warnings('set greeting = "x"\n'
+                                          'say "{{greting}}"')
+        self.assertIn('did you mean greeting', warnings[0])
+
+    def test_another_language_written_by_habit_is_pointed_at(self):
+        for line, word in (('while x > 3', 'while'), ('for i in list', 'for'),
+                           ('print "hello"', 'print'), ('sleep 5', 'sleep'),
+                           ('var x = 3', 'var'), ('exit', 'exit')):
+            warnings = MACROS.review_warnings(line)
+            self.assertTrue(any(word in w and 'not part of the Titan' in w
+                                for w in warnings), f"{line} -> {warnings}")
+
+    def test_a_value_an_action_does_not_take_is_caught(self):
+        # An action's own declaration IS the documentation, so a value outside
+        # a declared enum is checked against it. (Resolution needs a running
+        # Titan, so the declaration is supplied here.)
+        class _Spec:
+            params = {'kind': {'type': 'string',
+                               'enum': ['keys', 'tcs', 'ahk', 'au3']}}
+            needs_ai = False
+            qualified = 'macros.create_macro'
+
+        original = MACROS._ai_resolve
+        MACROS._ai_resolve = lambda path: ('macros', 'create_macro', _Spec())
+        try:
+            warnings = MACROS.review_warnings(
+                'macros.create_macro name="x" kind="python"')
+        finally:
+            MACROS._ai_resolve = original
+        self.assertTrue(any('does not take kind' in w for w in warnings),
+                        warnings)
+
+    def test_an_ai_backed_action_is_flagged_when_the_ai_is_off(self):
+        class _Spec:
+            params = {}
+            needs_ai = True
+            qualified = 'ocr.read_window'
+
+        original = MACROS._ai_resolve
+        MACROS._ai_resolve = lambda path: ('ocr', 'read_window', _Spec())
+        MACROS._ai_features_on = lambda: False
+        try:
+            warnings = MACROS.review_warnings('ocr.read_window')
+        finally:
+            MACROS._ai_resolve = original
+        self.assertTrue(any('carried out by the AI' in w for w in warnings),
+                        warnings)
+
+    def test_the_bundled_examples_have_nothing_to_answer_for(self):
+        base_dir = os.path.join(REPO, 'data', 'macros')
+        for folder in sorted(os.listdir(base_dir)):
+            folder_path = os.path.join(base_dir, folder)
+            if not os.path.isdir(folder_path):
+                continue
+            for name in sorted(os.listdir(folder_path)):
+                if not name.lower().endswith('.tcs'):
+                    continue
+                with open(os.path.join(folder_path, name),
+                          encoding='utf-8') as handle:
+                    text = handle.read()
+                self.assertEqual(
+                    [], MACROS.review_warnings(text, base_dir=folder_path),
+                    f"{folder}/{name}")
+
+    def test_a_clean_script_says_so_plainly(self):
+        MACROS._ai_features_on = lambda: False
+        answer = str(MACROS.action_check_macro(
+            script='set x = "a"\nsay "{{x}}"'))
+        self.assertIn('fine', answer)
+        self.assertIn('AI features are off', answer)
+
+    def test_the_three_tiers_are_reported_separately(self):
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': [
+            'line 2: the greeting is never spoken']
+        try:
+            answer = str(MACROS.action_check_macro(script=self.HIDDEN))
+        finally:
+            MACROS.review_with_ai = original
+        self.assertIn('Would run, but looks wrong', answer)
+        self.assertIn('The AI also read it and noticed', answer)
+        self.assertNotIn('Would not run', answer)
+
+    def test_the_ai_is_not_asked_about_a_script_that_cannot_parse(self):
+        asked = []
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': asked.append(1) or []
+        try:
+            problems, _warnings, notes = MACROS.review_tcs('repeat 3\n')
+        finally:
+            MACROS.review_with_ai = original
+        self.assertTrue(problems)
+        self.assertEqual([], asked)
+        self.assertEqual([], notes)
+
+    def test_the_ai_pass_is_off_when_ai_features_are(self):
+        MACROS._ai_features_on = lambda: False
+        self.assertEqual([], MACROS.review_with_ai('say "x"'))
+
+    def test_the_ai_answering_ok_means_nothing_to_report(self):
+        import src.ai.ai_provider as provider
+        saved = provider.generate
+        provider.generate = lambda *a, **k: "OK"
+        try:
+            self.assertEqual([], MACROS.review_with_ai('say "x"'))
+            provider.generate = lambda *a, **k: (
+                "line 3: the note is saved before its title is asked for\n"
+                "Overall this looks reasonable.")
+            notes = MACROS.review_with_ai('say "x"')
+        finally:
+            provider.generate = saved
+        # Only line-anchored findings survive; prose is dropped.
+        self.assertEqual(['line 3: the note is saved before its title is '
+                          'asked for'], notes)
+
+    def test_warnings_come_back_when_a_macro_is_written(self):
+        tmp = tempfile.mkdtemp(prefix='titan_macros_review_')
+        saved = (MACROS.MACROS_DIR, MACROS.USER_MACROS_DIR,
+                 MACROS._refresh_macro_list)
+        MACROS.MACROS_DIR = os.path.join(tmp, 'bundled')
+        MACROS.USER_MACROS_DIR = os.path.join(tmp, 'user')
+        os.makedirs(MACROS.MACROS_DIR, exist_ok=True)
+        os.makedirs(MACROS.USER_MACROS_DIR, exist_ok=True)
+        MACROS._refresh_macro_list = lambda: None
+        try:
+            answer = str(MACROS.action_create_macro(
+                'Typo', kind='tcs',
+                script='set greeting = "x"\nsay "{{greting}}"'))
+        finally:
+            (MACROS.MACROS_DIR, MACROS.USER_MACROS_DIR,
+             MACROS._refresh_macro_list) = saved
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertIn('Created the macro', answer)
+        self.assertIn('Worth looking at', answer)
+        self.assertIn('greting', answer)
+
+
 class _Result:
     def __init__(self, ok, text):
         self.ok, self.text = ok, text

@@ -26,6 +26,21 @@ class ActionError(Exception):
     pass
 
 
+def ai_features_on():
+    """Whether Titan's AI features are switched on at all.
+
+    One reading of one setting, here rather than in every provider, so that
+    "this needs the AI" has a single answer. Best effort: if the settings
+    cannot be read, the action is allowed to try - refusing on a settings
+    hiccup would be worse than the failure it is guarding against.
+    """
+    try:
+        from src.settings.settings import get_setting
+        return str(get_setting('enabled', '0', section='ai')).strip() == '1'
+    except Exception:
+        return True
+
+
 class ActionResult:
     """The outcome of one action: truthy when it worked, printable always.
 
@@ -99,6 +114,19 @@ def run(addon_id, action_name='', **args):
             False,
             f"'{addon.label}' has no action '{action_name}'. It offers: {known}.",
             addon=addon)
+
+    # An action that is *done by a model* cannot work with the AI features off,
+    # and the useful answer is to say exactly that. Checked here rather than in
+    # each provider so every caller - a macro, another add-on, the assistant -
+    # gets the same sentence instead of a failure from somewhere inside a
+    # library, and so nothing is half-done first.
+    if getattr(action, 'needs_ai', False) and not ai_features_on():
+        return ActionResult(
+            False,
+            f"{action.qualified} is done by the AI, and Titan's AI features "
+            f"are switched off. Switch them on in Settings, AI features, to "
+            f"use it.",
+            addon=addon, action=action)
 
     # A required parameter that was not given is a question, not an error. The
     # manifest already describes what the parameter is for, so every action

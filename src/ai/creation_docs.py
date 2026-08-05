@@ -196,7 +196,10 @@ def load_macro_docs():
     Read live from the Macro Manager component, so the generator is grounded on
     the language as it is today - including every action every installed add-on
     declares, which no static guide could list."""
-    language = _macro_action('macro_language')
+    # Explicitly English: the reference the *user* reads follows Titan's
+    # language, but the one a model is grounded on stays the authoritative
+    # English text, like every other guide here.
+    language = _macro_action('macro_language', language='en')
     catalogue = _macro_action('macro_actions')
     if len(catalogue) > _MAX_ACTION_CHARS:
         catalogue = (catalogue[:_MAX_ACTION_CHARS]

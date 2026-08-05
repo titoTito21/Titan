@@ -804,7 +804,7 @@ def run_macro(macro_info, parent_frame=None):
         return
 
     if ext == TCS_EXT:
-        run_tcs(script_path)
+        run_tcs(script_path, title=macro_info.get('name', ''))
         return
 
     if ext == '.exe':
@@ -1628,7 +1628,7 @@ def _show_configure_dialog(parent, macro_manager, selected_macro=None):
                 docs_panel, label=_("The Titan Scripting Language (.tcs):")),
                 0, wx.ALL, 5)
             self.docs_text = wx.TextCtrl(
-                docs_panel, value=_MACRO_LANGUAGE,
+                docs_panel, value=_macro_language_text(),
                 style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
             self.docs_text.Bind(wx.EVT_SET_FOCUS,
                                 lambda e: (_play_focus(), e.Skip()))
@@ -1779,7 +1779,7 @@ def _show_configure_dialog(parent, macro_manager, selected_macro=None):
                     folder_name, name_en, name_pl, script_name)
                 script_full = os.path.join(folder_path, script_name)
                 with open(script_full, 'w', encoding='utf-8') as f:
-                    f.write(TCS_TEMPLATE)
+                    f.write(_tcs_template())
                 _open_in_tedit(script_full)
                 self.EndModal(wx.ID_OK)
                 _refresh_macro_list()
@@ -2010,12 +2010,17 @@ def _edit_macro(macro_info):
 
 
 def _check_macro_dialog(macro_info, parent):
-    """Say what is wrong with a Titan Script, line by line, without running it.
+    """Review a Titan Script and show what it found, without running it.
 
-    The line number is the useful part, and a user who has just written a
-    script should be able to ask for it rather than discovering it when the
-    macro fires. It is spoken as well as shown: this is a screen-reader
-    program, and the first problem is usually the only one that matters.
+    Three tiers, because "the macro is fine" is a promise: what would stop it
+    running, what would run and still looks wrong when the script is compared
+    against the documented language and against what each action declares
+    about itself, and - with AI features on - what the AI noticed when it read
+    the script with the reference in front of it. The last is labelled as
+    advisory wherever it appears.
+
+    The reading is done off the GUI thread: the AI pass goes over the network,
+    and a frozen window is not an answer.
     """
     wx = _get_wx()
     path = macro_info.get('script_path', '')
@@ -2026,20 +2031,46 @@ def _check_macro_dialog(macro_info, parent):
         _speak(_("Could not read the macro: {}").format(str(e)))
         _play_error()
         return
-    problems = check_tcs(text, base_dir=macro_info.get('folder_path', ''))
-    if not problems:
-        _play_select()
-        _speak(_("The macro is fine - every line names something Titan can "
-                 "do."))
-        wx.MessageBox(_("The macro is fine - every line names something Titan "
-                        "can do."), macro_info.get('name', ''),
-                      wx.OK | wx.ICON_INFORMATION, parent)
-        return
-    _play_error()
-    _speak(_("{count} problems. The first: {problem}").format(
-        count=len(problems), problem=problems[0]))
-    wx.MessageBox("\n".join(problems), macro_info.get('name', ''),
-                  wx.OK | wx.ICON_WARNING, parent)
+
+    with_ai = _ai_features_on()
+    if with_ai:
+        _speak(_("Checking the macro, and reading it with the AI..."))
+    else:
+        _speak(_("Checking the macro..."))
+
+    def _work():
+        problems, warnings, notes = review_tcs(
+            text, base_dir=macro_info.get('folder_path', ''))
+        wx.CallAfter(_show, problems, warnings, notes)
+
+    def _show(problems, warnings, notes):
+        title = macro_info.get('name', '')
+        if not problems and not warnings and not notes:
+            _play_select()
+            said = _("The macro is fine - every line names something Titan "
+                     "can do, and nothing in it looks wrong.")
+            _speak(said)
+            wx.MessageBox(said, title, wx.OK | wx.ICON_INFORMATION, parent)
+            return
+        sections = []
+        if problems:
+            sections.append(_("Would not run:") + "\n"
+                            + "\n".join(f"- {p}" for p in problems))
+        if warnings:
+            sections.append(_("Would run, but looks wrong:") + "\n"
+                            + "\n".join(f"- {w}" for w in warnings))
+        if notes:
+            sections.append(_("The AI also read it and noticed (advisory):")
+                            + "\n" + "\n".join(f"- {n}" for n in notes))
+        _play_error()
+        first = (problems or warnings or notes)[0]
+        _speak(_("{count} things to look at. The first: {problem}").format(
+            count=len(problems) + len(warnings) + len(notes), problem=first))
+        wx.MessageBox("\n\n".join(sections), title,
+                      wx.OK | (wx.ICON_WARNING if problems
+                               else wx.ICON_INFORMATION), parent)
+
+    threading.Thread(target=_work, daemon=True).start()
 
 
 def _delete_macro_confirm(macro_info):
@@ -2853,8 +2884,14 @@ def _ai_looks_like_call(line):
     parts = head.split('.')
     if len(parts) < 2 or not all(parts):
         return False
-    return all(part.replace('_', '').isalnum() and not part[0].isdigit()
-               for part in parts)
+    for part in parts:
+        # A part may be a variable - `{{app}}.open_file` is still a call, and
+        # which action it is becomes known when the line runs.
+        if part.startswith('{{') and part.endswith('}}') and len(part) > 4:
+            continue
+        if not part.replace('_', '').isalnum() or part[0].isdigit():
+            return False
+    return True
 
 
 def _ai_parse_call(line_no, text):
@@ -2972,13 +3009,21 @@ def _ai_parse(text):
 
             if lowered.startswith('play '):
                 values, named = _ai_arg_tail(number, line[5:])
+                known = ('file', 'position', 'wait', 'to', 'duration',
+                         'elevation', 'to_elevation')
+                unknown = [k for k in named if k not in known]
+                if unknown:
+                    raise TCSError(number, "'play' does not know "
+                                   + ", ".join(unknown),
+                                   "It takes position, to, duration, "
+                                   "elevation, to_elevation and wait.")
                 if not values and 'file' not in named:
                     raise TCSError(number, "'play' wants a sound file, e.g. "
                                            'play "ding.ogg"')
-                block.append({'kind': 'play', 'line': number,
-                              'file': values[0] if values else named['file'],
-                              'position': named.get('position'),
-                              'wait': named.get('wait')})
+                statement = {'kind': 'play', 'line': number,
+                             'file': values[0] if values else named['file']}
+                statement.update({k: named.get(k) for k in known[1:]})
+                block.append(statement)
                 continue
 
             if lowered == 'stop':
@@ -3051,11 +3096,48 @@ def _ai_parse(text):
                 continue
 
             if lowered.startswith(('field ', 'multiline ', 'choice ',
-                                   'check ')):
+                                   'check ', 'buttons ')):
                 if not openers or openers[-1]['kind'] != 'dialog':
                     raise TCSError(number, f"'{lowered.split(' ')[0]}' "
                                                f"belongs inside a 'dialog'")
+                if lowered.startswith('buttons '):
+                    if any(f.get('control') == 'buttons' for f in block):
+                        raise TCSError(number, "a dialog has one set of "
+                                               "buttons")
+                    block.append(_ai_parse_buttons(number, line))
+                    continue
                 block.append(_ai_parse_field(number, line))
+                continue
+
+            if lowered.startswith('on '):
+                # What happens when something in the window is pressed, while
+                # the window is still open. Without this a form can only be
+                # filled in and submitted; with it a window can do work and
+                # show the result, which is what automating anything looks like.
+                if not openers or openers[-1]['kind'] != 'dialog':
+                    raise TCSError(number, "'on' belongs inside a 'dialog', "
+                                           "after its buttons")
+                statement = {'kind': 'handler', 'line': number,
+                             'match': _ai_rvalue(number, line[3:].strip()),
+                             'body': []}
+                block.append(statement)
+                stack.append(statement['body'])
+                openers.append(statement)
+                continue
+
+            if lowered.startswith('title '):
+                block.append({'kind': 'title', 'line': number,
+                              'text': _ai_rvalue(number, line[6:].strip())})
+                continue
+
+            if lowered.startswith('keys '):
+                block.append({'kind': 'keys', 'line': number,
+                              'value': _ai_rvalue(number, line[5:].strip())})
+                continue
+
+            if lowered.startswith('type '):
+                block.append({'kind': 'type', 'line': number,
+                              'value': _ai_rvalue(number, line[5:].strip())})
                 continue
 
             if lowered.startswith('do '):
@@ -3124,6 +3206,44 @@ _AI_COMPARISONS = ('is not empty', 'is empty', 'is not', 'does not contain',
                    '==', '>', '<', '=')
 
 
+# The comparisons that can be written tight against their values. A person
+# writing `if option="tak"` has written a comparison, and refusing it because
+# there are no spaces round the '=' is pedantry - but only symbols may be
+# written that way, or `ifxisy` would be a comparison too.
+_AI_TIGHT_OPS = ('>=', '<=', '!=', '==', '>', '<', '=')
+
+
+def _ai_tight_operator(text):
+    """(position, operator) for a comparison written without spaces, or None.
+
+    Quotes and brackets are skipped, so the '=' in `if x = "a=b"` and the one
+    in `if tnotes.count(kind="work") > 0` are not mistaken for the comparison.
+    """
+    quote = ''
+    depth = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == '\\':
+                index += 2
+                continue
+            if char == quote:
+                quote = ''
+        elif char in '"\'':
+            quote = char
+        elif char in '([':
+            depth += 1
+        elif char in ')]':
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            for operator in _AI_TIGHT_OPS:
+                if text.startswith(operator, index):
+                    return index, operator
+        index += 1
+    return None
+
+
 def _ai_parse_if(line_no, text):
     body = text.strip()
     lowered = body.lower()
@@ -3142,9 +3262,17 @@ def _ai_parse_if(line_no, text):
                     'op': operator,
                     'right': _ai_rvalue(line_no, body[position + len(marker):]),
                     'then': [], 'else': None}
+    tight = _ai_tight_operator(body)
+    if tight and tight[0] > 0:
+        position, operator = tight
+        return {'kind': 'if', 'line': line_no,
+                'left': _ai_rvalue(line_no, body[:position]),
+                'op': operator,
+                'right': _ai_rvalue(line_no, body[position + len(operator):]),
+                'then': [], 'else': None}
     raise TCSError(line_no, "an 'if' needs a comparison",
-                       "use contains, does not contain, is, is not, is empty "
-                       "or is not empty")
+                       "use contains, does not contain, is, is not, is empty, "
+                       "is not empty, or =, !=, >, <, >=, <=")
 
 
 def _ai_arg_tail(line_no, text):
@@ -3225,6 +3353,38 @@ def _ai_parse_field(line_no, line):
             'default': named.get('default'), 'options': options}
 
 
+def _ai_parse_buttons(line_no, line):
+    """`buttons pressed = "Save", "Save and read", "Cancel"` in a dialog.
+
+    A form that can only be accepted or abandoned is not a form somebody can
+    automate against: "Save", "Save and read it back" and "Cancel" are three
+    different instructions, and the script has to be able to tell which one it
+    was given. The buttons are the dialog's own, so they are one control with
+    one variable - the answer is which button was pressed, by text or by number.
+    """
+    _word, _sep, rest = line.partition(' ')
+    name, sep, tail = rest.partition('=')
+    if not sep:
+        raise TCSError(line_no, "'buttons' wants a name for what was pressed, "
+                                'e.g. buttons pressed = "Save", "Cancel"')
+    variable = name.strip().lower()
+    if not variable.replace('_', '').isalnum():
+        raise TCSError(line_no, f"'{name.strip()}' is not a name a value can "
+                                f"be kept under")
+    labels = [_ai_rvalue(line_no, item)
+              for item in _ai_split_args(tail) if item.strip()]
+    if not labels:
+        raise TCSError(line_no, "'buttons' wants at least one button, e.g. "
+                                'buttons pressed = "Save", "Cancel"')
+    if len(labels) > 6:
+        raise TCSError(line_no, "a dialog with more than six buttons is a "
+                                "dialog nobody can use - use 'choice' for a "
+                                "long list")
+    return {'kind': 'field', 'line': line_no, 'control': 'buttons',
+            'name': variable, 'label': None, 'default': None,
+            'options': labels}
+
+
 def _ai_parse_trigger(line_no, text):
     body = text.strip()
     lowered = body.lower()
@@ -3299,8 +3459,13 @@ def _ai_arguments(statement, spec, variables):
 def _ai_call(statement, variables, transcript):
     from src.titan_core import actions
 
+    # The action itself may come out of a variable: `{{app}}.open_file`, or a
+    # whole `{{what}}` decided earlier in the script. A macro that has just
+    # asked the user which application they meant should be able to act on the
+    # answer, rather than needing one branch per possibility.
+    path = _ai_fill(statement['path'], variables)
     try:
-        addon_id, action_name, spec = _ai_resolve(statement['path'])
+        addon_id, action_name, spec = _ai_resolve(path)
     except ValueError as e:
         raise TCSError(statement['line'], str(e))
     args = _ai_arguments(statement, spec, variables)
@@ -3327,6 +3492,51 @@ def _ai_call(statement, variables, transcript):
 
 class _AICancelled(Exception):
     """The user closed a dialog the macro was waiting on."""
+
+
+class _AIChoice(str):
+    """An answer picked from a fixed set: the text, which knows its number.
+
+    A script asks `choose kind = "Which?" options "personal", "work"` and then
+    wants to act on the answer. People write that comparison both ways - by what
+    the option said (`if kind = "work"`) and by which one it was
+    (`if kind = "2"`) - and the second is what somebody automating a form
+    reaches for, because the wording of a button is a detail and its position is
+    not.
+
+    So the answer *is* the text - everything that speaks it, joins it or writes
+    it into a note sees exactly what the user picked - and it also carries its
+    1-based number, which the comparison in `if` consults. Nothing else in the
+    language has to know this type exists.
+    """
+
+    def __new__(cls, text, number=0, options=()):
+        value = super().__new__(cls, str(text))
+        try:
+            value.number = int(number or 0)
+        except (TypeError, ValueError):
+            value.number = 0
+        value.options = [str(option) for option in (options or ())]
+        return value
+
+
+def _ai_choice_names(value, other):
+    """Whether ``other`` names this answer - by its text or by its number.
+
+    Only a whole number in range counts as a number: an option that literally
+    says "1" still compares as text first, so a script whose options are
+    numbers means what it says.
+    """
+    text = str(other if other is not None else '').strip()
+    if text.lower() == str(value).strip().lower():
+        return True
+    if not isinstance(value, _AIChoice) or not value.number:
+        return False
+    try:
+        wanted = int(str(text))
+    except (TypeError, ValueError):
+        return False
+    return wanted == value.number
 
 
 def _tcs_say(text, wait=False, interrupt=False, position=None, pitch=None,
@@ -3418,6 +3628,23 @@ def _tcs_say(text, wait=False, interrupt=False, position=None, pitch=None,
                 pass
 
 
+# The name of the macro running on this thread. A window a macro puts up
+# belongs to that macro, so when the script does not title it itself it is
+# titled with the macro's own name - "Voice demo", not the word "Macro". Two
+# macros can be running at once (a trigger while the user runs another), so it
+# is per-thread rather than a global.
+_tcs_running = threading.local()
+
+
+def _tcs_title(explicit=''):
+    """The title for a window this macro puts up."""
+    chosen = str(explicit or '').strip()
+    if chosen:
+        return chosen
+    return (str(getattr(_tcs_running, 'title', '') or '').strip()
+            or _("Macro"))
+
+
 def _tcs_parent():
     """The window a script's dialog belongs to.
 
@@ -3474,7 +3701,7 @@ def _ai_message(text, title='', level='info'):
 
     def show():
         dialog = wx.MessageDialog(_tcs_parent(), str(text),
-                                  str(title or _("Macro")),
+                                  _tcs_title(title),
                                   wx.OK | icons.get(level, wx.ICON_INFORMATION))
         dialog.ShowModal()
         dialog.Destroy()
@@ -3487,7 +3714,7 @@ def _ai_confirm(question, title=''):
 
     def show():
         dialog = wx.MessageDialog(_tcs_parent(), str(question),
-                                  str(title or _("Macro")),
+                                  _tcs_title(title),
                                   wx.YES_NO | wx.ICON_QUESTION)
         answer = dialog.ShowModal()
         dialog.Destroy()
@@ -3500,7 +3727,7 @@ def _ai_ask(prompt, title='', default=''):
 
     def show():
         dialog = wx.TextEntryDialog(_tcs_parent(), str(prompt),
-                                    str(title or _("Macro")),
+                                    _tcs_title(title),
                                     str(default or ''))
         answer = dialog.ShowModal()
         value = dialog.GetValue()
@@ -3519,33 +3746,46 @@ def _ai_choose(prompt, options, title=''):
 
     def show():
         dialog = wx.SingleChoiceDialog(_tcs_parent(), str(prompt),
-                                       str(title or _("Macro")), choices)
+                                       _tcs_title(title), choices)
         answer = dialog.ShowModal()
         value = dialog.GetStringSelection()
+        index = dialog.GetSelection()
         dialog.Destroy()
         if answer != wx.ID_OK:
             raise _AICancelled()
-        return value
+        # The answer carries which option it was, so a script can act on the
+        # option by its number as readily as by its wording.
+        return _AIChoice(value, index + 1, choices)
     return _ai_on_gui(show)
 
 
-def _ai_form(title, fields):
+def _ai_form(title, fields, on_press=None):
     """A whole dialog: several controls at once, answered into variables.
 
     Built by hand rather than from a layout file because a macro's form is
     described in the macro, and the controls are the ordinary wx ones so the
     screen reader treats them like every other Titan dialog.
+
+    ``on_press(label, number, values)`` is what makes a window able to *do*
+    something rather than only collect something: a button the script wrote an
+    `on` block for calls it with the controls as they stand and the window
+    stays open, so the same window can be used again. Buttons without a block
+    close the dialog and answer with the values, as before.
     """
     wx = _get_wx()
 
     def show():
-        dialog = wx.Dialog(_tcs_parent(), title=str(title or _("Macro")))
+        dialog = wx.Dialog(_tcs_parent(), title=_tcs_title(title))
         panel = wx.Panel(dialog)
         sizer = wx.BoxSizer(wx.VERTICAL)
         controls = []
+        button_field = next((f for f in fields
+                             if f.get('control') == 'buttons'), None)
         for field in fields:
             label = str(field.get('label') or field['name'])
             kind = field.get('control', 'text')
+            if kind == 'buttons':
+                continue                     # they belong to the dialog, below
             if kind == 'check':
                 control = wx.CheckBox(panel, label=label)
                 control.SetValue(bool(field.get('default')))
@@ -3574,9 +3814,65 @@ def _ai_form(title, fields):
         # The buttons belong to the DIALOG, so they go in the dialog's sizer.
         # Adding them to the panel's sizer instead is what wx refuses: a sizer
         # can only position windows whose parent is the window it manages.
-        buttons = dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
-        if buttons:
-            outer.Add(buttons, 0, wx.ALL | wx.ALIGN_RIGHT, 8)
+        def read_values():
+            """What the controls say right now."""
+            values = {}
+            for field, control in controls:
+                kind = field.get('control', 'text')
+                if kind == 'check':
+                    values[field['name']] = control.GetValue()
+                elif kind == 'choice':
+                    # The answer knows which option it was, so the script can
+                    # say `if kind = "2"` as well as `if kind = "work"`.
+                    values[field['name']] = _AIChoice(
+                        control.GetStringSelection(),
+                        control.GetSelection() + 1,
+                        [str(o) for o in field.get('options', [])])
+                else:
+                    values[field['name']] = control.GetValue()
+            return values
+
+        labels = [str(o) for o in (button_field or {}).get('options') or []]
+        stopped = {}
+
+        def pressed_live(index):
+            """A button the script wrote an 'on' block for: run it, stay open."""
+            try:
+                on_press(labels[index], index + 1, read_values())
+            except Exception as e:                   # noqa: BLE001 - relayed
+                # A handler that failed (or said 'stop') cannot raise into wx's
+                # event loop, so it is carried back to the script's own thread.
+                stopped['error'] = e
+                dialog.EndModal(wx.ID_CANCEL)
+
+        if labels:
+            # The script named its own buttons, so they are real buttons with
+            # those words on them. One with no 'on' block ends the dialog with
+            # its own code, which is how the script learns which was pressed;
+            # one with a block does its work and leaves the window up. Escape
+            # and the window's own close button still cancel, as everywhere.
+            row = wx.BoxSizer(wx.HORIZONTAL)
+            for index, text in enumerate(labels):
+                button = wx.Button(dialog, id=wx.ID_HIGHEST + 1 + index,
+                                   label=text)
+                live = bool(on_press and on_press(text, index + 1, None))
+                if live:
+                    button.Bind(wx.EVT_BUTTON,
+                                lambda e, i=index: pressed_live(i))
+                else:
+                    button.Bind(wx.EVT_BUTTON,
+                                lambda e, code=wx.ID_HIGHEST + 1 + index:
+                                dialog.EndModal(code))
+                button.Bind(wx.EVT_SET_FOCUS,
+                            lambda e: (_play_focus(), e.Skip()))
+                if index == 0:
+                    button.SetDefault()
+                row.Add(button, 0, wx.ALL, 6)
+            outer.Add(row, 0, wx.ALL | wx.ALIGN_RIGHT, 4)
+        else:
+            buttons = dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
+            if buttons:
+                outer.Add(buttons, 0, wx.ALL | wx.ALIGN_RIGHT, 8)
         dialog.SetSizer(outer)
         dialog.SetSize((460, min(520, 160 + 70 * len(fields))))
         dialog.Layout()
@@ -3584,16 +3880,17 @@ def _ai_form(title, fields):
         if controls:
             controls[0][1].SetFocus()
         answer = dialog.ShowModal()
-        values = {}
-        for field, control in controls:
-            kind = field.get('control', 'text')
-            if kind == 'check':
-                values[field['name']] = control.GetValue()
-            elif kind == 'choice':
-                values[field['name']] = control.GetStringSelection()
-            else:
-                values[field['name']] = control.GetValue()
+        values = read_values()
         dialog.Destroy()
+        if 'error' in stopped:
+            raise stopped['error']
+        if labels:
+            pressed = answer - wx.ID_HIGHEST - 1
+            if not (0 <= pressed < len(labels)):
+                raise _AICancelled()
+            values[button_field['name']] = _AIChoice(
+                labels[pressed], pressed + 1, labels)
+            return values
         if answer != wx.ID_OK:
             raise _AICancelled()
         return values
@@ -3736,7 +4033,12 @@ _TCS_RANGES = {
     'rate': (-10, 10),
     'pitch': (-10, 10),
     'volume': (0, 100),
+    # Everywhere something is placed in space it is placed the same way:
+    # -1 to 1, left to right, and down to up for a height.
     'position': (-1, 1),
+    'to': (-1, 1),
+    'elevation': (-1, 1),
+    'to_elevation': (-1, 1),
 }
 
 
@@ -3749,9 +4051,8 @@ def _tcs_range(line_no, name, value):
         raise TCSError(line_no, f"'{value}' is not a number for {name}",
                        f"{name} goes from {low} to {high}.")
     if not (low <= number <= high):
-        raise TCSError(line_no,
-                       f"{name} {number:g} is outside what Titan's speech "
-                       f"takes", f"{name} goes from {low} to {high}.")
+        raise TCSError(line_no, f"{name} {number:g} is out of range",
+                       f"{name} goes from {low} to {high}.")
     return number
 
 
@@ -3934,10 +4235,16 @@ def _tcs_play(statement, variables, transcript, budget):
                        f"there is no sound file called '{name}'",
                        "A bare name is looked for next to the script itself.")
     args = {'path': path}
-    if statement.get('position') is not None:
-        args['position'] = _tcs_range(
-            statement['line'], 'position',
-            _ai_value_of(statement['position'], variables, transcript))
+    # 'to' is what makes the sound travel while it plays; the rest place it.
+    for key in ('position', 'to', 'elevation', 'to_elevation'):
+        if statement.get(key) is not None:
+            args[key] = _tcs_range(
+                statement['line'], key,
+                _ai_value_of(statement[key], variables, transcript))
+    if statement.get('duration') is not None:
+        args['duration'] = _ai_seconds(
+            statement['line'],
+            str(_ai_value_of(statement['duration'], variables, transcript)))
     if statement.get('wait') is not None:
         args['wait'] = _ai_value_of(statement['wait'], variables, transcript)
     result = actions.run('titan', 'play_sound', **args)
@@ -4006,6 +4313,40 @@ def _tcs_run_script(statement, variables, transcript, budget):
     return str(returned if returned is not None else scope.get('last', ''))
 
 
+def _tcs_input(statement, variables, transcript):
+    """`keys "ctrl+s"` and `type "hello"` - driving whatever has the focus.
+
+    A .macro replays keystrokes and knows nothing else; a Titan Script knows
+    everything else and could not press a key. Both halves are needed to
+    automate a program that has no actions of its own, so the language says so
+    directly - through the desktop actions, so there is one implementation of
+    "press this" for the agent, the assistant and a macro alike.
+    """
+    from src.titan_core import actions
+
+    value = str(_ai_value_of(statement['value'], variables, transcript))
+    if not value:
+        raise TCSError(statement['line'],
+                       f"'{statement['kind']}' wants something to send")
+    if statement['kind'] == 'type':
+        result = actions.run('desktop', 'type_text', text=value)
+        transcript.append(f"type: {value[:60]}")
+        if not result.ok:
+            raise TCSError(statement['line'], str(result.text))
+        return str(result.text or '')
+    # `keys "ctrl+c, ctrl+v"` is a sequence, as in the recorder and in
+    # macros.create_macro, so the same spelling works in both places.
+    said = []
+    for chord in [part.strip() for part in value.split(',') if part.strip()]:
+        result = actions.run('desktop', 'press_keys', keys=chord)
+        said.append(f"{chord}: {result.text}")
+        if not result.ok:
+            transcript.append("keys " + "; ".join(said))
+            raise TCSError(statement['line'], str(result.text))
+    transcript.append("keys " + "; ".join(said))
+    return str(said[-1] if said else '')
+
+
 def _ai_prompt(statement, variables, transcript):
     """ask / confirm / choose, answered into a variable."""
     prompt = _ai_value_of(statement['prompt'], variables, transcript)
@@ -4033,11 +4374,22 @@ def _ai_prompt(statement, variables, transcript):
     return answer
 
 
-def _ai_dialog(statement, variables, transcript):
-    """A whole form, answered into one variable per control."""
+def _ai_dialog(statement, variables, transcript, budget=None):
+    """A whole form, answered into one variable per control.
+
+    A dialog may also carry `on "<button>"` blocks, which run *while the window
+    is open*: the window then does work and shows the result instead of only
+    collecting an answer. Those run on the GUI thread, inside the button's
+    event - which is safe because everything a script calls marshals itself
+    onto that thread anyway, and `_ai_on_gui` notices when it is already there.
+    """
     title = _ai_fill(statement.get('title', ''), variables)
     fields = []
+    handlers = []
     for field in statement['fields']:
+        if field.get('kind') == 'handler':
+            handlers.append(field)
+            continue
         if field.get('kind') != 'field':
             continue
         fields.append({
@@ -4053,8 +4405,42 @@ def _ai_dialog(statement, variables, transcript):
     if not fields:
         raise TCSError(statement['line'],
                            "this dialog has no controls in it")
+    buttons = next((f for f in fields if f['control'] == 'buttons'), None)
+    if handlers and not buttons:
+        raise TCSError(statement['line'],
+                       "'on' needs buttons to press - add a 'buttons' line")
+
+    def matching(label, number):
+        """The 'on' blocks written for this button, by its text or its number."""
+        answer = _AIChoice(label, number,
+                           [str(o) for o in (buttons or {}).get('options', [])])
+        found = []
+        for handler in handlers:
+            wanted = _ai_value_of(handler['match'], variables, transcript)
+            if _ai_choice_names(answer, wanted):
+                found.append(handler)
+        return found
+
+    def on_press(label, number, values):
+        """Called twice over: once with values=None to ask whether this button
+        has an 'on' block at all (so the form knows whether pressing it should
+        close the window), and then for real each time it is pressed."""
+        found = matching(label, number)
+        if values is None:
+            return bool(found)
+        variables.update(values)
+        if buttons:
+            variables[buttons['name']] = _AIChoice(
+                label, number, [str(o) for o in buttons.get('options', [])])
+        for handler in found:
+            _ai_execute(handler['body'], variables, transcript,
+                        budget if budget is not None
+                        else {'steps': 200, 'prose': {}, 'dir': ''})
+        return True
+
     try:
-        values = _ai_form(title, fields)
+        values = _ai_form(title, fields,
+                          on_press=on_press if handlers else None)
     except _AICancelled:
         raise _AIStop()
     except ValueError as e:
@@ -4075,6 +4461,15 @@ _AI_NUMERIC_OPS = {
 def _ai_compare(left, operator, right):
     if operator in _AI_NUMERIC_OPS:
         return _AI_NUMERIC_OPS[operator](_ai_number(left), _ai_number(right))
+    # An answer picked from options can be named by its text or by its number,
+    # so `if kind = "work"` and `if kind = "2"` are both that option.
+    if operator in ('is', '=', '==', 'is not', '!='):
+        choice = (left if isinstance(left, _AIChoice)
+                  else right if isinstance(right, _AIChoice) else None)
+        if choice is not None:
+            other = right if choice is left else left
+            named = _ai_choice_names(choice, other)
+            return named if operator in ('is', '=', '==') else not named
     a, b = str(left if left is not None else ''), str(right if right is not None else '')
     if operator == 'is empty':
         return not a.strip()
@@ -4163,9 +4558,17 @@ def _ai_execute(body, variables, transcript, budget):
             variables[statement['name']] = _ai_prompt(statement, variables,
                                                       transcript)
         elif kind == 'dialog':
-            for name, value in _ai_dialog(statement, variables,
-                                          transcript).items():
+            for name, value in _ai_dialog(statement, variables, transcript,
+                                          budget).items():
                 variables[name] = value
+        elif kind == 'title':
+            # The title a macro's windows carry, changeable at any point: one
+            # script may put up several windows that are about different things.
+            _tcs_running.title = str(_ai_value_of(statement['text'], variables,
+                                                  transcript))
+            transcript.append(f"title: {_tcs_running.title}")
+        elif kind in ('keys', 'type'):
+            variables['last'] = _tcs_input(statement, variables, transcript)
         elif kind == 'wait':
             _time.sleep(statement['seconds'])
         elif kind == 'play':
@@ -4237,6 +4640,8 @@ def check_tcs(text, base_dir=''):
     def walk(body):
         for statement in body:
             if statement['kind'] == 'call':
+                if '{{' in str(statement['path']):
+                    continue        # which action it is is known only at run
                 try:
                     _addon, _name, spec = _ai_resolve(statement['path'])
                 except ValueError as e:
@@ -4275,12 +4680,19 @@ def check_tcs(text, base_dir=''):
                 walk(statement.get('else') or [])
             elif statement['kind'] == 'dialog':
                 walk(statement['fields'])
+            elif statement['kind'] == 'handler':
+                # What a button does is as much of the macro as the rest, and
+                # is checked the same way.
+                walk([statement['match']])
+                walk(statement['body'])
             elif statement['kind'] == 'prompt':
                 walk([statement['prompt']] + list(statement.get('options') or []))
-            elif statement['kind'] in ('message', 'say'):
+            elif statement['kind'] in ('message', 'say', 'title'):
                 walk([statement['text']])
                 if statement['kind'] == 'say':
                     check_ranges(statement, ('position', 'pitch', 'rate'))
+            elif statement['kind'] in ('keys', 'type'):
+                walk([statement['value']])
             elif statement['kind'] == 'return' and statement.get('value'):
                 walk([statement['value']])
             elif statement['kind'] == 'voice':
@@ -4291,7 +4703,8 @@ def check_tcs(text, base_dir=''):
                 node = statement.get('file') or statement.get('script')
                 walk([node])
                 if statement['kind'] == 'play':
-                    check_ranges(statement, ('position',))
+                    check_ranges(statement, ('position', 'to', 'elevation',
+                                             'to_elevation'))
                 # A file named literally can be checked now; one built from a
                 # variable can only be checked when it is known.
                 if node.get('kind') == 'value' and base_dir:
@@ -4311,6 +4724,350 @@ def check_tcs(text, base_dir=''):
     return problems
 
 
+# --------------------------------------------------------------------------- #
+# Reviewing a script: what would not run, and what is merely suspicious
+# --------------------------------------------------------------------------- #
+# "The macro is fine" is a promise, and `check_tcs` alone cannot make it: it
+# says that every line parses and every action exists, which leaves out the
+# mistakes that make a macro do the wrong thing quietly. A variable spelled two
+# ways, an `on` block for a button that is not there, `while` written by
+# somebody who expected another language and silently turned into pseudocode -
+# each of those runs, and none of them does what its author meant.
+#
+# So a review has three tiers: problems (it would not run), warnings (it would
+# run, and something in it looks wrong against the documented language and the
+# actions' own declarations), and - with AI features on - what a model notices
+# when it reads the script with the reference in front of it.
+
+# Words that begin a statement in some other language and none in this one.
+# Written here, they are pseudocode: with AI features on that is not an error,
+# which is exactly why it is worth pointing at.
+_TCS_FOREIGN_WORDS = {
+    'while': "there is no 'while' - use 'repeat <number>' with an 'if' inside",
+    'for': "there is no 'for' - use 'repeat <number>'",
+    'foreach': "there is no 'foreach' - use 'repeat <number>'",
+    'elif': "write 'else' and a nested 'if'",
+    'elseif': "write 'else' and a nested 'if'",
+    'endif': "every block ends with 'end'",
+    'endwhile': "every block ends with 'end'",
+    'end if': "every block ends with 'end'",
+    'function': "a Titan Script has no functions - put it in another .tcs and "
+                "call it with 'run'",
+    'def': "a Titan Script has no functions - use 'run \"helper.tcs\"'",
+    'class': "a Titan Script is not Python",
+    'import': "a Titan Script is not Python - every add-on is already callable",
+    'print': "use 'say' to speak or 'message' to show a window",
+    'echo': "use 'say' to speak or 'message' to show a window",
+    'var': "just 'set name = value'",
+    'let': "just 'set name = value'",
+    'const': "just 'set name = value'",
+    'switch': "use 'if' and 'else'",
+    'case': "use 'if' and 'else'",
+    'try': "a Titan Script stops at the first line that fails; there is no "
+           "'try'",
+    'catch': "a Titan Script stops at the first line that fails",
+    'sleep': "use 'wait 2s'",
+    'pause': "use 'wait 2s'",
+    'exit': "use 'stop'",
+    'quit': "use 'stop'",
+    'break': "there is no 'break' - use 'if' around what should not repeat",
+    'continue': "there is no 'continue'",
+    'goto': "there is no 'goto'",
+    'input': "use 'ask name = \"question\"'",
+    'msgbox': "use 'message \"...\"'",
+}
+
+# Names a script may read without ever setting them.
+_TCS_GIVEN_NAMES = frozenset({'last', 'true', 'false', 'yes', 'no', 'on',
+                              'off'})
+
+
+def _tcs_names_in(node, into):
+    """Every variable a value node reads, added to ``into``."""
+    if not isinstance(node, dict):
+        return
+    kind = node.get('kind')
+    if kind == 'value':
+        value = node.get('value')
+        if isinstance(value, str):
+            for name in re.findall(r'\{\{([a-zA-Z_][a-zA-Z_0-9]*)\}\}', value):
+                into.add(name.lower())
+    elif kind == 'expr':
+        for token_kind, token in getattr(node.get('expr'), 'tokens', []) or []:
+            if token_kind != 'name':
+                continue
+            lowered = str(token).lower()
+            if lowered in _AI_FUNCTIONS or lowered in _TCS_GIVEN_NAMES:
+                continue
+            into.add(lowered)
+    elif kind == 'call':
+        for value in list(node.get('named', {}).values()) + list(
+                node.get('positional', [])):
+            _tcs_names_in(value, into)
+        for name in re.findall(r'\{\{([a-zA-Z_][a-zA-Z_0-9]*)\}\}',
+                               str(node.get('path', ''))):
+            into.add(name.lower())
+
+
+def review_warnings(text, base_dir=''):
+    """[warning, ...] - what would run, and still looks wrong.
+
+    Everything here is checked against the two things that define the language:
+    the documented set of statements, and what each action declares about
+    itself. Nothing here is a guess about intent.
+    """
+    program, _errors = _ai_parse(text)
+    warnings = []
+    ai_on = _ai_features_on()
+    assigned = set(_TCS_GIVEN_NAMES)
+    used = []                       # (line, name) in the order they are read
+
+    def note(line, message):
+        warnings.append(f"line {line}: {message}")
+
+    def values_of(statement):
+        """The value nodes a statement reads."""
+        found = []
+        # 'duration' is deliberately absent: a time is written "1.5s", which
+        # parses as a number and a unit, and the unit is not a variable.
+        for key in ('text', 'value', 'file', 'script', 'prompt', 'match',
+                    'left', 'right', 'title', 'default', 'label', 'position',
+                    'pitch', 'rate', 'to', 'elevation', 'to_elevation',
+                    'wait', 'interrupt', 'engine', 'name', 'volume'):
+            node = statement.get(key)
+            if isinstance(node, dict) and node.get('kind'):
+                found.append(node)
+        found.extend(n for n in statement.get('options') or []
+                     if isinstance(n, dict))
+        return found
+
+    def walk(body, inside_dialog=None):
+        ended = None
+        for statement in body:
+            kind = statement.get('kind')
+            line = statement.get('line', 0)
+            if ended is not None and kind != 'field':
+                note(line, f"this line can never run - the script always "
+                           f"{'stops' if ended[0] == 'stop' else 'returns'} on "
+                           f"line {ended[1]}")
+                ended = None            # say it once per block
+            for node in values_of(statement):
+                names = set()
+                _tcs_names_in(node, names)
+                for name in names:
+                    used.append((line, name))
+            if kind == 'call':
+                names = set()
+                _tcs_names_in(statement, names)
+                for name in names:
+                    used.append((line, name))
+                _warn_about_action(statement, note, ai_on)
+            elif kind == 'set':
+                walk([statement['value']], inside_dialog)
+                assigned.add(str(statement.get('name', '')).lower())
+            elif kind == 'prompt':
+                assigned.add(str(statement.get('name', '')).lower())
+            elif kind == 'field':
+                assigned.add(str(statement.get('name', '')).lower())
+            elif kind == 'prose':
+                word = str(statement.get('text') or '').strip().lower()
+                first = word.split(' ')[0].strip('(:')
+                advice = (_TCS_FOREIGN_WORDS.get(first)
+                          or _TCS_FOREIGN_WORDS.get(' '.join(word.split(' ')[:2])))
+                if advice:
+                    note(line, f"'{first}' is not part of the Titan Scripting "
+                               f"Language, so this line is pseudocode - "
+                               f"{advice}")
+                elif ai_on:
+                    note(line, f"'{statement.get('text')}' is written in "
+                               f"words, so it needs AI features on every time "
+                               f"the macro runs, and what it does may vary")
+            elif kind == 'repeat':
+                walk(statement.get('body') or [], inside_dialog)
+            elif kind == 'if':
+                walk(statement.get('then') or [], inside_dialog)
+                walk(statement.get('else') or [], inside_dialog)
+            elif kind == 'dialog':
+                walk(statement.get('fields') or [], statement)
+            elif kind == 'handler':
+                _warn_about_handler(statement, inside_dialog, note)
+                walk(statement.get('body') or [], inside_dialog)
+            elif kind in ('stop', 'return'):
+                ended = ('stop' if kind == 'stop' else 'return', line)
+
+    def _warn_about_action(statement, note, ai_on):
+        path = str(statement.get('path', ''))
+        if '{{' in path:
+            note(statement['line'], f"which action '{path}' is is only known "
+                                    f"while the macro runs, so it cannot be "
+                                    f"checked here")
+            return
+        try:
+            _addon, _name, spec = _ai_resolve(path)
+        except Exception:
+            return                                  # a problem, not a warning
+        if getattr(spec, 'needs_ai', False) and not ai_on:
+            note(statement['line'], f"{path} is carried out by the AI, and AI "
+                                    f"features are off, so it will not run")
+        # A value the action itself says must be one of a few - the declaration
+        # is the documentation, so it is what the script is compared against.
+        for name, param in spec.params.items():
+            allowed = param.get('enum')
+            node = statement['named'].get(name)
+            if not allowed or not isinstance(node, dict):
+                continue
+            if node.get('kind') != 'value':
+                continue
+            value = str(node.get('value', ''))
+            if '{{' in value:
+                continue
+            if value and value.lower() not in [str(a).lower() for a in allowed]:
+                note(statement['line'],
+                     f"{path} does not take {name}=\"{value}\" - it takes "
+                     + ", ".join(str(a) for a in allowed))
+
+    def _warn_about_handler(statement, dialog, note):
+        if not dialog:
+            return
+        buttons = next((f for f in dialog.get('fields') or []
+                        if f.get('control') == 'buttons'), None)
+        if not buttons:
+            return
+        labels = [str(o.get('value')) for o in buttons.get('options') or []
+                  if isinstance(o, dict) and o.get('kind') == 'value']
+        match = statement.get('match') or {}
+        if match.get('kind') != 'value' or not labels:
+            return
+        wanted = str(match.get('value', ''))
+        answer = _AIChoice(wanted, 0, labels)
+        if any(_ai_choice_names(_AIChoice(label, index + 1, labels), wanted)
+               for index, label in enumerate(labels)):
+            return
+        note(statement['line'],
+             f"there is no button called '{wanted}' in this dialog - it has "
+             + ", ".join(f'"{label}"' for label in labels))
+        del answer
+
+    try:
+        walk(program['body'])
+    except Exception as e:                       # noqa: BLE001 - reported
+        warnings.append(f"the review stopped early: {e}")
+
+    # A name read but never given a value is empty - which is not an error and
+    # is almost never what the author meant.
+    seen = set()
+    for line, name in used:
+        if name in assigned or name in seen:
+            continue
+        seen.add(name)
+        close = [other for other in sorted(assigned)
+                 if other not in _TCS_GIVEN_NAMES
+                 and (other.startswith(name[:3]) or name.startswith(other[:3]))]
+        warnings.append(
+            f"line {line}: '{name}' is used but never set, so it will be "
+            f"empty" + (f" - did you mean {close[0]}?" if close else ""))
+    return warnings
+
+
+_TCS_AI_REVIEW = (
+    "You are reviewing one Titan Script (.TCS) macro for its author. The "
+    "language reference and the actions the script uses are below; they are "
+    "the only truth about what exists.\n\n"
+    "Titan's own checker has already reported anything that would stop the "
+    "macro running, and anything it could prove wrong. Your job is what it "
+    "cannot see: a macro that RUNS and does the wrong thing. Look for values "
+    "that will not mean what the author expects, an order of steps that "
+    "cannot work, a condition that can never be true, an answer used before "
+    "it is asked for, a loop that repeats something that should happen once, "
+    "a window whose buttons do not match what the script does with them, and "
+    "anything that plainly contradicts what the macro is called or says it "
+    "is for.\n\n"
+    "Answer with one line per issue, each starting 'line <number>: '. Say "
+    "only what you are sure of; do not repeat the checker, do not suggest "
+    "style changes, do not invent actions. If the macro looks right, answer "
+    "with exactly: OK")
+
+
+def review_with_ai(text, actions_used=''):
+    """[note, ...] - what a model notices about a script. [] when it cannot.
+
+    Only ever advisory: it is the one part of a review that cannot be proved,
+    so it is reported separately and never turns into a refusal.
+    """
+    if not _ai_features_on():
+        return []
+    try:
+        from src.ai import ai_provider
+        system = (_TCS_AI_REVIEW
+                  + "\n\n===== THE LANGUAGE =====\n" + _MACRO_LANGUAGE
+                  + ("\n\n===== THE ACTIONS THIS MACRO USES =====\n"
+                     + actions_used if actions_used else ''))
+        numbered = "\n".join(f"{number}: {line}" for number, line
+                             in enumerate(text.splitlines(), start=1))
+        answer = ai_provider.generate(system, "The macro:\n" + numbered,
+                                      max_tokens=900)
+    except Exception as e:                       # noqa: BLE001 - reported
+        return [f"(the AI could not review this macro: {e})"]
+    lines = [line.strip(' -*\t') for line in str(answer or '').splitlines()
+             if line.strip()]
+    if not lines or lines[0].strip().upper().startswith('OK'):
+        return []
+    return [line for line in lines if line.lower().startswith('line ')][:12]
+
+
+def _tcs_actions_used(text):
+    """What the actions this script names actually declare, for the reviewer."""
+    program, _errors = _ai_parse(text)
+    described = []
+    seen = set()
+
+    def walk(body):
+        for statement in body:
+            kind = statement.get('kind')
+            if kind == 'call' and '{{' not in str(statement.get('path', '')):
+                try:
+                    _addon, _name, spec = _ai_resolve(statement['path'])
+                except Exception:
+                    continue
+                if spec.qualified not in seen:
+                    seen.add(spec.qualified)
+                    described.append(spec.describe())
+            elif kind == 'set':
+                walk([statement['value']])
+            elif kind in ('repeat', 'handler'):
+                walk(statement.get('body') or [])
+            elif kind == 'if':
+                walk(statement.get('then') or [])
+                walk(statement.get('else') or [])
+            elif kind == 'dialog':
+                walk(statement.get('fields') or [])
+
+    try:
+        walk(program['body'])
+    except Exception:
+        pass
+    return "\n".join(described)
+
+
+def review_tcs(text, base_dir='', use_ai=None):
+    """(problems, warnings, notes) - the whole review of one script.
+
+    problems: it would not run. warnings: it would run, and something in it
+    looks wrong against the language and the actions' own declarations. notes:
+    what the AI noticed, when AI features are on - advisory, and labelled as
+    such wherever it is shown.
+    """
+    problems = check_tcs(text, base_dir=base_dir)
+    warnings = review_warnings(text, base_dir=base_dir)
+    wanted = _ai_features_on() if use_ai is None else bool(use_ai)
+    notes = []
+    if wanted and not problems:
+        # A script that does not parse is not worth a model's opinion: the
+        # parse errors are the answer, and the AI would only restate them.
+        notes = review_with_ai(text, _tcs_actions_used(text))
+    return problems, warnings, notes
+
+
 def pseudocode_lines(text):
     """[(line number, what it says), ...] - the lines written in words.
 
@@ -4328,8 +5085,10 @@ def pseudocode_lines(text):
             if kind == 'prose':
                 found.append((statement.get('line', 0),
                               str(statement.get('text') or '')))
-            elif kind == 'repeat':
+            elif kind in ('repeat', 'handler'):
                 walk(statement.get('body') or [])
+            elif kind == 'dialog':
+                walk(statement.get('fields') or [])
             elif kind == 'if':
                 walk(statement.get('then') or [])
                 walk(statement.get('else') or [])
@@ -4354,12 +5113,15 @@ def _tcs_announce_problems(problems, announce):
             len(problems) - 1))
 
 
-def run_tcs_text(text, announce=True, base_dir=''):
+def run_tcs_text(text, announce=True, base_dir='', title=''):
     """(ok, transcript). Runs a script that is already in memory.
 
     ``base_dir`` is the folder the script came from: the sounds and helper
-    scripts it names by bare filename are looked for there.
+    scripts it names by bare filename are looked for there. ``title`` is the
+    macro's own name, which any window it puts up carries unless the script
+    titles that window itself.
     """
+    _tcs_running.title = str(title or '')
     program, errors = _ai_parse(text)
     if errors:
         problems = [e.describe() for e in errors]
@@ -4410,7 +5172,7 @@ def run_tcs_text(text, announce=True, base_dir=''):
         _tcs_voice_restore(budget)
 
 
-def run_tcs(script_path):
+def run_tcs(script_path, title=''):
     """Run a .tcs file on its own thread, as the other kinds do."""
     try:
         with open(script_path, 'r', encoding='utf-8') as handle:
@@ -4420,10 +5182,16 @@ def run_tcs(script_path):
         _play_error()
         return
 
+    # A script opened by double-clicking it has no macro entry to be named
+    # after, so it is named after itself rather than after the word "Macro".
+    name = str(title or '').strip() or os.path.splitext(
+        os.path.basename(script_path))[0].replace('_', ' ')
+
     def _run():
         _play_sound('macro/macro_start.ogg')
         ok, transcript = run_tcs_text(
-            text, base_dir=os.path.dirname(os.path.abspath(script_path)))
+            text, base_dir=os.path.dirname(os.path.abspath(script_path)),
+            title=name)
         for line in transcript:
             print(f"[tcs] {line}")
         if ok:
@@ -4454,9 +5222,10 @@ TCS_TEMPLATE = """# A Titan Script (.TCS): a script made of Titan's own actions.
 #   say "low" pitch=-4                         this line only, -10 to 10
 #   voice engine="supertonic" rate=2           for this script only
 #   voice reset
-#   play "ding.ogg" position=-0.8
+#   play "ding.ogg" position=-0.8              a sound, placed
+#   play "ding.ogg" position=-1 to=1 duration=3s   a sound that travels
 #
-# It can ask, and show windows:
+# It can ask, and show whole forms:
 #   ask who = "What is your name?"
 #   confirm sure = "Go ahead?"
 #   choose kind = "Which?" options "one", "two"
@@ -4465,7 +5234,23 @@ TCS_TEMPLATE = """# A Titan Script (.TCS): a script made of Titan's own actions.
 #       field title = "Title"
 #       multiline body = "Text"
 #       check urgent = "Urgent?"
+#       buttons pressed = "Save", "Read it now", "Cancel"
+#       on "Read it now"         runs while the window is still open
+#           say "{{body}}"
+#       end
 #   end
+#   if pressed = "Cancel"        by what it says, or
+#   if pressed = "3"             by which one it was
+#       stop
+#   end
+#   title "My tool"              what this script's windows are called
+#
+# And it can drive a program that has no actions of its own:
+#   desktop.launch_program path="notepad.exe"
+#   desktop.focus_window title="Notepad"
+#   type "some text"
+#   keys "ctrl+s"
+#   ui.click_element name="Save"
 #
 # Uncomment a trigger to have Titan run this by itself:
 # when startup
@@ -4474,6 +5259,80 @@ TCS_TEMPLATE = """# A Titan Script (.TCS): a script made of Titan's own actions.
 
 titan.speak "This script works."
 """
+
+
+TCS_TEMPLATE_PL = """# Skrypt Titana (.TCS): skrypt zbudowany z własnych akcji Titana.
+#
+# Każdą akcję, jaką oferuje dowolny dodatek, można tu wywołać po nazwie.
+# Uruchom macros.macro_actions (albo zapytaj asystenta), żeby zobaczyć,
+# co jest dostępne. Pełny opis języka jest w menedżerze makr,
+# na karcie "Skrypt Titana".
+#
+#   titan.speak "cześć"             akcja z jedną wartością
+#   titan.play_media title="..."    to samo, z nazwą wartości
+#   set x = zegarynka.get_settings  zapamiętaj, co odpowiedziała
+#   set powitanie = "Cześć, " + kto upper(), lower(), now(), + - * /
+#   if x contains "on"              contains, is, is more than, is empty...
+#       say "Gong jest włączony"
+#   end
+#   repeat 3
+#       wait 2s
+#   end
+#
+# Mówi głosem użytkownika i może tym głosem poruszać:
+#   say "z lewej" position=-1 wait=true        -1 lewo, 1 prawo
+#   say "szybko" rate=8                        tylko ta linia, -10 do 10
+#   say "nisko" pitch=-4                       tylko ta linia, -10 do 10
+#   voice engine="supertonic" rate=2           tylko na czas tego skryptu
+#   voice reset
+#   play "ding.ogg" position=-0.8              dźwięk umieszczony w przestrzeni
+#   play "ding.ogg" position=-1 to=1 duration=3s   dźwięk, który się przemieszcza
+#
+# Może pytać i pokazywać całe formularze:
+#   ask kto = "Jak masz na imię?"
+#   confirm pewne = "Kontynuować?"
+#   choose rodzaj = "Który?" options "jeden", "dwa"
+#   message "Gotowe, {{kto}}."
+#   dialog "Dodaj notatkę"
+#       field title = "Tytuł"
+#       multiline body = "Treść"
+#       check pilne = "Pilne?"
+#       buttons wcisniete = "Zapisz", "Przeczytaj teraz", "Anuluj"
+#       on "Przeczytaj teraz"    wykonuje się, gdy okno jest jeszcze otwarte
+#           say "{{body}}"
+#       end
+#   end
+#   if wcisniete = "Anuluj"      po treści albo
+#   if wcisniete = "3"           po numerze opcji
+#       stop
+#   end
+#   title "Moje narzędzie"       jak nazywają się okna tego skryptu
+#
+# I może sterować programem, który nie ma własnych akcji:
+#   desktop.launch_program path="notepad.exe"
+#   desktop.focus_window title="Notatnik"
+#   type "jakiś tekst"
+#   keys "ctrl+s"
+#   ui.click_element name="Zapisz"
+#
+# Odkomentuj wyzwalacz, żeby Titan sam uruchamiał ten skrypt:
+# when startup
+# when time = "11:45"
+# when every = "15m"
+
+titan.speak "Ten skrypt działa."
+"""
+
+
+def _tcs_template():
+    """The starting point for a new script, in the user's own language."""
+    try:
+        from src.titan_core.translation import language_code
+        if str(language_code or '').strip().lower().startswith('pl'):
+            return TCS_TEMPLATE_PL
+    except Exception:
+        pass
+    return TCS_TEMPLATE
 
 
 # --------------------------------------------------------------------------- #
@@ -4520,7 +5379,8 @@ class TCSScheduler(threading.Thread):
 
     def _fire(self, macro, text):
         print(f"[tcs] trigger fired: {macro.get('name')}")
-        run_tcs_text(text, base_dir=macro.get('folder_path', ''))
+        run_tcs_text(text, base_dir=macro.get('folder_path', ''),
+                     title=macro.get('name', ''))
 
     def run(self):
         self._running = True
@@ -4764,9 +5624,37 @@ _TCS_WRITE_RULES = """How to write a Titan Script that will actually be saved:
       say "one" position=-1 rate=-6 wait=true
       say "ten" position=1 rate=8 wait=true
       voice engine="supertonic" rate=2      (for this script only)
-      play "ding.ogg" position=-0.8
-  rate and pitch go from -10 to 10, volume from 0 to 100, position from -1
-  (left) to 1 (right).
+      play "ding.ogg" position=-0.8         a sound, placed
+      play "ding.ogg" position=-1 to=1 duration=3s    a sound that travels
+  rate and pitch go from -10 to 10, volume from 0 to 100, and every position
+  (position, to, elevation, to_elevation) from -1 to 1.
+- Windows are part of it too, and a macro for automation usually wants one:
+      title "New note"          what this script's windows are called
+      dialog "New note"
+          field title = "Title"
+          multiline body = "Text"
+          choice importance = "How important?" options "normal", "high"
+          check urgent = "Urgent?"
+          buttons pressed = "Save", "Read it now", "Cancel"
+          on "Read it now"      runs while the window is STILL OPEN
+              say "{{body}}"
+          end
+      end
+      if pressed = "Cancel"     by what it says, or
+      if pressed = "3"          by which option it was
+          stop
+      end
+  Give a dialog its own buttons whenever the user has more than one thing to
+  do with the answer, and an 'on' block whenever a button should do work
+  without closing the window.
+- Anything Titan can reach is callable, not only add-ons: the computer
+  (system.*), the keyboard, mouse, windows and programs (desktop.*, or the
+  'keys' and 'type' statements), the controls of any window by name (ui.*),
+  the browser (web.*), Titan-Net, Elten, the messengers. Drive a program that
+  has no actions of its own with desktop.focus_window + keys/type + ui.*
+  rather than giving up on it.
+- An action listed as [needs AI] is carried out by a model and will not run
+  with AI features off. Prefer one that is not when there is a choice.
 - Every other line names an action: add-on.action value or name="value".
 - macros.check_macro checks a script without running it."""
 
@@ -4865,9 +5753,16 @@ def action_create_macro(name, keys='', script='', kind='', hotkey='',
         return fails(f"Could not create the macro '{name}': {e}")
     manager.load_macros()
     _refresh_macro_list()
+    # What the checker could not call a refusal still goes back to whoever
+    # wrote it: a macro that runs and does the wrong thing is the failure this
+    # whole path exists to prevent.
+    warnings = (review_warnings(body, base_dir=folder_path)
+                if extension == TCS_EXT else [])
     return (f"Created the macro '{name}'"
             + (f" with the shortcut {hotkey}" if hotkey else "")
-            + f". It is in the macro manager and can be run by name.")
+            + f". It is in the macro manager and can be run by name."
+            + ("\n\nWorth looking at:\n"
+               + "\n".join(f"- {w}" for w in warnings[:6]) if warnings else ""))
 
 
 def _find_macro(manager, name, verb):
@@ -4909,8 +5804,22 @@ def action_read_macro(name):
     return f"{header}\n\n{body}"
 
 
+def _rename_macro(manager, macro, new_name):
+    """Change what a macro is called, in both languages of its manifest."""
+    folder_path = manager._ensure_user_copy(macro.get('folder_name'))
+    config_path = os.path.join(folder_path, '__macro__.TCE')
+    config = configparser.ConfigParser()
+    config.read(config_path, encoding='utf-8')
+    if 'macro' not in config:
+        config['macro'] = {}
+    config['macro']['name_en'] = new_name
+    config['macro']['name_pl'] = new_name
+    with open(config_path, 'w', encoding='utf-8') as handle:
+        config.write(handle)
+
+
 def action_edit_macro(name, script='', keys='', append='', hotkey='',
-                      allow_pseudocode=''):
+                      allow_pseudocode='', new_name=''):
     """Change a macro the user already has, rather than making a second one.
 
     "Make it count to twenty as well" must end with the macro they already have
@@ -4927,10 +5836,14 @@ def action_edit_macro(name, script='', keys='', append='', hotkey='',
     script = str(script or '').strip()
     keys = str(keys or '').strip()
     hotkey_given = str(hotkey or '').strip()
-    if not script and not keys and not hotkey_given:
+    renamed = str(new_name or '').strip()
+    if not script and not keys and not hotkey_given and not renamed:
         return needs('script', f"What should '{macro.get('name')}' do now? "
                                f"Pass the new script, or the keys to press. "
                                f"macros.read_macro shows what it does today.")
+    if renamed and manager.find_by_name(renamed) is not None \
+            and renamed != macro.get('name'):
+        return fails(f"There is already a macro called '{renamed}'.")
 
     kind = str(macro.get('type', '')).lower()
     body = None
@@ -4988,6 +5901,15 @@ def action_edit_macro(name, script='', keys='', append='', hotkey='',
             except Exception:
                 pass
 
+    if renamed:
+        # The name is also the title its windows carry, so renaming a macro is
+        # how the user changes what they are called from outside the script.
+        try:
+            _rename_macro(manager, macro, renamed)
+        except Exception as e:
+            return fails(f"The macro was saved, but it could not be renamed: "
+                         f"{e}")
+
     manager.load_macros()
     _refresh_macro_list()
     changed = []
@@ -4996,8 +5918,14 @@ def action_edit_macro(name, script='', keys='', append='', hotkey='',
                        else "rewrote what it does")
     if hotkey_given:
         changed.append(f"gave it the shortcut {hotkey_given}")
+    if renamed:
+        changed.append(f"renamed it to '{renamed}'")
+    warnings = (review_warnings(body, base_dir=macro.get('folder_path', ''))
+                if body is not None and kind == TCS_EXT else [])
     return (f"Changed the macro '{macro.get('name')}': "
-            + " and ".join(changed) + ".")
+            + " and ".join(changed) + "."
+            + ("\n\nWorth looking at:\n"
+               + "\n".join(f"- {w}" for w in warnings[:6]) if warnings else ""))
 
 
 def action_delete_macro(name):
@@ -5042,16 +5970,30 @@ own actions. Plain text, edited in tEdit like any other script.
 
 One statement per line. # starts a comment.
 
-  ACTIONS - every action every Titan add-on offers, exactly the set the
-  assistant has, called by name:
+  ACTIONS - literally every action Titan has, exactly the set the assistant
+  has, called by name:
     titan.speak "hello"                 one value, positionally
     titan.play_media title="Nirvana"    the same value, named
     titan.tts.speak("hello")            brackets and extra dots both work
     macros.run_macro name="My macro"    including other macros
-    tnotes.create_note title="x" text="y"
-    system.set_volume percent=30
+    tnotes.create_note title="x" text="y"       any application or add-on
+    system.set_volume percent=30                the computer itself
+    desktop.press_keys keys="ctrl+s"            the keyboard and mouse
+    desktop.focus_window title="Notepad"        the windows that are open
+    desktop.launch_program path="notepad.exe"
+    ui.click_element name="Save"                any control, by its name
+    web.open url="https://titosofttitan.com"    the user's own browser
+    titannet.send_mail to="..." subject="..." body="..."
+    {{app}}.open_file path="x"          the action itself may come from a
+                                        variable, decided while it runs
   The values an action takes are the ones it declares - run
-  macros.macro_actions, or titan_list_actions, to see them.
+  macros.macro_actions, or titan_list_actions, to see them. Anything Titan,
+  the system, an application, a component or any other add-on can do is here;
+  nothing is reserved for the AI.
+
+  An action marked [needs AI] is one carried out by a model (reading a window
+  with AI OCR, for instance). With AI features off it does not run and says so
+  - everything else in this language works with them off.
 
   VARIABLES AND WHAT CAN BE DONE TO THEM
     set state = zegarynka.get_settings  keep what an action returned
@@ -5069,6 +6011,9 @@ One statement per line. # starts a comment.
     else                                is more than, is less than,
         say "the chime is off"          is at least, is at most
     end                                 (>, <, >=, <=, ==, != also work)
+    if answer="yes"                     the symbols may be written tight
+        say "off we go"                 against their values, with or
+    end                                 without spaces
 
   REPEATING AND WAITING
     repeat 3
@@ -5083,13 +6028,48 @@ One statement per line. # starts a comment.
     message "All done, {{who}}."        a message box; also warn and error
     message "Saved" title="My macro"
     dialog "Add a note"                 one window, several controls
-        field title = "Title"
-        multiline body = "Text"
+        field title = "Title"           a line of text
+        multiline body = "Text"         a box of text
         choice kind = "Kind" options "personal", "work"
-        check urgent = "Urgent?"
+        check urgent = "Urgent?"        a tick box: true or false
+        buttons pressed = "Save", "Save and read", "Cancel"
     end
-    Each control's name becomes a variable. Closing a question or a dialog
-    ends the script - a macro must not carry on past something declined.
+    Each control's name becomes a variable. 'buttons' gives the window its own
+    buttons - up to six - and its name holds the one that was pressed, so a
+    form can offer several different instructions rather than only OK. Without
+    it a dialog has OK and Cancel as before.
+    Closing a question or a dialog ends the script - a macro must not carry on
+    past something declined.
+
+  WHAT A BUTTON DOES, WHILE THE WINDOW IS STILL OPEN
+    dialog "Notes"
+        field query = "Search for"
+        buttons pressed = "Search", "Close"
+        on "Search"                     runs when that button is pressed,
+            set found = tnotes.search text="{{query}}"
+            say "{{found}}"             and the window stays open
+        end
+    end
+    An 'on' block sees the controls as they stand, so the window can do work
+    and be used again. A button with no 'on' block closes the window and
+    answers with the values, as before - which is what 'Close' is for here.
+
+  THE TITLE OF THE WINDOWS
+    title "Notes"                       from here on, any window this script
+                                        puts up carries this title
+    Without it they carry the macro's own name; a title on the statement
+    itself (or after 'dialog') still wins.
+
+  ACTING ON THE OPTION THAT WAS PICKED
+    An answer from 'choose', from 'choice' or from 'buttons' is the text that
+    was picked AND knows which one it was, so either names it:
+        choose answer = "Ready?" options "yes", "no"
+        if answer = "yes"               by what it says
+        if answer = "1"                 by its number, 1 for the first
+            say "off we go"
+        end
+    The number is what a form is really automated by: the wording of a button
+    may change, its position does not.
 
   SPEAKING, SOUNDS AND STOPPING
     say "anything"                      Titan's own voice, as titan.speak
@@ -5108,10 +6088,24 @@ One statement per line. # starts a comment.
     voice reset                         back to the user's own, early
     play "ding.ogg"                     a sound shipped beside the script
     play "ding.ogg" position=-1 wait=true    -1 left to 1 right
+    play "ding.ogg" position=-1 to=1 duration=3s
+                                        a sound that TRAVELS while it plays
+    play "ding.ogg" elevation=1         and, with 3D positioning on, height:
+                                        elevation and to_elevation, -1 to 1
     run "helper.tcs"                    another script in the same folder;
                                         {{last}} is what it returned
     return "whatever"                   ends this script, handing that back
     stop                                ends the script here
+
+  DRIVING A PROGRAM THAT HAS NO ACTIONS OF ITS OWN
+    keys "ctrl+s"                       press a key or a chord
+    keys "alt+f, x"                     several, in order
+    type "some text"                    type at whatever has the focus
+    desktop.focus_window title="Notepad"    bring it forward first
+    ui.list_elements                    what the window has in it
+    ui.click_element name="Save"        press it by its name
+  ('keys' and 'type' are desktop.press_keys and desktop.type_text, so a macro
+  can do everything a recorded .macro could, and everything else besides.)
 
   So "count to ten, moving from the left to the right and getting faster" is
   written out, not described:
@@ -5124,6 +6118,14 @@ One statement per line. # starts a comment.
 
   A bare filename in 'play' and 'run' is looked for next to the script itself,
   so a macro folder carries its own sounds and helper scripts anywhere.
+
+  Positions follow the user's own choice in Settings, Sound: with positioning
+  off everything is heard in the centre, in stereo mode left to right, and in
+  3D mode through HRTF, where height means something too.
+
+  A window a macro puts up is titled with the macro's own name unless the
+  script gives it a title of its own (title="..." on ask, confirm, choose and
+  message, or the title after 'dialog').
 
   A script speaks with whatever the user configured. 'voice' borrows a
   different one: it is applied to the live engine, never saved, and put back
@@ -5148,9 +6150,217 @@ One statement per line. # starts a comment.
   refused with its line number unless there is genuinely no action for it."""
 
 
-def action_macro_language():
+# The same reference in Polish. A document this size is kept as a second text
+# rather than as one enormous msgid: a .po entry of 140 lines is invalidated
+# wholesale by a one-word change in the English, and what the reader of a
+# language reference needs is a reference that is right, in their language.
+# The English one stays authoritative - it is what the AI is grounded on.
+_MACRO_LANGUAGE_PL = """Język skryptowy Titana (.TCS) - skrypt złożony z własnych
+akcji Titana. Zwykły tekst, edytowany w tEdit jak każdy inny skrypt.
+
+Jedna instrukcja na linię. # zaczyna komentarz.
+
+  AKCJE - dosłownie każda akcja, jaką ma Titan, dokładnie ten sam zestaw, który
+  ma asystent, wywoływana po nazwie:
+    titan.speak "cześć"                 jedna wartość, bez nazwy
+    titan.play_media title="Nirvana"    ta sama wartość, z nazwą
+    titan.tts.speak("cześć")            nawiasy i dodatkowe kropki też działają
+    macros.run_macro name="Moje makro"  także inne makra
+    tnotes.create_note title="x" text="y"       dowolna aplikacja lub dodatek
+    system.set_volume percent=30                sam komputer
+    desktop.press_keys keys="ctrl+s"            klawiatura i mysz
+    desktop.focus_window title="Notatnik"       otwarte okna
+    desktop.launch_program path="notepad.exe"
+    ui.click_element name="Zapisz"              dowolna kontrolka, po nazwie
+    web.open url="https://titosofttitan.com"    przeglądarka użytkownika
+    titannet.send_mail to="..." subject="..." body="..."
+    {{app}}.open_file path="x"          sama akcja też może pochodzić ze
+                                        zmiennej, ustalonej w trakcie
+  Wartości, które przyjmuje akcja, to te, które sama deklaruje - uruchom
+  macros.macro_actions albo titan_list_actions, żeby je zobaczyć. Jest tu
+  wszystko, co potrafi Titan, system, aplikacja, komponent i każdy inny
+  dodatek; nic nie jest zarezerwowane dla AI.
+
+  Akcja oznaczona [needs AI] to taka, którą wykonuje model (na przykład
+  odczytanie okna przez AI OCR). Przy wyłączonych funkcjach AI nie wykonuje
+  się i mówi o tym wprost - cała reszta tego języka działa bez nich.
+
+  ZMIENNE I CO MOŻNA Z NIMI ZROBIĆ
+    set stan = zegarynka.get_settings   zapamiętaj, co odpowiedziała akcja
+    set suma = 2 + 3 * 4                + - * / i nawiasy
+    set powitanie = "Cześć, " + kto     + łączy tekst, gdy któraś strona to tekst
+    set krzyk = upper(trim(kto))
+    titan.speak "powiedziała {{stan}}"  wstaw wartość w dowolny tekst
+    {{last}} to zawsze poprzedni wynik.
+    Funkcje: upper, lower, trim, length, text, number, round, replace,
+    now("%H:%M"), today("%Y-%m-%d").
+
+  WARUNKI
+    if stan contains "on"               contains, does not contain,
+        say "gong jest włączony"        is, is not, is empty, is not empty,
+    else                                is more than, is less than,
+        say "gong jest wyłączony"       is at least, is at most
+    end                                 (działają też >, <, >=, <=, ==, !=)
+    if odpowiedz="tak"                  symbole można pisać tuż przy
+        say "jedziemy"                  wartościach, ze spacjami lub bez
+    end
+
+  POWTARZANIE I CZEKANIE
+    repeat 3
+        wait 2s                         s, m albo h
+    end
+
+  PYTANIA I OKNA
+    ask kto = "Jak masz na imię?"       pole tekstowe; odpowiedź trafia do 'kto'
+    ask kto = "Imię?" default="Anna" title="Powitanie"
+    confirm pewne = "Kontynuować?"      tak/nie, więc 'pewne' to prawda lub fałsz
+    choose rodzaj = "Który?" options "prywatne", "służbowe"
+    message "Gotowe, {{kto}}."          okno komunikatu; także warn i error
+    message "Zapisano" title="Moje makro"
+    dialog "Dodaj notatkę"              jedno okno, kilka kontrolek
+        field title = "Tytuł"           jedna linia tekstu
+        multiline body = "Treść"        pole wielolinijkowe
+        choice rodzaj = "Rodzaj" options "prywatne", "służbowe"
+        check pilne = "Pilne?"          pole wyboru: prawda albo fałsz
+        buttons wcisniete = "Zapisz", "Zapisz i przeczytaj", "Anuluj"
+    end
+    Nazwa każdej kontrolki staje się zmienną. 'buttons' daje oknu własne
+    przyciski - do sześciu - a jego nazwa przechowuje ten, który został
+    wciśnięty, dzięki czemu formularz może proponować kilka różnych poleceń, a
+    nie tylko OK. Bez tego okno ma OK i Anuluj, jak dotąd.
+    Zamknięcie pytania albo okna kończy skrypt - makro nie może iść dalej po
+    czymś, czego użytkownik odmówił.
+
+  CO ROBI PRZYCISK, GDY OKNO JEST JESZCZE OTWARTE
+    dialog "Notatki"
+        field zapytanie = "Szukaj"
+        buttons wcisniete = "Szukaj", "Zamknij"
+        on "Szukaj"                     wykonuje się po wciśnięciu tego
+            set wynik = tnotes.search text="{{zapytanie}}"
+            say "{{wynik}}"             przycisku, a okno zostaje otwarte
+        end
+    end
+    Blok 'on' widzi kontrolki w takim stanie, w jakim są, więc okno może
+    wykonać pracę i zostać użyte ponownie. Przycisk bez bloku 'on' zamyka okno
+    i oddaje wartości, jak dotąd - po to jest tu "Zamknij".
+
+  TYTUŁ OKIEN
+    title "Notatki"                     od tego miejsca każde okno wystawione
+                                        przez ten skrypt ma taki tytuł
+    Bez tego okna noszą nazwę samego makra; tytuł podany przy samej instrukcji
+    (albo po słowie 'dialog') i tak ma pierwszeństwo.
+
+  DZIAŁANIE NA WYBRANEJ OPCJI
+    Odpowiedź z 'choose', z 'choice' albo z 'buttons' to wybrany tekst, który
+    wie także, którą był opcją - można więc wskazać ją na oba sposoby:
+        choose odpowiedz = "Gotowy?" options "tak", "nie"
+        if odpowiedz = "tak"            po treści
+        if odpowiedz = "1"              po numerze, 1 to pierwsza
+            say "jedziemy"
+        end
+    Numer jest tym, czym naprawdę automatyzuje się formularz: treść przycisku
+    może się zmienić, jego pozycja nie.
+
+  MOWA, DŹWIĘKI I ZATRZYMYWANIE
+    say "cokolwiek"                     własny głos Titana, czyli titan.speak
+    say "cokolwiek" wait=true           poczekaj, aż skończy mówić
+    say "cokolwiek" interrupt=true      najpierw przerwij to, co jest mówione
+    speak "cokolwiek"                   oba słowa znaczą to samo
+    say "tutaj" position=-1              skąd dochodzi głos,
+    say "a tutaj" position=0.8           -1 z lewej do 1 z prawej
+    say "wysoko" pitch=4                 tylko ta linia, od -10 do 10
+    say "szybko" rate=8                  tylko ta linia, od -10 do 10; tempo
+                                         sprzed niej wraca zaraz po niej, a
+                                         taka linia sama na siebie czeka
+    voice engine="supertonic" name="Nova" rate=2 pitch=-1
+                                        inny głos TYLKO NA CZAS TEGO SKRYPTU
+                                        (rate/pitch -10..10, volume 0..100)
+    voice reset                         wcześniejszy powrót do głosu użytkownika
+    play "ding.ogg"                     dźwięk dostarczony obok skryptu
+    play "ding.ogg" position=-1 wait=true    -1 z lewej do 1 z prawej
+    play "ding.ogg" position=-1 to=1 duration=3s
+                                        dźwięk, który PRZEMIESZCZA SIĘ w trakcie
+    play "ding.ogg" elevation=1         a przy włączonym dźwięku 3D także
+                                        wysokość: elevation i to_elevation, -1..1
+    run "helper.tcs"                    inny skrypt z tego samego folderu;
+                                        {{last}} to jego wynik
+    return "cokolwiek"                  kończy ten skrypt i to oddaje
+    stop                                kończy skrypt w tym miejscu
+
+  STEROWANIE PROGRAMEM, KTÓRY NIE MA WŁASNYCH AKCJI
+    keys "ctrl+s"                       naciśnij klawisz albo skrót
+    keys "alt+f, x"                     kilka po kolei
+    type "jakiś tekst"                  pisz tam, gdzie jest fokus
+    desktop.focus_window title="Notatnik"   najpierw przełącz się na okno
+    ui.list_elements                    co jest w oknie
+    ui.click_element name="Zapisz"      wciśnij to po nazwie
+  ('keys' i 'type' to desktop.press_keys i desktop.type_text, więc makro
+  potrafi wszystko, co potrafiło nagrane .macro, i całą resztę oprócz tego.)
+
+  Zatem "policz do dziesięciu, przechodząc z lewej na prawą i coraz szybciej"
+  zapisuje się wprost, a nie opisuje słowami:
+    repeat 1
+        say "jeden" position=-1 rate=-6 wait=true
+        say "dwa" position=-0.8 rate=-4 wait=true
+    end
+  Liczba spoza zakresu, który przyjmuje dane ustawienie (rate=100), jest
+  odrzucana wraz z numerem linii, a nie po cichu przycinana.
+
+  Sama nazwa pliku w 'play' i 'run' jest szukana obok samego skryptu, dzięki
+  czemu folder makra wszędzie niesie ze sobą swoje dźwięki i skrypty pomocnicze.
+
+  Pozycjonowanie zależy od wyboru użytkownika w Ustawieniach, Dźwięk: przy
+  wyłączonym wszystko słychać na środku, w trybie stereo od lewej do prawej, a
+  w trybie 3D przez HRTF, gdzie znaczenie ma też wysokość.
+
+  Okno, które wystawia makro, ma tytuł samego makra, chyba że skrypt nada mu
+  własny (title="..." przy ask, confirm, choose i message albo tytuł po
+  słowie 'dialog').
+
+  Skrypt mówi tym, co skonfigurował użytkownik. 'voice' pożycza inny głos:
+  jest ustawiany na żywym silniku, nigdy nie zapisywany i przywracany w chwili,
+  gdy skrypt się kończy - normalnie, zatrzymany, anulowany albo przerwany
+  błędem.
+
+  WYZWALACZE - umieść je na górze, żeby Titan sam uruchamiał makro:
+    when startup
+    when time = "11:45"                 codziennie o tej godzinie
+    when every = "15m"
+
+  PSEUDOKOD - przy włączonych funkcjach AI linia może zamiast tego po prostu
+  powiedzieć własnymi słowami, o co chodzi, a AI zamienia to na te same akcje:
+    do "wpisz dzisiejszą datę do notatki o nazwie dziennik"
+  Linia, która nie nazywa akcji, jest traktowana jako pseudokod. Przy
+  wyłączonym AI taka linia to błąd z numerem linii, o którym makro mówi, zanim
+  cokolwiek wykona - wszystko powyżej działa przy wyłączonym AI.
+
+  Pseudokod jest dla kogoś, kto pisze własne makro w pośpiechu. Makro pisane
+  DLA kogoś (przez AI albo przez kreator) musi nazywać prawdziwe akcje: jest
+  sprawdzane przed zapisem, a linia pozostawiona słowami jest odrzucana wraz z
+  numerem linii, chyba że naprawdę nie ma dla niej żadnej akcji."""
+
+
+def _macro_language_text(language=''):
+    """The language reference, in the language Titan is running in.
+
+    Somebody reading a reference is reading it to learn the language, and doing
+    that in a foreign one is a second obstacle on top of the first. The English
+    text stays the one the AI is grounded on - ``language="en"`` asks for it
+    explicitly - but a Polish Titan shows Polish.
+    """
+    wanted = str(language or '').strip().lower()
+    if not wanted:
+        try:
+            from src.titan_core.translation import language_code
+            wanted = str(language_code or '').strip().lower()
+        except Exception:
+            wanted = 'en'
+    return _MACRO_LANGUAGE_PL if wanted.startswith('pl') else _MACRO_LANGUAGE
+
+
+def action_macro_language(language=""):
     """The Titan Scripting Language, for whoever is writing one."""
-    return _MACRO_LANGUAGE
+    return _macro_language_text(language)
 
 
 def action_macro_actions(addon=""):
@@ -5173,8 +6383,8 @@ def action_macro_actions(addon=""):
             + "\n".join(lines))
 
 
-def action_check_macro(script="", name=""):
-    """Say whether a Titan Script would run, without running it."""
+def action_check_macro(script="", name="", use_ai=""):
+    """Review a Titan Script: what would not run, and what looks wrong."""
     text = str(script or '')
     folder = ''
     if not text.strip():
@@ -5195,20 +6405,28 @@ def action_check_macro(script="", name=""):
         except Exception as e:
             return fails(f"Could not read '{macro.get('name')}': {e}")
         folder = macro.get('folder_path', '')
-    problems = check_tcs(text, base_dir=folder)
-    pseudocode = pseudocode_lines(text) if _ai_features_on() else []
-    if not problems and not pseudocode:
-        return "The macro is fine - every line names something Titan can do."
-    if not problems:
-        return ("The macro would run, but these lines are written in words and "
-                "need AI features on every time it runs:\n"
-                + "\n".join(f"- line {number}: {said}"
-                            for number, said in pseudocode[:12])
-                + "\n\nWritten as real actions they would work with AI "
-                  "features off too.")
-    return ("The macro would not run:\n"
-            + "\n".join(f"- {p}" for p in problems[:12])
-            + "\n\n" + _TCS_WRITE_RULES)
+    wanted = None if str(use_ai or '').strip() == '' else _ai_truth(use_ai)
+    problems, warnings, notes = review_tcs(text, base_dir=folder,
+                                           use_ai=wanted)
+    if not problems and not warnings and not notes:
+        return ("The macro is fine - every line names something Titan can do, "
+                "every value is one the action takes, and nothing in it looks "
+                "wrong."
+                + ("" if _ai_features_on() else
+                   " (AI features are off, so it was not also read by the AI.)"))
+    parts = []
+    if problems:
+        parts.append("Would not run:\n"
+                     + "\n".join(f"- {p}" for p in problems[:12]))
+    if warnings:
+        parts.append("Would run, but looks wrong:\n"
+                     + "\n".join(f"- {w}" for w in warnings[:12]))
+    if notes:
+        parts.append("The AI also read it and noticed (advisory):\n"
+                     + "\n".join(f"- {n}" for n in notes[:12]))
+    if problems:
+        parts.append(_TCS_WRITE_RULES)
+    return "\n\n".join(parts)
 
 
 def action_reload_macros():
@@ -5302,6 +6520,10 @@ TITAN_ACTIONS = [
                                    "instead of replacing it."},
          'hotkey': {'type': 'string',
                     'description': "Also give it this shortcut (optional)."},
+         'new_name': {'type': 'string',
+                      'description': "Rename the macro. This is also the "
+                                     "title its windows carry unless the "
+                                     "script titles them itself."},
          'allow_pseudocode': {'type': 'boolean',
                               'description': "As in create_macro; off by "
                                              "default."}},
@@ -5322,7 +6544,14 @@ TITAN_ACTIONS = [
     {'name': 'macro_language',
      'summary': "The Titan Scripting Language (.TCS) - how to write a macro "
                 "out of Titan's own actions, with variables, conditions, "
-                "dialogs and triggers. Read this before writing one.",
+                "dialogs, forms with buttons, positioned speech and sound, and "
+                "triggers. Read this before writing one.",
+     'params': {'language': {'type': 'string',
+                             'description': "'en' or 'pl'. By default the "
+                                            "language Titan is running in; "
+                                            "ask for 'en' when the reference "
+                                            "is for a model rather than for "
+                                            "the user."}},
      'run': action_macro_language},
     {'name': 'macro_actions',
      'summary': "Every action a Titan Script can call, with the values each "
@@ -5332,14 +6561,21 @@ TITAN_ACTIONS = [
                                          "actions (optional)."}},
      'run': action_macro_actions},
     {'name': 'check_macro',
-     'summary': "Say whether a Titan Script would run, without running it - "
-                "every line that names something Titan cannot do is reported. "
-                "Use this on a script you have written before saving it.",
+     'summary': "Review a Titan Script without running it: what would stop it "
+                "running, and - separately - what would run but looks wrong "
+                "against the language and the actions' own declarations "
+                "(a variable never set, a button that is not there, a value "
+                "an action does not take). With AI features on the script is "
+                "also read by the AI for mistakes that still run. Use this on "
+                "a script you have written before saving it.",
      'params': {'script': {'type': 'string',
                            'description': "The script text to check."},
                 'name': {'type': 'string',
                          'description': "Or the name of a saved macro to "
-                                        "check instead."}},
+                                        "check instead."},
+                'use_ai': {'type': 'boolean',
+                           'description': "Have the AI read it too. Defaults "
+                                          "to whether AI features are on."}},
      'run': action_check_macro},
     {'name': 'reload',
      'summary': "Re-read the macros folder so a macro written or changed from "

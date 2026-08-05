@@ -660,14 +660,19 @@ def _tool(name, description, run, risk='auto', properties=None, required=None,
     }
 
 
-def get_tools(ask_user=None):
-    """The full toolset available to the agent (Windows).
+def get_desktop_tools():
+    """Driving the computer itself: windows, keys, mouse, files, programs.
 
-    ``ask_user`` (a callable ``question -> answer``) adds the follow-up-question
-    tool, so a request that arrives half-specified becomes a conversation
-    instead of a guess. It is optional because a caller with no way to ask -
-    a headless run, a scheduled job - must not be given a tool it cannot
-    honour. The voice assistant supplies its own, so it leaves this alone.
+    Split out of :func:`get_tools` so it can be offered as actions as well as
+    as agent tools (``src/titan_core/actions/builtin.py`` turns it into the
+    ``desktop`` provider). That is what lets a macro, a component or another
+    add-on press a key or bring a window forward without reimplementing any of
+    it - and what makes "every action Titan has" true of the Action API rather
+    than only of the agent.
+
+    It deliberately contains no aggregation: everything here is implemented in
+    this module, so building it can never reach back into the action registry
+    that is being built from it.
     """
     S = {'type': 'string'}
     N = {'type': 'number'}
@@ -724,8 +729,21 @@ def get_tools(ask_user=None):
         _tool('delete_path', "Delete a file or an empty directory.", delete_path,
               risk='confirm', properties={'path': dict(S, description="Path to delete.")},
               required=['path']),
-    ] + (_ui_tools() + _browser_tools() + _titan_tools() + _subsystem_tools()
-         + _memory_tools() + _action_tools() + _ask_tools(ask_user))
+    ]
+
+
+def get_tools(ask_user=None):
+    """The full toolset available to the agent (Windows).
+
+    ``ask_user`` (a callable ``question -> answer``) adds the follow-up-question
+    tool, so a request that arrives half-specified becomes a conversation
+    instead of a guess. It is optional because a caller with no way to ask -
+    a headless run, a scheduled job - must not be given a tool it cannot
+    honour. The voice assistant supplies its own, so it leaves this alone.
+    """
+    return get_desktop_tools() + (
+        _ui_tools() + _browser_tools() + _titan_tools() + _subsystem_tools()
+        + _memory_tools() + _action_tools() + _ask_tools(ask_user))
 
 
 def _ui_tools():

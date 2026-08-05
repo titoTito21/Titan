@@ -58,9 +58,43 @@ _TOOL_PROVIDERS = (
     ('memory', "AI memory",
      "What the AI remembers between conversations.",
      'src.ai.memory', 'get_memory_tools', 'ai_'),
+    # Driving the computer itself. Without these the Action API could reach
+    # every add-on and every Titan subsystem but could not press a key, so
+    # "automate anything" stopped at the edge of Titan - and a macro had to go
+    # back to replaying keystrokes blindly to get any further.
+    ('desktop', "The desktop",
+     "Driving the computer: the windows that are open, the keyboard and mouse, "
+     "files, and launching programs.",
+     'src.ai.agent_tools', 'get_desktop_tools', ''),
+    ('ui', "Controls on screen",
+     "The controls of any window by name: listing them, pressing one, "
+     "scrolling and dragging - Windows' own accessibility, so it works where "
+     "there is no add-on to ask.",
+     'src.ai.ui_tools', 'get_ui_tools', ''),
+    ('web', "Web browser",
+     "The user's own browser: opening pages, reading them, filling forms and "
+     "pressing what is on them.",
+     'src.ai.browser_tools', 'get_browser_tools', 'browser_'),
 )
 
 BUILTIN_IDS = tuple(entry[0] for entry in _TOOL_PROVIDERS) + ('gamepad',)
+
+# The actions that are actually DONE BY A MODEL - the ones that send something
+# to an AI provider. Only these need Titan's AI features switched on, and
+# `dispatch.run` says so plainly rather than letting them fail inside a provider
+# with no key.
+#
+# The list is short on purpose, and it is per ACTION rather than per provider:
+# living in `src/ai/` is not the same as calling a model. AI OCR *reads* a
+# window with a vision request, but pressing, typing into and toggling what it
+# already read are ordinary UI Automation, and the memory tools are a file of
+# notes - all of which keep working with the AI switched off. Everything else
+# in the Action API is ordinary Python, which is the point of it being a
+# titan-core capability rather than an AI one.
+_AI_ACTIONS = frozenset({
+    'ocr.read_window',      # takes a picture of the window and asks a model
+    'ocr.ask',              # the same, with a question about it
+})
 
 
 # --------------------------------------------------------------------------- #
@@ -101,7 +135,11 @@ def _addon_from_tools(addon_id, label, description, tools, prefix):
             params=_params_from_schema(tool.get('parameters')),
             risk=('always_confirm' if tool.get('always_confirm')
                   else tool.get('risk', 'auto')),
-            mode='any', promote=False, handler=short, addon=addon)
+            mode='any', promote=False, handler=short, addon=addon,
+            # A tool may also say so itself, which is how a new AI-backed one
+            # gets this without anybody remembering to edit the list above.
+            needs_ai=(f"{addon_id}.{short}" in _AI_ACTIONS
+                      or bool(tool.get('needs_ai'))))
         action.run = tool['run']
         addon.actions.append(action)
     return addon

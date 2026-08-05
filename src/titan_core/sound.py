@@ -5,7 +5,7 @@ import time
 import platform
 import subprocess
 import atexit
-from threading import Lock
+from threading import Lock, Thread
 from src.settings.settings import load_settings
 from src.platform_utils import get_resource_path as _platform_resource_path, IS_WINDOWS, IS_LINUX, IS_MACOS
 
@@ -442,80 +442,169 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
 
 
 
+def _start_sound_file(file_path, pan=None, elevation=0.0):
+    """Start a file playing and hand back what is playing it.
+
+    Returns ``('spatial', source_id)`` when OpenAL took it, ``('channel',
+    channel, theme_volume)`` when pygame did, or None. Two callers need this:
+    :func:`play_sound_file`, which only wants to know that it started, and
+    :func:`play_sound_file_moving`, which has to keep hold of the thing playing
+    so it can move it while it plays. Splitting it here means there is still one
+    piece of code that knows how a file reaches the mixer.
+
+    ``pan`` is 0.0 (left) to 1.0 (right), 0.5 centre - the convention every
+    caller inside this module uses.
+    """
+    if not file_path or not os.path.exists(file_path):
+        return None
+
+    if not _mixer_initialized or pygame.mixer.get_init() is None:
+        if not initialize_sound():
+            return None
+
+    try:
+        settings = load_settings()
+        mode = get_sound_mode()
+        stereo_enabled = mode in ('stereo', '3d')
+        sound_theme_volume = int(settings.get('sound', {}).get('sound_theme_volume', 100)) / 100.0
+    except Exception:
+        mode = 'none'
+        stereo_enabled = False
+        sound_theme_volume = 1.0
+
+    # 3D mode: route through OpenAL HRTF (virtual surround).
+    if mode == '3d':
+        try:
+            from src.titan_core import spatial_audio
+            if spatial_audio.spatial_available():
+                source = spatial_audio.play_file(
+                    file_path,
+                    spatial_audio.pan_to_azimuth(0.5 if pan is None else pan),
+                    spatial_audio.norm_to_elevation(elevation or 0.0),
+                    max(0.0, min(1.0, sound_theme_volume)))
+                if source is not None:
+                    _fire_haptics(file_path)
+                    return ('spatial', source)
+        except Exception as e:
+            print(f"[Sound] Spatial playback error: {e}")
+
+    with lock:
+        try:
+            sound = pygame.mixer.Sound(file_path)
+        except (pygame.error, UnicodeDecodeError, OSError) as e:
+            print(f"Failed to load sound file {file_path}: {e}")
+            return None
+
+        try:
+            channel = pygame.mixer.find_channel()
+            if not channel:
+                for _cid in range(5, pygame.mixer.get_num_channels()):
+                    _ch = pygame.mixer.Channel(_cid)
+                    if not _ch.get_busy():
+                        channel = _ch
+                        break
+            if not channel:
+                channel = pygame.mixer.Channel(5)
+        except (pygame.error, AttributeError) as e:
+            print(f"Failed to find audio channel: {e}")
+            return None
+
+        if pan is not None:
+            try:
+                pan = max(0.0, min(1.0, float(pan)))
+            except (ValueError, TypeError):
+                pan = None
+
+        try:
+            if stereo_enabled and pan is not None:
+                left_volume = max(0.0, min(1.0, (1.0 - pan) * sound_theme_volume))
+                right_volume = max(0.0, min(1.0, pan * sound_theme_volume))
+                channel.set_volume(left_volume, right_volume)
+            else:
+                volume = max(0.0, min(1.0, sound_theme_volume))
+                channel.set_volume(volume)
+        except (pygame.error, AttributeError):
+            pass
+
+        try:
+            channel.play(sound)
+            _fire_haptics(file_path)
+            return ('channel', channel,
+                    max(0.0, min(1.0, sound_theme_volume)) if stereo_enabled
+                    else None)
+        except (pygame.error, AttributeError) as e:
+            print(f"Failed to play sound file: {e}")
+            return None
+
+
 def play_sound_file(file_path, pan=None, elevation=0.0):
     """Play a sound from an absolute file path (not relative to theme)."""
     try:
-        if not file_path or not os.path.exists(file_path):
-            return False
-
-        if not _mixer_initialized or pygame.mixer.get_init() is None:
-            if not initialize_sound():
-                return False
-
-        try:
-            settings = load_settings()
-            mode = get_sound_mode()
-            stereo_enabled = mode in ('stereo', '3d')
-            sound_theme_volume = int(settings.get('sound', {}).get('sound_theme_volume', 100)) / 100.0
-        except Exception:
-            mode = 'none'
-            stereo_enabled = False
-            sound_theme_volume = 1.0
-
-        # 3D mode: route through OpenAL HRTF (virtual surround).
-        if mode == '3d':
-            if _try_spatial_play(file_path, pan, elevation, max(0.0, min(1.0, sound_theme_volume))):
-                return True
-
-        with lock:
-            try:
-                sound = pygame.mixer.Sound(file_path)
-            except (pygame.error, UnicodeDecodeError, OSError) as e:
-                print(f"Failed to load sound file {file_path}: {e}")
-                return False
-
-            try:
-                channel = pygame.mixer.find_channel()
-                if not channel:
-                    for _cid in range(5, pygame.mixer.get_num_channels()):
-                        _ch = pygame.mixer.Channel(_cid)
-                        if not _ch.get_busy():
-                            channel = _ch
-                            break
-                if not channel:
-                    channel = pygame.mixer.Channel(5)
-            except (pygame.error, AttributeError) as e:
-                print(f"Failed to find audio channel: {e}")
-                return False
-
-            if pan is not None:
-                try:
-                    pan = max(0.0, min(1.0, float(pan)))
-                except (ValueError, TypeError):
-                    pan = None
-
-            try:
-                if stereo_enabled and pan is not None:
-                    left_volume = max(0.0, min(1.0, (1.0 - pan) * sound_theme_volume))
-                    right_volume = max(0.0, min(1.0, pan * sound_theme_volume))
-                    channel.set_volume(left_volume, right_volume)
-                else:
-                    volume = max(0.0, min(1.0, sound_theme_volume))
-                    channel.set_volume(volume)
-            except (pygame.error, AttributeError):
-                pass
-
-            try:
-                channel.play(sound)
-                _fire_haptics(file_path)
-                return True
-            except (pygame.error, AttributeError) as e:
-                print(f"Failed to play sound file: {e}")
-                return False
-
+        return _start_sound_file(file_path, pan, elevation) is not None
     except Exception as e:
         print(f"Error playing sound file {file_path}: {e}")
         return False
+
+
+def play_sound_file_moving(file_path, pan=0.0, to_pan=1.0, seconds=2.0,
+                           elevation=0.0, to_elevation=None):
+    """Play a sound that TRAVELS from one position to another as it plays.
+
+    A sound placed once is a sound at a place; a sound that moves is a sound
+    going somewhere, and for an audio-first desktop that difference carries
+    real information - a progress sweep, something arriving from the left, a
+    countdown crossing the head. Both backends can already do it: OpenAL takes
+    a new source position at any time, and a pygame channel takes new
+    left/right volumes at any time, so this steps the position on a small
+    daemon thread until the sound has finished or the journey is over.
+
+    Positions are 0.0 (left) to 1.0 (right) like everywhere else in this
+    module. Returns True when the sound started.
+    """
+    try:
+        start = max(0.0, min(1.0, float(pan)))
+        end = max(0.0, min(1.0, float(to_pan)))
+        travel = max(0.05, min(300.0, float(seconds or 0.0)))
+        start_elev = float(elevation or 0.0)
+        end_elev = start_elev if to_elevation is None else float(to_elevation)
+    except (TypeError, ValueError):
+        return False
+
+    started = _start_sound_file(file_path, start, start_elev)
+    if started is None:
+        return False
+
+    def _travel():
+        # ~40 steps a second: fine enough that the movement is heard as
+        # movement rather than as steps, cheap enough to be one sleeping thread.
+        steps = max(2, int(travel * 40))
+        for step in range(1, steps + 1):
+            time.sleep(travel / steps)
+            fraction = step / steps
+            position = start + (end - start) * fraction
+            elev = start_elev + (end_elev - start_elev) * fraction
+            try:
+                if started[0] == 'spatial':
+                    from src.titan_core import spatial_audio
+                    if not spatial_audio.is_playing(started[1]):
+                        return
+                    spatial_audio.move_source(
+                        started[1], spatial_audio.pan_to_azimuth(position),
+                        spatial_audio.norm_to_elevation(elev))
+                else:
+                    channel, theme_volume = started[1], started[2]
+                    if not channel.get_busy():
+                        return
+                    if theme_volume is None:
+                        return          # positioning is off: nothing to move
+                    channel.set_volume(
+                        max(0.0, min(1.0, (1.0 - position) * theme_volume)),
+                        max(0.0, min(1.0, position * theme_volume)))
+            except Exception:
+                return
+
+    Thread(target=_travel, daemon=True).start()
+    return True
 
 
 # Funkcje odtwarzania dźwięków

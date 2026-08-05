@@ -1,0 +1,7 @@
+[macro]
+name_pl = Demonstracja formularza (przyciski i opcje)
+name_en = Form demo (buttons and options)
+openfile = form_demo.tcs
+
+[macrocfg]
+hotkey =
