@@ -1152,7 +1152,26 @@ if __name__ == "__main__":
                             'directory, then launch it (apps/games) or surface it '
                             '(other add-on kinds). Used by the Explorer file '
                             'association for double-clicked packages.')
+    parser.add_argument('--run-script', default=None, metavar='PATH',
+                       help='Run a Titan Script (.TCS) once Titan has started. '
+                            'Used by the Explorer file association for '
+                            'double-clicked scripts. Needs the Macro Manager '
+                            'component, which is what understands the language.')
     args = parser.parse_args()
+
+    # `titan script.tcs` means the same as `titan --run-script script.tcs`:
+    # a bare path is what a shell, a shortcut and a drag-and-drop all produce,
+    # and it would otherwise be read as an application shortname.
+    try:
+        from src.titan_core import script_launch as _script_launch
+        if not args.run_script and _script_launch.looks_like_script(args.application):
+            args.run_script = args.application
+            args.application = args.file_path
+            args.file_path = None
+        if args.run_script:
+            _script_launch.set_pending(args.run_script)
+    except Exception as _script_error:
+        print(f"[TitanScript] could not accept the script argument: {_script_error}")
 
     # Optimization profiling (Phase 0 of the code-optimization plan).
     # Enabled with --profile: captures main() initialization and the GUI event

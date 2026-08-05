@@ -288,5 +288,55 @@
     "role": "assistant",
     "content": "Przypomnienie o spaniu zostało ustawione na godzinę 9:17. Niech Twój sen będzie spokojny i pokrzepiający.",
     "timestamp": 1785136592.3573616
+  },
+  {
+    "role": "user",
+    "content": "odtwórz lokalnie włatcy móch, odcinek maksymalna kontrola, następnie w oparciu o to, otwórz dokument w tedit o treści tytułu utworu, i otwórz mi ten dokument z tą treścią",
+    "timestamp": 1785922139.9422898
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam lokalnie odcinek „Lekcja 17. Maksymalna kontrola” serialu Włatcy Móch. Stworzyłam również dokument z tytułem tego utworu i otworzyłam go dla Ciebie w edytorze tEdit. Wszystko gotowe!",
+    "timestamp": 1785922172.2402203
+  },
+  {
+    "role": "user",
+    "content": "sprawdź w zegarynce która godzina, następnie, stwórz dokument z tytułem godzina, w tedit. Następnie wpisz podaną godzinę i datę, napisz potem pod spodem temat dźwiękowy titana. Następnie stwórz przypomnienie  na 11:34 z treścią tego dokumentu",
+    "timestamp": 1785922340.4879873
+  },
+  {
+    "role": "assistant",
+    "content": "Jasne, chwila!\n\nWszystko zostało wykonane:\n\n1. **Czas i data**: Aktualna godzina to **11:32:27**, data: **05.08.2026**.\n2. **Temat dźwiękowy**: Odczytano aktywny motyw dźwiękowy Titana – **longhorn**.\n3. **Dokument w tEdit**: Stworzono i otwarto dokument z tytułem **godzina** zawierający godzinę, datę oraz temat dźwiękowy.\n4. **Przypomnienie**: Utworzono przypomnienie w tReminder na godzinę **11:34** z treścią utworzonego dokumentu.",
+    "timestamp": 1785922376.1647274
+  },
+  {
+    "role": "user",
+    "content": "odczytaj temat dźwiękowy, następnie w Titan-net, napisz do mnie, użytkownika tito, prywatną wiadomość z odczytywanymi danymi, następnie, napisz to na tito@titosofttitan.com na titan-mail",
+    "timestamp": 1785922564.7214413
+  },
+  {
+    "role": "assistant",
+    "content": "Reached the step limit before finishing.",
+    "timestamp": 1785922730.0484726
+  },
+  {
+    "role": "user",
+    "content": "co się stało 24 lutego 2022? Odpowiedź  napisz w nowym dokumencie w TEdit. Następnie ten dokument wklej na pulpit, nazwa: Costam",
+    "timestamp": 1785922856.9239988
+  },
+  {
+    "role": "assistant",
+    "content": "24 lutego 2022 roku rozpoczęła się pełnoskalowa inwazja Rosji na Ukrainę. \n\nPrzygotowałam odpowiedź, stworzyłam plik **Costam.txt** na Twoim Pulpicie i otworzyłam go w edytorze TEdit.",
+    "timestamp": 1785922881.6028605
+  },
+  {
+    "role": "user",
+    "content": "stwórz makro, w auto hotkey, które powie: jakieś makro: skrót klawiszowy to ctrl shift m. Następnie, odtwórz lokalnie film dzień świra",
+    "timestamp": 1785923724.1868787
+  },
+  {
+    "role": "assistant",
+    "content": "Stworzyłam makro AutoHotkey ze skrótem **Ctrl + Shift + M**, które po naciśnięciu wypowiada frazę „jakieś makro”. Plik został zapisany na Pulpicie (`makro.ahk`) i uruchomiony w tle.\n\nRównocześnie rozpoczęłam odtwarzanie filmu **Dzień świra** w odtwarzaczu tMedia.",
+    "timestamp": 1785923822.8911848
   }
 ]

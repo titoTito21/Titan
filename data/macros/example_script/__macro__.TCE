@@ -1,0 +1,7 @@
+[macro]
+name_pl = Przykładowy skrypt Titana
+name_en = Example Titan Script
+openfile = example_script.tcs
+
+[macrocfg]
+hotkey = 

@@ -107,6 +107,19 @@ def import_entry(addon):
     return module
 
 
+def _comparable(path):
+    """A path in the form two paths may be compared in.
+
+    Windows paths differ in case and in separator between the string a manager
+    stored and the string discovery produced (``%APPDATA%`` versus a bundled
+    root, a short name, a ``.pyc`` beside its ``.py``), and a case-sensitive
+    comparison quietly decides an add-on's module is not its own - which is
+    exactly how a component's actions become invisible.
+    """
+    text = os.path.normpath(os.path.abspath(path))
+    return os.path.normcase(text)
+
+
 def loaded_modules_under(path):
     """Every already-imported module whose file lives inside ``path``.
 
@@ -114,18 +127,53 @@ def loaded_modules_under(path):
     at startup, so the object holding its windows and caches is already in
     ``sys.modules``.
     """
-    root = os.path.normpath(os.path.abspath(path))
+    root = _comparable(path)
     found = []
     for module in list(sys.modules.values()):
         filename = getattr(module, '__file__', None)
         if not filename:
             continue
         try:
-            candidate = os.path.normpath(os.path.abspath(filename))
-            if os.path.commonpath([root, candidate]) == root:
+            candidate = _comparable(filename)
+            if candidate == root or candidate.startswith(root + os.sep):
                 found.append(module)
         except (ValueError, OSError):
             continue
+    return found
+
+
+def modules_named_after(addon):
+    """Modules registered in ``sys.modules`` under the add-on's own name.
+
+    Every in-process manager imports an add-on under its folder name
+    (``sys.modules['zegarynka']``), and some of them build the module by hand
+    with ``types.ModuleType`` - which leaves ``__file__`` pointing at whatever
+    string the manager happened to hold, or at nothing at all. Looking the name
+    up directly finds those, so an add-on's actions do not depend on two
+    unrelated pieces of code having spelt the same path the same way.
+    """
+    folder = os.path.basename(os.path.normpath(addon.path))
+    found = []
+    for name in (addon.name, folder, addon.addon_id):
+        if not name:
+            continue
+        module = sys.modules.get(name)
+        if module is None or module in found:
+            continue
+        # A name alone is not proof: some other module may simply be called
+        # 'macros'. Accept it when it carries no file at all (a module built by
+        # hand, which is what the frozen loader does) or when it does sit in a
+        # directory of this add-on's name - a second copy of the same add-on
+        # under the other root.
+        filename = getattr(module, '__file__', None)
+        if filename:
+            try:
+                owner = os.path.basename(os.path.dirname(_comparable(filename)))
+            except (ValueError, OSError):
+                continue
+            if owner != os.path.normcase(folder):
+                continue
+        found.append(module)
     return found
 
 
@@ -135,7 +183,9 @@ def candidate_owners(addon):
     entry = import_entry(addon)
     if entry is not None:
         owners.append(entry)
-    owners.extend(loaded_modules_under(addon.path))
+    for module in loaded_modules_under(addon.path) + modules_named_after(addon):
+        if module not in owners:
+            owners.append(module)
     return owners
 
 

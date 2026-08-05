@@ -3,8 +3,14 @@
 **None of this needs the client's window open.** Generating speech is a
 capability the user has paid for, not a feature of one window: "write me a
 note, then read it out in my ElevenLabs voice" must not mean opening two
-applications first. The API key lives in the client's own ini file, so a
-headless run reads it, calls the API and plays the result.
+applications first. A headless run finds the API key, calls the API and plays
+the result.
+
+**The key is looked for wherever the user actually put it** - this client's own
+ini, or Settings -> speech -> ElevenLabs, which is where Titan's ElevenLabs
+speech engine keeps it (encrypted). Reading only one of the two is how a user
+looking at their key on screen gets told there is no key. A key saved *by*
+these actions goes to the encrypted place.
 
 The window is still used when it happens to be open, because then the
 generation lands in the app's history and cache exactly as if the user had
@@ -41,7 +47,7 @@ SETTINGS_PATH = os.path.expandvars(
 # --------------------------------------------------------------------------- #
 # Headless: the API directly
 # --------------------------------------------------------------------------- #
-def _api_key():
+def _key_from_ini():
     config = configparser.ConfigParser()
     try:
         config.read(SETTINGS_PATH, encoding='utf-8')
@@ -50,13 +56,44 @@ def _api_key():
         return ''
 
 
+def _key_from_titan():
+    """The key the user gave Titan's ElevenLabs *speech engine*.
+
+    There are two honest places to put an ElevenLabs key - this client's own
+    settings, and Settings -> speech -> ElevenLabs - and a user who filled in
+    one of them has configured ElevenLabs. Reading only the client's ini is how
+    "there is no API key" gets said to somebody looking at the key on screen.
+    """
+    try:
+        from src.settings.settings import get_setting
+        from src.titan_core.secret_store import load_value
+    except Exception:
+        return ''
+    for key in ('engine.elevenlabs.api_key', 'elevenlabs_api_key'):
+        try:
+            value = str(load_value(
+                get_setting(key, '', section='stereo_speech') or '')).strip()
+        except Exception:
+            value = ''
+        if value:
+            return value
+    return ''
+
+
+def _api_key():
+    return _key_from_ini() or _key_from_titan()
+
+
 def _api_client():
     """(client, error) - an ElevenLabs client from the key already configured."""
     key = _api_key()
     if not key:
-        return None, ("No ElevenLabs API key is configured. Open the "
-                      "ElevenLabs client once and set it under File, Client "
-                      "Settings.")
+        return None, ("No ElevenLabs API key is set, in the ElevenLabs "
+                      "client's own settings (File, Client Settings) or in "
+                      "Titan's ElevenLabs speech engine. Either fill one in, "
+                      "or set it without opening anything by running the "
+                      "action elevenlabs_tts_engine.set_setting with "
+                      "key 'api_key'.")
     try:
         from elevenlabs import ElevenLabs
     except Exception as e:
@@ -64,7 +101,22 @@ def _api_client():
     try:
         return ElevenLabs(api_key=key), ''
     except Exception as e:
-        return None, f"Could not reach ElevenLabs: {e}"
+        return None, f"Could not reach ElevenLabs: {_why(e)}"
+
+
+def _why(error):
+    """The readable part of an SDK exception.
+
+    The ElevenLabs client puts the whole HTTP response - every header - in the
+    exception text, which buries the one sentence that matters ("Invalid API
+    key") in noise a user should never be read out.
+    """
+    text = str(error)
+    for marker in ("'message': '", '"message": "'):
+        if marker in text:
+            rest = text.split(marker, 1)[1]
+            return rest.split(marker[-1], 1)[0]
+    return text if len(text) <= 200 else text[:200].rstrip() + '...'
 
 
 def _api_voices(client):
@@ -101,7 +153,7 @@ def _generate(text, voice=''):
     try:
         voices = _api_voices(client)
     except Exception as e:
-        return None, '', fails(f"Could not list the ElevenLabs voices: {e}")
+        return None, '', fails(f"Could not list the ElevenLabs voices: {_why(e)}")
     chosen, problem = _pick(voices, voice)
     if problem is not None:
         return None, '', problem
@@ -112,7 +164,7 @@ def _generate(text, voice=''):
             output_format='mp3_44100_128')
         audio = b''.join(stream)
     except Exception as e:
-        return None, '', fails(f"ElevenLabs could not generate the speech: {e}")
+        return None, '', fails(f"ElevenLabs could not generate the speech: {_why(e)}")
     if not audio:
         return None, '', fails("ElevenLabs returned no audio.")
     return audio, chosen['name'], None
@@ -185,6 +237,56 @@ def save_speech(text, path, voice=''):
     return f"Saved {len(text)} characters spoken by {name} to {target}."
 
 
+def get_status():
+    """Whether ElevenLabs is configured, and where its key came from."""
+    from_ini = _key_from_ini()
+    from_titan = _key_from_titan()
+    if not (from_ini or from_titan):
+        return ("ElevenLabs has no API key yet, neither in the client's own "
+                "settings nor in Titan's ElevenLabs speech engine. Ask the "
+                "user for their key and save it with set_api_key.")
+    where = ("the ElevenLabs client's settings" if from_ini
+             else "Titan's ElevenLabs speech engine")
+    client, error = _api_client()
+    if client is None:
+        return f"An API key is set (in {where}), but {error[0].lower()}{error[1:]}"
+    try:
+        voices = _api_voices(client)
+    except Exception as e:
+        return (f"An API key is set (in {where}), but ElevenLabs refused it: "
+                f"{_why(e)}")
+    return (f"ElevenLabs is ready: a key set in {where}, {len(voices)} voices "
+            f"on the account.")
+
+
+def set_api_key(key):
+    """Save the user's ElevenLabs API key, encrypted.
+
+    It goes into Titan's own settings rather than this client's ini, because
+    Titan encrypts it there (DPAPI, so only this Windows account can read it)
+    and the ini format is plain text. Speech generated through these actions
+    reads it back from either place, so nothing is lost by preferring the safe
+    one.
+    """
+    key = str(key or '').strip()
+    if not key:
+        return needs('key', "What is the ElevenLabs API key?")
+    try:
+        from src.settings.settings import set_setting
+        from src.titan_core.secret_store import store_value
+        set_setting('engine.elevenlabs.api_key',
+                    store_value('api_key', key, 'password'),
+                    section='stereo_speech')
+    except Exception as e:
+        return fails(f"Could not save the API key: {e}")
+    client, error = _api_client()
+    if client is None:
+        return (f"The API key was saved, but it could not be used yet: "
+                f"{error}")
+    return ("The ElevenLabs API key is saved, encrypted so that only this "
+            "Windows account can read it, and it works.")
+
+
 def list_voices():
     """List the voices available in the user's ElevenLabs account."""
     if _frame is not None and getattr(_frame, 'voices', None):
@@ -199,7 +301,7 @@ def list_voices():
     try:
         voices = _api_voices(client)
     except Exception as e:
-        return fails(f"Could not list the ElevenLabs voices: {e}")
+        return fails(f"Could not list the ElevenLabs voices: {_why(e)}")
     if not voices:
         return "The ElevenLabs account has no voices."
     return (f"{len(voices)} voices:\n"
@@ -262,6 +364,8 @@ def speak(text, voice=''):
 
 
 HANDLERS = {
+    'get_status': get_status,
+    'set_api_key': set_api_key,
     'speak': speak,
     'save_speech': save_speech,
     'list_voices': list_voices,

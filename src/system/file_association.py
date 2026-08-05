@@ -17,14 +17,22 @@ import sys
 import winreg
 
 
-_EXTENSIONS = ('.tca', '.tcd')
+_EXTENSIONS = ('.tca', '.tcd', '.tcs')
 _PROGID = {
     '.tca': 'TitanTCE.Package.TCA',
     '.tcd': 'TitanTCE.Package.TCD',
+    '.tcs': 'TitanTCE.Script.TCS',
 }
 _DESCRIPTION = {
     '.tca': 'Titan Application/Game Package',
     '.tcd': 'Titan Add-on Package',
+    '.tcs': 'Titan Script',
+}
+# What Titan is being asked to do with the file that was double-clicked.
+_SWITCH = {
+    '.tca': '--install-package',
+    '.tcd': '--install-package',
+    '.tcs': '--run-script',
 }
 
 
@@ -32,28 +40,30 @@ def _is_windows():
     return sys.platform == 'win32'
 
 
-def _get_launch_command():
-    """Return the command line (as a single string, %1 placeholder for the
-    clicked file) used to invoke Titan with --install-package."""
+def _get_launch_command(switch):
+    """The command line (%1 is the clicked file) that invokes Titan with
+    ``switch``. Compiled Titan is its own executable; from source it is the
+    interpreter plus main.py, which is the same program either way."""
     if getattr(sys, 'frozen', False):
         exe = sys.executable
-        return f'"{exe}" --install-package "%1"'
+        return f'"{exe}" {switch} "%1"'
     # Development mode: run through the current interpreter + main.py.
     root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
     main_py = os.path.join(root, 'main.py')
-    return f'"{sys.executable}" "{main_py}" --install-package "%1"'
+    return f'"{sys.executable}" "{main_py}" {switch} "%1"'
 
 
 def register():
-    """Register .tca/.tcd file associations in HKCU. Returns True on full
-    success. Safe to call on every startup -- cheap, idempotent, no prompt."""
+    """Register the .tca/.tcd/.tcs file associations in HKCU. Returns True on
+    full success. Safe to call on every startup -- cheap, idempotent, no
+    prompt."""
     if not _is_windows():
         return False
     try:
-        command = _get_launch_command()
         ok = True
         for ext in _EXTENSIONS:
             progid = _PROGID[ext]
+            command = _get_launch_command(_SWITCH[ext])
             try:
                 # <ProgID> default value + description
                 with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER,
@@ -74,7 +84,7 @@ def register():
                 print(f"[FileAssociation] Failed to register {ext}: {e}")
                 ok = False
         if ok:
-            print("[FileAssociation] .tca/.tcd file associations registered")
+            print("[FileAssociation] .tca/.tcd/.tcs file associations registered")
         return ok
     except Exception as e:
         print(f"[FileAssociation] register() error: {e}")
@@ -82,7 +92,7 @@ def register():
 
 
 def unregister():
-    """Remove the .tca/.tcd file associations from HKCU."""
+    """Remove the .tca/.tcd/.tcs file associations from HKCU."""
     if not _is_windows():
         return False
     ok = True

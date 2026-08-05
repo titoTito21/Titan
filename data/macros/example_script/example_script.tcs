@@ -1,0 +1,88 @@
+# Example Titan Script (.TCS)
+#
+# Everything the language does, in one file: variables and arithmetic, a
+# question, a whole dialog, conditions, a loop, real Titan actions, and speech.
+# Open it in the Macro Manager, press Enter, and it runs.
+#
+# To have Titan run it by itself, uncomment one of these:
+# when startup
+# when time = "08:00"
+# when every = "2h"
+
+
+# ---------------------------------------------------------------------------
+# 1. Variables, and doing something to them
+# ---------------------------------------------------------------------------
+set clock = now("%H:%M")
+set day = today("%A, %d %B")
+set minutes_left = 60 - number(now("%M"))
+
+say "Good day. It is {{clock}}."
+
+
+# ---------------------------------------------------------------------------
+# 2. Asking one question
+# ---------------------------------------------------------------------------
+ask who = "What should I call you?" default="friend" title="Example script"
+
+set greeting = "Hello, " + upper(who)
+say "{{greeting}}"
+
+
+# ---------------------------------------------------------------------------
+# 3. Reading what Titan and its add-ons say, and deciding on it
+# ---------------------------------------------------------------------------
+set chime = zegarynka.get_settings
+set volume = system.get_volume
+
+if chime contains "on"
+    say "Your clock chime is on."
+else
+    say "Your clock chime is off."
+end
+
+if minutes_left is less than 10
+    say "Only {{minutes_left}} minutes left in this hour."
+end
+
+
+# ---------------------------------------------------------------------------
+# 4. A whole window, several answers at once
+# ---------------------------------------------------------------------------
+dialog "Write a note"
+    field title = "Title" default="Notes for {{day}}"
+    multiline body = "What should the note say?"
+    choice importance = "How important?" options "normal", "high"
+    check speak_it = "Read it back to me"
+end
+
+tnotes.create_note title="{{title}}" text="{{body}}"
+say "Saved a note called {{title}}."
+
+if speak_it is true
+    titan.speak "{{body}}"
+end
+
+if importance is "high"
+    treminder.create_reminder name="Look at: {{title}}" date="today" time="18:00"
+    say "I put a reminder on it for six o'clock."
+end
+
+
+# ---------------------------------------------------------------------------
+# 5. Repeating, waiting, and a message box at the end
+# ---------------------------------------------------------------------------
+repeat 2
+    wait 1s
+end
+
+set report = "Done, " + who + ". The volume is " + volume
+
+message "{{report}}" title="Example script"
+
+
+# ---------------------------------------------------------------------------
+# 6. Pseudocode - only with AI features switched on.
+#    Uncomment to let the AI work out which actions this means.
+# ---------------------------------------------------------------------------
+# do "tell me what the weather is like and put it in a note called weather"

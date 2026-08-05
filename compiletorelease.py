@@ -281,6 +281,7 @@ def compile_to_release():
         "src.ai.titan_tools",
         "src.ai.creation_docs",
         "src.ai.secret_store",
+        "src.titan_core.secret_store",
         "src.ai.web_search",
         "src.ai.assistant",
         "src.ai.assistant.assistant_gui",

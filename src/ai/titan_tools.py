@@ -82,15 +82,12 @@ def _component_manager():
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
-# Substrings that mark a value as sensitive. Deliberately specific so ordinary
-# keys like 'assistant_hotkey' (a keyboard shortcut, not a secret) are NOT hidden.
-_SECRET_HINTS = ('api_key', 'apikey', '_key', 'token', 'password', 'passwd',
-                 'secret', 'credential', 'private_key')
-
-
-def _is_secret(key):
-    k = (key or '').lower()
-    return any(h in k for h in _SECRET_HINTS)
+# What counts as sensitive is decided in one place for the whole program - the
+# action API, the settings dialog and these tools must not disagree about
+# whether something is a secret.
+from src.titan_core.secret_store import (                      # noqa: E402
+    is_encrypted, load_value, looks_secret as _is_secret, store_value,
+)
 
 
 def _redact(key, value):
@@ -209,11 +206,13 @@ def titan_set_setting(key, value, section="general", **_):
     """Set one Titan setting value in a section and apply it live where possible."""
     try:
         from src.settings.settings import set_setting
-        set_setting(key, value, section=section)
+        # A key or a password goes to disk encrypted, and is never echoed back:
+        # the reply becomes part of the conversation the model keeps.
+        set_setting(key, store_value(key, value), section=section)
     except Exception as e:
         return f"Could not set setting: {e}"
     applied = _apply_live_setting(section, key, value)
-    base = f"Set {section}.{key} = {value}."
+    base = f"Set {section}.{key} = {_redact(key, value)}."
     # Language is the one change that genuinely needs a restart to fully apply.
     if section.lower() == 'general' and key.lower() == 'language':
         return base + " Restart Titan for the new language to fully apply."
@@ -676,30 +675,72 @@ def _send_web_im(svc, recipient, message):
     return _web_send(svc, recipient, message)
 
 
-def titan_im_login(service, username, password="", **_):
+def titan_im_login(service, username="", password="", **_):
     """Log in to a Titan IM service. ``service`` is 'titan_net' or 'telegram'
-    (for Telegram, ``username`` is the phone number)."""
+    (for Telegram, ``username`` is the phone number). With no username, the
+    sign-in the user asked Titan to remember is used."""
     svc = _norm_service(service)
     if svc == 'titan_net':
+        if not str(username or '').strip():
+            # Titan already knows who this is when autologin is on. Asking the
+            # model to produce a password it cannot know is worse than useless.
+            from src.ai.tools.titannet_tools import _client as _signed_in_client
+            client, error = _signed_in_client()
+            if client is not None:
+                return f"Signed in to Titan-Net as {client.username}."
+            return error
         client = _titan_net_client()
-        if client is None:
-            return "Titan-Net is not initialised in this session."
+        # A client built here is published only once the sign-in works: every
+        # frontend reads get_active_titan_net_client(), so registering one that
+        # then failed would leave them all holding a dead client.
+        fresh = client is None
+        if fresh:
+            try:
+                from src.network.titan_net import TitanNetClient
+                client = TitanNetClient()
+            except Exception as e:
+                return f"Titan-Net is not available: {e}"
         try:
             res = client.login(username, password)
         except Exception as e:
             return f"Titan-Net login failed: {e}"
         if isinstance(res, dict):
             if res.get('success'):
+                try:
+                    from src.network.titan_net import (
+                        register_active_titan_net_client,
+                        set_active_titan_logged_in)
+                    if fresh:
+                        register_active_titan_net_client(client)
+                    set_active_titan_logged_in(True)
+                except Exception:
+                    pass
                 return f"Logged in to Titan-Net as {username}."
             return f"Titan-Net login failed: {res.get('message', 'unknown error')}"
         return "Titan-Net login attempted."
     if svc == 'telegram':
+        phone = str(username or '').strip()
+        if not phone:
+            # The number the user last connected with is saved in titan.IM;
+            # a model has no way to know it and must not ask for it again.
+            try:
+                from src.settings.titan_im_config import get_telegram_credentials
+                _api_id, _api_hash, phone = get_telegram_credentials()
+                phone = str(phone or '').strip()
+            except Exception:
+                phone = ''
+            if not phone:
+                return ("No Telegram phone number is saved. Ask the user for "
+                        "the number they use with Telegram.")
         try:
             from src.network import telegram_client as tg
-            res = tg.login(username, password or None)
+            client = tg.connect_to_server(phone, password or None)
         except Exception as e:
             return f"Telegram login failed: {e}"
-        return f"Telegram login result: {res}"
+        if client is None:
+            return (f"Telegram did not connect as {phone}. It may need the "
+                    f"code Telegram sends - open Telegram in Titan once.")
+        return f"Connected to Telegram as {phone}."
     if svc in ('whatsapp', 'messenger'):
         label = _service_label(svc)
         # Prefer Titan's own accessible client: it signs in without a QR code
@@ -2071,13 +2112,17 @@ def get_titan_tools():
         _tool('titan_im_login',
               "Log in to / open an IM service: 'titan_net', 'telegram' (username "
               "is the phone number), 'whatsapp' or 'messenger' (these open the web "
-              "app in the browser to sign in; the desktop app can be used too).",
+              "app in the browser to sign in; the desktop app can be used too). "
+              "For Titan-Net, leave username and password out to use the sign-in "
+              "the user asked Titan to remember - never invent a password.",
               titan_im_login,
               risk='confirm', always_confirm=True,
               properties={'service': dict(S, description="titan_net, telegram, whatsapp or messenger."),
-                          'username': dict(S, description="Username (or phone for Telegram)."),
-                          'password': dict(S, description="Password (optional for Telegram).")},
-              required=['service', 'username']),
+                          'username': dict(S, description="Username (or phone for Telegram). "
+                                           "Omit for Titan-Net to use the saved sign-in."),
+                          'password': dict(S, description="Password (optional for Telegram, "
+                                           "and for a saved Titan-Net sign-in).")},
+              required=['service']),
         _tool('titan_list_im_contacts',
               "List online users / contacts / chats of an IM service so you can "
               "pick a recipient.", titan_list_im_contacts,

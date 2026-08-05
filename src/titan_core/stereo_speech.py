@@ -1762,11 +1762,20 @@ class StereoSpeech:
                 self.set_engine(engine)
 
             # 2. Engine-specific configs (API keys, model, etc.)
+            # An API key is written to the settings file encrypted, so it has
+            # to be decrypted on the way back to the engine - the engine wants
+            # the real key, the file must never hold it.
+            try:
+                from src.titan_core.secret_store import load_value
+            except Exception:
+                def load_value(stored):
+                    return stored
             for key, value in stereo_settings.items():
                 if key.startswith('engine.'):
                     parts = key.split('.', 2)
                     if len(parts) == 3:
-                        self.set_engine_config(parts[1], parts[2], value)
+                        self.set_engine_config(parts[1], parts[2],
+                                               load_value(value))
 
             # 3. Rate (-10 to +10)
             try:

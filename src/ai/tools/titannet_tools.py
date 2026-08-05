@@ -10,22 +10,87 @@ Everything that publishes - a topic, a reply, a message, mail - is
 because a post cannot be recalled.
 """
 
+import threading
+
 from src.ai.titan_tools import _titan_net_client
+
+_signin_lock = threading.Lock()
 
 
 # --------------------------------------------------------------------------- #
 # Shared plumbing
 # --------------------------------------------------------------------------- #
+def saved_credentials():
+    """(username, password) the user asked Titan to remember, or ('', '').
+
+    Titan-Net's own login screen stores these in the encrypted ``titan.IM``
+    file when "log me in automatically" is ticked. A user who ticked it has
+    signed in; being told to go and open a window to do it again is Titan
+    forgetting something it was told.
+    """
+    try:
+        from src.settings.titan_im_config import load_titan_im_config
+        config = load_titan_im_config() or {}
+    except Exception:
+        return '', ''
+    return (str(config.get('titannet_username') or '').strip(),
+            str(config.get('titannet_password') or ''))
+
+
+def _sign_in_with_saved():
+    """(client, error_text) - sign in headlessly with the saved credentials."""
+    username, password = saved_credentials()
+    if not (username and password):
+        return None, ''
+    with _signin_lock:
+        client = _titan_net_client()
+        if client is not None and getattr(client, 'username', None):
+            return client, ''
+        # A client built here is NOT published until the sign-in works.
+        # get_active_titan_net_client() is what every frontend reads, so
+        # registering a client that then failed to log in would leave the whole
+        # program holding a dead one.
+        fresh = client is None
+        try:
+            if fresh:
+                from src.network.titan_net import TitanNetClient
+                client = TitanNetClient()
+            result = client.login(username, password)
+        except Exception as e:
+            return None, f"Could not sign in to Titan-Net as {username}: {e}"
+        if isinstance(result, dict) and not result.get('success'):
+            detail = result.get('message') or result.get('error') or 'refused'
+            return None, (f"Titan-Net refused the saved sign-in for "
+                          f"{username}: {detail}")
+        try:
+            from src.network.titan_net import (
+                register_active_titan_net_client, set_active_titan_logged_in)
+            if fresh:
+                register_active_titan_net_client(client)
+            set_active_titan_logged_in(True)
+        except Exception:
+            pass
+        return client, ''
+
+
 def _client():
     """(client, error_text). Never raises."""
     client = _titan_net_client()
+    if client is not None and getattr(client, 'username', None):
+        return client, ''
+    signed_in, error = _sign_in_with_saved()
+    if signed_in is not None:
+        return signed_in, ''
+    if error:
+        return None, error
     if client is None:
-        return None, ("Titan-Net is not open. Open it in Titan first (the "
-                      "Titan-Net view), or sign in with titan_im_login.")
-    if not getattr(client, 'username', None):
-        return None, ("Nobody is signed in to Titan-Net. Sign in first "
-                      "(titan_im_login with service 'titan_net').")
-    return client, ''
+        return None, ("Titan-Net is not open and no sign-in is saved. Open it "
+                      "in Titan once, ticking 'log me in automatically', or "
+                      "sign in with titan_im_login.")
+    return None, ("Nobody is signed in to Titan-Net and no sign-in is saved. "
+                  "Sign in with titan_im_login (service 'titan_net'), or open "
+                  "the Titan-Net view once with 'log me in automatically' "
+                  "ticked.")
 
 
 def _failed(result, what):
@@ -54,11 +119,9 @@ def _lines(items, render, empty):
 # --------------------------------------------------------------------------- #
 def titannet_status(**_):
     """Whether Titan-Net is connected and who is signed in."""
-    client = _titan_net_client()
+    client, error = _client()
     if client is None:
-        return "Titan-Net is not open in Titan."
-    if not getattr(client, 'username', None):
-        return "Titan-Net is open but nobody is signed in."
+        return error
     role = ''
     try:
         result = client.get_user_role()
@@ -262,27 +325,113 @@ def titannet_join_group(group_id, **_):
 # --------------------------------------------------------------------------- #
 # Mail
 # --------------------------------------------------------------------------- #
+_FORMATS = {'text': 'plain', 'plain': 'plain', 'txt': 'plain',
+            'markdown': 'markdown', 'md': 'markdown',
+            'html': 'html'}
+
+
+# The mail API names its fields from_addr / to_addr / received_at. Reading
+# 'from' and 'created_at' produced a listing where every message came from '?'
+# at no particular time, which is worse than no listing at all.
+def _addr(mail, *names):
+    for name in names:
+        value = mail.get(name)
+        if value:
+            return str(value)
+    return ''
+
+
+def _sender(mail):
+    return _addr(mail, 'from_addr', 'from', 'sender') or '?'
+
+
+def _recipient(mail):
+    return _addr(mail, 'to_addr', 'to', 'recipient') or '?'
+
+
+def _peer(mail):
+    """Whoever is not the user: the sender in, the recipient out."""
+    if str(mail.get('direction', '')).lower() == 'out' or \
+            str(mail.get('folder', '')).lower() == 'sent':
+        return _recipient(mail)
+    return _sender(mail)
+
+
+def _when(mail):
+    return _addr(mail, 'received_at', 'created_at', 'sent_at', 'date')
+
+
+def _mailbox(client, folder):
+    """(messages, error). 'unread' is the inbox, filtered."""
+    wanted = str(folder or 'inbox').strip().lower()
+    remote = 'sent' if wanted.startswith('s') else 'inbox'
+    try:
+        result = client.get_mailbox(remote)
+    except Exception as e:
+        return None, f"Could not open the mailbox: {e}"
+    failure = _failed(result, "Opening the mailbox")
+    if failure:
+        return None, failure
+    messages = result.get('messages') or result.get('mail') or []
+    if wanted.startswith('u'):
+        messages = [m for m in messages if not m.get('read')]
+    return messages, ''
+
+
+def titannet_mail_address(**_):
+    """The user's own Titan Mail address, and how much is waiting."""
+    client, error = _client()
+    if error:
+        return error
+    address = ''
+    try:
+        result = client.get_mailbox('inbox')
+        if isinstance(result, dict):
+            address = str(result.get('address') or '')
+    except Exception:
+        result = None
+    if not address:
+        # The server says what the address is; this is only for a server too
+        # old to answer, and it must still name the server actually in use
+        # rather than a domain written into the client.
+        host = getattr(client, 'server_host', '') or 'titosofttitan.com'
+        address = f"{getattr(client, 'username', '?')}@{host}"
+    messages = []
+    if isinstance(result, dict):
+        messages = result.get('messages') or result.get('mail') or []
+    unread = len([m for m in messages if not m.get('read')])
+    return (f"The user's Titan Mail address is {address}. "
+            f"{len(messages)} messages in the inbox, {unread} unread.")
+
+
 def titannet_list_mail(folder="inbox", **_):
     """List the user's Titan Mail."""
     client, error = _client()
     if error:
         return error
-    try:
-        result = client.get_mailbox('sent' if str(folder).lower().startswith('s')
-                                    else 'inbox')
-    except Exception as e:
-        return f"Could not open the mailbox: {e}"
-    failure = _failed(result, "Opening the mailbox")
-    if failure:
-        return failure
-    messages = result.get('messages') or result.get('mail') or []
+    messages, error = _mailbox(client, folder)
+    if error:
+        return error
     return _lines(
         messages,
         lambda m: (f"#{m.get('id')} {'[unread] ' if not m.get('read') else ''}"
                    f"{m.get('subject') or '(no subject)'} - "
-                   f"{m.get('from') or m.get('to') or '?'}"
-                   f" - {m.get('created_at', '')}"),
-        "The mailbox is empty.")
+                   f"{_peer(m)} - {_when(m)}"),
+        "There is nothing in that folder.")
+
+
+def _fetch_mail(client, mail_id):
+    """(mail dict, error)."""
+    try:
+        result = client.get_mail(int(mail_id))
+    except (TypeError, ValueError):
+        return None, f"'{mail_id}' is not a message number."
+    except Exception as e:
+        return None, f"Could not read message {mail_id}: {e}"
+    failure = _failed(result, f"Reading message {mail_id}")
+    if failure:
+        return None, failure
+    return (result.get('mail') or result.get('message') or result), ''
 
 
 def titannet_read_mail(mail_id, **_):
@@ -290,19 +439,46 @@ def titannet_read_mail(mail_id, **_):
     client, error = _client()
     if error:
         return error
+    mail, error = _fetch_mail(client, mail_id)
+    if error:
+        return error
+    # A message may have been written as Markdown or HTML. Reading the raw
+    # body would hand the AI a wall of tags; the Mail client already knows how
+    # to reduce either to the text a person would hear, so it does that here
+    # too - one renderer, the same reading.
+    body = mail.get('body') or ''
     try:
-        result = client.get_mail(int(mail_id))
-    except Exception as e:
-        return f"Could not read message {mail_id}: {e}"
-    failure = _failed(result, f"Reading message {mail_id}")
-    if failure:
-        return failure
-    mail = result.get('mail') or result.get('message') or result
-    return (f"From: {mail.get('from', '?')}\n"
-            f"To: {mail.get('to', '?')}\n"
+        from src.network import mail_format
+        body = mail_format.to_plain_text(body,
+                                         mail.get('content_type', ''),
+                                         mail.get('body_html', '') or '')
+    except Exception:
+        pass
+    return (f"From: {_sender(mail)}\n"
+            f"To: {_recipient(mail)}\n"
             f"Subject: {mail.get('subject') or '(no subject)'}\n"
-            f"Date: {mail.get('created_at', '')}\n\n"
-            f"{_clip(mail.get('body'), 6000)}")
+            f"Date: {_when(mail)}\n\n"
+            f"{_clip(body, 6000)}")
+
+
+def _send(client, to, subject, body, fmt):
+    """Send one message, with the HTML alternative the format calls for."""
+    payload = {'body': body, 'body_html': '', 'content_type': 'text/plain'}
+    try:
+        from src.network import mail_format
+        payload = mail_format.build_outgoing(body, _FORMATS.get(fmt, 'plain'))
+    except Exception:
+        pass
+    try:
+        result = client.send_mail(to_addr=to,
+                                  subject=subject or '(no subject)',
+                                  body=payload.get('body', body),
+                                  body_html=payload.get('body_html', ''),
+                                  content_type=payload.get('content_type',
+                                                           'text/plain'))
+    except Exception as e:
+        return f"Could not send the mail: {e}"
+    return _failed(result, "Sending the mail")
 
 
 def titannet_send_mail(to, subject, body, format="text", **_):
@@ -313,15 +489,57 @@ def titannet_send_mail(to, subject, body, format="text", **_):
     if not str(to).strip() or not str(body).strip():
         return "Mail needs a recipient and a body."
     kind = str(format or 'text').strip().lower()
-    content_type = {'markdown': 'text/markdown', 'md': 'text/markdown',
-                    'html': 'text/html'}.get(kind, 'text/plain')
-    try:
-        result = client.send_mail(to_addr=to, subject=subject or '(no subject)',
-                                  body=body, content_type=content_type)
-    except Exception as e:
-        return f"Could not send the mail: {e}"
-    failure = _failed(result, "Sending the mail")
+    if kind not in _FORMATS:
+        return ("A message is written as 'text', 'markdown' or 'html'.")
+    failure = _send(client, to, subject, body, kind)
     return failure or f"Sent mail to {to} ('{subject or '(no subject)'}')."
+
+
+def titannet_reply_mail(mail_id, body, format="text", quote=True, **_):
+    """Reply to a message, to its sender, with its subject."""
+    client, error = _client()
+    if error:
+        return error
+    if not str(body).strip():
+        return "A reply needs something to say."
+    mail, error = _fetch_mail(client, mail_id)
+    if error:
+        return error
+    to = _addr(mail, 'from_addr', 'from', 'sender').strip()
+    if not to:
+        return f"Message {mail_id} has no sender to reply to."
+    subject = str(mail.get('subject') or '').strip()
+    if not subject.lower().startswith('re:'):
+        subject = f"Re: {subject}" if subject else "Re:"
+    text = body
+    if str(quote).strip().lower() not in ('0', 'false', 'no', 'off'):
+        try:
+            from src.network import mail_format
+            text = body + mail_format.quote_body(
+                mail.get('body') or '', mail.get('content_type', ''),
+                mail.get('body_html', '') or '', author=to)
+        except Exception:
+            pass
+    kind = str(format or 'text').strip().lower()
+    if kind not in _FORMATS:
+        return "A message is written as 'text', 'markdown' or 'html'."
+    failure = _send(client, to, subject, text, kind)
+    return failure or f"Replied to {to} ('{subject}')."
+
+
+def titannet_delete_mail(mail_id, **_):
+    """Delete one message from the user's mailbox."""
+    client, error = _client()
+    if error:
+        return error
+    try:
+        result = client.delete_mail(int(mail_id))
+    except (TypeError, ValueError):
+        return f"'{mail_id}' is not a message number."
+    except Exception as e:
+        return f"Could not delete message {mail_id}: {e}"
+    failure = _failed(result, f"Deleting message {mail_id}")
+    return failure or f"Deleted message {mail_id}."
 
 
 # --------------------------------------------------------------------------- #
@@ -460,10 +678,16 @@ def get_titannet_tools():
               properties={'group_id': dict(N, description="Group id.")},
               required=['group_id']),
         # Mail
+        _tool('titannet_mail_address',
+              "The user's own Titan Mail address, and how much mail is "
+              "waiting. Use this when the user asks what their address is, or "
+              "whether they have new mail.",
+              titannet_mail_address),
         _tool('titannet_list_mail',
-              "List the user's Titan Mail (folder 'inbox' or 'sent').",
+              "List the user's Titan Mail (folder 'inbox', 'unread' or 'sent').",
               titannet_list_mail,
-              properties={'folder': dict(S, description="'inbox' (default) or 'sent'.")}),
+              properties={'folder': dict(S, description="'inbox' (default), "
+                                         "'unread' or 'sent'.")}),
         _tool('titannet_read_mail',
               "Read one Titan Mail message. This marks it as read.",
               titannet_read_mail,
@@ -477,8 +701,28 @@ def get_titannet_tools():
               properties={'to': dict(S, description="Recipient address."),
                           'subject': dict(S, description="Subject line."),
                           'body': dict(S, description="The message, as readable plain text."),
-                          'format': dict(S, description="'text' (default), 'markdown' or 'html'.")},
+                          'format': dict(S, description="'text' (default), "
+                                         "'markdown' or 'html'. Markdown and "
+                                         "HTML are sent with a plain-text "
+                                         "alternative, so every mail program "
+                                         "can read them.")},
               required=['to', 'body']),
+        _tool('titannet_reply_mail',
+              "Reply to a Titan Mail message - to its sender, with its "
+              "subject, quoting it. Show the user the text before sending.",
+              titannet_reply_mail, risk='confirm', always_confirm=True,
+              properties={'mail_id': dict(N, description="The message being replied to."),
+                          'body': dict(S, description="The reply."),
+                          'format': dict(S, description="'text' (default), 'markdown' or 'html'."),
+                          'quote': {'type': 'boolean',
+                                    'description': "Quote the original below "
+                                                   "the reply (default true)."}},
+              required=['mail_id', 'body']),
+        _tool('titannet_delete_mail',
+              "Delete one message from the user's Titan Mail.",
+              titannet_delete_mail, risk='confirm', always_confirm=True,
+              properties={'mail_id': dict(N, description="Message id.")},
+              required=['mail_id']),
         # Rooms and people
         _tool('titannet_list_rooms', "List Titan-Net chat rooms.",
               titannet_list_rooms),

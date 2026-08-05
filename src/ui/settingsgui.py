@@ -3010,11 +3010,19 @@ class SettingsFrame(wx.Frame):
                 'volume': str(self.speech_volume_slider.GetValue()),
             }
 
-            # Save dynamic engine config controls with prefix engine.{id}.{key}
+            # Save dynamic engine config controls with prefix engine.{id}.{key}.
+            # An engine's API key goes to disk encrypted - the live engine gets
+            # the real value, the settings file never holds it in the clear.
+            try:
+                from src.titan_core.secret_store import store_value
+            except Exception:
+                def store_value(name, plaintext, field_type=''):
+                    return plaintext
             for ctrl_key, (label, ctrl, field) in self._engine_config_controls.items():
                 value = self._get_config_control_value(ctrl, field)
                 setting_key = f'engine.{engine}.{ctrl_key}'
-                stereo_speech_settings[setting_key] = value
+                stereo_speech_settings[setting_key] = store_value(
+                    ctrl_key, value, field.get('type', ''))
 
                 # Apply config to engine immediately
                 stereo_speech_obj = get_stereo_speech()
@@ -3493,7 +3501,14 @@ class SettingsFrame(wx.Frame):
         if old_api_key and new_api_key_key not in stereo_settings:
             stereo_settings[new_api_key_key] = old_api_key
 
-        # Load engine-specific config from settings and apply to engine
+        # Load engine-specific config from settings and apply to engine. An API
+        # key is stored encrypted, so it is decrypted here - on the way into
+        # the engine and into the field the user reads.
+        try:
+            from src.titan_core.secret_store import load_value
+        except Exception:
+            def load_value(stored):
+                return stored
         stereo_speech_obj = get_stereo_speech()
         if stereo_speech_obj:
             for setting_key, value in stereo_settings.items():
@@ -3501,7 +3516,8 @@ class SettingsFrame(wx.Frame):
                     parts = setting_key.split('.', 2)  # engine.{id}.{key}
                     if len(parts) == 3:
                         eng_id, cfg_key = parts[1], parts[2]
-                        stereo_speech_obj.set_engine_config(eng_id, cfg_key, value)
+                        stereo_speech_obj.set_engine_config(eng_id, cfg_key,
+                                                            load_value(value))
 
         # Build dynamic engine config controls for current engine
         self._rebuild_engine_config_controls(engine)
@@ -3509,7 +3525,7 @@ class SettingsFrame(wx.Frame):
         # Load saved values into dynamic controls
         for ctrl_key, (label, ctrl, field) in self._engine_config_controls.items():
             setting_key = f'engine.{engine}.{ctrl_key}'
-            saved_value = stereo_settings.get(setting_key, '')
+            saved_value = load_value(stereo_settings.get(setting_key, ''))
             if saved_value:
                 field_type = field.get('type', 'text')
                 if field_type in ('text', 'password'):

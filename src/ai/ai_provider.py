@@ -13,7 +13,7 @@ All methods STREAM: :func:`generate` takes an ``on_chunk`` callback that fires
 with each partial text delta, so the UI can show real, moving progress and live
 output instead of a frozen dialog.
 
-API keys are stored ENCRYPTED at rest via :mod:`src.ai.secret_store`
+API keys are stored ENCRYPTED at rest via :mod:`src.titan_core.secret_store`
 (DPAPI on Windows), under settings section ``ai`` as ``api_key_<provider>``.
 Legacy plaintext keys from the moderator-component creator
 (``titannet_component_ai_key_<provider>``) are still read for back-compat.
@@ -27,7 +27,7 @@ import subprocess
 import sys
 
 from src.settings.settings import get_setting, set_setting
-from src.ai.secret_store import encrypt_secret, decrypt_secret
+from src.titan_core.secret_store import encrypt_secret, decrypt_secret
 
 # --------------------------------------------------------------------------- #
 # Providers / models (mirrors titan_net_mod_components + interactive_games)

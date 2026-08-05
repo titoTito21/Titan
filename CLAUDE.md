@@ -556,12 +556,121 @@ question and shows a dialog, so a half-specified request becomes a conversation
 instead of a guess.
 
 **Components declare actions without any manifest.** `zegarynka` (say the time,
-turn the chime on/off, change the interval), `macros` (list and run the user's
-macros) and `titan access` (reader on/off/toggle/say) each ship a
+turn the chime on/off, change the interval), `macros` (list, run, **create**,
+read, delete a macro and set its shortcut - "write me a macro" ends with a macro
+in the macro manager, not a script file on the disk), `titan access` (reader
+on/off/toggle/say), `tips` (search Titan's own written help, say one, change the
+interval), `TTerm` (run a shell command and return its output - the last resort
+for anything with a command line but no API) and `TArticle` (fetch a page and
+return the article as readable text, or open it in the reader) each ship a
 `TITAN_ACTIONS` list in Python with real callables, found on the module
 `ComponentManager` already loaded - which is why `initialize_components()` ends
 with `actions.invalidate()`, or the registry would hold a snapshot taken before
-any component existed.
+any component existed. `inproc.candidate_owners()` also matches by the add-on's
+name in `sys.modules` and compares paths case-insensitively, because a manager
+and discovery spelling the same directory differently used to make a
+component's actions silently invisible.
+
+### Titan Script (.TCS) - a mini language made of Titan actions
+
+A `.macro` replays keystrokes and knows nothing about Titan. A **Titan Script**
+names actions instead, so it can do anything Titan can. It lives in the Macro
+Manager component (`data/components/macros/init.py`), is plain text, and Edit
+opens it in tEdit like any other script.
+
+```
+when time = "11:45"                 startup / time / every
+
+set total = 60 - number(now("%M"))  + - * / , upper lower trim length text
+ask who = "Your name?" default="Anna"   number round replace now today
+set greeting = "Hello, " + upper(who)
+titan.speak "{{greeting}}"          any action of any add-on, by name
+set chime = zegarynka.get_settings
+if chime contains "on"              contains / is / is more than / is empty...
+    say "the chime is on"
+end
+dialog "Write a note"               one window, one variable per control
+    field title = "Title"
+    multiline body = "Text"
+    choice importance = "How important?" options "normal", "high"
+    check speak_it = "Read it back"
+end
+tnotes.create_note title="{{title}}" text="{{body}}"
+message "Done, {{who}}." title="Example"    also warn / error / confirm / choose
+repeat 2
+    wait 1s
+end
+```
+
+- **Resolution is forgiving, never a guess**: `titan.tts.speak`, `titan.speak`
+  and `titan.speak("x")` all reach the same action; an ambiguous or unknown
+  name is an error that names the candidates.
+- **Checked before it runs** (`check_tcs`, action `macros.check_macro`): unknown
+  actions, wrong argument names, wrong arity and unclosed blocks are reported at
+  write time, not at a quarter to twelve. `macros.create_macro` with `kind:
+  'tcs'` refuses to save a script that would not run.
+- **Expressions are parsed, never `eval`'d** - a script is a file on disk and
+  must not be able to run arbitrary Python.
+- **Dialogs are real wx controls** on the GUI thread, and closing one ends the
+  script rather than continuing with an empty answer.
+- **Pseudocode needs AI features on, everything else does not.** A line that
+  does not name an action (or an explicit `do "..."`) is handed to the AI, which
+  translates it into the same action steps and runs them through
+  `run_sequence` - a translation, not an agent. With AI off, such a line is an
+  error and the rest of the language still runs.
+- **Triggers**: `TCSScheduler` (one slow-ticking thread, started only if some
+  script asks for a trigger) fires `when startup` / `when time` / `when every`.
+- **Titan opens a .TCS directly**, compiled or from source:
+  `main.py --run-script <path>` (and a bare `titan foo.tcs`), registered for
+  double-click by `src/system/file_association.py` alongside `.tca`/`.tcd`. The
+  path is parked in `src/titan_core/script_launch.py` and run at the end of
+  `ComponentManager.initialize_components()` - the first moment every action a
+  script can name exists, and the one place all three startup modes pass
+  through. Without the Macro Manager component it says so plainly.
+- Actions: `macros.macro_language` (the grammar), `macros.macro_actions` (what
+  can be called), `macros.check_macro`. Example: `data/macros/example_script/`.
+
+**Every add-on is reachable, declaration or not** (`actions/generic.py`). Most
+kinds share one Python interface with every other add-on of that kind, so the
+*kind* declares the obvious actions and each installed add-on gets them for
+free - a user's own TTS engine installed yesterday is drivable without its
+author writing anything:
+
+- `tts_engine` - `status`, `list_voices`, `set_voice`, `list_settings`,
+  `get_setting`, `set_setting`, `use`
+- `component` - `status`, `enable`, `disable`
+- `im_module` - `status`, `open`
+- `statusbar_applet` - `read`, `activate`
+- `widget` - `info`
+- `gamepad_mode` - `status`, `activate`
+- `launcher` - `status`, `use`
+
+An add-on that declares an action of the same name keeps its own. This is also
+what answers "the settings exist but the AI says there is no API key": a TTS
+engine's configuration fields *are* its settings, so `list_settings` /
+`set_setting` let the AI find the field, say where it goes and fill it in,
+instead of reporting a dead end.
+
+**Secrets are encrypted and never leave the machine in a tool result**
+(`src/titan_core/secret_store.py`, formerly `src/ai/secret_store.py`, which
+re-exports it). `looks_secret()` decides once, for the whole program, whether a
+setting is confidential - whole-word matching, so `api_key` is a secret and
+`titan_ui_key` and `assistant_hotkey` are not. `store_value()` / `load_value()`
+encrypt on the way to disk (DPAPI: readable only by that Windows account) and
+decrypt on the way back, and `describe_value()` is what may be shown - a key is
+reported as "set, N characters, kept encrypted" and never rendered, because a
+tool result is sent to the model provider verbatim. The engine settings panel,
+`stereo_speech`'s loader, `titan_set_setting` and the generic
+`tts_engine.set_setting` all go through it.
+
+**Credentials the user already gave Titan are used, not asked for again.**
+`titannet_tools._client()` signs in headlessly with the username and password
+saved in the encrypted `titan.IM` file when "log me in automatically" is
+ticked, so Titan-Net actions work with no window open; `titan_im_login` with no
+username does the same, and falls back to the saved Telegram number. The
+ElevenLabs actions look for the key in the client's own ini *and* in Titan's
+ElevenLabs speech engine, and a key saved through them goes to the encrypted
+one.
 
 **There is no permission wall between add-ons.** The Settings gate applies only
 to the AI (`action_tools.allowed()`); `dispatch.run()` is ungated, so any
@@ -604,7 +713,11 @@ cannot import is skipped rather than taking the toolset down.
   Deliberately scoped: read anything, change the ordinary things, and open the
   right `ms-settings:` page for everything else.
 - `titannet_tools.py` - forum topics and replies, mail, groups, rooms, private
-  messages. Everything that publishes is `always_confirm`.
+  messages. Everything that publishes is `always_confirm`. Mail is the whole
+  client: the user's own address, inbox / unread / sent, read (Markdown and
+  HTML reduced to readable text by `mail_format`, the same renderer the Mail
+  window uses), send in text / Markdown / HTML with the plain-text alternative
+  beside it, reply (to the sender, with the subject, quoting), and delete.
 - `elten_tools.py` - Elten messages, forums, blogs; signs itself in from the
   credentials saved in the encrypted `titan.IM` file.
 - `im_tools.py` - one bridge for every web-backed messenger, because

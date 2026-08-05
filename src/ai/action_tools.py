@@ -28,6 +28,11 @@ _SETTINGS_SECTION = 'ai'
 
 PROMOTED_BUDGET = 60
 
+# Characters of one titan_list_actions result before it collapses to names
+# only. Roughly three thousand tokens - enough for every add-on a normal
+# install has, small enough that the listing cannot swallow the conversation.
+_LISTING_BUDGET = 12000
+
 # A promoted tool from an add-on is still add-on code doing something on the
 # user's machine, so it can never be quieter than this.
 _MIN_RISK = {'auto': 'auto', 'confirm': 'confirm', 'always_confirm': 'confirm'}
@@ -96,20 +101,39 @@ def titan_list_actions(addon="", kind="", **_):
     if not addons:
         return ("No installed add-on declares any actions yet. Add-ons expose "
                 "their functions with an __actions.json manifest.")
-    lines = ["Titan add-ons you can drive, and what each one offers.",
-             "Run one with titan_run_action(addon, action, args).", ""]
-    for addon_info in addons:
-        state = ''
-        if addon_info.transport == 'process':
-            state = " [running]" if getattr(addon_info, 'running', False) else ""
-        lines.append(f"{addon_info.label} ({addon_info.addon_id}) - "
-                     f"{kind_label(addon_info.kind)}{state}")
-        if addon_info.description:
-            lines.append(f"  {addon_info.description}")
-        for action in addon_info.actions:
-            lines.append(f"  {action.describe()}")
-        lines.append("")
-    return "\n".join(lines).rstrip()
+
+    def render(detailed):
+        lines = ["Titan add-ons you can drive, and what each one offers.",
+                 "Run one with titan_run_action(addon, action, args).", ""]
+        for addon_info in addons:
+            state = ''
+            if addon_info.transport == 'process':
+                state = (" [running]" if getattr(addon_info, 'running', False)
+                         else "")
+            lines.append(f"{addon_info.label} ({addon_info.addon_id}) - "
+                         f"{kind_label(addon_info.kind)}{state}")
+            if detailed:
+                if addon_info.description:
+                    lines.append(f"  {addon_info.description}")
+                for action in addon_info.actions:
+                    lines.append(f"  {action.describe()}")
+                lines.append("")
+            else:
+                lines.append("  " + ", ".join(action.name
+                                              for action in addon_info.actions))
+        return "\n".join(lines).rstrip()
+
+    full = render(True)
+    if len(full) <= _LISTING_BUDGET:
+        return full
+    # Every add-on still appears - only the per-action detail is dropped, and
+    # the model is told exactly how to get it back. A listing that grows with
+    # the number of installed add-ons would eventually crowd out the
+    # conversation it is meant to serve.
+    return (render(False)
+            + "\n\nOnly the names are shown because there are a lot of "
+              "add-ons. Call titan_list_actions with 'addon' set to one id, or "
+              "'kind' set to one kind, for what each action takes.")
 
 
 def _parse_args(raw):

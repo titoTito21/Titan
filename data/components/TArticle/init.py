@@ -255,9 +255,14 @@ class ArticleFrame(wx.Frame):
                 for element in soup.select(selector):
                     element.decompose()
             
-            # Also remove elements by common Wikipedia class patterns
+            # Also remove elements by common Wikipedia class patterns.
+            # The list is taken before anything is removed, so it contains
+            # children of elements this loop itself decomposes - and a
+            # decomposed element has no attributes left to read.
             for element in soup.find_all(attrs={"class": True}):
-                classes = ' '.join(element.get('class', []))
+                if getattr(element, 'decomposed', False):
+                    continue
+                classes = ' '.join(element.get('class') or [])
                 if any(pattern in classes.lower() for pattern in ['navbox', 'infobox', 'hatnote', 'mbox', 'navigation', 'editsection']):
                     element.decompose()
             
@@ -424,9 +429,19 @@ class ArticleFrame(wx.Frame):
                 for element in soup.select(selector):
                     element.decompose()
                     
-            # Also remove elements by common Wikipedia class patterns
+            # Also remove elements by common Wikipedia class patterns.
+            # The list is taken before anything is removed, so it contains
+            # children of elements this loop itself decomposes - and a
+            # decomposed element has no attributes left to read.
             for element in soup.find_all(attrs={"class": True}):
-                classes = ' '.join(element.get('class', []))
+                if getattr(element, 'decomposed', False):
+                    continue
+                # Never the page itself. Wikipedia's <html> carries layout
+                # classes that match these patterns, and decomposing it threw
+                # the whole article away - which is why nothing was found.
+                if element.name in ('html', 'body', 'head'):
+                    continue
+                classes = ' '.join(element.get('class') or [])
                 if any(pattern in classes.lower() for pattern in ['navbox', 'infobox', 'hatnote', 'mbox', 'navigation']):
                     element.decompose()
         elif 'bbc.com' in domain or 'bbc.co.uk' in domain:
@@ -629,3 +644,135 @@ def add_menu(component_manager):
 def initialize(app):
     """Initialize component"""
     pass
+
+
+# ===========================================================================
+# Titan actions - what Titan, its AI and other add-ons can ask this component
+# ===========================================================================
+# TArticle's real value is the extraction, not the window: it already knows how
+# to pull the article out of a page full of menus, adverts and cookie banners.
+# So the action returns the *text*, with no window involved - which is what
+# "read me this article" and "summarise this page" both need. The window is a
+# separate action, for when the user wants to read it themselves.
+#
+# The extraction methods do not touch the frame's state, so they are borrowed
+# rather than copied: one implementation, so a fix to the viewer is a fix here.
+
+try:
+    from src.titan_core.actions import fails, needs
+except Exception:                       # Titan not importable - actions unused
+    def fails(reason):
+        return reason
+
+    def needs(name, prompt, options=None, kind='string', default=''):
+        return prompt
+
+
+class _HeadlessExtractor:
+    """The article extraction of ArticleFrame, without a window."""
+
+    extract_content_by_site = ArticleFrame.extract_content_by_site
+    extract_main_content_fallback = ArticleFrame.extract_main_content_fallback
+    clean_article_content = ArticleFrame.clean_article_content
+    fix_relative_urls = ArticleFrame.fix_relative_urls
+
+
+def _normalise_url(url):
+    url = str(url or '').strip()
+    if url and not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    return url
+
+
+def action_read_article(url, max_characters=8000):
+    """Fetch a page and return just the article, as readable text."""
+    url = _normalise_url(url)
+    if not url:
+        return needs('url', "Which page should be read?")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=20)
+        response.raise_for_status()
+    except Exception as e:
+        return fails(f"Could not fetch {url}: {e}")
+    if response.encoding is None or response.encoding == 'ISO-8859-1':
+        response.encoding = response.apparent_encoding
+    try:
+        soup = BeautifulSoup(response.content, 'html.parser',
+                             from_encoding=response.encoding)
+        for element in soup(['script', 'style', 'nav', 'header', 'footer',
+                             'aside', 'iframe', 'form', 'noscript']):
+            element.decompose()
+        extractor = _HeadlessExtractor()
+        content = extractor.extract_content_by_site(soup, url)
+        title = soup.find('title')
+        title_text = title.get_text().strip() if title else ''
+    except Exception as e:
+        return fails(f"Could not read the article at {url}: {e}")
+    if not content:
+        return fails(f"No article could be found on {url} - the page may be "
+                     f"mostly script, or need signing in to.")
+    # Paragraph by paragraph, not node by node: a link or an emphasis in the
+    # middle of a sentence is not a new line, and splitting on every element
+    # turns readable prose into a column of fragments.
+    blocks = []
+    try:
+        found = content.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p',
+                                  'li', 'blockquote', 'pre', 'dd', 'dt',
+                                  'figcaption'])
+        for element in found:
+            line = element.get_text(' ', strip=True)
+            if line and (not blocks or blocks[-1] != line):
+                blocks.append(line)
+        if not blocks:
+            blocks = [content.get_text(' ', strip=True)]
+    except Exception:
+        blocks = [str(content)]
+    text = "\n".join(line for line in blocks if line)
+    try:
+        limit = max(500, min(int(max_characters or 8000), 40000))
+    except (TypeError, ValueError):
+        limit = 8000
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "\n(the article continues)"
+    header = f"{title_text}\n{url}" if title_text else url
+    return f"{header}\n\n{text}"
+
+
+def action_open_article(url):
+    """Open a page in TArticle's reader window for the user."""
+    url = _normalise_url(url)
+    if not url:
+        return needs('url', "Which page should be opened?")
+    try:
+        frame = ArticleFrame(None)
+        frame.Show()
+        frame.load_article_content(url)
+    except Exception as e:
+        return fails(f"Could not open {url}: {e}")
+    return f"Opened {url} in the article reader."
+
+
+TITAN_ACTIONS = [
+    {'name': 'read_article',
+     'summary': "Fetch a web page and return the article itself as readable "
+                "text, with the menus, adverts and cookie banners removed. Use "
+                "this to read, quote or summarise a page.",
+     'params': {'url': {'type': 'string', 'required': True,
+                        'description': "The page's address."},
+                'max_characters': {'type': 'integer',
+                                   'description': "How much text to return "
+                                                  "(default 8000)."}},
+     'run': action_read_article},
+    {'name': 'open_article',
+     'summary': "Open a page in Titan's accessible article reader so the user "
+                "can read it themselves.",
+     'params': {'url': {'type': 'string', 'required': True,
+                        'description': "The page's address."}},
+     'risk': 'confirm', 'run': action_open_article},
+]

@@ -50,6 +50,25 @@
       "timeout": 180
     },
     {
+      "name": "get_status",
+      "summary": "Say whether ElevenLabs is configured - whether an API key is set, and where it was found. Check this before reporting that speech cannot be generated.",
+      "mode": "any",
+      "risk": "auto"
+    },
+    {
+      "name": "set_api_key",
+      "summary": "Save the user's ElevenLabs API key so speech can be generated. Only ever call this with a key the user actually gave you.",
+      "params": {
+        "key": {
+          "type": "string",
+          "required": true,
+          "description": "The ElevenLabs API key."
+        }
+      },
+      "mode": "any",
+      "risk": "always_confirm"
+    },
+    {
       "name": "list_voices",
       "summary": "List the voices in the user's ElevenLabs account.",
       "mode": "any",

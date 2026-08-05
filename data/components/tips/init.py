@@ -279,3 +279,120 @@ def initialize(app=None):
 
 # Globalna zmienna tip_manager
 tip_manager = None
+
+
+# ===========================================================================
+# Titan actions - what Titan, its AI and other add-ons can ask this component
+# ===========================================================================
+# The tips are Titan's own written help, one line each. That makes them the
+# right thing to answer "how do I ..." with - the AI reading the user's real
+# documentation rather than guessing at an interface it cannot see. So the
+# useful actions are searching them and reading one out, not just turning the
+# reminder on and off.
+
+try:
+    from src.titan_core.actions import fails, needs
+except Exception:                       # Titan not importable - actions unused
+    def fails(reason):
+        return reason
+
+    def needs(name, prompt, options=None, kind='string', default=''):
+        return prompt
+
+
+def action_random_tip():
+    """Say one of Titan's tips, as the reminder does."""
+    tips = load_tips()
+    if not tips:
+        return fails("Titan has no tips installed.")
+    tip = random.choice(tips)
+    speak(_("Tip: %s") % tip)
+    return tip
+
+
+def action_search_tips(query="", limit=10):
+    """Find the tips that mention something."""
+    tips = load_tips()
+    if not tips:
+        return fails("Titan has no tips installed.")
+    wanted = str(query or '').strip().lower()
+    try:
+        count = max(1, min(int(limit or 10), 50))
+    except (TypeError, ValueError):
+        count = 10
+    found = [t for t in tips if not wanted or wanted in t.lower()]
+    if not found:
+        return f"None of Titan's {len(tips)} tips mention '{query}'."
+    shown = found[:count]
+    header = (f"{len(found)} of Titan's {len(tips)} tips mention '{query}'"
+              if wanted else f"{len(tips)} tips")
+    return header + ":\n" + "\n".join(f"- {t}" for t in shown)
+
+
+def action_get_interval():
+    """Say how often Titan shows a tip."""
+    option = config['Tips'].get('interval', 'every_15_minutes')
+    option = _LEGACY_KEY_MAP.get(option, option)
+    if option == 'disabled':
+        return "Tips are switched off."
+    seconds = INTERVAL_OPTIONS.get(option)
+    if not seconds:
+        return "Tips are switched off."
+    return f"Titan shows a tip every {seconds // 60} minutes."
+
+
+def action_set_interval(minutes):
+    """Change how often Titan shows a tip, or switch tips off."""
+    try:
+        wanted = int(minutes)
+    except (TypeError, ValueError):
+        return needs('minutes', "How many minutes between tips? Use 0 to "
+                                "switch them off.")
+    if wanted <= 0:
+        option = 'disabled'
+    else:
+        # Only the intervals the settings panel offers exist, so the closest
+        # one is chosen rather than inventing a value the panel cannot show.
+        choices = [(key, value // 60) for key, value in INTERVAL_OPTIONS.items()
+                   if value]
+        option = min(choices, key=lambda item: abs(item[1] - wanted))[0]
+    config['Tips']['interval'] = option
+    try:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as handle:
+            config.write(handle)
+    except OSError as e:
+        return fails(f"Could not save the tip interval: {e}")
+    if tip_manager is not None:
+        try:
+            tip_manager.update_settings()
+        except Exception:
+            pass
+    if option == 'disabled':
+        return "Tips are switched off."
+    return (f"Titan will show a tip every "
+            f"{INTERVAL_OPTIONS[option] // 60} minutes.")
+
+
+TITAN_ACTIONS = [
+    {'name': 'random_tip',
+     'summary': "Say one of Titan's tips out loud.",
+     'run': action_random_tip},
+    {'name': 'search_tips',
+     'summary': "Search Titan's own tips - its written help, one line each. "
+                "Use this when the user asks how to do something in Titan.",
+     'params': {'query': {'type': 'string',
+                          'description': "What to look for. Leave empty to "
+                                         "list them all."},
+                'limit': {'type': 'integer',
+                          'description': "How many to return (default 10)."}},
+     'run': action_search_tips},
+    {'name': 'get_interval',
+     'summary': "Say how often Titan shows a tip.",
+     'run': action_get_interval},
+    {'name': 'set_interval',
+     'summary': "Change how often Titan shows a tip, or switch tips off.",
+     'params': {'minutes': {'type': 'integer', 'required': True,
+                            'description': "Minutes between tips, or 0 to "
+                                           "switch them off."}},
+     'risk': 'confirm', 'run': action_set_interval},
+]

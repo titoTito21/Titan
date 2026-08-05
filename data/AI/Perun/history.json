@@ -433,5 +433,35 @@
     "role": "assistant",
     "content": "Słuchowisko „Seksmisja” gra od pięćdziesiątej minuty. Moc pioruna niech ci towarzyszy!",
     "timestamp": 1785860442.0899704
+  },
+  {
+    "role": "user",
+    "content": "stwórz notatkę pt: Idę spać! Treść: spać idę, a bo co, następnie przeczytaj to przez głos adam w eleven labs, następnie wklej tą notatkę do pulpitu, następnie usuń ją",
+    "timestamp": 1785921547.711832
+  },
+  {
+    "role": "assistant",
+    "content": "Stworzyłem notatkę „Idę spać!”. Dźwięk w ElevenLabs nie był dostępny z powodu braku klucza API, więc notatka została odczytana systemowo. Następnie zapisałem plik na Pulpicie i zgodnie z Twoim rozkazem go usunąłem. Zadanie wykonane!",
+    "timestamp": 1785921577.0859244
+  },
+  {
+    "role": "user",
+    "content": "stwórz dwie notatki: idę spać, potem idę spać 2, w treści napisz, co kolwiek, następnie przeczytaj którąś z nich, następnie zobacz ile mam notatek, następnie stwórz katalog test, stwórz notatkę test, usuń katalog test",
+    "timestamp": 1785921644.683161
+  },
+  {
+    "role": "assistant",
+    "content": "Wszystkie zadania zostały wykonane:\n\n1. **Stworzono dwie notatki**: „idę spać” oraz „idę spać 2”.\n2. **Przeczytano notatkę**: „idę spać” o treści „Cokolwiek, idę spać.” została odczytana na głos.\n3. **Liczba notatek**: W Twojej kolekcji znajduje się obecnie **6 notatek** (wliczając nowo utworzone).\n4. **Katalog i notatka testowa**: Utworzono katalog „test” na Pulpicie, stworzono notatkę „test”, a następnie usunięto katalog „test”.",
+    "timestamp": 1785921721.525256
+  },
+  {
+    "role": "user",
+    "content": "zmień ustawienia, temat dźwiękowy na longhorn, głos titan tts na rh voice polish natan, szybkość na 100, zmień też motyw systemowy na kontrast",
+    "timestamp": 1785922020.4292276
+  },
+  {
+    "role": "assistant",
+    "content": "Jasne, chwila!\n\nWszystkie Twoje rozkazy zostały wykonane z mocą pioruna:\n\n1. **Temat dźwiękowy**: Zmieniony na **Longhorn**.\n2. **Głos Titan TTS**: Ustawiony na **RHVoice Polish Natan** (silnik RHVoice).\n3. **Szybkość mowy**: Zwiększona do **100**.\n4. **Motyw systemowy**: Przełączony na motyw ciemny/wysokokontrastowy.",
+    "timestamp": 1785922066.9497068
   }
 ]

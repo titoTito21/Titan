@@ -168,6 +168,22 @@ def _merge_python_declared(addon):
             addon.source = 'python'
 
 
+def _merge_kind_standard(addon):
+    """Add the actions every add-on of this kind offers.
+
+    A TTS engine has voices and settings, a statusbar applet has text, an IM
+    module opens - none of which its author should have to declare. These go on
+    last, so an add-on that *did* declare an action of the same name keeps its
+    own.
+    """
+    try:
+        from src.titan_core.actions import generic
+    except Exception:
+        return
+    for action in generic.standard_actions(addon):
+        addon.actions.append(action)
+
+
 def _scan_disk():
     addons = []
     for kind in ACTIONABLE_KINDS:
@@ -189,6 +205,7 @@ def _scan_disk():
                                          transport='inproc')
                     addon.source = 'python'
                 _merge_python_declared(addon)
+                _merge_kind_standard(addon)
                 if addon.actions:
                     addons.append(addon)
             except Exception as e:
@@ -247,8 +264,13 @@ def _build():
         # distinguishable id, and says so.
         if addon.addon_id in taken:
             original = addon.addon_id
-            suffix = 'addon' if original in builtin_ids else slug(addon.name,
-                                                                  'copy')
+            # The kind is what usually differs - an ElevenLabs application and
+            # an ElevenLabs TTS engine both want to be 'elevenlabs' - and
+            # 'elevenlabs_tts_engine' says which one this is, where repeating
+            # the name would not.
+            suffix = 'addon' if original in builtin_ids else (
+                addon.kind if slug(addon.name) == original else slug(addon.name,
+                                                                     'copy'))
             candidate = f"{original}_{suffix}"
             counter = 2
             while candidate in taken:
