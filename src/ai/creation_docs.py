@@ -145,11 +145,42 @@ def load_guide(kind_id):
     return text
 
 
+# The Action API guide is a real file like the others, but it applies to EVERY
+# kind rather than one, so it is loaded by name instead of through KIND_GUIDE.
+_ACTION_GUIDE = 'action_api_guide_en.md'
+
+
+def load_action_guide():
+    """The Titan Action API guide - how a generated add-on declares what it can
+    do, so Titan and its AI can call into it. Injected for every kind: an
+    add-on that cannot be driven is a dead end, and the generator has no way to
+    know this contract exists otherwise."""
+    for candidate in platform_utils.iter_resource_paths(
+            os.path.join(_GUIDE_SUBDIR, _ACTION_GUIDE), prefer_user=False):
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, 'r', encoding='utf-8',
+                          errors='replace') as handle:
+                    return handle.read(_MAX_GUIDE_CHARS)
+            except OSError:
+                return ''
+    return ''
+
+
 def build_docs_block(kind_id):
-    """The documentation section for a kind: the shared core reference plus the
-    kind's own full programming guide. Returned as a single string ready to drop
-    into the system prompt (empty pieces are skipped)."""
+    """The documentation section for a kind: the shared core reference, the
+    Action API contract, and the kind's own full programming guide. Returned as
+    a single string ready to drop into the system prompt (empty pieces are
+    skipped)."""
     parts = [CORE_API_REFERENCE]
+    action_guide = load_action_guide()
+    if action_guide and kind_id != 'language':
+        parts.append("# Titan Action API (applies to every kind)\n\n"
+                     "Every add-on you generate MUST ship an `__actions.json` "
+                     "manifest and a handler module declaring what it can do, "
+                     "unless the user says otherwise. This is what lets the "
+                     "user drive it from elsewhere in Titan and lets the AI "
+                     "agent and voice assistant use it.\n\n" + action_guide)
     guide = load_guide(kind_id)
     if guide:
         parts.append("# Kind-specific programming guide (authoritative)\n\n"

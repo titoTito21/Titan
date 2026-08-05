@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 14:19+0200\n"
+"POT-Creation-Date: 2026-08-05 11:14+0200\n"
 "PO-Revision-Date: 2025-11-22 19:24+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -356,8 +356,12 @@ msgid "Recover Password"
 msgstr "Recover Password"
 
 #: src/network/titan_net_gui.py:581
-msgid "Enter your username or the email on your account. If a verified email is on file, we will send a reset link to it."
-msgstr "Enter your username or the email on your account. If a verified email is on file, we will send a reset link to it."
+msgid ""
+"Enter your username or the email on your account. If a verified email is "
+"on file, we will send a reset link to it."
+msgstr ""
+"Enter your username or the email on your account. If a verified email is "
+"on file, we will send a reset link to it."
 
 #: src/network/titan_net_gui.py:586
 msgid "Username or email:"
@@ -368,8 +372,12 @@ msgid "Send reset link"
 msgstr "Send reset link"
 
 #: src/network/titan_net_gui.py:598
-msgid "Already have the reset link/token from your email? Paste it below with a new password."
-msgstr "Already have the reset link/token from your email? Paste it below with a new password."
+msgid ""
+"Already have the reset link/token from your email? Paste it below with a "
+"new password."
+msgstr ""
+"Already have the reset link/token from your email? Paste it below with a "
+"new password."
 
 #: src/network/titan_net_gui.py:603
 msgid "Reset token:"
@@ -408,8 +416,12 @@ msgid "Sending..."
 msgstr "Sending..."
 
 #: src/network/titan_net_gui.py:655
-msgid "If an account with a verified email matches, a reset link has been sent. Check your inbox, then paste the token below."
-msgstr "If an account with a verified email matches, a reset link has been sent. Check your inbox, then paste the token below."
+msgid ""
+"If an account with a verified email matches, a reset link has been sent. "
+"Check your inbox, then paste the token below."
+msgstr ""
+"If an account with a verified email matches, a reset link has been sent. "
+"Check your inbox, then paste the token below."
 
 #: src/network/titan_net_gui.py:666
 msgid "Enter the reset token and a new password"
@@ -437,8 +449,12 @@ msgid "Recovery Email"
 msgstr "Recovery Email"
 
 #: src/network/titan_net_gui.py:718
-msgid "A recovery email lets you reset your password if you forget it. We send a verification link to confirm the address is yours."
-msgstr "A recovery email lets you reset your password if you forget it. We send a verification link to confirm the address is yours."
+msgid ""
+"A recovery email lets you reset your password if you forget it. We send a"
+" verification link to confirm the address is yours."
+msgstr ""
+"A recovery email lets you reset your password if you forget it. We send a"
+" verification link to confirm the address is yours."
 
 #: src/network/titan_net_gui.py:723 src/network/titan_net_gui.py:1026
 #: src/network/titan_net_gui.py:2359
@@ -974,8 +990,12 @@ msgid "Disconnect"
 msgstr "Disconnect"
 
 #: src/network/titan_net_gui.py:2307
-msgid "Tip: add a recovery email in Actions, Recovery Email, so you can reset your password if you forget it."
-msgstr "Tip: add a recovery email in Actions, Recovery Email, so you can reset your password if you forget it."
+msgid ""
+"Tip: add a recovery email in Actions, Recovery Email, so you can reset "
+"your password if you forget it."
+msgstr ""
+"Tip: add a recovery email in Actions, Recovery Email, so you can reset "
+"your password if you forget it."
 
 #: src/network/titan_net_gui.py:2335
 #: src/network/titan_net_mod_components.py:1345
@@ -1716,8 +1736,12 @@ msgstr "your forum"
 
 #: src/network/titan_net_gui.py:5481
 #, python-brace-format
-msgid "{user} asks to move the thread {title} from {source} into {destination}. Approve or reject it in the move requests list."
-msgstr "{user} asks to move the thread {title} from {source} into {destination}. Approve or reject it in the move requests list."
+msgid ""
+"{user} asks to move the thread {title} from {source} into {destination}. "
+"Approve or reject it in the move requests list."
+msgstr ""
+"{user} asks to move the thread {title} from {source} into {destination}. "
+"Approve or reject it in the move requests list."
 
 #: src/network/feedback_hub.py:989 src/network/titan_net_gui.py:5497
 #, python-brace-format
@@ -1769,23 +1793,39 @@ msgstr "STATUS: {level}"
 
 #: src/network/titan_net_gui.py:6045
 #, python-brace-format
-msgid "Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: {threats}"
-msgstr "Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: {threats}"
+msgid ""
+"Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: "
+"{threats}"
+msgstr ""
+"Intrusions blocked: {count} | DDoS blocked: {ddos} | Active threats: "
+"{threats}"
 
 #: src/network/titan_net_gui.py:6050
 #, python-brace-format
-msgid "Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers tracked: {attackers}"
-msgstr "Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | Attackers tracked: {attackers}"
+msgid ""
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
+"Attackers tracked: {attackers}"
+msgstr ""
+"Banned IPs: {banned} ({perma} permanent) | Whitelisted: {white} | "
+"Attackers tracked: {attackers}"
 
 #: src/network/titan_net_gui.py:6062
 #, python-brace-format
-msgid "Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | IDOR: {idor} | Privilege-escalation: {privesc}"
-msgstr "Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | IDOR: {idor} | Privilege-escalation: {privesc}"
+msgid ""
+"Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | "
+"IDOR: {idor} | Privilege-escalation: {privesc}"
+msgstr ""
+"Account Guard: {locked} locked accounts | Impersonation IPs: {forged} | "
+"IDOR: {idor} | Privilege-escalation: {privesc}"
 
 #: src/network/titan_net_gui.py:6097
 #, python-brace-format
-msgid "Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs banned."
-msgstr "Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs banned."
+msgid ""
+"Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs "
+"banned."
+msgstr ""
+"Cerberus Protocol: {level}. {blocked} intrusions blocked. {banned} IPs "
+"banned."
 
 #: src/network/titan_net_gui.py:6104
 msgid "Running Cerberus AI threat analysis. This can take a few seconds..."
@@ -1797,8 +1837,12 @@ msgid "Could not run AI analysis: {error}"
 msgstr "Could not run AI analysis: {error}"
 
 #: src/network/titan_net_gui.py:6127
-msgid "Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the server to enable it."
-msgstr "Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the server to enable it."
+msgid ""
+"Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the "
+"server to enable it."
+msgstr ""
+"Cerberus AI is disabled. Set a Gemini API key (CERBERUS_AI_KEY) on the "
+"server to enable it."
 
 #: src/network/titan_net_gui.py:6129
 msgid "Cerberus AI"
@@ -1968,8 +2012,12 @@ msgid "Only developers can activate CERBERUS mode"
 msgstr "Only developers can activate CERBERUS mode"
 
 #: src/network/titan_net_gui.py:6400
-msgid "CERBERUS mode is the maximum threat level. All new connections will be blocked. Are you sure you want to activate CERBERUS mode?"
-msgstr "CERBERUS mode is the maximum threat level. All new connections will be blocked. Are you sure you want to activate CERBERUS mode?"
+msgid ""
+"CERBERUS mode is the maximum threat level. All new connections will be "
+"blocked. Are you sure you want to activate CERBERUS mode?"
+msgstr ""
+"CERBERUS mode is the maximum threat level. All new connections will be "
+"blocked. Are you sure you want to activate CERBERUS mode?"
 
 #: src/network/titan_net_gui.py:6410
 msgid "Enter reason:"
@@ -2789,8 +2837,12 @@ msgstr "Please select a room first"
 
 #: src/network/titan_net_gui.py:7810
 #, python-brace-format
-msgid "Are you sure you want to delete room '{name}'? This will remove all messages and members."
-msgstr "Are you sure you want to delete room '{name}'? This will remove all messages and members."
+msgid ""
+"Are you sure you want to delete room '{name}'? This will remove all "
+"messages and members."
+msgstr ""
+"Are you sure you want to delete room '{name}'? This will remove all "
+"messages and members."
 
 #: src/network/titan_net_gui.py:7820
 msgid "Room deleted successfully"
@@ -3140,8 +3192,12 @@ msgstr "Select room to delete:"
 
 #: src/network/titan_net_gui.py:8612
 #, python-brace-format
-msgid "Are you sure you want to delete room '{name}' (ID: {id})? This cannot be undone!"
-msgstr "Are you sure you want to delete room '{name}' (ID: {id})? This cannot be undone!"
+msgid ""
+"Are you sure you want to delete room '{name}' (ID: {id})? This cannot be "
+"undone!"
+msgstr ""
+"Are you sure you want to delete room '{name}' (ID: {id})? This cannot be "
+"undone!"
 
 #: src/network/titan_net_gui.py:8675
 msgid "Select package file (.TCA/.TCD)"
@@ -3306,8 +3362,12 @@ msgid "Failed to save broadcast file"
 msgstr "Failed to save broadcast file"
 
 #: src/network/titan_net_gui.py:9139
-msgid "Titan-Net server is not available. Would you like to continue in offline mode?"
-msgstr "Titan-Net server is not available. Would you like to continue in offline mode?"
+msgid ""
+"Titan-Net server is not available. Would you like to continue in offline "
+"mode?"
+msgstr ""
+"Titan-Net server is not available. Would you like to continue in offline "
+"mode?"
 
 #: src/network/titan_net_gui.py:9144
 msgid ""
@@ -3626,8 +3686,12 @@ msgid "Manage Members"
 msgstr "Manage Members"
 
 #: src/network/titan_net_forum_gui.py:1123
-msgid "Transfer ownership of this group to the selected member? You will become a moderator and can no longer manage moderators or delete the group."
-msgstr "Transfer ownership of this group to the selected member? You will become a moderator and can no longer manage moderators or delete the group."
+msgid ""
+"Transfer ownership of this group to the selected member? You will become "
+"a moderator and can no longer manage moderators or delete the group."
+msgstr ""
+"Transfer ownership of this group to the selected member? You will become "
+"a moderator and can no longer manage moderators or delete the group."
 
 #: src/network/titan_net_forum_gui.py:1138
 msgid "Ownership transferred."
@@ -3705,8 +3769,12 @@ msgid "Create Component with AI"
 msgstr "Create Component with AI"
 
 #: src/network/titan_net_mod_components.py:1607
-msgid "Describe precisely the Titan-Net add-on you want, then Generate. After the first result you can keep refining in the same box."
-msgstr "Describe precisely the Titan-Net add-on you want, then Generate. After the first result you can keep refining in the same box."
+msgid ""
+"Describe precisely the Titan-Net add-on you want, then Generate. After "
+"the first result you can keep refining in the same box."
+msgstr ""
+"Describe precisely the Titan-Net add-on you want, then Generate. After "
+"the first result you can keep refining in the same box."
 
 #: src/network/titan_net_mod_components.py:1613
 msgid "AI provider:"
@@ -3911,8 +3979,12 @@ msgstr "Only disabled components can be enabled."
 
 #: src/network/titan_net_mod_components.py:2111
 #, python-brace-format
-msgid "Permanently delete '{name}'? This removes it from Titan-Net for everyone and cannot be undone."
-msgstr "Permanently delete '{name}'? This removes it from Titan-Net for everyone and cannot be undone."
+msgid ""
+"Permanently delete '{name}'? This removes it from Titan-Net for everyone "
+"and cannot be undone."
+msgstr ""
+"Permanently delete '{name}'? This removes it from Titan-Net for everyone "
+"and cannot be undone."
 
 #: src/network/titan_net_mod_components.py:2113
 msgid "Delete Component"
@@ -3924,8 +3996,12 @@ msgid "Titan-Net Moderator Components"
 msgstr "Titan-Net Moderator Components"
 
 #: src/network/titan_net_mod_components.py:2169
-msgid "Program your own moderator tools. Components live in your user data folder."
-msgstr "Program your own moderator tools. Components live in your user data folder."
+msgid ""
+"Program your own moderator tools. Components live in your user data "
+"folder."
+msgstr ""
+"Program your own moderator tools. Components live in your user data "
+"folder."
 
 #: src/network/titan_net_mod_components.py:2174
 msgid "Enabled"
@@ -4002,8 +4078,12 @@ msgstr "Local testing turned off for '{name}'."
 
 #: src/network/titan_net_mod_components.py:2310
 #, python-brace-format
-msgid "Local testing turned on for '{name}'. It now runs in your client as it would on the server."
-msgstr "Local testing turned on for '{name}'. It now runs in your client as it would on the server."
+msgid ""
+"Local testing turned on for '{name}'. It now runs in your client as it "
+"would on the server."
+msgstr ""
+"Local testing turned on for '{name}'. It now runs in your client as it "
+"would on the server."
 
 #: src/network/titan_net_mod_components.py:2409
 #, python-brace-format
@@ -4012,8 +4092,12 @@ msgstr "Could not read component: {error}"
 
 #: src/network/titan_net_mod_components.py:2415
 #, python-brace-format
-msgid "Submit '{name}' to the network? Another moderator/admin must approve it before it affects all of Titan-Net."
-msgstr "Submit '{name}' to the network? Another moderator/admin must approve it before it affects all of Titan-Net."
+msgid ""
+"Submit '{name}' to the network? Another moderator/admin must approve it "
+"before it affects all of Titan-Net."
+msgstr ""
+"Submit '{name}' to the network? Another moderator/admin must approve it "
+"before it affects all of Titan-Net."
 
 #: src/network/titan_net_mod_components.py:2434
 msgid "Submitted for approval."
@@ -5291,12 +5375,20 @@ msgid "Plain text: sent exactly as typed."
 msgstr "Plain text: sent exactly as typed."
 
 #: src/network/mail_gui.py:1279
-msgid "Markdown: # heading, - list, > quote, **bold**, [text](address). Sent as written, with a formatted version alongside it."
-msgstr "Markdown: # heading, - list, > quote, **bold**, [text](address). Sent as written, with a formatted version alongside it."
+msgid ""
+"Markdown: # heading, - list, > quote, **bold**, [text](address). Sent as "
+"written, with a formatted version alongside it."
+msgstr ""
+"Markdown: # heading, - list, > quote, **bold**, [text](address). Sent as "
+"written, with a formatted version alongside it."
 
 #: src/network/mail_gui.py:1282
-msgid "HTML: write the markup yourself. A readable text version is sent alongside it."
-msgstr "HTML: write the markup yourself. A readable text version is sent alongside it."
+msgid ""
+"HTML: write the markup yourself. A readable text version is sent "
+"alongside it."
+msgstr ""
+"HTML: write the markup yourself. A readable text version is sent "
+"alongside it."
 
 #: src/network/mail_gui.py:1314
 msgid "Discard this message?"
@@ -6230,7 +6322,10 @@ msgstr "{author} wrote:"
 #~ "THIS CANNOT BE UNDONE!"
 #~ msgstr ""
 
-#~ msgid "Showing online users. To ban offline users, use their User ID in the General Moderation menu."
+#~ msgid ""
+#~ "Showing online users. To ban offline "
+#~ "users, use their User ID in the"
+#~ " General Moderation menu."
 #~ msgstr ""
 
 #~ msgid "All Users"

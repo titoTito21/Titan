@@ -399,7 +399,8 @@ DEFAULT_SYSTEM = (
 def run_agent(goal, tools, *, provider=None, model=None, system=None,
               on_text=None, on_tool_start=None, on_tool_result=None,
               on_text_delta=None, goal_audio=None,
-              confirm=None, confirm_all=False, cancel_event=None, max_steps=25):
+              confirm=None, confirm_all=False, cancel_event=None, max_steps=25,
+              remember=True, memory_source='agent'):
     """Run the tool-calling loop until the model stops requesting tools, the
     step budget is exhausted, or cancellation is requested.
 
@@ -409,7 +410,12 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
     bool`` gates a tool run (return False to skip). ``cancel_event`` is a
     threading.Event checked between steps and tool calls. Returns the final
     assistant text. Raises :class:`AgentCancelled` if cancelled, or the provider
-    error on failure."""
+    error on failure.
+
+    ``remember`` replays what was said in earlier runs (see ``src/ai/memory.py``)
+    and records this one, so the user is having one continuing conversation
+    rather than meeting a stranger each time. Pass False for a run that should
+    not see or leave a trace - a background job, a one-off classification."""
     provider = provider or ai_provider.get_ai_provider()
     api_key = ai_provider.get_ai_key(provider)
     if not api_key:
@@ -432,8 +438,25 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
     # separate speech-to-text round trip. Ignored by non-Gemini providers.
     if goal_audio and goal_audio.get('data') and provider == 'gemini':
         first_user['audio'] = goal_audio
-    history = [first_user]
+    recalled = []
+    if remember:
+        try:
+            from src.ai import memory
+            recalled = memory.prompt_history()
+        except Exception as e:
+            print(f"[ai_agent] Could not recall earlier conversation: {e}")
+    history = recalled + [first_user]
     final_text = ''
+
+    def _remember(answer):
+        """Record this exchange. Never lets a memory problem lose the answer."""
+        if not remember:
+            return
+        try:
+            from src.ai import memory
+            memory.record_exchange(goal, answer, source=memory_source)
+        except Exception as e:
+            print(f"[ai_agent] Could not record the conversation: {e}")
     # Stream text deltas (for a voice caller to speak mid-reply) only when a
     # consumer is supplied and the provider supports it (Gemini). The streaming
     # step falls back to the proven non-streaming one on any error, so the agent
@@ -456,6 +479,7 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
         if text and on_text:
             on_text(text)
         if not calls:
+            _remember(text)
             return text  # done
         assistant_entry = {'role': 'assistant', 'content': text, 'tool_calls': calls}
         # Opaque per-provider passthrough (Gemini needs the raw parts replayed).
@@ -502,4 +526,6 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
         if step_images:
             history.append({'role': 'images', 'images': step_images})
         final_text = text
-    return final_text or "Reached the step limit before finishing."
+    answer = final_text or "Reached the step limit before finishing."
+    _remember(answer)
+    return answer

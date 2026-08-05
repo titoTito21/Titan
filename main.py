@@ -528,6 +528,16 @@ def main(command_line_args=None):
             except Exception as e:
                 print(f"Error registering .tca/.tcd file associations: {e}")
 
+            # The Titan Action Bus: applications and games connect back to it
+            # so Titan (and its AI) can call into the instance the user
+            # actually has open. Cheap, idempotent, and a daemon thread - an
+            # add-on that never joins costs nothing.
+            try:
+                from src.titan_core import actions as titan_actions_api
+                titan_actions_api.start()
+            except Exception as e:
+                print(f"Error starting the Titan Action Bus: {e}")
+
             # Install Copilot key hook on the main thread (LL hook binds to it).
             # Done here, before GUI/IUI startup, so the hook never blocks them.
             try:

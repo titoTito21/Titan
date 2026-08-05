@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "id": "tfm",
+  "label": "File Manager",
+  "description": "Titan's file manager. Lists, finds, copies, moves and deletes files without opening a window, and navigates the open window when there is one.",
+  "transport": "process",
+  "entry": "tfm_actions.py",
+  "launch_if_needed": false,
+  "actions": [
+    {
+      "name": "list_folder",
+      "summary": "List what is in a folder, with sizes. Defaults to the user's home folder.",
+      "params": {
+        "path": {
+          "type": "string",
+          "description": "The folder to list."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto",
+      "promote": true
+    },
+    {
+      "name": "find_files",
+      "summary": "Find files and folders whose name contains some text, searching inside a folder and everything under it.",
+      "params": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Words the name must contain."
+        },
+        "path": {
+          "type": "string",
+          "description": "Where to search. Defaults to the user's home folder."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "How many matches to return (default 60)."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto",
+      "promote": true
+    },
+    {
+      "name": "folder_size",
+      "summary": "Say how much space a folder takes and how many files are in it.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "The folder to measure."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "free_space",
+      "summary": "Say how much room is left on the drive holding a path.",
+      "params": {
+        "path": {
+          "type": "string",
+          "description": "Any path on the drive."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "make_folder",
+      "summary": "Create a folder.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Full path of the folder to create."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "copy_path",
+      "summary": "Copy a file or a whole folder. Never overwrites: a name that is taken gets a number.",
+      "params": {
+        "source": {
+          "type": "string",
+          "required": true,
+          "description": "What to copy."
+        },
+        "destination": {
+          "type": "string",
+          "required": true,
+          "description": "Where to put it - a folder, or the new full path."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "move_path",
+      "summary": "Move or rename a file or folder. Never overwrites.",
+      "params": {
+        "source": {
+          "type": "string",
+          "required": true,
+          "description": "What to move."
+        },
+        "destination": {
+          "type": "string",
+          "required": true,
+          "description": "Where to put it - a folder, or the new full path."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "delete_path",
+      "summary": "Delete a file or folder. Goes to the Recycle Bin where Windows allows it.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "What to delete."
+        }
+      },
+      "mode": "headless",
+      "risk": "always_confirm"
+    },
+    {
+      "name": "get_location",
+      "summary": "Say which folder the open file manager is showing and what is selected in it.",
+      "mode": "live",
+      "risk": "auto"
+    },
+    {
+      "name": "go_to",
+      "summary": "Take the open file manager to a folder.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "The folder to show."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "refresh",
+      "summary": "Re-read the folder the file manager is showing.",
+      "mode": "live",
+      "risk": "auto"
+    }
+  ]
+}

@@ -2315,3 +2315,79 @@ def add_settings_category(component_manager):
 
     component_manager.register_settings_category(
         _("Macro Manager"), create_macro_settings_panel, save_macro_settings, load_macro_settings)
+
+
+# ===========================================================================
+# Titan actions - what Titan, its AI and other add-ons can ask this component
+# ===========================================================================
+# Running a macro by name is the whole point: a macro is already the user's own
+# named piece of automation, so exposing it here turns every macro they have
+# written into something the AI and other add-ons can trigger, without this
+# component knowing anything about either.
+
+try:
+    from src.titan_core.actions import fails, needs
+except Exception:                       # Titan not importable - actions unused
+    def fails(reason):
+        return reason
+
+    def needs(name, prompt, options=None, kind='string', default=''):
+        return prompt
+
+
+def _action_manager():
+    """A MacroManager with the current macros loaded."""
+    manager = MacroManager(MACROS_DIR, USER_MACROS_DIR)
+    manager.load_macros()
+    return manager
+
+
+def action_list_macros():
+    """List the macros the user has."""
+    manager = _action_manager()
+    if not manager.macros:
+        return "There are no macros yet."
+    lines = []
+    for macro in manager.macros:
+        hotkey = macro.get('hotkey') or ''
+        lines.append(f"- {macro.get('name', '?')}"
+                     + (f" ({hotkey})" if hotkey else '')
+                     + f" [{macro.get('type', '?')}]")
+    return f"{len(manager.macros)} macros:\n" + "\n".join(lines)
+
+
+def action_run_macro(name):
+    """Run one of the user's macros by name."""
+    manager = _action_manager()
+    if not manager.macros:
+        return fails("There are no macros to run.")
+    macro = manager.find_by_name(name)
+    if macro is None:
+        wanted = str(name or '').strip().lower()
+        matches = [m for m in manager.macros
+                   if wanted and wanted in str(m.get('name', '')).lower()]
+        if len(matches) == 1:
+            macro = matches[0]
+        elif len(matches) > 1:
+            return needs('name', f"'{name}' matches {len(matches)} macros. "
+                         f"Which one should run?",
+                         options=[m.get('name', '?') for m in matches[:8]])
+        else:
+            return needs('name', f"There is no macro called '{name}'. Which "
+                         f"macro should run?",
+                         options=[m.get('name', '?')
+                                  for m in manager.macros[:12]])
+    run_macro(macro)
+    return f"Running the macro '{macro.get('name')}'."
+
+
+TITAN_ACTIONS = [
+    {'name': 'list_macros',
+     'summary': "List the macros the user has, with their shortcuts.",
+     'run': action_list_macros},
+    {'name': 'run_macro',
+     'summary': "Run one of the user's macros by name.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The macro's name."}},
+     'risk': 'confirm', 'promote': True, 'run': action_run_macro},
+]

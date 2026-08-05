@@ -61,10 +61,12 @@ def describe_action(name, args):
         'titan_list_addons': _("Listing Titan add-ons"),
         'titan_list_tts_engines': _("Listing the TTS engines"),
         'titan_open_settings': _("Opening Titan settings"),
+        'titan_list_actions': _("Checking what Titan's add-ons can do"),
         'list_tce_items': _("Listing Titan apps and games"),
         'list_elements': _("Checking what is on screen and what can be clicked"),
     }
     detailed = ((name == 'titan_list_settings' and a.get('section'))
+                or (name == 'titan_list_actions' and a.get('addon'))
                 or (name == 'list_elements' and a.get('filter')))
     if name in simple and not detailed:
         return simple[name]
@@ -101,6 +103,9 @@ def describe_action(name, args):
             _("Enabling the component {name}") if str(a.get('enabled', True)).lower() in ('true', '1', 'yes')
             else _("Disabling the component {name}")).format(name=g('component')),
         'titan_launch': lambda: _("Launching {name}").format(name=g('name')),
+        'titan_list_actions': lambda: _("Checking what {addon} can do").format(addon=g('addon')),
+        'titan_run_action': lambda: _("Running {action} in {addon}").format(
+            action=g('action'), addon=g('addon')),
         'titan_im_login': lambda: _("Logging in to {service} as {user}").format(
             service=g('service'), user=g('username')),
         'titan_list_im_contacts': lambda: _("Listing {service} contacts").format(service=g('service')),
@@ -138,6 +143,15 @@ def describe_action(name, args):
             pass
     if name in simple:
         return simple[name]
+    # A tool contributed by an add-on through the Action API: its own manifest
+    # carries a summary, which is a better sentence than anything generic.
+    try:
+        from src.ai.action_tools import describe_action_tool
+        described = describe_action_tool(name, a)
+        if described:
+            return described
+    except Exception:
+        pass
     # Unknown tool (e.g. one contributed by a component): we have no hand-written
     # phrase for it. Return None so narration defers to the AI's OWN generated
     # text describing what it is doing; callers that must show something (confirm
@@ -646,8 +660,15 @@ def _tool(name, description, run, risk='auto', properties=None, required=None,
     }
 
 
-def get_tools():
-    """The full toolset available to the agent (Windows)."""
+def get_tools(ask_user=None):
+    """The full toolset available to the agent (Windows).
+
+    ``ask_user`` (a callable ``question -> answer``) adds the follow-up-question
+    tool, so a request that arrives half-specified becomes a conversation
+    instead of a guess. It is optional because a caller with no way to ask -
+    a headless run, a scheduled job - must not be given a tool it cannot
+    honour. The voice assistant supplies its own, so it leaves this alone.
+    """
     S = {'type': 'string'}
     N = {'type': 'number'}
     return [
@@ -703,7 +724,8 @@ def get_tools():
         _tool('delete_path', "Delete a file or an empty directory.", delete_path,
               risk='confirm', properties={'path': dict(S, description="Path to delete.")},
               required=['path']),
-    ] + _ui_tools() + _browser_tools() + _titan_tools()
+    ] + (_ui_tools() + _browser_tools() + _titan_tools() + _subsystem_tools()
+         + _memory_tools() + _action_tools() + _ask_tools(ask_user))
 
 
 def _ui_tools():
@@ -737,4 +759,54 @@ def _titan_tools():
         return get_titan_tools()
     except Exception as e:
         print(f"[agent_tools] Titan tools unavailable: {e}")
+        return []
+
+
+def _ask_tools(ask_user):
+    """The follow-up-question tool, when the caller can actually ask.
+
+    The implementation is the assistant's - the same tool works by voice or
+    through a dialog, because the asking is the caller's callback, not the
+    tool's."""
+    if ask_user is None:
+        return []
+    try:
+        from src.ai.assistant.assistant_tools import make_ask_user_tool
+        return [make_ask_user_tool(ask_user)]
+    except Exception as e:
+        print(f"[agent_tools] Follow-up questions unavailable: {e}")
+        return []
+
+
+def _memory_tools():
+    """Remembering and recalling across runs (src/ai/memory.py)."""
+    try:
+        from src.ai.memory import get_memory_tools
+        return get_memory_tools()
+    except Exception as e:
+        print(f"[agent_tools] Memory tools unavailable: {e}")
+        return []
+
+
+def _subsystem_tools():
+    """Titan's own services: its settings and the computer's, Titan-Net,
+    Elten, the Titan IM clients and AI OCR. These are not add-ons and have no
+    manifest, so each is a hand-written module over the API Titan already has."""
+    try:
+        from src.ai.tools import get_subsystem_tools
+        return get_subsystem_tools()
+    except Exception as e:
+        print(f"[agent_tools] Titan subsystem tools unavailable: {e}")
+        return []
+
+
+def _action_tools():
+    """Whatever the installed add-ons themselves declare, through the Titan
+    Action API. This is the open-ended half of the toolset: an add-on written
+    tomorrow becomes callable without a line of code here."""
+    try:
+        from src.ai.action_tools import get_action_tools
+        return get_action_tools()
+    except Exception as e:
+        print(f"[agent_tools] Add-on action tools unavailable: {e}")
         return []

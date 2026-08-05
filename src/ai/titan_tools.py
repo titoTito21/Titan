@@ -1906,6 +1906,26 @@ def titan_create_reminder(name, description="", date="", time="", priority="medi
 # --------------------------------------------------------------------------- #
 # Open Titan's own windows
 # --------------------------------------------------------------------------- #
+def titan_speak(text, interrupt=False, **_):
+    """Say something out loud through Titan's own speech.
+
+    Windowless by definition: Titan's TTS engines are loaded in Titan's own
+    process, so this reads text to the user without opening anything. It is
+    what an add-on should use to have something read out - a note, a result, a
+    warning - instead of shipping a voice of its own.
+    """
+    message = str(text or '').strip()
+    if not message:
+        return "There is nothing to say."
+    stop_first = str(interrupt).strip().lower() in ('1', 'true', 'yes', 'on')
+    try:
+        from src.ai.ai_speech import speak
+        speak(message, interrupt=stop_first)
+    except Exception as e:
+        return f"Could not speak: {e}"
+    return f"Said: {message[:200]}" + ('...' if len(message) > 200 else '')
+
+
 def titan_open_settings(**_):
     """Open Titan's Settings window."""
     def _open():
@@ -2076,6 +2096,15 @@ def get_titan_tools():
                           'recipient': dict(S, description="Username / phone / chat name."),
                           'message': dict(S, description="Message text to send.")},
               required=['service', 'recipient', 'message']),
+        # Speech, without opening anything
+        _tool('titan_speak',
+              "Read text out loud through Titan's own speech. Needs no window "
+              "and no add-on: use it to have something read to the user - a "
+              "note, an answer, a warning.", titan_speak,
+              properties={'text': dict(S, description="What to say."),
+                          'interrupt': dict(B, description="Stop whatever is "
+                                            "being said first (default no).")},
+              required=['text']),
         # Titan windows
         _tool('titan_open_settings', "Open Titan's Settings window.",
               titan_open_settings, risk='confirm'),

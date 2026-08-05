@@ -292,7 +292,11 @@ def run_turn(persona, *, goal_text=None, on_status=None, on_transcript=None,
             on_text=(on_reply if on_reply else None), on_text_delta=_delta,
             goal_audio=goal_audio,
             on_tool_start=_tool_start, on_tool_result=_tool_result,
-            confirm=confirm, confirm_all=confirm_all, cancel_event=cancel_event)
+            confirm=confirm, confirm_all=confirm_all, cancel_event=cancel_event,
+            # The assistant and the agent share one memory: a user who asks the
+            # assistant something and then opens the agent window is one person
+            # having one conversation.
+            memory_source='assistant')
     except BaseException:
         # Always tear the speaker down (cancel/errors included) so its worker
         # thread and audio stream never leak.

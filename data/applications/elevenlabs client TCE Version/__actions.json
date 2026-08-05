@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "id": "elevenlabs",
+  "label": "ElevenLabs Client",
+  "description": "Turns text into speech with the user's ElevenLabs voices. Works without opening the client: the API key it was given is enough. When the client does happen to be open, the generation joins its history and cache.",
+  "transport": "process",
+  "entry": "elevenlabs_actions.py",
+  "launch_if_needed": false,
+  "actions": [
+    {
+      "name": "speak",
+      "summary": "Say some text out loud in one of the user's ElevenLabs voices. Does not need the ElevenLabs client open.",
+      "params": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "The text to say."
+        },
+        "voice": {
+          "type": "string",
+          "description": "Which voice, by name. Defaults to the first one."
+        }
+      },
+      "mode": "any",
+      "risk": "confirm",
+      "timeout": 180,
+      "promote": true
+    },
+    {
+      "name": "save_speech",
+      "summary": "Generate speech from text and save it as an mp3 file, without playing it. Use this to make an audio file the user keeps.",
+      "params": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "The text to say."
+        },
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Where to save the mp3."
+        },
+        "voice": {
+          "type": "string",
+          "description": "Which voice, by name."
+        }
+      },
+      "mode": "any",
+      "risk": "confirm",
+      "timeout": 180
+    },
+    {
+      "name": "list_voices",
+      "summary": "List the voices in the user's ElevenLabs account.",
+      "mode": "any",
+      "risk": "auto",
+      "timeout": 60
+    },
+    {
+      "name": "set_voice",
+      "summary": "Choose which ElevenLabs voice the open client speaks with. Only meaningful while the client is open; pass 'voice' to speak instead.",
+      "params": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "The voice's name."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm"
+    }
+  ]
+}

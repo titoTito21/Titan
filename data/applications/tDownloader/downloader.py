@@ -579,6 +579,14 @@ if __name__ == '__main__':
     frame = TitanDownloadManager(None)
     frame.Show()
 
+    # Join the Titan Action Bus so Titan, its AI and any other add-on can hand
+    # a download to this manager instead of fetching files themselves.
+    try:
+        import downloader_actions
+        downloader_actions.attach(frame)
+    except Exception as _e:
+        print(f"[tDownloader] Titan actions unavailable: {_e}")
+
     # Obsługa argumentów wiersza poleceń - automatyczne pobieranie jeśli podano URL
     if len(sys.argv) > 1:
         url_arg = sys.argv[1]

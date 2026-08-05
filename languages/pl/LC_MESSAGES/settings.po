@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-04 14:07+0200\n"
+"POT-Creation-Date: 2026-08-05 11:14+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -56,7 +56,7 @@ msgid "Captured: {}"
 msgstr "Przechwycono: {}"
 
 #: src/ui/settingsgui.py:317 src/ui/settingsgui.py:319
-#: src/ui/settingsgui.py:469 src/ui/settingsgui.py:3007
+#: src/ui/settingsgui.py:469 src/ui/settingsgui.py:3132
 msgid "Settings"
 msgstr "Ustawienia"
 
@@ -125,7 +125,7 @@ msgstr "Titan-Net"
 msgid "Select sound theme:"
 msgstr "Wybierz motyw dźwiękowy:"
 
-#: src/ui/settingsgui.py:689 src/ui/settingsgui.py:2567
+#: src/ui/settingsgui.py:689 src/ui/settingsgui.py:2692
 msgid "No themes"
 msgstr "Brak motywów"
 
@@ -145,7 +145,7 @@ msgstr "Stereo"
 msgid "3D"
 msgstr "3D"
 
-#: src/ui/settingsgui.py:710 src/ui/settingsgui.py:2657
+#: src/ui/settingsgui.py:710 src/ui/settingsgui.py:2782
 msgid "Calibrate 3D sound"
 msgstr "Kalibruj dźwięk 3D"
 
@@ -290,8 +290,8 @@ msgid "Alt+F4 keyboard shortcut:"
 msgstr "Skrót klawiszowy Alt+F4:"
 
 #: src/settings/configvizard.py:419 src/settings/configvizard.py:971
-#: src/ui/settingsgui.py:943 src/ui/settingsgui.py:2059
-#: src/ui/settingsgui.py:2558
+#: src/ui/settingsgui.py:943 src/ui/settingsgui.py:2184
+#: src/ui/settingsgui.py:2683
 #, python-brace-format
 msgid "Titan UI key: {}"
 msgstr "Klawisz Titan UI: {}"
@@ -303,9 +303,9 @@ msgstr "Wybierz skórkę interfejsu:"
 
 #: src/settings/configvizard.py:102 src/settings/configvizard.py:359
 #: src/settings/configvizard.py:802 src/ui/settingsgui.py:968
-#: src/ui/settingsgui.py:970 src/ui/settingsgui.py:2078
-#: src/ui/settingsgui.py:2081 src/ui/settingsgui.py:2085
-#: src/ui/settingsgui.py:2086
+#: src/ui/settingsgui.py:970 src/ui/settingsgui.py:2203
+#: src/ui/settingsgui.py:2206 src/ui/settingsgui.py:2210
+#: src/ui/settingsgui.py:2211
 msgid "Default"
 msgstr "Domyślny"
 
@@ -486,35 +486,71 @@ msgstr "Potwierdzaj każdą akcję"
 msgid "Autonomous (no confirmations)"
 msgstr "Autonomicznie (bez potwierdzeń)"
 
-#: src/ui/settingsgui.py:1235
+#: src/ui/settingsgui.py:1238
+msgid "What the AI may reach"
+msgstr "Do czego AI ma dostęp"
+
+#: src/ui/settingsgui.py:1242 src/ui/settingsgui.py:1243
+msgid "Let the AI use the functions add-ons offer"
+msgstr "Pozwól AI korzystać z funkcji udostępnianych przez dodatki"
+
+#: src/ui/settingsgui.py:1249
+msgid "Add-ons the AI may drive (untick to exclude one):"
+msgstr "Dodatki, którymi AI może sterować (odznacz, by wykluczyć):"
+
+#: src/ui/settingsgui.py:1253
+msgid "Add-ons the AI may drive"
+msgstr "Dodatki, którymi AI może sterować"
+
+#: src/ui/settingsgui.py:1258 src/ui/settingsgui.py:1609
+msgid "Memory"
+msgstr "Pamięć"
+
+#: src/ui/settingsgui.py:1262 src/ui/settingsgui.py:1263
+msgid "Remember earlier conversations"
+msgstr "Pamiętaj wcześniejsze rozmowy"
+
+#: src/ui/settingsgui.py:1269
+msgid "How many earlier exchanges to carry into a new one:"
+msgstr "Ile wcześniejszych wymian przenieść do nowej rozmowy:"
+
+#: src/ui/settingsgui.py:1272
+msgid "Earlier exchanges to remember"
+msgstr "Wcześniejsze wymiany do zapamiętania"
+
+#: src/ui/settingsgui.py:1277
+msgid "Forget the conversation so far"
+msgstr "Zapomnij dotychczasową rozmowę"
+
+#: src/ui/settingsgui.py:1284
 msgid "Voice assistant"
 msgstr "Asystent głosowy"
 
-#: src/ui/settingsgui.py:1244
+#: src/ui/settingsgui.py:1293
 msgid "Automatic (match the API key you configured)"
 msgstr "Automatycznie (zgodnie z ustawionym kluczem API)"
 
-#: src/ui/settingsgui.py:1246
+#: src/ui/settingsgui.py:1295
 msgid "Assistant voice (text to speech)"
 msgstr "Głos asystenta (zamiana tekstu na mowę)"
 
-#: src/ui/settingsgui.py:1253
+#: src/ui/settingsgui.py:1302
 msgid "Assistant model:"
 msgstr "Model asystenta:"
 
-#: src/ui/settingsgui.py:1261
+#: src/ui/settingsgui.py:1310
 msgid "(none installed)"
 msgstr "(brak zainstalowanych)"
 
-#: src/ui/settingsgui.py:1269
+#: src/ui/settingsgui.py:1318
 msgid "Global assistant shortcut (arrows and Tab are not allowed):"
 msgstr "Globalny skrót asystenta (strzałki i Tab są niedozwolone):"
 
-#: src/ui/settingsgui.py:1273 src/ui/settingsgui.py:1409
+#: src/ui/settingsgui.py:1322 src/ui/settingsgui.py:1458
 msgid "Global assistant shortcut"
 msgstr "Globalny skrót asystenta"
 
-#: src/ui/settingsgui.py:1282
+#: src/ui/settingsgui.py:1331
 msgid ""
 "Titan UI assistant shortcut (active only in Titan UI; arrows and Tab are "
 "not allowed):"
@@ -522,11 +558,11 @@ msgstr ""
 "Skrót asystenta Titan UI (aktywny tylko w Titan UI; strzałki i Tab są "
 "niedozwolone):"
 
-#: src/ui/settingsgui.py:1287 src/ui/settingsgui.py:1408
+#: src/ui/settingsgui.py:1336 src/ui/settingsgui.py:1457
 msgid "Titan UI assistant shortcut"
 msgstr "Skrót asystenta Titan UI"
 
-#: src/ui/settingsgui.py:1296
+#: src/ui/settingsgui.py:1345
 msgid ""
 "Dictate into text fields (an assistant shortcut pressed while a text "
 "field is focused types what you say into it)"
@@ -534,23 +570,23 @@ msgstr ""
 "Dyktowanie do pól tekstowych (skrót asystenta naciśnięty, gdy fokus jest "
 "w polu tekstowym, wpisuje do niego to, co mówisz)"
 
-#: src/ui/settingsgui.py:1305
+#: src/ui/settingsgui.py:1354
 msgid "Announce reminders automatically"
 msgstr "Automatyczne odczytywanie przypomnień"
 
-#: src/ui/settingsgui.py:1306
+#: src/ui/settingsgui.py:1355
 msgid "Speak them in the assistant's voice"
 msgstr "Wypowiadaj je głosem asystenta"
 
-#: src/ui/settingsgui.py:1307
+#: src/ui/settingsgui.py:1356
 msgid "Read them as a text notification"
 msgstr "Odczytuj je jako powiadomienie tekstowe"
 
-#: src/ui/settingsgui.py:1308
+#: src/ui/settingsgui.py:1357
 msgid "Do not announce them"
 msgstr "Nie odczytuj ich"
 
-#: src/ui/settingsgui.py:1314
+#: src/ui/settingsgui.py:1363
 msgid ""
 "Let the AI word the reminder announcement in the assistant's own style (a"
 " fixed wording is used otherwise)"
@@ -558,49 +594,49 @@ msgstr ""
 "Pozwól AI ułożyć treść przypomnienia w stylu asystenta (w przeciwnym "
 "razie używany jest stały tekst)"
 
-#: src/ui/settingsgui.py:1322
+#: src/ui/settingsgui.py:1371
 msgid "AI OCR (reading a screen that a screen reader cannot)"
 msgstr "AI OCR (odczyt ekranu, którego czytnik ekranu nie widzi)"
 
-#: src/ui/settingsgui.py:1327
+#: src/ui/settingsgui.py:1376
 msgid ""
 "Enable AI OCR (a scan sends a picture of the window to the AI provider "
 "you configured above)"
 msgstr "Włącz AI OCR (odczyt wysyła obraz okna do dostawcy AI wybranego powyżej)"
 
-#: src/ui/settingsgui.py:1335
+#: src/ui/settingsgui.py:1384
 msgid "What a scan looks at"
 msgstr "Co obejmuje odczyt"
 
-#: src/ui/settingsgui.py:1336
+#: src/ui/settingsgui.py:1385
 msgid "The window in front (recommended)"
 msgstr "Okno na pierwszym planie (zalecane)"
 
-#: src/ui/settingsgui.py:1337
+#: src/ui/settingsgui.py:1386
 msgid "The whole screen"
 msgstr "Cały ekran"
 
-#: src/ui/settingsgui.py:1344
+#: src/ui/settingsgui.py:1393
 msgid "Where the controls appear"
 msgstr "Gdzie pojawiają się kontrolki"
 
-#: src/ui/settingsgui.py:1345
+#: src/ui/settingsgui.py:1394
 msgid "On the real window itself, control by control (recommended)"
 msgstr "Na samym prawdziwym oknie, kontrolka w kontrolkę (zalecane)"
 
-#: src/ui/settingsgui.py:1347
+#: src/ui/settingsgui.py:1396
 msgid "In a Titan window, as a list to read"
 msgstr "W oknie Titana, jako lista do odczytania"
 
-#: src/ui/settingsgui.py:1356
+#: src/ui/settingsgui.py:1405
 msgid "Global AI OCR shortcut (arrows and Tab are not allowed):"
 msgstr "Globalny skrót AI OCR (strzałki i Tab są niedozwolone):"
 
-#: src/ui/settingsgui.py:1359 src/ui/settingsgui.py:1416
+#: src/ui/settingsgui.py:1408 src/ui/settingsgui.py:1465
 msgid "Global AI OCR shortcut"
 msgstr "Globalny skrót AI OCR"
 
-#: src/ui/settingsgui.py:1368
+#: src/ui/settingsgui.py:1417
 msgid ""
 "Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab are not"
 " allowed):"
@@ -608,11 +644,11 @@ msgstr ""
 "Skrót AI OCR w Titan UI (aktywny tylko w Titan UI; strzałki i Tab są "
 "niedozwolone):"
 
-#: src/ui/settingsgui.py:1372 src/ui/settingsgui.py:1415
+#: src/ui/settingsgui.py:1421 src/ui/settingsgui.py:1464
 msgid "Titan UI AI OCR shortcut"
 msgstr "Skrót AI OCR w Titan UI"
 
-#: src/ui/settingsgui.py:1379
+#: src/ui/settingsgui.py:1428
 msgid ""
 "Let AI OCR press controls (Enter on an entry clicks it in the real "
 "program; with this off the screen is only read out)"
@@ -620,7 +656,7 @@ msgstr ""
 "Pozwól AI OCR naciskać elementy (Enter na pozycji klika ją w prawdziwym "
 "programie; przy wyłączonej opcji ekran jest tylko odczytywany)"
 
-#: src/ui/settingsgui.py:1385
+#: src/ui/settingsgui.py:1434
 msgid ""
 "Check what the AI read against Windows itself (more exact positions and "
 "states where the program exposes any)"
@@ -628,48 +664,70 @@ msgstr ""
 "Sprawdzaj odczyt AI z danymi samego Windows (dokładniejsze położenia i "
 "stany tam, gdzie program je udostępnia)"
 
-#: src/ui/settingsgui.py:1391
+#: src/ui/settingsgui.py:1440
 msgid "Re-read a watched screen every (seconds, 0 = only when I ask):"
 msgstr "Odczytuj obserwowany ekran co (sekund, 0 = tylko na żądanie):"
 
-#: src/settings/configvizard.py:116 src/ui/settingsgui.py:1410
-#: src/ui/settingsgui.py:1417 src/ui/settingsgui.py:2513
+#: src/settings/configvizard.py:116 src/ui/settingsgui.py:1459
+#: src/ui/settingsgui.py:1466 src/ui/settingsgui.py:2638
 msgid "Not set"
 msgstr "Nie ustawiono"
 
-#: src/ui/settingsgui.py:1425
+#: src/ui/settingsgui.py:1474
 msgid "Capture AI OCR shortcut"
 msgstr "Przechwyć skrót AI OCR"
 
-#: src/ui/settingsgui.py:1444
+#: src/ui/settingsgui.py:1493
 msgid "Capture assistant shortcut"
 msgstr "Przechwyć skrót asystenta"
 
-#: src/ui/settingsgui.py:1635
+#: src/ui/settingsgui.py:1588
+#, python-brace-format
+msgid "{count} functions"
+msgstr "{count} funkcji"
+
+#: src/ui/settingsgui.py:1599
+msgid ""
+"Forget everything the AI remembers of your conversations so far? Facts "
+"you asked it to remember are kept."
+msgstr ""
+"Zapomnieć wszystko, co AI pamięta z dotychczasowych rozmów? Fakty, o "
+"których zapamiętanie prosiłeś, zostaną zachowane."
+
+#: src/ui/settingsgui.py:1601
+msgid "Forget the conversation"
+msgstr "Zapomnij rozmowę"
+
+#: src/ui/settingsgui.py:1608
+#, python-brace-format
+msgid "Could not clear the memory: {error}"
+msgstr "Nie udało się wyczyścić pamięci: {error}"
+
+#: src/ui/settingsgui.py:1760
 msgid "System volume:"
 msgstr "Głośność systemu:"
 
-#: src/ui/settingsgui.py:1664
+#: src/ui/settingsgui.py:1789
 msgid "Disable sound card mute when Titan is running"
 msgstr "Wyłącz wyciszenie karty dźwiękowej gdy Titan jest uruchomiony"
 
-#: src/ui/settingsgui.py:1679
+#: src/ui/settingsgui.py:1804
 msgid "Server Configuration"
 msgstr "Konfiguracja serwera"
 
-#: src/settings/configvizard.py:489 src/ui/settingsgui.py:1684
+#: src/settings/configvizard.py:489 src/ui/settingsgui.py:1809
 msgid "Server host:"
 msgstr "Adres serwera:"
 
-#: src/settings/configvizard.py:498 src/ui/settingsgui.py:1695
+#: src/settings/configvizard.py:498 src/ui/settingsgui.py:1820
 msgid "WebSocket port:"
 msgstr "Port WebSocket:"
 
-#: src/settings/configvizard.py:507 src/ui/settingsgui.py:1702
+#: src/settings/configvizard.py:507 src/ui/settingsgui.py:1827
 msgid "HTTP port:"
 msgstr "Port HTTP:"
 
-#: src/ui/settingsgui.py:1713
+#: src/ui/settingsgui.py:1838
 msgid ""
 "Audio business card allows you to personalize sounds that other users "
 "hear when you log in, send a message, or view your profile."
@@ -678,133 +736,133 @@ msgstr ""
 "słyszą, kiedy się logujesz, wysyłasz wiadomość lub przeglądają Twój "
 "profil."
 
-#: src/ui/settingsgui.py:1721
+#: src/ui/settingsgui.py:1846
 msgid "Custom business card"
 msgstr "Własna wizytówka"
 
-#: src/ui/settingsgui.py:1729 src/ui/settingsgui.py:1730
+#: src/ui/settingsgui.py:1854 src/ui/settingsgui.py:1855
 msgid "Audio files"
 msgstr "Pliki audio"
 
-#: src/ui/settingsgui.py:1741 src/ui/settingsgui.py:1841
-#: src/ui/settingsgui.py:2195
+#: src/ui/settingsgui.py:1866 src/ui/settingsgui.py:1966
+#: src/ui/settingsgui.py:2320
 msgid "Login sound"
 msgstr "Dźwięk logowania"
 
-#: src/ui/settingsgui.py:1747 src/ui/settingsgui.py:1842
-#: src/ui/settingsgui.py:2196
+#: src/ui/settingsgui.py:1872 src/ui/settingsgui.py:1967
+#: src/ui/settingsgui.py:2321
 msgid "Logout sound"
 msgstr "Dźwięk wylogowania"
 
-#: src/ui/settingsgui.py:1753 src/ui/settingsgui.py:1843
-#: src/ui/settingsgui.py:2197
+#: src/ui/settingsgui.py:1878 src/ui/settingsgui.py:1968
+#: src/ui/settingsgui.py:2322
 msgid "New message sound"
 msgstr "Dźwięk nowej wiadomości"
 
-#: src/ui/settingsgui.py:1759 src/ui/settingsgui.py:1844
-#: src/ui/settingsgui.py:2198
+#: src/ui/settingsgui.py:1884 src/ui/settingsgui.py:1969
+#: src/ui/settingsgui.py:2323
 msgid "Avatar audio"
 msgstr "Dźwięk awatara"
 
-#: src/ui/settingsgui.py:1778
+#: src/ui/settingsgui.py:1903
 msgid "Notify on user login/logout"
 msgstr "Powiadamiaj o zalogowaniu/wylogowaniu użytkowników"
 
-#: src/ui/settingsgui.py:1783
+#: src/ui/settingsgui.py:1908
 msgid "Notify on new applications"
 msgstr "Powiadamiaj o nowych aplikacjach"
 
-#: src/ui/settingsgui.py:1788
+#: src/ui/settingsgui.py:1913
 msgid "Notify on new private messages"
 msgstr "Powiadamiaj o nowych wiadomościach prywatnych"
 
-#: src/ui/settingsgui.py:1793
+#: src/ui/settingsgui.py:1918
 msgid "Notify on new chat messages"
 msgstr "Powiadamiaj o nowych wiadomościach na czacie"
 
-#: src/ui/settingsgui.py:1803
+#: src/ui/settingsgui.py:1928
 msgid "Allow sounds sent by the server"
 msgstr "Zezwalaj na dźwięki wysyłane przez serwer"
 
-#: src/ui/settingsgui.py:1808
+#: src/ui/settingsgui.py:1933
 msgid "Clear downloaded server sounds"
 msgstr "Wyczyść pobrane dźwięki serwera"
 
-#: src/ui/settingsgui.py:1826
+#: src/ui/settingsgui.py:1951
 #, python-brace-format
 msgid "Removed {n} cached sounds."
 msgstr "Usunięto dźwięków z pamięci podręcznej: {n}."
 
-#: src/ui/settingsgui.py:1827
+#: src/ui/settingsgui.py:1952
 msgid "Server sounds"
 msgstr "Dźwięki serwera"
 
-#: src/ui/settingsgui.py:1852
+#: src/ui/settingsgui.py:1977
 #, python-brace-format
 msgid "The file '{}' exceeds the maximum duration of {} seconds."
 msgstr "Plik '{}' przekracza maksymalny czas trwania {} sekund."
 
-#: src/settings/configvizard.py:987 src/ui/settingsgui.py:1854
-#: src/ui/settingsgui.py:2394 src/ui/settingsgui.py:2400
-#: src/ui/settingsgui.py:2403 src/ui/settingsgui.py:2433
-#: src/ui/settingsgui.py:2441 src/ui/settingsgui.py:2444
+#: src/settings/configvizard.py:987 src/ui/settingsgui.py:1979
+#: src/ui/settingsgui.py:2519 src/ui/settingsgui.py:2525
+#: src/ui/settingsgui.py:2528 src/ui/settingsgui.py:2558
+#: src/ui/settingsgui.py:2566 src/ui/settingsgui.py:2569
 msgid "Error"
 msgstr "Błąd"
 
-#: src/ui/settingsgui.py:1875
+#: src/ui/settingsgui.py:2000
 msgid "Enable Titan TTS"
 msgstr "Włącz Titan TTS"
 
-#: src/ui/settingsgui.py:1881
+#: src/ui/settingsgui.py:2006
 msgid "Speech engine:"
 msgstr "Silnik mowy:"
 
-#: src/ui/settingsgui.py:1890
+#: src/ui/settingsgui.py:2015
 msgid "Voice:"
 msgstr "Głos:"
 
-#: src/ui/settingsgui.py:1899
+#: src/ui/settingsgui.py:2024
 msgid "Speech rate:"
 msgstr "Szybkość mowy:"
 
-#: src/ui/settingsgui.py:1904
+#: src/ui/settingsgui.py:2029
 msgid "Speech rate"
 msgstr "Szybkość mowy"
 
-#: src/ui/settingsgui.py:1910
+#: src/ui/settingsgui.py:2035
 msgid "Pitch:"
 msgstr "Wysokość:"
 
-#: src/ui/settingsgui.py:1915
+#: src/ui/settingsgui.py:2040
 msgid "Pitch"
 msgstr "Wysokość"
 
-#: src/ui/settingsgui.py:1921
+#: src/ui/settingsgui.py:2046
 msgid "Speech volume:"
 msgstr "Głośność mowy:"
 
-#: src/ui/settingsgui.py:1926
+#: src/ui/settingsgui.py:2051
 msgid "Speech volume"
 msgstr "Głośność mowy"
 
-#: src/ui/settingsgui.py:2039 src/ui/settingsgui.py:2503
+#: src/ui/settingsgui.py:2164 src/ui/settingsgui.py:2628
 msgid "No description available."
 msgstr "Brak opisu."
 
-#: src/ui/settingsgui.py:2378 src/ui/settingsgui.py:2410
+#: src/ui/settingsgui.py:2503 src/ui/settingsgui.py:2535
 msgid "This feature is only available on Windows."
 msgstr ""
 
-#: src/ui/settingsgui.py:2378 src/ui/settingsgui.py:2410
+#: src/ui/settingsgui.py:2503 src/ui/settingsgui.py:2535
 msgid "Information"
 msgstr ""
 
-#: src/ui/settingsgui.py:2388 src/ui/settingsgui.py:2427
+#: src/ui/settingsgui.py:2513 src/ui/settingsgui.py:2552
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
 msgstr ""
 
-#: src/ui/settingsgui.py:2394
+#: src/ui/settingsgui.py:2519
 #, python-brace-format
 msgid ""
 "Cannot open SAPI settings:\n"
@@ -813,13 +871,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:2400
+#: src/ui/settingsgui.py:2525
 msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:2403
+#: src/ui/settingsgui.py:2528
 #, python-brace-format
 msgid ""
 "Unexpected error while opening SAPI settings:\n"
@@ -828,7 +886,7 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:2433
+#: src/ui/settingsgui.py:2558
 #, python-brace-format
 msgid ""
 "Cannot open Ease of Access:\n"
@@ -837,13 +895,13 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/ui/settingsgui.py:2441
+#: src/ui/settingsgui.py:2566
 msgid ""
 "Error: Cannot find accessibility settings. Make sure Windows is working "
 "correctly."
 msgstr ""
 
-#: src/ui/settingsgui.py:2444
+#: src/ui/settingsgui.py:2569
 #, python-brace-format
 msgid ""
 "Unexpected error while opening Ease of Access:\n"
@@ -852,134 +910,134 @@ msgid ""
 "Technical details in the console."
 msgstr ""
 
-#: src/settings/configvizard.py:119 src/ui/settingsgui.py:2516
+#: src/settings/configvizard.py:119 src/ui/settingsgui.py:2641
 msgid "Ctrl"
 msgstr "Ctrl"
 
-#: src/settings/configvizard.py:120 src/ui/settingsgui.py:2517
+#: src/settings/configvizard.py:120 src/ui/settingsgui.py:2642
 msgid "Shift"
 msgstr "Shift"
 
-#: src/settings/configvizard.py:121 src/ui/settingsgui.py:2518
+#: src/settings/configvizard.py:121 src/ui/settingsgui.py:2643
 msgid "Alt"
 msgstr "Alt"
 
-#: src/settings/configvizard.py:122 src/ui/settingsgui.py:2519
+#: src/settings/configvizard.py:122 src/ui/settingsgui.py:2644
 msgid "Win"
 msgstr "Win"
 
-#: src/settings/configvizard.py:123 src/ui/settingsgui.py:2520
+#: src/settings/configvizard.py:123 src/ui/settingsgui.py:2645
 msgid "Cmd"
 msgstr "Cmd"
 
-#: src/settings/configvizard.py:124 src/ui/settingsgui.py:2521
+#: src/settings/configvizard.py:124 src/ui/settingsgui.py:2646
 msgid "Accent"
 msgstr "Akcent"
 
-#: src/settings/configvizard.py:125 src/ui/settingsgui.py:2522
+#: src/settings/configvizard.py:125 src/ui/settingsgui.py:2647
 msgid "Space"
 msgstr "Spacja"
 
-#: src/settings/configvizard.py:126 src/ui/settingsgui.py:2523
+#: src/settings/configvizard.py:126 src/ui/settingsgui.py:2648
 msgid "Tab"
 msgstr "Tab"
 
-#: src/settings/configvizard.py:127 src/ui/settingsgui.py:2524
+#: src/settings/configvizard.py:127 src/ui/settingsgui.py:2649
 msgid "Enter"
 msgstr "Enter"
 
-#: src/settings/configvizard.py:128 src/ui/settingsgui.py:2525
+#: src/settings/configvizard.py:128 src/ui/settingsgui.py:2650
 msgid "Escape"
 msgstr "Escape"
 
-#: src/settings/configvizard.py:129 src/ui/settingsgui.py:2526
+#: src/settings/configvizard.py:129 src/ui/settingsgui.py:2651
 msgid "Backspace"
 msgstr "Backspace"
 
-#: src/settings/configvizard.py:130 src/ui/settingsgui.py:2527
+#: src/settings/configvizard.py:130 src/ui/settingsgui.py:2652
 msgid "Delete"
 msgstr "Delete"
 
-#: src/settings/configvizard.py:131 src/ui/settingsgui.py:2528
+#: src/settings/configvizard.py:131 src/ui/settingsgui.py:2653
 msgid "Insert"
 msgstr "Insert"
 
-#: src/settings/configvizard.py:132 src/ui/settingsgui.py:2529
+#: src/settings/configvizard.py:132 src/ui/settingsgui.py:2654
 msgid "Home"
 msgstr "Home"
 
-#: src/settings/configvizard.py:133 src/ui/settingsgui.py:2530
+#: src/settings/configvizard.py:133 src/ui/settingsgui.py:2655
 msgid "End"
 msgstr "End"
 
-#: src/settings/configvizard.py:134 src/ui/settingsgui.py:2531
+#: src/settings/configvizard.py:134 src/ui/settingsgui.py:2656
 msgid "Page Up"
 msgstr "Page Up"
 
-#: src/settings/configvizard.py:135 src/ui/settingsgui.py:2532
+#: src/settings/configvizard.py:135 src/ui/settingsgui.py:2657
 msgid "Page Down"
 msgstr "Page Down"
 
-#: src/settings/configvizard.py:136 src/ui/settingsgui.py:2533
+#: src/settings/configvizard.py:136 src/ui/settingsgui.py:2658
 msgid "Up"
 msgstr "Góra"
 
-#: src/settings/configvizard.py:137 src/ui/settingsgui.py:2534
+#: src/settings/configvizard.py:137 src/ui/settingsgui.py:2659
 msgid "Down"
 msgstr "Dół"
 
-#: src/settings/configvizard.py:138 src/ui/settingsgui.py:2535
+#: src/settings/configvizard.py:138 src/ui/settingsgui.py:2660
 msgid "Left"
 msgstr "Lewo"
 
-#: src/settings/configvizard.py:139 src/ui/settingsgui.py:2536
+#: src/settings/configvizard.py:139 src/ui/settingsgui.py:2661
 msgid "Right"
 msgstr "Prawo"
 
-#: src/ui/settingsgui.py:2561
+#: src/ui/settingsgui.py:2686
 #, python-brace-format
 msgid "Titan UI key set to {}"
 msgstr "Klawisz Titan UI ustawiony na {}"
 
-#: src/ui/settingsgui.py:2656
+#: src/ui/settingsgui.py:2781
 msgid "Remove calibration profile"
 msgstr "Usuń profil kalibracji"
 
-#: src/ui/settingsgui.py:2688
+#: src/ui/settingsgui.py:2813
 msgid "Calibration profile removed"
 msgstr "Profil kalibracji usunięty"
 
-#: src/ui/settingsgui.py:2694
+#: src/ui/settingsgui.py:2819
 msgid "Calibration, please wait"
 msgstr "Trwa kalibracja, proszę czekać"
 
-#: src/ui/settingsgui.py:2709
+#: src/ui/settingsgui.py:2834
 msgid "Calibration complete"
 msgstr "Kalibracja zakończyła się powodzeniem"
 
-#: src/ui/settingsgui.py:2711
+#: src/ui/settingsgui.py:2836
 msgid "Error while calibrating"
 msgstr "Błąd kalibracji"
 
-#: src/ui/settingsgui.py:2990
+#: src/ui/settingsgui.py:3115
 msgid ""
 "Settings have been saved. Please restart the application for changes to "
 "take full effect."
 msgstr ""
 
-#: src/ui/settingsgui.py:2992
+#: src/ui/settingsgui.py:3117
 msgid "Settings have been saved."
 msgstr ""
 
-#: src/ui/settingsgui.py:3321
+#: src/ui/settingsgui.py:3446
 msgid "macOS Speech"
 msgstr ""
 
-#: src/ui/settingsgui.py:3322
+#: src/ui/settingsgui.py:3447
 msgid "Speech Dispatcher"
 msgstr "Speech Dispatcher"
 
-#: src/ui/settingsgui.py:3482 src/ui/settingsgui.py:3487
+#: src/ui/settingsgui.py:3607 src/ui/settingsgui.py:3612
 msgid "Default voice"
 msgstr ""
 

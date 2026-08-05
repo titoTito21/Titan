@@ -448,6 +448,184 @@ real controls. It lives in `src/ai/ocr/`.
 - The `titan_talk` gamepad mode does a much simpler Gemini-only flat-list
   version of the same idea for audio games; this package is the general one.
 
+### Titan Action API: any part of Titan calling into any add-on
+
+`src/titan_core/actions/` is how one piece of Titan asks another to do
+something. It is a **titan-core capability, not an AI one** - the AI agent and
+voice assistant are just its first consumers, and a component, widget, macro,
+launcher, gamepad mode or another application uses the identical calls.
+
+```python
+from src.titan_core import actions
+actions.list_addons()                        # what is installed and reachable
+actions.run('tedit', 'open_file', path=...)  # do it (never raises; result.ok / result.text)
+```
+
+Before this, reaching an add-on meant writing code *about* it inside
+`src/ai/` - the tMedia integration is ~1100 lines of exactly that (it reads
+tMedia's private data files and drives it through a startup argument). That
+does not scale and breaks whenever the add-on changes. Now the add-on
+**declares** what it can do and Titan discovers it:
+
+- `data/applications/tEdit/__actions.json` - the declaration (id, label,
+  per-action `summary`, typed `params`, `risk`, `mode`, `promote`)
+- `data/applications/tEdit/tedit_actions.py` - the handlers
+
+All nine add-on kinds use the same file, and because discovery goes through
+`platform_utils.discover_data_entries()`, a packaged `.TCA`/`.TCD` add-on is
+picked up exactly like a directory. An in-process add-on may skip the JSON and
+declare `TITAN_ACTIONS` in Python with real callables.
+
+**Two transports**, because add-ons live in two places:
+- `inproc` (`inproc.py`) - components, widgets, statusbar applets, TTS engines,
+  gamepad modes, launchers, Titan IM modules are already loaded, so an action
+  is a direct call marshalled onto the GUI thread. Handlers resolve against the
+  *already-loaded* module, so they act on the add-on's live state.
+- `process` (`process.py`) - applications and games. A `headless` action runs
+  in a short-lived subprocess printing one JSON object; a `live` action goes to
+  the running instance over the **Action Bus**; `any` (the default) uses the
+  open instance when there is one and stays out of the user's way otherwise.
+
+**The Action Bus** (`bus.py`) is one named pipe, `\\.\pipe\TitanActions`,
+started from `main.py`. An add-on joins with a single call:
+
+```python
+from src.titan_core.titan_actions import serve
+serve({'open_file': open_file, 'save': save}, id='tedit', label='Text Editor')
+```
+
+`src/titan_core/titan_actions.py` is deliberately **standalone and
+standard-library only** (it imports nothing from `src`), because the add-on
+importing it may be a wx app, a Tk launcher or a console script. `bus.py`
+imports `PipeChannel` *from it*, so there is exactly one definition of the wire
+behaviour. Handles are OVERLAPPED and not by accident: a synchronous pipe
+handle serialises all I/O on the file object, so a thread parked in ReadFile
+blocks the WriteFile answering it - which collapses the connection on the first
+call.
+
+The bus is **bidirectional**: an application can ask Titan to run *another*
+add-on's action (`titan_actions.call(...)` / `list_addons()`), which is how an
+add-on in its own process reaches components and other applications. Both ends
+dispatch on worker threads so a handler that calls back cannot deadlock.
+
+**Titan's own subsystems are providers too** (`builtin.py`), so an add-on never
+reimplements Titan: `titan` (settings, components, add-ons, TTS engines),
+`settings` (find a setting by what it does), `system` (volume, playback device,
+brightness, power plan, theme, Wi-Fi, autostart), `gamepad` (list/read/set/cycle
+the modes), `titannet`, `elten`, `im`, `ocr`, `memory`. These are **adapted, not
+rewritten**: `builtin._addon_from_tools()` turns the tool tables in
+`src/ai/tools/` into ActionSpecs with the callable attached, so there is one
+implementation with two audiences. An installed add-on can never shadow one of
+these ids - it is registered as `<id>_addon` with a warning instead.
+
+**`live` is the last resort.** An action must not require the add-on's window
+just because that is where the code was written - "write a note, then read it
+out in my ElevenLabs voice" cannot mean opening two applications first. So
+`any` is the default and the rule is: does the action need the *window*, or
+only the add-on's *data*? The API key, the download folder and the saved files
+are all on disk, and the window does not own them. ElevenLabs (`speak`,
+`save_speech`, `list_voices`) and tDownloader (`download`, folder settings) are
+written this way - they prefer the open window so the result joins its history
+and list, and work fully without it. `live` is left only for things like "save
+the document I have open" or "what is selected right now". Two supports for
+this: a per-action `"timeout"` in the manifest (an action that legitimately
+takes minutes is not killed at 45s), and **detached** work for anything that
+outlives the answer - audio playback, a large download - so the short-lived
+process can return at once. `titan.speak` reads text through Titan's own TTS,
+in Titan's process, so no add-on needs a voice or a window of its own.
+
+**Three outcomes, not two** (`interaction.py`). A handler returns a sentence
+when it worked, `fails(reason)` when it could not, and `needs(name, prompt,
+options=...)` when it must ask. Prose alone was not enough: a composite command
+cannot tell "there is no such note" from success and carries on to the step
+that assumed otherwise - which is exactly what the first `run_sequence` test
+exposed. A question is a *pending* result (`result.pending`,
+`result.question`), not a failure; `run_interactive()` runs the whole
+ask-and-retry loop, through a Titan dialog by default. A **required parameter
+that was not supplied becomes a question automatically**, built from its
+manifest `description`, so every action is askable without its author writing
+anything.
+
+**Composite commands** (`sequence.py`). `run_sequence(steps)` runs actions in
+order; `{{n}}` in a string argument is what step n returned; the run stops at
+the first step that fails or asks and the transcript names every step. Over the
+bus that is `titan_actions.call_sequence()`, and the AI has it as
+`titan_run_actions`. The **agent window can now ask too** - `get_tools(ask_user=)`
+adds the assistant's `ask_user` tool and `ai_agent_gui._ask_user` speaks the
+question and shows a dialog, so a half-specified request becomes a conversation
+instead of a guess.
+
+**Components declare actions without any manifest.** `zegarynka` (say the time,
+turn the chime on/off, change the interval), `macros` (list and run the user's
+macros) and `titan access` (reader on/off/toggle/say) each ship a
+`TITAN_ACTIONS` list in Python with real callables, found on the module
+`ComponentManager` already loaded - which is why `initialize_components()` ends
+with `actions.invalidate()`, or the registry would hold a snapshot taken before
+any component existed.
+
+**There is no permission wall between add-ons.** The Settings gate applies only
+to the AI (`action_tools.allowed()`); `dispatch.run()` is ungated, so any
+add-on reaches anything any other add-on declares, and Titan's own subsystems
+too. That is the point: nothing should ship its own editor, browser, file
+manager or downloader. An add-on that only wants to *call* others uses
+`titan_actions.connect()` rather than `serve()`.
+
+The AI's view of all this is `src/ai/action_tools.py`: `titan_list_actions` and
+`titan_run_action` always exist, and an action marked `"promote": true` becomes
+a first-class tool (capped at `PROMOTED_BUDGET`), which keeps the tool list
+bounded however many add-ons are installed. Gated by Settings -> AI features
+("Let the AI use the functions add-ons offer", plus a per-add-on list).
+
+**Bundled apps that ship a manifest**: tEdit (live edit/save + headless file
+read/write), TFM (headless file operations + live navigation), tWeb (opens
+pages in the browser the user actually has open, plus bookmarks/history),
+tNotes and tReminder (pure data, no app change needed), tDownloader and the
+ElevenLabs client (live). tMedia is deliberately still driven by the older
+bespoke code in `src/ai/titan_tools.py` - it is live-tested and migrating it
+buys nothing until the generic layer has been used in anger.
+
+Guide: `data/docu/programming_guide/action_api_guide_{en,pl}.md`, injected into
+every AI creation-kit prompt by `src/ai/creation_docs.py`.
+
+### Titan's own subsystems exposed to the AI
+
+`src/ai/tools/` is the other half: Titan's built-in services are not add-ons
+and have no manifest, so each gets a hand-written tool module over the Python
+API Titan already has. `get_subsystem_tools()` collects them, and a module that
+cannot import is skipped rather than taking the toolset down.
+
+- `settings_tools.py` - a schema over Titan's settings (what each one means,
+  what it accepts, words a user might use), because the settings file only
+  contains keys already changed and a model cannot find `alt_f4_action` from
+  "what should Alt+F4 do". Search with `titan_find_setting`.
+- `system_tools.py` - the *computer's* settings: volume, playback device
+  (via the undocumented `IPolicyConfig`, the only way to switch it), brightness,
+  power plan, light/dark theme, Wi-Fi, whether Titan starts with Windows.
+  Deliberately scoped: read anything, change the ordinary things, and open the
+  right `ms-settings:` page for everything else.
+- `titannet_tools.py` - forum topics and replies, mail, groups, rooms, private
+  messages. Everything that publishes is `always_confirm`.
+- `elten_tools.py` - Elten messages, forums, blogs; signs itself in from the
+  credentials saved in the encrypted `titan.IM` file.
+- `im_tools.py` - one bridge for every web-backed messenger, because
+  `IMBackend` is already service-agnostic and capability-gated. Never starts an
+  engine the user did not open.
+- `ocr_tools.py` - AI OCR as something the agent reaches for when
+  `read_focused_window` comes back empty: read the window, ask one question
+  about it, press/type/toggle, or hand it to the user as the real overlay.
+
+### AI memory across runs
+
+`src/ai/memory.py`. The agent and assistant each began every run with an empty
+history, so "and now save it" had nothing to refer to. Two stores under
+`%APPDATA%/titosoft/Titan/ai/`: `conversation.jsonl` (recent exchanges replayed
+verbatim, older ones surviving as a one-line digest of subjects) and
+`notes.jsonl` (facts the user asked to keep, injected in full). `run_agent`
+takes `remember=True` and `memory_source`, and the agent and the voice
+assistant **share** the memory - one person, one conversation. Tools:
+`ai_remember`, `ai_recall`, `ai_list_notes`, `ai_forget`. Settings -> AI
+features has the switch, the number of exchanges, and a Forget button.
+
 ### Key Dependencies
 - wxPython for GUI
 - accessible_output3 for screen reader output

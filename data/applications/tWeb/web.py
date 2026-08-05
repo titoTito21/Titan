@@ -492,4 +492,12 @@ class SettingsDialog(wx.Dialog):
 if __name__ == '__main__':
     app = wx.App()
     frame = BrowserFrame(None)
+    # Join the Titan Action Bus so Titan, its AI and any other add-on can open
+    # pages in the browser the user actually has open - instead of embedding a
+    # browser of their own. Never fatal.
+    try:
+        import tweb_actions
+        tweb_actions.attach(frame)
+    except Exception as _e:
+        print(f"[tWeb] Titan actions unavailable: {_e}")
     app.MainLoop()

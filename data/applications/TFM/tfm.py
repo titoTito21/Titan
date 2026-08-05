@@ -17,6 +17,13 @@ def main(initial_path=None):
 
     frame = FileManager(initial_path=initial_path)
     frame.Show()
+    # Join the Titan Action Bus so Titan and its AI can see where this window
+    # is and navigate it. Never fatal: TFM runs exactly as before without it.
+    try:
+        import tfm_actions
+        tfm_actions.attach(frame)
+    except Exception as _e:
+        print(f"[TFM] Titan actions unavailable: {_e}")
     app.MainLoop()
 
 if __name__ == "__main__":

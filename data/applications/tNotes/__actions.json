@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "id": "tnotes",
+  "label": "Notes",
+  "description": "The user's notes. Reads, writes, searches and deletes them without opening a window.",
+  "transport": "process",
+  "entry": "tnotes_actions.py",
+  "actions": [
+    {
+      "name": "list_notes",
+      "summary": "List the user's notes by title.",
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "read_note",
+      "summary": "Read one of the user's notes.",
+      "params": {
+        "title": {"type": "string", "required": true, "description": "The note's title, or part of it."}
+      },
+      "mode": "headless",
+      "risk": "auto",
+      "promote": true
+    },
+    {
+      "name": "search_notes",
+      "summary": "Find the notes containing some text.",
+      "params": {
+        "query": {"type": "string", "required": true, "description": "Words to look for."}
+      },
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "create_note",
+      "summary": "Create a note. Replaces an existing note with the same title.",
+      "params": {
+        "title": {"type": "string", "required": true, "description": "The note's title."},
+        "text": {"type": "string", "description": "The body of the note."}
+      },
+      "mode": "headless",
+      "risk": "confirm",
+      "promote": true
+    },
+    {
+      "name": "append_note",
+      "summary": "Add a line to a note, creating it if it does not exist yet.",
+      "params": {
+        "title": {"type": "string", "required": true, "description": "The note's title."},
+        "text": {"type": "string", "required": true, "description": "The line to add."}
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "delete_note",
+      "summary": "Delete one of the user's notes.",
+      "params": {
+        "title": {"type": "string", "required": true, "description": "The note's title."}
+      },
+      "mode": "headless",
+      "risk": "always_confirm"
+    }
+  ]
+}

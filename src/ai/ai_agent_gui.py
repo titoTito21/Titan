@@ -117,6 +117,37 @@ class AIAgentFrame(wx.Frame):
         return agent_tools.describe_action(name, args)
 
     # -- confirmation (called on the worker thread) ---------------------- #
+    def _ask_user(self, question):
+        """Put a follow-up question to the user and wait for the answer.
+
+        Runs on the agent's worker thread, so the dialog is built on the GUI
+        thread and this blocks until it closes. The question is spoken as well
+        as shown: a screen-reader user must not have to go looking for a dialog
+        that appeared while they were listening to the transcript.
+        """
+        box = {}
+        done = threading.Event()
+
+        def ask():
+            self._append(_("Agent"), question)
+            _speak(question)
+            play_sound('core/dialog.ogg')
+            dlg = wx.TextEntryDialog(self, question, _("The agent is asking"))
+            box['answer'] = dlg.GetValue() if dlg.ShowModal() == wx.ID_OK else ''
+            dlg.Destroy()
+            done.set()
+
+        wx.CallAfter(ask)
+        # No timeout: the user is being asked a question and may take as long
+        # as they like. Cancelling the run is what stops it.
+        while not done.wait(0.5):
+            if self._cancel is not None and self._cancel.is_set():
+                raise ai_agent.AgentCancelled()
+        answer = box.get('answer', '')
+        if answer:
+            self._append(_("You"), answer)
+        return answer
+
     def _confirm(self, tool, args):
         policy = ai_provider.get_agent_confirm()
         # Autonomous means autonomous: never interrupt the user with a
@@ -167,7 +198,10 @@ class AIAgentFrame(wx.Frame):
         play_sound('core/SELECT.ogg')
 
         policy = ai_provider.get_agent_confirm()
-        tools = agent_tools.get_tools()
+        # With ask_user the agent can come back for a missing detail instead of
+        # guessing it - which is what a composite request ("write it, then send
+        # it to Anna") needs when one part was left vague.
+        tools = agent_tools.get_tools(ask_user=self._ask_user)
 
         def work():
             try:

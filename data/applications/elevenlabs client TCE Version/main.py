@@ -329,4 +329,11 @@ if __name__ == '__main__':
     app = wx.App()
     frame = ElevenLabsClient(None, title=_("ElevenLabs Client"))
     frame.Show()
+    # Join the Titan Action Bus so Titan, its AI and other add-ons can have
+    # text spoken here instead of each building their own ElevenLabs client.
+    try:
+        import elevenlabs_actions
+        elevenlabs_actions.attach(frame)
+    except Exception as _e:
+        print(f"[ElevenLabs] Titan actions unavailable: {_e}")
     app.MainLoop()

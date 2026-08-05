@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "tdownloader",
+  "label": "Download Manager",
+  "description": "Fetches a file to the user's download folder. Works without opening the manager; when it is open the download joins its list with the usual progress and completion announcement. Any add-on that needs to fetch a file for the user should call this rather than downloading on its own.",
+  "transport": "process",
+  "entry": "downloader_actions.py",
+  "launch_if_needed": false,
+  "actions": [
+    {
+      "name": "download",
+      "summary": "Download a file from a web address to the user's download folder. Does not need the Download Manager open.",
+      "params": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "Full http:// or https:// address of the file."
+        },
+        "folder": {
+          "type": "string",
+          "description": "Save it here instead of the usual download folder."
+        }
+      },
+      "mode": "any",
+      "risk": "confirm",
+      "promote": true
+    },
+    {
+      "name": "list_downloads",
+      "summary": "List what has been downloaded.",
+      "mode": "any",
+      "risk": "auto"
+    },
+    {
+      "name": "get_download_folder",
+      "summary": "Say where downloads are being saved.",
+      "mode": "any",
+      "risk": "auto"
+    },
+    {
+      "name": "set_download_folder",
+      "summary": "Change where downloads are saved.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "The folder to save downloads in."
+        }
+      },
+      "mode": "any",
+      "risk": "confirm"
+    }
+  ]
+}

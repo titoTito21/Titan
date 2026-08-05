@@ -428,3 +428,94 @@ if __name__ == '__main__':
     time.sleep(12)
     shutdown()
     print("\nTest completed!")
+
+
+# ===========================================================================
+# Titan actions - what Titan, its AI and other add-ons can ask this component
+# ===========================================================================
+# A component runs inside Titan, so no manifest file is needed: this list is
+# found on the module Titan already loaded, which means the handlers act on the
+# live component - the running clock thread, the settings actually in force.
+
+def action_say_time():
+    """Say the current time out loud, as the clock chime would."""
+    import datetime
+    try:
+        from src.titan_core.translation import language_code as lang
+    except Exception:
+        lang = 'pl'
+    now = datetime.datetime.now()
+    spoken = time_to_words(now.hour, now.minute, lang=lang)
+    _speak(spoken)
+    return spoken
+
+
+def action_get_settings():
+    """Say whether the clock chime is on and how often it speaks."""
+    settings = load_clock_settings()
+    state = "on" if settings.get('enabled') else "off"
+    return (f"The clock chime is {state}, speaking every "
+            f"{settings.get('interval')} minutes.")
+
+
+def action_set_enabled(enabled=True):
+    """Turn the clock chime on or off."""
+    want = str(enabled).strip().lower() not in ('0', 'false', 'no', 'off')
+    settings = load_clock_settings()
+    settings['enabled'] = want
+    save_clock_settings(settings)
+    _restart_clock()
+    return "The clock chime is on." if want else "The clock chime is off."
+
+
+def action_set_interval(minutes):
+    """Change how often the clock chime speaks."""
+    try:
+        value = int(minutes)
+    except (TypeError, ValueError):
+        return fails("Give the interval as a whole number of minutes.")
+    if not 1 <= value <= 720:
+        return fails("The interval has to be between 1 and 720 minutes.")
+    settings = load_clock_settings()
+    settings['interval'] = value
+    save_clock_settings(settings)
+    _restart_clock()
+    return f"The clock chime will now speak every {value} minutes."
+
+
+def _restart_clock():
+    """Apply changed settings to the thread that is already running."""
+    try:
+        shutdown()
+        initialize()
+    except Exception as e:
+        print(f"[zegarynka] Could not restart the clock thread: {e}")
+
+
+try:
+    from src.titan_core.actions import fails
+except Exception:                       # Titan not importable - actions unused
+    def fails(reason):
+        return reason
+
+
+TITAN_ACTIONS = [
+    {'name': 'say_time',
+     'summary': "Say the current time out loud, the way the clock chime says "
+                "it.",
+     'run': action_say_time},
+    {'name': 'get_settings',
+     'summary': "Say whether the clock chime is on and how often it speaks.",
+     'run': action_get_settings},
+    {'name': 'set_enabled',
+     'summary': "Turn the clock chime on or off.",
+     'params': {'enabled': {'type': 'boolean',
+                            'description': "True to turn it on."}},
+     'risk': 'confirm', 'run': action_set_enabled},
+    {'name': 'set_interval',
+     'summary': "Change how often the clock chime announces the time.",
+     'params': {'minutes': {'type': 'integer', 'required': True,
+                            'description': "Minutes between announcements, "
+                                           "1 to 720."}},
+     'risk': 'confirm', 'run': action_set_interval},
+]

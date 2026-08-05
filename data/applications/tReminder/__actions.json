@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "id": "treminder",
+  "label": "Organizer",
+  "description": "The user's reminders and calendar. Reads and writes them without opening a window, and Titan announces them when they are due even if the Organizer is closed.",
+  "transport": "process",
+  "entry": "reminder_actions.py",
+  "actions": [
+    {
+      "name": "list_reminders",
+      "summary": "List the user's reminders. Optionally only today's or tomorrow's.",
+      "params": {
+        "when": {"type": "string", "description": "'today' or 'tomorrow' to narrow it down."},
+        "include_done": {"type": "boolean", "description": "Include reminders already marked done."}
+      },
+      "mode": "headless",
+      "risk": "auto",
+      "promote": true
+    },
+    {
+      "name": "next_reminder",
+      "summary": "Say which reminder is coming up next.",
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "create_reminder",
+      "summary": "Create a reminder in the Organizer.",
+      "params": {
+        "name": {"type": "string", "required": true, "description": "What to be reminded of."},
+        "description": {"type": "string", "description": "Text spoken or shown when it fires."},
+        "date": {"type": "string", "description": "'today', 'tomorrow' or a date like 2026-08-12. Defaults to today."},
+        "time": {"type": "string", "description": "Time of day as HH:MM. Defaults to the next full hour."},
+        "priority": {"type": "string", "description": "low, medium or high.", "enum": ["low", "medium", "high"]},
+        "repeat": {"type": "string", "description": "once (default), every15, daily or weekly."}
+      },
+      "mode": "headless",
+      "risk": "confirm",
+      "promote": true
+    },
+    {
+      "name": "complete_reminder",
+      "summary": "Mark a reminder as done.",
+      "params": {
+        "which": {"type": "string", "required": true, "description": "The reminder's name, or its number from list_reminders."}
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "delete_reminder",
+      "summary": "Delete a reminder.",
+      "params": {
+        "which": {"type": "string", "required": true, "description": "The reminder's name, or its number from list_reminders."}
+      },
+      "mode": "headless",
+      "risk": "always_confirm"
+    }
+  ]
+}

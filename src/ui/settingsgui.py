@@ -1230,6 +1230,55 @@ class SettingsFrame(wx.Frame):
         self.ai_agent_confirm_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(_dep(self.ai_agent_confirm_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
+        # --- What the AI may reach ---------------------------------------- #
+        # Add-ons declare their own functions (the Titan Action API), so the
+        # list below is built from what is actually installed rather than from
+        # anything hard-coded here.
+        vbox.Add(_dep(wx.StaticLine(panel)), flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
+        reach_header = wx.StaticText(panel, label=_("What the AI may reach"))
+        vbox.Add(_dep(reach_header), flag=wx.LEFT | wx.TOP, border=10)
+
+        self.ai_addon_actions_cb = wx.CheckBox(panel, label=_(
+            "Let the AI use the functions add-ons offer"))
+        self.ai_addon_actions_cb.SetName(_("Let the AI use the functions add-ons offer"))
+        self.ai_addon_actions_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_addon_actions_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(_dep(self.ai_addon_actions_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        addons_label = wx.StaticText(panel, label=_(
+            "Add-ons the AI may drive (untick to exclude one):"))
+        vbox.Add(_dep(addons_label), flag=wx.LEFT | wx.TOP, border=10)
+        self._ai_addon_ids = []
+        self.ai_addon_list = wx.CheckListBox(panel, choices=[])
+        self.ai_addon_list.SetName(_("Add-ons the AI may drive"))
+        self.ai_addon_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ai_addon_list), flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
+
+        # --- Memory -------------------------------------------------------- #
+        memory_header = wx.StaticText(panel, label=_("Memory"))
+        vbox.Add(_dep(memory_header), flag=wx.LEFT | wx.TOP, border=10)
+
+        self.ai_memory_cb = wx.CheckBox(panel, label=_(
+            "Remember earlier conversations"))
+        self.ai_memory_cb.SetName(_("Remember earlier conversations"))
+        self.ai_memory_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_memory_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(_dep(self.ai_memory_cb), flag=wx.LEFT | wx.TOP, border=10)
+
+        memory_turns_label = wx.StaticText(panel, label=_(
+            "How many earlier exchanges to carry into a new one:"))
+        vbox.Add(_dep(memory_turns_label), flag=wx.LEFT | wx.TOP, border=10)
+        self.ai_memory_turns = wx.SpinCtrl(panel, min=0, max=100, initial=20)
+        self.ai_memory_turns.SetName(_("Earlier exchanges to remember"))
+        self.ai_memory_turns.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        vbox.Add(_dep(self.ai_memory_turns), flag=wx.LEFT, border=10)
+
+        self.ai_memory_forget_btn = wx.Button(panel, label=_(
+            "Forget the conversation so far"))
+        self.ai_memory_forget_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_memory_forget_btn.Bind(wx.EVT_BUTTON, self._on_ai_memory_forget)
+        vbox.Add(_dep(self.ai_memory_forget_btn), flag=wx.LEFT | wx.TOP, border=10)
+
         # --- Voice assistant (Perun / Melitele) --------------------------- #
         vbox.Add(_dep(wx.StaticLine(panel)), flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, border=10)
         assistant_header = wx.StaticText(panel, label=_("Voice assistant"))
@@ -1500,6 +1549,65 @@ class SettingsFrame(wx.Frame):
         if event:
             event.Skip()
 
+    def _load_ai_reach_and_memory(self):
+        """Fill in the add-on permission list and the memory controls.
+
+        The list is built from the add-ons that actually declare actions, so a
+        newly installed add-on appears here without any change to this file.
+        """
+        from src.settings.settings import get_setting
+
+        def _flag(key, default):
+            value = get_setting(key, default, section='ai')
+            return str(value).strip().lower() not in ('0', 'false', 'no', 'off')
+
+        self.ai_addon_actions_cb.SetValue(_flag('addon_actions', True))
+        self.ai_memory_cb.SetValue(_flag('memory_enabled', True))
+        try:
+            self.ai_memory_turns.SetValue(
+                int(get_setting('memory_turns', 20, section='ai')))
+        except (TypeError, ValueError):
+            self.ai_memory_turns.SetValue(20)
+
+        blocked = str(get_setting('addon_actions_blocked', '', section='ai') or '')
+        blocked_ids = {part.strip().lower()
+                       for part in blocked.replace(';', ',').split(',')
+                       if part.strip()}
+        entries = []
+        try:
+            from src.titan_core import actions as core_actions
+            # Titan's own subsystems are not listed: they are governed by their
+            # own settings (AI OCR's switch, Titan-Net's, and the master one
+            # above), not by a per-add-on tick box.
+            entries = [entry for entry in core_actions.list_addons()
+                       if not entry.get('builtin')]
+        except Exception as e:
+            print(f"[settings] could not list add-on actions: {e}")
+        self._ai_addon_ids = [entry['id'] for entry in entries]
+        labels = [f"{entry['label']} ({entry['kind_label']}) - "
+                  + _("{count} functions").format(count=len(entry['actions']))
+                  for entry in entries]
+        self.ai_addon_list.Set(labels)
+        for index, addon_id in enumerate(self._ai_addon_ids):
+            self.ai_addon_list.Check(index, addon_id not in blocked_ids)
+
+    def _on_ai_memory_forget(self, event):
+        """Throw away the remembered conversation. Notes are kept: the user
+        asked for those deliberately, and losing them to a button labelled
+        'forget the conversation' would be a surprise."""
+        answer = wx.MessageBox(
+            _("Forget everything the AI remembers of your conversations so "
+              "far? Facts you asked it to remember are kept."),
+            _("Forget the conversation"), wx.YES_NO | wx.ICON_QUESTION, self)
+        if answer != wx.YES:
+            return
+        try:
+            from src.ai import memory
+            message = memory.clear_conversation()
+        except Exception as e:
+            message = _("Could not clear the memory: {error}").format(error=e)
+        wx.MessageBox(message, _("Memory"), wx.OK | wx.ICON_INFORMATION, self)
+
     def _load_ai_features(self, panel):
         from src.ai import ai_provider as ap
         self.ai_enable_cb.SetValue(ap.is_ai_enabled())
@@ -1539,6 +1647,8 @@ class SettingsFrame(wx.Frame):
             if announce in self._reminder_announce_values else 0)
         self.reminder_ai_phrasing_cb.SetValue(ap.get_reminder_ai_phrasing())
 
+        self._load_ai_reach_and_memory()
+
         # AI OCR
         self.ocr_enabled_cb.SetValue(ap.get_ocr_enabled())
         scope = ap.get_ocr_scope()
@@ -1575,6 +1685,21 @@ class SettingsFrame(wx.Frame):
                 self._ai_agent_confirm_values[self.ai_agent_confirm_radio.GetSelection()])
         except Exception:
             pass
+        # What the AI may reach, and what it remembers.
+        try:
+            from src.settings.settings import set_setting
+            set_setting('addon_actions', self.ai_addon_actions_cb.GetValue(),
+                        section='ai')
+            blocked = [addon_id for index, addon_id
+                       in enumerate(self._ai_addon_ids)
+                       if not self.ai_addon_list.IsChecked(index)]
+            set_setting('addon_actions_blocked', ",".join(blocked), section='ai')
+            set_setting('memory_enabled', self.ai_memory_cb.GetValue(),
+                        section='ai')
+            set_setting('memory_turns', self.ai_memory_turns.GetValue(),
+                        section='ai')
+        except Exception as e:
+            print(f"[settings] could not save the AI access settings: {e}")
         # Voice assistant
         try:
             if self._assistant_personas:

@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "id": "tweb",
+  "label": "Web Browser",
+  "description": "Titan's web browser. Opens addresses in the browser the user actually has open, and reads their bookmarks and history. Any add-on that needs to show a web page should call this instead of embedding its own browser.",
+  "transport": "process",
+  "entry": "tweb_actions.py",
+  "launch_if_needed": false,
+  "actions": [
+    {
+      "name": "open_url",
+      "summary": "Open a web address in the user's browser, starting it if it is not running.",
+      "params": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "The address. A bare domain gets https:// added."
+        },
+        "new_tab": {
+          "type": "boolean",
+          "description": "Open in a new tab (default) or replace the current page."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm",
+      "promote": true,
+      "launch_if_needed": true
+    },
+    {
+      "name": "current_page",
+      "summary": "Say which page the browser is showing.",
+      "mode": "live",
+      "risk": "auto"
+    },
+    {
+      "name": "list_tabs",
+      "summary": "List the browser's open tabs.",
+      "mode": "live",
+      "risk": "auto"
+    },
+    {
+      "name": "go_back",
+      "summary": "Go back a page in the browser.",
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "go_forward",
+      "summary": "Go forward a page in the browser.",
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "reload_page",
+      "summary": "Reload the page the browser is showing.",
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "bookmark_current",
+      "summary": "Bookmark the page the browser is showing.",
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "list_bookmarks",
+      "summary": "List the user's browser bookmarks.",
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "find_bookmark",
+      "summary": "Find a bookmark by title or address.",
+      "params": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Words to look for."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "add_bookmark",
+      "summary": "Save a bookmark.",
+      "params": {
+        "url": {
+          "type": "string",
+          "required": true,
+          "description": "The address."
+        },
+        "title": {
+          "type": "string",
+          "description": "What to call it."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "remove_bookmark",
+      "summary": "Remove a bookmark.",
+      "params": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Title or address of the bookmark."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "search_history",
+      "summary": "Look through the pages the user has visited. With no query, the most recent ones.",
+      "params": {
+        "query": {
+          "type": "string",
+          "description": "Words to look for."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "How many (default 30)."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto"
+    }
+  ]
+}

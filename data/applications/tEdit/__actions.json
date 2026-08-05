@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "id": "tedit",
+  "label": "Text Editor",
+  "description": "Titan's text editor. Opens, edits and saves text files, and can read or write a file without opening a window.",
+  "transport": "process",
+  "entry": "tedit_actions.py",
+  "launch_if_needed": false,
+  "actions": [
+    {
+      "name": "get_status",
+      "summary": "Say which document the text editor has open, how long it is and whether it has unsaved changes.",
+      "mode": "live",
+      "risk": "auto"
+    },
+    {
+      "name": "get_text",
+      "summary": "Read the text of the document open in the editor.",
+      "mode": "live",
+      "risk": "auto"
+    },
+    {
+      "name": "open_file",
+      "summary": "Open a text file in the editor.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Full path of the file to open."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm",
+      "promote": true,
+      "launch_if_needed": true
+    },
+    {
+      "name": "insert_text",
+      "summary": "Insert text at the cursor in the open document.",
+      "params": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "Text to insert."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm",
+      "promote": true
+    },
+    {
+      "name": "set_text",
+      "summary": "Replace the whole document with new text.",
+      "params": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "The new contents."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "replace_text",
+      "summary": "Find and replace text in the open document.",
+      "params": {
+        "find": {
+          "type": "string",
+          "required": true,
+          "description": "Text to look for."
+        },
+        "replace": {
+          "type": "string",
+          "description": "Text to put in its place (empty deletes it)."
+        },
+        "all": {
+          "type": "boolean",
+          "description": "Replace every occurrence (default) or only the first."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "save",
+      "summary": "Save the open document.",
+      "mode": "live",
+      "risk": "confirm",
+      "promote": true
+    },
+    {
+      "name": "save_as",
+      "summary": "Save the open document under a new name.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Where to save it."
+        }
+      },
+      "mode": "live",
+      "risk": "confirm"
+    },
+    {
+      "name": "read_file",
+      "summary": "Read a text file. Does not open a window.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "File to read."
+        }
+      },
+      "mode": "headless",
+      "risk": "auto"
+    },
+    {
+      "name": "write_file",
+      "summary": "Create or overwrite a text file. Does not open a window.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "File to write."
+        },
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "What to write."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    },
+    {
+      "name": "append_file",
+      "summary": "Add text to the end of a file. Does not open a window.",
+      "params": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "File to add to."
+        },
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "What to add."
+        }
+      },
+      "mode": "headless",
+      "risk": "confirm"
+    }
+  ]
+}

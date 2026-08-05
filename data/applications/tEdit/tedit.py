@@ -1096,4 +1096,12 @@ if __name__ == "__main__":
     app = wx.App()
     frame = TextEditor(None) # Usunięto title="TEdit" z Frame, bo ustawiamy je w __init__
     frame.Show()
+    # Join the Titan Action Bus, so Titan and its AI can drive this editor
+    # (open, read, edit, save the document that is actually open). Never fatal:
+    # tEdit must run exactly as before when Titan is not there.
+    try:
+        import tedit_actions
+        tedit_actions.attach(frame)
+    except Exception as _e:
+        print(f"[tEdit] Titan actions unavailable: {_e}")
     app.MainLoop()
