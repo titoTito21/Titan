@@ -641,6 +641,24 @@ end
   not run. The Macro Manager offers the same check on any .tcs macro (context
   menu -> Check script, GUI and Invisible UI), and its **Titan Script** tab is
   the language reference itself.
+- **Checking is a review, not a parse** (`review_tcs` -> `check_tcs` +
+  `review_warnings` + `review_with_ai`). "The macro is fine" is a promise, and
+  parsing cannot make it: a script can name only real actions and still be
+  wrong. The warning pass compares the script against the *documented* language
+  and against what each action *declares* - a variable never set or **used
+  before the line that sets it** (order-aware, and it trusts only straight-line
+  code, so a loop or an `on` block using what it sets later is not a false
+  positive), a word from another language that quietly became pseudocode
+  (`_TCS_FOREIGN_WORDS`: while/for/print/var/sleep/exit...), an `on` block for a
+  button that is not there, a value outside an action's declared `enum`, a line
+  after `stop`, an AI-backed action while AI features are off. With AI features
+  on, `review_with_ai` then has a model read the script *with the reference in
+  front of it* for what neither can prove - reported separately and always
+  labelled advisory, never turned into a refusal, and never asked at all about a
+  script that does not parse. Live-checked: it caught "the note is created on
+  line 2 using title and body before they are asked for on lines 3 and 4".
+  `create_macro` / `edit_macro` append the warnings to their success message, so
+  the AI that wrote a macro is told what is suspicious in it.
 - **The reference is in the user's own language.** `_MACRO_LANGUAGE` /
   `_MACRO_LANGUAGE_PL` and `_macro_language_text()`: a Polish Titan shows the
   Polish reference, and `_tcs_template()` writes a Polish template into a new

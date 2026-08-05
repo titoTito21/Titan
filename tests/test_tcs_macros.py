@@ -792,6 +792,24 @@ class CheckScriptIsARealReview(unittest.TestCase):
         self.assertTrue(any('line 11' in w and 'never run' in w
                             for w in warnings), warnings)
 
+    def test_an_answer_used_before_it_is_asked_for(self):
+        # "Save the note, then ask what to call it" runs, and saves an
+        # untitled note every time.
+        warnings = MACROS.review_warnings(
+            'tnotes.create_note title="{{title}}" text="x"\n'
+            'ask title = "What should it be called?"')
+        self.assertTrue(any('only gets a value on line 2' in w
+                            for w in warnings), warnings)
+
+    def test_a_loop_may_use_what_it_sets_at_the_end(self):
+        self.assertEqual([], MACROS.review_warnings(
+            'repeat 3\n    say "{{total}}"\n    set total = 1\nend'))
+
+    def test_a_button_block_may_use_the_forms_controls(self):
+        self.assertEqual([], MACROS.review_warnings(
+            'dialog "x"\n    field a = "A"\n    buttons p = "Go"\n'
+            '    on "Go"\n        say "{{a}}"\n    end\nend'))
+
     def test_a_misspelt_variable_suggests_the_real_one(self):
         warnings = MACROS.review_warnings('set greeting = "x"\n'
                                           'say "{{greting}}"')

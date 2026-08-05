@@ -4801,12 +4801,16 @@ def _tcs_names_in(node, into):
                 continue
             into.add(lowered)
     elif kind == 'call':
+        # An action's arguments are plain literals, not value nodes - they are
+        # filled in from the variables at the moment the action is called.
         for value in list(node.get('named', {}).values()) + list(
-                node.get('positional', [])):
-            _tcs_names_in(value, into)
-        for name in re.findall(r'\{\{([a-zA-Z_][a-zA-Z_0-9]*)\}\}',
-                               str(node.get('path', ''))):
-            into.add(name.lower())
+                node.get('positional', [])) + [node.get('path', '')]:
+            if isinstance(value, dict):
+                _tcs_names_in(value, into)
+                continue
+            for name in re.findall(r'\{\{([a-zA-Z_][a-zA-Z_0-9]*)\}\}',
+                                   str(value)):
+                into.add(name.lower())
 
 
 def review_warnings(text, base_dir=''):
@@ -4820,10 +4824,20 @@ def review_warnings(text, base_dir=''):
     warnings = []
     ai_on = _ai_features_on()
     assigned = set(_TCS_GIVEN_NAMES)
-    used = []                       # (line, name) in the order they are read
+    first_set = {}                  # name -> the line that first gives it one
+    used = []                       # (line, name, straight_line) as they are read
 
     def note(line, message):
         warnings.append(f"line {line}: {message}")
+
+    def remember(name, line, straight):
+        """This line gives ``name`` a value."""
+        lowered = str(name or '').lower()
+        if not lowered:
+            return
+        assigned.add(lowered)
+        if straight and lowered not in first_set:
+            first_set[lowered] = line
 
     def values_of(statement):
         """The value nodes a statement reads."""
@@ -4841,7 +4855,11 @@ def review_warnings(text, base_dir=''):
                      if isinstance(n, dict))
         return found
 
-    def walk(body, inside_dialog=None):
+    def walk(body, inside_dialog=None, straight=True):
+        # ``straight`` is "these lines run once, in this order". Inside a
+        # 'repeat' or an 'on' block they do not - a variable set at the end of
+        # a loop is perfectly good at the top of the next turn - so the
+        # order-sensitive check below only trusts straight-line code.
         ended = None
         for statement in body:
             kind = statement.get('kind')
@@ -4855,20 +4873,18 @@ def review_warnings(text, base_dir=''):
                 names = set()
                 _tcs_names_in(node, names)
                 for name in names:
-                    used.append((line, name))
+                    used.append((line, name, straight))
             if kind == 'call':
                 names = set()
                 _tcs_names_in(statement, names)
                 for name in names:
-                    used.append((line, name))
+                    used.append((line, name, straight))
                 _warn_about_action(statement, note, ai_on)
             elif kind == 'set':
-                walk([statement['value']], inside_dialog)
-                assigned.add(str(statement.get('name', '')).lower())
-            elif kind == 'prompt':
-                assigned.add(str(statement.get('name', '')).lower())
-            elif kind == 'field':
-                assigned.add(str(statement.get('name', '')).lower())
+                walk([statement['value']], inside_dialog, straight)
+                remember(statement.get('name'), line, straight)
+            elif kind in ('prompt', 'field'):
+                remember(statement.get('name'), line, straight)
             elif kind == 'prose':
                 word = str(statement.get('text') or '').strip().lower()
                 first = word.split(' ')[0].strip('(:')
@@ -4883,15 +4899,15 @@ def review_warnings(text, base_dir=''):
                                f"words, so it needs AI features on every time "
                                f"the macro runs, and what it does may vary")
             elif kind == 'repeat':
-                walk(statement.get('body') or [], inside_dialog)
+                walk(statement.get('body') or [], inside_dialog, False)
             elif kind == 'if':
-                walk(statement.get('then') or [], inside_dialog)
-                walk(statement.get('else') or [], inside_dialog)
+                walk(statement.get('then') or [], inside_dialog, straight)
+                walk(statement.get('else') or [], inside_dialog, straight)
             elif kind == 'dialog':
-                walk(statement.get('fields') or [], statement)
+                walk(statement.get('fields') or [], statement, straight)
             elif kind == 'handler':
                 _warn_about_handler(statement, inside_dialog, note)
-                walk(statement.get('body') or [], inside_dialog)
+                walk(statement.get('body') or [], inside_dialog, False)
             elif kind in ('stop', 'return'):
                 ended = ('stop' if kind == 'stop' else 'return', line)
 
@@ -4913,12 +4929,15 @@ def review_warnings(text, base_dir=''):
         # is the documentation, so it is what the script is compared against.
         for name, param in spec.params.items():
             allowed = param.get('enum')
-            node = statement['named'].get(name)
-            if not allowed or not isinstance(node, dict):
+            given = statement['named'].get(name)
+            if not allowed or given is None:
                 continue
-            if node.get('kind') != 'value':
-                continue
-            value = str(node.get('value', ''))
+            # An action's arguments are literals; anything else is left to run.
+            if isinstance(given, dict):
+                if given.get('kind') != 'value':
+                    continue
+                given = given.get('value')
+            value = str(given)
             if '{{' in value:
                 continue
             if value and value.lower() not in [str(a).lower() for a in allowed]:
@@ -4954,18 +4973,29 @@ def review_warnings(text, base_dir=''):
         warnings.append(f"the review stopped early: {e}")
 
     # A name read but never given a value is empty - which is not an error and
-    # is almost never what the author meant.
+    # is almost never what the author meant. Nor is a name read *before* the
+    # line that sets it: "save the note, then ask what to call it" runs, and
+    # saves an untitled note every time.
     seen = set()
-    for line, name in used:
-        if name in assigned or name in seen:
+    for line, name, straight in used:
+        if name in seen:
             continue
-        seen.add(name)
-        close = [other for other in sorted(assigned)
-                 if other not in _TCS_GIVEN_NAMES
-                 and (other.startswith(name[:3]) or name.startswith(other[:3]))]
-        warnings.append(
-            f"line {line}: '{name}' is used but never set, so it will be "
-            f"empty" + (f" - did you mean {close[0]}?" if close else ""))
+        if name not in assigned:
+            seen.add(name)
+            close = [other for other in sorted(assigned)
+                     if other not in _TCS_GIVEN_NAMES
+                     and (other.startswith(name[:3])
+                          or name.startswith(other[:3]))]
+            warnings.append(
+                f"line {line}: '{name}' is used but never set, so it will be "
+                f"empty" + (f" - did you mean {close[0]}?" if close else ""))
+            continue
+        set_at = first_set.get(name)
+        if straight and set_at and set_at > line:
+            seen.add(name)
+            warnings.append(
+                f"line {line}: '{name}' is used here but only gets a value on "
+                f"line {set_at}, so it will be empty the first time")
     return warnings
 
 
@@ -5656,7 +5686,11 @@ _TCS_WRITE_RULES = """How to write a Titan Script that will actually be saved:
 - An action listed as [needs AI] is carried out by a model and will not run
   with AI features off. Prefer one that is not when there is a choice.
 - Every other line names an action: add-on.action value or name="value".
-- macros.check_macro checks a script without running it."""
+- macros.check_macro REVIEWS a script without running it: what would not run,
+  what would run and still looks wrong (a variable never set or used before it
+  is set, a value an action does not take, a button that is not there), and -
+  with AI features on - what the AI notices reading it. Run it on what you
+  wrote and fix what it says before you hand the macro over."""
 
 
 def _tcs_write_problems(script, base_dir='', allow_pseudocode=False):
@@ -6147,7 +6181,21 @@ One statement per line. # starts a comment.
   Pseudocode is for somebody writing their own macro in a hurry. A macro
   written FOR somebody else (by the AI, or by the creation kit) must name real
   actions: it is checked before it is saved, and a line left in words is
-  refused with its line number unless there is genuinely no action for it."""
+  refused with its line number unless there is genuinely no action for it.
+
+  CHECKING ONE (Macro Manager -> Check script, or macros.check_macro) reads the
+  script against this reference and against what each action declares about
+  itself, and answers in three parts:
+    - what would stop it running (an unknown action, a value out of range, a
+      block never closed);
+    - what would run and still looks wrong: a variable that is never set or is
+      used before it is, a word from another language that quietly became
+      pseudocode, an 'on' block for a button that is not there, a value an
+      action does not accept, a line after 'stop' that can never run;
+    - with AI features on, what the AI noticed when it read the script with
+      this reference in front of it - advisory, and marked as such.
+  So "the macro is fine" means all three found nothing, not merely that it
+  parsed."""
 
 
 # The same reference in Polish. A document this size is kept as a second text
@@ -6337,7 +6385,22 @@ Jedna instrukcja na linię. # zaczyna komentarz.
   Pseudokod jest dla kogoś, kto pisze własne makro w pośpiechu. Makro pisane
   DLA kogoś (przez AI albo przez kreator) musi nazywać prawdziwe akcje: jest
   sprawdzane przed zapisem, a linia pozostawiona słowami jest odrzucana wraz z
-  numerem linii, chyba że naprawdę nie ma dla niej żadnej akcji."""
+  numerem linii, chyba że naprawdę nie ma dla niej żadnej akcji.
+
+  SPRAWDZANIE (Menedżer makr -> Sprawdź skrypt albo macros.check_macro)
+  porównuje skrypt z tą dokumentacją i z tym, co każda akcja deklaruje o sobie,
+  i odpowiada w trzech częściach:
+    - co uniemożliwiłoby uruchomienie (nieznana akcja, wartość spoza zakresu,
+      niezamknięty blok);
+    - co by się wykonało, a mimo to wygląda źle: zmienna, która nigdy nie
+      dostaje wartości albo jest użyta przed jej nadaniem, słowo z innego
+      języka, które po cichu stało się pseudokodem, blok 'on' dla przycisku,
+      którego nie ma, wartość, której akcja nie przyjmuje, linia po 'stop',
+      która nigdy się nie wykona;
+    - przy włączonych funkcjach AI to, co zauważyła AI, czytając skrypt z tą
+      dokumentacją przed sobą - pomocniczo i wyraźnie tak oznaczone.
+  Zatem "makro jest w porządku" znaczy, że wszystkie trzy części nic nie
+  znalazły, a nie tylko, że skrypt się sparsował."""
 
 
 def _macro_language_text(language=''):
