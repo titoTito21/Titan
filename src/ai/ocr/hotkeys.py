@@ -7,8 +7,10 @@ and a user who has learned one has learned the other:
 
 * **Global** - works anywhere, so it reaches a full-screen game that Titan is
   not in front of.
-* **Titan UI** - fires only while the Titan (Invisible) UI is on, which frees
-  it to be a bare key that would otherwise collide with normal typing.
+* **Titan UI** - fires only while Titan UI mode is on (the mode the tilde key
+  toggles inside the invisible interface, not merely Titan being minimised to
+  the tray), which frees it to be a bare key that would otherwise collide with
+  normal typing.
 
 The shortcut is the whole point of the feature being usable: the window it
 opens has to be about the program the user was *just* in, so the foreground
@@ -48,8 +50,14 @@ def _find_main_frame():
 
 
 def _titan_ui_active(frame):
+    """True only while Titan UI mode is on - the mode the tilde key toggles.
+
+    The invisible UI's `active` flag only says Titan is minimised to the tray,
+    so asking that made a "Titan UI only" shortcut fire with Titan UI off.
+    """
     iui = getattr(frame, 'invisible_ui', None)
-    return bool(iui is not None and getattr(iui, 'active', False))
+    check = getattr(iui, 'is_titan_ui_on', None)
+    return bool(check()) if callable(check) else False
 
 
 def _launch(require_titan_ui):

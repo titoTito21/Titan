@@ -3,9 +3,10 @@
 Two shortcuts, both configured in Settings, AI features:
 
 * **Global assistant hotkey** - works anywhere, whenever AI features are on.
-* **Titan UI assistant hotkey** - fires only while the Titan (Invisible) UI is
-  active, so it can reuse a simple key that would otherwise clash with normal
-  typing.
+* **Titan UI assistant hotkey** - fires only while Titan UI mode is on (the
+  mode the tilde key toggles inside the invisible interface, not merely Titan
+  being minimised to the tray), so it can reuse a simple key that would
+  otherwise clash with normal typing.
 
 Both use the ``keyboard`` library (same as the rest of Titan's global hooks) and
 open the assistant window on the wx main thread.
@@ -44,8 +45,14 @@ def _find_main_frame():
 
 
 def _titan_ui_active(frame):
+    """True only while Titan UI mode is on - the mode the tilde key toggles.
+
+    The invisible UI's `active` flag only says Titan is minimised to the tray,
+    so asking that made a "Titan UI only" shortcut fire with Titan UI off.
+    """
     iui = getattr(frame, 'invisible_ui', None)
-    return bool(iui is not None and getattr(iui, 'active', False))
+    check = getattr(iui, 'is_titan_ui_on', None)
+    return bool(check()) if callable(check) else False
 
 
 def _launch(require_titan_ui):
