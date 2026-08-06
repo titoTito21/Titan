@@ -659,6 +659,24 @@ end
   line 2 using title and body before they are asked for on lines 3 and 4".
   `create_macro` / `edit_macro` append the warnings to their success message, so
   the AI that wrote a macro is told what is suspicious in it.
+- **The review then mends what it found** (`fix_with_ai`, `macros.fix_macro`,
+  and the Macro Manager's own question after a check). The AI is handed the
+  findings and the reference, corrects the script, and **its correction is
+  reviewed the same way**, up to three rounds, stopping the moment a round comes
+  back clean. A macro that was already right costs nothing: no request is made
+  and nothing changes. A correction that comes back *worse* than the original is
+  discarded, and nothing is ever written without being asked for - the GUI asks
+  before saving, and `fix_macro` only writes with `apply=true`. Live-verified:
+  a macro that created a note before asking for its title came back with the
+  `ask` lines moved above the action, clean in two rounds.
+- **The review is written in the user's language** - `_tcs_line()` /
+  `_tcs_line_prefixes()` and the macro component's own catalogue (`macros`
+  domain, *not* `languages/ai.po`), so a Polish Titan says
+  "linia 4: 'greting' jest używane, ale nigdy nie ustawione". The AI reviewer is
+  told which language to answer in and which word to anchor each finding with,
+  and both spellings are accepted when its answer is read back - which is also
+  why `ai_creation_kit.check_titan_script` matches `- <word> <n>:` by shape
+  rather than by the English word.
 - **The reference is in the user's own language.** `_MACRO_LANGUAGE` /
   `_MACRO_LANGUAGE_PL` and `_macro_language_text()`: a Polish Titan shows the
   Polish reference, and `_tcs_template()` writes a Polish template into a new

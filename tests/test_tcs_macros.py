@@ -48,6 +48,21 @@ def _load_macros_component():
 
 MACROS = _load_macros_component()
 
+# The macro manager writes its review in the language Titan is running in, and
+# these tests assert the English wording, so the component is pinned to English
+# here. `TheReviewSpeaksTheUsersLanguage` checks the Polish catalogue itself.
+_LANGUAGES_DIR = os.path.join(REPO, 'data', 'components', 'macros',
+                              'languages')
+
+
+def _catalogue(language):
+    import gettext
+    return gettext.translation('macros', _LANGUAGES_DIR, languages=[language],
+                               fallback=True).gettext
+
+
+MACROS._ = _catalogue('en')
+
 HALLUCINATED = (
     '# Makro: licz do 10\n'
     'voice rate=1\n'
@@ -946,6 +961,174 @@ class CheckScriptIsARealReview(unittest.TestCase):
         self.assertIn('Created the macro', answer)
         self.assertIn('Worth looking at', answer)
         self.assertIn('greting', answer)
+
+
+class TheReviewSpeaksTheUsersLanguage(unittest.TestCase):
+    """Everything the check says is Titan's own wording, so it follows the
+    language Titan is running in - and it lives in the MACRO component's
+    catalogue, not in Titan's."""
+
+    def setUp(self):
+        self._ai_on, self._gettext = MACROS._ai_features_on, MACROS._
+        MACROS._ai_features_on = lambda: True
+        MACROS._ = _catalogue('pl')
+
+    def tearDown(self):
+        MACROS._ai_features_on, MACROS._ = self._ai_on, self._gettext
+
+    def test_the_line_anchor_is_translated(self):
+        self.assertTrue(MACROS._tcs_line(4, 'x').startswith('linia 4:'),
+                        MACROS._tcs_line(4, 'x'))
+        self.assertIn('linia', MACROS._tcs_line_prefixes())
+        self.assertIn('line', MACROS._tcs_line_prefixes())
+
+    def test_a_warning_is_polish(self):
+        warnings = MACROS.review_warnings('set greeting = "x"\n'
+                                          'say "{{greting}}"')
+        self.assertIn('nigdy nie ustawione', warnings[0])
+        self.assertIn('czy chodziło o greeting', warnings[0])
+
+    def test_advice_about_another_language_is_polish(self):
+        warnings = MACROS.review_warnings('while x > 3')
+        self.assertIn('nie należy do języka skryptowego Titana', warnings[0])
+        self.assertIn("użyj 'repeat", warnings[0])
+
+    def test_the_sections_are_polish(self):
+        answer = str(MACROS.action_check_macro(
+            script='set greeting = "x"\nsay "{{greting}}"', use_ai=False))
+        self.assertIn('Uruchomi się, ale wygląda źle:', answer)
+
+    def test_a_clean_macro_is_told_so_in_polish(self):
+        answer = str(MACROS.action_check_macro(script='say "x"', use_ai=False))
+        self.assertIn('Makro jest w porządku', answer)
+
+    def test_a_parse_error_is_polish(self):
+        problems = MACROS.check_tcs('repeat 3\n')
+        self.assertTrue(problems[0].startswith('linia 1:'), problems)
+
+    def test_the_wording_comes_from_the_macro_component(self):
+        # Not from languages/*.po - the macro manager owns what it says.
+        with open(os.path.join(_LANGUAGES_DIR, 'pl', 'LC_MESSAGES',
+                               'macros.po'), encoding='utf-8') as handle:
+            catalogue = handle.read()
+        for msgid in ('line {number}: {message}', 'Would not run:',
+                      'The AI also read it and noticed (advisory):'):
+            self.assertIn(f'msgid "{msgid}"', catalogue)
+
+    def test_the_ai_is_asked_to_answer_in_that_language(self):
+        seen = {}
+        import src.ai.ai_provider as provider
+        saved = provider.generate
+
+        def _generate(system, prompt, **kwargs):
+            seen['system'] = system
+            return "linia 2: notatka powstaje, zanim pada pytanie o tytuł"
+
+        provider.generate = _generate
+        try:
+            notes = MACROS.review_with_ai('say "x"')
+        finally:
+            provider.generate = saved
+        self.assertIn('Polish', seen['system'])
+        self.assertIn("'linia'", seen['system'])
+        # ...and a Polish finding is still recognised as a finding.
+        self.assertEqual(1, len(notes), notes)
+
+
+class TheAiCorrectsWhatItFound(unittest.TestCase):
+    """After the review, the AI mends the macro and checks its own mending -
+    and a macro with nothing wrong costs nothing at all."""
+
+    def setUp(self):
+        self._ai_on = MACROS._ai_features_on
+        MACROS._ai_features_on = lambda: True
+        self.asked = []
+
+    def tearDown(self):
+        MACROS._ai_features_on = self._ai_on
+
+    def _with_provider(self, answers):
+        """Run fix_with_ai against a scripted model."""
+        import src.ai.ai_provider as provider
+        saved = provider.generate
+        replies = list(answers)
+
+        def _generate(system, prompt, **kwargs):
+            self.asked.append(prompt)
+            return replies.pop(0) if replies else "OK"
+
+        provider.generate = _generate
+        try:
+            return MACROS.fix_with_ai(self.script)
+        finally:
+            provider.generate = saved
+
+    def test_a_clean_macro_is_not_sent_anywhere(self):
+        self.script = 'set x = "a"\nsay "{{x}}"'
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': []
+        try:
+            fixed, problems, warnings, notes, rounds = self._with_provider([])
+        finally:
+            MACROS.review_with_ai = original
+        self.assertEqual(self.script, fixed)
+        self.assertEqual(0, rounds)
+        self.assertEqual([], self.asked)      # nothing was asked of a model
+        self.assertEqual(([], [], []), (problems, warnings, notes))
+
+    def test_it_corrects_and_stops_when_nothing_is_left(self):
+        self.script = 'set greeting = "Hello"\nsay "{{greting}}"'
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': []
+        try:
+            fixed, problems, warnings, notes, rounds = self._with_provider([
+                'set greeting = "Hello"\nsay "{{greeting}}"'])
+        finally:
+            MACROS.review_with_ai = original
+        self.assertIn('{{greeting}}', fixed)
+        self.assertEqual(1, rounds)
+        self.assertEqual(([], [], []), (problems, warnings, notes))
+        # One round was enough, so only one request was made.
+        self.assertEqual(1, len(self.asked))
+
+    def test_a_correction_that_is_worse_is_refused(self):
+        self.script = 'set greeting = "Hello"\nsay "{{greting}}"'
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': []
+        try:
+            fixed, _p, warnings, _n, _rounds = self._with_provider([
+                'say "{{one}}"\nsay "{{two}}"\nsay "{{three}}"'])
+        finally:
+            MACROS.review_with_ai = original
+        self.assertEqual(self.script, fixed)
+        self.assertEqual(1, len(warnings), warnings)
+
+    def test_a_code_fence_the_model_was_told_not_to_use_is_stripped(self):
+        self.assertEqual('say "x"\n',
+                         MACROS._tcs_strip_fences('```\nsay "x"\n```'))
+        self.assertEqual('say "x"\n', MACROS._tcs_strip_fences('say "x"'))
+
+    def test_it_does_nothing_with_the_ai_off(self):
+        MACROS._ai_features_on = lambda: False
+        script = 'set greeting = "x"\nsay "{{greting}}"'
+        fixed, _p, warnings, _n, rounds = MACROS.fix_with_ai(script)
+        self.assertEqual(script, fixed)
+        self.assertEqual(0, rounds)
+        self.assertTrue(warnings)
+
+    def test_the_action_says_so_when_there_was_nothing_to_correct(self):
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': []
+        try:
+            answer = str(MACROS.action_fix_macro(script='say "x"'))
+        finally:
+            MACROS.review_with_ai = original
+        self.assertIn('nothing to correct', answer)
+
+    def test_the_action_refuses_with_the_ai_off(self):
+        MACROS._ai_features_on = lambda: False
+        result = MACROS.action_fix_macro(script='say "{{x}}"')
+        self.assertIn('AI features', str(getattr(result, 'reason', result)))
 
 
 class _Result:

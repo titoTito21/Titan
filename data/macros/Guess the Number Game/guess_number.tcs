@@ -1,0 +1,65 @@
+# Guess the Number Mini-Game (.TCS)
+# A classic number guessing game built using Titan Scripting Language.
+
+title "Guess the Number"
+
+say "Welcome to Guess the Number!" wait=true
+
+# Choose difficulty level
+choose diff = "Select difficulty level:" options "Easy (1 to 20, 6 attempts)", "Medium (1 to 50, 7 attempts)", "Hard (1 to 100, 8 attempts)"
+
+set max_val = 20
+set max_attempts = 6
+
+if diff = "2"
+    set max_val = 50
+    set max_attempts = 7
+end
+
+if diff = "3"
+    set max_val = 100
+    set max_attempts = 8
+end
+
+# Generate pseudo-random secret number based on current time seconds
+set sec = number(now("%S"))
+set secret = (sec * max_val) / 59
+set secret = round(secret)
+
+if secret is less than 1
+    set secret = 1
+end
+
+if secret is more than max_val
+    set secret = max_val
+end
+
+say "I have chosen a secret number between 1 and {{max_val}}. You have {{max_attempts}} attempts." wait=true
+
+set attempts = 0
+set won = false
+
+repeat 10
+    if won is false
+        if attempts is less than max_attempts
+            set attempts = attempts + 1
+            ask guess_raw = "Attempt {{attempts}} of {{max_attempts}}. Enter your guess (1 to {{max_val}}):" default="1" title="Guess the Number"
+            set guess = number(guess_raw)
+
+            if guess == secret
+                set won = true
+                say "Congratulations! You guessed the secret number {{secret}} in {{attempts}} attempts!" pitch=3 wait=true
+            else
+                if guess is less than secret
+                    say "Too low! Try a higher number." pitch=-2 wait=true
+                else
+                    say "Too high! Try a lower number." pitch=2 wait=true
+                end
+            end
+        end
+    end
+end
+
+if won is false
+    say "Game over! You ran out of attempts. The secret number was {{secret}}." pitch=-4 wait=true
+end

@@ -1,0 +1,7 @@
+[macro]
+name_pl = Gra w zgadywanie liczby
+name_en = Guess the Number Game
+openfile = guess_number.tcs
+
+[macrocfg]
+hotkey = 

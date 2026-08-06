@@ -565,9 +565,12 @@ def check_titan_script(text):
     # AI features were switched off.
     if ok and 'written in words' not in said:
         return []
+    # "- line 4: ..." in English, "- linia 4: ..." in Polish - the macro
+    # manager writes its review in the user's language, so the anchor is
+    # matched by its shape rather than by the English word.
     problems = [re.sub(r'^\s*-\s*', '', line).strip()
                 for line in said.splitlines()
-                if re.match(r'\s*-\s*line \d+', line)]
+                if re.match(r'\s*-\s*\w+\s+\d+\s*:', line)]
     if problems and 'written in words' in said and ok:
         problems = [p + " - write it with real actions instead"
                     for p in problems]

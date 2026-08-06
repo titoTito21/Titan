@@ -268,3 +268,174 @@ msgstr "Makro (skrypt Titana)"
 
 msgid "The macro has no Titan Script (.tcs) file."
 msgstr "Makro nie zawiera pliku skryptu Titana (.tcs)."
+
+msgid "line {number}: {message}"
+msgstr "linia {number}: {message}"
+
+msgid "this line can never run - the script always stops on line {where}"
+msgstr "ta linia nigdy się nie wykona - skrypt zawsze zatrzymuje się w linii {where}"
+
+msgid "this line can never run - the script always returns on line {where}"
+msgstr "ta linia nigdy się nie wykona - skrypt zawsze kończy się w linii {where}"
+
+msgid "'{word}' is not part of the Titan Scripting Language, so this line is pseudocode - {advice}"
+msgstr "'{word}' nie należy do języka skryptowego Titana, więc ta linia jest pseudokodem - {advice}"
+
+msgid "'{said}' is written in words, so it needs AI features on every time the macro runs, and what it does may vary"
+msgstr "'{said}' jest napisane słowami, więc wymaga włączonych funkcji AI przy każdym uruchomieniu makra, a wynik może się różnić"
+
+msgid "which action '{path}' is is only known while the macro runs, so it cannot be checked here"
+msgstr "to, którą akcją jest '{path}', wiadomo dopiero w trakcie działania makra, więc nie da się tego tutaj sprawdzić"
+
+msgid "{path} is carried out by the AI, and AI features are off, so it will not run"
+msgstr "{path} wykonuje AI, a funkcje AI są wyłączone, więc to się nie uruchomi"
+
+msgid "{path} does not take {name}=\"{value}\" - it takes {allowed}"
+msgstr "{path} nie przyjmuje {name}=\"{value}\" - przyjmuje {allowed}"
+
+msgid "there is no button called '{wanted}' in this dialog - it has {labels}"
+msgstr "w tym oknie nie ma przycisku '{wanted}' - są {labels}"
+
+msgid "the review stopped early: {}"
+msgstr "sprawdzanie przerwane: {}"
+
+msgid "'{name}' is used but never set, so it will be empty - did you mean {other}?"
+msgstr "'{name}' jest używane, ale nigdy nie ustawione, więc będzie puste - czy chodziło o {other}?"
+
+msgid "'{name}' is used but never set, so it will be empty"
+msgstr "'{name}' jest używane, ale nigdy nie ustawione, więc będzie puste"
+
+msgid "'{name}' is used here but only gets a value on line {where}, so it will be empty the first time"
+msgstr "'{name}' jest tu użyte, a wartość dostaje dopiero w linii {where}, więc za pierwszym razem będzie puste"
+
+msgid "{path} needs {missing}"
+msgstr "{path} wymaga: {missing}"
+
+msgid "'{said}' is written in words, and pseudocode needs AI features switched on. Write it as add-on.action to run it without them."
+msgstr "'{said}' jest napisane słowami, a pseudokod wymaga włączonych funkcji AI. Zapisz to jako dodatek.akcja, żeby działało bez nich."
+
+msgid "'{said}' is written in words, and pseudocode needs AI features switched on (Settings, AI features). Write it as add-on.action to run it without them."
+msgstr "'{said}' jest napisane słowami, a pseudokod wymaga włączonych funkcji AI (Ustawienia, Funkcje AI). Zapisz to jako dodatek.akcja, żeby działało bez nich."
+
+msgid "there is no script called '{name}' next to this one"
+msgstr "obok tego skryptu nie ma skryptu o nazwie '{name}'"
+
+msgid "there is no sound file called '{name}' next to this one"
+msgstr "obok tego skryptu nie ma pliku dźwiękowego o nazwie '{name}'"
+
+msgid "The macro is fine - every line names something Titan can do, every value is one the action takes, and nothing in it looks wrong."
+msgstr "Makro jest w porządku - każda linia nazywa coś, co Titan potrafi zrobić, każda wartość jest przyjmowana przez akcję i nic w nim nie wygląda źle."
+
+msgid "(AI features are off, so it was not also read by the AI.)"
+msgstr "(Funkcje AI są wyłączone, więc makro nie zostało dodatkowo przeczytane przez AI.)"
+
+msgid "Would not run:"
+msgstr "Nie uruchomi się:"
+
+msgid "Would run, but looks wrong:"
+msgstr "Uruchomi się, ale wygląda źle:"
+
+msgid "The AI also read it and noticed (advisory):"
+msgstr "AI też je przeczytała i zauważyła (pomocniczo):"
+
+msgid "(the AI could not review this macro: {})"
+msgstr "(AI nie mogła sprawdzić tego makra: {})"
+
+msgid "Checking the macro, and reading it with the AI..."
+msgstr "Sprawdzam makro i czytam je z AI..."
+
+msgid "Checking the macro..."
+msgstr "Sprawdzam makro..."
+
+msgid "The macro is fine - every line names something Titan can do, and nothing in it looks wrong."
+msgstr "Makro jest w porządku - każda linia nazywa coś, co Titan potrafi zrobić, i nic w nim nie wygląda źle."
+
+msgid "{count} things to look at. The first: {problem}"
+msgstr "Rzeczy do sprawdzenia: {count}. Pierwsza: {problem}"
+
+msgid "there is no 'while' - use 'repeat <number>' with an 'if' inside"
+msgstr "nie ma 'while' - użyj 'repeat <liczba>' z 'if' w środku"
+
+msgid "there is no 'for' - use 'repeat <number>'"
+msgstr "nie ma 'for' - użyj 'repeat <liczba>'"
+
+msgid "there is no 'foreach' - use 'repeat <number>'"
+msgstr "nie ma 'foreach' - użyj 'repeat <liczba>'"
+
+msgid "write 'else' and a nested 'if'"
+msgstr "napisz 'else' i zagnieżdżone 'if'"
+
+msgid "every block ends with 'end'"
+msgstr "każdy blok kończy się słowem 'end'"
+
+msgid "a Titan Script has no functions - put it in another .tcs and call it with 'run'"
+msgstr "skrypt Titana nie ma funkcji - umieść to w innym pliku .tcs i wywołaj przez 'run'"
+
+msgid "a Titan Script has no functions - use 'run \"helper.tcs\"'"
+msgstr "skrypt Titana nie ma funkcji - użyj 'run \"helper.tcs\"'"
+
+msgid "a Titan Script is not Python"
+msgstr "skrypt Titana to nie Python"
+
+msgid "a Titan Script is not Python - every add-on is already callable"
+msgstr "skrypt Titana to nie Python - każdy dodatek już da się wywołać"
+
+msgid "use 'say' to speak or 'message' to show a window"
+msgstr "użyj 'say', żeby powiedzieć, albo 'message', żeby pokazać okno"
+
+msgid "just 'set name = value'"
+msgstr "wystarczy 'set nazwa = wartość'"
+
+msgid "use 'if' and 'else'"
+msgstr "użyj 'if' i 'else'"
+
+msgid "a Titan Script stops at the first line that fails; there is no 'try'"
+msgstr "skrypt Titana zatrzymuje się na pierwszej linii, która się nie powiedzie; nie ma 'try'"
+
+msgid "a Titan Script stops at the first line that fails"
+msgstr "skrypt Titana zatrzymuje się na pierwszej linii, która się nie powiedzie"
+
+msgid "use 'wait 2s'"
+msgstr "użyj 'wait 2s'"
+
+msgid "use 'stop'"
+msgstr "użyj 'stop'"
+
+msgid "there is no 'break' - use 'if' around what should not repeat"
+msgstr "nie ma 'break' - otocz 'if' to, co nie ma się powtarzać"
+
+msgid "there is no 'continue'"
+msgstr "nie ma 'continue'"
+
+msgid "there is no 'goto'"
+msgstr "nie ma 'goto'"
+
+msgid "use 'ask name = \"question\"'"
+msgstr "użyj 'ask nazwa = \"pytanie\"'"
+
+msgid "use 'message \"...\"'"
+msgstr "użyj 'message \"...\"'"
+
+msgid "The AI is correcting the macro..."
+msgstr "AI poprawia makro..."
+
+msgid "The AI corrected the macro and it now checks out. Save the corrected version?"
+msgstr "AI poprawiła makro i teraz nie ma w nim błędów. Zapisać poprawioną wersję?"
+
+msgid "The AI corrected what it could, and this is left:"
+msgstr "AI poprawiła, co mogła, i zostało to:"
+
+msgid "Save the corrected version anyway?"
+msgstr "Zapisać poprawioną wersję mimo to?"
+
+msgid "The AI could not correct this macro."
+msgstr "AI nie zdołała poprawić tego makra."
+
+msgid "The corrected macro has been saved."
+msgstr "Poprawione makro zostało zapisane."
+
+msgid "The macro was left as it was."
+msgstr "Makro zostało bez zmian."
+
+msgid "Correct it with the AI?"
+msgstr "Poprawić je z pomocą AI?"

@@ -2043,32 +2043,95 @@ def _check_macro_dialog(macro_info, parent):
             text, base_dir=macro_info.get('folder_path', ''))
         wx.CallAfter(_show, problems, warnings, notes)
 
+    def _sections(problems, warnings, notes):
+        parts = []
+        if problems:
+            parts.append(_("Would not run:") + "\n"
+                         + "\n".join(f"- {p}" for p in problems))
+        if warnings:
+            parts.append(_("Would run, but looks wrong:") + "\n"
+                         + "\n".join(f"- {w}" for w in warnings))
+        if notes:
+            parts.append(_("The AI also read it and noticed (advisory):")
+                         + "\n" + "\n".join(f"- {n}" for n in notes))
+        return "\n\n".join(parts)
+
     def _show(problems, warnings, notes):
         title = macro_info.get('name', '')
         if not problems and not warnings and not notes:
+            # Nothing is wrong, so nothing more is done - no correcting, no
+            # further requests, no questions.
             _play_select()
             said = _("The macro is fine - every line names something Titan "
                      "can do, and nothing in it looks wrong.")
             _speak(said)
             wx.MessageBox(said, title, wx.OK | wx.ICON_INFORMATION, parent)
             return
-        sections = []
-        if problems:
-            sections.append(_("Would not run:") + "\n"
-                            + "\n".join(f"- {p}" for p in problems))
-        if warnings:
-            sections.append(_("Would run, but looks wrong:") + "\n"
-                            + "\n".join(f"- {w}" for w in warnings))
-        if notes:
-            sections.append(_("The AI also read it and noticed (advisory):")
-                            + "\n" + "\n".join(f"- {n}" for n in notes))
         _play_error()
         first = (problems or warnings or notes)[0]
         _speak(_("{count} things to look at. The first: {problem}").format(
             count=len(problems) + len(warnings) + len(notes), problem=first))
-        wx.MessageBox("\n\n".join(sections), title,
-                      wx.OK | (wx.ICON_WARNING if problems
-                               else wx.ICON_INFORMATION), parent)
+        if not with_ai:
+            wx.MessageBox(_sections(problems, warnings, notes), title,
+                          wx.OK | (wx.ICON_WARNING if problems
+                                   else wx.ICON_INFORMATION), parent)
+            return
+        # The AI has just read the macro with the reference in front of it, so
+        # it is asked to mend what it found - and to check its own mending.
+        # Nothing is written until the user says so: this is their macro.
+        from src.titan_core.sound import play_dialog_sound
+        play_dialog_sound()
+        dialog = wx.MessageDialog(
+            parent,
+            _sections(problems, warnings, notes) + "\n\n"
+            + _("Correct it with the AI?"), title,
+            wx.YES_NO | wx.ICON_WARNING)
+        answer = dialog.ShowModal()
+        dialog.Destroy()
+        if answer != wx.ID_YES:
+            return
+        _speak(_("The AI is correcting the macro..."))
+        threading.Thread(target=_fix, daemon=True).start()
+
+    def _fix():
+        fixed, problems, warnings, notes, rounds = fix_with_ai(
+            text, base_dir=macro_info.get('folder_path', ''))
+        wx.CallAfter(_offer, fixed, problems, warnings, notes, rounds)
+
+    def _offer(fixed, problems, warnings, notes, rounds):
+        title = macro_info.get('name', '')
+        if not rounds or fixed.strip() == text.strip():
+            _play_error()
+            _speak(_("The AI could not correct this macro."))
+            wx.MessageBox(_("The AI could not correct this macro."), title,
+                          wx.OK | wx.ICON_WARNING, parent)
+            return
+        left = _sections(problems, warnings, notes)
+        question = (_("The AI corrected the macro and it now checks out. Save "
+                      "the corrected version?") if not left else
+                    _("The AI corrected what it could, and this is left:")
+                    + "\n\n" + left + "\n\n"
+                    + _("Save the corrected version anyway?"))
+        _speak(question.splitlines()[0])
+        from src.titan_core.sound import play_dialog_sound
+        play_dialog_sound()
+        dialog = wx.MessageDialog(parent, question, title,
+                                  wx.YES_NO | wx.ICON_QUESTION)
+        answer = dialog.ShowModal()
+        dialog.Destroy()
+        if answer != wx.ID_YES:
+            _speak(_("The macro was left as it was."))
+            return
+        try:
+            with open(path, 'w', encoding='utf-8') as handle:
+                handle.write(fixed)
+        except OSError as e:
+            _play_error()
+            _speak(_("Could not read the macro: {}").format(str(e)))
+            return
+        _play_select()
+        _speak(_("The corrected macro has been saved."))
+        _refresh_macro_list()
 
     threading.Thread(target=_work, daemon=True).start()
 
@@ -2543,8 +2606,11 @@ class TCSError(Exception):
         self.hint = hint
 
     def describe(self):
-        return (f"line {self.line_no}: {self.message}"
-                + (f" {self.hint}" if self.hint else ''))
+        # The message itself is looked up too: the ones that are fixed
+        # sentences get a translation, and the ones built around a value the
+        # author wrote fall back to English rather than being mangled.
+        return (_tcs_line(self.line_no, _(self.message))
+                + (f" {_(self.hint)}" if self.hint else ''))
 
 
 # --------------------------------------------------------------------------- #
@@ -4645,7 +4711,7 @@ def check_tcs(text, base_dir=''):
                 try:
                     _addon, _name, spec = _ai_resolve(statement['path'])
                 except ValueError as e:
-                    problems.append(f"line {statement['line']}: {e}")
+                    problems.append(_tcs_line(statement['line'], str(e)))
                     continue
                 except Exception:
                     continue
@@ -4661,15 +4727,15 @@ def check_tcs(text, base_dir=''):
                            and name not in statement['named']
                            and list(spec.params).index(name) >= len(statement['positional'])]
                 if missing:
-                    problems.append(f"line {statement['line']}: "
-                                    f"{statement['path']} needs "
-                                    + ", ".join(missing))
+                    problems.append(_tcs_line(statement['line'], _(
+                        "{path} needs {missing}").format(
+                            path=statement['path'],
+                            missing=", ".join(missing))))
             elif statement['kind'] == 'prose' and not ai_on:
-                problems.append(
-                    f"line {statement['line']}: '{statement['text']}' is "
-                    f"written in words, and pseudocode needs AI features "
-                    f"switched on. Write it as add-on.action to run it "
-                    f"without them.")
+                problems.append(_tcs_line(statement['line'], _(
+                    "'{said}' is written in words, and pseudocode needs AI "
+                    "features switched on. Write it as add-on.action to run "
+                    "it without them.").format(said=statement['text'])))
             elif statement['kind'] == 'set':
                 walk([statement['value']])
             elif statement['kind'] == 'repeat':
@@ -4713,10 +4779,11 @@ def check_tcs(text, base_dir=''):
                     if statement['kind'] == 'run' and not target.lower().endswith(TCS_EXT):
                         target += TCS_EXT
                     if name and not os.path.isfile(target):
-                        problems.append(
-                            f"line {statement['line']}: there is no "
-                            f"{'script' if statement['kind'] == 'run' else 'sound file'}"
-                            f" called '{name}' next to this one")
+                        problems.append(_tcs_line(statement['line'], (
+                            _("there is no script called '{name}' next to "
+                              "this one") if statement['kind'] == 'run' else
+                            _("there is no sound file called '{name}' next to "
+                              "this one")).format(name=name)))
     try:
         walk(program['body'])
     except Exception as e:
@@ -4739,9 +4806,35 @@ def check_tcs(text, base_dir=''):
 # actions' own declarations), and - with AI features on - what a model notices
 # when it reads the script with the reference in front of it.
 
+def _tcs_line(number, message):
+    """"line 12: ..." in the language Titan is running in.
+
+    A review is read by the person who wrote the macro, so it is written in
+    their language like everything else Titan says. The number keeps its own
+    word ('linia' in Polish) - what has to stay stable is the *shape*, because
+    the creation kit reads these lines back to feed its auto-fix loop, and
+    ``_tcs_line_prefixes`` is what it matches them with.
+    """
+    return _("line {number}: {message}").format(number=number,
+                                                message=message)
+
+
+def _tcs_line_prefixes():
+    """Every spelling of the "line N:" anchor a review may use.
+
+    The user's own word first - it is the one to ask for and the one to read -
+    and English after it, because a model answering in Polish may still write
+    'line' and a finding must not be dropped for that.
+    """
+    sample = _("line {number}: {message}").format(number=1, message='')
+    word = sample.split('1')[0].strip().lower() or 'line'
+    return (word,) if word == 'line' else (word, 'line')
+
+
 # Words that begin a statement in some other language and none in this one.
 # Written here, they are pseudocode: with AI features on that is not an error,
-# which is exactly why it is worth pointing at.
+# which is exactly why it is worth pointing at. The advice is translated where
+# it is used, so this stays one table with English keys.
 _TCS_FOREIGN_WORDS = {
     'while': "there is no 'while' - use 'repeat <number>' with an 'if' inside",
     'for': "there is no 'for' - use 'repeat <number>'",
@@ -4828,7 +4921,7 @@ def review_warnings(text, base_dir=''):
     used = []                       # (line, name, straight_line) as they are read
 
     def note(line, message):
-        warnings.append(f"line {line}: {message}")
+        warnings.append(_tcs_line(line, message))
 
     def remember(name, line, straight):
         """This line gives ``name`` a value."""
@@ -4865,9 +4958,12 @@ def review_warnings(text, base_dir=''):
             kind = statement.get('kind')
             line = statement.get('line', 0)
             if ended is not None and kind != 'field':
-                note(line, f"this line can never run - the script always "
-                           f"{'stops' if ended[0] == 'stop' else 'returns'} on "
-                           f"line {ended[1]}")
+                note(line, (_("this line can never run - the script always "
+                              "stops on line {where}")
+                            if ended[0] == 'stop' else
+                            _("this line can never run - the script always "
+                              "returns on line {where}")).format(
+                                  where=ended[1]))
                 ended = None            # say it once per block
             for node in values_of(statement):
                 names = set()
@@ -4891,13 +4987,15 @@ def review_warnings(text, base_dir=''):
                 advice = (_TCS_FOREIGN_WORDS.get(first)
                           or _TCS_FOREIGN_WORDS.get(' '.join(word.split(' ')[:2])))
                 if advice:
-                    note(line, f"'{first}' is not part of the Titan Scripting "
-                               f"Language, so this line is pseudocode - "
-                               f"{advice}")
+                    note(line, _("'{word}' is not part of the Titan Scripting "
+                                 "Language, so this line is pseudocode - "
+                                 "{advice}").format(word=first,
+                                                    advice=_(advice)))
                 elif ai_on:
-                    note(line, f"'{statement.get('text')}' is written in "
-                               f"words, so it needs AI features on every time "
-                               f"the macro runs, and what it does may vary")
+                    note(line, _("'{said}' is written in words, so it needs AI "
+                                 "features on every time the macro runs, and "
+                                 "what it does may vary").format(
+                                     said=statement.get('text')))
             elif kind == 'repeat':
                 walk(statement.get('body') or [], inside_dialog, False)
             elif kind == 'if':
@@ -4914,17 +5012,18 @@ def review_warnings(text, base_dir=''):
     def _warn_about_action(statement, note, ai_on):
         path = str(statement.get('path', ''))
         if '{{' in path:
-            note(statement['line'], f"which action '{path}' is is only known "
-                                    f"while the macro runs, so it cannot be "
-                                    f"checked here")
+            note(statement['line'],
+                 _("which action '{path}' is is only known while the macro "
+                   "runs, so it cannot be checked here").format(path=path))
             return
         try:
             _addon, _name, spec = _ai_resolve(path)
         except Exception:
             return                                  # a problem, not a warning
         if getattr(spec, 'needs_ai', False) and not ai_on:
-            note(statement['line'], f"{path} is carried out by the AI, and AI "
-                                    f"features are off, so it will not run")
+            note(statement['line'],
+                 _("{path} is carried out by the AI, and AI features are off, "
+                   "so it will not run").format(path=path))
         # A value the action itself says must be one of a few - the declaration
         # is the documentation, so it is what the script is compared against.
         for name, param in spec.params.items():
@@ -4942,8 +5041,10 @@ def review_warnings(text, base_dir=''):
                 continue
             if value and value.lower() not in [str(a).lower() for a in allowed]:
                 note(statement['line'],
-                     f"{path} does not take {name}=\"{value}\" - it takes "
-                     + ", ".join(str(a) for a in allowed))
+                     _("{path} does not take {name}=\"{value}\" - it takes "
+                       "{allowed}").format(
+                           path=path, name=name, value=value,
+                           allowed=", ".join(str(a) for a in allowed)))
 
     def _warn_about_handler(statement, dialog, note):
         if not dialog:
@@ -4963,14 +5064,16 @@ def review_warnings(text, base_dir=''):
                for index, label in enumerate(labels)):
             return
         note(statement['line'],
-             f"there is no button called '{wanted}' in this dialog - it has "
-             + ", ".join(f'"{label}"' for label in labels))
+             _("there is no button called '{wanted}' in this dialog - it has "
+               "{labels}").format(
+                   wanted=wanted,
+                   labels=", ".join(f'"{label}"' for label in labels)))
         del answer
 
     try:
         walk(program['body'])
     except Exception as e:                       # noqa: BLE001 - reported
-        warnings.append(f"the review stopped early: {e}")
+        warnings.append(_("the review stopped early: {}").format(str(e)))
 
     # A name read but never given a value is empty - which is not an error and
     # is almost never what the author meant. Nor is a name read *before* the
@@ -4986,16 +5089,20 @@ def review_warnings(text, base_dir=''):
                      if other not in _TCS_GIVEN_NAMES
                      and (other.startswith(name[:3])
                           or name.startswith(other[:3]))]
-            warnings.append(
-                f"line {line}: '{name}' is used but never set, so it will be "
-                f"empty" + (f" - did you mean {close[0]}?" if close else ""))
+            warnings.append(_tcs_line(line, (
+                _("'{name}' is used but never set, so it will be empty - did "
+                  "you mean {other}?").format(name=name, other=close[0])
+                if close else
+                _("'{name}' is used but never set, so it will be "
+                  "empty").format(name=name))))
             continue
         set_at = first_set.get(name)
         if straight and set_at and set_at > line:
             seen.add(name)
-            warnings.append(
-                f"line {line}: '{name}' is used here but only gets a value on "
-                f"line {set_at}, so it will be empty the first time")
+            warnings.append(_tcs_line(line, _(
+                "'{name}' is used here but only gets a value on line {where}, "
+                "so it will be empty the first time").format(
+                    name=name, where=set_at)))
     return warnings
 
 
@@ -5012,10 +5119,10 @@ _TCS_AI_REVIEW = (
     "a window whose buttons do not match what the script does with them, and "
     "anything that plainly contradicts what the macro is called or says it "
     "is for.\n\n"
-    "Answer with one line per issue, each starting 'line <number>: '. Say "
-    "only what you are sure of; do not repeat the checker, do not suggest "
-    "style changes, do not invent actions. If the macro looks right, answer "
-    "with exactly: OK")
+    "Answer with one line per issue, each starting with the word for 'line' "
+    "given below, then its number and a colon. Say only what you are sure of; "
+    "do not repeat the checker, do not suggest style changes, do not invent "
+    "actions. If the macro looks right, answer with exactly: OK")
 
 
 def review_with_ai(text, actions_used=''):
@@ -5026,9 +5133,18 @@ def review_with_ai(text, actions_used=''):
     """
     if not _ai_features_on():
         return []
+    # The findings are read by the person who wrote the macro, so they are
+    # written in Titan's language like everything else - and the word the
+    # answer must anchor each line with is handed over rather than assumed, so
+    # they can still be picked apart afterwards.
+    word = _tcs_line_prefixes()[0]
     try:
         from src.ai import ai_provider
         system = (_TCS_AI_REVIEW
+                  + f"\n\nWrite your findings in this language: "
+                    f"{_tcs_language_name()}. Begin each one with the word "
+                    f"'{word}', its number and a colon (for example "
+                    f"'{word} 4: ...'). 'OK' stays 'OK'."
                   + "\n\n===== THE LANGUAGE =====\n" + _MACRO_LANGUAGE
                   + ("\n\n===== THE ACTIONS THIS MACRO USES =====\n"
                      + actions_used if actions_used else ''))
@@ -5037,12 +5153,24 @@ def review_with_ai(text, actions_used=''):
         answer = ai_provider.generate(system, "The macro:\n" + numbered,
                                       max_tokens=900)
     except Exception as e:                       # noqa: BLE001 - reported
-        return [f"(the AI could not review this macro: {e})"]
+        return [_("(the AI could not review this macro: {})").format(str(e))]
     lines = [line.strip(' -*\t') for line in str(answer or '').splitlines()
              if line.strip()]
     if not lines or lines[0].strip().upper().startswith('OK'):
         return []
-    return [line for line in lines if line.lower().startswith('line ')][:12]
+    prefixes = _tcs_line_prefixes()
+    return [line for line in lines
+            if line.lower().startswith(tuple(p + ' ' for p in prefixes))][:12]
+
+
+def _tcs_language_name():
+    """The language Titan is speaking, for whoever is being asked to write."""
+    try:
+        from src.titan_core.translation import language_code
+        code = str(language_code or 'en').strip().lower()
+    except Exception:
+        code = 'en'
+    return {'pl': 'Polish', 'en': 'English'}.get(code[:2], code)
 
 
 def _tcs_actions_used(text):
@@ -5096,6 +5224,99 @@ def review_tcs(text, base_dir='', use_ai=None):
         # parse errors are the answer, and the AI would only restate them.
         notes = review_with_ai(text, _tcs_actions_used(text))
     return problems, warnings, notes
+
+
+# --------------------------------------------------------------------------- #
+# Correcting one
+# --------------------------------------------------------------------------- #
+# A review that only reports is half an answer: the AI has just read the script
+# with the reference in front of it, so it can also mend it. The loop is
+# deliberately tight - correct, check the correction, and stop the moment there
+# is nothing left to say. A macro that was already clean costs nothing at all:
+# no request is made, because there is nothing to fix.
+
+_TCS_AI_FIX = (
+    "You are correcting one Titan Script (.TCS) macro. Below are the language "
+    "reference, the actions it uses, the macro, and everything Titan's checker "
+    "and reviewer found wrong with it.\n\n"
+    "Fix every one of those findings and change NOTHING else: keep the "
+    "macro's purpose, its wording, its comments and its structure, and keep "
+    "every line that was not complained about exactly as it is. Use only "
+    "statements and actions that appear in the reference - do not invent one "
+    "to make a finding go away, and do not replace a real action with "
+    "pseudocode.\n\n"
+    "Answer with the complete corrected script and nothing else: no "
+    "commentary, no explanation, no markdown fences.")
+
+
+def _tcs_strip_fences(text):
+    """A script as the model sent it, without the code fence it was told not
+    to use."""
+    lines = [line for line in str(text or '').splitlines()]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and lines[0].lstrip().startswith('```'):
+        lines.pop(0)
+        while lines and not lines[-1].lstrip().startswith('```'):
+            if lines[-1].strip():
+                break
+            lines.pop()
+        if lines and lines[-1].lstrip().startswith('```'):
+            lines.pop()
+    return "\n".join(lines).strip() + "\n"
+
+
+def fix_with_ai(text, base_dir='', rounds=2):
+    """(script, problems, warnings, notes, rounds_used) - the macro, corrected.
+
+    The script is reviewed first, and if there is nothing wrong with it the
+    original comes straight back with no request made at all. Otherwise the AI
+    is given the findings and asked to mend them, and its answer is reviewed
+    again - up to ``rounds`` times, stopping as soon as a round comes back
+    clean. What is returned is always the best version reached and what is
+    still wrong with it, so the caller can decide whether to keep it.
+    """
+    problems, warnings, notes = review_tcs(text, base_dir=base_dir)
+    if not (problems or warnings or notes):
+        return text, problems, warnings, notes, 0
+    if not _ai_features_on():
+        return text, problems, warnings, notes, 0
+
+    best = text
+    used = 0
+    for _round in range(max(1, min(int(rounds or 1), 3))):
+        findings = "\n".join(f"- {item}" for item in
+                             list(problems) + list(warnings) + list(notes))
+        try:
+            from src.ai import ai_provider
+            system = (_TCS_AI_FIX
+                      + "\n\n===== THE LANGUAGE =====\n" + _MACRO_LANGUAGE
+                      + "\n\n===== THE ACTIONS IT USES =====\n"
+                      + _tcs_actions_used(best))
+            answer = ai_provider.generate(
+                system,
+                "The macro:\n" + best + "\n\nWhat is wrong with it:\n"
+                + findings, max_tokens=2000)
+        except Exception as e:                   # noqa: BLE001 - reported
+            notes = list(notes) + [
+                _("(the AI could not review this macro: {})").format(str(e))]
+            break
+        candidate = _tcs_strip_fences(answer)
+        if not candidate.strip() or candidate.strip() == best.strip():
+            break
+        used += 1
+        new_problems, new_warnings, new_notes = review_tcs(candidate,
+                                                           base_dir=base_dir)
+        # Only keep a correction that is actually an improvement: a model that
+        # "fixes" a macro into a worse one must not be allowed to save it.
+        if (len(new_problems), len(new_warnings), len(new_notes)) > \
+                (len(problems), len(warnings), len(notes)):
+            break
+        best, problems, warnings, notes = (candidate, new_problems,
+                                           new_warnings, new_notes)
+        if not (problems or warnings or notes):
+            break                       # nothing left to do, so nothing is done
+    return best, problems, warnings, notes, used
 
 
 def pseudocode_lines(text):
@@ -5164,9 +5385,11 @@ def run_tcs_text(text, announce=True, base_dir='', title=''):
         prose = pseudocode_lines(text)
         if prose:
             problems = [
-                f"line {number}: '{said}' is written in words, and pseudocode "
-                f"needs AI features switched on (Settings, AI features). Write "
-                f"it as add-on.action to run it without them."
+                _tcs_line(number, _(
+                    "'{said}' is written in words, and pseudocode needs AI "
+                    "features switched on (Settings, AI features). Write it "
+                    "as add-on.action to run it without them.").format(
+                        said=said))
                 for number, said in prose]
             _tcs_announce_problems(problems, announce)
             return False, problems
@@ -5690,7 +5913,9 @@ _TCS_WRITE_RULES = """How to write a Titan Script that will actually be saved:
   what would run and still looks wrong (a variable never set or used before it
   is set, a value an action does not take, a button that is not there), and -
   with AI features on - what the AI notices reading it. Run it on what you
-  wrote and fix what it says before you hand the macro over."""
+  wrote and fix what it says before you hand the macro over.
+- macros.fix_macro corrects a script and checks its own correction, repeating
+  until nothing is left. A macro that already checks out is left alone."""
 
 
 def _tcs_write_problems(script, base_dir='', allow_pseudocode=False):
@@ -6195,7 +6420,16 @@ One statement per line. # starts a comment.
     - with AI features on, what the AI noticed when it read the script with
       this reference in front of it - advisory, and marked as such.
   So "the macro is fine" means all three found nothing, not merely that it
-  parsed."""
+  parsed.
+
+  CORRECTING ONE - with AI features on, the check can go straight on to mend
+  what it found (macros.fix_macro, or the Macro Manager's own question after a
+  check): the AI is given the findings and the reference, corrects the script,
+  and its correction is checked the same way, up to a few rounds, stopping the
+  moment there is nothing left to say. A macro that was already right costs
+  nothing at all - nothing is asked of a model, and nothing is changed. A
+  correction is never saved without being asked for, and one that comes back
+  worse than the original is thrown away."""
 
 
 # The same reference in Polish. A document this size is kept as a second text
@@ -6400,7 +6634,16 @@ Jedna instrukcja na linię. # zaczyna komentarz.
     - przy włączonych funkcjach AI to, co zauważyła AI, czytając skrypt z tą
       dokumentacją przed sobą - pomocniczo i wyraźnie tak oznaczone.
   Zatem "makro jest w porządku" znaczy, że wszystkie trzy części nic nie
-  znalazły, a nie tylko, że skrypt się sparsował."""
+  znalazły, a nie tylko, że skrypt się sparsował.
+
+  POPRAWIANIE - przy włączonych funkcjach AI sprawdzanie może od razu przejść
+  do naprawy tego, co znalazło (macros.fix_macro albo pytanie, które menedżer
+  makr zadaje po sprawdzeniu): AI dostaje wynik sprawdzenia i tę dokumentację,
+  poprawia skrypt, a poprawka jest sprawdzana tak samo, przez kilka rund,
+  kończąc w chwili, gdy nie ma już nic do powiedzenia. Makro, które od początku
+  było dobre, nie kosztuje nic - nic nie jest wysyłane do modelu i nic się nie
+  zmienia. Poprawka nigdy nie zapisuje się bez pytania, a taka, która wypada
+  gorzej niż oryginał, jest odrzucana."""
 
 
 def _macro_language_text(language=''):
@@ -6472,24 +6715,92 @@ def action_check_macro(script="", name="", use_ai=""):
     problems, warnings, notes = review_tcs(text, base_dir=folder,
                                            use_ai=wanted)
     if not problems and not warnings and not notes:
-        return ("The macro is fine - every line names something Titan can do, "
-                "every value is one the action takes, and nothing in it looks "
-                "wrong."
-                + ("" if _ai_features_on() else
-                   " (AI features are off, so it was not also read by the AI.)"))
+        return (_("The macro is fine - every line names something Titan can "
+                  "do, every value is one the action takes, and nothing in it "
+                  "looks wrong.")
+                + ("" if _ai_features_on() else " " + _(
+                    "(AI features are off, so it was not also read by the "
+                    "AI.)")))
     parts = []
     if problems:
-        parts.append("Would not run:\n"
+        parts.append(_("Would not run:") + "\n"
                      + "\n".join(f"- {p}" for p in problems[:12]))
     if warnings:
-        parts.append("Would run, but looks wrong:\n"
+        parts.append(_("Would run, but looks wrong:") + "\n"
                      + "\n".join(f"- {w}" for w in warnings[:12]))
     if notes:
-        parts.append("The AI also read it and noticed (advisory):\n"
+        parts.append(_("The AI also read it and noticed (advisory):") + "\n"
                      + "\n".join(f"- {n}" for n in notes[:12]))
     if problems:
         parts.append(_TCS_WRITE_RULES)
     return "\n\n".join(parts)
+
+
+def action_fix_macro(name="", script="", apply=""):
+    """Have the AI correct a Titan Script, then check its correction."""
+    text = str(script or '')
+    folder = ''
+    macro = None
+    if not text.strip():
+        if not str(name or '').strip():
+            return needs('name', "Which macro should be corrected? Pass the "
+                                 "script, or the name of a saved one.")
+        manager = _action_manager()
+        macro, problem = _find_macro(manager, name, 'corrected')
+        if problem is not None:
+            return problem
+        if macro.get('type') != TCS_EXT:
+            return fails(f"'{macro.get('name')}' is a {macro.get('type')} "
+                         f"macro, not a Titan Script.")
+        try:
+            with open(macro.get('script_path', ''), 'r',
+                      encoding='utf-8') as handle:
+                text = handle.read()
+        except OSError as e:
+            return fails(f"Could not read '{macro.get('name')}': {e}")
+        folder = macro.get('folder_path', '')
+
+    if not _ai_features_on():
+        return fails("Correcting a macro is done by the AI, and Titan's AI "
+                     "features are switched off. Switch them on in Settings, "
+                     "AI features. macros.check_macro still says what is "
+                     "wrong.")
+
+    fixed, problems, warnings, notes, rounds = fix_with_ai(text,
+                                                           base_dir=folder)
+    if not rounds and not (problems or warnings or notes):
+        # Nothing was wrong, so nothing was done - and nothing was asked of a
+        # model either.
+        return "There was nothing to correct - the macro already checks out."
+    left = list(problems) + list(warnings) + list(notes)
+    report = (f"The AI corrected the macro in {rounds} "
+              f"{'round' if rounds == 1 else 'rounds'}."
+              if rounds else "The AI did not change the macro.")
+    if left:
+        report += ("\nStill outstanding:\n"
+                   + "\n".join(f"- {item}" for item in left[:8]))
+    else:
+        report += " Nothing is left to fix."
+
+    if not _ai_truth(apply):
+        return report + "\n\nThe corrected macro:\n" + fixed
+
+    if macro is None:
+        return fails("There is no saved macro to write this to - pass 'name' "
+                     "instead of 'script' to have it saved.")
+    if problems:
+        return fails(report + "\n\nIt was not saved: it would still not run.")
+    manager = _action_manager()
+    folder_path = manager._ensure_user_copy(macro.get('folder_name'))
+    try:
+        with open(os.path.join(folder_path, macro.get('openfile', '')), 'w',
+                  encoding='utf-8') as handle:
+            handle.write(fixed)
+    except OSError as e:
+        return fails(f"Could not save '{macro.get('name')}': {e}")
+    manager.load_macros()
+    _refresh_macro_list()
+    return report + f"\n\nSaved over '{macro.get('name')}'."
 
 
 def action_reload_macros():
@@ -6640,6 +6951,23 @@ TITAN_ACTIONS = [
                            'description': "Have the AI read it too. Defaults "
                                           "to whether AI features are on."}},
      'run': action_check_macro},
+    {'name': 'fix_macro',
+     'summary': "Have the AI correct a Titan Script and check its own "
+                "correction, repeating until nothing is left to fix. A macro "
+                "that already checks out is returned untouched and costs "
+                "nothing. Use this after check_macro rather than rewriting a "
+                "macro by hand.",
+     'params': {'name': {'type': 'string',
+                         'description': "The saved macro to correct."},
+                'script': {'type': 'string',
+                           'description': "Or the script text itself, when it "
+                                          "is not saved yet."},
+                'apply': {'type': 'boolean',
+                          'description': "Save the correction over the macro. "
+                                         "Off by default: the corrected "
+                                         "script comes back for you to show "
+                                         "the user first."}},
+     'risk': 'confirm', 'run': action_fix_macro},
     {'name': 'reload',
      'summary': "Re-read the macros folder so a macro written or changed from "
                 "outside the macro manager appears in the user's list.",

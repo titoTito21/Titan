@@ -268,3 +268,174 @@ msgstr "Macro (Titan Script)"
 
 msgid "The macro has no Titan Script (.tcs) file."
 msgstr "The macro has no Titan Script (.tcs) file."
+
+msgid "line {number}: {message}"
+msgstr "line {number}: {message}"
+
+msgid "this line can never run - the script always stops on line {where}"
+msgstr "this line can never run - the script always stops on line {where}"
+
+msgid "this line can never run - the script always returns on line {where}"
+msgstr "this line can never run - the script always returns on line {where}"
+
+msgid "'{word}' is not part of the Titan Scripting Language, so this line is pseudocode - {advice}"
+msgstr "'{word}' is not part of the Titan Scripting Language, so this line is pseudocode - {advice}"
+
+msgid "'{said}' is written in words, so it needs AI features on every time the macro runs, and what it does may vary"
+msgstr "'{said}' is written in words, so it needs AI features on every time the macro runs, and what it does may vary"
+
+msgid "which action '{path}' is is only known while the macro runs, so it cannot be checked here"
+msgstr "which action '{path}' is is only known while the macro runs, so it cannot be checked here"
+
+msgid "{path} is carried out by the AI, and AI features are off, so it will not run"
+msgstr "{path} is carried out by the AI, and AI features are off, so it will not run"
+
+msgid "{path} does not take {name}=\"{value}\" - it takes {allowed}"
+msgstr "{path} does not take {name}=\"{value}\" - it takes {allowed}"
+
+msgid "there is no button called '{wanted}' in this dialog - it has {labels}"
+msgstr "there is no button called '{wanted}' in this dialog - it has {labels}"
+
+msgid "the review stopped early: {}"
+msgstr "the review stopped early: {}"
+
+msgid "'{name}' is used but never set, so it will be empty - did you mean {other}?"
+msgstr "'{name}' is used but never set, so it will be empty - did you mean {other}?"
+
+msgid "'{name}' is used but never set, so it will be empty"
+msgstr "'{name}' is used but never set, so it will be empty"
+
+msgid "'{name}' is used here but only gets a value on line {where}, so it will be empty the first time"
+msgstr "'{name}' is used here but only gets a value on line {where}, so it will be empty the first time"
+
+msgid "{path} needs {missing}"
+msgstr "{path} needs {missing}"
+
+msgid "'{said}' is written in words, and pseudocode needs AI features switched on. Write it as add-on.action to run it without them."
+msgstr "'{said}' is written in words, and pseudocode needs AI features switched on. Write it as add-on.action to run it without them."
+
+msgid "'{said}' is written in words, and pseudocode needs AI features switched on (Settings, AI features). Write it as add-on.action to run it without them."
+msgstr "'{said}' is written in words, and pseudocode needs AI features switched on (Settings, AI features). Write it as add-on.action to run it without them."
+
+msgid "there is no script called '{name}' next to this one"
+msgstr "there is no script called '{name}' next to this one"
+
+msgid "there is no sound file called '{name}' next to this one"
+msgstr "there is no sound file called '{name}' next to this one"
+
+msgid "The macro is fine - every line names something Titan can do, every value is one the action takes, and nothing in it looks wrong."
+msgstr "The macro is fine - every line names something Titan can do, every value is one the action takes, and nothing in it looks wrong."
+
+msgid "(AI features are off, so it was not also read by the AI.)"
+msgstr "(AI features are off, so it was not also read by the AI.)"
+
+msgid "Would not run:"
+msgstr "Would not run:"
+
+msgid "Would run, but looks wrong:"
+msgstr "Would run, but looks wrong:"
+
+msgid "The AI also read it and noticed (advisory):"
+msgstr "The AI also read it and noticed (advisory):"
+
+msgid "(the AI could not review this macro: {})"
+msgstr "(the AI could not review this macro: {})"
+
+msgid "Checking the macro, and reading it with the AI..."
+msgstr "Checking the macro, and reading it with the AI..."
+
+msgid "Checking the macro..."
+msgstr "Checking the macro..."
+
+msgid "The macro is fine - every line names something Titan can do, and nothing in it looks wrong."
+msgstr "The macro is fine - every line names something Titan can do, and nothing in it looks wrong."
+
+msgid "{count} things to look at. The first: {problem}"
+msgstr "{count} things to look at. The first: {problem}"
+
+msgid "there is no 'while' - use 'repeat <number>' with an 'if' inside"
+msgstr "there is no 'while' - use 'repeat <number>' with an 'if' inside"
+
+msgid "there is no 'for' - use 'repeat <number>'"
+msgstr "there is no 'for' - use 'repeat <number>'"
+
+msgid "there is no 'foreach' - use 'repeat <number>'"
+msgstr "there is no 'foreach' - use 'repeat <number>'"
+
+msgid "write 'else' and a nested 'if'"
+msgstr "write 'else' and a nested 'if'"
+
+msgid "every block ends with 'end'"
+msgstr "every block ends with 'end'"
+
+msgid "a Titan Script has no functions - put it in another .tcs and call it with 'run'"
+msgstr "a Titan Script has no functions - put it in another .tcs and call it with 'run'"
+
+msgid "a Titan Script has no functions - use 'run \"helper.tcs\"'"
+msgstr "a Titan Script has no functions - use 'run \"helper.tcs\"'"
+
+msgid "a Titan Script is not Python"
+msgstr "a Titan Script is not Python"
+
+msgid "a Titan Script is not Python - every add-on is already callable"
+msgstr "a Titan Script is not Python - every add-on is already callable"
+
+msgid "use 'say' to speak or 'message' to show a window"
+msgstr "use 'say' to speak or 'message' to show a window"
+
+msgid "just 'set name = value'"
+msgstr "just 'set name = value'"
+
+msgid "use 'if' and 'else'"
+msgstr "use 'if' and 'else'"
+
+msgid "a Titan Script stops at the first line that fails; there is no 'try'"
+msgstr "a Titan Script stops at the first line that fails; there is no 'try'"
+
+msgid "a Titan Script stops at the first line that fails"
+msgstr "a Titan Script stops at the first line that fails"
+
+msgid "use 'wait 2s'"
+msgstr "use 'wait 2s'"
+
+msgid "use 'stop'"
+msgstr "use 'stop'"
+
+msgid "there is no 'break' - use 'if' around what should not repeat"
+msgstr "there is no 'break' - use 'if' around what should not repeat"
+
+msgid "there is no 'continue'"
+msgstr "there is no 'continue'"
+
+msgid "there is no 'goto'"
+msgstr "there is no 'goto'"
+
+msgid "use 'ask name = \"question\"'"
+msgstr "use 'ask name = \"question\"'"
+
+msgid "use 'message \"...\"'"
+msgstr "use 'message \"...\"'"
+
+msgid "The AI is correcting the macro..."
+msgstr "The AI is correcting the macro..."
+
+msgid "The AI corrected the macro and it now checks out. Save the corrected version?"
+msgstr "The AI corrected the macro and it now checks out. Save the corrected version?"
+
+msgid "The AI corrected what it could, and this is left:"
+msgstr "The AI corrected what it could, and this is left:"
+
+msgid "Save the corrected version anyway?"
+msgstr "Save the corrected version anyway?"
+
+msgid "The AI could not correct this macro."
+msgstr "The AI could not correct this macro."
+
+msgid "The corrected macro has been saved."
+msgstr "The corrected macro has been saved."
+
+msgid "The macro was left as it was."
+msgstr "The macro was left as it was."
+
+msgid "Correct it with the AI?"
+msgstr "Correct it with the AI?"

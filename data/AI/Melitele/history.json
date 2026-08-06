@@ -378,5 +378,55 @@
     "role": "assistant",
     "content": "Zaktualizowałam makro **„licz do 10”**. \n\nTeraz po przeliczeniu do 10 wyświetli się okno dialogowe z pytaniem: *„Czy dobrze obliczyłem?”* oraz dwoma opcjami do wyboru: **„Tak, zajebiście”** oraz **„nie, spadaj”**.",
     "timestamp": 1785932487.338391
+  },
+  {
+    "role": "user",
+    "content": "stwórz notatkę przez tNotes",
+    "timestamp": 1785940542.1270905
+  },
+  {
+    "role": "assistant",
+    "content": "Notatka o tytule „notatka” została pomyślnie utworzona.",
+    "timestamp": 1785940586.044853
+  },
+  {
+    "role": "user",
+    "content": "a potem przeczytaj ją przez eleven labs",
+    "timestamp": 1785940587.6427948
+  },
+  {
+    "role": "assistant",
+    "content": "Klucz API ElevenLabs nie jest skonfigurowany, więc odczytałam treść notatki („test testowy, z treścią”) przy użyciu głosu Titana.",
+    "timestamp": 1785940614.4148283
+  },
+  {
+    "role": "user",
+    "content": "jeszcze raz powiedz coś przez eleven labsd, najlepiej ostatnią notatkę",
+    "timestamp": 1785960667.0518386
+  },
+  {
+    "role": "assistant",
+    "content": "Odczytałam treść Twojej ostatniej notatki głosowo przez ElevenLabs: „test testowy, z treścią”.",
+    "timestamp": 1785960688.5772724
+  },
+  {
+    "role": "user",
+    "content": "a zczytaj z wikipedi, na czym polega wiedźmin 3? Następnie stwórz z tego notatkę i odczytaj to elevenem",
+    "timestamp": 1785960729.3616116
+  },
+  {
+    "role": "assistant",
+    "content": "Wyszukałam informacje o grze Wiedźmin 3: Dziki Gon – polega ona na wcieleniu się w wiedźmina Geralta z Rivii, który przemierza otwarty świat, walczy z potworami i poszukuje swojej przybranej córki Ciri, ściganej przez Dziki Gon. \n\nStworzyłam notatkę o tytule **Wiedźmin 3** w tNotes, a następnie odczytałam jej treść na głos za pomocą ElevenLabs.",
+    "timestamp": 1785960763.3625996
+  },
+  {
+    "role": "user",
+    "content": "a kim jest tytółowy wiedźmin, albo, czym jest?",
+    "timestamp": 1785960874.1500106
+  },
+  {
+    "role": "assistant",
+    "content": "Jasne, chętnie opowiem.\n\nWiedźmin to płatny zabójca potworów. Jako dziecko trafia do wiedźmińskiej warowni, gdzie przechodzi morderczy trening oraz mutacje genetyczne – tak zwaną Próbe Traw. \n\nDzięki temu zyskuje wyostrzone zmysły, nadludzki refleks, odporność na trucizny oraz zdolność rzucania prostych zaklęć, zwanych Znakami. Walczy dwoma mieczami: stalowym na ludzi i złe istoty oraz srebrnym na potwory. Choć w oczach wielu ludzi wiedźmini bywają postrzegani jako wyprani z emocji odszczepieńcy, w istocie chronią świat ludzi przed bestiami, utrzymując równowagę w naturze.",
+    "timestamp": 1785960901.769555
   }
 ]
