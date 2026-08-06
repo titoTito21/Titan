@@ -1,22 +1,35 @@
 # -*- coding: utf-8 -*-
-"""Browse mode (virtual buffer) for web documents.
+"""Document mode: a web page, or any application, read as a flat document.
 
-Python port of ``ScreenReader/BrowseMode/BrowseModeHandler.cs`` together with a
-simplified virtual buffer (a flat, in-order list of the document's accessible
-elements, inspired by NVDA's ``virtualBuffers`` / ``browseMode``).
+Two modes share one implementation, because they are the same idea:
 
-When focus enters a browser document, browse mode becomes active. In browse mode
-the document is read as a flat buffer: arrow up/down step through buffer nodes,
-single letters jump by element type (``h`` headings, ``k`` links, ``b`` buttons,
-... see :mod:`titan_access.quick_nav`), Shift reverses direction. Pass-through
-("form" / "focus" mode) hands keys back to the page so the user can type into
-fields.
+* **Browse mode** engages by itself inside a web document. Arrow keys walk the
+  page, single letters jump by element type (``h`` headings, ``k`` links, ``b``
+  buttons -- see :mod:`titan_access.quick_nav`), Shift reverses, and focus mode
+  (pass-through) hands the keys back to the page so a form can be typed into.
+  This is the NVDA behaviour users already expect on the web.
 
-The buffer is built by walking the UI Automation control tree from the document
-root via the vendored ``uiautomation`` package; building is bounded (depth / node
-count) so a huge page never stalls. If the buffer cannot be built the handler
-degrades gracefully: :meth:`handle_key` returns ``False`` and the keys pass
-through unchanged.
+* **Scan mode** is the same document over an ORDINARY application, switched on
+  and off by the user with the reader modifier + Space. The application's own
+  interface becomes a virtual page: the same arrows, the same quick-navigation
+  letters, the same Enter to press whatever the cursor is on. It is what makes a
+  program navigable that cannot be tabbed through at all -- and, because the
+  document is built by :mod:`titan_access.virtual_buffer`, it works on modern
+  apps (UI Automation), on legacy Win32 / VB6 / Delphi programs (MSAA, then the
+  raw child windows), and -- when the window answers nothing and Titan's AI
+  features are on -- on what the AI reads off a picture of it.
+
+The buffer itself is always a flat list of :class:`~titan_access.virtual_buffer.VNode`,
+whichever source produced it, so navigation, quick navigation, announcement and
+activation are written once.
+
+CRITICAL, and the reason for :meth:`_dispatch`: :meth:`handle_key` runs on the
+keyboard-hook thread, whose message loop services the global ``WH_KEYBOARD_LL``
+hook. Building or walking the document there (thousands of cross-process COM
+calls) blocks that loop, and once a low-level hook callback exceeds Windows'
+``LowLevelHooksTimeout`` (~300 ms) Windows silently drops key events and may
+unhook us. So this class only DECIDES on the hook thread; every command that may
+touch the buffer runs on the engine's background reader.
 
 # LOCALE KEYS TO ADD: browse.browseMode = Browse mode
 # LOCALE KEYS TO ADD: browse.focusMode = Focus mode
@@ -26,19 +39,33 @@ through unchanged.
 # LOCALE KEYS TO ADD: browse.documentEnd = End of document
 # LOCALE KEYS TO ADD: browse.emptyLine = Empty line
 # LOCALE KEYS TO ADD: browse.webPage = web page
+# LOCALE KEYS TO ADD: browse.scanOn = Scan mode on, {0} elements
+# LOCALE KEYS TO ADD: browse.scanOff = Scan mode off
+# LOCALE KEYS TO ADD: browse.scanEmpty = Nothing to scan in this window
+# LOCALE KEYS TO ADD: browse.scanReading = Reading the screen
+# LOCALE KEYS TO ADD: browse.refreshed = Refreshed, {0} elements
+# LOCALE KEYS TO ADD: browse.sourceOcr = read by AI
+# LOCALE KEYS TO ADD: browse.sourceLegacy = legacy application
 """
 
 import ctypes
 import os
-_DBG = bool(os.environ.get("TITAN_ACCESS_DEBUG"))
-from dataclasses import dataclass, field
-from typing import Any, List, Optional
+import threading
+import time
+from typing import List, Optional
 
 from titan_access.localization import L
 from titan_access import localization as loc
 from titan_access import quick_nav as qn
-from titan_access import presentation as pres
-from titan_access.contracts import SND_CLICK, SND_CURSOR, SND_EDGE
+from titan_access import virtual_buffer as vbuf
+from titan_access.virtual_buffer import VNode
+from titan_access.contracts import (
+    SND_CLICK, SND_CURSOR, SND_EDGE, SND_WINDOW,
+    STATE_CHECKED, STATE_UNCHECKED, STATE_PARTIAL, STATE_SELECTED,
+    STATE_UNAVAILABLE, STATE_EXPANDED, STATE_COLLAPSED,
+)
+
+_DBG = bool(os.environ.get("TITAN_ACCESS_DEBUG"))
 
 # --- defensive UIA import (module must import even without UIA) ------------- #
 try:
@@ -57,34 +84,14 @@ _BROWSER_PROCESSES = {
     "msedgewebview2", "webview2", "cef", "cefclient",
 }
 # UIA FrameworkId values that mean "this element is web content" — covers
-# WebView2 and Electron apps whose own process name is not a known browser.
+# WebView2 and Electron apps whose own process name is not a browser.
 _WEB_FRAMEWORKS = {"chrome", "gecko", "webview", "edge", "blink"}
 
-# Window classes that host a rendered web document. Chromium (Chrome / Edge /
-# WebView2 / CEF / Electron / Brave / Opera / Vivaldi) all render content in a
-# ``Chrome_RenderWidgetHostHWND`` child window; Firefox/Gecko use the Mozilla
-# classes. Detecting these makes browse mode engage for web content embedded in
-# a host app or dialog (where the foreground process is NOT a browser and the
-# focus snapshot may arrive via MSAA without a framework id / process id).
+# Window classes that host a rendered web document.
 _WEB_WINDOW_CLASSES = {
     "chrome_renderwidgethosthwnd",   # Chromium (all variants + WebView2 / CEF)
     "mozillawindowclass",            # Firefox / Gecko
     "mozillacontentwindowclass",
-}
-
-# Bounds for buffer construction so a giant page never stalls the hook thread.
-_MAX_DEPTH = 25
-_MAX_NODES = 4000
-
-# UIA ControlTypeNames that are pure grouping / layout WRAPPERS. NVDA presents
-# the web buffer flat -- the user arrows through the actual links / headings /
-# controls, not through the anonymous group / pane containers that merely hold
-# them. Emitting those as their own buffer stops made navigation feel like it was
-# "inside groups" (unintuitive), so they are skipped; their descendants are still
-# walked, so no real content is lost.
-_SKIP_CONTROL_TYPES = {
-    "GroupControl", "PaneControl", "DocumentControl", "WindowControl",
-    "TitleBarControl",
 }
 
 # Minimum bounding-rectangle area (px^2) for a DocumentControl to count as a web
@@ -92,68 +99,70 @@ _SKIP_CONTROL_TYPES = {
 # etc.). ~316x316; the page viewport is far larger, chrome documents far smaller.
 _MIN_CONTENT_AREA = 100000
 
-# Virtual key codes for the arrow keys.
+# A web buffer older than this is rebuilt before the next command even when the
+# document element itself looks unchanged: a single-page app replaces its whole
+# content without ever changing the document's runtime id, and navigating a
+# document that is no longer on screen is worse than a short pause.
+_WEB_MAX_AGE = 12.0
+# The same, for a scanned application (which changes far less often, and whose
+# rebuild is more expensive).
+_SCAN_MAX_AGE = 30.0
+
+# Virtual key codes.
 _VK_LEFT, _VK_UP, _VK_RIGHT, _VK_DOWN = 0x25, 0x26, 0x27, 0x28
+_VK_HOME, _VK_END, _VK_PRIOR, _VK_NEXT = 0x24, 0x23, 0x21, 0x22
 
+# How many entries Page Up / Page Down moves.
+_PAGE = 15
 
-@dataclass
-class _Node:
-    """One element in the flat virtual buffer."""
-    element: Any                      # live uiautomation Control (None for IA2 nodes)
-    name: str = ""
-    control_type: str = ""            # uiautomation ControlTypeName
-    localized_type: str = ""          # lower-cased LocalizedControlType / ItemStatus
-    level: int = 0                    # heading level (0 = unknown)
-    runtime_id: tuple = field(default_factory=tuple)
-    role: str = ""                    # Titan role key (set for IA2-sourced nodes)
+# Roles that put a web document into focus (pass-through) mode automatically,
+# so typing edits the field instead of driving quick navigation (NVDA-style).
+_FOCUS_MODE_ROLES = {"edit", "password", "combobox", "spinner", "slider"}
 
+# Pitches for a node announcement, mirroring accessible.py (kept local to avoid
+# importing the announcer for three integers).
+_NAME_PITCH = 0
+_ROLE_PITCH = -4
+_STATE_PITCH = 4
 
-# QuickNavType -> Titan role keys, for IA2-sourced nodes that have no UIA
-# ControlTypeName. Headings are matched by role/level separately.
-_QN_ROLE_MATCH = {
-    qn.QuickNavType.LINK: ("link",),
-    qn.QuickNavType.UNVISITED_LINK: ("link",),
-    qn.QuickNavType.VISITED_LINK: ("link",),
-    qn.QuickNavType.BUTTON: ("button", "split_button"),
-    qn.QuickNavType.EDIT_FIELD: ("edit", "document"),
-    qn.QuickNavType.COMBO_BOX: ("combobox",),
-    qn.QuickNavType.CHECKBOX: ("checkbox",),
-    qn.QuickNavType.RADIO_BUTTON: ("radio",),
-    qn.QuickNavType.LIST: ("list",),
-    qn.QuickNavType.LIST_ITEM: ("listitem",),
-    qn.QuickNavType.TABLE: ("table", "grid"),
-    qn.QuickNavType.GRAPHIC: ("image",),
-    qn.QuickNavType.LANDMARK: ("group",),
-    qn.QuickNavType.FORM_FIELD: ("edit", "combobox", "checkbox", "radio",
-                                 "button"),
-}
+_STATE_LABELS = (STATE_CHECKED, STATE_UNCHECKED, STATE_PARTIAL, STATE_SELECTED,
+                 STATE_UNAVAILABLE, STATE_EXPANDED, STATE_COLLAPSED)
 
 
 class BrowseModeHandler:
-    """Browse-mode controller bound to the engine.
+    """Browse mode (web) and scan mode (any application), bound to the engine.
 
-    Construction never touches UIA; the buffer is built lazily the first time a
-    key is handled in an active browser document.
+    Construction never touches UIA; a document is built lazily, off the hook
+    thread, the first time a key needs it.
     """
 
     def __init__(self, engine):
         self.engine = engine
         self._pass_through = False
         self._manual_override = False   # user pressed the toggle; pause auto-switch
-        self._nodes: List[_Node] = []
-        self._index = -1
-        self._char_pos = 0
-        self._root_runtime_id: tuple = ()
-        self._active_pid = 0
         self._was_web = False           # were we inside a web document last focus?
         self._last_content_doc = None   # last good web content document (Control)
+
+        # The active document.
+        self._doc: Optional[vbuf.VirtualDocument] = None
+        self._index = -1
+        self._char_pos = 0
+        self._doc_key = ()              # what the current document was built for
+        self._lock = threading.RLock()
+
+        # Scan mode (ordinary applications).
+        self._scan = False
+        self._scan_hwnd = 0
+        self._building = False
 
     # ==================================================================== #
     # Activation state
     # ==================================================================== #
     @property
     def is_active(self) -> bool:
-        """True when focus is inside a web document / browser window."""
+        """True when document keys (arrows / quick nav) belong to us."""
+        if self._scan:
+            return True
         if not _UIA:
             return False
         try:
@@ -162,8 +171,27 @@ class BrowseModeHandler:
             return False
 
     @property
+    def is_web(self) -> bool:
+        """True when focus is inside a web document (not a scanned app)."""
+        if not _UIA:
+            return False
+        try:
+            return self._foreground_is_browser()
+        except Exception:
+            return False
+
+    @property
+    def scan_active(self) -> bool:
+        return bool(self._scan)
+
+    @property
     def pass_through(self) -> bool:
         return self._pass_through
+
+    @property
+    def source(self) -> str:
+        """Which tier built the active document ('uia', 'msaa', 'ocr', ...)."""
+        return self._doc.source if self._doc is not None else ""
 
     def _foreground_is_browser(self) -> bool:
         pid = _foreground_pid()
@@ -171,26 +199,33 @@ class BrowseModeHandler:
             return True
         obj = getattr(self.engine, "current_object", None)
         if obj is not None:
-            # Owning process is a known browser / web host.
             if getattr(obj, "process_id", 0) and \
                     _process_name_for_pid(obj.process_id) in _BROWSER_PROCESSES:
                 return True
-            # Or the focused element is web content (WebView2 / Electron, whose
-            # own process name is not a browser).
             fw = (getattr(obj, "framework_id", "") or "").lower()
             if fw in _WEB_FRAMEWORKS:
                 return True
-        # Last resort: the foreground window hosts a rendered web document. This
-        # catches web content embedded in a host app / dialog (WebView2, CEF) and
-        # MSAA-delivered focus, where the process-name and framework checks above
-        # have nothing to match against.
+        # Last resort: the foreground window contains a web-render child window
+        # (WebView2 / CEF content embedded in a host app or dialog).
         if _foreground_hosts_web_document():
             return True
         return False
 
     # ==================================================================== #
-    # Mode toggle
+    # Mode toggles
     # ==================================================================== #
+    def toggle(self):
+        """What the reader modifier + Space does.
+
+        In a web document it switches between browse and focus mode (the page is
+        already a document). Anywhere else it switches SCAN mode on and off,
+        turning the application's interface into that same document.
+        """
+        if self.is_web:
+            self.toggle_pass_through()
+            return True
+        return self.toggle_scan()
+
     def toggle_pass_through(self):
         """Switch between browse mode and focus (form) mode (manual override)."""
         self._pass_through = not self._pass_through
@@ -202,44 +237,110 @@ class BrowseModeHandler:
             self.engine.play(SND_CURSOR)
             self.engine.speak(L("browse.browseMode"))
 
-    # Roles that should auto-switch the document into focus (pass-through) mode,
-    # so typing / arrowing edits the field instead of driving quick navigation
-    # (NVDA's automatic focus mode).
-    _FOCUS_MODE_ROLES = {"edit", "password", "combobox", "spinner", "slider"}
+    def toggle_scan(self) -> bool:
+        """Turn scan mode on or off for the foreground application."""
+        if self._scan:
+            self._end_scan()
+            return True
+        if not self._scan_allowed():
+            return False
+        hwnd = vbuf.foreground_hwnd()
+        if not hwnd:
+            return False
+        if self._building:
+            return True
+        self._building = True
+        self._scan_hwnd = hwnd
+        self.engine.play(SND_WINDOW)
+        self._dispatch(lambda: self._start_scan(hwnd))
+        return True
+
+    def _scan_allowed(self) -> bool:
+        """The user's own switch (Settings -> scan mode), default on."""
+        settings = getattr(self.engine, "settings", None)
+        if settings is None:
+            return True
+        try:
+            return bool(settings.scan_mode)
+        except Exception:
+            return True
+
+    def _start_scan(self, hwnd):
+        """Build the document for *hwnd* and enter scan mode (reader thread)."""
+        try:
+            doc = self._build_document(hwnd, allow_ocr=True)
+            if doc is None or not doc.nodes:
+                self._scan = False
+                self.engine.play(SND_EDGE)
+                self.engine.speak(L("browse.scanEmpty"))
+                return
+            with self._lock:
+                self._doc = doc
+                self._index = 0
+                self._char_pos = 0
+                self._scan = True
+                self._scan_hwnd = hwnd
+                self._pass_through = False
+            self.engine.play(SND_CURSOR)
+            message = L("browse.scanOn", len(doc.nodes))
+            extra = self._source_note(doc.source)
+            self.engine.speak(f"{message}, {extra}" if extra else message)
+            # Read where the cursor starts, so the mode is immediately useful.
+            node = self._node_at(0)
+            if node is not None:
+                self._announce_node(node, move_focus=False)
+        finally:
+            self._building = False
+
+    def _end_scan(self):
+        with self._lock:
+            self._scan = False
+            self._doc = None
+            self._index = -1
+            self._char_pos = 0
+        self.engine.play(SND_EDGE)
+        self.engine.speak(L("browse.scanOff"))
+
+    def _source_note(self, source) -> str:
+        """A short word about where the document came from, when it matters."""
+        if source == "ocr":
+            return L("browse.sourceOcr")
+        if source in ("msaa", "win32"):
+            return L("browse.sourceLegacy")
+        return ""
 
     def update_for_focus(self, obj):
-        """Auto-switch browse vs focus mode when focus moves inside a web
-        document, mirroring NVDA: editable / form controls => focus mode, other
-        content => browse mode. A manual toggle pauses auto-switching until focus
-        moves to a control of the opposite kind."""
-        active = self.is_active
+        """React to a focus change.
+
+        In a web document: auto-switch browse vs focus mode (NVDA-style) --
+        editable / form controls get focus mode, other content browse mode.
+        In scan mode: leave scan when the user changes application, and keep the
+        document cursor on whatever the app just focused.
+        """
+        if self._scan:
+            self._scan_follow_focus(obj)
+            return
+        active = self.is_web
         if _DBG:
             print(f"[TitanAccess][browse] update_for_focus role="
-                  f"{getattr(obj,'role',None)!r} active={active} "
+                  f"{getattr(obj,'role',None)!r} web={active} "
                   f"pass_through={self._pass_through} was_web={self._was_web}",
                   flush=True)
         if not _UIA or not active:
             self._manual_override = False
             self._was_web = False
             return
-        # Announce crossing into a web document. Without this the entry is read
-        # with the container's raw role ("dialog" / "pane") and the user never
-        # learns the page is a browsable web document — the auto mode-switch below
-        # stays silent because browse mode is already the default (no flip).
         if not self._was_web:
             self._was_web = True
             self._announce_web_entry(obj)
-            # Warm the virtual buffer off the hook/focus thread so the first
-            # arrow / quick-nav key finds it ready instead of paying for the
-            # whole UIA walk on the first keystroke (NVDA builds on load too).
-            self._dispatch(self._ensure_buffer)
-        want_focus = obj is not None and obj.role in self._FOCUS_MODE_ROLES
+            # Warm the document off the focus thread so the first arrow key
+            # finds it ready instead of paying for the whole walk.
+            self._dispatch(lambda: self._ensure_document())
+        want_focus = obj is not None and obj.role in _FOCUS_MODE_ROLES
         if want_focus == self._pass_through:
-            # Already in the right mode; a matching focus clears the manual hold.
             self._manual_override = False
             return
         if self._manual_override:
-            # User forced a mode; respect it until the focus kind flips.
             self._manual_override = False
             return
         self._pass_through = want_focus
@@ -250,13 +351,32 @@ class BrowseModeHandler:
             self.engine.play(SND_CURSOR)
             self.engine.speak(L("browse.browseMode"))
 
-    def _announce_web_entry(self, obj):
-        """Announce that focus has entered a browsable web document.
+    def _scan_follow_focus(self, obj):
+        """Keep scan mode honest when the user tabs or changes window."""
+        hwnd = vbuf.foreground_hwnd()
+        if hwnd and self._scan_hwnd and hwnd != self._scan_hwnd:
+            # A different window: the document no longer describes what is in
+            # front of the user, so scan mode ends rather than navigating a
+            # window they left.
+            self._end_scan()
+            return
+        if obj is None:
+            return
+        # Move the document cursor to whatever now has the focus, so switching
+        # between Tab and the document cursor does not lose the place.
+        name = (getattr(obj, "name", "") or "").strip()
+        if not name:
+            return
+        with self._lock:
+            nodes = self._doc.nodes if self._doc else []
+            for i, node in enumerate(nodes):
+                if node.name == name and node.role == getattr(obj, "role", ""):
+                    self._index = i
+                    self._char_pos = 0
+                    break
 
-        Spoken as "<page title>, web page" so the user knows arrows / single
-        letters now drive the virtual buffer instead of tabbing a dialog. The
-        title is the foreground window text (browser tab title), falling back to
-        the focused object's name."""
+    def _announce_web_entry(self, obj):
+        """Announce that focus has entered a browsable web document."""
         title = _foreground_window_title()
         if not title and obj is not None:
             title = (getattr(obj, "name", "") or "").strip()
@@ -268,174 +388,241 @@ class BrowseModeHandler:
     # Key handling
     # ==================================================================== #
     def handle_key(self, vk, key_name, ctrl, alt, shift) -> bool:
-        """Handle a plain key in browse mode. Return True to consume it.
-
-        In focus (pass-through) mode nothing is consumed. Otherwise: arrows step
-        the buffer caret and single letters perform quick navigation.
-
-        CRITICAL: this runs on the keyboard-hook thread, whose message loop
-        services the global ``WH_KEYBOARD_LL`` hook. Building / walking the UIA
-        virtual buffer here (thousands of cross-process COM calls) blocks that
-        loop, and once a low-level hook callback exceeds Windows'
-        ``LowLevelHooksTimeout`` (~300 ms) Windows silently drops key events and
-        may unhook us -- which is exactly the "arrows / quick-nav do nothing"
-        failure. So every command that may touch the buffer is dispatched to the
-        engine's background reader thread (COM-initialised, off the hook path);
-        we only decide *here* whether the key is ours and swallow it. Mirrors
-        NVDA, which builds and reads its virtual buffer off the input thread.
-        """
-        if _DBG and key_name in ("up", "down", "left", "right") and not ctrl and not alt:
-            print(f"[TitanAccess][browse] handle_key {key_name} "
-                  f"pass_through={self._pass_through} active={self.is_active} "
-                  f"nodes={len(self._nodes)}", flush=True)
-        if self._pass_through or not _UIA:
+        """Handle a plain key in document mode. Return True to consume it."""
+        if self._pass_through or (not _UIA and not self._scan):
+            return False
+        if alt:
             return False
 
-        # Arrow navigation (no modifiers other than handled here).
-        if not ctrl and not alt:
-            if key_name == "enter":
-                self._dispatch(self._activate_current)
+        if ctrl:
+            # Ctrl+Home / Ctrl+End jump to the ends of the document; Ctrl+Left /
+            # Ctrl+Right move by word. Everything else with Ctrl belongs to the
+            # application.
+            if vk == _VK_HOME:
+                self._dispatch(lambda: self._move_to_end(first=True))
                 return True
-            if vk == _VK_UP:
-                self._dispatch(lambda: self._move_line(-1))
+            if vk == _VK_END:
+                self._dispatch(lambda: self._move_to_end(first=False))
                 return True
-            if vk == _VK_DOWN:
-                self._dispatch(lambda: self._move_line(+1))
+            if vk in (_VK_LEFT, _VK_RIGHT):
+                delta = -1 if vk == _VK_LEFT else 1
+                self._dispatch(lambda: self._move_word(delta))
                 return True
-            if vk == _VK_LEFT:
-                self._dispatch(lambda: self._move_char(-1))
-                return True
-            if vk == _VK_RIGHT:
-                self._dispatch(lambda: self._move_char(+1))
-                return True
-
-        # Single-letter / digit quick navigation (Ctrl/Alt are app shortcuts).
-        if ctrl or alt:
             return False
+
+        if key_name == "enter":
+            self._dispatch(self._activate_current)
+            return True
+        if key_name == "escape" and self._scan:
+            # Escape leaves scan mode, so the application is instantly usable
+            # again without hunting for the toggle.
+            self._end_scan()
+            return True
+        if key_name == "f5":
+            self._dispatch(self.refresh)
+            return True
+        if key_name == "tab":
+            # Let the application move focus; scan mode follows it (see
+            # _scan_follow_focus) instead of fighting it.
+            return False
+        if vk == _VK_UP:
+            self._dispatch(lambda: self._move_line(-1))
+            return True
+        if vk == _VK_DOWN:
+            self._dispatch(lambda: self._move_line(+1))
+            return True
+        if vk == _VK_LEFT:
+            self._dispatch(lambda: self._move_char(-1))
+            return True
+        if vk == _VK_RIGHT:
+            self._dispatch(lambda: self._move_char(+1))
+            return True
+        if vk == _VK_HOME:
+            self._dispatch(lambda: self._move_line_edge(start=True))
+            return True
+        if vk == _VK_END:
+            self._dispatch(lambda: self._move_line_edge(start=False))
+            return True
+        if vk == _VK_PRIOR:
+            self._dispatch(lambda: self._move_line(-_PAGE))
+            return True
+        if vk == _VK_NEXT:
+            self._dispatch(lambda: self._move_line(+_PAGE))
+            return True
+
+        # Single-letter / digit quick navigation.
         ch = _char_for_key(vk, key_name)
         if not ch:
             return False
         qn_type = qn.type_for_key(ch)
         if qn_type == qn.QuickNavType.NONE:
             return False
-        # A recognised quick-nav letter IS a browse-mode command: swallow it and
-        # do the (buffer-building) work off the hook thread.
-        self._dispatch(lambda: self._quick_nav(qn_type, backward=shift)
-                       if self._ensure_buffer() else None)
+        self._dispatch(lambda: self._quick_nav(qn_type, backward=shift))
         return True
 
     def _dispatch(self, fn):
-        """Run buffer work off the keyboard-hook thread.
-
-        Uses the engine's background reader thread (latest-wins, COM-initialised)
-        when available, so a slow UIA walk never stalls the global keyboard hook;
-        falls back to a throwaway thread if the engine exposes no reader queue."""
+        """Run document work off the keyboard-hook thread."""
         engine = self.engine
         submit = getattr(engine, "submit_read", None)
         if callable(submit):
             submit(fn)
             return
-        import threading
         threading.Thread(target=fn, daemon=True).start()
 
     def quick_nav_by_char(self, ch, backward=False) -> bool:
-        """Public entry used by the dial: jump to the next/previous element of
-        the quick-nav type bound to *ch* (e.g. ``b`` buttons, ``h`` headings).
-
-        Returns ``False`` when no browse buffer can be built (e.g. focus is not
-        inside a web document), so the caller can announce that the category is
-        not available here instead of failing silently.
-        """
-        if not _UIA:
-            return False
+        """Public entry used by the dial: jump by the type bound to *ch*."""
         qn_type = qn.type_for_key((ch or "").lower())
         if qn_type == qn.QuickNavType.NONE:
             return False
-        if not self._ensure_buffer():
+        if not self._ensure_document():
             return False
         self._quick_nav(qn_type, backward=backward)
         return True
 
     # ==================================================================== #
-    # Activation + say all
+    # Document construction
     # ==================================================================== #
-    def _activate_current(self) -> bool:
-        """Activate the node at the buffer caret (Enter): Invoke / Toggle, or
-        focus it and press Enter. Returns True (handled)."""
-        if not (0 <= self._index < len(self._nodes)):
-            return False
-        element = self._nodes[self._index].element
-        ok = False
-        for getter, call in (("GetInvokePattern", "Invoke"),
-                             ("GetTogglePattern", "Toggle"),
-                             ("GetSelectionItemPattern", "Select")):
-            try:
-                pattern = getattr(element, getter)()
-                if pattern is not None:
-                    getattr(pattern, call)()
-                    ok = True
-                    break
-            except Exception:
-                continue
-        if not ok:
-            try:
-                element.SetFocus()
-                ctypes.windll.user32.keybd_event(0x0D, 0, 0, 0)
-                ctypes.windll.user32.keybd_event(0x0D, 0, 0x0002, 0)
-                ok = True
-            except Exception:
-                ok = False
-        self.engine.play(SND_CLICK if ok else SND_EDGE)
-        return True
+    def _build_document(self, hwnd=0, allow_ocr=False):
+        """Build the document for the current context (reader thread only).
 
-    def say_all(self) -> bool:
-        """Read continuously from the buffer caret to the end (NVDA say all).
-
-        Each node's name is spoken in order; the user interrupts by pressing a
-        key (which stops speech through the normal stop path). Runs on a thread
-        so it never blocks the hook / focus thread.
+        ``allow_ocr`` is off unless the user explicitly asked for this document
+        (turning scan mode on, or refreshing it): reading a window with the AI
+        sends a picture of it to their provider, so it must never be a side
+        effect of, say, a dial gesture that happened to find no buffer.
         """
-        if not self._ensure_buffer():
+        if self._scan or not self.is_web:
+            hwnd = hwnd or self._scan_hwnd or vbuf.foreground_hwnd()
+            return vbuf.build_for_window(
+                hwnd, allow_ocr=allow_ocr and self._ocr_allowed(),
+                on_status=lambda stage: self._announce_stage(stage))
+        return self._build_web_document()
+
+    def _build_web_document(self):
+        """The page's own document: UIA under the content root, else IA2."""
+        hwnd = _foreground_hwnd()
+        doc = vbuf.VirtualDocument(hwnd=hwnd, title=_foreground_window_title())
+        root = self._document_root()
+        nodes: List[VNode] = []
+        if root is not None:
+            try:
+                nodes = vbuf.build_uia(root, deadline=time.time() + vbuf.BUILD_BUDGET_S)
+            except Exception as e:
+                print(f"[TitanAccess] browse_mode: buffer build failed: {e}")
+                nodes = []
+        # IA2 fallback: Chromium / Gecko keep the page in a render fragment a
+        # downward UIA walk of the window never reaches, so a walk that yields
+        # just the empty wrapper (<= 1 node) means "ask IA2", not "empty page".
+        if len(nodes) <= 1:
+            ia2_nodes = vbuf.build_ia2(hwnd)
+            if len(ia2_nodes) > len(nodes):
+                nodes = ia2_nodes
+                doc.source = "ia2"
+        if not doc.source:
+            doc.source = "uia"
+        doc.nodes = nodes
+        doc.signature = _web_signature(root, hwnd)
+        doc.built_at = time.time()
+        return doc
+
+    def _ocr_allowed(self) -> bool:
+        """Whether the AI may be asked to read a window that answers nothing."""
+        try:
+            from titan_access import ocr_assist
+            return ocr_assist.available(getattr(self.engine, "settings", None))
+        except Exception:
             return False
-        import threading
 
-        def _run():
-            i = self._index if self._index >= 0 else 0
-            for j in range(i, len(self._nodes)):
-                node = self._nodes[j]
-                text = node.name
-                if not text:
-                    continue
-                self._index = j
-                # interrupt=False so lines queue back-to-back like say-all.
-                self.engine.speak(text, interrupt=(j == i))
-                # Pace by the speech adapter's own segment wait when available.
-                sp = getattr(self.engine, "speech", None)
-                if sp is not None and hasattr(sp, "_wait_for_segment"):
-                    try:
-                        sp._wait_for_segment(text, getattr(sp, "_seq_id", 0))
-                        continue
-                    except Exception:
-                        pass
-                import time as _t
-                _t.sleep(min(2.5, 0.28 + len(text) / 16.0))
+    def _announce_stage(self, stage):
+        """Progress from a slow AI reading ('capturing' / 'reading')."""
+        if stage in ("capturing", "reading"):
+            try:
+                self.engine.speak(L("browse.scanReading"), interrupt=False)
+            except Exception:
+                pass
 
-        threading.Thread(target=_run, daemon=True).start()
+    def _ensure_document(self, force=False, allow_ocr=False) -> bool:
+        """Make sure a usable, current document exists. Reader thread only."""
+        with self._lock:
+            doc = self._doc
+            index = self._index
+        if not force and doc is not None and doc.nodes and not self._stale(doc):
+            return True
+        # A document the AI read may only be rebuilt by the AI: the very reason
+        # it exists is that the accessibility tiers answer nothing here, so a
+        # rebuild without OCR would find nothing and we would keep re-walking
+        # the same empty tree on every keystroke.
+        if doc is not None and doc.source == "ocr":
+            allow_ocr = True
+        try:
+            new_doc = self._build_document(allow_ocr=allow_ocr)
+        except Exception as e:
+            print(f"[TitanAccess] browse_mode: document build failed: {e}")
+            return False
+        if new_doc is None or not new_doc.nodes:
+            # Nothing better is available: keep what we have, but stop treating
+            # it as stale, or every later key pays for the same failed walk.
+            if doc is not None and doc.nodes:
+                doc.built_at = time.time()
+                doc.signature = self._current_signature(doc)
+                return True
+            return False
+        with self._lock:
+            self._doc = new_doc
+            # Keep the reading position across a rebuild when the document
+            # looks like the same one (a refresh of the same page), so F5 or a
+            # staleness rebuild does not throw the user back to the top.
+            self._index = min(index, len(new_doc.nodes) - 1) if index >= 0 else 0
+            self._char_pos = 0
         return True
 
-    # ==================================================================== #
-    # Virtual buffer construction
-    # ==================================================================== #
+    def _current_signature(self, doc):
+        """The signature *as :meth:`_stale` will compute it* for this document.
+
+        Web and scan documents are fingerprinted differently, so this must
+        follow the same branch -- writing the wrong kind back would make the
+        document permanently "changed" and rebuild it on every key.
+        """
+        if self._scan:
+            return vbuf.signature_for(doc.hwnd, doc)
+        try:
+            return _web_signature(self._document_root(), _foreground_hwnd())
+        except Exception:
+            return doc.signature
+
+    def _stale(self, doc) -> bool:
+        if self._scan:
+            return vbuf.looks_stale(doc, max_age=_SCAN_MAX_AGE)
+        # Web: the content document itself may have been replaced (navigation),
+        # or its content swapped under the same element (a single-page app).
+        if (time.time() - doc.built_at) > _WEB_MAX_AGE:
+            return True
+        try:
+            current = _web_signature(self._document_root(), _foreground_hwnd())
+        except Exception:
+            return False
+        return current != doc.signature
+
+    def refresh(self):
+        """Rebuild the document now (F5) and say how big it is."""
+        if not self._ensure_document(force=True, allow_ocr=bool(self._scan)):
+            self.engine.play(SND_EDGE)
+            self.engine.speak(L("browse.scanEmpty"))
+            return False
+        with self._lock:
+            count = len(self._doc.nodes) if self._doc else 0
+        self.engine.play(SND_CURSOR)
+        self.engine.speak(L("browse.refreshed", count))
+        return True
+
+    # -- the web content document ---------------------------------------- #
     def _document_root(self):
         """Locate the **web content** document of the foreground browser window.
 
         The browser chrome (address bar, toolbars, menus) is itself web UI in
-        modern Chromium/Edge, so several ``DocumentControl`` elements exist: the
-        page viewport AND small chrome documents (the omnibox suggestion list,
-        etc.). We must return the *content* document, otherwise browse mode reads
-        the browser menu instead of the page. Strategy: use the focused element's
-        nearest document only when it is a real content document; otherwise pick
-        the largest web document in the window."""
+        modern Chromium/Edge, so several ``DocumentControl`` elements exist. We
+        must return the *content* document, or browse mode reads the browser
+        menu instead of the page.
+        """
         if not _UIA:
             return None
         try:
@@ -443,12 +630,6 @@ class BrowseModeHandler:
             window = auto.ControlFromHandle(hwnd) if hwnd else auto.GetForegroundControl()
         except Exception:
             window = None
-        # 1) Focus inside a real content document? Walk UP to it. This is the
-        #    only reliable route in modern Chromium/Edge: the page lives in a
-        #    separate renderer fragment that a downward tree walk from the window
-        #    does not reach, but GetParentControl from a focused content element
-        #    climbs straight to its document. (Also handles iframes the user
-        #    tabbed into.) Remember it so a later chrome focus can still find it.
         try:
             focused = auto.GetFocusedControl()
         except Exception:
@@ -457,20 +638,13 @@ class BrowseModeHandler:
         if self._is_content_document(doc):
             self._last_content_doc = doc
             return doc
-        # 2) Try a (bounded) downward search for the largest web document. This
-        #    works in browsers that expose the document in the control tree
-        #    (e.g. Firefox/Gecko) and is a harmless no-op where it does not.
         if window is not None:
             main = self._find_main_document(window)
             if self._is_content_document(main):
                 self._last_content_doc = main
                 return main
-        # 3) Focus is on the browser chrome (toolbar / address bar / menu).
-        #    Reuse the last content document if it is still alive, so the user can
-        #    keep reading the page. NEVER fall back to the chrome window itself --
-        #    that is what made browse mode read the browser menu instead of the
-        #    page. When nothing valid is available, return None so the keys pass
-        #    through to the browser rather than narrating its menus.
+        # Focus is on the browser chrome: reuse the last content document if it
+        # is still alive. NEVER fall back to the chrome window itself.
         last = getattr(self, "_last_content_doc", None)
         if last is not None and self._is_content_document(last):
             return last
@@ -479,8 +653,6 @@ class BrowseModeHandler:
 
     @staticmethod
     def _is_content_document(doc) -> bool:
-        """True when *doc* is a real web *content* document (page viewport), not a
-        small chrome document (omnibox dropdown) or a non-web document."""
         if doc is None:
             return False
         try:
@@ -489,16 +661,12 @@ class BrowseModeHandler:
             fw = (doc.FrameworkId or "").lower()
             if fw and fw not in _WEB_FRAMEWORKS:
                 return False
-            # A real page viewport covers a large area; the omnibox suggestion
-            # list and other browser-chrome documents are small. (A dead document
-            # from a navigated-away page reports a 0 area and is rejected too.)
             return _control_area(doc) >= _MIN_CONTENT_AREA
         except Exception:
             return False
 
     def _find_main_document(self, window):
-        """Bounded BFS for the largest web ``DocumentControl`` under *window* —
-        the page viewport, as opposed to the browser-chrome documents."""
+        """Bounded BFS for the largest web ``DocumentControl`` under *window*."""
         from collections import deque
         best = None
         best_area = 0
@@ -523,8 +691,6 @@ class BrowseModeHandler:
                             area = _control_area(child)
                             if area > best_area:
                                 best_area, best = area, child
-                        # Don't descend into a document; the outermost content
-                        # document is what we want (and it's much faster).
                         continue
                 except Exception:
                     pass
@@ -545,214 +711,82 @@ class BrowseModeHandler:
             depth += 1
         return None
 
-    @staticmethod
-    def _find_first(root, predicate, max_depth=24, max_nodes=2500):
-        """Bounded breadth-first search for the first descendant of *root*
-        satisfying *predicate*. Returns the matching ``Control`` or ``None``.
+    # ==================================================================== #
+    # Navigation
+    # ==================================================================== #
+    def _nodes(self):
+        with self._lock:
+            return self._doc.nodes if self._doc else []
 
-        Used to locate the web ``DocumentControl`` when focus is not currently
-        inside it (e.g. focus is on the browser toolbar/address bar). Bounded by
-        depth and node count so a huge UI never stalls the hook thread."""
-        if root is None:
-            return None
-        from collections import deque
-        queue = deque([(root, 0)])
-        seen = 0
-        while queue:
-            node, depth = queue.popleft()
-            if depth >= max_depth:
-                continue
-            try:
-                children = node.GetChildren()
-            except Exception:
-                children = []
-            for child in children or []:
-                seen += 1
-                if seen > max_nodes:
-                    return None
-                try:
-                    if predicate(child):
-                        return child
-                except Exception:
-                    pass
-                queue.append((child, depth + 1))
+    def _node_at(self, index):
+        nodes = self._nodes()
+        if 0 <= index < len(nodes):
+            return nodes[index]
         return None
 
-    def _ensure_buffer(self) -> bool:
-        """(Re)build the buffer if the document changed or it is empty."""
-        root = self._document_root()
-        if _DBG:
-            try:
-                rn = None if root is None else (root.ControlTypeName, (root.Name or "")[:30])
-            except Exception:
-                rn = "?"
-            print(f"[TitanAccess][browse] ensure_buffer root={rn} "
-                  f"nodes={len(self._nodes)}", flush=True)
-        if root is None:
-            return False
-        rid = _runtime_id(root)
-        if self._nodes and rid and rid == self._root_runtime_id:
-            return True
-        try:
-            self._build_buffer(root)
-        except Exception as e:
-            print(f"[TitanAccess] browse_mode: buffer build failed: {e}")
-            self._nodes = []
-        # IA2 fallback: when UIA exposed nothing usable, build the buffer from
-        # the IAccessible2 document tree instead. Common for Chromium/Gecko,
-        # whose page content lives in a separate render fragment that a plain
-        # downward UIA walk of the window does not reach -- there the walk yields
-        # just the empty outer document wrapper (a single Pane/Document node), so
-        # treat "<= 1 node" as empty and fall back, not only a literally empty
-        # buffer (the old ``not self._nodes`` test left that wrapper in place and
-        # never fell back, so browse mode had nothing to navigate).
-        if len(self._nodes) <= 1:
-            self._build_ia2_buffer()
-        self._root_runtime_id = rid
-        self._index = 0 if self._nodes else -1
-        self._char_pos = 0
-        return bool(self._nodes)
-
-    def _build_ia2_buffer(self):
-        """Populate the buffer from the IAccessible2 web document (fallback)."""
-        try:
-            from titan_access import ia2
-        except Exception:
-            return
-        try:
-            hwnd = _foreground_hwnd()
-            raw = ia2.build_document_nodes(hwnd) if hwnd else []
-        except Exception as e:
-            print(f"[TitanAccess] browse_mode: IA2 buffer failed: {e}")
-            raw = []
-        nodes = []
-        for n in raw:
-            nodes.append(_Node(
-                element=None, name=n.get("name", ""),
-                control_type="", localized_type=(n.get("role") or ""),
-                level=int(n.get("level") or 0), role=n.get("role", "")))
-        if nodes:
-            self._nodes = nodes
-            print(f"[TitanAccess] browse_mode: IA2 buffer built ({len(nodes)} nodes)")
-
-    def _build_buffer(self, root):
-        nodes: List[_Node] = []
-        try:
-            walker = auto.WalkControl(root, includeTop=False, maxDepth=_MAX_DEPTH)
-        except Exception:
-            walker = None
-        if walker is None:
-            self._nodes = nodes
-            return
-        for control, _depth in walker:
-            try:
-                # Skip invisible / offscreen nodes (NVDA presentation filter).
-                if pres.presentation_type(control) == pres.UNAVAILABLE:
-                    continue
-                ctype = _ctype(control)
-                name = (control.Name or "").strip()
-                localized = (_localized(control) or "").lower()
-            except Exception:
-                continue
-            # Flat, NVDA-style buffer: never stop on an anonymous grouping /
-            # layout wrapper. The walk still descends into it, so its real
-            # content (links, headings, ...) is kept -- only the wrapper node
-            # itself is dropped, so navigation never lands "inside a group".
-            if ctype in _SKIP_CONTROL_TYPES:
-                continue
-            # Keep interactive controls always; keep text only if it has content.
-            interactive = ctype not in ("TextControl", "")
-            if not interactive and not name:
-                continue
-            if ctype == "TextControl":
-                # Drop pure icon-font glyphs (private-use area) — read noise.
-                visible = "".join(c for c in name
-                                  if not (0xE000 <= ord(c) <= 0xF8FF))
-                if not visible.strip():
-                    continue
-            # Heading detection must be language-independent: in Chromium the
-            # heading (h1..h6 / role=heading) is exposed as a plain TextControl
-            # whose only English-free signal is the ARIA role + UIA Level
-            # property. (LocalizedControlType is translated -- "nagłówek" on a
-            # Polish system -- so the old "heading" substring test never matched.)
-            aria = _aria_role(control)
-            level = _heading_level(control)
-            role = ""
-            if aria == "heading":
-                role = "heading"
-                level = level or _uia_level(control)
-            node = _Node(element=control, name=name, control_type=ctype,
-                         localized_type=localized, level=level,
-                         runtime_id=_runtime_id(control), role=role)
-            nodes.append(node)
-            if len(nodes) >= _MAX_NODES:
-                break
-        self._nodes = nodes
-
-    # ==================================================================== #
-    # Quick navigation
-    # ==================================================================== #
-    def _quick_nav(self, qn_type, backward):
-        start = self._index if self._index >= 0 else 0
-        rng = (range(start - 1, -1, -1) if backward
-               else range(start + 1, len(self._nodes)))
-        for i in rng:
-            if self._matches(self._nodes[i], qn_type):
-                self._index = i
-                self._char_pos = 0
-                self._announce_node(self._nodes[i], qn_type)
-                return
-        # Nothing found in that direction.
-        label = qn.type_label(qn_type)
-        self.engine.play(SND_EDGE)
-        self.engine.speak(L("browse.noPrevious", label) if backward
-                          else L("browse.noNext", label))
-
-    def _matches(self, node, qn_type) -> bool:
-        # Headings are recognised by localized type / heading level / role.
-        if qn.is_heading(qn_type):
-            is_heading = ("heading" in node.localized_type or node.level > 0
-                          or node.role == "heading")
-            if not is_heading:
-                return False
-            want = qn.heading_level(qn_type)
-            return want == 0 or node.level == want
-        # IA2-sourced nodes carry a Titan role instead of a UIA control type.
-        if node.element is None and node.role:
-            return node.role in _QN_ROLE_MATCH.get(qn_type, ())
-        ct = qn.CONTROL_TYPE_MATCH.get(qn_type, ())
-        if node.control_type in ct:
-            # Paragraph also requires actual text content.
-            if qn_type == qn.QuickNavType.PARAGRAPH and not node.name:
-                return False
-            return True
-        aria = qn.ARIA_MATCH.get(qn_type, ())
-        return any(token in node.localized_type for token in aria)
-
-    # ==================================================================== #
-    # Linear (arrow) navigation
-    # ==================================================================== #
     def _move_line(self, delta) -> bool:
-        if not self._ensure_buffer():
+        if not self._ensure_document():
             return False
-        new = self._index + delta
+        nodes = self._nodes()
+        with self._lock:
+            new = self._index + delta
         if new < 0:
-            self.engine.play(SND_EDGE)
-            self.engine.speak(L("browse.documentStart"))
+            if self._index <= 0:
+                self.engine.play(SND_EDGE)
+                self.engine.speak(L("browse.documentStart"))
+                return True
+            new = 0
+        if new >= len(nodes):
+            if self._index >= len(nodes) - 1:
+                self.engine.play(SND_EDGE)
+                self.engine.speak(L("browse.documentEnd"))
+                return True
+            new = len(nodes) - 1
+        with self._lock:
+            self._index = new
+            self._char_pos = 0
+        self._announce_node(nodes[new])
+        return True
+
+    def _move_to_end(self, first=True) -> bool:
+        if not self._ensure_document():
+            return False
+        nodes = self._nodes()
+        if not nodes:
+            return False
+        index = 0 if first else len(nodes) - 1
+        with self._lock:
+            self._index = index
+            self._char_pos = 0
+        self.engine.speak(L("browse.documentStart" if first else "browse.documentEnd"),
+                          interrupt=True)
+        self._announce_node(nodes[index])
+        return True
+
+    def _move_line_edge(self, start=True) -> bool:
+        """Home / End: the first or last character of the current entry."""
+        if not self._ensure_document():
+            return False
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        text = node.text
+        with self._lock:
+            self._char_pos = 0 if start or not text else len(text) - 1
+        if not text:
+            self.engine.speak(L("browse.emptyLine"))
             return True
-        if new >= len(self._nodes):
-            self.engine.play(SND_EDGE)
-            self.engine.speak(L("browse.documentEnd"))
-            return True
-        self._index = new
-        self._char_pos = 0
-        self._announce_node(self._nodes[new])
+        self.engine.speak(loc.character_announcement(text[self._char_pos],
+                                                     use_phonetic=False))
         return True
 
     def _move_char(self, delta) -> bool:
-        if not self._ensure_buffer() or not (0 <= self._index < len(self._nodes)):
+        if not self._ensure_document():
             return False
-        text = self._nodes[self._index].name
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        text = node.text
         if not text:
             self.engine.speak(L("browse.emptyLine"))
             return True
@@ -762,47 +796,179 @@ class BrowseModeHandler:
             self.engine.speak(L("browse.documentStart") if delta < 0
                               else L("browse.documentEnd"))
             return True
-        self._char_pos = new
+        with self._lock:
+            self._char_pos = new
         self.engine.speak(loc.character_announcement(text[new], use_phonetic=False))
+        return True
+
+    def _move_word(self, delta) -> bool:
+        """Ctrl+Left / Ctrl+Right: by word within the current entry."""
+        if not self._ensure_document():
+            return False
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        text = node.text
+        if not text:
+            self.engine.speak(L("browse.emptyLine"))
+            return True
+        starts = _word_starts(text)
+        if not starts:
+            return True
+        position = self._char_pos
+        if delta > 0:
+            nxt = next((s for s in starts if s > position), None)
+        else:
+            nxt = next((s for s in reversed(starts) if s < position), None)
+        if nxt is None:
+            self.engine.play(SND_EDGE)
+            self.engine.speak(L("browse.documentStart") if delta < 0
+                              else L("browse.documentEnd"))
+            return True
+        with self._lock:
+            self._char_pos = nxt
+        end = next((s for s in starts if s > nxt), len(text))
+        self.engine.speak(text[nxt:end].strip() or text[nxt])
+        return True
+
+    def _quick_nav(self, qn_type, backward):
+        if not self._ensure_document():
+            self.engine.play(SND_EDGE)
+            self.engine.speak(L("browse.scanEmpty"))
+            return
+        nodes = self._nodes()
+        start = self._index if self._index >= 0 else 0
+        rng = (range(start - 1, -1, -1) if backward
+               else range(start + 1, len(nodes)))
+        for i in rng:
+            if self._matches(nodes[i], qn_type):
+                with self._lock:
+                    self._index = i
+                    self._char_pos = 0
+                self._announce_node(nodes[i], qn_type)
+                return
+        label = qn.type_label(qn_type)
+        self.engine.play(SND_EDGE)
+        self.engine.speak(L("browse.noPrevious", label) if backward
+                          else L("browse.noNext", label))
+
+    @staticmethod
+    def _matches(node: VNode, qn_type) -> bool:
+        """Does *node* satisfy a quick-navigation type?
+
+        Matched on the Titan role key, so it works identically whether the
+        document came from UI Automation, MSAA, the raw child windows or the
+        AI's reading of a picture.
+        """
+        if qn.is_heading(qn_type):
+            if not node.is_heading:
+                return False
+            want = qn.heading_level(qn_type)
+            return want == 0 or node.level == want
+        roles = qn.roles_for(qn_type)
+        if not roles:
+            return False
+        if node.role in roles:
+            if qn_type == qn.QuickNavType.PARAGRAPH and not node.name:
+                return False
+            return True
+        return False
+
+    # ==================================================================== #
+    # Activation + say all
+    # ==================================================================== #
+    def _activate_current(self) -> bool:
+        """Press whatever the document cursor is on (Enter)."""
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        ok = vbuf.activate(node)
+        self.engine.play(SND_CLICK if ok else SND_EDGE)
+        if ok and self._scan:
+            # Pressing something usually changes the window, so the document
+            # that described it is no longer true.
+            self._dispatch(lambda: self._after_activation())
+        return True
+
+    def _after_activation(self):
+        time.sleep(0.4)
+        self._ensure_document(force=True)
+
+    def say_all(self) -> bool:
+        """Read continuously from the cursor to the end of the document.
+
+        Every line is QUEUED rather than spoken over the last one: the speech
+        adapter owns a real queue, so this reads the document at the speed of
+        the voice instead of racing it (and a keypress interrupts, as always).
+        """
+        if not self._ensure_document():
+            return False
+
+        def _run():
+            nodes = self._nodes()
+            speech = getattr(self.engine, "speech", None)
+            start = self._index if self._index >= 0 else 0
+            for j in range(start, len(nodes)):
+                text = nodes[j].text
+                if not text:
+                    continue
+                with self._lock:
+                    self._index = j
+                self.engine.speak(text, interrupt=(j == start))
+                if speech is not None and hasattr(speech, "pending_count"):
+                    # Keep at most a couple of lines queued ahead, so the voice
+                    # never runs dry between lines and an interrupt is instant.
+                    while speech.pending_count() > 2:
+                        time.sleep(0.05)
+                        if not self.is_active:
+                            return
+                else:
+                    time.sleep(min(2.5, 0.28 + len(text) / 16.0))
+
+        threading.Thread(target=_run, daemon=True).start()
         return True
 
     # ==================================================================== #
     # Announcement
     # ==================================================================== #
-    def _announce_node(self, node, qn_type=None):
-        # IA2-sourced node (no live UIA Control): speak name + role (+ level)
-        # with the cursor cue, since there is no element to announce richly.
-        if node.element is None:
-            self.engine.play(SND_CURSOR)
-            parts = []
-            if node.name:
-                parts.append(node.name)
-            if node.role == "heading" and node.level:
-                parts.append(L("quickNav.headingLevel", node.level))
-            elif node.role:
-                parts.append(loc.role_label(node.role))
-            self.engine.speak(", ".join(p for p in parts if p) or node.name)
-            return
-        # Move real focus to the element when possible (best-effort).
-        try:
-            node.element.SetFocus()
-        except Exception:
-            pass
-        # Preferred path: convert to AccessibleObject and use the rich announcer.
-        ao = self._to_accessible(node.element)
-        if ao is not None:
+    def _announce_node(self, node: VNode, qn_type=None, move_focus=True):
+        """Read one document entry, richly where the source allows it."""
+        if move_focus:
             try:
-                self.engine.announce_object(ao, for_navigation=True)
-                return
+                vbuf.focus_node(node)
             except Exception:
                 pass
-        # Fallback: name + type label (+ heading level).
-        label = qn.type_label(qn_type) if qn_type is not None else node.localized_type
-        if qn_type is not None and qn.is_heading(qn_type) and node.level > 0:
-            label = L("quickNav.headingLevel", node.level)
-        text = f"{node.name}, {label}" if node.name and label else (node.name or label)
+        # A live UIA element can go through the full announcer (context, list
+        # position, description) exactly like a focus change.
+        if node.source == "uia" and node.element is not None:
+            ao = self._to_accessible(node.element)
+            if ao is not None:
+                try:
+                    self.engine.announce_object(ao, for_navigation=True)
+                    return
+                except Exception:
+                    pass
         self.engine.play(SND_CURSOR)
-        self.engine.speak(text)
+        self.engine.speak_segments(self._segments_for(node, qn_type))
+
+    def _segments_for(self, node: VNode, qn_type=None):
+        """(text, pitch) parts for a node with no live accessible object."""
+        name = node.name or node.value
+        segments = [(name, _NAME_PITCH)] if name else []
+        if node.is_heading:
+            level = node.level or (qn.heading_level(qn_type) if qn_type else 0)
+            segments.append((L("quickNav.headingLevel", level) if level
+                             else L("quickNav.heading"), _ROLE_PITCH))
+        elif node.role and node.role != "text":
+            segments.append((loc.role_label(node.role), _ROLE_PITCH))
+        if node.value and node.value != node.name:
+            segments.append((node.value, _NAME_PITCH))
+        for state in node.states:
+            if state in _STATE_LABELS:
+                segments.append((loc.state_label(state), _STATE_PITCH))
+        if not segments:
+            segments = [(L("browse.emptyLine"), _NAME_PITCH)]
+        return segments
 
     def _to_accessible(self, element):
         provider = getattr(self.engine, "provider", None)
@@ -830,17 +996,7 @@ def _foreground_hwnd() -> int:
 
 
 def _foreground_window_title() -> str:
-    try:
-        u = ctypes.windll.user32
-        hwnd = u.GetForegroundWindow()
-        if not hwnd:
-            return ""
-        n = u.GetWindowTextLengthW(hwnd)
-        buf = ctypes.create_unicode_buffer(n + 1)
-        u.GetWindowTextW(hwnd, buf, n + 1)
-        return (buf.value or "").strip()
-    except Exception:
-        return ""
+    return vbuf.window_text(_foreground_hwnd())
 
 
 def _foreground_pid() -> int:
@@ -860,15 +1016,8 @@ _web_doc_cache = (0, 0.0, False)
 
 
 def _foreground_hosts_web_document() -> bool:
-    """True when the foreground window contains a web-render child window.
-
-    Enumerates the foreground window's descendants (``EnumChildWindows`` visits
-    the whole subtree, not just direct children) looking for a class in
-    :data:`_WEB_WINDOW_CLASSES`. Cached for a short interval per foreground
-    window because it is consulted on every key press in browse mode.
-    Fully guarded — any failure reports "no web document"."""
+    """True when the foreground window contains a web-render child window."""
     global _web_doc_cache
-    import time as _t
     try:
         hwnd = _foreground_hwnd()
     except Exception:
@@ -876,7 +1025,7 @@ def _foreground_hosts_web_document() -> bool:
     if not hwnd:
         return False
     cached_hwnd, cached_at, cached_val = _web_doc_cache
-    now = _t.time()
+    now = time.time()
     if hwnd == cached_hwnd and (now - cached_at) < 0.5:
         return cached_val
     found = _enum_has_web_window(hwnd)
@@ -895,7 +1044,6 @@ def _enum_has_web_window(hwnd: int) -> bool:
             user32.GetClassNameW(h, buf, 256)
             return (buf.value or "").lower()
 
-        # The top-level window class can itself be a render-widget host.
         if _class(hwnd) in _WEB_WINDOW_CLASSES:
             return True
 
@@ -948,16 +1096,6 @@ def _ctype(control) -> str:
         return ""
 
 
-def _localized(control) -> str:
-    try:
-        val = control.LocalizedControlType or ""
-        if not val:
-            val = control.ItemStatus or ""
-        return val
-    except Exception:
-        return ""
-
-
 def _runtime_id(control) -> tuple:
     try:
         return tuple(control.GetRuntimeId() or ())
@@ -976,30 +1114,34 @@ def _control_area(control) -> int:
         return 0
 
 
-# UIA property ids used for language-independent heading detection.
-_UIA_PROP_ARIAROLE = 30101
-_UIA_PROP_LEVEL = 30154
+def _web_signature(root, hwnd) -> tuple:
+    """"Is this still the same page?" -- cheap enough to check on every key.
 
-
-def _aria_role(control) -> str:
-    """The element's ARIA role (e.g. ``heading``, ``button``), lower-cased.
-
-    Language-independent (unlike LocalizedControlType). Empty when the element
-    exposes no ARIA role / the property is unavailable."""
+    The document element's runtime id alone is not enough: a single-page app
+    replaces the whole page under the SAME element, which is why a buffer built
+    on the first view of a site used to survive every later navigation. The
+    window title (which a page change almost always updates) and the document's
+    own name close that gap without walking the tree.
+    """
+    name = ""
     try:
-        val = control.GetPropertyValue(_UIA_PROP_ARIAROLE)
-        return (val or "").strip().lower()
+        if root is not None:
+            name = root.Name or ""
     except Exception:
-        return ""
+        name = ""
+    return (_runtime_id(root), name, vbuf.window_text(hwnd))
 
 
-def _uia_level(control) -> int:
-    """The UIA hierarchy Level property (heading level for ARIA headings)."""
-    try:
-        val = control.GetPropertyValue(_UIA_PROP_LEVEL)
-        return int(val) if val else 0
-    except Exception:
-        return 0
+def _word_starts(text) -> list:
+    """Index of the first character of every word in *text*."""
+    starts = []
+    previous_blank = True
+    for i, ch in enumerate(text):
+        blank = ch.isspace()
+        if previous_blank and not blank:
+            starts.append(i)
+        previous_blank = blank
+    return starts
 
 
 def _char_for_key(vk, key_name) -> str:
@@ -1016,18 +1158,3 @@ def _char_for_key(vk, key_name) -> str:
     if key_name and len(key_name) == 1:
         return key_name.lower()
     return ""
-
-
-def _heading_level(control) -> int:
-    """Best-effort heading level from LocalizedControlType / AutomationId."""
-    try:
-        localized = (control.LocalizedControlType or "").lower()
-        for i in range(1, 7):
-            if f"level {i}" in localized or f"heading {i}" in localized:
-                return i
-        aid = control.AutomationId or ""
-        if len(aid) == 2 and aid[0] in "Hh" and aid[1].isdigit():
-            return int(aid[1])
-    except Exception:
-        pass
-    return 0

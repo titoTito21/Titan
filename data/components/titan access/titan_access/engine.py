@@ -143,6 +143,10 @@ class TitanAccessEngine:
         # Its focus must NOT be announced ("panel"/"window") -- but the popup's
         # menu / menu items (different role) still are. 0 = no menu host active.
         self._menu_host_hwnd = 0
+        # True while a background AI reading for a control's missing label is
+        # in flight, so a burst of nameless controls asks for one reading, not
+        # one per element.
+        self._ocr_label_pending = False
         # Host-declared kind for the NEXT dialog ("question"/"information"/...),
         # used when the reader cannot detect the icon (e.g. a generic wx dialog).
         # (kind, expiry); consumed by the context presenter. See host_bridge.
@@ -162,6 +166,7 @@ class TitanAccessEngine:
         self.menu_tracker = None
         self.dial = None
         self.context = None
+        self.progress = None
         self.nvda_ctl = None
 
         TitanAccessEngine.__dict__  # noqa - keep linters calm
@@ -351,6 +356,11 @@ class TitanAccessEngine:
         self.context = _try(lambda: __import__(
             "titan_access.context_presenter", fromlist=["ContextPresenter"]
         ).ContextPresenter(self), "context_presenter")
+        # Progress bars: NVDA's rising beep, panned across the stereo image and
+        # spoken every ten percent. Runs on its own slow thread.
+        self.progress = _try(lambda: __import__(
+            "titan_access.progress_monitor", fromlist=["ProgressMonitor"]
+        ).ProgressMonitor(self).start(), "progress_monitor")
 
         # NVDA controller server: lets external apps (and accessible_output3's
         # NVDA backend) speak through Titan Access. Needs the native helper DLL;
@@ -375,7 +385,7 @@ class TitanAccessEngine:
 
     def _teardown_subsystems(self):
         self._stop_bg_worker()
-        for name in ("keyboard", "provider", "nvda_ctl"):
+        for name in ("keyboard", "provider", "nvda_ctl", "progress"):
             obj = getattr(self, name, None)
             if obj is not None and hasattr(obj, "stop"):
                 try:
@@ -755,6 +765,12 @@ class TitanAccessEngine:
                 self.browse.update_for_focus(obj)
             except Exception as e:
                 print(f"[TitanAccess] browse update error: {e}")
+        # A focused progress bar becomes the one the monitor reports.
+        if self.progress is not None:
+            try:
+                self.progress.on_focus(obj)
+            except Exception as e:
+                print(f"[TitanAccess] progress focus error: {e}")
         # Bind edit-field caret tracking to the newly focused control.
         self._update_edit_context(obj)
         # Enter/leave an app that drives us through the NVDA controller.
@@ -822,7 +838,7 @@ class TitanAccessEngine:
             is_web = fw in _WEB_DOC_FRAMEWORKS
             if not is_web and self.browse is not None:
                 try:
-                    is_web = bool(self.browse.is_active)
+                    is_web = bool(self.browse.is_web)
                 except Exception:
                     is_web = False
             if is_web:
@@ -934,6 +950,12 @@ class TitanAccessEngine:
             return
         if play_cursor:
             self._play_element_cue(obj, for_navigation)
+        # A control the program never named: borrow the caption printed on or
+        # beside it from what the AI already read of this window. Only from a
+        # CACHED reading here (this runs on the focus path and must not wait for
+        # a vision call); a fresh reading is asked for afterwards, off-thread,
+        # and its answer is spoken behind this announcement.
+        self._label_unnamed(obj)
         # Newly-entered container context (dialog / group / list / toolbar),
         # NVDA-style focus-context presentation. This single ancestor walk ALSO
         # records whether the focused row is a status-bar slot (on the presenter)
@@ -974,6 +996,83 @@ class TitanAccessEngine:
             self.speak(" ".join(t for t, _p in segments if t), obj=obj)
         else:
             self.speak_segments(segments)
+
+    # ==================================================================== #
+    # AI OCR assistance: naming controls the program never named
+    # ==================================================================== #
+    # Roles where "no name" is a real accessibility failure worth spending an
+    # AI reading on. A nameless pane or text block is usually just decoration.
+    _NEEDS_NAME_ROLES = {
+        "button", "split_button", "edit", "password", "checkbox", "radio",
+        "combobox", "listitem", "menuitem", "tab", "link", "slider", "spinner",
+    }
+
+    def _label_unnamed(self, obj):
+        """Give a nameless control a name from what the AI read of the window.
+
+        Uses only an existing reading, so the announcement is not delayed. When
+        there is none, :meth:`_request_ocr_label` asks for one in the background
+        and the answer is spoken behind the current announcement -- which is
+        possible at all because the speech adapter has a real queue now.
+        """
+        if obj is None or (obj.name or "").strip():
+            return
+        if obj.role not in self._NEEDS_NAME_ROLES:
+            return
+        if not self._ocr_labels_enabled():
+            return
+        try:
+            from titan_access import ocr_assist
+        except Exception:
+            return
+        hwnd = getattr(obj, "hwnd", 0) or 0
+        bounds = getattr(obj, "bounds", None)
+        if not bounds:
+            return
+        try:
+            label = ocr_assist.label_for(hwnd, tuple(bounds), self.settings) \
+                if ocr_assist.available(self.settings) else ""
+        except Exception:
+            label = ""
+        if label:
+            obj.name = label
+            return
+        self._request_ocr_label(obj, hwnd, tuple(bounds))
+
+    def _ocr_labels_enabled(self) -> bool:
+        try:
+            value = self.settings.get("Reader", "AiOcrLabels")
+        except Exception:
+            return True
+        if value in (None, ""):
+            return True
+        return str(value).strip().lower() not in ("0", "false", "no", "off")
+
+    def _request_ocr_label(self, obj, hwnd, bounds):
+        """Read the window in the background and speak the label if one turns up."""
+        if not hwnd or getattr(self, "_ocr_label_pending", False):
+            return
+        self._ocr_label_pending = True
+        token = self._announce_token
+
+        def _work():
+            label = ""
+            try:
+                from titan_access import ocr_assist
+                if ocr_assist.available(self.settings):
+                    label = ocr_assist.label_for(hwnd, bounds, self.settings)
+            except Exception as e:
+                if os.environ.get("TITAN_ACCESS_DEBUG"):
+                    print(f"[TitanAccess] OCR label failed: {e}")
+            finally:
+                self._ocr_label_pending = False
+            # Only if the user is still on the same element: a label for a
+            # control they have already left is noise.
+            if label and token == self._announce_token and self.current_object is obj:
+                obj.name = label
+                self.speak(label, obj=obj, interrupt=False)
+
+        threading.Thread(target=_work, daemon=True).start()
 
     def refresh_current_scope(self, delay_ms=0):
         """Re-read focus after an action that may have changed the UI."""
@@ -1130,12 +1229,19 @@ class TitanAccessEngine:
         return True
 
     def action_toggle_browse_mode(self, *a):
+        """Reader modifier + Space.
+
+        In a web document it switches between browse and focus mode. In an
+        ORDINARY application it switches scan mode on and off: the app's own
+        interface becomes a virtual document with the same arrows and the same
+        quick-navigation letters as a web page (see
+        :class:`titan_access.browse_mode.BrowseModeHandler`).
+        """
         if self.browse is not None:
             try:
-                self.browse.toggle_pass_through()
-                return True
-            except Exception:
-                pass
+                return bool(self.browse.toggle())
+            except Exception as e:
+                print(f"[TitanAccess] browse toggle error: {e}")
         return False
 
     def action_toggle_virtual_screen(self, *a):

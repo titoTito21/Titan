@@ -79,6 +79,51 @@ def _restore_launcher(launcher):
         print(f"[TitanAccess] restore launcher error: {e}")
 
 
+def _test_nvda_bridge(engine):
+    """Check, and say, whether applications really reach Titan Access.
+
+    Answers the question no in-process check can: Titan is a 64-bit process, so
+    only a real 32-bit client proves the bridge works for 32-bit applications.
+    :meth:`NvdaControllerServer.self_test` runs one probe process per bitness
+    and reports whether the call arrived here or at another screen reader.
+
+    Runs off the GUI thread (it starts processes) and speaks the verdict.
+    """
+    import threading
+
+    server = getattr(engine, "nvda_ctl", None) if engine is not None else None
+    if server is None or not hasattr(server, "self_test"):
+        try:
+            engine.speak(L("readerMenu.bridgeUnavailable"))
+        except Exception:
+            pass
+        return
+
+    def _run():
+        try:
+            results = server.self_test()
+        except Exception as e:  # pragma: no cover - host dependent
+            print(f"[TitanAccess] NVDA bridge test error: {e}")
+            return
+        for bits, ok, detail in results:
+            print(f"[TitanAccess] NVDA bridge {bits}-bit: "
+                  f"{'reaches Titan Access' if ok else 'does NOT reach us'} -- {detail}")
+        good = [str(bits) for bits, ok, _d in results if ok]
+        bad = [str(bits) for bits, ok, _d in results if not ok]
+        if good and not bad:
+            message = L("readerMenu.bridgeOk", ", ".join(good))
+        elif good:
+            message = L("readerMenu.bridgePartial", ", ".join(good), ", ".join(bad))
+        else:
+            message = L("readerMenu.bridgeNone")
+        try:
+            engine.speak(message)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _set_menu_host(engine, hwnd):
     """Tell the engine which window hosts our popup, so its focus is not read."""
     try:
@@ -107,6 +152,9 @@ def _show_on_gui_thread(engine):
     settings_item = menu.Append(wx.ID_ANY, L("readerMenu.settings"))
     menu.Bind(wx.EVT_MENU,
               lambda _evt: _open_settings_category(launcher), settings_item)
+
+    bridge_item = menu.Append(wx.ID_ANY, L("readerMenu.testNvdaBridge"))
+    menu.Bind(wx.EVT_MENU, lambda _evt: _test_nvda_bridge(engine), bridge_item)
 
     if minimized:
         restore_item = menu.Append(wx.ID_ANY, L("readerMenu.returnToTitan"))

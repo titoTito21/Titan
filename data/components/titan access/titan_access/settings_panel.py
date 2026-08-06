@@ -310,6 +310,22 @@ def build_panel(parent):
     panel.chk_dial_places = _checkbox(scroller, dial,
                                       L("settings.dial.importantPlaces"))
 
+    # -------------------- Scan mode / AI assistance -------------------- #
+    rd = _section(scroller, s, L("settings.section.reader"))
+    panel.chk_scan_mode = _checkbox(scroller, rd, L("settings.reader.scanMode"))
+    rd.Add(wx.StaticText(scroller, label=L("settings.reader.scanModeInfo")),
+           0, wx.LEFT | wx.BOTTOM, 6)
+    panel.chk_ai_ocr = _checkbox(scroller, rd, L("settings.reader.useAiOcr"))
+    panel.chk_ai_ocr_labels = _checkbox(scroller, rd,
+                                        L("settings.reader.aiOcrLabels"))
+    rd.Add(wx.StaticText(scroller, label=L("settings.reader.aiOcrInfo")),
+           0, wx.LEFT | wx.BOTTOM, 6)
+    panel.cmb_progress = _choice_row(scroller, rd,
+                                     L("settings.reader.progressMode"),
+                                     _announce_labels())
+    rd.Add(wx.StaticText(scroller, label=L("settings.reader.progressInfo")),
+           0, wx.LEFT | wx.BOTTOM, 6)
+
     # --------------------------- Text editing -------------------------- #
     te = _section(scroller, s, L("settings.section.textEditing"))
     panel.chk_phonetic = _checkbox(scroller, te,
@@ -422,6 +438,13 @@ def load_panel(panel):
     panel.chk_dial_synth.SetValue(st.get_bool(SEC_DIAL, "DialSynthesizer", True))
     panel.chk_dial_places.SetValue(st.get_bool(SEC_DIAL, "DialImportantPlaces", True))
 
+    # --- Reader: scan mode / AI assistance ---
+    panel.chk_scan_mode.SetValue(st.scan_mode)
+    panel.chk_ai_ocr.SetValue(st.ai_ocr)
+    panel.chk_ai_ocr_labels.SetValue(st.ai_ocr_labels)
+    panel.cmb_progress.SetSelection(
+        _enum_index(list(AnnouncementMode.ALL), st.progress_mode, 3))
+
     # --- Text editing ---
     panel.chk_phonetic.SetValue(st.phonetic_letters)
     panel.cmb_echo.SetSelection(
@@ -482,6 +505,13 @@ def save_panel(panel):
     st.set_bool(SEC_DIAL, "DialVoice", panel.chk_dial_voice.GetValue())
     st.set_bool(SEC_DIAL, "DialSynthesizer", panel.chk_dial_synth.GetValue())
     st.set_bool(SEC_DIAL, "DialImportantPlaces", panel.chk_dial_places.GetValue())
+
+    # --- Reader: scan mode / AI assistance ---
+    st.scan_mode = panel.chk_scan_mode.GetValue()
+    st.ai_ocr = panel.chk_ai_ocr.GetValue()
+    st.ai_ocr_labels = panel.chk_ai_ocr_labels.GetValue()
+    st.progress_mode = AnnouncementMode.ALL[
+        max(0, panel.cmb_progress.GetSelection())]
 
     # --- Text editing ---
     st.phonetic_letters = panel.chk_phonetic.GetValue()

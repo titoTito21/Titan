@@ -100,6 +100,9 @@ SEC_VERBOSITY = "Verbosity"
 SEC_NAVIGATION = "Navigation"
 SEC_TEXT_EDITING = "TextEditing"
 SEC_DIAL = "Dial"
+# Reader-level behaviour that is neither speech nor navigation: scan mode and
+# what the reader may ask Titan's AI to do for an unreadable window.
+SEC_READER = "Reader"
 
 # (section, key) -> default value (string-encoded, exactly like C# SetDefaults)
 DEFAULTS = {
@@ -159,6 +162,24 @@ DEFAULTS = {
     (SEC_DIAL, "DialVoice"): "true",
     (SEC_DIAL, "DialSynthesizer"): "true",
     (SEC_DIAL, "DialImportantPlaces"): "true",
+    # Reader (scan mode + AI assistance)
+    # Scan mode (reader modifier + Space) turns an ordinary application into a
+    # virtual document. On by default: it does nothing until the user asks.
+    (SEC_READER, "ScanMode"): "true",
+    # May the reader ask Titan's AI to read a window that exposes nothing? This
+    # sends a picture of that window to the configured provider, so it is also
+    # gated by Titan's own AI-features switch -- this one lets a user who has AI
+    # on for everything else keep their screen out of it.
+    (SEC_READER, "UseAiOcr"): "true",
+    # May a control the program never named be given the caption printed on or
+    # beside it, from the same reading?
+    (SEC_READER, "AiOcrLabels"): "true",
+    # Progress bars. Same vocabulary as every other announcement mode, and the
+    # same two throttles NVDA uses (percent of movement per beep / per spoken
+    # value), with NVDA's own defaults.
+    (SEC_READER, "ProgressMode"): "SpeechAndSound",
+    (SEC_READER, "ProgressBeepInterval"): "1",
+    (SEC_READER, "ProgressSpeechInterval"): "10",
     # TextEditing
     (SEC_TEXT_EDITING, "PhoneticLetters"): "true",
     (SEC_TEXT_EDITING, "KeyboardEcho"): "CharactersAndWords",
@@ -385,6 +406,28 @@ class SettingsStore:
     def virtual_screen(self): return self.get_bool(SEC_GENERAL, "VirtualScreen", False)
     @virtual_screen.setter
     def virtual_screen(self, v): self.set_bool(SEC_GENERAL, "VirtualScreen", v)
+
+    # Reader (scan mode + AI assistance)
+    @property
+    def scan_mode(self): return self.get_bool(SEC_READER, "ScanMode", True)
+    @scan_mode.setter
+    def scan_mode(self, v): self.set_bool(SEC_READER, "ScanMode", v)
+
+    @property
+    def ai_ocr(self): return self.get_bool(SEC_READER, "UseAiOcr", True)
+    @ai_ocr.setter
+    def ai_ocr(self, v): self.set_bool(SEC_READER, "UseAiOcr", v)
+
+    @property
+    def ai_ocr_labels(self): return self.get_bool(SEC_READER, "AiOcrLabels", True)
+    @ai_ocr_labels.setter
+    def ai_ocr_labels(self, v): self.set_bool(SEC_READER, "AiOcrLabels", v)
+
+    @property
+    def progress_mode(self):
+        return AnnouncementMode.normalize(self.get(SEC_READER, "ProgressMode"))
+    @progress_mode.setter
+    def progress_mode(self, v): self.set(SEC_READER, "ProgressMode", v)
 
     # TextEditing
     @property

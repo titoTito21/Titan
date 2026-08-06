@@ -36,6 +36,16 @@ static TA_VoidProc    g_onCancel  = NULL;
 static TA_BrailleProc g_onBraille = NULL;
 static int            g_running   = 0;
 static volatile unsigned long g_lastClientPid = 0;
+/* Do WE own the ncalrpc endpoint, or did somebody else (real NVDA, or an
+ * earlier Titan instance that has not exited) get there first? Without this the
+ * bridge reported success while every call went to the other server -- which is
+ * indistinguishable, from the outside, from "it does not work with my app". */
+static int            g_ownsEndpoint = 0;
+/* Every served call, so a self-test can prove that the calls a client makes are
+ * really arriving HERE. */
+static volatile unsigned long g_callCount = 0;
+/* Set while a self-test call is in flight, so it is not spoken at the user. */
+static volatile long  g_selfTest = 0;
 
 /* Record the PID of the process making the current RPC call, so Titan Access
  * can play its "in a controller app" earcons. Best-effort: leaves the last
@@ -55,12 +65,16 @@ static void rememberClientPid(void)
 error_status_t nvdaController_testIfRunning(void)
 {
     rememberClientPid();
+    g_callCount++;
     return 0;  /* RPC_S_OK -> client sees "a controller (NVDA) is running" */
 }
 
 error_status_t nvdaController_speakText(const wchar_t* text)
 {
     rememberClientPid();
+    g_callCount++;
+    /* A self-test speaks to prove the path works, not to be heard. */
+    if (g_selfTest) return 0;
     if (g_onSpeak && text) g_onSpeak(text);
     return 0;
 }
@@ -68,6 +82,8 @@ error_status_t nvdaController_speakText(const wchar_t* text)
 error_status_t nvdaController_cancelSpeech(void)
 {
     rememberClientPid();
+    g_callCount++;
+    if (g_selfTest) return 0;
     if (g_onCancel) g_onCancel();
     return 0;
 }
@@ -75,6 +91,8 @@ error_status_t nvdaController_cancelSpeech(void)
 error_status_t nvdaController_brailleMessage(const wchar_t* message)
 {
     rememberClientPid();
+    g_callCount++;
+    if (g_selfTest) return 0;
     if (g_onBraille && message) g_onBraille(message);
     return 0;
 }
@@ -83,6 +101,19 @@ __declspec(dllexport) unsigned long __stdcall TitanAccessHelper_lastClientPid(vo
 {
     return g_lastClientPid;
 }
+
+__declspec(dllexport) unsigned long __stdcall TitanAccessHelper_callCount(void)
+{
+    return g_callCount;
+}
+
+/* 1 when this process owns the controller endpoint (so external apps reach US),
+ * 0 when another controller owns it and we are only registered alongside. */
+__declspec(dllexport) int __stdcall TitanAccessHelper_ownsEndpoint(void)
+{
+    return g_ownsEndpoint;
+}
+
 
 /* ----- endpoint construction (must match the client) ---------------------- */
 static void buildEndpoint(wchar_t* out, size_t cch)
@@ -136,7 +167,11 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_start(
     status = RpcServerUseProtseqEpW((RPC_WSTR)L"ncalrpc",
                                     RPC_C_PROTSEQ_MAX_REQS_DEFAULT,
                                     (RPC_WSTR)endpoint, psd);
-    /* RPC_S_DUPLICATE_ENDPOINT (real NVDA already there) is not fatal here. */
+    /* RPC_S_DUPLICATE_ENDPOINT means another controller (real NVDA, or an
+     * earlier Titan that has not exited) already owns the name. We stay
+     * registered -- if that other server goes away we are ready -- but we must
+     * NOT pretend to be the one applications are talking to. */
+    g_ownsEndpoint = (status == RPC_S_OK) ? 1 : 0;
     if (status != RPC_S_OK && status != RPC_S_DUPLICATE_ENDPOINT) {
         if (psd) LocalFree(psd);
         return (int)status;
@@ -159,6 +194,43 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_start(
     return 0;
 }
 
+/* Try again to become the owner of the controller endpoint.
+ *
+ * The endpoint is a single name: whoever registers it first receives every
+ * application's controller calls, and the loser receives none. That is what
+ * makes an external application -- very visibly a 32-bit one, since Titan's own
+ * 64-bit code never goes through RPC at all -- look as though the bridge does
+ * not work. Registration is therefore not a one-shot at startup: the Python
+ * side calls this while another controller holds the name, so that the moment
+ * that controller exits (the user closes NVDA) Titan Access takes the endpoint
+ * over without needing a restart.
+ *
+ * Returns 1 when we own it, 0 when somebody else still does.
+ */
+__declspec(dllexport) int __stdcall TitanAccessHelper_retryEndpoint(void)
+{
+    RPC_STATUS status;
+    PSECURITY_DESCRIPTOR psd = NULL;
+    wchar_t endpoint[160];
+
+    if (!g_running || g_ownsEndpoint)
+        return g_ownsEndpoint;
+
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:(A;;GA;;;WD)(A;;GA;;;AC)S:(ML;;NW;;;LW)",
+            SDDL_REVISION_1, &psd, NULL)) {
+        psd = NULL;
+    }
+    buildEndpoint(endpoint, 160);
+    status = RpcServerUseProtseqEpW((RPC_WSTR)L"ncalrpc",
+                                    RPC_C_PROTSEQ_MAX_REQS_DEFAULT,
+                                    (RPC_WSTR)endpoint, psd);
+    if (psd) LocalFree(psd);
+    if (status == RPC_S_OK)
+        g_ownsEndpoint = 1;
+    return g_ownsEndpoint;
+}
+
 __declspec(dllexport) void __stdcall TitanAccessHelper_stop(void)
 {
     if (!g_running)
@@ -168,7 +240,27 @@ __declspec(dllexport) void __stdcall TitanAccessHelper_stop(void)
     g_onCancel = NULL;
     g_onBraille = NULL;
     g_running = 0;
+    g_ownsEndpoint = 0;
 }
+
+__declspec(dllexport) int __stdcall TitanAccessHelper_endpoint(wchar_t* out, int cch)
+{
+    if (!out || cch <= 0)
+        return 0;
+    buildEndpoint(out, (size_t)cch);
+    return 1;
+}
+
+/* ----- self-test ---------------------------------------------------------- *
+ * "Does a call from another application actually arrive HERE?" is the only
+ * question that matters, and a successful RPC call cannot answer it: it proves
+ * only that SOME controller answered, not which one. So the check is done from
+ * the outside -- the Python side reads :func:`TitanAccessHelper_callCount`,
+ * runs a probe process (nvda_probe32.exe / nvda_probe64.exe, which use the
+ * stock client stub exactly as an application would), and reads the counter
+ * again. The 32-bit probe is what proves the bridge works for 32-bit apps,
+ * which no in-process check ever could.
+ */
 
 /* MIDL needs these allocator hooks for [string] parameters. */
 void* __RPC_USER midl_user_allocate(size_t size) { return malloc(size); }

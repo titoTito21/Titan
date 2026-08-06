@@ -217,6 +217,109 @@ def _init_oleacc():
 
 
 # --------------------------------------------------------------------------- #
+# Public MSAA tree access
+#
+# The focus provider above only ever needs the ONE element that has the focus.
+# Building a virtual document (:mod:`titan_access.virtual_buffer`) needs to walk
+# the whole tree of a legacy window, so the three primitives that takes -- get
+# the root, list the children, describe one -- are exposed here rather than
+# re-implemented (and re-debugged) there.
+# --------------------------------------------------------------------------- #
+def msaa_available() -> bool:
+    """True when oleacc / comtypes could be initialised on this machine."""
+    return _init_oleacc()
+
+
+def object_from_window(hwnd, object_id=OBJID_CLIENT):
+    """The ``IAccessible`` of a window, or None."""
+    if not hwnd or not _init_oleacc():
+        return None
+    try:
+        return _AccessibleObjectFromWindow(hwnd, object_id)
+    except Exception:
+        return None
+
+
+def accessible_children(acc):
+    """Children of *acc* as ``(IAccessible or None, child_id)`` pairs.
+
+    MSAA has two kinds of child: a real object (which has children of its own)
+    and a "simple child", which is just an id its parent answers questions
+    about (list items and menu items usually are). Both come back here, and the
+    None in the first slot is what tells the caller which it got.
+    """
+    if acc is None or not _init_oleacc():
+        return []
+    try:
+        import comtypes
+        from comtypes.automation import VARIANT
+        from ctypes import POINTER, byref
+    except Exception:
+        return []
+    try:
+        count = int(acc.accChildCount or 0)
+    except Exception:
+        return []
+    if count <= 0:
+        return []
+    count = min(count, 1000)             # a runaway container is not a document
+    try:
+        _oleacc.AccessibleChildren.restype = ctypes.c_long
+        array = (VARIANT * count)()
+        obtained = ctypes.c_long(0)
+        hr = _oleacc.AccessibleChildren(acc, 0, count, array, byref(obtained))
+        if hr != 0:
+            return []
+    except Exception:
+        return []
+    out = []
+    for i in range(int(obtained.value)):
+        try:
+            value = array[i].value
+        except Exception:
+            continue
+        if value is None:
+            continue
+        if isinstance(value, int):
+            out.append((None, int(value)))
+            continue
+        try:
+            child = value.QueryInterface(_IAccessible)
+            out.append((child, CHILDID_SELF))
+        except Exception:
+            # An IDispatch that is not an IAccessible is not part of the tree.
+            continue
+    return out
+
+
+def describe_child(acc, child_id=CHILDID_SELF):
+    """Flatten one MSAA element into a plain dict, or None if it says nothing.
+
+    Keys: ``name``, ``role`` (Titan role key), ``value``, ``description``,
+    ``states`` (set of Titan state keys, plus ``offscreen``) and ``rect``
+    (screen pixels).
+    """
+    if acc is None:
+        return None
+    try:
+        role_raw = _safe(lambda: acc.accRole(child_id))
+        state_raw = _safe(lambda: acc.accState(child_id))
+        rect = _location(acc, child_id)
+        return {
+            "name": _s(lambda: acc.accName(child_id)),
+            "value": _s(lambda: acc.accValue(child_id)),
+            "description": _s(lambda: acc.accDescription(child_id)),
+            "role": _MSAA_ROLE_TO_ROLE.get(
+                int(role_raw) if isinstance(role_raw, int) else -1, ROLE_UNKNOWN),
+            "states": _states_from_int(
+                int(state_raw) if isinstance(state_raw, int) else 0),
+            "rect": rect if rect != (0, 0, 0, 0) else (),
+        }
+    except Exception:
+        return None
+
+
+# --------------------------------------------------------------------------- #
 # WinEvent hook plumbing (private, fully-typed user32 -- see keyboard_hook note
 # about restype/argtypes truncation on 64-bit).
 # --------------------------------------------------------------------------- #

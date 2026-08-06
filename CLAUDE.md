@@ -448,6 +448,83 @@ real controls. It lives in `src/ai/ocr/`.
 - The `titan_talk` gamepad mode does a much simpler Gemini-only flat-list
   version of the same idea for audio games; this package is the general one.
 
+### Titan Access: one document over the web, over any app, over anything
+
+`data/components/titan access/` is Titan's own screen reader. Two ideas carry
+the parts added most recently.
+
+**Everything the reader says is queued** (`titan_access/speech_adapter.py`).
+Titan's TTS engines have no queue of their own - every `speak`/`speak_async`
+stops what is playing - so a second announcement used to erase the first, and a
+multi-part one (name / role / state) lost everything after the part that
+happened to be speaking. The adapter now owns an utterance queue drained by one
+pump thread: `interrupt=True` clears it, `interrupt=False` really does mean
+"after this one", and each utterance is waited out (TTS channel -> engine
+`is_speaking` -> length estimate) before the next starts.
+`StereoSpeech.speak_concat` - which joins the pitched parts into ONE clip, so no
+part can be cut off by the next - was **SAPI5-only**; it now works for every
+engine that can render to memory via `_synthesize_segment()` (eSpeak, `say`, and
+every TitanTTS plugin: Supertonic, SMP, Eloquence, DECtalk, BestSpeech,
+ElevenLabs, Milena...). An engine that cannot (spd-say, no pydub) speaks the
+parts as one joined line - pitch lost, nothing dropped.
+
+**A flat virtual document, from whatever the window will answer**
+(`titan_access/virtual_buffer.py`). Browse mode made a *web page* into a list
+the arrows and quick-navigation letters walk; nothing about that is web-specific.
+`build_for_window()` tries, in descending order of trust: `uia` (modern apps),
+`msaa` (legacy Win32 / VB6 / Delphi - Windows proxies the standard controls, so
+a program from 1998 still reports its buttons and their state), `win32` (the raw
+child-window tree: class -> role, window text -> name, and a nameless Edit
+labelled from the Static beside it), and `ocr` (the picture, read by the AI - see
+below). Every node is a `VNode` with the same shape, so navigation,
+quick navigation, announcement and activation (`activate()` - UIA patterns, MSAA
+`accDoDefaultAction`, `BM_CLICK`, or an OCR click) are written once, and
+`quick_nav.ROLE_MATCH` matches on Titan role keys so `b` finds a button whatever
+built the document.
+
+- **`browse_mode.py` is now both modes.** In a web document it behaves as
+  before (auto browse/focus switching, IA2 fallback for Chromium/Gecko), plus a
+  staleness check that notices a page replaced under the same document element.
+  Anywhere else, **the reader modifier + Space toggles SCAN mode**: the app's
+  interface becomes that same document. Arrows, Home/End, Ctrl+Home/End,
+  PageUp/Down, Ctrl+Left/Right by word, Enter to press, F5 to rebuild, Escape to
+  leave, Tab left to the application (the cursor follows the focus), and scan
+  mode ends by itself when the user changes window.
+- **AI OCR fills the gap when a window answers nothing**
+  (`titan_access/ocr_assist.py` over `src/ai/ocr`). Two uses: the whole window as
+  buffer nodes (only after the accessibility tiers came back empty, and only when
+  explicitly asked for - turning scan mode on, or F5), and `label_for()`, which
+  gives a control the program never named the caption printed on or beside it -
+  from a cached reading on the focus path, or spoken behind the announcement when
+  a fresh reading was needed (possible at all because speech now queues). Gated by
+  Titan's AI-features switch AND Settings -> Titan Access -> scan mode / AI
+  reading / AI labels.
+- **Progress bars** (`titan_access/progress_monitor.py`) are NVDA's, positioned:
+  the pitch curve and throttles are taken from NVDA's own
+  `NVDAObjects/behaviors.py` (`110 * 2 ** (percent / 25)`, 40 ms, a beep per 1%
+  of movement, the value spoken per 10%), and the beep is **panned 0% hard left
+  to 100% hard right**, so the progress is heard travelling across the stereo
+  image. Foreground window only, one slow thread, Settings -> Titan Access ->
+  Progress bars (`Reader/ProgressMode` + the two intervals).
+- **The NVDA controller bridge answers 32-bit applications too**
+  (`helper/`). The RPC layer always was bitness-agnostic; what was wrong is that
+  the endpoint `NvdaCtlr.<session>.<desktop>` is ONE name whose first registrant
+  receives every application's calls - and the helper reported "server active"
+  even when it had lost that race, so a conflict looked like "the bridge does not
+  work with my program" (most visibly for 32-bit ones, since Titan's own 64-bit
+  code speaks through the engine directly and never goes near RPC). The helper
+  now reports ownership (`TitanAccessHelper_ownsEndpoint`), keeps trying to take
+  the endpoint over while somebody else holds it (`retryEndpoint`, so closing
+  NVDA is enough - no Titan restart), and counts served calls. `nvda_probe32.exe`
+  / `nvda_probe64.exe` (built by `helper/build.bat`, which pins `/protocol dce`
+  precisely so an ndr64-only stub can never lock 32-bit clients out) bind to the
+  endpoint exactly as an application does; Insert+C -> "Test the NVDA controller
+  bridge" runs one per bitness and says whether the call reached **Titan Access**
+  or another screen reader.
+- Tests: `tests/test_titan_access_speech_queue.py`,
+  `tests/test_titan_access_document_mode.py` (run them directly - `tests/` has no
+  `__init__.py`).
+
 ### Titan Action API: any part of Titan calling into any add-on
 
 `src/titan_core/actions/` is how one piece of Titan asks another to do

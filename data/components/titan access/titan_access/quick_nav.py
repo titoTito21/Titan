@@ -219,8 +219,45 @@ ARIA_MATCH = {
 
 
 # --------------------------------------------------------------------------- #
+# Titan role keys (:mod:`titan_access.contracts`) that satisfy a type.
+#
+# This is the table the virtual document actually matches on. ``CONTROL_TYPE_MATCH``
+# above only understands UI Automation, but a document can equally have been
+# built from MSAA, from the raw child windows of a legacy program or from what
+# the AI read off a picture - all of which speak in Titan role keys. One table,
+# so quick navigation behaves identically whichever source answered.
+# --------------------------------------------------------------------------- #
+ROLE_MATCH = {
+    QuickNavType.LINK: ("link",),
+    QuickNavType.UNVISITED_LINK: ("link",),
+    QuickNavType.VISITED_LINK: ("link",),
+    QuickNavType.BUTTON: ("button", "split_button"),
+    QuickNavType.EDIT_FIELD: ("edit", "password", "document"),
+    QuickNavType.COMBO_BOX: ("combobox",),
+    QuickNavType.CHECKBOX: ("checkbox",),
+    QuickNavType.RADIO_BUTTON: ("radio",),
+    QuickNavType.LIST: ("list",),
+    QuickNavType.LIST_ITEM: ("listitem", "treeitem", "menuitem"),
+    QuickNavType.TABLE: ("table", "grid"),
+    QuickNavType.TABLE_CELL: ("cell", "griditem"),
+    QuickNavType.GRAPHIC: ("image",),
+    QuickNavType.SEPARATOR: ("separator",),
+    QuickNavType.FRAME: ("document",),
+    QuickNavType.LANDMARK: ("group", "toolbar", "menubar", "statusbar"),
+    QuickNavType.PARAGRAPH: ("text",),
+    QuickNavType.FORM_FIELD: ("edit", "password", "combobox", "checkbox",
+                              "radio", "button", "slider", "spinner"),
+}
+
+
+# --------------------------------------------------------------------------- #
 # Public helpers
 # --------------------------------------------------------------------------- #
+def roles_for(qn_type):
+    """Titan role keys that satisfy ``qn_type`` (empty tuple when none do)."""
+    return ROLE_MATCH.get(qn_type, ())
+
+
 def type_for_key(key):
     """Map a pressed character to a :class:`QuickNavType` (NONE if not a key)."""
     if not key:

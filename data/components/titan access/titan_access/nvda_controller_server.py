@@ -14,8 +14,25 @@ When the DLL is missing (not yet compiled) every method is a safe no-op, so the
 reader runs fine without it -- only this NVDA-compatibility bridge is disabled.
 
 The helper registers the RPC endpoint NVDA itself uses
-(``NvdaCtlr.<session>.<desktop>`` over ``ncalrpc``); if real NVDA is already
-running it owns the endpoint and our registration simply backs off.
+(``NvdaCtlr.<session>.<desktop>`` over ``ncalrpc``).
+
+**That endpoint is one name, and only one process can own it.** Whoever
+registers it first receives every application's controller calls; everybody else
+receives none. That is the whole reason this bridge can appear to "work with
+64-bit applications but not with 32-bit ones": Titan's own 64-bit code speaks
+through the engine directly and never goes near RPC, so only a separate
+application -- very often a 32-bit one -- exercises this path at all. If another
+controller (real NVDA, or an earlier Titan that has not exited) holds the
+endpoint, that application's speech goes there instead, and the bridge looks
+broken for reasons that have nothing to do with bitness. The RPC layer itself is
+bitness-agnostic: 32-bit and 64-bit clients both reach the helper, which
+``helper/nvda_probe32.exe`` / ``nvda_probe64.exe`` prove on demand (see
+:meth:`NvdaControllerServer.self_test`).
+
+So this module reports honestly whether we actually own the endpoint, keeps
+trying to take it over while somebody else does (closing NVDA is then enough --
+no Titan restart), and can verify the whole path from a real process of each
+bitness.
 """
 
 import ctypes
@@ -51,6 +68,9 @@ class NvdaControllerServer:
         self._dll = None
         self._started = False
         self._get_pid = None
+        self._owns_endpoint = False
+        self._watch_thread = None
+        self._watch_stop = None
         # PIDs of processes that have driven us through the controller; the
         # engine uses this to play its "in a controller app" earcons.
         self.client_pids = set()
@@ -105,6 +125,15 @@ class NvdaControllerServer:
                 self._get_pid = dll.TitanAccessHelper_lastClientPid
             except Exception:
                 self._get_pid = None
+            # Newer helper exports; an older DLL simply lacks them.
+            for name, restype in (("TitanAccessHelper_ownsEndpoint", ctypes.c_int),
+                                  ("TitanAccessHelper_retryEndpoint", ctypes.c_int),
+                                  ("TitanAccessHelper_callCount", ctypes.c_ulong)):
+                try:
+                    getattr(dll, name).argtypes = []
+                    getattr(dll, name).restype = restype
+                except Exception:
+                    pass
             rc = dll.TitanAccessHelper_start(
                 self._cb_speak, self._cb_cancel, self._cb_braille)
         except Exception as e:
@@ -118,28 +147,146 @@ class NvdaControllerServer:
 
         self._dll = dll
         self._started = True
-        print("[TitanAccess] NVDA controller server active "
-              "(apps using nvdaControllerClient.dll now speak through Titan Access)")
-        # If NVDA is also running it OWNS the single ncalrpc controller endpoint,
-        # so external apps reach NVDA, not us -- make that diagnosable.
-        try:
-            import psutil
-            if any((p.name() or "").lower() == "nvda.exe"
-                   for p in psutil.process_iter(["name"])):
-                print("[TitanAccess] WARNING: NVDA is running -- it owns the NVDA "
-                      "controller endpoint, so other apps speak through NVDA, not "
-                      "Titan Access. Close NVDA to let Titan Access handle them.")
-        except Exception:
-            pass
+        self._owns_endpoint = self._read_owns()
+        if self._owns_endpoint:
+            print("[TitanAccess] NVDA controller server active -- applications "
+                  "using nvdaControllerClient32.dll or ...64.dll (either bitness) "
+                  "now speak through Titan Access")
+        else:
+            # Another controller holds the endpoint, so applications reach IT,
+            # not us. Reporting "active" here is what turned a plain conflict
+            # into "the bridge does not work with my program".
+            print("[TitanAccess] NVDA controller: another screen reader owns the "
+                  "controller endpoint, so applications speak through it, not "
+                  "Titan Access" + self._who_owns())
+            self._start_watch()
         return self
 
+    # ------------------------------------------------------------------ #
+    # Endpoint ownership
+    # ------------------------------------------------------------------ #
+    @property
+    def owns_endpoint(self) -> bool:
+        """True when applications' controller calls actually arrive here."""
+        return bool(self._owns_endpoint)
+
+    def _read_owns(self) -> bool:
+        if self._dll is None:
+            return False
+        try:
+            return bool(self._dll.TitanAccessHelper_ownsEndpoint())
+        except Exception:
+            return True     # an older helper cannot tell us; assume the best
+
+    @staticmethod
+    def _who_owns() -> str:
+        """A parenthetical naming the likely owner, when one can be found."""
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                if (proc.info.get("name") or "").lower() == "nvda.exe":
+                    return (" (NVDA is running -- close it and Titan Access takes "
+                            "the endpoint over by itself)")
+        except Exception:
+            pass
+        return ""
+
+    def _start_watch(self):
+        """Take the endpoint over the moment its current owner lets go.
+
+        A slow poll, running only while we do NOT own it, so a user who closes
+        the other screen reader gets a working bridge without restarting Titan.
+        """
+        import threading
+        if self._watch_thread is not None and self._watch_thread.is_alive():
+            return
+        self._watch_stop = threading.Event()
+        stop = self._watch_stop
+
+        def _watch():
+            while not stop.wait(5.0):
+                if self._dll is None or not self._started:
+                    return
+                try:
+                    if self._dll.TitanAccessHelper_retryEndpoint():
+                        self._owns_endpoint = True
+                        print("[TitanAccess] NVDA controller server active -- the "
+                              "endpoint was released and Titan Access has taken "
+                              "it over (applications of either bitness reach us "
+                              "now)")
+                        return
+                except Exception:
+                    return
+
+        self._watch_thread = threading.Thread(target=_watch, daemon=True,
+                                              name="TitanAccessCtlrWatch")
+        self._watch_thread.start()
+
+    def call_count(self) -> int:
+        """How many controller calls this process has served."""
+        if self._dll is None:
+            return 0
+        try:
+            return int(self._dll.TitanAccessHelper_callCount())
+        except Exception:
+            return 0
+
+    # ------------------------------------------------------------------ #
+    # Self-test (both bitnesses, from real processes)
+    # ------------------------------------------------------------------ #
+    def self_test(self, bitnesses=(64, 32)):
+        """Prove -- or disprove -- that applications reach us, per bitness.
+
+        Runs ``helper/nvda_probe<bits>.exe``, which binds to the controller
+        endpoint and calls it exactly as an application does, then checks
+        whether the call arrived HERE (the helper's own counter) rather than at
+        some other screen reader. This is the only honest answer to "does it
+        work with 32-bit programs?": Titan is a 64-bit process and can never
+        exercise the 32-bit client path in process.
+
+        Returns a list of ``(bits, ok, detail)``.
+        """
+        import subprocess
+        results = []
+        for bits in bitnesses:
+            probe = os.path.join(_COMPONENT_DIR, "helper", "nvda_probe%d.exe" % bits)
+            if not os.path.isfile(probe):
+                results.append((bits, False,
+                                "probe not built (run helper/build.bat)"))
+                continue
+            before = self.call_count()
+            try:
+                out = subprocess.run(
+                    [probe, "Titan Access %d bit self test" % bits],
+                    capture_output=True, text=True, timeout=15,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                line = (out.stdout or "").strip() or (out.stderr or "").strip()
+            except Exception as e:
+                results.append((bits, False, "probe failed: %s" % e))
+                continue
+            served = self.call_count() - before
+            if served > 0:
+                results.append((bits, True, line))
+            elif "1722" in line:
+                results.append((bits, False,
+                                "no screen reader is listening on the controller "
+                                "endpoint: " + line))
+            else:
+                results.append((bits, False,
+                                "answered by a DIFFERENT screen reader, not Titan "
+                                "Access: " + line))
+        return results
+
     def stop(self):
+        if self._watch_stop is not None:
+            self._watch_stop.set()
         if self._dll is not None and self._started:
             try:
                 self._dll.TitanAccessHelper_stop()
             except Exception as e:
                 print(f"[TitanAccess] NVDA controller stop error: {e}")
         self._started = False
+        self._owns_endpoint = False
         self._dll = None
 
     # ------------------------------------------------------------------ #

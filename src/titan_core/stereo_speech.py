@@ -2981,6 +2981,90 @@ class StereoSpeech:
         except Exception as e:
             print(f"[StereoSpeech] Error stopping speech: {e}")
 
+    def _synthesize_segment(self, text, pitch_offset=0):
+        """Render ONE utterance to an ``AudioSegment`` with the ACTIVE engine.
+
+        This is the engine-agnostic half of :meth:`speak_concat`: whatever the
+        current engine is (SAPI5, eSpeak, macOS ``say``, or any TitanTTS plugin
+        engine -- Supertonic, SMP, Eloquence, DECtalk, BestSpeech, ElevenLabs,
+        Milena, ...), it comes back as audio the caller can trim, pan, join and
+        play itself. It is the same per-engine dispatch :meth:`speak` performs,
+        factored out so a multi-part announcement no longer needs a per-engine
+        code path -- which is exactly why everything except SAPI used to lose
+        every part after the first.
+
+        Returns ``None`` when this engine cannot synthesize to memory (spd-say,
+        or no pydub), which is the caller's signal to fall back.
+        """
+        if not text or not PYDUB_AVAILABLE:
+            return None
+        engine = getattr(self, 'engine', '')
+        try:
+            if engine == 'sapi5' and getattr(self, '_sapi_worker', None):
+                tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                tmp_path = os.path.abspath(tmp.name)
+                tmp.close()
+                path = self._sapi_worker.generate_to_file(
+                    text, tmp_path, pitch_offset + self.default_pitch)
+                if not path:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+                    return None
+                try:
+                    return AudioSegment.from_wav(path)
+                finally:
+                    try:
+                        os.unlink(path)
+                    except Exception:
+                        pass
+            if engine in ('espeak', 'espeak_dll'):
+                audio = None
+                if ESPEAK_AVAILABLE:
+                    audio = self._generate_espeak_dll_to_memory(text, pitch_offset)
+                    if not audio:
+                        audio = self._generate_espeak_to_memory(text, pitch_offset)
+                if not audio and getattr(self, 'espeak_dll', None):
+                    # DLL in RETRIEVAL mode (no double playback).
+                    audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset)
+                return audio
+            if engine == 'say':
+                return self._generate_say_to_memory(text, pitch_offset)
+            # Generic TitanTTS plugin engine (registry).
+            registry = _get_engine_registry()
+            tts_engine = registry.get_titantts_engine(engine) if registry else None
+            if tts_engine and tts_engine.is_available():
+                return tts_engine.generate(text, pitch_offset + self.default_pitch)
+        except Exception as e:
+            print(f"[StereoSpeech] segment synthesis error ({engine}): {e}")
+        return None
+
+    def supports_segment_synthesis(self):
+        """True when the active engine can render an utterance to memory.
+
+        That is the precondition for :meth:`speak_concat` (and therefore for a
+        multi-part screen-reader announcement being spoken as one clip). False
+        only for spd-say and for a host without pydub.
+        """
+        if not PYDUB_AVAILABLE:
+            return False
+        engine = getattr(self, 'engine', '')
+        if engine == 'sapi5':
+            return bool(getattr(self, '_sapi_worker', None))
+        if engine in ('espeak', 'espeak_dll'):
+            return bool(ESPEAK_AVAILABLE or getattr(self, 'espeak_dll', None))
+        if engine == 'say':
+            return bool(SAY_AVAILABLE)
+        if engine == 'spd':
+            return False
+        try:
+            registry = _get_engine_registry()
+            tts_engine = registry.get_titantts_engine(engine) if registry else None
+            return bool(tts_engine and tts_engine.is_available())
+        except Exception:
+            return False
+
     def speak_concat(self, segments, gap_ms=40):
         """Speak several ``(text, pitch_offset, position)`` parts as ONE clip.
 
@@ -2993,12 +3077,17 @@ class StereoSpeech:
         audio during synthesis, so nothing is read aloud as SSML and voices that
         ignore pitch (e.g. ScanSoft Agata) still get a clean separation.
 
-        SAPI5 only (the screen reader's engine); returns False if it cannot
-        handle the request so the caller can fall back to the paced per-segment
-        path.
+        Works with EVERY engine that can synthesize to memory (see
+        :meth:`_synthesize_segment`), not just SAPI5. It used to be SAPI-only,
+        which meant every other engine fell back to a paced, interrupt-per-part
+        pipeline whose timing could only be right for an engine that plays on
+        the pygame TTS channel -- so on eSpeak, Supertonic, SMP, Eloquence and
+        the rest the parts after the first were cut off or never spoken at all.
+        Returns False only when the engine genuinely cannot render to memory, so
+        the caller can speak the announcement as one joined line instead.
         """
-        if (not segments or not PYDUB_AVAILABLE or self.engine != 'sapi5'
-                or not getattr(self, '_sapi_worker', None)):
+        if (not segments or not PYDUB_AVAILABLE
+                or not self.supports_segment_synthesis()):
             return False
 
         with self._seq_lock:
@@ -3078,27 +3167,25 @@ class StereoSpeech:
                 for idx, (text, pitch, position) in enumerate(groups):
                     if my_seq != self._speak_seq:
                         break
-                    tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-                    tmp_path = os.path.abspath(tmp.name)
-                    tmp.close()
-                    path = self._sapi_worker.generate_to_file(
-                        text, tmp_path, pitch + self.default_pitch)
-                    if not path:
-                        try:
-                            os.unlink(tmp_path)
-                        except Exception:
-                            pass
-                        continue
-                    try:
-                        seg_audio = AudioSegment.from_wav(path)
-                    except Exception:
-                        seg_audio = None
-                    finally:
-                        try:
-                            os.unlink(path)
-                        except Exception:
-                            pass
+                    seg_audio = self._synthesize_segment(text, pitch)
+                    if seg_audio is None and pitch:
+                        # Some engines refuse a pitched request but synthesize
+                        # the same text happily at their own pitch. A part read
+                        # flat beats a part not read at all.
+                        seg_audio = self._synthesize_segment(text, 0)
                     if seg_audio is None:
+                        # This engine produced nothing for this part. Dropping
+                        # it silently is the exact failure this method exists to
+                        # end, so speak the whole announcement as one plain line
+                        # instead -- the parts lose their individual pitch, but
+                        # nothing in the queue goes unspoken.
+                        if not played:
+                            if my_seq == self._speak_seq:
+                                self.is_speaking = False
+                            joined = ", ".join(g[0] for g in groups if g[0])
+                            if joined and my_seq == self._speak_seq:
+                                self.speak_async(joined, position=groups[0][2])
+                            return
                         continue
                     try:
                         seg_audio = trim_silence(

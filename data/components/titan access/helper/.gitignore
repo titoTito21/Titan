@@ -7,4 +7,6 @@ dlldata.c
 *.lib
 *.exp
 *.pdb
-# Keep: titan_access_helper.dll (the built product), *.c, *.idl, build.bat, README.md
+# Keep: the built products (titan_access_helper.dll, nvda_probe32.exe,
+# nvda_probe64.exe -- the probes are how the bridge is verified per bitness on a
+# machine with no compiler), plus *.c, *.idl, build.bat, README.md

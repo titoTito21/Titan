@@ -45,13 +45,55 @@ _SYNTH_TO_ENGINE = {
 }
 
 
-def _estimate_duration(text):
-    """Rough spoken duration (seconds) used to gate sequential segments.
+def _estimate_duration(text, cap=2.5):
+    """Rough spoken duration (seconds) used to pace speech.
 
-    Matches the heuristic in ``titan_talk.tt_core`` so segment pacing feels the
-    same across the suite when the engine cannot report :attr:`is_speaking`.
+    Matches the heuristic in ``titan_talk.tt_core`` so pacing feels the same
+    across the suite when the engine cannot report :attr:`is_speaking`. Pass
+    ``cap=None`` when the estimate has to cover a whole utterance (the queue
+    pump): capping it at 2.5 s would start the next one over a long sentence.
     """
-    return min(2.5, 0.28 + len(text or "") / 16.0)
+    seconds = 0.28 + len(text or "") / 16.0
+    return seconds if cap is None else min(cap, seconds)
+
+
+class _Utterance(object):
+    """One queued unit of speech: plain text, or pitched parts to concatenate."""
+
+    __slots__ = ("text", "position", "pitch", "segments", "generation")
+
+    def __init__(self, text="", position=0.0, pitch=0, segments=None):
+        self.text = text or ""
+        self.position = position
+        self.pitch = pitch
+        self.segments = segments or ()
+        self.generation = 0
+
+    @property
+    def has_text(self):
+        return bool(self.text) or any(s[0] for s in self.segments)
+
+    @property
+    def plain_text(self):
+        """The whole utterance as one line (used for pacing and as a fallback)."""
+        if not self.segments:
+            return self.text
+        parts = []
+        for seg in self.segments:
+            part = (seg[0] or "").strip()
+            if part and (not parts or parts[-1] != part):
+                parts.append(part)
+        return ", ".join(parts)
+
+    @property
+    def first_position(self):
+        if self.segments:
+            try:
+                first = self.segments[0]
+                return float(first[2]) if len(first) > 2 else 0.0
+            except Exception:
+                return 0.0
+        return self.position
 
 
 class SpeechAdapter(object):
@@ -80,10 +122,20 @@ class SpeechAdapter(object):
         # A StereoSpeech instance dedicated to the reader (see _init_backend).
         self._engine = None
 
-        # Sequence id for :meth:`speak_segments` (a newer call supersedes an
-        # in-flight one) — same pattern as titan_talk.
+        # Legacy sequence id kept for callers that still bump/read it.
         self._seq_lock = threading.Lock()
         self._seq_id = 0
+
+        # Utterance queue + the single pump thread that drains it. Titan's TTS
+        # engines have no queue of their own (every call interrupts), so this is
+        # what makes "say this after the current one" actually happen instead of
+        # erasing what is playing.
+        self._q_lock = threading.Lock()
+        self._queue = []
+        self._current = None
+        self._generation = 0        # bumped by every interrupting call / stop()
+        self._pump_thread = None
+        self._wake = threading.Event()
 
         # Fallback "still speaking" estimate when the engine cannot report it.
         self._speaking_until = 0.0
@@ -146,11 +198,15 @@ class SpeechAdapter(object):
 
     @property
     def is_speaking(self):
-        """Whether speech is currently playing.
+        """Whether speech is playing OR still queued.
 
-        Prefers the engine's own flag (StereoSpeech exposes ``is_speaking``);
-        otherwise uses the duration estimate set on the last utterance.
+        Anything queued counts: a caller asking "are you still talking?" wants
+        to know whether the reader has finished what it was asked to say, not
+        merely whether audio happens to be flowing this millisecond.
         """
+        with self._q_lock:
+            if self._queue or self._current is not None:
+                return True
         sp = self._underlying_speaker()
         if sp is not None and hasattr(sp, "is_speaking"):
             try:
@@ -160,113 +216,269 @@ class SpeechAdapter(object):
         return time.time() < self._speaking_until
 
     # ------------------------------------------------------------------ #
-    # Speaking
+    # Speaking (everything goes through the queue + pump)
     # ------------------------------------------------------------------ #
     def _mark_speaking(self, text):
         self._speaking_until = time.time() + _estimate_duration(text)
 
     def speak(self, text, position=0.0, interrupt=True, pitch_offset=0):
-        """Speak ``text`` (blocking only for the print fallback).
+        """Speak ``text``.
 
-        ``position`` is a stereo pan -1..1, ``pitch_offset`` -10..10 (ignored by
-        the non-Titan backends).
+        ``interrupt=True`` (the default) drops anything queued and cuts off what
+        is playing -- the usual screen-reader "read this now". ``interrupt=False``
+        QUEUES the text behind what is already speaking, and the pump guarantees
+        it is spoken in turn (see :meth:`_pump`).
+
+        ``position`` is a stereo pan -1..1, ``pitch_offset`` -10..10.
         """
-        if not text:
-            return
-        if self._mode == self._MODE_TCE and self._engine is not None:
-            try:
-                if interrupt:
-                    self._engine.stop()
-                self._engine.speak(text, position=position,
-                                   pitch_offset=pitch_offset)
-                self._mark_speaking(text)
-                return
-            except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] StereoSpeech.speak error: {e}")
-        print(f"[TitanAccess] (speech) {text}")
+        self._enqueue(_Utterance(text=text, position=position,
+                                 pitch=pitch_offset), interrupt)
 
-    def speak_async(self, text, position=0.0, interrupt=True, pitch_offset=0):
-        """Non-blocking variant of :meth:`speak`."""
-        if not text:
+    # ``speak_async`` is kept because callers all over the reader use it. It has
+    # always been the same call: nothing here ever blocks, the pump does the
+    # waiting.
+    speak_async = speak
+
+    def speak_segments(self, segments):
+        """Speak ``(text, pitch_offset, position)`` tuples as ONE announcement.
+
+        Each part keeps its own pitch, and -- this is the contract -- **every**
+        part is spoken. Interrupts, like any other element announcement, so
+        rapid navigation always reads the newest element.
+        """
+        segments = [tuple(s) for s in (segments or []) if s and s[0]]
+        if not segments:
             return
-        if self._mode == self._MODE_TCE and self._engine is not None:
-            try:
-                # StereoSpeech.speak_async always interrupts (it stops current
-                # speech at the top), which is exactly the segment-pipeline
-                # contract, so ``interrupt`` needs no special handling here.
-                self._engine.speak_async(text, position=position,
-                                         pitch_offset=pitch_offset)
-                self._mark_speaking(text)
-                return
-            except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] StereoSpeech.speak_async error: {e}")
-        # print fallback has no async API; spawn a thread.
-        threading.Thread(
-            target=self.speak,
-            args=(text, position, interrupt, pitch_offset),
-            daemon=True,
-        ).start()
+        self._enqueue(_Utterance(segments=segments), interrupt=True)
 
     def stop(self):
-        """Stop any current speech and supersede any pending segment sequence."""
+        """Stop what is speaking and DISCARD everything queued behind it."""
+        with self._q_lock:
+            self._queue = []
+            self._generation += 1
         with self._seq_lock:
-            self._seq_id += 1  # invalidate in-flight speak_segments
+            self._seq_id += 1  # invalidate in-flight segment waits
         self._speaking_until = 0.0
         if self._mode == self._MODE_TCE and self._engine is not None:
             try:
                 self._engine.stop()
-                return
             except Exception:
                 pass
 
     # ------------------------------------------------------------------ #
-    # Sequential pitched announcement (name / type / state)
+    # Queue + pump
     # ------------------------------------------------------------------ #
-    def speak_segments(self, segments):
-        """Speak ``(text, pitch_offset, position)`` tuples sequentially.
+    def _enqueue(self, utterance, interrupt):
+        """Add ``utterance`` to the queue (clearing it first when interrupting).
 
-        Each segment is fully spoken at its own pitch before the next begins. A
-        newer call bumps the sequence id so rapid navigation cleanly supersedes
-        an in-flight sequence (its first segment interrupts whatever is playing).
-        Port of ``titan_talk.tt_core.speak_segments``.
+        This is the single entry point for ALL speech. A queue is what makes
+        ``interrupt=False`` mean what it says: Titan's TTS engines have no queue
+        of their own -- every ``speak``/``speak_async`` stops whatever is
+        playing -- so before this, a second announcement simply erased the
+        first. Multi-part announcements (and continuous reading) lost everything
+        after the part that happened to be playing.
         """
-        segments = [s for s in (segments or []) if s and s[0]]
-        if not segments:
+        if not utterance.has_text:
             return
-        with self._seq_lock:
-            self._seq_id += 1
-            my_id = self._seq_id
-        # Preferred path: let the engine synthesize the whole pitched
-        # announcement and play it as ONE concatenated clip with a short fixed
-        # silence between parts. This collapses the ~100 ms per-segment handoff
-        # (generate/load/process/play) into a single playback, so the only pause
-        # left is the tiny gap we ask for -- far shorter than the paced pipeline,
-        # while each part keeps its own pitch and nothing is read as SSML. SAPI
-        # supports it; other engines return False and we use the paced fallback.
-        eng = self._engine
-        if eng is not None and hasattr(eng, "speak_concat"):
+        with self._q_lock:
+            if interrupt:
+                self._queue = []
+                self._generation += 1
+            utterance.generation = self._generation
+            self._queue.append(utterance)
+            self._ensure_pump()
+        if interrupt and self._mode == self._MODE_TCE and self._engine is not None:
+            # Cut the current audio at once; the pump picks up the new item
+            # without waiting for the old one to play out.
             try:
-                if eng.speak_concat(segments, gap_ms=self._SEGMENT_GAP_MS):
-                    self._mark_speaking(" ".join(s[0] for s in segments if s[0]))
-                    return
-            except Exception as e:  # pragma: no cover
-                print(f"[TitanAccess] speak_concat error: {e}")
-        threading.Thread(target=self._run_segments, args=(my_id, segments),
-                         daemon=True).start()
+                self._engine.stop()
+            except Exception:
+                pass
+        self._mark_speaking(utterance.plain_text)
+        self._wake.set()
 
-    def _run_segments(self, my_id, segments):
-        for text, pitch, position in segments:
-            if not text:
+    def _ensure_pump(self):
+        """Start the pump thread on first use (called with ``_q_lock`` held)."""
+        if self._pump_thread is not None and self._pump_thread.is_alive():
+            return
+        self._pump_thread = threading.Thread(
+            target=self._pump, name="TitanAccessSpeechPump", daemon=True)
+        self._pump_thread.start()
+
+    def _next_utterance(self):
+        with self._q_lock:
+            while self._queue:
+                item = self._queue.pop(0)
+                if item.generation == self._generation:
+                    self._current = item
+                    return item
+            self._current = None
+            return None
+
+    def _pump(self):
+        """Speak queued utterances one at a time, in order, for ever.
+
+        Each utterance is spoken and then WAITED OUT before the next starts, so
+        a queued announcement can neither be cut off by the one behind it nor be
+        skipped. An interrupting call empties the queue and bumps the
+        generation, which this loop notices at once.
+        """
+        while True:
+            item = self._next_utterance()
+            if item is None:
+                self._wake.wait(timeout=30.0)
+                self._wake.clear()
                 continue
-            with self._seq_lock:
-                if my_id != self._seq_id:
+            try:
+                self._speak_now(item)
+            except Exception as e:  # pragma: no cover - never kill the pump
+                print(f"[TitanAccess] speech pump error: {e}")
+            finally:
+                with self._q_lock:
+                    if self._current is item:
+                        self._current = None
+
+    def _superseded(self, item):
+        with self._q_lock:
+            return item.generation != self._generation
+
+    def _speak_now(self, item):
+        """Render one queued utterance and block until its audio has finished."""
+        if self._superseded(item):
+            # Interrupted between being taken off the queue and being spoken.
+            return
+        if self._mode != self._MODE_TCE or self._engine is None:
+            print(f"[TitanAccess] (speech) {item.plain_text}")
+            return
+        eng = self._engine
+        if item.segments:
+            # Preferred path: let the engine synthesize the pitched parts and
+            # play them as ONE concatenated clip with a short silence between
+            # them. Because the parts are joined before anything is heard, no
+            # part can be cut off by the next one. ``StereoSpeech.speak_concat``
+            # does this for every engine that can synthesize to memory (SAPI5,
+            # eSpeak, say, and all TitanTTS plugin engines).
+            done = False
+            if hasattr(eng, "speak_concat"):
+                try:
+                    done = bool(eng.speak_concat(item.segments,
+                                                 gap_ms=self._SEGMENT_GAP_MS))
+                except Exception as e:  # pragma: no cover
+                    print(f"[TitanAccess] speak_concat error: {e}")
+                    done = False
+            if not done:
+                # An engine that cannot render to memory at all (spd-say, no
+                # pydub): speak the parts as a single joined line. The per-part
+                # pitch is lost, but the announcement is complete -- which is
+                # the whole point. Chaining one interrupting utterance per part
+                # (the old fallback) could only be timed correctly for an engine
+                # that plays on Titan's pygame TTS channel, so on every other
+                # engine the parts after the first were cut off or lost.
+                eng.speak_async(item.plain_text,
+                                position=item.first_position, pitch_offset=0)
+        else:
+            eng.speak_async(item.text, position=item.position,
+                            pitch_offset=item.pitch)
+        self._wait_for_playback(item)
+
+    def _wait_for_playback(self, item):
+        """Block until this utterance's audio has finished (or is superseded).
+
+        Pacing signals, in order of reliability: the dedicated pygame TTS
+        channel (exact for everything that plays through Titan's mixer), the
+        engine's own ``is_speaking``, and finally a length-derived estimate --
+        which is all an engine that plays through its own audio device (the
+        eSpeak DLL fast path) can offer.
+        """
+        text = item.plain_text
+        est = _estimate_duration(text, cap=None)
+        t0 = time.time()
+        # Phase 1: wait for the audio to actually start. Synthesis is not
+        # instant (a neural engine can take a second), and treating that
+        # pre-start silence as "finished" is what let the next utterance
+        # interrupt this one before it was ever heard.
+        start_cap = t0 + est + 8.0
+        started = False
+        while time.time() < start_cap:
+            if self._superseded(item):
+                return
+            busy = self._audio_busy()
+            if busy:
+                started = True
+                break
+            if busy is None and time.time() - t0 > 0.25:
+                break  # no usable signal at all; fall through to the estimate
+            time.sleep(0.01)
+        if started:
+            # Phase 2: playing -- wait for the end, then return at once so the
+            # next queued utterance follows with no dead air.
+            end_cap = time.time() + est + 30.0
+            while time.time() < end_cap:
+                if self._superseded(item):
                     return
-            # Every segment interrupts the previous one (which has already had
-            # its full time slice below): the first cuts off the previous
-            # announcement, the rest play back-to-back.
-            self.speak_async(text, position=position, interrupt=True,
-                             pitch_offset=pitch)
-            self._wait_for_segment(text, my_id)
+                busy = self._audio_busy()
+                if busy is None or not busy:
+                    return
+                time.sleep(0.012)
+            return
+        # No playback signal (engine plays through its own device): pace on the
+        # estimate, which is never shortened by a flag we cannot trust.
+        remaining = est - (time.time() - t0)
+        while remaining > 0:
+            if self._superseded(item):
+                return
+            time.sleep(min(0.05, remaining))
+            remaining = est - (time.time() - t0)
+
+    def _audio_busy(self):
+        """True/False if a playback signal exists, None when none does."""
+        ch = self._tts_channel()
+        if ch is not None:
+            try:
+                return bool(ch.get_busy())
+            except Exception:
+                pass
+        eng = self._engine
+        if eng is not None and hasattr(eng, "is_speaking"):
+            try:
+                return bool(eng.is_speaking)
+            except Exception:
+                pass
+        return None
+
+    def pending_count(self):
+        """How many utterances are waiting behind the one being spoken.
+
+        Continuous reading (say all) uses this to stay a line or two ahead of
+        the voice: enough that it never runs dry, few enough that a keypress
+        interrupts almost immediately.
+        """
+        with self._q_lock:
+            return len(self._queue)
+
+    def wait_for_queue(self, timeout=None):
+        """Block until everything queued has been spoken (or ``timeout``).
+
+        Returns True when the queue drained, False on timeout or if speech was
+        interrupted. Used by continuous reading (say all).
+        """
+        deadline = None if timeout is None else time.time() + timeout
+        while True:
+            with self._q_lock:
+                idle = not self._queue and self._current is None
+            if idle:
+                return True
+            if deadline is not None and time.time() > deadline:
+                return False
+            time.sleep(0.03)
+
+    def wait_until_done(self, text="", timeout=None):
+        """Block until everything the reader was asked to say has been said.
+
+        Kept as the public pacing helper for continuous reading; ``text`` is
+        accepted (and ignored) so older callers keep working.
+        """
+        return self.wait_for_queue(timeout=timeout)
 
     def _tts_channel(self):
         """The dedicated pygame channel Titan TTS plays speech on, or None.
@@ -293,98 +505,6 @@ class SpeechAdapter(object):
             return getter()
         except Exception:
             return None
-
-    def _wait_for_segment(self, text, my_id):
-        """Block until a segment's audio has finished, then return at once.
-
-        CRITICAL: every segment is spoken with ``interrupt=True`` so that the
-        FIRST segment of a new announcement cuts off the previous one. That makes
-        the inter-segment wait load-bearing: if it returns too early, the *next*
-        segment's interrupt cuts the *current* one mid-word. The element name is
-        the first segment, so an early return here is exactly what made the name
-        come out as silence or a clipped syllable ("element listy" with no name).
-
-        We pace on the real audio: poll the dedicated TTS channel's
-        ``get_busy()`` (see :meth:`_tts_channel`) and move on the instant the clip
-        ends -- so pauses are exactly as long as the speech, no dead air, and the
-        segment is never cut. We do NOT trust ``is_speaking`` (it lies on the
-        eSpeak DLL path). When no channel signal is available (standalone reader)
-        we fall back to a fixed length-derived estimate, never shortened by a
-        playback flag.
-
-        A newer announcement (bumped sequence id) supersedes us within one poll,
-        so rapid navigation stays responsive (each keypress interrupts).
-        """
-        est = _estimate_duration(text)
-
-        def _superseded():
-            with self._seq_lock:
-                return my_id != self._seq_id
-
-        def _ch_busy():
-            ch = self._tts_channel()
-            if ch is None:
-                return None
-            try:
-                return bool(ch.get_busy())
-            except Exception:
-                return None
-
-        # Let the new utterance take over the channel: the dispatch first stops
-        # the old clip, then synthesis hands the new one to the channel. That
-        # synthesis is NOT instant -- the pitched (role/state) segments render
-        # through a slower generate-to-memory / subprocess path that can lag well
-        # past `est` -- so the channel reads idle for a while *before* this
-        # segment starts. The whole bug ("only the beginning", clipped words) was
-        # treating that pre-start idle as "finished" and returning, which let the
-        # NEXT segment's interrupt cut this one. The fix: never return on idle
-        # until we have CONFIRMED the clip actually started.
-        t0 = time.time()
-        time.sleep(0.03)
-
-        probe = _ch_busy()
-        if probe is None:
-            # No playback signal (standalone / non-pygame backend): fixed
-            # length-derived estimate. NEVER gate on is_speaking here.
-            slept = 0.03
-            while slept < est:
-                if _superseded():
-                    return
-                time.sleep(0.03)
-                slept += 0.03
-            return
-
-        # Phase 1: wait until THIS segment's audio actually STARTS on the TTS
-        # channel. Generous cap covers slow synthesis; if it never starts (synth
-        # produced nothing, or we were superseded) we bail rather than hang. Now
-        # that UI cues are reserved off the TTS channel, a busy reading here is
-        # always real speech, so no "floor" workaround is needed.
-        started = bool(probe)
-        start_cap = t0 + est + 2.5
-        while not started and time.time() < start_cap:
-            if _superseded():
-                return
-            b = _ch_busy()
-            if b:
-                started = True
-                break
-            if b is None:
-                break  # signal vanished; bail to avoid hanging
-            time.sleep(0.01)
-        if not started:
-            return  # no audio for this segment
-
-        # Phase 2: the clip is playing -- wait for it to END, then the next
-        # segment plays at once (no dead air). The cap is only a hang guard; a
-        # newer announcement supersedes us within one poll.
-        end_cap = time.time() + est + 6.0
-        while time.time() < end_cap:
-            if _superseded():
-                return
-            b = _ch_busy()
-            if b is None or not b:
-                return
-            time.sleep(0.012)
 
     # ------------------------------------------------------------------ #
     # Configuration (mirrors C# SpeechManager setters)
