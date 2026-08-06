@@ -80,6 +80,15 @@ except Exception as e:  # pragma: no cover - vendored lib not importable
     _auto = None
     _UIA_LIB_OK = False
 
+# Bulk (cached) property reads. Every field below used to be its own
+# cross-process call - about thirty per focus change, which is what made focus
+# announcements lag in UWP apps and in anything Chromium. See uia_cache.
+try:
+    from titan_access import uia_cache as _cache
+except Exception as e:  # pragma: no cover
+    print(f"[TitanAccess] uia_cache unavailable: {e}")
+    _cache = None
+
 
 # CLSIDs for the UI Automation root objects.
 _CLSID_CUIAUTOMATION8 = "{e22ad333-b25f-460c-83d0-0581107395c9}"
@@ -296,8 +305,13 @@ class UIAProvider:
                 if self._handler_cls is None:
                     return False
                 self._handler = self._handler_cls(self)
-                # AddFocusChangedEventHandler(cacheRequest, handler)
-                self._uia.AddFocusChangedEventHandler(None, self._handler)
+                # AddFocusChangedEventHandler(cacheRequest, handler). Passing a
+                # cache request is the whole difference between a focus
+                # announcement costing one delivery and costing thirty
+                # cross-process property reads: the element arrives with
+                # everything we are going to ask it already filled in.
+                self._uia.AddFocusChangedEventHandler(
+                    self._focus_cache_request(), self._handler)
                 self._listening = True
                 return True
             except Exception as e:
@@ -359,6 +373,115 @@ class UIAProvider:
             print(f"[TitanAccess] object_from_handle failed: {e}")
             return None
 
+    # -- cached reading ----------------------------------------------------- #
+    @staticmethod
+    def _focus_cache_request():
+        """The cache request focus events are delivered with (None if no UIA)."""
+        if _cache is None:
+            return None
+        try:
+            return _cache.focus_request()
+        except Exception:
+            return None
+
+    def _cached_element_to_object(self, element) -> Optional[AccessibleObject]:
+        """Snapshot a focus element from its cache - no cross-process calls.
+
+        Returns None when the element carries no cache and one cannot be filled
+        in, so the caller falls back to the live property-by-property path.
+        Every pattern value is gated on its ``Is<Pattern>PatternAvailable``
+        property: UI Automation answers an unsupported property with its TYPE
+        DEFAULT, so an element with no toggle pattern reports ToggleState 2 and
+        would be announced "partially checked".
+        """
+        if _cache is None:
+            return None
+        cached = _cache.with_cache(element, self._focus_cache_request())
+        if cached is None:
+            return None
+        c = _cache
+        try:
+            control_type = c.get(cached, c.CONTROL_TYPE, None)
+            if control_type is None:
+                return None
+            native = c.control_for(cached, control_type)
+            if native is None:
+                return None
+            obj = AccessibleObject(native=native, provider="uia")
+
+            is_password = c.flag(cached, c.IS_PASSWORD, False)
+            obj.role = _role_for_control_type(int(control_type), is_password)
+            obj.name = c.text(cached, c.NAME)
+            obj.help_text = c.text(cached, c.HELP_TEXT)
+            obj.description = c.text(cached, c.FULL_DESCRIPTION)
+            obj.value = self._cached_value(cached)
+            obj.automation_id = c.text(cached, c.AUTOMATION_ID)
+            obj.class_name = c.text(cached, c.CLASS_NAME)
+            obj.framework_id = c.text(cached, c.FRAMEWORK_ID)
+            obj.process_id = c.number(cached, c.PROCESS_ID)
+            obj.hwnd = c.number(cached, c.NATIVE_WINDOW_HANDLE)
+            obj.bounds = c.rect_of(cached) or (0, 0, 0, 0)
+            obj.level = c.number(cached, c.LEVEL)
+            obj.pos_in_set = c.number(cached, c.POSITION_IN_SET)
+            obj.size_of_set = c.number(cached, c.SIZE_OF_SET)
+            obj.states = self._cached_states(cached, is_password)
+            if obj.role == ROLE_LINK:
+                obj.parameter = obj.value
+            return obj
+        except Exception as e:
+            if os.environ.get("TITAN_ACCESS_DEBUG"):
+                print(f"[TitanAccess] cached snapshot failed: {e}")
+            return None
+
+    @staticmethod
+    def _cached_value(cached) -> str:
+        c = _cache
+        value = c.pattern_value(cached, c.IS_VALUE_AVAILABLE, c.VALUE_VALUE, None)
+        if value not in (None, ""):
+            return str(value)
+        value = c.pattern_value(cached, c.IS_RANGEVALUE_AVAILABLE,
+                                c.RANGEVALUE_VALUE, None)
+        if value is None:
+            return ""
+        # Trim a redundant ".0" so "30" reads better than "30.0".
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
+
+    @staticmethod
+    def _cached_states(cached, is_password):
+        c = _cache
+        states = set()
+        if not c.flag(cached, c.IS_ENABLED, True):
+            states.add(STATE_UNAVAILABLE)
+        if c.flag(cached, c.HAS_KEYBOARD_FOCUS, False):
+            states.add(STATE_FOCUSED)
+        if c.flag(cached, c.IS_OFFSCREEN, False):
+            states.add(_STATE_OFFSCREEN)
+        if c.flag(cached, c.IS_REQUIRED_FOR_FORM, False):
+            states.add(STATE_REQUIRED)
+        if is_password:
+            states.add(STATE_PROTECTED)
+        toggle = c.pattern_value(cached, c.IS_TOGGLE_AVAILABLE, c.TOGGLE_STATE, None)
+        if toggle == c.TOGGLE_ON:
+            states.add(STATE_CHECKED)
+        elif toggle == c.TOGGLE_INDETERMINATE:
+            states.add(STATE_PARTIAL)
+        expand = c.pattern_value(cached, c.IS_EXPANDCOLLAPSE_AVAILABLE,
+                                 c.EXPANDCOLLAPSE_STATE, None)
+        if expand in (c.EXPAND_EXPANDED, c.EXPAND_PARTIAL):
+            states.add(STATE_EXPANDED)
+        elif expand == c.EXPAND_COLLAPSED:
+            states.add(STATE_COLLAPSED)
+        # EXPAND_LEAF means "nothing to expand" and is not a state to announce.
+        if c.pattern_value(cached, c.IS_SELECTIONITEM_AVAILABLE,
+                           c.SELECTIONITEM_IS_SELECTED, False):
+            states.add(STATE_SELECTED)
+        if c.pattern_value(cached, c.IS_VALUE_AVAILABLE, c.VALUE_IS_READONLY,
+                           False):
+            states.add(STATE_READONLY)
+        return states
+
     # -- element -> snapshot ----------------------------------------------- #
     def element_to_object(self, element) -> Optional[AccessibleObject]:
         """Build an :class:`AccessibleObject` from a UIA element.
@@ -374,6 +497,12 @@ class UIAProvider:
         # Already a uiautomation.Control? Use it directly (it exposes .Element).
         if hasattr(element, "Element") and hasattr(element, "GetParentControl"):
             return self._control_to_object(element)
+        # Raw element: read it out of its cache in one go. This is the normal
+        # path (every focus event lands here) and the reason focus is announced
+        # promptly in UWP / Chromium windows instead of after ~30 RPCs.
+        obj = self._cached_element_to_object(element)
+        if obj is not None:
+            return obj
         try:
             control = _auto.Control.CreateControlFromElement(element)
         except Exception as e:  # pragma: no cover

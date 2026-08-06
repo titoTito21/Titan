@@ -73,6 +73,17 @@ _REGION_NAME_ONLY_ROLES = {"list", "tree", "toolbar", "tabcontrol"}
 
 _MAX_DEPTH = 14
 
+# UIA FrameworkId values that mean "this control is inside a rendered web page".
+_WEB_FRAMEWORKS = {"chrome", "gecko", "webview", "edge", "blink"}
+
+
+def _is_web_content(obj) -> bool:
+    """True when the focused control lives in a web document."""
+    try:
+        return (getattr(obj, "framework_id", "") or "").lower() in _WEB_FRAMEWORKS
+    except Exception:
+        return False
+
 # UIA property id: UIA_IsDialogPropertyId. Plus the Win32 standard-dialog class
 # (wx.MessageDialog and most native confirm/alert boxes use "#32770"), so we can
 # recognise a dialog even when the IsDialog property is not set.
@@ -402,7 +413,16 @@ class ContextPresenter:
         # enclose the focused control. Restricted to form controls: list/tree/menu
         # items live in big collections, so scanning their siblings would be slow
         # and a group box never frames them anyway.
-        if "group" not in nearest and obj.role in _GROUPABLE_ROLES:
+        #
+        # Never in web content. A page is groups all the way down (Chromium
+        # wraps almost everything in one), NVDA says nothing about them there,
+        # and the sibling scan is not cheap - so this is both the behaviour
+        # users expect on the web and one less tree walk per focus change.
+        in_web = _is_web_content(obj)
+        if in_web:
+            nearest.pop("group", None)
+            nodes.pop("group", None)
+        elif "group" not in nearest and obj.role in _GROUPABLE_ROLES:
             grp = self._find_containing_group(native)
             if grp is not None:
                 nearest["group"] = grp
@@ -438,8 +458,12 @@ class ContextPresenter:
             # "list" word). Other apps keep the standard "<name>, list".
             return (name, _REGION_PITCH)
         if role == "group":
-            # "{name}, group" (named) or just "group".
-            text = L("engine.namedGroup", name) if name else label
+            # "{name}, group". A group with no caption is not announced at all:
+            # the bare word says nothing the user can act on, and it is exactly
+            # the noise that made Titan sound unlike NVDA in grouped dialogs.
+            if not name:
+                return None
+            text = L("engine.namedGroup", name)
         elif name:
             text = f"{name}, {label}"
         else:

@@ -1,0 +1,7 @@
+[macro]
+name_pl = Demonstracja czytnika ekranu (Titan Access)
+name_en = Screen reader demo (Titan Access)
+openfile = screen_reader_demo.tcs
+
+[macrocfg]
+hotkey =

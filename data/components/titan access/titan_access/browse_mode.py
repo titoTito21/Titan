@@ -99,14 +99,26 @@ _WEB_WINDOW_CLASSES = {
 # etc.). ~316x316; the page viewport is far larger, chrome documents far smaller.
 _MIN_CONTENT_AREA = 100000
 
-# A web buffer older than this is rebuilt before the next command even when the
-# document element itself looks unchanged: a single-page app replaces its whole
-# content without ever changing the document's runtime id, and navigating a
-# document that is no longer on screen is worse than a short pause.
-_WEB_MAX_AGE = 12.0
+# How old a document may get before it is refreshed. A single-page app replaces
+# its whole content without ever changing the document's runtime id, so age is
+# the only general signal there is that the buffer may no longer describe what
+# is on screen.
+#
+# CRITICAL: reaching this age never makes the user WAIT. The refresh runs on its
+# own thread while the keystroke that noticed it navigates the buffer we already
+# have (see :meth:`_ensure_document`). A rebuild costs half a second of
+# cross-process calls, and a screen reader that spends half a second before
+# answering an arrow key is the thing this whole change exists to remove.
+_WEB_MAX_AGE = 20.0
 # The same, for a scanned application (which changes far less often, and whose
 # rebuild is more expensive).
-_SCAN_MAX_AGE = 30.0
+_SCAN_MAX_AGE = 45.0
+
+# How long a resolved web content document is reused before it is looked up
+# again. Finding it means walking the browser's UIA tree, which must not happen
+# on a keystroke; the window handle and title are what actually change when the
+# user moves to another page or tab, and both are free to read.
+_ROOT_CACHE_S = 8.0
 
 # Virtual key codes.
 _VK_LEFT, _VK_UP, _VK_RIGHT, _VK_DOWN = 0x25, 0x26, 0x27, 0x28
@@ -154,6 +166,14 @@ class BrowseModeHandler:
         self._scan = False
         self._scan_hwnd = 0
         self._building = False
+
+        # A background rebuild in flight (never more than one), and the cached
+        # content-document lookup it would otherwise repeat on every keystroke.
+        self._rebuilding = False
+        self._root_cache = None         # (hwnd, title, when, Control)
+        self._last_landmark = ""        # region last announced while arrowing
+        self._scrolling = False
+        self._scroll_target = None
 
     # ==================================================================== #
     # Activation state
@@ -298,6 +318,7 @@ class BrowseModeHandler:
             self._doc = None
             self._index = -1
             self._char_pos = 0
+            self._last_landmark = ""
         self.engine.play(SND_EDGE)
         self.engine.speak(L("browse.scanOff"))
 
@@ -500,12 +521,16 @@ class BrowseModeHandler:
     def _build_web_document(self):
         """The page's own document: UIA under the content root, else IA2."""
         hwnd = _foreground_hwnd()
-        doc = vbuf.VirtualDocument(hwnd=hwnd, title=_foreground_window_title())
+        title = _foreground_window_title()
+        doc = vbuf.VirtualDocument(hwnd=hwnd, title=title)
         root = self._document_root()
         nodes: List[VNode] = []
         if root is not None:
             try:
-                nodes = vbuf.build_uia(root, deadline=time.time() + vbuf.BUILD_BUDGET_S)
+                # web=True: no grouping or landmark lines of their own, the way
+                # a page reads in NVDA (the regions ride on the content).
+                nodes = vbuf.build_uia(
+                    root, deadline=time.time() + vbuf.BUILD_BUDGET_S, web=True)
             except Exception as e:
                 print(f"[TitanAccess] browse_mode: buffer build failed: {e}")
                 nodes = []
@@ -520,7 +545,7 @@ class BrowseModeHandler:
         if not doc.source:
             doc.source = "uia"
         doc.nodes = nodes
-        doc.signature = _web_signature(root, hwnd)
+        doc.signature = (hwnd, title)
         doc.built_at = time.time()
         return doc
 
@@ -541,12 +566,51 @@ class BrowseModeHandler:
                 pass
 
     def _ensure_document(self, force=False, allow_ocr=False) -> bool:
-        """Make sure a usable, current document exists. Reader thread only."""
+        """Make sure a usable document exists, WITHOUT making the user wait.
+
+        The first build of a document is synchronous - there is nothing to read
+        until it finishes. Every later one is not: a buffer that has gone stale
+        is refreshed on its own thread while the keystroke that noticed goes on
+        navigating the buffer already in hand. This is the difference between a
+        reader that answers every arrow key immediately and one that stops for
+        half a second whenever it decides to re-read the page.
+        """
         with self._lock:
             doc = self._doc
-            index = self._index
-        if not force and doc is not None and doc.nodes and not self._stale(doc):
+        if not force and doc is not None and doc.nodes:
+            if self._cheap_stale(doc):
+                self._schedule_rebuild(allow_ocr)
             return True
+        return self._rebuild_now(allow_ocr)
+
+    def _schedule_rebuild(self, allow_ocr=False):
+        """Refresh the document in the background; never more than one at once.
+
+        Deliberately NOT ``_dispatch``: the engine's reader thread is where the
+        next arrow key will want to be read, and a build parked there would put
+        the whole page walk in front of it - exactly the stall this avoids.
+        """
+        with self._lock:
+            if self._rebuilding:
+                return
+            self._rebuilding = True
+
+        def _run():
+            try:
+                self._rebuild_now(allow_ocr)
+            except Exception as e:
+                print(f"[TitanAccess] browse_mode: background refresh failed: {e}")
+            finally:
+                with self._lock:
+                    self._rebuilding = False
+
+        threading.Thread(target=_run, daemon=True,
+                         name="TitanAccessBufferRefresh").start()
+
+    def _rebuild_now(self, allow_ocr=False) -> bool:
+        """Build the document on THIS thread and install it."""
+        with self._lock:
+            doc = self._doc
         # A document the AI read may only be rebuilt by the AI: the very reason
         # it exists is that the accessibility tiers answer nothing here, so a
         # rebuild without OCR would find nothing and we would keep re-walking
@@ -563,44 +627,44 @@ class BrowseModeHandler:
             # it as stale, or every later key pays for the same failed walk.
             if doc is not None and doc.nodes:
                 doc.built_at = time.time()
-                doc.signature = self._current_signature(doc)
+                doc.signature = self._cheap_signature(doc)
                 return True
             return False
         with self._lock:
+            current = self._node_at_locked(self._index)
             self._doc = new_doc
-            # Keep the reading position across a rebuild when the document
-            # looks like the same one (a refresh of the same page), so F5 or a
-            # staleness rebuild does not throw the user back to the top.
-            self._index = min(index, len(new_doc.nodes) - 1) if index >= 0 else 0
+            self._index = _same_place(new_doc.nodes, current, self._index)
             self._char_pos = 0
+            # The region context belongs to the document that was replaced.
+            self._last_landmark = ""
         return True
 
-    def _current_signature(self, doc):
-        """The signature *as :meth:`_stale` will compute it* for this document.
+    def _node_at_locked(self, index):
+        nodes = self._doc.nodes if self._doc else []
+        return nodes[index] if 0 <= index < len(nodes) else None
 
-        Web and scan documents are fingerprinted differently, so this must
-        follow the same branch -- writing the wrong kind back would make the
-        document permanently "changed" and rebuild it on every key.
+    def _cheap_signature(self, doc):
+        """"Is this still the same screen?", costing nothing.
+
+        Checked on every navigation key, so it may only use what Windows can
+        answer without leaving the process: the foreground window and its title.
+        The old signature asked UI Automation for the page's document element -
+        which meant resolving it (a walk of the browser's tree, sometimes a
+        breadth-first search of thousands of elements) before every single arrow
+        key. Whether the CONTENT changed under an unchanged title is answered by
+        the age check instead, and by the refresh it schedules in the background.
         """
         if self._scan:
             return vbuf.signature_for(doc.hwnd, doc)
-        try:
-            return _web_signature(self._document_root(), _foreground_hwnd())
-        except Exception:
-            return doc.signature
+        hwnd = _foreground_hwnd()
+        return (hwnd, vbuf.window_text(hwnd))
 
-    def _stale(self, doc) -> bool:
+    def _cheap_stale(self, doc) -> bool:
         if self._scan:
             return vbuf.looks_stale(doc, max_age=_SCAN_MAX_AGE)
-        # Web: the content document itself may have been replaced (navigation),
-        # or its content swapped under the same element (a single-page app).
         if (time.time() - doc.built_at) > _WEB_MAX_AGE:
             return True
-        try:
-            current = _web_signature(self._document_root(), _foreground_hwnd())
-        except Exception:
-            return False
-        return current != doc.signature
+        return self._cheap_signature(doc) != doc.signature
 
     def refresh(self):
         """Rebuild the document now (F5) and say how big it is."""
@@ -622,9 +686,27 @@ class BrowseModeHandler:
         modern Chromium/Edge, so several ``DocumentControl`` elements exist. We
         must return the *content* document, or browse mode reads the browser
         menu instead of the page.
+
+        The answer is cached against the window and its title: resolving it
+        walks the browser's UIA tree (and, when focus is on the chrome, searches
+        it breadth-first), which is far too expensive to repeat for a keystroke.
+        A different window, a different page or a new tab all change one of
+        those two, and the lookup happens again.
         """
         if not _UIA:
             return None
+        hwnd = _foreground_hwnd()
+        title = vbuf.window_text(hwnd)
+        cached = self._root_cache
+        if (cached is not None and cached[0] == hwnd and cached[1] == title
+                and (time.time() - cached[2]) < _ROOT_CACHE_S
+                and self._is_content_document(cached[3])):
+            return cached[3]
+        root = self._resolve_document_root()
+        self._root_cache = (hwnd, title, time.time(), root)
+        return root
+
+    def _resolve_document_root(self):
         try:
             hwnd = _foreground_hwnd()
             window = auto.ControlFromHandle(hwnd) if hwnd else auto.GetForegroundControl()
@@ -865,6 +947,16 @@ class BrowseModeHandler:
                 return False
             want = qn.heading_level(qn_type)
             return want == 0 or node.level == want
+        if qn_type == qn.QuickNavType.LANDMARK:
+            # A landmark is not a line of the document any more (NVDA does not
+            # make it one either), so d / n look for the first entry INSIDE each
+            # region rather than for a "group" entry standing before it. A
+            # document with no regions at all still falls back to the container
+            # roles below, which is what an application scanned in scan mode has.
+            if getattr(node, "landmark_start", False):
+                return True
+            if getattr(node, "landmark", ""):
+                return False
         roles = qn.roles_for(qn_type)
         if not roles:
             return False
@@ -932,43 +1024,120 @@ class BrowseModeHandler:
     # Announcement
     # ==================================================================== #
     def _announce_node(self, node: VNode, qn_type=None, move_focus=True):
-        """Read one document entry, richly where the source allows it."""
-        if move_focus:
-            try:
-                vbuf.focus_node(node)
-            except Exception:
-                pass
-        # A live UIA element can go through the full announcer (context, list
-        # position, description) exactly like a focus change.
-        if node.source == "uia" and node.element is not None:
-            ao = self._to_accessible(node.element)
-            if ao is not None:
+        """Read one document entry.
+
+        In a web document this is deliberately all local. The buffer was built
+        with every property already cached, so an arrow key costs no
+        cross-process call at all; handing the node back to the full announcer
+        (which re-reads the live element through the provider) is what made
+        arrowing a page feel heavy. It also moved the real keyboard focus onto
+        every entry the cursor passed - which NVDA does not do in browse mode,
+        because it scrolls the page under the user, fires focus events straight
+        back at the reader, and in a form starts typing into a field they only
+        went past. The page is scrolled instead, behind the announcement.
+
+        In scan mode the document is an application's own controls, it is small,
+        and its focus IS the useful cursor - so there the live announcer and the
+        real focus move are kept.
+        """
+        if self._scan:
+            if move_focus:
                 try:
-                    self.engine.announce_object(ao, for_navigation=True)
-                    return
+                    vbuf.focus_node(node)
                 except Exception:
                     pass
+            if node.source == "uia":
+                control = vbuf.uia_control(node)
+                ao = self._to_accessible(control) if control is not None else None
+                if ao is not None:
+                    try:
+                        self.engine.announce_object(ao, for_navigation=True)
+                        return
+                    except Exception:
+                        pass
+        else:
+            self._scroll_later(node)
         self.engine.play(SND_CURSOR)
         self.engine.speak_segments(self._segments_for(node, qn_type))
 
+    def _scroll_later(self, node):
+        """Bring the entry on screen off the announcement's critical path."""
+        with self._lock:
+            self._scroll_target = node
+            if self._scrolling:
+                return
+            self._scrolling = True
+
+        def _run():
+            try:
+                while True:
+                    with self._lock:
+                        target = self._scroll_target
+                        self._scroll_target = None
+                        if target is None:
+                            self._scrolling = False
+                            return
+                    try:
+                        vbuf.scroll_into_view(target)
+                    except Exception:
+                        pass
+            except Exception:
+                with self._lock:
+                    self._scrolling = False
+
+        threading.Thread(target=_run, daemon=True,
+                         name="TitanAccessScroll").start()
+
     def _segments_for(self, node: VNode, qn_type=None):
-        """(text, pitch) parts for a node with no live accessible object."""
+        """(text, pitch) parts for a node, read straight out of the buffer."""
+        segments = []
+        # The region the entry sits in, announced when the cursor crosses into
+        # it - NVDA's behaviour, and the reason a page has no "navigation,
+        # group" line standing in front of its navigation.
+        landmark = self._landmark_segment(node)
+        if landmark:
+            segments.append(landmark)
         name = node.name or node.value
-        segments = [(name, _NAME_PITCH)] if name else []
+        if name:
+            segments.append((name, _NAME_PITCH))
         if node.is_heading:
             level = node.level or (qn.heading_level(qn_type) if qn_type else 0)
             segments.append((L("quickNav.headingLevel", level) if level
                              else L("quickNav.heading"), _ROLE_PITCH))
-        elif node.role and node.role != "text":
+        elif node.role and node.role not in ("text", "unknown"):
             segments.append((loc.role_label(node.role), _ROLE_PITCH))
         if node.value and node.value != node.name:
             segments.append((node.value, _NAME_PITCH))
         for state in node.states:
             if state in _STATE_LABELS:
                 segments.append((loc.state_label(state), _STATE_PITCH))
+        if node.size_of_set and node.pos_in_set and self._want_position():
+            segments.append((L("element.positionOf", node.pos_in_set,
+                               node.size_of_set), _NAME_PITCH))
         if not segments:
             segments = [(L("browse.emptyLine"), _NAME_PITCH)]
         return segments
+
+    def _want_position(self) -> bool:
+        """The same verbosity switch the focus announcer honours ("3 of 10")."""
+        settings = getattr(self.engine, "settings", None)
+        if settings is None:
+            return True
+        try:
+            return settings.get_bool("Verbosity", "AnnounceListPosition", True)
+        except Exception:
+            return True
+
+    def _landmark_segment(self, node):
+        """"main landmark" the first time the cursor enters that region."""
+        landmark = getattr(node, "landmark", "")
+        if landmark == self._last_landmark:
+            return None
+        self._last_landmark = landmark
+        if not landmark:
+            return None
+        return (f"{landmark}, {qn.type_label(qn.QuickNavType.LANDMARK)}",
+                _ROLE_PITCH)
 
     def _to_accessible(self, element):
         provider = getattr(self.engine, "provider", None)
@@ -1096,13 +1265,6 @@ def _ctype(control) -> str:
         return ""
 
 
-def _runtime_id(control) -> tuple:
-    try:
-        return tuple(control.GetRuntimeId() or ())
-    except Exception:
-        return ()
-
-
 def _control_area(control) -> int:
     """Bounding-rectangle area of *control* in px^2 (0 when unavailable)."""
     try:
@@ -1114,22 +1276,28 @@ def _control_area(control) -> int:
         return 0
 
 
-def _web_signature(root, hwnd) -> tuple:
-    """"Is this still the same page?" -- cheap enough to check on every key.
+def _same_place(nodes, previous, fallback_index) -> int:
+    """Where the cursor should land in a freshly built document.
 
-    The document element's runtime id alone is not enough: a single-page app
-    replaces the whole page under the SAME element, which is why a buffer built
-    on the first view of a site used to survive every later navigation. The
-    window title (which a page change almost always updates) and the document's
-    own name close that gap without walking the tree.
+    A refresh must not throw the user back to the top of the page, and it must
+    not silently move them either: the entry they were on is looked for by what
+    it says and what it is, nearest to where it used to be, before falling back
+    to the same ordinal position.
     """
-    name = ""
-    try:
-        if root is not None:
-            name = root.Name or ""
-    except Exception:
-        name = ""
-    return (_runtime_id(root), name, vbuf.window_text(hwnd))
+    if not nodes:
+        return 0
+    if previous is not None and (previous.name or previous.value):
+        key = (previous.name, previous.role, previous.value)
+        best = None
+        for i, node in enumerate(nodes):
+            if (node.name, node.role, node.value) == key:
+                if best is None or abs(i - fallback_index) < abs(best - fallback_index):
+                    best = i
+        if best is not None:
+            return best
+    if fallback_index < 0:
+        return 0
+    return min(fallback_index, len(nodes) - 1)
 
 
 def _word_starts(text) -> list:

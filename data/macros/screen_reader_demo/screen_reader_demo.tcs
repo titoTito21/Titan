@@ -1,0 +1,60 @@
+# Screen reader demo: a macro that can SEE the program in front of it.
+#
+# Titan Access is the only part of Titan that can answer "what is on the screen
+# right now" for a program that is not Titan - it builds a flat document out of
+# whatever the window will tell it (UI Automation, the legacy accessibility
+# interface, the raw controls, and only if asked, the AI reading a picture).
+# Every one of those readings is an ordinary action, so a script can use it.
+#
+# Nothing here needs the screen reader to be switched on: reading builds its
+# own document. Only speaking and the modes need the reader running.
+
+title "Screen reader demo"
+
+set what = titan_access.window_title
+say "The window in front is {{what}}."
+
+# What has the keyboard focus, in words.
+set here = titan_access.read_focused
+say "The focus is on {{here}}."
+
+# Everything the window says. 'kind' narrows it to one type of control -
+# button, link, heading, edit, checkbox, listitem, landmark, and so on.
+set buttons = titan_access.read_screen kind="button" limit=10
+
+dialog "What the reader can see"
+    multiline seen = "The buttons in this window" default="{{buttons}}"
+    field wanted = "Look for something (leave empty to skip)"
+    check press_it = "Press it if it is there"
+    buttons pressed = "Look", "Read it all out", "Close"
+
+    # This button works while the window stays open: it reads the whole window
+    # out loud and leaves the form up.
+    on "Read it all out"
+        titan_access.speak_screen
+    end
+end
+
+if pressed = "Close"
+    stop
+end
+
+if wanted is empty
+    say "Nothing to look for."
+    stop
+end
+
+# find_element says whether it is there and what it is.
+set found = titan_access.find_element text="{{wanted}}"
+say "{{found}}"
+
+if found contains "no '"
+    stop
+end
+
+if press_it is true
+    # The same press browse mode performs on Enter, so it reaches the control
+    # whichever way the window was read.
+    set result = titan_access.click_element text="{{wanted}}"
+    say "{{result}}"
+end

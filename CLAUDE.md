@@ -521,8 +521,71 @@ built the document.
   endpoint exactly as an application does; Insert+C -> "Test the NVDA controller
   bridge" runs one per bitness and says whether the call reached **Titan Access**
   or another screen reader.
+**Every UIA property used to be its own cross-process call**
+(`titan_access/uia_cache.py`). That, and not the logic, was the whole of "it
+lags on web pages and in UWP apps": a focus announcement made about thirty
+round trips, and a browse-mode buffer about ten per element over thousands of
+elements. UI Automation's answer is the one NVDA and JAWS use - a **cache
+request** - and it is now used in both places. `AddFocusChangedEventHandler`
+is given one, so a focus event arrives with everything already filled in;
+`FindAllBuildCache` returns a whole page WITH its properties in a single call.
+Measured on this machine: a focus snapshot 9.6 ms -> 0.43 ms (22x, identical
+output), a Chromium page 2088 ms -> 448 ms, and reading fourteen properties of
+every element back out of the cache 7 ms. Two traps the module hides: an
+unsupported property answers with its TYPE DEFAULT (an element with no toggle
+pattern reports ToggleState 2, "partially checked"), so every pattern value is
+gated on its cached `Is<Pattern>PatternAvailable`; and
+`GetCachedPropertyValue(BoundingRectangle)` answers width/height while
+`CachedBoundingRectangle` answers right/bottom.
+
+**A page is read the way NVDA reads it - flat, with no group lines.** Chromium
+wraps almost everything in a `GroupControl` and every landmark is one too, so
+browse mode used to make the user arrow past "navigation, group" on the way
+into the navigation, and the focus context presenter said "group" on the way
+into anything. Now: `build_uia(..., web=True)` emits no grouping entries at
+all, `_flatten_web` recovers the regions from the source elements and stamps
+them onto the content by geometry (`landmark` / `landmark_start` on `VNode`),
+quick navigation `d` / `n` jumps between the entries that BEGIN a region, and
+the region is spoken once as the cursor crosses into it. An application in scan
+mode keeps its captioned group boxes - there a group is a real division. In the
+context presenter, group context is skipped entirely in web content
+(`_is_web_content`, by FrameworkId) and an unnamed group is never announced
+anywhere.
+
+**A navigation key never waits for a rebuild.** The staleness check ran on
+every arrow key and resolved the page's document element to do it - a walk of
+the browser's UIA tree, sometimes a breadth-first search of thousands of
+elements - and then a stale buffer was rebuilt synchronously, half a second
+before the key was answered. Now the per-key check is `(foreground window,
+title)` and nothing else, the resolved content document is cached against those
+two, and a buffer that has gone stale is refreshed **on its own thread** while
+the keystroke that noticed navigates the buffer already in hand (one refresh at
+a time; the cursor is put back on the same entry by name and role). Only the
+first build of a document is synchronous. Browse mode also no longer moves the
+real keyboard focus onto every entry the cursor passes - NVDA does not, because
+it scrolls the page, fires focus events back at the reader and can start typing
+into a field the cursor merely went past; the page is scrolled behind the
+announcement instead, and the announcement itself is assembled from the cached
+node with no COM call at all.
+
+**Titan Access is reachable from the Action API and from Titan Script**
+(`titan_access_actions.py`, 21 actions under the add-on id `titan_access`; the
+component's `init.py` hands its lifecycle over with `bind()` and re-exports
+`TITAN_ACTIONS`). It is the only part of Titan that can answer "what is on the
+screen right now" for a program that is not Titan, so that is what most of them
+do: `read_screen` / `list_elements` / `find_element` / `click_element` (by text
+or by the number `list_elements` gave), `read_focused`, `window_title`,
+`document_info`, `refresh`; `say` / `speak_screen` / `stop_speech`;
+`scan_mode` / `browse_mode` / `say_all` / `go_to` (quick navigation);
+`get_state` / `set_enabled` / `toggle`; and `list_settings` / `get_setting` /
+`set_setting` by the words a user would use ("rate", "scan mode", "progress
+bars"). **Reading does not need the reader to be running** - it builds the
+document itself - and the AI tier is never reached unless a caller passes
+`use_ai=true`, because that tier sends a picture of the screen to the user's
+provider. Example: `data/macros/screen_reader_demo/`.
 - Tests: `tests/test_titan_access_speech_queue.py`,
-  `tests/test_titan_access_document_mode.py` (run them directly - `tests/` has no
+  `tests/test_titan_access_document_mode.py`,
+  `tests/test_titan_access_actions.py` (run them directly - `tests/` has no
   `__init__.py`).
 
 ### Titan Action API: any part of Titan calling into any add-on
@@ -651,8 +714,9 @@ instead of a guess.
 turn the chime on/off, change the interval), `macros` (list, run, **create**,
 read, **edit**, delete a macro and set its shortcut - "write me a macro" ends
 with a macro in the macro manager, not a script file on the disk, and "change
-it" changes that one), `titan access` (reader
-on/off/toggle/say), `tips` (search Titan's own written help, say one, change the
+it" changes that one), `titan access` (21 actions: reading the screen of any
+program, pressing what it finds, the reader's modes and its settings - see
+"Titan Access" above), `tips` (search Titan's own written help, say one, change the
 interval), `TTerm` (run a shell command and return its output - the last resort
 for anything with a command line but no API) and `TArticle` (fetch a page and
 return the article as readable text, or open it in the reader) each ship a

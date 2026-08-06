@@ -19,6 +19,8 @@ What these lock down:
 
 import os
 import sys
+import threading
+import time
 import types
 import unittest
 
@@ -32,6 +34,7 @@ from titan_access import virtual_buffer as vbuf                # noqa: E402
 from titan_access import ocr_assist                            # noqa: E402
 from titan_access import progress_monitor as pm                # noqa: E402
 from titan_access.virtual_buffer import VNode                  # noqa: E402
+from titan_access.browse_mode import _same_place               # noqa: E402
 
 
 class FakeEngine(object):
@@ -90,7 +93,7 @@ def make_handler(engine=None, nodes=None, source="uia"):
         handler._scan = True
         handler._scan_hwnd = 1
         # A document that is never stale: these tests are about navigation.
-        handler._stale = lambda _doc: False
+        handler._cheap_stale = lambda _doc: False
     return handler, engine
 
 
@@ -416,6 +419,181 @@ class ProgressBarTests(unittest.TestCase):
         monitor._report(100.0, "Speech")
         completions = [t for t in engine.spoken if t in ("complete", "gotowe")]
         self.assertEqual(len(completions), 1)
+
+
+class WebDocumentTests(unittest.TestCase):
+    """A page is read flat, the way NVDA reads it.
+
+    No grouping or landmark lines of their own: the regions ride on the content
+    they contain, are announced once when the cursor crosses into them, and are
+    still what quick navigation jumps between.
+    """
+
+    class _Cache(object):
+        """Just enough of :mod:`titan_access.uia_cache` for _flatten_web."""
+        ARIA_ROLE, NAME = "aria", "name"
+
+        @staticmethod
+        def get(item, key, default=None):
+            return item.get(key, default)
+
+        @staticmethod
+        def text(item, key):
+            return (item.get(key) or "").strip()
+
+        @staticmethod
+        def rect_of(item):
+            return item.get("rect", ())
+
+    def test_a_named_group_is_an_entry_in_an_app_and_never_in_a_page(self):
+        self.assertTrue(vbuf._wrapper_worth_keeping("GroupControl", "Options",
+                                                    web=False))
+        self.assertFalse(vbuf._wrapper_worth_keeping("GroupControl", "Options",
+                                                     web=True))
+        self.assertFalse(vbuf._wrapper_worth_keeping("GroupControl", "",
+                                                     web=False))
+
+    def test_landmarks_label_the_content_instead_of_standing_before_it(self):
+        elements = [
+            {"aria": "navigation", "name": "", "rect": (0, 0, 200, 50)},
+            {"aria": "main", "name": "", "rect": (0, 50, 200, 400)},
+        ]
+        nodes = [
+            VNode(name="Home", role="link", rect=(5, 5, 60, 20)),
+            VNode(name="News", role="link", rect=(65, 5, 120, 20)),
+            VNode(name="Headline", role="heading", level=1,
+                  rect=(5, 60, 190, 90)),
+            VNode(name="Footer note", role="text", rect=(0, 500, 200, 520)),
+        ]
+        vbuf._flatten_web(self._Cache, elements, nodes)
+        self.assertEqual([n.landmark for n in nodes],
+                         ["navigation", "navigation", "main", ""])
+        self.assertEqual([n.landmark_start for n in nodes],
+                         [True, False, True, False])
+
+    def test_the_innermost_region_wins(self):
+        elements = [
+            {"aria": "main", "name": "", "rect": (0, 0, 500, 500)},
+            {"aria": "search", "name": "Site search", "rect": (10, 10, 100, 40)},
+        ]
+        nodes = [VNode(name="Query", role="edit", rect=(15, 15, 90, 35))]
+        vbuf._flatten_web(self._Cache, elements, nodes)
+        self.assertEqual(nodes[0].landmark, "Site search")
+
+    def test_quick_nav_jumps_between_regions_not_to_group_entries(self):
+        nodes = [
+            VNode(name="Home", role="link", landmark="navigation",
+                  landmark_start=True),
+            VNode(name="News", role="link", landmark="navigation"),
+            VNode(name="Headline", role="heading", level=1, landmark="main",
+                  landmark_start=True),
+        ]
+        handler, _ = make_handler(nodes=nodes)
+        handler._index = 0
+        handler._quick_nav(qn.QuickNavType.LANDMARK, backward=False)
+        self.assertEqual(handler._index, 2)
+
+    def test_the_region_is_announced_on_entry_and_not_repeated(self):
+        handler, engine = make_handler()
+        first = VNode(name="Home", role="link", landmark="navigation",
+                      landmark_start=True)
+        second = VNode(name="News", role="link", landmark="navigation")
+        said_first = " ".join(t for t, _p in handler._segments_for(first))
+        said_second = " ".join(t for t, _p in handler._segments_for(second))
+        self.assertIn("navigation", said_first)
+        self.assertNotIn("navigation", said_second)
+        self.assertNotIn("group", said_first.lower())
+
+
+class ResponsivenessTests(unittest.TestCase):
+    """A navigation key must never wait for the document to be rebuilt."""
+
+    def test_the_staleness_check_never_touches_ui_automation(self):
+        handler, _ = make_handler(nodes=nodes_sample())
+        handler._scan = False                      # web document
+        handler._doc.built_at = time.time()
+        handler._doc.signature = handler._cheap_signature(handler._doc)
+
+        def _boom():
+            raise AssertionError("the staleness check resolved the document root")
+
+        handler._document_root = _boom
+        handler._resolve_document_root = _boom
+        self.assertFalse(handler._cheap_stale(handler._doc))
+
+    def test_a_stale_document_is_refreshed_behind_the_keystroke(self):
+        handler, engine = make_handler(nodes=nodes_sample())
+        handler._scan = False
+        handler._cheap_stale = lambda _doc: True
+        started = threading.Event()
+        release = threading.Event()
+        built = []
+
+        def _slow_build(hwnd=0, allow_ocr=False):
+            started.set()
+            release.wait(2.0)
+            built.append(True)
+            return None
+
+        handler._build_document = _slow_build
+        handler._move_line(+1)                     # the keystroke
+        # It answered from the buffer it already had, while the build waits.
+        self.assertTrue(started.wait(2.0))
+        self.assertEqual(built, [])
+        self.assertEqual(handler._index, 1)
+        self.assertIn("Some text here", " ".join(engine.spoken))
+        release.set()
+
+    def test_only_one_refresh_runs_at_a_time(self):
+        handler, _ = make_handler(nodes=nodes_sample())
+        handler._scan = False
+        release = threading.Event()
+        calls = []
+
+        def _slow_build(hwnd=0, allow_ocr=False):
+            calls.append(True)
+            release.wait(2.0)
+            return None
+
+        handler._build_document = _slow_build
+        for _ in range(5):
+            handler._schedule_rebuild()
+        time.sleep(0.15)
+        self.assertEqual(len(calls), 1)
+        release.set()
+
+    def test_a_refresh_keeps_the_cursor_on_the_same_entry(self):
+        nodes = nodes_sample()
+        rebuilt = [VNode(name="Banner", role="text", source="uia")] + [
+            VNode(name=n.name, role=n.role, value=n.value, level=n.level,
+                  source="uia") for n in nodes]
+        self.assertEqual(_same_place(rebuilt, nodes[2], 2), 3)   # "Open" moved
+        self.assertEqual(_same_place(rebuilt, None, 2), 2)       # nothing to match
+        self.assertEqual(_same_place([], nodes[2], 2), 0)
+
+
+class GroupAnnouncementTests(unittest.TestCase):
+    """Titan stops saying "group" where NVDA does not say it."""
+
+    def test_an_unnamed_group_is_not_announced_at_all(self):
+        from titan_access.context_presenter import ContextPresenter
+        self.assertIsNone(ContextPresenter._segment_for("group", ""))
+        self.assertIsNone(ContextPresenter._segment_for("group", "   "))
+
+    def test_a_named_group_still_is(self):
+        from titan_access.context_presenter import ContextPresenter
+        segment = ContextPresenter._segment_for("group", "Options")
+        self.assertIsNotNone(segment)
+        self.assertIn("Options", segment[0])
+
+    def test_web_content_is_recognised_by_its_framework(self):
+        from titan_access.context_presenter import _is_web_content
+        for framework in ("Chrome", "Gecko", "WebView", "Edge", "Blink"):
+            self.assertTrue(_is_web_content(
+                types.SimpleNamespace(framework_id=framework)), framework)
+        for framework in ("Win32", "WPF", "XAML", ""):
+            self.assertFalse(_is_web_content(
+                types.SimpleNamespace(framework_id=framework)), framework)
 
 
 if __name__ == "__main__":

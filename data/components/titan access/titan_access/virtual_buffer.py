@@ -202,12 +202,20 @@ class VNode:
     rect: tuple = ()                    # (left, top, right, bottom) screen px
     source: str = ""                    # uia | msaa | win32 | ocr | ia2
     element: Any = None                 # live uiautomation Control (uia)
+    raw: Any = None                     # cached IUIAutomationElement (uia)
     acc: Any = None                     # IAccessible (msaa)
     child_id: int = 0                   # MSAA child id
     hwnd: int = 0                       # owning window (msaa / win32)
     ocr_ref: Any = None                 # src.ai.ocr Element (ocr)
     pos_in_set: int = 0
     size_of_set: int = 0
+    # The landmark / region this entry sits in. NVDA does not make a landmark a
+    # line of its own in browse mode, so it is carried on the content instead:
+    # quick navigation still jumps between landmarks (the entries where
+    # ``landmark_start`` is set) without the user having to arrow past
+    # "navigation, group" on the way into every one of them.
+    landmark: str = ""
+    landmark_start: bool = False
 
     @property
     def text(self) -> str:
@@ -348,8 +356,203 @@ def _child_windows(hwnd, limit=MAX_NODES):
 # =========================================================================== #
 # Tier 1: UI Automation
 # =========================================================================== #
-def build_uia(root, deadline=None) -> List[VNode]:
-    """Flatten the UIA subtree under *root* (a ``uiautomation`` Control)."""
+def build_uia(root, deadline=None, web=False) -> List[VNode]:
+    """Flatten the UIA subtree under *root* into buffer entries.
+
+    Two implementations, same result. The **cached** one asks UI Automation for
+    the whole subtree WITH the properties we need already filled in - one
+    cross-process call for the entire page instead of about ten per element -
+    and is what makes a document build fast enough to feel like NVDA. The tree
+    walk is kept as the fallback for when a cache request cannot be made.
+
+    ``web`` presents the document the way a browser document has to be
+    presented: no grouping or landmark lines of their own (see
+    :func:`_flatten_web`).
+    """
+    if root is None:
+        return []
+    nodes = build_uia_cached(root, deadline, web=web)
+    if nodes:
+        return nodes
+    return _build_uia_walk(root, deadline, web=web)
+
+
+# UIA ControlTypeId -> Titan role key. The cached path reads the numeric control
+# type (one property) rather than ControlTypeName (a string built per call).
+_UIA_CTID_TO_ROLE = {
+    50000: C.ROLE_BUTTON, 50002: C.ROLE_CHECKBOX, 50003: C.ROLE_COMBOBOX,
+    50004: C.ROLE_EDIT, 50005: C.ROLE_LINK, 50006: C.ROLE_IMAGE,
+    50007: C.ROLE_LISTITEM, 50008: C.ROLE_LISTBOX, 50009: C.ROLE_MENU,
+    50010: C.ROLE_MENUBAR, 50011: C.ROLE_MENUITEM, 50012: C.ROLE_PROGRESSBAR,
+    50013: C.ROLE_RADIO, 50014: C.ROLE_SCROLLBAR, 50015: C.ROLE_SLIDER,
+    50016: C.ROLE_SPINNER, 50017: C.ROLE_STATUSBAR, 50018: C.ROLE_TABCONTROL,
+    50019: C.ROLE_TAB, 50020: C.ROLE_TEXT, 50021: C.ROLE_TOOLBAR,
+    50023: C.ROLE_TREE, 50024: C.ROLE_TREEITEM, 50025: C.ROLE_PANE,
+    50026: C.ROLE_GROUP, 50028: C.ROLE_GRID, 50029: C.ROLE_GRIDITEM,
+    50030: C.ROLE_DOCUMENT, 50031: C.ROLE_SPLIT_BUTTON, 50032: C.ROLE_WINDOW,
+    50033: C.ROLE_PANE, 50034: C.ROLE_TABLE, 50035: C.ROLE_HEADING,
+    50036: C.ROLE_TABLE, 50037: C.ROLE_UNKNOWN, 50038: C.ROLE_SEPARATOR,
+    50039: C.ROLE_PANE, 50040: C.ROLE_TOOLBAR, 50001: C.ROLE_TABLE,
+    50027: C.ROLE_UNKNOWN, 50022: C.ROLE_TEXT,
+}
+
+# Control types that are grouping / layout only: their children are the content.
+_WRAPPER_CTIDS = {50026, 50033, 50030, 50032, 50037, 50027, 50025, 50039}
+
+# ARIA roles that name a region of a page. In browse mode these are not entries
+# of their own; they label the entries inside them.
+_LANDMARK_ARIA = {
+    "navigation", "main", "banner", "contentinfo", "complementary", "region",
+    "search", "form", "article",
+}
+
+
+def build_uia_cached(root, deadline=None, web=False) -> List[VNode]:
+    """The whole subtree in one cross-process call (see :mod:`uia_cache`)."""
+    try:
+        from titan_access import uia_cache as uc
+    except Exception:
+        return []
+    element = uc.raw_element(root)
+    if element is None:
+        return []
+    elements = uc.find_all_cached(element)
+    if not elements:
+        return []
+    nodes: List[VNode] = []
+    for cached in elements[:MAX_NODES]:
+        if deadline and time.time() > deadline:
+            break
+        node = _node_from_cached(uc, cached, web)
+        if node is not None:
+            nodes.append(node)
+    if web:
+        nodes = _flatten_web(uc, elements, nodes)
+    return nodes
+
+
+def _node_from_cached(uc, cached, web):
+    """One buffer entry from a cached element, or None to skip it."""
+    if uc.flag(cached, uc.IS_OFFSCREEN, False):
+        return None
+    ctid = uc.get(cached, uc.CONTROL_TYPE, 0)
+    try:
+        ctid = int(ctid)
+    except (TypeError, ValueError):
+        return None
+    name = uc.text(cached, uc.NAME)
+    role = _UIA_CTID_TO_ROLE.get(ctid, C.ROLE_UNKNOWN)
+    aria = (uc.get(cached, uc.ARIA_ROLE, "") or "").strip().lower()
+    # Web content states its real role in ARIA, not in the control type:
+    # Chromium exposes a heading, a landmark and often a link as a plain
+    # TextControl, and LocalizedControlType is translated ("nagłówek" on a
+    # Polish system), so the ARIA role is the only language-independent signal.
+    if aria in _ARIA_TO_ROLE:
+        role = _ARIA_TO_ROLE[aria]
+    if ctid in _WRAPPER_CTIDS and not (
+            not web and ctid == 50026 and name):
+        return None
+    value = _cached_value(uc, cached)
+    if not name and not value and role not in _ALWAYS_KEEP_ROLES:
+        return None
+    if role == C.ROLE_TEXT and not _visible_text(name):
+        return None
+    level = uc.number(cached, uc.LEVEL)
+    if aria == "heading" or role == C.ROLE_HEADING:
+        role = C.ROLE_HEADING
+        level = level or _cached_heading_level(uc, cached) or 1
+    return VNode(name=name, role=role, value=value, source="uia", raw=cached,
+                 rect=uc.rect_of(cached), states=_cached_states(uc, cached),
+                 level=level, pos_in_set=uc.number(cached, uc.POSITION_IN_SET),
+                 size_of_set=uc.number(cached, uc.SIZE_OF_SET))
+
+
+def _cached_value(uc, cached) -> str:
+    value = uc.pattern_value(cached, uc.IS_VALUE_AVAILABLE, uc.VALUE_VALUE, None)
+    if value not in (None, ""):
+        return str(value)
+    value = uc.pattern_value(cached, uc.IS_RANGEVALUE_AVAILABLE,
+                             uc.RANGEVALUE_VALUE, None)
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _cached_states(uc, cached) -> tuple:
+    states = []
+    if not uc.flag(cached, uc.IS_ENABLED, True):
+        states.append(C.STATE_UNAVAILABLE)
+    toggle = uc.pattern_value(cached, uc.IS_TOGGLE_AVAILABLE, uc.TOGGLE_STATE,
+                              None)
+    if toggle is not None:
+        states.append({uc.TOGGLE_OFF: C.STATE_UNCHECKED,
+                       uc.TOGGLE_ON: C.STATE_CHECKED}.get(int(toggle),
+                                                          C.STATE_PARTIAL))
+    if uc.pattern_value(cached, uc.IS_SELECTIONITEM_AVAILABLE,
+                        uc.SELECTIONITEM_IS_SELECTED, False):
+        states.append(C.STATE_SELECTED)
+    return tuple(states)
+
+
+def _cached_heading_level(uc, cached) -> int:
+    localized = (uc.get(cached, uc.LOCALIZED_CONTROL_TYPE, "") or "").lower()
+    for i in range(1, 7):
+        if f"level {i}" in localized or f"heading {i}" in localized:
+            return i
+    aid = uc.text(cached, uc.AUTOMATION_ID)
+    if len(aid) == 2 and aid[0] in "Hh" and aid[1].isdigit():
+        return int(aid[1])
+    return 0
+
+
+def _flatten_web(uc, elements, nodes):
+    """Label the entries inside each landmark instead of listing the landmark.
+
+    A page arrowed through in NVDA has no "navigation, group" line before the
+    navigation and no "main, group" line before the article - the regions are
+    still reachable (quick navigation ``d`` / ``n``), but they are properties of
+    the content, not obstacles in front of it. The landmarks were dropped when
+    the entries were built, so they are recovered here from the source elements
+    and matched to the content by geometry: in a rendered page an element
+    belongs to the region whose rectangle encloses it.
+    """
+    regions = []
+    for cached in elements:
+        aria = (uc.get(cached, uc.ARIA_ROLE, "") or "").strip().lower()
+        if aria not in _LANDMARK_ARIA:
+            continue
+        rect = uc.rect_of(cached)
+        if not rect or rect[2] <= rect[0] or rect[3] <= rect[1]:
+            continue
+        label = uc.text(cached, uc.NAME) or aria
+        regions.append((rect, label))
+    if not regions:
+        return nodes
+    # Innermost first, so a region nested inside another wins.
+    regions.sort(key=lambda r: (r[0][2] - r[0][0]) * (r[0][3] - r[0][1]))
+    seen = set()
+    for node in nodes:
+        if not node.rect:
+            continue
+        for rect, label in regions:
+            if _encloses(rect, node.rect):
+                node.landmark = label
+                if label not in seen:
+                    seen.add(label)
+                    node.landmark_start = True
+                break
+    return nodes
+
+
+def _encloses(outer, inner, slack=2) -> bool:
+    return (outer[0] - slack <= inner[0] and outer[1] - slack <= inner[1]
+            and outer[2] + slack >= inner[2] and outer[3] + slack >= inner[3])
+
+
+def _build_uia_walk(root, deadline=None, web=False) -> List[VNode]:
+    """Element-by-element fallback: correct, but a call per property."""
     try:
         import uiautomation as auto
     except Exception:
@@ -373,7 +576,7 @@ def build_uia(root, deadline=None) -> List[VNode]:
             name = (control.Name or "").strip()
         except Exception:
             continue
-        if ctype in _WRAPPER_TYPES and not _wrapper_worth_keeping(ctype, name):
+        if ctype in _WRAPPER_TYPES and not _wrapper_worth_keeping(ctype, name, web):
             continue
         role = _UIA_TYPE_TO_ROLE.get(ctype, C.ROLE_UNKNOWN)
         # Web content states its real role in ARIA, not in the control type:
@@ -402,8 +605,15 @@ def build_uia(root, deadline=None) -> List[VNode]:
     return nodes
 
 
-def _wrapper_worth_keeping(ctype, name) -> bool:
-    """A group with a real caption is a landmark worth stopping on."""
+def _wrapper_worth_keeping(ctype, name, web=False) -> bool:
+    """A named group is worth an entry in an application, never in a page.
+
+    In a dialog a captioned group box is a real division the user wants to land
+    on. In a web document it is what NVDA silently steps over, so browse mode
+    does too.
+    """
+    if web:
+        return False
     return ctype == "GroupControl" and bool(name)
 
 
@@ -818,13 +1028,65 @@ def looks_stale(doc: VirtualDocument, max_age=None) -> bool:
 # =========================================================================== #
 # Acting on a node
 # =========================================================================== #
+def uia_control(node: VNode):
+    """The vendored ``Control`` for a UIA node, built on first use.
+
+    A cached build stores only the element (thousands of them), because wrapping
+    every one of them in a Control up front costs time on a page nobody may ever
+    press anything on. Acting on a node is where the wrapper is actually needed.
+    """
+    if node is None:
+        return None
+    if node.element is not None:
+        return node.element
+    if node.raw is None:
+        return None
+    try:
+        from titan_access import uia_cache as uc
+        node.element = uc.control_for(node.raw)
+    except Exception:
+        node.element = None
+    return node.element
+
+
+def scroll_into_view(node: VNode) -> bool:
+    """Bring *node* on screen without taking the keyboard focus from the page.
+
+    Browse mode moves a cursor through a document, and NVDA does not move the
+    real focus while it does - doing so makes the page scroll, fires focus
+    events back at us and, in a form, starts typing into whatever the cursor
+    happened to pass over. Scrolling is the part the user does want.
+    """
+    if node is None or node.source != "uia":
+        return False
+    control = uia_control(node)
+    if control is None:
+        return False
+    for getter, call in (("GetScrollItemPattern", "ScrollIntoView"),):
+        try:
+            pattern = getattr(control, getter)()
+        except Exception:
+            continue
+        if pattern is None:
+            continue
+        try:
+            getattr(pattern, call)()
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def focus_node(node: VNode) -> bool:
     """Move the real keyboard focus to *node* (best effort)."""
     if node is None:
         return False
     try:
-        if node.source == "uia" and node.element is not None:
-            node.element.SetFocus()
+        if node.source == "uia":
+            control = uia_control(node)
+            if control is None:
+                return False
+            control.SetFocus()
             return True
         if node.source == "msaa" and node.acc is not None:
             # accSelect(SELFLAG_TAKEFOCUS | SELFLAG_TAKESELECTION)
@@ -859,7 +1121,7 @@ def activate(node: VNode, screen=None) -> bool:
 
 
 def _activate_uia(node, _screen=None):
-    element = node.element
+    element = uia_control(node)
     if element is None:
         return False
     for getter, call in (("GetInvokePattern", "Invoke"),

@@ -233,85 +233,26 @@ def _standalone():
         _stop_hotkey()
 
 
-if __name__ == "__main__":
-    _standalone()
-
-
 # ===========================================================================
 # Titan actions - what Titan, its AI and other add-ons can ask this component
 # ===========================================================================
 # Declared in Python rather than in an __actions.json, because the handlers are
 # the component's own functions and Titan finds them on the module it already
 # loaded. Either form works; a manifest file is never required.
+#
+# The handlers live in titan_access_actions so this file stays what it says it
+# is - the component's lifecycle. The reader-state actions there need this
+# module's start/stop/toggle, so it is handed over rather than imported by name
+# (the component loader may load this file under any module name).
 
 try:
-    from src.titan_core.actions import fails
-except Exception:                       # Titan not importable - actions unused
-    def fails(reason):
-        return reason
+    import titan_access_actions as _actions
+    _actions.bind(sys.modules[__name__])
+    TITAN_ACTIONS = _actions.TITAN_ACTIONS
+except Exception as _e:                 # actions unavailable, component is not
+    print(f"[TitanAccess] actions unavailable: {_e}")
+    TITAN_ACTIONS = []
 
 
-def action_get_state():
-    """Say whether the Titan screen reader is running."""
-    return ("The Titan screen reader is running." if is_active()
-            else "The Titan screen reader is off.")
-
-
-def action_set_enabled(enabled=True):
-    """Turn the Titan screen reader on or off."""
-    want = str(enabled).strip().lower() not in ('0', 'false', 'no', 'off')
-    if want == is_active():
-        return ("The Titan screen reader is already "
-                + ("on." if want else "off."))
-    try:
-        start_reader() if want else stop_reader()
-    except Exception as e:
-        return fails(f"Could not change the screen reader: {e}")
-    return ("The Titan screen reader is now on." if want
-            else "The Titan screen reader is now off.")
-
-
-def action_toggle():
-    """Turn the Titan screen reader on if it is off, or off if it is on."""
-    try:
-        toggle_reader()
-    except Exception as e:
-        return fails(f"Could not toggle the screen reader: {e}")
-    return action_get_state()
-
-
-def action_say(text):
-    """Have the Titan screen reader speak something."""
-    if not str(text or '').strip():
-        return fails("There is nothing to say.")
-    try:
-        from titan_access.engine import get_engine
-        engine = get_engine()
-        speak = getattr(engine, 'speak', None)
-        if not callable(speak):
-            return fails("This build of the reader cannot be asked to speak.")
-        speak(text)
-    except Exception as e:
-        return fails(f"The screen reader could not speak: {e}")
-    return f"Said: {text}"
-
-
-TITAN_ACTIONS = [
-    {'name': 'get_state',
-     'summary': "Say whether the Titan screen reader is running.",
-     'run': action_get_state},
-    {'name': 'set_enabled',
-     'summary': "Turn the Titan screen reader on or off.",
-     'params': {'enabled': {'type': 'boolean',
-                            'description': "True to turn it on."}},
-     'risk': 'confirm', 'run': action_set_enabled},
-    {'name': 'toggle',
-     'summary': "Turn the Titan screen reader on if it is off, or off if it "
-                "is on.",
-     'risk': 'confirm', 'run': action_toggle},
-    {'name': 'say',
-     'summary': "Have the Titan screen reader speak a message.",
-     'params': {'text': {'type': 'string', 'required': True,
-                         'description': "What to say."}},
-     'risk': 'confirm', 'run': action_say},
-]
+if __name__ == "__main__":
+    _standalone()
