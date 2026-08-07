@@ -1,6 +1,0 @@
-[im_module]
-name = TeamTalk
-status = 0
-description = Full TeamTalk 5 client for Titan IM: channels, voice, chat, files, recording, media streaming, server administration, Titan skins and sounds, .tt file support
-libs = lib, sdk
-

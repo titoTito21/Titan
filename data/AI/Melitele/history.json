@@ -428,5 +428,45 @@
     "role": "assistant",
     "content": "Jasne, chętnie opowiem.\n\nWiedźmin to płatny zabójca potworów. Jako dziecko trafia do wiedźmińskiej warowni, gdzie przechodzi morderczy trening oraz mutacje genetyczne – tak zwaną Próbe Traw. \n\nDzięki temu zyskuje wyostrzone zmysły, nadludzki refleks, odporność na trucizny oraz zdolność rzucania prostych zaklęć, zwanych Znakami. Walczy dwoma mieczami: stalowym na ludzi i złe istoty oraz srebrnym na potwory. Choć w oczach wielu ludzi wiedźmini bywają postrzegani jako wyprani z emocji odszczepieńcy, w istocie chronią świat ludzi przed bestiami, utrzymując równowagę w naturze.",
     "timestamp": 1785960901.769555
+  },
+  {
+    "role": "user",
+    "content": "potrafiłbyś odczytać w jakim jestem teraz oknie, a następnie napisać mi z tego notatkę? w Tnotes, i otworzą ją w dokumentach? Następnie, odtwórz mi włatcy móch odc 17, i powiedz mi tytół przy pomocy eleven labs",
+    "timestamp": 1786025204.8983145
+  },
+  {
+    "role": "assistant",
+    "content": "Sprawdziłam aktualnie otwarte okno – był to **Asystent Titan - Melitele**.\n\nStworzyłam notatkę w tNotes oraz dokument w folderze Dokumenty i otworzyłam go w edytorze tEdit. Następnie uruchomiłam odtwarzanie odcinka **„Lekcja 17. Maksymalna kontrola”** w tMedia i przeczytałam jego tytuł głosem z ElevenLabs. Wszystko gotowe!",
+    "timestamp": 1786025294.9227753
+  },
+  {
+    "role": "user",
+    "content": "ustaw temat dźwiękowy tce na domyślny, i ustaw espeak, głos PL, w Titan TTS",
+    "timestamp": 1786025451.1932514
+  },
+  {
+    "role": "assistant",
+    "content": "Ustawiłam temat dźwiękowy na domyślny, a jako silnik mowy Titan TTS wybrałam eSpeak z polskim głosem. Wszystkie zmiany zostały zapisane!",
+    "timestamp": 1786025519.962004
+  },
+  {
+    "role": "user",
+    "content": "a co potrafisz? Jakie możesz wykonywać akcje?",
+    "timestamp": 1786025550.8574514
+  },
+  {
+    "role": "assistant",
+    "content": "Jako Melitele potrafię opiekować się Twoim systemem i wspierać Cię w codziennych zadaniach. Oto co mogę dla Ciebie zrobić:\n\n1. **Zarządzanie Titanem**: Otwieram i obsługuję aplikacje (tNotes, tEdit, tMedia, tReminder), zmieniam ustawienia, motywy dźwiękowe, silniki mowy i tworzę zaawansowane makra (.TCS, AutoHotkey).\n2. **Odtwarzanie multimediów**: Wyszukuję i odtwarzam muzykę, filmy, odcinki seriali, audiobooki oraz radio internetowe.\n3. **Komunikacja**: Mogę czytać i wysyłać wiadomości oraz maile na Titan-Net, korzystać z Eltena, Telegrama, WhatsAppa czy Messengera.\n4. **Przeglądanie sieci i wiedza**: Wyszukuję informacje w internecie, sprawdzam pogodę, definicje oraz artykuły w Wikipedii.\n5. **Obsługa komputera**: Czytam zawartość ekranu (OCR), zarządzam plikami, folderami i ustawieniami systemu Windows.\n6. **Tworzenie treści i mowa**: Generuję i odczytuję notatki oraz dokumenty przy użyciu głosu Titana lub ElevenLabs.\n\nW czym mogę Ci teraz pomóc?",
+    "timestamp": 1786025583.245116
+  },
+  {
+    "role": "user",
+    "content": "potrafiłbyś przeciągnąć myszką w pulpicie, żeby nvda było jako pierwsza pozycja?",
+    "timestamp": 1786025690.0861652
+  },
+  {
+    "role": "assistant",
+    "content": "Przeciągnęłam ikonę NVDA na pierwszą pozycję na Pulpicie (w lewy górny róg). Jeśli w Twoim systemie włączona jest opcja automatycznego rozmieszczania ikon, Windows może zachować domyślną siatkę, ale sam gest przeciągnięcia został wykonany!",
+    "timestamp": 1786025851.6378133
   }
 ]
