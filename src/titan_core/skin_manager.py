@@ -103,6 +103,10 @@ class Skin:
         self.start_menu = {}
         self.sounds = {}
         self.interface = {}
+        # The system shell (desktop, taskbar, notification area, Start menu).
+        # A skin with no [Shell] section gets the Windows XP look, so every
+        # existing skin means "XP" by the shell until it says otherwise.
+        self.shell = {}
 
         # Load skin data
         self._load()
@@ -158,6 +162,10 @@ class Skin:
             # Load interface config
             if 'Interface' in config:
                 self.interface = dict(config['Interface'])
+
+            # Load shell config (colours and metrics of the system shell)
+            if 'Shell' in config:
+                self.shell = dict(config['Shell'])
 
         except Exception as e:
             print(f"Error loading skin {self.name}: {e}")
@@ -375,6 +383,23 @@ class SkinManager:
                         set_theme(self.current_skin.sounds['theme'])
                     except Exception as e:
                         print(f"Error applying sound theme: {e}")
+
+            # The system shell paints from its own palette, which is built
+            # from this skin - so a skin change has to reach it, or the
+            # desktop and taskbar keep the previous skin's colours until the
+            # next start.
+            # Only ever a repaint of a shell that is already up: this runs
+            # while the shell may itself be half-built (it reads the skin as
+            # it is constructed), so it must never create one.
+            try:
+                from src.shell import luna as _shell_luna
+                _shell_luna.invalidate_palette()
+                from src.shell.shell_manager import (is_shell_running,
+                                                     refresh_shell)
+                if is_shell_running():
+                    refresh_shell(skin_changed=True)
+            except Exception:
+                pass
 
             return True
         except Exception as e:

@@ -247,7 +247,11 @@ class ClassicStartMenu(wx.Frame):
         for item in self.menu_items:
             if item.is_separator:
                 # Add separator as visual divider (disabled item)
-                separator_item = self.menu_tree.AppendItem(root, "─────────────")
+                # A row of dashes is read out as thirteen dashes.  The
+                # word is what a screen reader says for a real menu
+                # separator.
+                separator_item = self.menu_tree.AppendItem(
+                    root, _("Separator"))
                 self.menu_tree.SetItemData(separator_item, item)
             else:
                 tree_item = self.menu_tree.AppendItem(root, item.name)
@@ -1062,24 +1066,22 @@ class ClassicStartMenu(wx.Frame):
             print(f"Error running program {program['name']}: {e}")
     
     def show_run_dialog(self):
-        """Dialog 'Uruchom...' - systemowy Windows Run dialog"""
+        """The Run dialog - Titan's own, not Explorer's.
+
+        This used to run `rundll32 shell32.dll,#61`, which puts up a window
+        belonging to Explorer: not skinned like the rest of Titan, nothing
+        Titan can announce or drive, and the wrong window entirely on a
+        machine whose shell Titan is replacing.  `src/shell/run_dialog.py`
+        is the same dialog, control for control, built here.
+        """
         try:
-            # Use Windows native Run dialog
-            if self.is_windows:
-                subprocess.run(['rundll32', 'shell32.dll,#61'], shell=True)
-                self.Hide()
-            else:
-                # Fallback for non-Windows systems
-                dlg = _new_text_entry_dialog(self, _("Enter program name:"), _("Run..."))
-                if dlg.ShowModal() == wx.ID_OK:
-                    command = dlg.GetValue()
-                    if command:
-                        try:
-                            subprocess.run(command, shell=True)
-                            self.Hide()
-                        except Exception as e:
-                            _show_skinned_message(f"Error: {e}", "Error", wx.OK | wx.ICON_ERROR)
-                dlg.Destroy()
+            from src.shell.run_dialog import show_run_dialog
+        except Exception as error:
+            print(f"Error opening run dialog: {error}")
+            return
+        try:
+            self.Hide()
+            show_run_dialog(self.GetParent())
         except Exception as e:
             print(f"Error opening run dialog: {e}")
     
@@ -1108,32 +1110,22 @@ class ClassicStartMenu(wx.Frame):
             print(f"Error opening help: {e}")
     
     def show_shutdown_dialog(self):
-        """Dialog zamykania systemu - wspólny dla przycisku i opcji menu"""
+        """The Shut Down dialog - the shell's own, with every choice on it.
+
+        This used to be a yes/no box that could only shut the machine down,
+        so logging off, restarting, sleeping and hibernating had nowhere to
+        be asked for.  `src/shell/shutdown_dialog.py` is the dialog the
+        shell actually has (msgina's `IDD_SHUTDOWN`): one list, one
+        description of what the chosen entry does, OK and Cancel.
+        """
         try:
-            # Dźwięk otwierania dialogu zamknięcia
             play_sound('ui/statusbar.ogg')
-            
-            # Custom shutdown dialog for all systems
-            dlg = _new_message_dialog(self, 
-                                  _("Do you want to shut down the system?"),
-                                  _("Shut Down Windows"),
-                                  wx.YES_NO | wx.ICON_QUESTION)
-            
-            result = dlg.ShowModal()
-            dlg.Destroy()
-            
-            # Dźwięk zamknięcia dialogu
-            play_sound('ui/applist.ogg')
-            
-            if result == wx.ID_YES:
-                try:
-                    shutdown_cmd = get_system_shutdown_command()
-                    subprocess.run(shutdown_cmd, shell=(IS_WINDOWS))
-                except Exception:
-                    # Final fallback - just close the app
-                    self.parent.Close()
-            
+
+            from src.shell.shutdown_dialog import show_shutdown_dialog
             self.Hide()
+            show_shutdown_dialog(self.GetParent())
+
+            play_sound('ui/applist.ogg')
             
         except Exception as e:
             print(f"Error in shutdown dialog: {e}")
@@ -1321,7 +1313,7 @@ class ClassicSubmenu(wx.Frame):
         self.items.append(item)
         
         if item.is_separator:
-            self.listbox.Append("─" * 20, None)
+            self.listbox.Append(_("Separator"), None)
         else:
             self.listbox.Append(item.name, item)
     

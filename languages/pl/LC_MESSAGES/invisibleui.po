@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-05 11:14+0200\n"
+"POT-Creation-Date: 2026-08-11 14:56+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -123,7 +123,7 @@ msgid "Facebook Messenger"
 msgstr "Facebook Messenger"
 
 #: src/ui/invisibleui.py:1483 src/ui/invisibleui.py:2060
-#: src/ui/invisibleui.py:2816 src/ui/invisibleui.py:3960
+#: src/ui/invisibleui.py:2816 src/ui/invisibleui.py:3976
 msgid "WhatsApp"
 msgstr "WhatsApp"
 
@@ -132,7 +132,7 @@ msgid "Titan-Net (Beta)"
 msgstr "Titan-Net (Beta)"
 
 #: src/ui/invisibleui.py:1485 src/ui/invisibleui.py:2820
-#: src/ui/invisibleui.py:4222
+#: src/ui/invisibleui.py:4238
 msgid "EltenLink (Beta)"
 msgstr "EltenLink (Beta)"
 
@@ -339,8 +339,8 @@ msgstr "Wychodzę z panelu głośności"
 msgid "Exiting WiFi manager, returning to Titan UI"
 msgstr ""
 
-#: src/ui/invisibleui.py:2818 src/ui/invisibleui.py:4094
-#: src/ui/invisibleui.py:4133
+#: src/ui/invisibleui.py:2818 src/ui/invisibleui.py:4110
+#: src/ui/invisibleui.py:4149
 msgid "Titan-Net"
 msgstr "Titan-Net"
 
@@ -375,7 +375,7 @@ msgstr "Brak kontaktów"
 
 #: src/ui/invisibleui.py:2913 src/ui/invisibleui.py:2948
 #: src/ui/invisibleui.py:3017 src/ui/invisibleui.py:3205
-#: src/ui/invisibleui.py:3841
+#: src/ui/invisibleui.py:3857
 msgid "Messenger"
 msgstr "Messenger"
 
@@ -479,32 +479,32 @@ msgstr "Brak wiadomości w historii czatu"
 msgid "Invisible interface active"
 msgstr "Niewidzialny interfejs aktywny"
 
-#: src/ui/invisibleui.py:3778
+#: src/ui/invisibleui.py:3794
 msgid "Titan UI on"
 msgstr "Titan UI włączony"
 
-#: src/ui/invisibleui.py:3781
+#: src/ui/invisibleui.py:3797
 msgid "Titan UI off"
 msgstr "Titan UI wyłączony"
 
-#: src/ui/invisibleui.py:3808
+#: src/ui/invisibleui.py:3824
 msgid "Cannot open Messenger - application not ready"
 msgstr "Nie można otworzyć Messengera - aplikacja nie jest gotowa"
 
-#: src/ui/invisibleui.py:3839
+#: src/ui/invisibleui.py:3855
 msgid "Messenger, web application"
 msgstr "Messenger, aplikacja internetowa"
 
-#: src/ui/invisibleui.py:3853 src/ui/invisibleui.py:3864
-#: src/ui/invisibleui.py:3874
+#: src/ui/invisibleui.py:3869 src/ui/invisibleui.py:3880
+#: src/ui/invisibleui.py:3890
 msgid "Error opening Messenger WebView"
 msgstr "Błąd otwierania Messenger WebView"
 
-#: src/ui/invisibleui.py:3868
+#: src/ui/invisibleui.py:3884
 msgid "Messenger WebView not available"
 msgstr "WebView Messengera jest niedostępny"
 
-#: src/ui/invisibleui.py:3893
+#: src/ui/invisibleui.py:3909
 msgid ""
 "WiFi functionality requires pywifi library. Install with: pip install "
 "pywifi"
@@ -512,78 +512,78 @@ msgstr ""
 "Funkcjonalność WiFi wymaga biblioteki pywifi.\n"
 "Zainstaluj poleceniem: pip install pywifi"
 
-#: src/ui/invisibleui.py:3898 src/ui/invisibleui.py:3917
+#: src/ui/invisibleui.py:3914 src/ui/invisibleui.py:3933
 msgid "WiFi Manager"
 msgstr "Menedżer WiFi"
 
-#: src/ui/invisibleui.py:3903
+#: src/ui/invisibleui.py:3919
 msgid "Error opening WiFi interface"
 msgstr "Błąd podczas otwierania interfejsu WiFi"
 
-#: src/ui/invisibleui.py:3927
+#: src/ui/invisibleui.py:3943
 msgid "Cannot open WhatsApp - application not ready"
 msgstr "Nie można otworzyć WhatsAppa - aplikacja nie jest gotowa"
 
-#: src/ui/invisibleui.py:3958
+#: src/ui/invisibleui.py:3974
 msgid "WhatsApp, web application"
 msgstr "WhatsApp, aplikacja internetowa"
 
-#: src/ui/invisibleui.py:3972 src/ui/invisibleui.py:3983
-#: src/ui/invisibleui.py:3993
+#: src/ui/invisibleui.py:3988 src/ui/invisibleui.py:3999
+#: src/ui/invisibleui.py:4009
 msgid "Error opening WhatsApp WebView"
 msgstr "Błąd otwierania WhatsApp WebView"
 
-#: src/ui/invisibleui.py:3987
+#: src/ui/invisibleui.py:4003
 msgid "WhatsApp WebView not available"
 msgstr "WebView WhatsAppa jest niedostępny"
 
-#: src/ui/invisibleui.py:4002
+#: src/ui/invisibleui.py:4018
 msgid "Cannot open Titan-Net - application not ready"
 msgstr "Nie można otworzyć Titan-Net - aplikacja nie jest gotowa"
 
-#: src/ui/invisibleui.py:4007 src/ui/invisibleui.py:4039
+#: src/ui/invisibleui.py:4023 src/ui/invisibleui.py:4055
 msgid "Titan-Net client not available"
 msgstr "Klient Titan-Net niedostępny"
 
-#: src/ui/invisibleui.py:4092 src/ui/invisibleui.py:4131
+#: src/ui/invisibleui.py:4108 src/ui/invisibleui.py:4147
 msgid "Titan-Net, application"
 msgstr "Titan-Net, aplikacja"
 
-#: src/ui/invisibleui.py:4140
+#: src/ui/invisibleui.py:4156
 msgid "Offline mode selected"
 msgstr "Wybrano tryb offline"
 
-#: src/ui/invisibleui.py:4143 src/ui/invisibleui.py:4228
+#: src/ui/invisibleui.py:4159 src/ui/invisibleui.py:4244
 msgid "Login cancelled"
 msgstr "Anulowano logowanie"
 
-#: src/ui/invisibleui.py:4153 src/ui/invisibleui.py:4164
-#: src/ui/invisibleui.py:4178
+#: src/ui/invisibleui.py:4169 src/ui/invisibleui.py:4180
+#: src/ui/invisibleui.py:4194
 msgid "Error opening Titan-Net"
 msgstr "Błąd otwierania Titan-Net"
 
-#: src/ui/invisibleui.py:4170
+#: src/ui/invisibleui.py:4186
 msgid "Titan-Net not available"
 msgstr "Titan-Net niedostępny"
 
-#: src/ui/invisibleui.py:4187
+#: src/ui/invisibleui.py:4203
 msgid "Cannot open EltenLink (Beta) - application not ready"
 msgstr "Nie można otworzyć EltenLink (Beta) - aplikacja nie jest gotowa"
 
-#: src/ui/invisibleui.py:4220
+#: src/ui/invisibleui.py:4236
 msgid "EltenLink (Beta), application"
 msgstr "EltenLink (Beta), aplikacja"
 
-#: src/ui/invisibleui.py:4237 src/ui/invisibleui.py:4248
-#: src/ui/invisibleui.py:4262
+#: src/ui/invisibleui.py:4253 src/ui/invisibleui.py:4264
+#: src/ui/invisibleui.py:4278
 msgid "Error opening EltenLink (Beta)"
 msgstr "Błąd otwierania EltenLink (Beta)"
 
-#: src/ui/invisibleui.py:4254
+#: src/ui/invisibleui.py:4270
 msgid "EltenLink (Beta) not available"
 msgstr "EltenLink (Beta) niedostępny"
 
-#: src/ui/invisibleui.py:4274
+#: src/ui/invisibleui.py:4290
 msgid "Menu Start"
 msgstr "Menu Start"
 

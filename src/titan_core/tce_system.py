@@ -3,8 +3,16 @@ Titan shell layer - system level hooks for the "Modify system interface" mode.
 
 While the mode is enabled Titan owns the Windows key: a bare tap opens the
 Titan Menu instead of the Windows Start menu, and a configurable set of
-Windows+<key> shortcuts is routed to Titan features.  Combinations Titan
-deliberately does not claim keep working:
+Windows+<key> shortcuts is routed to Titan features.
+
+With "Replace the desktop, taskbar and Start menu" turned on as well, the
+mode goes the whole way: `src/shell/` puts up Titan's own desktop, taskbar,
+notification area and Start menu in the shape of Windows XP, Explorer's own
+bar is hidden while Titan owns the screen, and the shortcuts below drive
+those instead of standing in for them.  With it off, the mode is exactly
+what it always was - the keyboard, and nothing on the screen.
+
+Combinations Titan deliberately does not claim keep working:
 
   * Windows+L still locks the workstation (handled natively, because the
     Windows key itself never reaches the system while the mode is on).
@@ -52,6 +60,17 @@ SHELL_BINDINGS = (
     ('run_dialog', ('r',), 'Windows+R', True),
     ('window_switcher', ('w', 'f2'), 'Windows+W / Windows+F2', True),
     ('notifications', ('n',), 'Windows+N', True),
+    ('taskbar', ('t',), 'Windows+T', True),
+    ('minimize_all', ('m',), 'Windows+M', True),
+    ('find', ('f',), 'Windows+F', True),
+    ('system_properties', ('pause',), 'Windows+Pause', True),
+)
+
+# Shortcuts that are not Windows+<key> at all.  Ctrl+Escape has opened the
+# Start menu since Windows 95 and is the only way to reach it on a keyboard
+# with no Windows key, so with Titan's shell up it must open Titan's menu.
+EXTRA_SHELL_BINDINGS = (
+    ('start_menu_ctrl_esc', 'ctrl+esc', 'Ctrl+Escape', True),
 )
 
 
@@ -65,12 +84,25 @@ def get_binding_descriptions():
         'run_dialog': _("Open the Run dialog"),
         'notifications': _("Open the notification center"),
         'window_switcher': _("Open the window switcher"),
+        'taskbar': _("Move to the taskbar"),
+        'minimize_all': _("Minimise every window"),
+        'find': _("Search for files"),
+        'system_properties': _("Open the system properties"),
+        'start_menu_ctrl_esc': _("Open the Start menu"),
     }
 
 
 def is_shell_mode_enabled():
     """True when the "Modify system interface" setting is turned on."""
     value = get_setting('windows_e_hook', 'False', 'environment')
+    return str(value).lower() in ('true', '1')
+
+
+def is_desktop_shell_enabled():
+    """True when the mode should also replace the desktop and the taskbar."""
+    if not is_shell_mode_enabled():
+        return False
+    value = get_setting('desktop_shell', 'False', SHELL_SECTION)
     return str(value).lower() in ('true', '1')
 
 
@@ -93,6 +125,8 @@ class SystemHooksManager:
 
         # Handles returned by keyboard.hook_key, removed one by one on stop.
         self._hook_handles = []
+        # Handles returned by keyboard.add_hotkey for whole combinations.
+        self._hotkey_handles = []
         # Windows key state tracked by the low level hooks.
         self._win_down = False
         self._win_consumed = False
@@ -117,11 +151,35 @@ class SystemHooksManager:
 
         if is_shell_mode_enabled():
             self.start_system_interface_hooks()
+            self.start_desktop_shell()
+
+    def start_desktop_shell(self):
+        """Bring up the Titan desktop, taskbar and Start menu."""
+        if not IS_WINDOWS or not is_desktop_shell_enabled():
+            return False
+        try:
+            from src.shell.shell_manager import start_shell
+            return bool(wx.CallAfter(start_shell,
+                                     self._get_main_frame()) or True)
+        except Exception as e:
+            print(f"ERROR: Failed to start the Titan shell: {e}")
+            return False
+
+    def stop_desktop_shell(self):
+        """Take the shell down and give the screen back to Windows."""
+        try:
+            from src.shell.shell_manager import stop_shell, is_shell_running
+            if is_shell_running():
+                return bool(stop_shell())
+        except Exception as e:
+            print(f"ERROR: Failed to stop the Titan shell: {e}")
+        return False
 
     def stop_system_hooks(self):
         """Stop all system hooks"""
         self.monitoring = False
         self.cleanup_event.set()
+        self.stop_desktop_shell()
 
         # Always attempt to release the keyboard hooks, even when start was
         # never called - a half finished registration must not leave the
@@ -137,6 +195,14 @@ class SystemHooksManager:
                 self.start_system_interface_hooks()
         else:
             self.stop_system_interface_hooks()
+
+        # The desktop half of the mode follows the same settings, so turning
+        # it on shows the desktop at once rather than on the next start.
+        try:
+            from src.shell.shell_manager import apply_shell_settings
+            wx.CallAfter(apply_shell_settings, self._get_main_frame())
+        except Exception as e:
+            print(f"WARNING: Could not apply the Titan shell settings: {e}")
 
     def start_system_interface_hooks(self):
         """Install the low level keyboard hooks of the Titan shell layer."""
@@ -169,6 +235,11 @@ class SystemHooksManager:
                 for key in keys:
                     self._add_hook(key, self._make_binding_hook(binding_id))
 
+            # Combinations that do not involve the Windows key at all.
+            for binding_id, combo, _label, default in EXTRA_SHELL_BINDINGS:
+                if is_binding_enabled(binding_id, default):
+                    self._add_combination(binding_id, combo)
+
             print("INFO: Titan shell hooks activated - Windows key owned by Titan")
         except Exception as e:
             print(f"ERROR: Failed to start system interface hooks: {e}")
@@ -180,6 +251,13 @@ class SystemHooksManager:
             return
         if not self._hook_handles and not self.windows_e_hook_active:
             return
+
+        hotkeys, self._hotkey_handles = self._hotkey_handles, []
+        for handle in hotkeys:
+            try:
+                keyboard.remove_hotkey(handle)
+            except Exception as e:
+                print(f"WARNING: Failed to release a shell combination: {e}")
 
         handles, self._hook_handles = self._hook_handles, []
         for key, callback, handle in handles:
@@ -215,6 +293,24 @@ class SystemHooksManager:
         handle = keyboard.hook_key(key, hook, suppress=True)
         self._hook_handles.append((key, hook, handle))
         return handle
+
+    def _add_combination(self, binding_id, combination):
+        """Claim a whole combination (Ctrl+Escape), not a single key.
+
+        `keyboard.add_hotkey` is used rather than a suppressing key hook
+        because Control and Escape both have to keep working on their own;
+        only the pair belongs to Titan.
+        """
+        try:
+            handler = getattr(self, f'_handle_{binding_id}', None)
+            if handler is None:
+                return
+            handle = keyboard.add_hotkey(
+                combination, lambda: wx.CallAfter(handler),
+                suppress=True, trigger_on_release=False)
+            self._hotkey_handles.append(handle)
+        except Exception as e:
+            print(f"WARNING: Could not claim {combination}: {e}")
 
     def _force_unhook(self, key, callback):
         """Detach a hook straight from the keyboard listener tables.
@@ -418,7 +514,18 @@ class SystemHooksManager:
     # ------------------------------------------------------------------
 
     def _toggle_start_menu(self):
-        """Open or close the Titan Menu."""
+        """Open or close the Start menu.
+
+        With the desktop shell running that is the XP one on its own
+        taskbar; otherwise it is the classic Titan Menu, exactly as before.
+        """
+        try:
+            from src.shell.shell_manager import toggle_start_menu
+            if toggle_start_menu():
+                return
+        except Exception as e:
+            print(f"WARNING: The shell Start menu is unavailable: {e}")
+
         try:
             menu = self._get_menu()
             if menu is None:
@@ -452,7 +559,18 @@ class SystemHooksManager:
             print(f"ERROR: Failed to open TFM: {e}")
 
     def _handle_system_tray(self):
-        """Windows+B - list the system tray icons."""
+        """Windows+B - the notification area.
+
+        With the shell running this is Windows' own meaning of the shortcut:
+        the keyboard goes to the notification area of the taskbar.
+        """
+        try:
+            from src.shell.shell_manager import focus_tray
+            if focus_tray():
+                return
+        except Exception as e:
+            print(f"WARNING: Could not focus the notification area: {e}")
+
         try:
             from src.system.system_tray_list import show_system_tray_list
             show_system_tray_list(self._get_main_frame())
@@ -460,7 +578,14 @@ class SystemHooksManager:
             print(f"ERROR: Failed to open System Tray list: {e}")
 
     def _handle_show_desktop(self):
-        """Windows+D - show or hide the main Titan window."""
+        """Windows+D - show the desktop, or toggle the Titan window."""
+        try:
+            from src.shell.shell_manager import show_desktop
+            if show_desktop():
+                return
+        except Exception as e:
+            print(f"WARNING: Could not show the desktop: {e}")
+
         try:
             frame = self._get_main_frame()
             if frame is None:
@@ -493,6 +618,58 @@ class SystemHooksManager:
             show_window_switcher(self._get_main_frame())
         except Exception as e:
             print(f"ERROR: Failed to open the window switcher: {e}")
+
+    def _handle_start_menu_ctrl_esc(self):
+        """Ctrl+Escape - the Start menu, as on every Windows since 95."""
+        self._toggle_start_menu()
+
+    def _handle_minimize_all(self):
+        """Windows+M - minimise everything, Titan's own windows included.
+
+        As on Windows, the keyboard ends up on the desktop: there is nothing
+        else left on the screen for it to be in.
+        """
+        try:
+            from src.shell.shell_manager import get_shell
+            from src.shell import win_shell
+            shell = get_shell()
+            own = shell.own_hwnds() if shell and shell.is_running() else ()
+            win_shell.minimize_all(own)
+            if shell is not None and shell.is_running():
+                wx.CallLater(150, shell.focus_desktop)
+        except Exception as e:
+            print(f"ERROR: Windows+M failed: {e}")
+
+    def _handle_find(self):
+        """Windows+F - search, through the Titan Menu's own Find dialog."""
+        try:
+            menu = self._get_menu()
+            if menu is not None:
+                menu.show_find_dialog()
+        except Exception as e:
+            print(f"ERROR: Windows+F failed: {e}")
+
+    def _handle_system_properties(self):
+        """Windows+Pause - the system properties, as Windows opens them."""
+        try:
+            subprocess.Popen(['control', 'system'], shell=True)
+        except Exception as e:
+            print(f"ERROR: Windows+Pause failed: {e}")
+
+    def _handle_taskbar(self):
+        """Windows+T - put the keyboard on the taskbar's window buttons."""
+        try:
+            from src.shell.shell_manager import get_shell
+            shell = get_shell()
+            if shell is not None and shell.is_running():
+                shell.focus_taskbar()
+                return
+        except Exception as e:
+            print(f"WARNING: Could not focus the taskbar: {e}")
+
+        # Without the shell there is no Titan taskbar, so the nearest thing
+        # Titan has to "the list of my windows" is the switcher.
+        self._handle_window_switcher()
 
     def _handle_notifications(self):
         """Windows+N - the notification center."""

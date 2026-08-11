@@ -364,12 +364,70 @@ class SettingsFrame(wx.Frame):
                 self.current_category_panel = None
             print("[SettingsFrame] No gamepad - removed Game controller category")
 
+    def _on_system_interface_toggled(self, event):
+        """The system interface switch also decides whether the Titan shell
+        category is there to be configured, so the list is rebuilt at once."""
+        self.OnCheckBox(event)
+        try:
+            self._sync_shell_category()
+            self.force_rebuild_categories()
+        except Exception as error:
+            print(f"[SettingsFrame] Could not refresh the shell category: {error}")
+
+    def _system_interface_enabled(self):
+        """Is "Modify system interface" ticked right now?
+
+        The live checkbox wins over the saved settings, so the category
+        appears and disappears as the user ticks it rather than only after
+        the settings have been saved and the window reopened.
+        """
+        checkbox = getattr(self, 'windows_e_hook_cb', None)
+        if checkbox is not None:
+            try:
+                return bool(checkbox.GetValue())
+            except RuntimeError:
+                pass
+        try:
+            environment = self.settings.get('environment', {}) or {}
+            return str(environment.get('windows_e_hook', 'False')).lower()                 in ('true', '1')
+        except Exception:
+            return False
+
+    def _sync_shell_category(self):
+        """Show the Titan shell category only while the system interface is
+        modified - the shell is the other half of that one switch."""
+        if getattr(self, 'titan_shell_panel', None) is None:
+            return
+        name = _("Titan shell")
+        enabled = self._system_interface_enabled()
+        registered = name in self.categories
+
+        if enabled and not registered:
+            self.categories[name] = self.titan_shell_panel
+            if name not in self.category_order:
+                # Where it was registered before it became conditional: next
+                # to Windows, which is the setting it belongs with.
+                try:
+                    self.category_order.insert(
+                        self.category_order.index(_("Windows")) + 1, name)
+                except ValueError:
+                    self.category_order.append(name)
+            self.titan_shell_panel.Hide()
+        elif not enabled and registered:
+            del self.categories[name]
+            if name in self.category_order:
+                self.category_order.remove(name)
+            if self.current_category_panel is self.titan_shell_panel:
+                self.titan_shell_panel.Hide()
+                self.current_category_panel = None
+
     def force_rebuild_categories(self):
         """Force complete rebuild of category list"""
         print("[SettingsFrame] ***** FORCE REBUILD STARTING *****")
 
         # Add/remove the Game controller category based on live gamepad presence.
         self._sync_controller_category()
+        self._sync_shell_category()
 
         # Check if category_list is still valid before accessing it
         try:
@@ -379,11 +437,15 @@ class SettingsFrame(wx.Frame):
             print("[SettingsFrame] WARNING: category_list is not valid, skipping rebuild")
             return
 
-        # Get current selection
-        current_selection = self.category_list.GetSelection()
+        # Get current selection.  By its name and not by its index: a
+        # category added or removed above it (the Game controller and the
+        # Titan shell ones both come and go) would otherwise move the
+        # selection onto a different category than the one the user is on.
         current_category = None
-        if current_selection != wx.NOT_FOUND and current_selection < len(self.category_order):
-            current_category = self.category_order[current_selection]
+        try:
+            current_category = self.category_list.GetStringSelection() or None
+        except (RuntimeError, AttributeError):
+            current_category = None
 
         # Completely clear and rebuild
         self.category_list.Clear()
@@ -503,8 +565,12 @@ class SettingsFrame(wx.Frame):
             self.windows_panel = wx.Panel(self.content_panel)
             self.register_category(_("Windows"), self.windows_panel)
 
+            # The Titan shell panel is built either way, but the category is
+            # only listed while "Modify system interface" is ticked - the
+            # shell is that setting's second half, so offering to configure a
+            # desktop that cannot appear is a dead end.  See
+            # _sync_shell_category.
             self.titan_shell_panel = wx.Panel(self.content_panel)
-            self.register_category(_("Titan shell"), self.titan_shell_panel)
         else:
             self.titan_shell_panel = None
 
@@ -540,6 +606,7 @@ class SettingsFrame(wx.Frame):
 
         # Register the Game controller category now if a pad is already present.
         self._sync_controller_category()
+        self._sync_shell_category()
 
     def register_category(self, name, panel, save_callback=None, load_callback=None):
         """
@@ -1010,7 +1077,7 @@ class SettingsFrame(wx.Frame):
         if sys.platform == 'win32':
             self.windows_e_hook_cb = wx.CheckBox(self.environment_panel, label=_("Modify system interface"))
             self.windows_e_hook_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-            self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+            self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self._on_system_interface_toggled)
             vbox.Add(self.windows_e_hook_cb, flag=wx.LEFT | wx.TOP, border=10)
         else:
             self.windows_e_hook_cb = None
@@ -1065,14 +1132,54 @@ class SettingsFrame(wx.Frame):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         vbox.Add(wx.StaticText(panel, label=_(
-            "These shortcuts are active only when \"Modify system interface\" "
+            "These options are active only when \"Modify system interface\" "
             "is enabled under Environment.")), flag=wx.LEFT | wx.TOP, border=10)
+
+        # The desktop half of the mode: Titan's own desktop, taskbar,
+        # notification area and Start menu instead of Explorer's.
+        self.shell_option_cbs = {}
+        shell_options = (
+            ('desktop_shell',
+             _("Replace the desktop, taskbar and Start menu (Windows XP look)"),
+             False),
+            ('show_desktop', _("Show the desktop with its icons"), True),
+            ('show_taskbar', _("Show the taskbar"), True),
+            ('show_tray', _("Show the notification area"), True),
+            ('hide_system_taskbar',
+             _("Hide the Windows taskbar while Titan's is shown"), True),
+            ('show_wallpaper', _("Show the Windows wallpaper"), True),
+            ('clock_seconds', _("Show seconds on the clock"), False),
+            ('auto_arrange_icons', _("Arrange desktop icons automatically"),
+             False),
+            ('focus_cues', _("Play a sound when the focus moves"), True),
+        )
+        for option_id, label, default in shell_options:
+            checkbox = wx.CheckBox(panel, label=label)
+            checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+            checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+            checkbox.shell_default = default
+            vbox.Add(checkbox, flag=wx.LEFT | wx.TOP, border=10)
+            self.shell_option_cbs[option_id] = checkbox
+
+        vbox.Add(wx.StaticText(panel, label=_(
+            "The Titan shell never speaks by itself - your screen reader "
+            "announces it, like any other program.")),
+            flag=wx.LEFT | wx.TOP, border=10)
+
+        vbox.Add(wx.StaticLine(panel), flag=wx.EXPAND | wx.ALL, border=6)
+        vbox.Add(wx.StaticText(panel, label=_("Shortcuts Titan takes over:")),
+                 flag=wx.LEFT | wx.TOP, border=10)
 
         self.shell_binding_cbs = {}
         try:
-            from src.titan_core.tce_system import SHELL_BINDINGS, get_binding_descriptions
+            from src.titan_core.tce_system import (SHELL_BINDINGS,
+                                                   EXTRA_SHELL_BINDINGS,
+                                                   get_binding_descriptions)
             descriptions = get_binding_descriptions()
-            for binding_id, _keys, label, default in SHELL_BINDINGS:
+            # The Windows+<key> shortcuts, then the ones that do not use the
+            # Windows key at all (Ctrl+Escape).
+            for binding_id, _keys, label, default in (tuple(SHELL_BINDINGS)
+                                                      + tuple(EXTRA_SHELL_BINDINGS)):
                 checkbox = wx.CheckBox(panel, label="{} - {}".format(
                     label, descriptions.get(binding_id, binding_id)))
                 checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -2225,8 +2332,12 @@ class SettingsFrame(wx.Frame):
         if self.register_titan_tts_sapi_cb is not None:
             self.register_titan_tts_sapi_cb.SetValue(str(environment_settings.get('register_titan_tts_sapi', 'False')).lower() in ['true', '1'])
 
-        # Titan shell shortcuts
+        # Titan shell: the desktop options and then the shortcuts
         shell_settings = self.settings.get('titan_shell', {})
+        for option_id, checkbox in getattr(self, 'shell_option_cbs', {}).items():
+            default = str(getattr(checkbox, 'shell_default', False))
+            checkbox.SetValue(
+                str(shell_settings.get(option_id, default)).lower() in ['true', '1'])
         for binding_id, checkbox in getattr(self, 'shell_binding_cbs', {}).items():
             default = str(getattr(checkbox, 'shell_default', True))
             checkbox.SetValue(
@@ -2944,13 +3055,16 @@ class SettingsFrame(wx.Frame):
                     env_settings['copilot_replacement_vk'] = str(REPLACEMENT_KEYS[idx][0])
         self.settings['environment'] = env_settings
 
-        # Titan shell shortcuts
-        shell_cbs = getattr(self, 'shell_binding_cbs', {})
+        # Titan shell: the desktop options and the shortcuts share a section
+        shell_cbs = dict(getattr(self, 'shell_binding_cbs', {}))
+        shell_cbs.update(getattr(self, 'shell_option_cbs', {}))
         if shell_cbs:
-            self.settings['titan_shell'] = {
-                binding_id: str(checkbox.GetValue())
-                for binding_id, checkbox in shell_cbs.items()
-            }
+            existing = dict(self.settings.get('titan_shell', {}))
+            existing.update({
+                option_id: str(checkbox.GetValue())
+                for option_id, checkbox in shell_cbs.items()
+            })
+            self.settings['titan_shell'] = existing
 
         # Apply SAPI5 registration only if the checkbox state actually changed.
         # Elevation (UAC) is triggered interactively here; startup sync stays silent.

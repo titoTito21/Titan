@@ -448,6 +448,207 @@ real controls. It lives in `src/ai/ocr/`.
 - The `titan_talk` gamepad mode does a much simpler Gemini-only flat-list
   version of the same idea for audio games; this package is the general one.
 
+### Titan Shell: Windows XP as the system interface
+
+`src/shell/` is what the existing **"Modify system interface"** setting
+(`environment.windows_e_hook`) now opens onto. That mode always owned the
+Windows key; with **Settings -> Titan shell -> "Replace the desktop, taskbar
+and Start menu"** on as well, Titan also puts up its own **desktop, taskbar,
+notification area and Start menu**, shaped like Windows XP (Luna Blue), and
+hides Explorer's bar while it is there. Off by default; both switches must
+agree (`shell_manager.desktop_shell_enabled()`).
+
+**The look is data, not drawing code** (`luna.py`). The palette holds the
+*measured* Luna gradient stops - the taskbar's five bands
+(`#3888e9 0.0 ... #1941a5 1.0`), the task-button and notification-area
+gradients, the Start capsule - so the bar matches a screenshot band for band
+rather than being blue-ish. Any skin overrides any of it through a `[Shell]`
+section in its `skin.ini` (`skins/windows_xp/skin.ini` is the reference and
+the full list); `style = classic` swaps the base for the grey 3D shell,
+which is what `windows95` and `retro` now ask for. A skin change repaints a
+running shell (`skin_manager.load_skin` -> `refresh_shell`).
+
+**It never speaks.** The shell replaces the system interface, so a screen
+reader is already announcing every focus change in it - a Titan announcement
+on top would say each button twice. Accessibility is instead *native*: every
+painted control is a real focusable `wx.Window` answering MSAA with a name, a
+role and a state (`a11y.ShellAccessible` + `AccessibleMixin`, `controls.py`),
+raising its own focus event. The only sound is Titan's non-speech focus cue,
+panned to where the control is, and it has a setting.
+
+**Mouse and keyboard are equals.** The keyboard model is XP's own: **Tab and
+Shift+Tab step between the bar's groups** - Start, quick launch, the window
+buttons, the notification area (the clock belongs to it) - and the **arrows
+move inside** whichever group has the focus, with Home/End for its ends and
+the group remembering where it was left. Shift+F10 opens a window's menu
+(Restore / Minimise / Maximise / Close), **Escape gives the keyboard back to
+the window the user came from** (remembered when the bar was activated, not a
+jump onto the desktop), F5 rebuilds; the mouse gets XP's tooltips, hover
+states, middle-click-to-close, the taskbar's own menu (Cascade, Tile, Show the
+Desktop, Task Manager, Properties) and the Start button's.
+
+**None of that works until the bar is the foreground window.** `SetFocus`
+only moves the focus *within* the window Windows already considers active, so
+a bar put up with `ShowWithoutActivating` swallowed every key: Tab did
+nothing, the window buttons and the notification area could not be reached at
+all, and it read as a taskbar with no windows on it. `win_shell.take_foreground()`
+(attach to the foreground thread's input queue, then `SetForegroundWindow`) is
+what every way into the bar and the desktop - Windows+B, Windows+T, Windows+D,
+Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
+
+- `win_shell.py` - the Windows side: the **appbar** (so a maximised window
+  stops above the bar), the **shell hook** (`RegisterShellHookWindow`, so
+  window changes arrive as messages instead of being polled for), the window
+  list/drive calls, desktop folders, wallpaper, file icons, the Recycle Bin,
+  `CascadeWindows`/`TileWindows`. Two traps live here, both found by
+  measurement: **the appbar answers in real pixels** while Titan runs
+  DPI-unaware, so a 30 px bar reserved 152 px until the rectangle was scaled
+  (`physical_screen_size()`, `dpi_scale()`); and hiding Explorer's taskbar
+  with `ShowWindow` leaves its reservation standing, so
+  `set_explorer_taskbar_reserved()` puts it into auto-hide (`ABM_SETSTATE`)
+  and Explorer's bar must go before ours docks.
+- `desktop.py` - a real `SysListView32` in icon mode (`wx.LC_ICON`), which is
+  what the Windows desktop is: rubber-band selection, first-letter jumping
+  and screen-reader support come from the control. Titan adds the shell
+  behaviour - real Windows icons (`SHGetFileInfo`), Enter/F2/Delete/F5,
+  Alt+Enter for the properties, both context menus, dragging icons to
+  remembered positions, the wallpaper drawn by the list itself
+  (`LVM_SETBKIMAGE`, transparent labels). It is a **grid, not a list**:
+  `LVS_ALIGN_LEFT` fills a column from the top of the screen downwards before
+  starting the next one, `LVS_EX_SNAPTOGRID` and a 76x88 cell
+  (`LVM_SETICONSPACING`) keep every icon on the grid however it was dragged,
+  and anything the user has never moved is arranged by the control. With
+  wxWidgets' default `LC_ALIGN_TOP` the icons ran across the top of the
+  screen in one line instead.
+- `taskbar.py` - Start button, window buttons (reused across refreshes so the
+  focus survives), notification area, clock whose accessible name carries the
+  date. Tray buttons are reused the same way, keyed on UI Automation's
+  runtime id rather than on the name - a tray icon is renamed every few
+  seconds (the battery percentage, the volume), and rebuilding the button to
+  say so would throw the keyboard out of the notification area each time. The
+  tray is re-read on a slow tick of its own (~30 s, and F5), because reading
+  it is a walk of Windows' accessibility tree and costs about 60 ms.
+- **The notification area is read from the Windows the user actually has**
+  (`src/system/tray_icons.py`, which `system_tray_list.py` now re-exports).
+  Windows 11 has no `ToolbarWindow32` under `TrayNotifyWnd` at all - the
+  taskbar is XAML - so the twenty-year-old `TB_*` route found nothing and the
+  tray came up empty. It now reads **UI Automation** over `Shell_TrayWnd`,
+  where every icon is a `SystemTray.*Button` named with the text the hover tip
+  shows, and matches on that class *prefix* so a renamed one appears rather
+  than vanishing. Hidden icons live in a XAML flyout that is only built when
+  it is shown: "Show hidden icons" (recognised by **where it is** - first in
+  the area, before the applications' own `NotifyItemIcon` buttons - since
+  nothing else tells it apart in any language) opens it, reads it and puts
+  those icons into the bar beside the visible ones, and a hidden icon whose
+  flyout has since closed re-opens it to find its element again instead of
+  clicking a stale rectangle. Pressing goes through UIA `Invoke` first,
+  because with Explorer's bar auto-hidden the icons are off the screen and a
+  synthesised click would land on whatever is underneath. The legacy toolbar
+  is kept for Windows 10 and earlier and is **fixed**: its text and rectangles
+  have to be read out of Explorer's own address space (`VirtualAllocEx` +
+  `ReadProcessMemory`), which is why every icon used to come back called
+  "System Icon 1" and why clicking any of them clicked the first.
+- `start_menu.py` - `XPStartMenu(ClassicStartMenu)`: the XP two-pane face on
+  the existing menu, inheriting everything that finds programs, runs a Titan
+  app or game, opens Run or asks about shutting down. "All Programs" drills
+  down **inside** the left column (Backspace/Escape step out) instead of
+  cascading flyouts a keyboard cannot follow.
+- Windows' own shortcuts drive it (`tce_system.py`): Windows or **Ctrl+Esc**
+  = Start menu, Win+D = show desktop, Win+M = minimise all, Win+B =
+  notification area, Win+T = the window buttons, Win+E, Win+R, Win+F,
+  Win+Pause, and Win+L still locks.
+- **Action API**: a built-in `shell` provider (`shell_actions.py`,
+  `actions/builtin.py`) - `status`, `start`/`stop`, `open_start_menu`,
+  `show_desktop`, `list_windows`, `activate_window` / `minimize_window` /
+  `close_window`, `arrange_windows`, `list_desktop`, `open_desktop_item`,
+  `list_tray`, `activate_tray_icon`, `get_time`, `list_settings`,
+  `set_setting`. The window and desktop ones answer with the shell switched
+  off too (they read Windows, not the taskbar), an ambiguous title *asks*
+  rather than guessing, and nothing here needs AI.
+- **Read out of ReactOS' Explorer, control for control.** The parts added
+  after the first round are each a rebuild of a named piece of
+  `base/shell/explorer` or of the shell32/msgina dialog it calls:
+  - `quick_launch.py` - `CQuickLaunchBand`: the real
+    `%APPDATA%/Microsoft/Internet Explorer/Quick Launch` folder, each
+    shortcut with the icon `SHGetFileInfo` gives it. The two Windows puts
+    there itself (Show Desktop, Window Switcher) are left out, matched on
+    the *file* name because the displayed one is translated - Titan has
+    both already.
+  - `run_dialog.py` - shell32's `RunFileDlg` (`IDD_RUN`): the paragraph, the
+    Open combo, OK / Cancel / Browse. The history is Explorer's own
+    `HKCU\...\Explorer\RunMRU`, so it is shared with Windows' Run box, and
+    what is typed goes through `ShellExecuteW` (`os.startfile` cannot run a
+    bare `notepad`, a command with arguments, or anything resolved through
+    App Paths). It replaced `rundll32 shell32.dll,#61`, which put up
+    Explorer's window - unskinned, unannounceable, and the wrong window on a
+    machine whose shell Titan is replacing.
+  - `shutdown_dialog.py` - msgina's `IDD_SHUTDOWN`, which is what
+    `ExitWindowsDialog` actually shows: one list, one description of the
+    chosen entry, OK and Cancel. Every string is `IDS_SHUTDOWN_*` verbatim.
+    Sleep and hibernate appear only where the machine will take them, read
+    from `GetPwrCapabilities` **including its `AoAc` flag** - modern standby
+    machines report S1/S2/S3 absent and `IsPwrSuspendAllowed` says no, so
+    asking the old way hides Sleep on most laptops made this decade.
+  - `taskbar_properties.py` - `trayprop.cpp`'s three pages (Taskbar / Start
+    Menu / Notification Area), opened by the taskbar's own **Properties**.
+    The rule applied throughout: a control is there only if it does
+    something, so ReactOS' own two commented-out switches (group similar
+    buttons, small icons) are absent rather than dead.
+- **The bar goes on any of the four edges**, hides itself and can be locked
+  (`taskbar_position` / `taskbar_auto_hide` / `taskbar_locked`, plus
+  `taskbar_on_top`, `show_quick_launch`, `show_clock`,
+  `show_desktop_button`, `start_menu_style`). Auto-hide uses ReactOS' own
+  timings (2000 ms to go, 50 ms to come back, a 10 ms animation that creeps
+  out and snaps in) and leaves a sliver behind; a bar standing on its side
+  is not a horizontal one turned round - the window buttons stack and the
+  notification area sits at the bottom of the column. **Show Desktop is the
+  last thing on the bar**, inside the notification area, which is where
+  `CTrayShowDesktopButton` is and where Shift+Tab from the desktop arrives.
+- **The desktop is a grid, worked out rather than left to the control.**
+  `CDefView::CreateList` gives the desktop view `LVS_ALIGNLEFT` +
+  `LVS_AUTOARRANGE` + `LVS_EX_SNAPTOGRID`; wxWidgets translates neither
+  auto-arrange nor anything else it was not given at construction, and the
+  icons are read in *before* the desktop has the screen, when a column is a
+  few pixels tall and holds one icon - which is what put them in a row along
+  the top. `layout_grid()` places them column-first from the screen's own
+  size and the system icon spacing, keeping whatever the user dragged
+  somewhere and giving everything else the free slots.
+- **Tab is a round trip.** From the desktop, Tab goes to Start and Shift+Tab
+  to the notification area; off either end of the bar is the desktop again.
+- **The notification area is read from the XAML island, not from
+  `Shell_TrayWnd`.** On Windows 11 the taskbar's contents live in a
+  `Windows.UI.Composition.DesktopWindowContentBridge` child window with a UI
+  Automation tree **of its own**: walking down from `Shell_TrayWnd` reaches
+  `TrayNotifyWnd` and `MSTaskSwWClass` and stops, which is why the tray came
+  up empty even after it was moved to UIA. `_tray_roots()` asks the island
+  first. Windows' own clock and Show Desktop button are then left out of
+  Titan's strip while Titan draws its own (`is_clock`, matched on the class
+  plus the time in the name because the name is translated;
+  `is_show_desktop`, matched on its class) - otherwise the bar carried two
+  of each. Icons show their real picture where Windows will part with one
+  (`WM_GETICON`, then the window class'), which on Windows 11 is nowhere,
+  since a notification icon's bitmap never leaves the process that
+  registered it; the fallback is the first letter, never a character
+  standing in for a picture.
+- **Switching windows never pulls the keyboard onto the bar.**
+  `wx.Frame.Raise()` calls `SetForegroundWindow` on Windows, and the bar
+  called it from the appbar's `ABN_FULLSCREENAPP` notification - which
+  Windows sends on ordinary Alt+Tabs - so switching windows kept dropping
+  the user on the taskbar. The z-order is now set with `SetWindowPos` and
+  `SWP_NOACTIVATE`; going behind everything gives up topmost first, since a
+  topmost window sent to the bottom is still in front of everything that is
+  not.
+- **No character ever stands in for a picture or a word.** A list item's
+  text *is* its accessible name, so an arrow after a folder's name was read
+  out as the arrow: a Start-menu folder now says "<name>, submenu" in words
+  (`start_menu.py`), and the classic menu's separators, which were thirteen
+  box-drawing dashes, say "Separator" - what a screen reader says for a real
+  menu separator.
+- The **Titan shell settings category** is listed only while "Modify system
+  interface" is ticked, and appears and disappears as the box is ticked.
+- Translation domain: **`shell`**.
+- Tests: `tests/test_shell.py` (run it directly).
+
 ### Titan Access: one document over the web, over any app, over anything
 
 `data/components/titan access/` is Titan's own screen reader. Two ideas carry

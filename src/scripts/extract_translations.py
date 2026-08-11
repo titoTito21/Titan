@@ -35,7 +35,9 @@ DOMAIN_FILES = {
         # Mail: the mailbox/reader/composer and the rich-body renderer
         'src/network/mail_gui.py', 'src/network/mail_format.py'
     ],
-    'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py', 'src/system/mic_permission.py'],
+    'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py', 'src/system/mic_permission.py',
+               # The notification area: the reader and the list over it
+               'src/system/tray_icons.py', 'src/system/system_tray_list.py'],
     'controller': ['src/controller/controller_ui.py', 'src/controller/controller_modes.py', 'src/controller/controller_vibrations.py'],
     'help': ['src/ui/help.py'],
     'sound': ['src/titan_core/sound.py', 'src/titan_core/tsounds.py', 'src/titan_core/stereo_speech.py'],
@@ -43,6 +45,12 @@ DOMAIN_FILES = {
     'classicstartmenu': ['src/ui/classic_start_menu.py'],
     'eltenclient': ['src/eltenlink_client/elten_client.py', 'src/eltenlink_client/elten_gui.py', 'src/eltenlink_client/elten_voip_client.py', 'src/eltenlink_client/accountmanagement.py'],
     'window_switcher': ['src/ui/window_switcher.py'],
+    'shell': ['src/shell/a11y.py', 'src/shell/controls.py',
+              'src/shell/taskbar.py', 'src/shell/desktop.py',
+              'src/shell/start_menu.py', 'src/shell/shell_manager.py',
+              'src/shell/shell_actions.py', 'src/shell/run_dialog.py', 'src/shell/quick_launch.py',
+              'src/shell/shutdown_dialog.py',
+              'src/shell/taskbar_properties.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
     'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py', 'src/buffers/ai_buffer.py'],
     'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/titan_tools.py', 'src/ai/action_tools.py', 'src/ai/ai_agent_gui.py', 'src/ai/assistant/personas.py', 'src/ai/assistant/voice_io.py', 'src/ai/assistant/voice_assistant.py', 'src/ai/assistant/assistant_gui.py', 'src/ai/assistant/hotkeys.py', 'src/ai/assistant/headless.py', 'src/ai/assistant/reminder_watcher.py', 'src/ai/ocr/mimic.py', 'src/ai/ocr/form_view.py', 'src/ai/ocr/controls.py', 'src/ai/ocr/overlay.py'],

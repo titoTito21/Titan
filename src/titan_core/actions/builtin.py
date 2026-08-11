@@ -77,7 +77,7 @@ _TOOL_PROVIDERS = (
      'src.ai.browser_tools', 'get_browser_tools', 'browser_'),
 )
 
-BUILTIN_IDS = tuple(entry[0] for entry in _TOOL_PROVIDERS) + ('gamepad',)
+BUILTIN_IDS = tuple(entry[0] for entry in _TOOL_PROVIDERS) + ('gamepad', 'shell')
 
 # The actions that are actually DONE BY A MODEL - the ones that send something
 # to an AI provider. Only these need Titan's AI features switched on, and
@@ -267,6 +267,39 @@ def _gamepad_addon():
     return addon
 
 
+def _shell_addon():
+    """The system shell: the desktop, taskbar, notification area and menu.
+
+    Written here rather than adapted from a tool table because the shell is
+    not an AI subsystem - it is what Titan puts on the screen when it
+    replaces the system interface, and a macro asking "which windows are
+    open" or "open this desktop icon" should not have to go near a model.
+    """
+    from src.shell.shell_actions import get_shell_actions
+
+    addon = AddonActions(kind='builtin', addon_id='shell', name='shell',
+                         path='', label="System shell",
+                         description="Titan's own desktop, taskbar, "
+                                     "notification area and Start menu, and "
+                                     "the windows that are open on them.",
+                         transport='inproc')
+    addon.source = 'builtin'
+    addon.builtin = True
+    for name, summary, params, risk, run in get_shell_actions():
+        prepared = {}
+        for pname, pspec in params.items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+            if pspec.get('enum'):
+                prepared[pname]['enum'] = list(pspec['enum'])
+        action = ActionSpec(name=name, summary=summary, params=prepared,
+                            risk=risk, mode='any', addon=addon)
+        action.run = run
+        addon.actions.append(action)
+    return addon
+
+
 # --------------------------------------------------------------------------- #
 # Building them all
 # --------------------------------------------------------------------------- #
@@ -291,4 +324,8 @@ def build():
         addons.append(_gamepad_addon())
     except Exception as e:
         print(f"[actions] Built-in 'gamepad' unavailable: {e}")
+    try:
+        addons.append(_shell_addon())
+    except Exception as e:
+        print(f"[actions] Built-in 'shell' unavailable: {e}")
     return addons

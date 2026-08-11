@@ -468,5 +468,55 @@
     "role": "assistant",
     "content": "Przeciągnęłam ikonę NVDA na pierwszą pozycję na Pulpicie (w lewy górny róg). Jeśli w Twoim systemie włączona jest opcja automatycznego rozmieszczania ikon, Windows może zachować domyślną siatkę, ale sam gest przeciągnięcia został wykonany!",
     "timestamp": 1786025851.6378133
+  },
+  {
+    "role": "user",
+    "content": "please, tell me about my system",
+    "timestamp": 1786176154.8730862
+  },
+  {
+    "role": "assistant",
+    "content": "Your computer is running Windows 11 Pro 64-bit. It is powered by an AMD Ryzen 5 5500 processor, equipped with 32 gigabytes of memory, and has a main drive with over 800 gigabytes of free space remaining out of 930. Everything looks healthy and well, dear one.",
+    "timestamp": 1786176179.8093278
+  },
+  {
+    "role": "user",
+    "content": "can you check system health?",
+    "timestamp": 1786176198.210722
+  },
+  {
+    "role": "assistant",
+    "content": "Your system is in wonderful health, my child. \n\nYour ADATA drive is in perfect healthy status. Your processor is resting easy with a light 26% load, and you have almost 24 gigabytes of memory free out of 32. The computer has been running smoothly for just over an hour. All is peaceful and working as it should.",
+    "timestamp": 1786176217.4892077
+  },
+  {
+    "role": "user",
+    "content": "trim my ssd",
+    "timestamp": 1786176241.5554795
+  },
+  {
+    "role": "assistant",
+    "content": "I tried to trim your drive, but Windows requires Administrator privileges to perform a TRIM operation, which I do not currently have. \n\nIf you would like to trim your drive, you can search for \"Defragment and Optimize Drives\" in your Start Menu and click \"Optimize\", or open PowerShell as an Administrator and run the TRIM command. May your system stay swift and well-cared for, dear one.",
+    "timestamp": 1786176263.2869742
+  },
+  {
+    "role": "user",
+    "content": "Odtwórz lokalnie Władcę Much odcinek.",
+    "timestamp": 1786368705.0322294
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam lokalnie odcinek 17 serialu Włatcy Móch – „Lekcja 17. Maksymalna kontrola”.",
+    "timestamp": 1786368777.3224924
+  },
+  {
+    "role": "user",
+    "content": "przeczytaj mi najnowsze wiadomości z polski, lub sprawdź",
+    "timestamp": 1786369757.9770885
+  },
+  {
+    "role": "assistant",
+    "content": "Oto najważniejsze wiadomości z Polski z ostatnich godzin:\n\n1. **Alert RCB**: Wydano ostrzeżenia RCB dla pięciu województw.\n2. **Utrudnienia drogowe**: Karambol na drodze S3 spowodował ogromny korek pod Szczecinem.\n3. **Cyberbezpieczeństwo**: Doszło do ataku hakerskiego na stronę ZUS, co wywołało jej czasową awarię.\n4. **Polityka i finanse**: Reakcja ministra Tomasza Siemoniaka na doniesienia w sprawie środków dla powodzian.\n5. **Edukacja**: Pilna interwencja kuratorium oświaty po publikacjach dotyczących skandalu z udziałem Jana Bestrego.",
+    "timestamp": 1786369817.3656843
   }
 ]

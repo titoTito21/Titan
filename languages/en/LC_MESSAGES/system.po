@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-05 11:14+0200\n"
+"POT-Creation-Date: 2026-08-11 14:56+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -19,33 +19,53 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/titan_core/tce_system.py:61
+#: src/titan_core/tce_system.py:80
 msgid "Open the Titan Menu"
 msgstr "Open the Titan Menu"
 
-#: src/titan_core/tce_system.py:62
+#: src/titan_core/tce_system.py:81
 msgid "Open the Titan file manager"
 msgstr "Open the Titan file manager"
 
-#: src/titan_core/tce_system.py:63
+#: src/titan_core/tce_system.py:82
 msgid "Open the system tray list"
 msgstr "Open the system tray list"
 
-#: src/titan_core/tce_system.py:64
+#: src/titan_core/tce_system.py:83
 msgid "Show or hide the Titan window"
 msgstr "Show or hide the Titan window"
 
-#: src/titan_core/tce_system.py:65
+#: src/titan_core/tce_system.py:84
 msgid "Open the Run dialog"
 msgstr "Open the Run dialog"
 
-#: src/titan_core/tce_system.py:66
+#: src/titan_core/tce_system.py:85
 msgid "Open the notification center"
 msgstr "Open the notification center"
 
-#: src/titan_core/tce_system.py:67
+#: src/titan_core/tce_system.py:86
 msgid "Open the window switcher"
 msgstr "Open the window switcher"
+
+#: src/titan_core/tce_system.py:87
+msgid "Move to the taskbar"
+msgstr "Move to the taskbar"
+
+#: src/titan_core/tce_system.py:88
+msgid "Minimise every window"
+msgstr ""
+
+#: src/titan_core/tce_system.py:89
+msgid "Search for files"
+msgstr ""
+
+#: src/titan_core/tce_system.py:90
+msgid "Open the system properties"
+msgstr "Open the system properties"
+
+#: src/titan_core/tce_system.py:91
+msgid "Open the Start menu"
+msgstr "Open the Start menu"
 
 #: src/titan_core/tce_system_net.py:650
 msgid "Connect to WiFi Network"
@@ -577,6 +597,48 @@ msgstr ""
 #: src/system/mic_permission.py:184
 msgid "Microphone blocked"
 msgstr ""
+
+#: src/system/tray_icons.py:137 src/system/tray_icons.py:617
+msgid "Notification icon"
+msgstr "Notification icon"
+
+#: src/system/system_tray_list.py:49
+msgid "System Tray"
+msgstr "System Tray"
+
+#: src/system/system_tray_list.py:70
+msgid ""
+"System Tray Icons (Enter = click, Applications key/Context menu = right "
+"click)"
+msgstr ""
+
+#: src/system/system_tray_list.py:82
+msgid "Click (Enter)"
+msgstr ""
+
+#: src/system/system_tray_list.py:86
+msgid "Context Menu (Applications key)"
+msgstr ""
+
+#: src/system/system_tray_list.py:90
+msgid "Close"
+msgstr ""
+
+#: src/system/system_tray_list.py:114
+msgid "No system tray icons found"
+msgstr "No system tray icons found"
+
+#: src/system/system_tray_list.py:121
+msgid "hidden"
+msgstr ""
+
+#: src/system/system_tray_list.py:194
+msgid "System tray list is only available on Windows"
+msgstr ""
+
+#: src/system/system_tray_list.py:195
+msgid "Not Available"
+msgstr "Not Available"
 
 #~ msgid "Connect to WiFi Network"
 #~ msgstr "Connect to WiFi Network"

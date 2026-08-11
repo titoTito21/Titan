@@ -3,39 +3,26 @@
 System Tray List - Accessible system tray icon browser
 Shows system tray icons in a list with keyboard navigation
 (Windows only)
+
+The icons themselves are read by `src.system.tray_icons`, which knows how to
+ask both the Windows 11 taskbar (UI Automation) and the older toolbar one.
+This module is the window over that.
 """
 
 import wx
-import platform
+
 from src.titan_core.sound import play_sound
-from src.controller.controller_vibrations import vibrate_cursor_move, vibrate_selection, vibrate_menu_open
+from src.controller.controller_vibrations import (vibrate_cursor_move,
+                                                  vibrate_selection,
+                                                  vibrate_menu_open)
 from src.titan_core.translation import _
-from src.settings.settings import get_setting
 from src.platform_utils import IS_WINDOWS
 from src.titan_core.skin_manager import apply_skin_to_window
+from src.system.tray_icons import (SystemTrayIcon, expand_hidden_icons,
+                                   get_tray_icons, is_chevron)
 
-# Windows-specific imports
-if IS_WINDOWS:
-    import win32gui
-    import win32con
-    import win32api
-    import ctypes
-    from ctypes import wintypes
-    import struct
-
-
-# Constants for system tray
-WM_USER = 0x0400
-TB_BUTTONCOUNT = WM_USER + 24
-TB_GETBUTTON = WM_USER + 23
-TB_GETBUTTONTEXTW = WM_USER + 75
-
-# Shell_NotifyIcon messages
-NIN_SELECT = WM_USER + 0
-NIN_KEYSELECT = WM_USER + 1
-WM_LBUTTONUP = 0x0202
-WM_RBUTTONUP = 0x0205
-WM_CONTEXTMENU = 0x007B
+__all__ = ['SystemTrayIcon', 'get_tray_icons', 'expand_hidden_icons',
+           'is_chevron', 'show_system_tray_list', 'SystemTrayListDialog']
 
 
 def _apply_skin_to_tree(window):
@@ -53,224 +40,6 @@ def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, p
     result = dlg.ShowModal()
     dlg.Destroy()
     return result
-
-
-class TBBUTTON(ctypes.Structure):
-    """Toolbar button structure"""
-    _fields_ = [
-        ('iBitmap', ctypes.c_int),
-        ('idCommand', ctypes.c_int),
-        ('fsState', ctypes.c_byte),
-        ('fsStyle', ctypes.c_byte),
-        ('bReserved', ctypes.c_byte * 6),
-        ('dwData', ctypes.POINTER(ctypes.c_ulong)),
-        ('iString', ctypes.POINTER(ctypes.c_char))
-    ]
-
-
-class SystemTrayIcon:
-    """Represents a system tray icon"""
-    def __init__(self, hwnd, button_id, text, tooltip):
-        self.hwnd = hwnd
-        self.button_id = button_id
-        self.text = text or _("Unknown Icon")
-        self.tooltip = tooltip or self.text
-
-    def left_click(self):
-        """Simulate left click on icon"""
-        try:
-            # Get icon position
-            rect = win32gui.GetWindowRect(self.hwnd)
-            x = rect[0] + 10
-            y = rect[1] + 10
-
-            # Send mouse messages to simulate click
-            lParam = win32api.MAKELONG(x, y)
-            win32gui.PostMessage(self.hwnd, WM_LBUTTONUP, 0, lParam)
-            print(f"INFO: Left clicked on tray icon: {self.text}")
-        except Exception as e:
-            print(f"ERROR: Failed to left click tray icon: {e}")
-
-    def right_click(self):
-        """Simulate right click on icon to show context menu"""
-        try:
-            # Get icon position
-            rect = win32gui.GetWindowRect(self.hwnd)
-            x = rect[0] + 10
-            y = rect[1] + 10
-
-            # Send right button up message to trigger context menu
-            lParam = win32api.MAKELONG(x, y)
-            win32gui.PostMessage(self.hwnd, WM_RBUTTONUP, 0, lParam)
-
-            # Also send WM_CONTEXTMENU for better compatibility
-            win32gui.PostMessage(self.hwnd, WM_CONTEXTMENU, self.hwnd, lParam)
-            print(f"INFO: Right clicked on tray icon: {self.text}")
-        except Exception as e:
-            print(f"ERROR: Failed to right click tray icon: {e}")
-
-
-def find_system_tray_window():
-    """Find the system tray window (notification area)"""
-    try:
-        # Find Shell_TrayWnd (taskbar)
-        tray_wnd = win32gui.FindWindow("Shell_TrayWnd", None)
-        if not tray_wnd:
-            print("WARNING: Shell_TrayWnd not found")
-            return None
-
-        # Find TrayNotifyWnd
-        tray_notify = win32gui.FindWindowEx(tray_wnd, 0, "TrayNotifyWnd", None)
-        if not tray_notify:
-            print("WARNING: TrayNotifyWnd not found")
-            return None
-
-        # Try to find SysPager (older Windows versions)
-        sys_pager = win32gui.FindWindowEx(tray_notify, 0, "SysPager", None)
-
-        # Find ToolbarWindow32 (the actual toolbar with icons)
-        if sys_pager:
-            # Older Windows (Vista, 7, 8, early 10)
-            print("INFO: Using SysPager for system tray (older Windows)")
-            toolbar = win32gui.FindWindowEx(sys_pager, 0, "ToolbarWindow32", None)
-        else:
-            # Newer Windows 10/11 - try directly under TrayNotifyWnd
-            print("INFO: SysPager not found, trying direct TrayNotifyWnd (newer Windows 10/11)")
-            toolbar = win32gui.FindWindowEx(tray_notify, 0, "ToolbarWindow32", None)
-
-        if toolbar:
-            print(f"INFO: Found system tray toolbar: {toolbar}")
-            return toolbar
-        else:
-            print("WARNING: ToolbarWindow32 not found in system tray")
-            return None
-
-    except Exception as e:
-        print(f"ERROR: Failed to find system tray window: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-
-def find_overflow_tray_window():
-    """Find the overflow (hidden) system tray window"""
-    try:
-        # In Windows 10/11, overflow icons are in NotifyIconOverflowWindow
-        overflow_wnd = win32gui.FindWindow("NotifyIconOverflowWindow", None)
-        if not overflow_wnd:
-            print("INFO: NotifyIconOverflowWindow not found (no hidden icons or older Windows)")
-            return None
-
-        # Find the toolbar in overflow window
-        toolbar = win32gui.FindWindowEx(overflow_wnd, 0, "ToolbarWindow32", None)
-        if toolbar:
-            print(f"INFO: Found overflow tray toolbar: {toolbar}")
-        else:
-            print("WARNING: ToolbarWindow32 not found in overflow window")
-
-        return toolbar
-
-    except Exception as e:
-        print(f"WARNING: Failed to find overflow tray window: {e}")
-        return None
-
-
-def get_tray_icons():
-    """Get list of system tray icons (visible and hidden)"""
-    icons = []
-
-    # Get visible tray icons
-    try:
-        toolbar_hwnd = find_system_tray_window()
-        if toolbar_hwnd:
-            # Get button count
-            button_count = win32gui.SendMessage(toolbar_hwnd, TB_BUTTONCOUNT, 0, 0)
-            print(f"INFO: Found {button_count} visible tray icons")
-
-            # Get each button/icon info
-            for i in range(button_count):
-                try:
-                    # Get button text (tooltip)
-                    text_buffer = ctypes.create_unicode_buffer(256)
-                    text_length = win32gui.SendMessage(toolbar_hwnd, TB_GETBUTTONTEXTW, i, ctypes.addressof(text_buffer))
-
-                    if text_length > 0:
-                        tooltip = text_buffer.value
-                    else:
-                        tooltip = _("System Icon") + f" {i+1}"
-
-                    # Create icon object
-                    icon = SystemTrayIcon(
-                        hwnd=toolbar_hwnd,
-                        button_id=i,
-                        text=tooltip,
-                        tooltip=tooltip
-                    )
-                    icons.append(icon)
-
-                except Exception as e:
-                    print(f"WARNING: Failed to get info for visible icon {i}: {e}")
-                    # Add placeholder icon
-                    icon = SystemTrayIcon(
-                        hwnd=toolbar_hwnd,
-                        button_id=i,
-                        text=_("System Icon") + f" {i+1}",
-                        tooltip=_("Unknown")
-                    )
-                    icons.append(icon)
-        else:
-            print("WARNING: Visible system tray window not found")
-
-    except Exception as e:
-        print(f"ERROR: Failed to get visible tray icons: {e}")
-
-    # Get hidden/overflow tray icons
-    try:
-        overflow_hwnd = find_overflow_tray_window()
-        if overflow_hwnd:
-            # Get button count in overflow
-            button_count = win32gui.SendMessage(overflow_hwnd, TB_BUTTONCOUNT, 0, 0)
-            print(f"INFO: Found {button_count} hidden/overflow tray icons")
-
-            # Get each button/icon info
-            for i in range(button_count):
-                try:
-                    # Get button text (tooltip)
-                    text_buffer = ctypes.create_unicode_buffer(256)
-                    text_length = win32gui.SendMessage(overflow_hwnd, TB_GETBUTTONTEXTW, i, ctypes.addressof(text_buffer))
-
-                    if text_length > 0:
-                        tooltip = text_buffer.value
-                        # Add marker to indicate it's a hidden icon
-                        tooltip = f"[{_('Hidden')}] {tooltip}"
-                    else:
-                        tooltip = f"[{_('Hidden')}] " + _("System Icon") + f" {i+1}"
-
-                    # Create icon object
-                    icon = SystemTrayIcon(
-                        hwnd=overflow_hwnd,
-                        button_id=i,
-                        text=tooltip,
-                        tooltip=tooltip
-                    )
-                    icons.append(icon)
-
-                except Exception as e:
-                    print(f"WARNING: Failed to get info for hidden icon {i}: {e}")
-                    # Add placeholder icon
-                    icon = SystemTrayIcon(
-                        hwnd=overflow_hwnd,
-                        button_id=i,
-                        text=f"[{_('Hidden')}] " + _("System Icon") + f" {i+1}",
-                        tooltip=_("Unknown")
-                    )
-                    icons.append(icon)
-
-    except Exception as e:
-        print(f"WARNING: Failed to get hidden/overflow tray icons: {e}")
-
-    print(f"INFO: Total tray icons found: {len(icons)}")
-    return icons
 
 
 class SystemTrayListDialog(wx.Dialog):
@@ -329,9 +98,15 @@ class SystemTrayListDialog(wx.Dialog):
         # Bind dialog events
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
-    def load_icons(self):
+    def load_icons(self, expand_hidden=False):
         """Load system tray icons into the list"""
-        self.icons = get_tray_icons()
+        if expand_hidden:
+            hidden = expand_hidden_icons()
+            visible = [icon for icon in get_tray_icons(include_hidden=False)
+                       if not is_chevron(icon)]
+            self.icons = visible + hidden
+        else:
+            self.icons = get_tray_icons()
 
         self.icon_list.Clear()
 
@@ -341,7 +116,10 @@ class SystemTrayListDialog(wx.Dialog):
             self.context_button.Enable(False)
         else:
             for icon in self.icons:
-                self.icon_list.Append(icon.text)
+                label = icon.text
+                if icon.hidden:
+                    label = "{} ({})".format(label, _("hidden"))
+                self.icon_list.Append(label)
 
             # Select first item
             if self.icon_list.GetCount() > 0:
@@ -363,12 +141,19 @@ class SystemTrayListDialog(wx.Dialog):
     def on_click(self, event):
         """Handle click button / Enter key"""
         icon = self.get_selected_icon()
-        if icon:
-            play_sound('select.ogg')
-            vibrate_selection()
-            icon.left_click()
-            # Close dialog after click
-            wx.CallLater(100, self.Close)
+        if not icon:
+            return
+        play_sound('select.ogg')
+        vibrate_selection()
+        if is_chevron(icon):
+            # "Show hidden icons" is not something to leave the list for:
+            # the hidden icons belong in this list, so it opens them and
+            # shows them here instead of closing and leaving a flyout open.
+            self.load_icons(expand_hidden=True)
+            return
+        icon.left_click()
+        # Close dialog after click
+        wx.CallLater(100, self.Close)
 
     def on_context_menu(self, event):
         """Handle context menu button / Applications key"""

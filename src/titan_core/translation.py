@@ -72,6 +72,7 @@ TRANSLATION_DOMAINS = [
     'interactive_games', # Interactive Games (network/interactive_games.py, interactive_game_session.py)
     'buffers_system', # Titan Buffer System (src/buffers/*.py)
     'ai',            # AI subsystem (src/ai/*.py: provider, creation kit, agent)
+    'shell',         # System shell: desktop, taskbar, tray, Start menu (src/shell/*.py)
 ]
 
 # Store translation objects for each domain

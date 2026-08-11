@@ -1,0 +1,890 @@
+# Author: Klaudiusz Wypych <klaldekwypych@gmail.com>
+# English translations for TCE Launcher - system shell (desktop, taskbar,
+# notification area, Start menu).
+# The English catalogue repeats the source strings; it was prepared with AI
+# assistance and reviewed by the author.
+# Copyright (C) 2026 Titosoft
+# This file is distributed under the same license as the TCE Launcher
+# project.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TCE Launcher\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-08-11 23:10+0200\n"
+"PO-Revision-Date: 2026-08-11 14:00+0200\n"
+"Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: src/shell/a11y.py:270
+msgid "button"
+msgstr "button"
+
+#: src/shell/a11y.py:271
+msgid "list"
+msgstr "list"
+
+#: src/shell/a11y.py:272
+msgid "item"
+msgstr "item"
+
+#: src/shell/a11y.py:273
+msgid "toolbar"
+msgstr "toolbar"
+
+#: src/shell/a11y.py:274
+msgid "menu item"
+msgstr "menu item"
+
+#: src/shell/a11y.py:275
+msgid "clock"
+msgstr "clock"
+
+#: src/shell/taskbar.py:93 src/shell/taskbar.py:135
+msgid "Start"
+msgstr "Start"
+
+#: src/shell/taskbar.py:95
+msgid "Open the Start menu"
+msgstr "Open the Start menu"
+
+#: src/shell/taskbar.py:97
+msgid "Click here to begin"
+msgstr "Click here to begin"
+
+#: src/shell/desktop.py:614 src/shell/quick_launch.py:143
+#: src/shell/taskbar.py:102
+msgid "&Open"
+msgstr "&Open"
+
+#: src/shell/taskbar.py:103
+msgid "&Explore"
+msgstr "&Explore"
+
+#: src/shell/desktop.py:619 src/shell/quick_launch.py:147
+#: src/shell/taskbar.py:105 src/shell/taskbar.py:1366
+msgid "P&roperties"
+msgstr "P&roperties"
+
+#: src/shell/taskbar.py:135
+msgid "start"
+msgstr "start"
+
+#: src/shell/taskbar.py:150
+msgid "Switch to this window"
+msgstr "Switch to this window"
+
+#: src/shell/taskbar.py:188
+msgid "needs attention"
+msgstr "needs attention"
+
+#: src/shell/shell_actions.py:199 src/shell/taskbar.py:190
+msgid "minimised"
+msgstr "minimised"
+
+#: src/shell/shell_actions.py:197 src/shell/taskbar.py:192
+msgid "active"
+msgstr "active"
+
+#: src/shell/taskbar.py:214
+msgid "&Restore"
+msgstr "&Restore"
+
+#: src/shell/taskbar.py:215
+msgid "Mi&nimise"
+msgstr "Mi&nimise"
+
+#: src/shell/taskbar.py:216
+msgid "Ma&ximise"
+msgstr "Ma&ximise"
+
+#: src/shell/taskbar.py:218
+msgid "&Close"
+msgstr "&Close"
+
+#: src/shell/taskbar.py:255 src/shell/taskbar.py:281
+msgid "Notification icon"
+msgstr "Notification icon"
+
+#: src/shell/taskbar.py:257 src/shell/taskbar.py:283
+#, python-brace-format
+msgid "{icon} (hidden)"
+msgstr "{icon} (hidden)"
+
+#: src/shell/taskbar.py:263
+msgid "Show the hidden icons"
+msgstr "Show the hidden icons"
+
+#: src/shell/taskbar.py:265
+msgid "Activate"
+msgstr "Activate"
+
+#: src/shell/taskbar.py:339 src/shell/taskbar.py:342
+msgid "Show desktop"
+msgstr "Show desktop"
+
+#: src/shell/taskbar.py:341
+msgid "Show the desktop"
+msgstr "Show the desktop"
+
+#: src/shell/taskbar.py:361
+msgid "Clock"
+msgstr "Clock"
+
+#: src/shell/taskbar.py:363
+msgid "Show the date"
+msgstr "Show the date"
+
+#: src/shell/taskbar.py:384
+msgid "Date and time"
+msgstr "Date and time"
+
+#: src/shell/taskbar.py:393 src/shell/taskbar.py:397
+msgid "Titan taskbar"
+msgstr "Titan taskbar"
+
+#: src/shell/quick_launch.py:97 src/shell/quick_launch.py:111
+#: src/shell/quick_launch.py:168 src/shell/taskbar.py:451
+msgid "Quick Launch"
+msgstr "Quick Launch"
+
+#: src/shell/taskbar.py:462
+msgid "Open windows"
+msgstr "Open windows"
+
+#: src/shell/taskbar.py:467 src/shell/taskbar_properties.py:237
+msgid "Notification area"
+msgstr "Notification area"
+
+#: src/shell/quick_launch.py:144 src/shell/taskbar.py:485
+msgid "Open the &folder"
+msgstr "Open the &folder"
+
+#: src/shell/taskbar.py:486
+msgid "&Refresh"
+msgstr "&Refresh"
+
+#: src/shell/taskbar.py:1332
+msgid "&Cascade Windows"
+msgstr "&Cascade Windows"
+
+#: src/shell/taskbar.py:1333
+msgid "Tile Windows &Horizontally"
+msgstr "Tile Windows &Horizontally"
+
+#: src/shell/taskbar.py:1334
+msgid "Tile Windows &Vertically"
+msgstr "Tile Windows &Vertically"
+
+#: src/shell/taskbar.py:1336
+msgid "&Show the Desktop"
+msgstr "&Show the Desktop"
+
+#: src/shell/taskbar.py:1338
+msgid "Tas&k Manager"
+msgstr "Tas&k Manager"
+
+#: src/shell/taskbar.py:1339
+msgid "&Window list"
+msgstr "&Window list"
+
+#: src/shell/taskbar.py:1347
+msgid "&Bottom"
+msgstr "&Bottom"
+
+#: src/shell/taskbar.py:1347
+msgid "&Top"
+msgstr "&Top"
+
+#: src/shell/taskbar.py:1348
+msgid "&Left"
+msgstr "&Left"
+
+#: src/shell/taskbar.py:1348
+msgid "&Right"
+msgstr "&Right"
+
+#: src/shell/taskbar.py:1353
+msgid "&Position"
+msgstr "&Position"
+
+#: src/shell/taskbar.py:1360 src/shell/taskbar_properties.py:86
+msgid "&Lock the taskbar"
+msgstr "&Lock the taskbar"
+
+#: src/shell/taskbar.py:1363 src/shell/taskbar_properties.py:89
+msgid "A&uto-hide the taskbar"
+msgstr "A&uto-hide the taskbar"
+
+#: src/shell/desktop.py:85 src/shell/desktop.py:89 src/shell/desktop.py:568
+msgid "Desktop"
+msgstr "Desktop"
+
+#: src/shell/desktop.py:98
+msgid "Desktop icons"
+msgstr "Desktop icons"
+
+#: src/shell/desktop.py:568
+msgid "The item could not be renamed."
+msgstr "The item could not be renamed."
+
+#: src/shell/desktop.py:616
+msgid "Re&name"
+msgstr "Re&name"
+
+#: src/shell/desktop.py:617 src/shell/quick_launch.py:146
+msgid "&Delete"
+msgstr "&Delete"
+
+#: src/shell/desktop.py:641
+msgid "Auto &Arrange"
+msgstr "Auto &Arrange"
+
+#: src/shell/desktop.py:643
+msgid "Line Up &Icons"
+msgstr "Line Up &Icons"
+
+#: src/shell/desktop.py:645
+msgid "Re&fresh"
+msgstr "Re&fresh"
+
+#: src/shell/desktop.py:647
+msgid "&New Folder"
+msgstr "&New Folder"
+
+#: src/shell/desktop.py:649
+msgid "&Titan settings"
+msgstr "&Titan settings"
+
+#: src/shell/desktop.py:650
+msgid "Display &properties"
+msgstr "Display &properties"
+
+#: src/shell/desktop.py:682
+msgid "New Folder"
+msgstr "New Folder"
+
+#: src/shell/start_menu.py:81
+#, python-brace-format
+msgid "{name}, submenu"
+msgstr "{name}, submenu"
+
+#: src/shell/run_dialog.py:278 src/shell/start_menu.py:132
+msgid "Programs"
+msgstr "Programs"
+
+#: src/shell/start_menu.py:135
+msgid "Places"
+msgstr "Places"
+
+#: src/shell/start_menu.py:142
+msgid "&Log Off"
+msgstr "&Log Off"
+
+#: src/shell/start_menu.py:144
+msgid "&Turn Off Computer"
+msgstr "&Turn Off Computer"
+
+#: src/shell/start_menu.py:194
+msgid "Titan"
+msgstr "Titan"
+
+#: src/shell/start_menu.py:195
+msgid "Applications"
+msgstr "Applications"
+
+#: src/shell/start_menu.py:196
+msgid "Games"
+msgstr "Games"
+
+#: src/shell/start_menu.py:197
+msgid "File manager"
+msgstr "File manager"
+
+#: src/shell/start_menu.py:198
+msgid "Internet"
+msgstr "Internet"
+
+#: src/shell/start_menu.py:200
+msgid "All Programs"
+msgstr "All Programs"
+
+#: src/shell/start_menu.py:207
+msgid "My Documents"
+msgstr "My Documents"
+
+#: src/shell/start_menu.py:208
+msgid "My Pictures"
+msgstr "My Pictures"
+
+#: src/shell/start_menu.py:209
+msgid "My Music"
+msgstr "My Music"
+
+#: src/shell/start_menu.py:210
+msgid "My Computer"
+msgstr "My Computer"
+
+#: src/shell/start_menu.py:211
+msgid "Control Panel"
+msgstr "Control Panel"
+
+#: src/shell/start_menu.py:212
+msgid "Titan settings"
+msgstr "Titan settings"
+
+#: src/shell/start_menu.py:213
+msgid "Notification centre"
+msgstr "Notification centre"
+
+#: src/shell/start_menu.py:214
+msgid "Search"
+msgstr "Search"
+
+#: src/shell/start_menu.py:215
+msgid "Run..."
+msgstr "Run..."
+
+#: src/shell/start_menu.py:216
+msgid "Help and Support"
+msgstr "Help and Support"
+
+#: src/shell/start_menu.py:221
+msgid "Titan applications"
+msgstr "Titan applications"
+
+#: src/shell/start_menu.py:222
+msgid "Titan games"
+msgstr "Titan games"
+
+#: src/shell/start_menu.py:230 src/shell/start_menu.py:254
+#: src/shell/start_menu.py:297
+msgid "Back"
+msgstr "Back"
+
+#: src/shell/start_menu.py:252
+msgid "No games found"
+msgstr "No games found"
+
+#: src/shell/start_menu.py:252
+msgid "No applications"
+msgstr "No applications"
+
+#: src/shell/start_menu.py:366
+msgid "Do you want to log off?"
+msgstr "Do you want to log off?"
+
+#: src/shell/start_menu.py:366
+msgid "Log Off"
+msgstr "Log Off"
+
+#: src/shell/shell_manager.py:237
+msgid "Settings"
+msgstr "Settings"
+
+#: src/shell/shell_actions.py:39
+msgid ""
+"The Titan shell is not running. Turn on \"Replace the desktop, taskbar "
+"and Start menu\" under Settings, Titan shell."
+msgstr ""
+"The Titan shell is not running. Turn on \"Replace the desktop, taskbar "
+"and Start menu\" under Settings, Titan shell."
+
+#: src/shell/shell_actions.py:44
+msgid "The Titan shell only runs on Windows."
+msgstr "The Titan shell only runs on Windows."
+
+#: src/shell/shell_actions.py:56
+msgid "The Titan shell is not running."
+msgstr "The Titan shell is not running."
+
+#: src/shell/shell_actions.py:58 src/shell/shell_actions.py:85
+msgid "The Titan shell is running."
+msgstr "The Titan shell is running."
+
+#: src/shell/shell_actions.py:60
+#, python-brace-format
+msgid "Desktop: {count} icons"
+msgstr "Desktop: {count} icons"
+
+#: src/shell/shell_actions.py:63
+#, python-brace-format
+msgid "Taskbar: {count} windows"
+msgstr "Taskbar: {count} windows"
+
+#: src/shell/shell_actions.py:65
+#, python-brace-format
+msgid "Clock: {time}"
+msgstr "Clock: {time}"
+
+#: src/shell/shell_actions.py:67
+#, python-brace-format
+msgid "The taskbar is at the {edge}."
+msgstr "The taskbar is at the {edge}."
+
+#: src/shell/shell_actions.py:70
+msgid "It hides itself."
+msgstr "It hides itself."
+
+#: src/shell/shell_actions.py:73 src/shell/shell_actions.py:121
+msgid "The Start menu is open."
+msgstr "The Start menu is open."
+
+#: src/shell/shell_actions.py:83
+msgid "The Titan shell is already running."
+msgstr "The Titan shell is already running."
+
+#: src/shell/shell_actions.py:87
+msgid "The Titan shell could not be started."
+msgstr "The Titan shell could not be started."
+
+#: src/shell/shell_actions.py:94
+msgid "The Titan shell has been stopped."
+msgstr "The Titan shell has been stopped."
+
+#: src/shell/shell_actions.py:95
+msgid "The Titan shell was not running."
+msgstr "The Titan shell was not running."
+
+#: src/shell/shell_actions.py:102
+msgid "The shell has been refreshed."
+msgstr "The shell has been refreshed."
+
+#: src/shell/shell_actions.py:118
+msgid "The Start menu could not be opened."
+msgstr "The Start menu could not be opened."
+
+#: src/shell/shell_actions.py:130
+msgid "The Start menu is closed."
+msgstr "The Start menu is closed."
+
+#: src/shell/shell_actions.py:131
+msgid "The Start menu was not open."
+msgstr "The Start menu was not open."
+
+#: src/shell/shell_actions.py:139
+msgid "The desktop is showing."
+msgstr "The desktop is showing."
+
+#: src/shell/shell_actions.py:143
+msgid "Every window has been minimised."
+msgstr "Every window has been minimised."
+
+#: src/shell/shell_actions.py:152
+msgid "The keyboard is on the taskbar."
+msgstr "The keyboard is on the taskbar."
+
+#: src/shell/shell_actions.py:161
+msgid "The keyboard is on the desktop."
+msgstr "The keyboard is on the desktop."
+
+#: src/shell/shell_actions.py:192
+msgid "No windows are open."
+msgstr "No windows are open."
+
+#: src/shell/shell_actions.py:210
+msgid "Which window?"
+msgstr "Which window?"
+
+#: src/shell/shell_actions.py:215
+msgid "Which window did you mean?"
+msgstr "Which window did you mean?"
+
+#: src/shell/shell_actions.py:219 src/shell/shutdown_dialog.py:208
+msgid "Windows refused that."
+msgstr "Windows refused that."
+
+#: src/shell/shell_actions.py:226
+#, python-brace-format
+msgid "{title} is now in front."
+msgstr "{title} is now in front."
+
+#: src/shell/shell_actions.py:227 src/shell/shell_actions.py:234
+#: src/shell/shell_actions.py:241
+#, python-brace-format
+msgid "There is no open window called {title}."
+msgstr "There is no open window called {title}."
+
+#: src/shell/shell_actions.py:233
+#, python-brace-format
+msgid "{title} has been minimised."
+msgstr "{title} has been minimised."
+
+#: src/shell/shell_actions.py:240
+#, python-brace-format
+msgid "{title} has been asked to close."
+msgstr "{title} has been asked to close."
+
+#: src/shell/shell_actions.py:256
+msgid "How should the windows be arranged?"
+msgstr "How should the windows be arranged?"
+
+#: src/shell/shell_actions.py:261
+msgid "The windows have been arranged."
+msgstr "The windows have been arranged."
+
+#: src/shell/shell_actions.py:263
+msgid "There was nothing to arrange."
+msgstr "There was nothing to arrange."
+
+#: src/shell/shell_actions.py:293
+msgid "The desktop is empty."
+msgstr "The desktop is empty."
+
+#: src/shell/shell_actions.py:302
+msgid "Which item on the desktop?"
+msgstr "Which item on the desktop?"
+
+#: src/shell/shell_actions.py:309
+#, python-brace-format
+msgid "There is no item number {number} on the desktop."
+msgstr "There is no item number {number} on the desktop."
+
+#: src/shell/shell_actions.py:318
+#, python-brace-format
+msgid "There is nothing called {name} on the desktop."
+msgstr "There is nothing called {name} on the desktop."
+
+#: src/shell/shell_actions.py:321 src/shell/shell_actions.py:381
+msgid "Which one did you mean?"
+msgstr "Which one did you mean?"
+
+#: src/shell/shell_actions.py:326
+#, python-brace-format
+msgid "{name} has been opened."
+msgstr "{name} has been opened."
+
+#: src/shell/shell_actions.py:327
+#, python-brace-format
+msgid "{name} could not be opened."
+msgstr "{name} could not be opened."
+
+#: src/shell/shell_actions.py:342 src/shell/shell_actions.py:363
+#, python-brace-format
+msgid "The notification area could not be read: {error}"
+msgstr "The notification area could not be read: {error}"
+
+#: src/shell/shell_actions.py:345
+msgid "The notification area is empty."
+msgstr "The notification area is empty."
+
+#: src/shell/shell_actions.py:348
+msgid "Unnamed"
+msgstr "Unnamed"
+
+#: src/shell/shell_actions.py:358
+msgid "Which notification icon?"
+msgstr "Which notification icon?"
+
+#: src/shell/shell_actions.py:384
+#, python-brace-format
+msgid "There is no notification icon called {name}."
+msgstr "There is no notification icon called {name}."
+
+#: src/shell/shell_actions.py:388
+#, python-brace-format
+msgid "{name} has been activated."
+msgstr "{name} has been activated."
+
+#: src/shell/shell_actions.py:390
+#, python-brace-format
+msgid "That icon could not be activated: {error}"
+msgstr "That icon could not be activated: {error}"
+
+#: src/shell/shell_actions.py:424 src/shell/shell_actions.py:435
+#: src/shell/shell_actions.py:447 src/shell/shell_actions.py:467
+msgid "on"
+msgstr "on"
+
+#: src/shell/shell_actions.py:424 src/shell/shell_actions.py:435
+#: src/shell/shell_actions.py:467
+msgid "off"
+msgstr "off"
+
+#: src/shell/shell_actions.py:432
+msgid "Which setting?"
+msgstr "Which setting?"
+
+#: src/shell/shell_actions.py:435
+msgid "On or off?"
+msgstr "On or off?"
+
+#: src/shell/shell_actions.py:442
+#, python-brace-format
+msgid "There is no shell setting called {name}."
+msgstr "There is no shell setting called {name}."
+
+#: src/shell/shell_actions.py:466
+#, python-brace-format
+msgid "{name} is now {state}."
+msgstr "{name} is now {state}."
+
+#: src/shell/shell_actions.py:479
+msgid "Which edge of the screen?"
+msgstr "Which edge of the screen?"
+
+#: src/shell/shell_actions.py:483
+msgid "The taskbar can be at the bottom, the top, the left or the right."
+msgstr "The taskbar can be at the bottom, the top, the left or the right."
+
+#: src/shell/shell_actions.py:486
+msgid "The taskbar is locked. Turn \"lock the taskbar\" off first."
+msgstr "The taskbar is locked. Turn \"lock the taskbar\" off first."
+
+#: src/shell/shell_actions.py:488
+#, python-brace-format
+msgid "The taskbar is now at the {edge}."
+msgstr "The taskbar is now at the {edge}."
+
+#: src/shell/run_dialog.py:174
+#, python-brace-format
+msgid ""
+"Windows cannot find '{command}'. Make sure you typed the name correctly, "
+"and then try again."
+msgstr ""
+"Windows cannot find '{command}'. Make sure you typed the name correctly, "
+"and then try again."
+
+#: src/shell/run_dialog.py:176 src/shell/run_dialog.py:191
+msgid "Run"
+msgstr "Run"
+
+#: src/shell/run_dialog.py:204
+msgid ""
+"Type the name of a program, folder, document, or Internet resource, and "
+"Windows will open it for you."
+msgstr ""
+"Type the name of a program, folder, document, or Internet resource, and "
+"Windows will open it for you."
+
+#: src/shell/run_dialog.py:212
+msgid "&Open:"
+msgstr "&Open:"
+
+#: src/shell/quick_launch.py:99 src/shell/run_dialog.py:221
+msgid "Open"
+msgstr "Open"
+
+#: src/shell/run_dialog.py:229 src/shell/shutdown_dialog.py:126
+msgid "OK"
+msgstr "OK"
+
+#: src/shell/run_dialog.py:230 src/shell/shutdown_dialog.py:127
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/shell/run_dialog.py:231
+msgid "&Browse..."
+msgstr "&Browse..."
+
+#: src/shell/run_dialog.py:279
+msgid "All files"
+msgstr "All files"
+
+#: src/shell/run_dialog.py:280
+msgid "Browse"
+msgstr "Browse"
+
+#: src/shell/quick_launch.py:166
+#, python-brace-format
+msgid "Remove \"{name}\" from Quick Launch?"
+msgstr "Remove \"{name}\" from Quick Launch?"
+
+#: src/shell/shutdown_dialog.py:53
+#, python-brace-format
+msgid "Log off \"{user}\""
+msgstr "Log off \"{user}\""
+
+#: src/shell/shutdown_dialog.py:53
+msgid "Log off"
+msgstr "Log off"
+
+#: src/shell/shutdown_dialog.py:54
+msgid "Ends your current session and allows other users to log on to the system."
+msgstr "Ends your current session and allows other users to log on to the system."
+
+#: src/shell/shutdown_dialog.py:56
+msgid "Shut down"
+msgstr "Shut down"
+
+#: src/shell/shutdown_dialog.py:57
+msgid ""
+"Ends your current session and shuts down the system so you can safely "
+"shut down the power."
+msgstr ""
+"Ends your current session and shuts down the system so you can safely "
+"shut down the power."
+
+#: src/shell/shutdown_dialog.py:59
+msgid "Restart"
+msgstr "Restart"
+
+#: src/shell/shutdown_dialog.py:60
+msgid "Ends your current session and reboots the system."
+msgstr "Ends your current session and reboots the system."
+
+#: src/shell/shutdown_dialog.py:65
+msgid "Sleep"
+msgstr "Sleep"
+
+#: src/shell/shutdown_dialog.py:66
+msgid "Puts the system in sleep mode."
+msgstr "Puts the system in sleep mode."
+
+#: src/shell/shutdown_dialog.py:68
+msgid "Hibernate"
+msgstr "Hibernate"
+
+#: src/shell/shutdown_dialog.py:69
+msgid "Saves the current session and shuts down the computer."
+msgstr "Saves the current session and shuts down the computer."
+
+#: src/shell/shutdown_dialog.py:90 src/shell/shutdown_dialog.py:208
+msgid "Shut Down Windows"
+msgstr "Shut Down Windows"
+
+#: src/shell/shutdown_dialog.py:105
+msgid "&What do you want the computer to do?"
+msgstr "&What do you want the computer to do?"
+
+#: src/shell/shutdown_dialog.py:111
+msgid "What do you want the computer to do?"
+msgstr "What do you want the computer to do?"
+
+#: src/shell/shutdown_dialog.py:118
+msgid "Description"
+msgstr "Description"
+
+#: src/shell/taskbar_properties.py:37
+msgid "Bottom"
+msgstr "Bottom"
+
+#: src/shell/taskbar_properties.py:37
+msgid "Top"
+msgstr "Top"
+
+#: src/shell/taskbar_properties.py:38
+msgid "Left"
+msgstr "Left"
+
+#: src/shell/taskbar_properties.py:38
+msgid "Right"
+msgstr "Right"
+
+#: src/shell/taskbar_properties.py:82
+msgid "Taskbar appearance"
+msgstr "Taskbar appearance"
+
+#: src/shell/taskbar_properties.py:92
+msgid "Keep the &taskbar on top of other windows"
+msgstr "Keep the &taskbar on top of other windows"
+
+#: src/shell/taskbar_properties.py:96
+msgid "Show &Quick Launch"
+msgstr "Show &Quick Launch"
+
+#: src/shell/taskbar_properties.py:104
+msgid "Taskbar location on &screen:"
+msgstr "Taskbar location on &screen:"
+
+#: src/shell/taskbar_properties.py:110
+msgid "Taskbar location on screen"
+msgstr "Taskbar location on screen"
+
+#: src/shell/taskbar_properties.py:135
+msgid "Start menu"
+msgstr "Start menu"
+
+#: src/shell/taskbar_properties.py:141
+msgid "&Start menu"
+msgstr "&Start menu"
+
+#: src/shell/taskbar_properties.py:146
+msgid ""
+"This menu style gives you easy access to your folders, favorite programs,"
+" and search."
+msgstr ""
+"This menu style gives you easy access to your folders, favorite programs,"
+" and search."
+
+#: src/shell/taskbar_properties.py:150
+msgid "Classic Start &menu"
+msgstr "Classic Start &menu"
+
+#: src/shell/taskbar_properties.py:154
+msgid "This menu style gives you the classic look and functionality."
+msgstr "This menu style gives you the classic look and functionality."
+
+#: src/shell/taskbar_properties.py:174
+msgid "Icons"
+msgstr "Icons"
+
+#: src/shell/taskbar_properties.py:178
+msgid ""
+"You can keep the notification area uncluttered by hiding icons that you "
+"have not clicked recently."
+msgstr ""
+"You can keep the notification area uncluttered by hiding icons that you "
+"have not clicked recently."
+
+#: src/shell/taskbar_properties.py:184
+msgid "&Customize..."
+msgstr "&Customize..."
+
+#: src/shell/taskbar_properties.py:189
+msgid "System icons"
+msgstr "System icons"
+
+#: src/shell/taskbar_properties.py:192
+msgid "Select which system icons to always show."
+msgstr "Select which system icons to always show."
+
+#: src/shell/taskbar_properties.py:195
+msgid "Cloc&k"
+msgstr "Cloc&k"
+
+#: src/shell/taskbar_properties.py:197
+msgid "Show &seconds"
+msgstr "Show &seconds"
+
+#: src/shell/taskbar_properties.py:200
+msgid "&Desktop"
+msgstr "&Desktop"
+
+#: src/shell/taskbar_properties.py:227
+msgid "Taskbar and Start Menu Properties"
+msgstr "Taskbar and Start Menu Properties"
+
+#: src/shell/taskbar_properties.py:233
+msgid "Taskbar"
+msgstr "Taskbar"
+
+#: src/shell/taskbar_properties.py:235
+msgid "Start Menu"
+msgstr "Start Menu"
+
+#: src/shell/taskbar_properties.py:246
+msgid "Close"
+msgstr "Close"
+
+#~ msgid "Windows would not do that."
+#~ msgstr "Windows would not do that."
+
+#~ msgid "&Lock the Taskbar"
+#~ msgstr "&Lock the Taskbar"
+
+#~ msgid "A&uto-hide the Taskbar"
+#~ msgstr "A&uto-hide the Taskbar"
+
+#~ msgid "Quick launch"
+#~ msgstr "Quick launch"
+
+#~ msgid "Notification Area"
+#~ msgstr "Notification Area"
+
