@@ -106,21 +106,21 @@ class TitanShell:
             self.stop()
             return False
 
-    def stop(self, quiet=False):
+    def stop(self, quiet=False, wait=False):
         """Put the screen back exactly as it was.
 
-        `quiet` is for the exit that has already said goodbye, or for a
-        quick start's quick exit - the sound is skipped, nothing else is.
+        `quiet` skips the goodbye sound - a quick start's quick exit, or an
+        exit that has already said it.  `wait` holds until the sound has
+        played, which only the way OUT of Titan needs: the process may go
+        the moment this returns, and a sound still in the mixer then is a
+        sound nobody hears.  Turning the shell off from the settings does
+        not wait, or the dialog would sit there for the length of the clip.
         """
         was_running = self._running
         self._running = False
 
-        # Logging out of the shell, and waited out on purpose: Titan may be
-        # exiting - through Windows shutting down, through the menu's Exit,
-        # or through the shell's own Shut Down dialog - and a sound still in
-        # the mixer when the process goes is a sound nobody hears.
         if was_running and not quiet:
-            shell_sound(SOUND_SHUTDOWN, wait=True)
+            shell_sound(SOUND_SHUTDOWN, wait=wait)
 
         if self._explorer_hidden:
             win_shell.set_explorer_taskbar_visible(True)
@@ -420,7 +420,7 @@ def start_shell(parent=None, force=False):
     return shell.start()
 
 
-def stop_shell(quiet=False):
+def stop_shell(quiet=False, wait=False):
     """Take the shell down. Called twice on the way out, and idempotent."""
     global _shell
     with _lock:
@@ -428,7 +428,7 @@ def stop_shell(quiet=False):
         _shell = None
     if shell is None:
         return False
-    shell.stop(quiet=quiet)
+    shell.stop(quiet=quiet, wait=wait)
     return True
 
 

@@ -42,6 +42,10 @@ merely present:
     and fall back to the default set on a theme that does not carry them.
 13. The shell settings are in real `wx.StaticBox` groups, which is what makes
     a screen reader say which group the keyboard has entered.
+14. "Turn off TCE" in the Shut Down dialog is not a second kind of exit: it
+    hands the exit to whichever face of Titan is running, so the confirmation
+    the user asked for still appears and one teardown runs - and the shell is
+    stopped, with its own goodbye sound, before Titan's.
 
 Run directly: python tests/test_shell.py
 """
@@ -2473,9 +2477,16 @@ class ShellSoundTests(unittest.TestCase):
             shell.stop()
             self.assertEqual(played, [], "a shell that never ran said goodbye")
             shell._running = True
-            shell.stop()
+            shell.stop(wait=True)
             self.assertEqual(played,
                              [(shell_manager.SOUND_SHUTDOWN, True)])
+            # Turning the shell off from the settings still says goodbye,
+            # but does not hold the dialog for the length of the clip.
+            del played[:]
+            shell._running = True
+            shell.stop()
+            self.assertEqual(played,
+                             [(shell_manager.SOUND_SHUTDOWN, False)])
         finally:
             shell_manager.shell_sound = real
 
@@ -2545,6 +2556,113 @@ class ShellSettingsPanelTests(unittest.TestCase):
     def test_the_sound_switch_is_there(self):
         self.assertIn("'shell_sounds'", self.panel_source)
         self.assertIn("'focus_cues'", self.panel_source)
+
+class ExitTitanTests(unittest.TestCase):
+    """"Turn off TCE" is not a second kind of exit.
+
+    Every face of Titan already has a way out that asks first when the user
+    asked to be asked (`shutdown_question`) and then runs the one teardown -
+    hooks off, shell stopped, appbar unregistered, Explorer's taskbar back.
+    The Shut Down dialog's own entry hands the exit to that, and the shell
+    says goodbye out loud on the way.
+    """
+
+    class FakeMain(wx.Frame):
+        """A stand-in for Titan's main window: it has `shutdown_app`."""
+
+        def __init__(self):
+            super().__init__(None, title='FakeTitanMain')
+            self.closed = False
+            self.shut_down = False
+
+        def Close(self, force=False):
+            self.closed = True
+            return True
+
+        def shutdown_app(self):
+            self.shut_down = True
+
+    class FakeKlango(wx.Frame):
+        """Klango mode: it does the asking itself, in `exit_program`."""
+
+        def __init__(self):
+            super().__init__(None, title='FakeKlango')
+            self.exited = False
+
+        def exit_program(self):
+            self.exited = True
+
+    def test_the_main_window_is_closed_the_way_the_menu_closes_it(self):
+        from src.shell import shutdown_dialog
+        frame = self.FakeMain()
+        try:
+            self.assertIs(shutdown_dialog.titan_main_window(), frame)
+            self.assertTrue(shutdown_dialog.exit_titan())
+            wx.Yield()
+            # Close(), so `main.py`'s EVT_CLOSE binding does the asking -
+            # rather than shutdown_app(), which would skip the question.
+            self.assertTrue(frame.closed)
+            self.assertFalse(frame.shut_down)
+        finally:
+            frame.Destroy()
+            wx.Yield()
+
+    def test_klango_mode_exits_through_its_own_way_out(self):
+        from src.shell import shutdown_dialog
+        frame = self.FakeKlango()
+        try:
+            self.assertTrue(shutdown_dialog.exit_titan())
+            wx.Yield()
+            self.assertTrue(frame.exited)
+        finally:
+            frame.Destroy()
+            wx.Yield()
+
+    def test_the_shells_own_windows_are_never_taken_for_the_main_one(self):
+        """They refuse to close, so closing one would put the dialog up again."""
+        from src.shell import explorer, shutdown_dialog
+        browser = explorer.ExplorerFrame(None, explorer.COMPUTER)
+        frame = self.FakeMain()
+        try:
+            self.assertIs(shutdown_dialog.titan_main_window(), frame)
+        finally:
+            frame.Destroy()
+            browser.Destroy()
+            wx.Yield()
+
+    def test_turning_tce_off_is_one_of_the_dialogs_own_entries(self):
+        from src.shell import shutdown_dialog
+        identifiers = [identifier for identifier, _label, _description
+                       in shutdown_dialog.shutdown_actions()]
+        self.assertIn('exit_titan', identifiers)
+
+    def test_the_shell_is_stopped_before_titans_own_goodbye_sound(self):
+        """The logoff sound comes first, as it does on Windows."""
+        for path in (os.path.join(REPO, 'src', 'ui', 'gui.py'),
+                     os.path.join(REPO, 'src', 'system', 'klangomode.py')):
+            source = open(path, encoding='utf-8').read()
+            self.assertIn('stop_shell(quiet=quick_start, wait=True)', source,
+                          "{} does not stop the shell".format(path))
+            self.assertLess(source.index('stop_shell(quiet=quick_start'),
+                            source.index('play_shutdown_sound()'),
+                            "{} says goodbye before logging out".format(path))
+
+    def test_a_quiet_stop_says_nothing(self):
+        """Quick start's quick exit, and an exit that already said it."""
+        from src.shell import shell_manager
+        played = []
+        real = shell_manager.shell_sound
+        shell_manager.shell_sound = lambda name, **kwargs: played.append(name)
+        try:
+            shell = shell_manager.TitanShell(parent=None)
+            shell._running = True
+            shell.stop(quiet=True)
+            self.assertEqual(played, [])
+            shell._running = True
+            shell.stop()
+            self.assertEqual(played, [shell_manager.SOUND_SHUTDOWN])
+        finally:
+            shell_manager.shell_sound = real
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

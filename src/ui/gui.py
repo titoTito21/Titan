@@ -4796,6 +4796,18 @@ class TitanApp(wx.Frame):
                     quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
                 except Exception:
                     quick_start = False
+
+                # The shell goes first, and so does its sound: logging out
+                # of the system interface is heard before Titan's own
+                # goodbye, the way Windows plays its logoff sound before it
+                # shuts down.  stop_system_hooks() below stops the shell too
+                # and this is idempotent, so nothing is done twice.
+                try:
+                    from src.shell.shell_manager import stop_shell
+                    stop_shell(quiet=quick_start, wait=True)
+                except Exception as e:
+                    print(f"Warning: Error stopping the Titan shell: {e}")
+
                 if not quick_start:
                     play_shutdown_sound()
 

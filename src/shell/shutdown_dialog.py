@@ -78,20 +78,75 @@ def shutdown_actions():
     return actions
 
 
-def exit_titan():
-    """Close Titan itself, as its own window's close button does.
+def titan_main_window():
+    """The window that owns Titan's exit - never one of the shell's own.
 
-    The shell is taken down on the way out by Titan's normal shutdown (the
-    system hooks stop the shell, which unregisters the appbar and puts
-    Explorer's taskbar back), so this is the ordinary exit and not a
-    separate teardown that could get out of step with it.
+    Titan runs one of three faces (the main window, the Invisible UI, Klango
+    mode) and each carries its own way out; the desktop and the taskbar are
+    furniture and refuse to close at all, so a search for "the top window"
+    must not land on one of them.
+    """
+    app = wx.GetApp()
+    if app is None:
+        return None
+    candidates = []
+    try:
+        candidates.extend(wx.GetTopLevelWindows())
+    except Exception:
+        pass
+    top = None
+    try:
+        top = app.GetTopWindow()
+    except Exception:
+        top = None
+    if top is not None and top not in candidates:
+        candidates.insert(0, top)
+    for window in candidates:
+        if hasattr(window, 'exit_program') or hasattr(window, 'shutdown_app'):
+            return window
+    return top
+
+
+def exit_titan():
+    """Turn Titan off the way every other way of turning Titan off does.
+
+    "Turn off TCE" is one entry in a dialog, but it must not become a second
+    kind of exit.  Every face of Titan already has one, and each asks first
+    when the user has asked to be asked (Settings -> General -> "Confirm
+    exit from Titan", which is what `shutdown_question` puts up) and then
+    runs the same teardown: the hooks come off, the shell is stopped, the
+    appbar unregistered and Explorer's taskbar put back.  So this hands the
+    exit to that window rather than doing any of it here:
+
+      * Klango mode's `exit_program()` - it does the asking itself;
+      * the main window's `Close()`, which is what the menu's Exit, the
+        Invisible UI's Exit and the title bar all go through (`main.py`
+        binds the confirmation to `EVT_CLOSE`);
+      * `shutdown_app()`, then wx's own exit, as the last resorts.
+
+    Cancelling the confirmation cancels the exit and the shell stays up,
+    which is why nothing here tears anything down by itself.
+
+    **The shell says goodbye out loud**: stopping it plays
+    `sfx/<theme>/shell/shell_shutdown.ogg` and waits for it
+    (`TitanShell.stop`), and Titan's shutdown now stops the shell *before*
+    its own goodbye sound - so logging out of the shell is heard first, the
+    way Windows plays its logoff sound before it goes.
     """
     app = wx.GetApp()
     if app is None:
         return False
-    frame = app.GetTopWindow()
-    if frame is not None and hasattr(frame, 'shutdown_app'):
-        wx.CallAfter(frame.shutdown_app)
+    window = titan_main_window()
+    if window is not None and hasattr(window, 'exit_program'):
+        # After the dialog has gone, or a confirmation would come up behind
+        # the window that asked for it.
+        wx.CallAfter(window.exit_program)
+        return True
+    if window is not None and hasattr(window, 'shutdown_app'):
+        wx.CallAfter(window.Close)
+        return True
+    if window is not None:
+        wx.CallAfter(window.Close)
         return True
     wx.CallAfter(app.ExitMainLoop)
     return True

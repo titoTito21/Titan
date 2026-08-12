@@ -1239,6 +1239,16 @@ class KlangoMode:
                     quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
                 except Exception:
                     quick_start = False
+
+                # The shell first, so logging out of the system interface is
+                # heard before Titan's own goodbye. stop_system_hooks() below
+                # stops it too and this is idempotent.
+                try:
+                    from src.shell.shell_manager import stop_shell
+                    stop_shell(quiet=quick_start, wait=True)
+                except Exception as e:
+                    print(f"Warning: Error stopping the Titan shell: {e}")
+
                 if not quick_start:
                     play_shutdown_sound()
 
@@ -2472,6 +2482,16 @@ class KlangoFrame(wx.Frame):
                     quick_start = str(get_setting('quick_start', 'False')).lower() in ('true', '1')
                 except Exception:
                     quick_start = False
+
+                # The shell first, so logging out of the system interface is
+                # heard before Titan's own goodbye. stop_system_hooks() below
+                # stops it too and this is idempotent.
+                try:
+                    from src.shell.shell_manager import stop_shell
+                    stop_shell(quiet=quick_start, wait=True)
+                except Exception as e:
+                    print(f"Warning: Error stopping the Titan shell: {e}")
+
                 if not quick_start:
                     play_shutdown_sound()
 

@@ -686,6 +686,21 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
 - **The Shut Down dialog has one entry that is Titan's**: "Turn off TCE"
   closes Titan and gives the desktop and the taskbar back to Windows,
   beside msgina's own log off / shut down / restart / sleep / hibernate.
+  It is deliberately **not a second kind of exit** (`exit_titan` ->
+  `titan_main_window()`): it hands the exit to whichever face of Titan is
+  running - Klango mode's own `exit_program()`, or the main window's
+  `Close()`, which is what the menu's Exit, the Invisible UI's Exit and the
+  title bar go through - so the confirmation the user asked for
+  (`shutdown_question`, Settings -> General -> "Confirm exit from Titan")
+  still appears, cancelling it still cancels, and one teardown runs. The
+  search skips the shell's own windows on purpose: they refuse to close, so
+  closing one would put this dialog up again. Titan's shutdown now **stops
+  the shell before its own goodbye sound** (`gui.py` and `klangomode.py`,
+  `stop_shell(quiet=quick_start, wait=True)`, idempotent because
+  `stop_system_hooks()` stops it too; only the way out waits for the
+  clip - turning the shell off in the settings would otherwise sit
+  there for its length), so logging out of the shell is heard first, the way Windows
+  plays its logoff sound before it goes.
 - **The Start menu is one ring of real controls** (`start_menu.py`): the
   user's name is a `UserButton` (a focusable, named control - a painted
   strip is nothing to a screen reader) that opens their own folder, then a
@@ -843,7 +858,7 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   (a folder, or "My Computer", listed the way the browser shows it).
   `focus_desktop` no longer needs the shell.
 - Translation domain: **`shell`**.
-- Tests: `tests/test_shell.py` (run it directly; 185 tests).
+- Tests: `tests/test_shell.py` (run it directly; 191 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 
