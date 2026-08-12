@@ -71,33 +71,63 @@ class TitanShell:
             from src.shell.desktop import DesktopFrame
             from src.shell.taskbar import TaskbarFrame
 
-            # Explorer's bar goes first, and not only for tidiness: while it
-            # is still docked it owns a strip of the work area, and Windows
-            # would place ours above that strip instead of at the bottom of
-            # the screen.
-            if shell_setting('hide_system_taskbar', True):
-                self._explorer_hidden = win_shell.set_explorer_taskbar_visible(
-                    False)
+            # Explorer's bar has to give the strip up before ours claims
+            # it, or Windows places ours above the strip the other one still
+            # owns.  That handover is `ABM_SETSTATE`, which measured 2.4
+            # SECONDS on this machine - Explorer moves the work area and
+            # every window in the session is told about it - so the two are
+            # chained through this event, on workers, rather than the shell
+            # sitting inside Windows waiting for either of them.
+            hidden = threading.Event()
 
-            if shell_setting('show_desktop', True):
-                self.desktop = DesktopFrame(self, parent=self.parent)
-                self.desktop.cover_screen()
-
+            # The bar before the desktop, and both before anything is read
+            # into them.  Starting a shell is the moment Windows is least
+            # able to wait: the appbar and the shell hook make this process
+            # something every other program's broadcasts go through, so the
+            # rule here is that nothing slow happens between registering
+            # them and getting back to the message loop.  What is slow -
+            # the desktop's icons, the notification area, the user's startup
+            # programs - is read afterwards, off this thread.
             if shell_setting('show_taskbar', True):
                 self.taskbar = TaskbarFrame(self, parent=self.parent)
-                self.taskbar.dock()
+                self.taskbar.dock(after=hidden)
 
-            # Only when Titan really is the shell: with Explorer running,
-            # these programs were started at logon already.
-            win_shell.run_startup_items()
+            if shell_setting('show_desktop', True):
+                self.desktop = DesktopFrame(self, parent=self.parent,
+                                            defer=True)
+                self.desktop.cover_screen()
 
             self._running = True
             print("[TitanShell] shell started")
             # The shell has the screen: say so with the one sound Windows
-            # itself would make here.  Only once everything is really up -
-            # a sound played before the bar docked would be a promise the
-            # shell had not yet kept.
+            # itself would make here.
             shell_sound(SOUND_STARTUP)
+
+            # Explorer's bar goes away only now, with the shell's own
+            # windows built and shown and this thread about to go back to
+            # the message loop.  While Explorer is switching its bar to
+            # auto-hide, ANY window this thread creates and any message it
+            # sends across the session waits for it: measured, the same
+            # taskbar took 76 ms to build before that change and 2.6
+            # SECONDS during it.  The work-area change costs what it costs;
+            # what matters is that the shell spends it answering Windows
+            # instead of queueing behind it.
+            self._claim_the_strip(hidden)
+
+            # Only when Titan really is the shell: with Explorer running,
+            # these programs were started at logon already.  On a thread,
+            # and after the shell is up, because `ShellExecute` on a program
+            # that puts a window up can take seconds - and every one of them
+            # would have been seconds of a shell that had stopped answering
+            # Windows.
+            self._start_startup_items()
+            # The Start menu is built the first time it is asked for, which
+            # is about 150 ms - noticeable exactly when the user has just
+            # pressed the Windows key.  So it is built for them a couple of
+            # seconds later instead, while nobody is waiting, and its slow
+            # lists (the packaged apps, the Windows Start Menu) are warmed
+            # on a thread of their own by `prefetch`.
+            wx.CallLater(2500, self._prebuild_start_menu)
             return True
         except Exception as error:
             print(f"[TitanShell] could not start: {error}")
@@ -105,6 +135,66 @@ class TitanShell:
             traceback.print_exc()
             self.stop()
             return False
+
+    def _claim_the_strip(self, hidden):
+        """Put Explorer's bar away, on a worker, and let ours dock after it.
+
+        `hidden` is what the taskbar's own appbar worker is waiting on: our
+        bar must not be registered until Explorer's has given the strip up,
+        or Windows places ours above it.
+        """
+        if not shell_setting('hide_system_taskbar', True):
+            hidden.set()
+            return None
+
+        def work():
+            try:
+                self._explorer_hidden = win_shell.set_explorer_taskbar_visible(
+                    False)
+            except Exception as error:
+                print(f"[TitanShell] could not hide Explorer's bar: {error}")
+            finally:
+                hidden.set()
+
+        thread = threading.Thread(target=work, daemon=True,
+                                  name='TitanShellExplorerBar')
+        thread.start()
+        return thread
+
+    def _prebuild_start_menu(self):
+        """Have the menu ready before the Windows key is pressed."""
+        if not self._running or self.start_menu is not None:
+            return False
+        menu = self.get_start_menu()
+        if menu is None:
+            return False
+        try:
+            menu.prefetch()
+        except Exception:
+            pass
+        return True
+
+    def _start_startup_items(self, delay=1.5):
+        """Run the user's startup programs, out of the shell's way.
+
+        Staggered on purpose: a logon that launches six programs at once
+        gives the machine six cold starts to do together, and the shell is
+        what the user is looking at while that happens.
+        """
+        def work():
+            import time
+            time.sleep(delay)
+            try:
+                started = win_shell.run_startup_items()
+                if started:
+                    print(f"[TitanShell] {len(started)} startup items")
+            except Exception as error:
+                print(f"[TitanShell] startup items failed: {error}")
+
+        thread = threading.Thread(target=work, daemon=True,
+                                  name='TitanShellStartup')
+        thread.start()
+        return thread
 
     def stop(self, quiet=False, wait=False):
         """Put the screen back exactly as it was.
@@ -122,7 +212,12 @@ class TitanShell:
         if was_running and not quiet:
             shell_sound(SOUND_SHUTDOWN, wait=wait)
 
-        if self._explorer_hidden:
+        # Restored whenever the shell was ever going to hide it, not only
+        # when the flag says it managed to: hiding it happens on a worker
+        # now, and a stop that overtakes that worker must still give the
+        # user their taskbar back.  Showing a bar that was never hidden
+        # costs nothing.
+        if self._explorer_hidden or shell_setting('hide_system_taskbar', True):
             win_shell.set_explorer_taskbar_visible(True)
             self._explorer_hidden = False
 
@@ -363,7 +458,10 @@ class TitanShell:
         """Re-read the desktop, the windows and, if asked, the skin."""
         if skin_changed:
             self.palette = luna.get_palette(refresh=True)
-        for window, method in ((self.desktop, 'refresh'),
+        # The desktop off the GUI thread: a refresh re-reads every icon,
+        # and F5 must not be a moment of a shell that has stopped answering
+        # Windows.
+        for window, method in ((self.desktop, 'refresh_async'),
                                (self.taskbar, 'refresh_windows')):
             if window is None:
                 continue

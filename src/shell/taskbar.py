@@ -21,6 +21,7 @@ a bar shown with `ShowWithoutActivating` and never activated swallowed every
 key.  `activate()` is what every entry point into the bar now goes through.
 """
 
+import threading
 import time
 
 import wx
@@ -174,15 +175,23 @@ class TaskButton(IconTextControl):
         self.taskbar = taskbar
         self.accessible_action = _("Switch to this window")
         self.set_tooltip(window.title)
+        self._icon_asked_at = 0.0
         self._load_icon()
 
     def _load_icon(self):
         """The window's own icon, which is what a task button shows."""
+        self._icon_asked_at = time.monotonic()
         try:
             handle = win_shell.window_icon_handle(self.window.hwnd)
         except Exception:
             handle = 0
         self.set_icon(bitmap_from_icon_handle(handle, 16) if handle else None)
+
+    # How long to leave a window that gave no icon alone.  Asking costs a
+    # message into its process, and the poll comes round every three
+    # seconds: a program that answers nothing (or has hung) would otherwise
+    # be asked twenty times a minute, for ever.
+    ICON_RETRY_SECONDS = 30.0
 
     def update(self, window):
         changed = window.hwnd != self.window.hwnd
@@ -190,10 +199,12 @@ class TaskButton(IconTextControl):
         if window.title != self._text:
             self.set_text(window.title)
             self.set_tooltip(window.title)
-        if changed or self._icon is None:
-            # A button is reused for another window when the list changes,
-            # and a program that had no icon when it started may have one
-            # now, so an empty one is worth asking about again.
+        if changed:
+            self._load_icon()
+        elif self._icon is None and (time.monotonic() - self._icon_asked_at
+                                     > self.ICON_RETRY_SECONDS):
+            # A program that had no icon when it started may have one now,
+            # so an empty one is worth asking about again - occasionally.
             self._load_icon()
         self.Refresh()
 
@@ -425,6 +436,7 @@ class TaskbarFrame(wx.Frame):
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
         self._appbar = None
+        self._appbar_thread = None
         self._hook = None
         self._windows = []
         self._buttons = {}
@@ -662,23 +674,23 @@ class TaskbarFrame(wx.Frame):
             return (0, 0, thickness, height)
         return (width - thickness, 0, thickness, height)
 
-    def dock(self):
-        """Take the strip along the chosen edge of the screen and hold it."""
-        thickness = self.thickness()
+    def dock(self, after=None):
+        """Take the strip along the chosen edge of the screen and hold it.
+
+        The bar is on the screen when this returns; **the appbar is
+        registered on a worker**.  `ABM_NEW` is a call into Explorer that
+        moves the work area and tells every top-level window about it -
+        close to a second on this machine - and the shell must not be inside
+        it, because a shell that is not answering Windows is a machine that
+        feels stuck rather than a slow Titan.
+
+        `after` is the event that says Explorer's own bar has gone; ours has
+        to be registered after that or Windows places it above the strip the
+        other one still owns.
+        """
         self.SetSize(*self._shown_rect())
 
         if IS_WINDOWS:
-            try:
-                self._appbar = win_shell.AppBar(self.GetHandle(),
-                                                edge=self.edge(),
-                                                height=thickness)
-                if self._appbar.register():
-                    rect = self._appbar.reposition()
-                    if rect:
-                        self.SetSize(*rect)
-            except Exception as error:
-                print(f"[TitanShell] docking failed: {error}")
-
             try:
                 self._hook = win_shell.ShellHook(
                     self.GetHandle(),
@@ -696,9 +708,89 @@ class TaskbarFrame(wx.Frame):
             pass
         self._layout_bar()
         self.refresh_windows()
-        self.refresh_tray()
         self._start_auto_hide()
         self.apply_always_on_top()
+        if IS_WINDOWS:
+            self.register_appbar(after=after)
+        else:
+            wx.CallAfter(self._first_tray_read)
+
+    def register_appbar(self, after=None):
+        """Claim the strip, on a thread of our own.
+
+        Nothing here touches wx: `SHAppBarMessage` is Windows IPC and the
+        rectangle it hands back is arithmetic, so the only thing that comes
+        back to the GUI thread is the size to be.
+        """
+        if self._appbar is not None or self._appbar_thread is not None:
+            return False
+        handle = self.GetHandle()
+        edge = self.edge()
+        thickness = self.thickness()
+
+        def work():
+            appbar, rect = None, None
+            try:
+                if after is not None:
+                    # Long enough for Explorer to answer, short enough that
+                    # a machine which never answers still gets a taskbar.
+                    after.wait(8.0)
+                appbar = win_shell.AppBar(handle, edge=edge, height=thickness)
+                if appbar.register():
+                    rect = appbar.reposition()
+                else:
+                    appbar = None
+            except Exception as error:
+                print(f"[TitanShell] docking failed: {error}")
+                appbar = None
+            wx.CallAfter(self._appbar_ready, appbar, rect)
+
+        self._appbar_thread = threading.Thread(
+            target=work, daemon=True, name='TitanShellAppBar')
+        self._appbar_thread.start()
+        return True
+
+    def _appbar_ready(self, appbar, rect):
+        """The strip is ours: take the size Windows agreed to."""
+        self._appbar_thread = None
+        if not self:
+            # The shell went away while Windows was thinking about it; the
+            # reservation must not outlive the bar.
+            if appbar is not None:
+                try:
+                    appbar.unregister()
+                except Exception:
+                    pass
+            return
+        self._appbar = appbar
+        if appbar is not None and rect and not self.auto_hide():
+            self.SetSize(*rect)
+            self._layout_bar()
+        # And only now the notification area.  Reading it is UI Automation
+        # into Explorer's own windows, and Explorer has just been made to
+        # move the work area: asking it anything before it has settled is
+        # seconds of a shell that has stopped answering Windows, and the
+        # answer comes back empty anyway.
+        wx.CallLater(400, self._first_tray_read)
+
+    def _first_tray_read(self, attempt=1):
+        """Read the notification area, and again if Explorer was not ready.
+
+        Reading it is UI Automation into Explorer's own windows, and this
+        happens seconds after Explorer has been made to move the work area:
+        asked too early it answers nothing at all.  An empty answer is
+        therefore treated as "not yet" rather than as "no icons", and tried
+        again a few times before the ordinary slow refresh takes over.
+        """
+        if not self:
+            return
+        try:
+            self.refresh_tray()
+        except Exception as error:
+            print(f"[TitanShell] the notification area could not be read: "
+                  f"{error}")
+        if not self._tray_buttons and attempt < 4:
+            wx.CallLater(1000 * attempt, self._first_tray_read, attempt + 1)
 
     # ------------------------------------------------------------------
     # Auto-hide

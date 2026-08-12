@@ -15,6 +15,7 @@ Nothing here draws anything; the modules that draw call in here.
 
 import ctypes
 import os
+import time
 import sys
 import threading
 from ctypes import wintypes
@@ -895,11 +896,29 @@ def set_explorer_taskbar_reserved(reserved):
     hwnd = explorer_taskbar_hwnd()
     if not available() or not hwnd:
         return False
+    wanted = ABS_ALWAYSONTOP if reserved else ABS_AUTOHIDE
     try:
+        # Measured: this one call takes about two and a half SECONDS, and
+        # not because of anything here - Explorer moves the work area and
+        # every top-level window in the session is told about it, which
+        # stalls a bare wx application just as much as it stalls the shell.
+        # So it is worth not making it at all when the state is already the
+        # one being asked for (`ABM_GETSTATE` is instant), which is what a
+        # second start, or turning the shell off and on again, would do.
+        try:
+            data = APPBARDATA()
+            data.cbSize = ctypes.sizeof(APPBARDATA)
+            state = int(shell32.SHAppBarMessage(ABM_GETSTATE,
+                                                ctypes.byref(data)))
+            if bool(state & ABS_AUTOHIDE) == (not reserved):
+                return True
+        except Exception:
+            pass
+
         data = APPBARDATA()
         data.cbSize = ctypes.sizeof(APPBARDATA)
         data.hWnd = hwnd
-        data.lParam = ABS_ALWAYSONTOP if reserved else ABS_AUTOHIDE
+        data.lParam = wanted
         shell32.SHAppBarMessage(ABM_SETSTATE, ctypes.byref(data))
         return True
     except Exception as error:
@@ -1026,6 +1045,11 @@ def run_startup_items():
                 started.append(path)
             except Exception as error:
                 print(f"[TitanShell] startup item {entry} failed: {error}")
+            # A breath between programs: they are cold starts competing for
+            # the same disk, and Explorer staggers them too.  It costs the
+            # user nothing - this is never on the thread the shell answers
+            # Windows with.
+            time.sleep(0.35)
     return started
 
 
@@ -1065,12 +1089,46 @@ def file_icon_handle(path, large=True):
         return 0
 
 
+# `SendMessageTimeout`'s flags.  SMTO_ABORTIFHUNG is the one that matters
+# here: it answers at once for a window whose thread has stopped pumping.
+SMTO_NORMAL = 0x0000
+SMTO_ABORTIFHUNG = 0x0002
+
+
+def send_message_timeout(hwnd, message, wparam=0, lparam=0, timeout=200):
+    """Ask another window something without letting it hold the shell.
+
+    A plain `SendMessage` into another process blocks until that process
+    answers - and a program that has stopped answering blocks it for as
+    long as it is hung.  In an ordinary application that means one frozen
+    window; in the SHELL it means a frozen machine, because this is the
+    process every taskbar button, the notification area, the appbar and the
+    shell hook go through, and a shell that is not pumping messages holds
+    up the broadcasts Windows sends to everything else.
+
+    So the shell never sends: it asks, briefly, and takes silence for an
+    answer.
+    """
+    if not available() or not hwnd:
+        return 0
+    try:
+        result = ctypes.c_size_t(0)
+        ok = user32.SendMessageTimeoutW(int(hwnd), int(message), wparam,
+                                        lparam,
+                                        SMTO_NORMAL | SMTO_ABORTIFHUNG,
+                                        int(timeout), ctypes.byref(result))
+        return int(result.value) if ok else 0
+    except Exception:
+        return 0
+
+
 def window_icon_handle(hwnd):
     """The icon a window would show on a taskbar button.
 
     Asked for the way the shell asks: the window's own small icon first,
     then the one its window class carries, which is what a program that
-    never answered WM_GETICON was registered with.
+    never answered WM_GETICON was registered with - and asked with a
+    timeout, because a hung program must not be able to freeze the bar.
     """
     if not available() or not hwnd:
         return 0
@@ -1078,10 +1136,7 @@ def window_icon_handle(hwnd):
     ICON_SMALL, ICON_BIG, ICON_SMALL2 = 0, 1, 2
     GCLP_HICONSM, GCLP_HICON = -34, -14
     for which in (ICON_SMALL2, ICON_SMALL, ICON_BIG):
-        try:
-            handle = user32.SendMessageW(int(hwnd), WM_GETICON, which, 0)
-        except Exception:
-            handle = 0
+        handle = send_message_timeout(hwnd, WM_GETICON, which, 0, timeout=120)
         if handle:
             return int(handle)
     getter = getattr(user32, 'GetClassLongPtrW', None) or         getattr(user32, 'GetClassLongW', None)

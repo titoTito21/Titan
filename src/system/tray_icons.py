@@ -182,7 +182,12 @@ class SystemTrayIcon:
         GCLP_HICONSM, GCLP_HICON = -34, -14
         for which in (ICON_SMALL2, ICON_SMALL, ICON_BIG):
             try:
-                handle = user32.SendMessageW(hwnd, WM_GETICON, which, 0)
+                # With a timeout: a notification icon belongs to somebody
+                # else's process, and one that has hung must not take the
+                # taskbar down with it.
+                from src.shell.win_shell import send_message_timeout
+                handle = send_message_timeout(hwnd, WM_GETICON, which, 0,
+                                              timeout=120)
             except Exception:
                 handle = 0
             if handle:

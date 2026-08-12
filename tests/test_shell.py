@@ -46,6 +46,14 @@ merely present:
     hands the exit to whichever face of Titan is running, so the confirmation
     the user asked for still appears and one teardown runs - and the shell is
     stopped, with its own goodbye sound, before Titan's.
+15. Starting the shell keeps the GUI thread free: the bar is docked before
+    anything is read into it, the desktop's icons and the notification area
+    are read afterwards, the user's startup programs run on a thread, and
+    nothing the shell asks another program can be held by a hung one.
+16. The strip changes hands off the GUI thread and in order - Explorer's bar
+    gives it up, then ours claims it - because those two calls into Explorer
+    take seconds of the whole session's time, and the shell must spend them
+    answering Windows rather than queueing behind it.
 
 Run directly: python tests/test_shell.py
 """
@@ -53,6 +61,7 @@ Run directly: python tests/test_shell.py
 import os
 import re
 import sys
+import threading
 import types
 import unittest
 
@@ -2663,6 +2672,251 @@ class ExitTitanTests(unittest.TestCase):
             self.assertEqual(played, [shell_manager.SOUND_SHUTDOWN])
         finally:
             shell_manager.shell_sound = real
+
+class ShellStartupSpeedTests(unittest.TestCase):
+    """Starting the shell must not stop the machine.
+
+    A shell is not an ordinary program: with the appbar registered and the
+    shell hook installed, every broadcast Windows sends to top-level windows
+    goes through this process, so a GUI thread busy for half a second is
+    half a second of a system that feels stuck - not just a slow Titan.
+    Everything slow therefore happens off that thread, and these tests lock
+    down which things those are.
+    """
+
+    class FakeShell:
+        parent = None
+
+        def __init__(self):
+            self.desktop = self.taskbar = self.start_menu = None
+
+        def toggle_start_menu(self):
+            pass
+
+        def own_hwnds(self):
+            return ()
+
+        def taskbar_height(self):
+            return 30
+
+    def test_the_desktop_can_be_put_up_without_reading_it(self):
+        """`defer` is what the shell starts the desktop with."""
+        import time
+        from src.shell.desktop import DesktopFrame
+        started = time.perf_counter()
+        desktop = DesktopFrame(self.FakeShell(), defer=True)
+        elapsed = (time.perf_counter() - started) * 1000
+        try:
+            # The window exists at once; the icons arrive on their own.
+            self.assertLess(elapsed, 250,
+                            "putting the desktop up took {:.0f} ms".format(
+                                elapsed))
+            deadline = time.time() + 20
+            while time.time() < deadline and not desktop.items:
+                wx.Yield()
+                time.sleep(0.02)
+            self.assertTrue(desktop.items, "the icons never arrived")
+            self.assertEqual(desktop.list.GetItemCount(), len(desktop.items))
+        finally:
+            desktop.Destroy()
+            wx.Yield()
+
+    def test_an_icon_read_once_is_not_read_again(self):
+        """A refresh used to be half a second of Windows shell calls."""
+        from src.shell import desktop as desktop_module
+        from src.shell.desktop import DesktopFrame
+        desktop = DesktopFrame(self.FakeShell())
+        asked = []
+        real = desktop_module.win_shell.file_icon_handle
+        desktop_module.win_shell.file_icon_handle = (
+            lambda path, large=True: asked.append(path) or real(path, large))
+        try:
+            desktop.refresh()
+            self.assertEqual(asked, [], "the icons were read a second time")
+        finally:
+            desktop_module.win_shell.file_icon_handle = real
+            desktop.Destroy()
+            wx.Yield()
+
+    def test_a_renamed_item_gets_its_icon_read_again(self):
+        """The cache is keyed on the file, not merely on its name."""
+        from src.shell.desktop import DesktopFrame
+        desktop = DesktopFrame(self.FakeShell())
+        try:
+            self.assertIsNone(desktop._cached_bitmap(
+                os.path.join(REPO, 'no such file.txt')))
+            path = os.path.join(REPO, 'CLAUDE.md')
+            bitmap = desktop._bitmap_for(path)
+            self.assertIsNotNone(bitmap)
+            self.assertIs(desktop._cached_bitmap(path), bitmap)
+        finally:
+            desktop.Destroy()
+            wx.Yield()
+
+    def test_the_type_name_is_read_only_when_something_wants_it(self):
+        """Another shell call per item, and the desktop shows none of them."""
+        from src.shell.desktop import DesktopFrame
+        desktop = DesktopFrame(self.FakeShell())
+        try:
+            if not desktop.items:
+                self.skipTest("this desktop is empty")
+            self.assertEqual(desktop.items[0]['type'], '')
+            self.assertTrue(desktop.item_type(desktop.items[0]))
+        finally:
+            desktop.Destroy()
+            wx.Yield()
+
+    def test_the_bar_is_up_before_anything_is_read_into_it(self):
+        from src.shell import shell_manager
+        source = open(shell_manager.__file__, encoding='utf-8').read()
+        start = source.index('    def start(self):')
+        body = source[start:source.index('    def _start_startup_items')]
+        self.assertLess(body.index('TaskbarFrame(self'),
+                        body.index('DesktopFrame(self'),
+                        "the desktop is built before the bar is docked")
+        self.assertIn('defer=True', body,
+                      "the desktop is read on the GUI thread at startup")
+        self.assertIn('self._start_startup_items()', body)
+
+    def test_the_users_startup_programs_run_off_the_gui_thread(self):
+        """`ShellExecute` on a program that opens a window takes seconds."""
+        from src.shell import shell_manager
+        shell = shell_manager.TitanShell(parent=None)
+        ran = []
+        real = shell_manager.win_shell.run_startup_items
+        shell_manager.win_shell.run_startup_items = lambda: ran.append(
+            threading.current_thread()) or []
+        try:
+            thread = shell._start_startup_items(delay=0.05)
+            self.assertIsNot(thread, threading.current_thread())
+            thread.join(timeout=10)
+            self.assertEqual(len(ran), 1)
+            self.assertIsNot(ran[0], threading.main_thread())
+        finally:
+            shell_manager.win_shell.run_startup_items = real
+
+    def test_the_notification_area_is_read_after_the_bar_is_shown(self):
+        from src.shell import taskbar as taskbar_module
+        source = open(taskbar_module.__file__, encoding='utf-8').read()
+        dock = source[source.index('    def dock(self, after=None):'):
+                      source.index('    def register_appbar')]
+        self.assertIn('wx.CallAfter(self._first_tray_read)', dock)
+        self.assertNotIn('self.refresh_tray()', dock)
+
+    def test_the_appbar_is_claimed_off_the_gui_thread(self):
+        """ABM_SETSTATE and ABM_NEW measured 2.4 s and 0.8 s here."""
+        from src.shell import shell_manager, taskbar as taskbar_module
+        bar = open(taskbar_module.__file__, encoding='utf-8').read()
+        dock = bar[bar.index('    def dock(self, after=None):'):
+                   bar.index('    def _appbar_ready')]
+        self.assertNotIn('appbar.register()', dock.split('def work')[0])
+        self.assertIn('threading.Thread', bar[bar.index('def register_appbar'):
+                                              bar.index('def _appbar_ready')])
+        manager = open(shell_manager.__file__, encoding='utf-8').read()
+        start = manager[manager.index('    def start(self):'):
+                        manager.index('    def _prebuild_start_menu')]
+        self.assertIn('threading.Thread', start,
+                      "Explorer's bar is still hidden on the GUI thread")
+        self.assertIn('dock(after=hidden)', start,
+                      "the appbar no longer waits for Explorer's bar to go")
+
+    def test_the_shell_never_sends_a_message_a_hung_program_can_hold(self):
+        """A hung window must not be able to freeze the whole taskbar."""
+        from src.shell import win_shell
+        source = open(win_shell.__file__, encoding='utf-8').read()
+        icon = source[source.index('def window_icon_handle'):
+                      source.index('def file_display_name')]
+        self.assertNotIn('SendMessageW', icon)
+        self.assertIn('send_message_timeout', icon)
+        # And it really answers - about this very process's own window.
+        frame = wx.Frame(None, title='TimeoutProbe')
+        try:
+            handle = win_shell.window_icon_handle(frame.GetHandle())
+            self.assertIsInstance(handle, int)
+        finally:
+            frame.Destroy()
+            wx.Yield()
+
+    def test_a_window_with_no_icon_is_not_asked_on_every_poll(self):
+        from src.shell.taskbar import TaskButton
+        self.assertTrue(getattr(TaskButton, 'ICON_RETRY_SECONDS', 0) >= 10)
+        source = open(os.path.join(REPO, 'src', 'shell', 'taskbar.py'),
+                      encoding='utf-8').read()
+        update = source[source.index('    def update(self, window):'):
+                        source.index('    def middle_activate')]
+        self.assertIn('ICON_RETRY_SECONDS', update)
+
+class ExplorerHandoverTests(unittest.TestCase):
+    """The strip changes hands without the shell sitting inside Windows.
+
+    Measured on this machine: `ABM_SETSTATE` (Explorer's bar to auto-hide)
+    2416 ms, `ABM_NEW` (ours registered) 849 ms, and a bare wx application
+    with no Titan shell at all stalls 2407 ms while the first of those is
+    happening - so the cost is Windows moving the work area and telling
+    every window about it, not anything here.  What Titan controls is that
+    it happens on a worker, after its own windows are up, and not at all
+    when Explorer's bar is already where it is being put.
+    """
+
+    def test_the_state_is_not_set_when_it_is_already_that(self):
+        """The one call that costs two and a half seconds."""
+        from src.shell import win_shell
+        source = open(win_shell.__file__, encoding='utf-8').read()
+        body = source[source.index('def set_explorer_taskbar_reserved'):
+                      source.index('def set_explorer_taskbar_visible')]
+        self.assertIn('ABM_GETSTATE', body)
+        self.assertLess(body.index('ABM_GETSTATE'), body.index('ABM_SETSTATE'),
+                        "the state is set before it is looked at")
+
+    def test_explorers_bar_goes_after_the_shells_windows_are_up(self):
+        from src.shell import shell_manager
+        source = open(shell_manager.__file__, encoding='utf-8').read()
+        start = source[source.index('    def start(self):'):
+                       source.index('    def _claim_the_strip')]
+        self.assertLess(start.index('self._running = True'),
+                        start.index('self._claim_the_strip(hidden)'),
+                        "the shell waits for Windows before it is running")
+        self.assertLess(start.index('DesktopFrame(self'),
+                        start.index('self._claim_the_strip(hidden)'))
+
+    def test_the_two_are_chained_rather_than_raced(self):
+        """Ours must not be registered while Explorer's still owns the strip."""
+        from src.shell import shell_manager, taskbar as taskbar_module
+        manager = open(shell_manager.__file__, encoding='utf-8').read()
+        self.assertIn('threading.Event()', manager)
+        self.assertIn('dock(after=hidden)', manager)
+        bar = open(taskbar_module.__file__, encoding='utf-8').read()
+        worker = bar[bar.index('def register_appbar'):
+                     bar.index('def _appbar_ready')]
+        self.assertIn('after.wait(', worker,
+                      "the appbar does not wait for Explorer's bar to go")
+
+    def test_the_taskbar_is_given_back_even_if_the_worker_was_overtaken(self):
+        """A stop that beats the hiding worker must still restore it."""
+        from src.shell import shell_manager
+        source = open(shell_manager.__file__, encoding='utf-8').read()
+        stop = source[source.index('    def stop(self, quiet=False'):
+                      source.index('    def is_running')]
+        self.assertIn("shell_setting('hide_system_taskbar', True)", stop)
+
+    def test_an_empty_notification_area_is_taken_for_not_yet(self):
+        """Explorer answers nothing at all while it is re-laying out."""
+        from src.shell import taskbar as taskbar_module
+        source = open(taskbar_module.__file__, encoding='utf-8').read()
+        read = source[source.index('    def _first_tray_read'):
+                      source.index('    def refresh_tray')]
+        self.assertIn('attempt', read)
+        self.assertIn('wx.CallLater', read)
+
+    def test_the_start_menu_is_built_before_it_is_asked_for(self):
+        """150 ms, and the moment it costs them is the Windows key."""
+        from src.shell import shell_manager
+        source = open(shell_manager.__file__, encoding='utf-8').read()
+        self.assertIn('_prebuild_start_menu', source)
+        body = source[source.index('    def _prebuild_start_menu'):
+                      source.index('    def _start_startup_items')]
+        self.assertIn('prefetch()', body,
+                      "the slow lists are not warmed with it")
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

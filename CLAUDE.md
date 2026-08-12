@@ -780,6 +780,55 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   grouping Windows itself knows about, so a screen reader says which group
   the keyboard has entered instead of the panel being twenty checkboxes to
   count through.
+- **Starting the shell must not stop the machine** - measured, then fixed.
+  `start_shell()` cost **4240 ms on the GUI thread**; it now costs **214
+  ms**, with the desktop's icons, the notification area, the appbar and the
+  user's startup programs all arriving afterwards. This matters more than
+  ordinary startup time: with the appbar registered and the shell hook
+  installed, every broadcast Windows sends to top-level windows goes
+  through this process, so a GUI thread busy for a second is a second of a
+  system that feels stuck, not merely a slow Titan. What was where:
+  - `ABM_SETSTATE` (Explorer's bar into auto-hide) **2416 ms** and
+    `ABM_NEW` (ours registered) **849 ms**. Neither is Titan's doing - a
+    bare wx application with no shell at all stalls **2407 ms** while the
+    first one happens, because Explorer moves the work area and tells every
+    window in the session about it. They are Windows IPC touching no wx, so
+    both now run on workers, chained through a `threading.Event` (ours must
+    not claim the strip until Explorer's has given it up), and
+    `set_explorer_taskbar_reserved()` asks `ABM_GETSTATE` first so a second
+    start makes neither call. **Explorer's bar is put away last**, once the
+    shell's own windows are up: while that transition is happening, any
+    window this thread creates and any message it sends across the session
+    waits for it - the same taskbar took 76 ms to build before the change
+    and 2.6 seconds during it.
+  - The desktop was **550 ms of shell calls** (a display name and a
+    `SHGetFileInfo` icon per item, 64 of them). `DesktopFrame(defer=True)`
+    reads them on a worker - with its own COM apartment, because
+    `SHGetFileInfo` reaches into shell extensions - and only the `wx.Bitmap`
+    conversion comes back to the GUI thread: 322 ms -> **31 ms**, the icons
+    arriving about half a second later. Both the icons and the display names
+    are then cached against the file's own timestamp, so a re-read (F5, a
+    rename, the shell's `refresh` action) is 269 ms -> **33 ms**, and
+    `file_type_name` is gone from the read entirely - it was another call
+    per item and nothing on the desktop shows it (`item_type()` asks for it
+    if anything ever wants it).
+  - The notification area is UI Automation into Explorer's own windows, so
+    it is read **after** the strip has changed hands, and an empty answer is
+    treated as "not yet" and tried again - asked during the transition,
+    Explorer answers nothing at all.
+  - The user's **startup programs run on a worker** 1.5 s later, staggered:
+    `ShellExecute` on a program that puts a window up takes seconds, and
+    every one of them used to be seconds of a shell that had stopped
+    answering Windows.
+  - **The shell never `SendMessage`s another program**
+    (`win_shell.send_message_timeout`, `SMTO_ABORTIFHUNG`): a window's icon
+    is fetched with `WM_GETICON`, and a program that has hung would
+    otherwise hold the bar - and therefore the machine - for as long as it
+    is hung. A window that answers no icon is also not asked again for 30
+    seconds rather than on every poll.
+  - The **Start menu is built 2.5 s after startup** rather than on the first
+    press of the Windows key (about 150 ms), and its slow lists (packaged
+    apps, the Windows Start Menu) are warmed by `prefetch()` on a thread.
 - **The shell has three sounds of its own**, in `sfx/<theme>/shell/`:
   `shell_startup.ogg` when the shell is up and complete, `shell_shutdown.ogg`
   when it goes away (waited out, because Titan may be exiting through Windows
@@ -858,7 +907,7 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   (a folder, or "My Computer", listed the way the browser shows it).
   `focus_desktop` no longer needs the shell.
 - Translation domain: **`shell`**.
-- Tests: `tests/test_shell.py` (run it directly; 191 tests).
+- Tests: `tests/test_shell.py` (run it directly; 207 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 

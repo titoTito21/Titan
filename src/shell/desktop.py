@@ -25,6 +25,7 @@ dragged an icon to.
 
 import json
 import os
+import threading
 
 import wx
 
@@ -81,7 +82,13 @@ GRID_CELL_HEIGHT = 88
 class DesktopFrame(wx.Frame):
     """The window that owns the whole screen and sits under everything."""
 
-    def __init__(self, shell, parent=None):
+    def __init__(self, shell, parent=None, defer=False):
+        """`defer` reads the icons on a worker instead of here.
+
+        The shell starts with it: putting the desktop up must not wait for
+        half a second of Windows shell calls, and the window is perfectly
+        usable while its icons are still arriving.
+        """
         super().__init__(parent, title=_("Desktop"),
                          style=wx.FRAME_NO_TASKBAR | wx.BORDER_NONE)
         self.shell = shell
@@ -94,6 +101,17 @@ class DesktopFrame(wx.Frame):
         self._cut_paths = []
         self._image_list = None
         self._positions = self._load_positions()
+        # The icon of every item is a `SHGetFileInfo` - about 7 ms each, and
+        # a desktop of sixty is most of half a second - so what has been
+        # read once is kept, keyed on the file's own timestamp.  This is
+        # what makes F5, a rename and the periodic re-read cost nothing.
+        self._icon_cache = {}
+        # The same for the displayed name, which is a shell call too (a
+        # localised folder, a shortcut's own label): sixty of them are
+        # another 70 ms, and they change no more often than the file does.
+        self._name_cache = {}
+        self._read_thread = None
+        self._read_again = False
 
         self.list = wx.ListCtrl(
             self, style=wx.LC_ICON | wx.LC_SINGLE_SEL | wx.LC_ALIGN_LEFT
@@ -107,7 +125,10 @@ class DesktopFrame(wx.Frame):
         self._apply_grid()
 
         self._apply_look()
-        self.refresh()
+        if defer:
+            self.refresh_async()
+        else:
+            self.refresh()
 
         self.list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_activate)
         self.list.Bind(wx.EVT_LIST_END_LABEL_EDIT, self._on_rename)
@@ -375,15 +396,92 @@ class DesktopFrame(wx.Frame):
     # Contents
     # ------------------------------------------------------------------
     def refresh(self):
-        """Re-read the desktop folders and rebuild the icons."""
-        self.items = self._read_items()
+        """Re-read the desktop folders and rebuild the icons, here and now.
+
+        Everything that changes the desktop from inside Titan - a rename, a
+        delete, a paste - uses this, because it must be able to look at the
+        result on the next line.
+        """
+        self._fill(self._read_items())
+
+    def refresh_async(self):
+        """The same, with the reading done off the GUI thread.
+
+        Reading a desktop is half a second of Windows shell calls: a display
+        name, and an icon, for every item.  Doing that on the GUI thread
+        while the appbar and the shell hook are installed is what makes the
+        whole MACHINE feel stuck rather than just Titan - a window that is
+        not pumping messages holds up the broadcasts Windows sends to every
+        top-level window, so other programs sit waiting on ours.  So the
+        reading happens on a worker and only the wx part comes back here.
+
+        One reader at a time; anything asked for while it is out is done
+        once, afterwards, rather than queued up behind it.
+        """
+        if self._read_thread is not None and self._read_thread.is_alive():
+            self._read_again = True
+            return False
+        self._read_again = False
+
+        def work():
+            entries, handles = [], {}
+            # SHGetFileInfo reaches into shell extensions, which expect a
+            # COM apartment on the thread that calls them.
+            initialised = False
+            if IS_WINDOWS:
+                try:
+                    initialised = ctypes.windll.ole32.CoInitializeEx(
+                        None, 0x2) in (0, 1)
+                except Exception:
+                    initialised = False
+            try:
+                entries = self._read_items()
+                for entry in entries:
+                    if self._cached_bitmap(entry['path']) is None:
+                        handles[entry['path']] = win_shell.file_icon_handle(
+                            entry['path'], large=True)
+            except Exception as error:
+                print(f"[TitanShell] could not read the desktop: {error}")
+            finally:
+                if initialised:
+                    try:
+                        ctypes.windll.ole32.CoUninitialize()
+                    except Exception:
+                        pass
+            wx.CallAfter(self._apply_read, entries, handles)
+
+        self._read_thread = threading.Thread(target=work, daemon=True,
+                                             name='TitanShellDesktop')
+        self._read_thread.start()
+        return True
+
+    def _apply_read(self, entries, handles):
+        """What the worker found, turned into wx on the GUI thread.
+
+        An HICON is a handle and can be fetched anywhere; a `wx.Bitmap` is
+        wx and belongs here, which is exactly where the line between the two
+        threads is drawn.
+        """
+        if not self:
+            return
+        for path, handle in handles.items():
+            bitmap = self._bitmap_from_handle(handle)
+            if bitmap is not None:
+                self._remember_bitmap(path, bitmap)
+        self._fill(entries)
+        if self._read_again:
+            self.refresh_async()
+
+    def _fill(self, entries):
+        """Put the items in the list, with the icons that are known."""
+        self.items = entries
         self.list.ClearAll()
 
         self._image_list = wx.ImageList(ICON_SIZE, ICON_SIZE)
         fallback = wx.ArtProvider.GetBitmap(wx.ART_NORMAL_FILE, wx.ART_OTHER,
                                             (ICON_SIZE, ICON_SIZE))
         for entry in self.items:
-            bitmap = self._icon_for(entry['path']) or fallback
+            bitmap = self._bitmap_for(entry['path']) or fallback
             entry['image'] = self._image_list.Add(bitmap)
         self.list.AssignImageList(self._image_list, wx.IMAGE_LIST_NORMAL)
 
@@ -410,15 +508,83 @@ class DesktopFrame(wx.Frame):
                     continue
                 seen.add(key)
                 entries.append({
-                    'name': win_shell.file_display_name(path),
+                    'name': self._display_name(path),
                     'path': path,
-                    'type': win_shell.file_type_name(path),
+                    # Asked for only when something wants it: another
+                    # `SHGetFileInfo` per item, and nothing on the desktop
+                    # shows it.
+                    'type': '',
                     'image': -1,
                 })
         # Folders first, then files - the order Explorer sorts a desktop in.
         entries.sort(key=lambda item: (not os.path.isdir(item['path']),
                                        item['name'].lower()))
         return entries
+
+    def item_type(self, entry):
+        """"Shortcut", "Folder" - read when it is actually wanted."""
+        if not entry.get('type'):
+            entry['type'] = win_shell.file_type_name(entry['path'])
+        return entry['type']
+
+    def _display_name(self, path):
+        """What Explorer writes under the icon, remembered between reads."""
+        key = os.path.normcase(path)
+        stamp = self._stamp(path)
+        cached = self._name_cache.get(key)
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
+        name = win_shell.file_display_name(path)
+        if len(self._name_cache) > 512:
+            self._name_cache.clear()
+        self._name_cache[key] = (stamp, name)
+        return name
+
+    @staticmethod
+    def _stamp(path):
+        try:
+            return os.path.getmtime(path)
+        except Exception:
+            return 0
+
+    def _cached_bitmap(self, path):
+        cached = self._icon_cache.get(os.path.normcase(path))
+        if cached is not None and cached[0] == self._stamp(path):
+            return cached[1]
+        return None
+
+    def _remember_bitmap(self, path, bitmap):
+        # A desktop does not have thousands of items, but a cache that only
+        # ever grows is still a leak: this one is thrown away rather than
+        # curated, because the next read fills it again anyway.
+        if len(self._icon_cache) > 512:
+            self._icon_cache.clear()
+        self._icon_cache[os.path.normcase(path)] = (self._stamp(path), bitmap)
+
+    def _bitmap_for(self, path):
+        """The item's icon, from the cache when it is already known."""
+        bitmap = self._cached_bitmap(path)
+        if bitmap is not None:
+            return bitmap
+        bitmap = self._icon_for(path)
+        if bitmap is not None:
+            self._remember_bitmap(path, bitmap)
+        return bitmap
+
+    @staticmethod
+    def _bitmap_from_handle(handle):
+        if not handle:
+            return None
+        try:
+            icon = wx.Icon()
+            icon.SetHandle(handle)
+            icon.SetWidth(ICON_SIZE)
+            icon.SetHeight(ICON_SIZE)
+            bitmap = wx.Bitmap()
+            bitmap.CopyFromIcon(icon)
+            return bitmap if bitmap.IsOk() else None
+        except Exception:
+            return None
 
     def _icon_for(self, path):
         """The real Windows icon, converted into something wx can hold."""
