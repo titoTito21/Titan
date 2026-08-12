@@ -664,28 +664,20 @@ def shell_sound_path(name):
     return ''
 
 
-def play_shell_sound(name, pan=None, wait=False):
-    """Play one of the shell's sounds. `wait` blocks for the length of it.
+def play_shell_sound(name, pan=None):
+    """Play one of the shell's sounds. Never blocks.
 
-    The shutdown one needs the wait: Titan may exit the moment the shell has
-    finished stopping, and a sound that is still in the mixer when the
-    process goes is a sound nobody hears.
+    It used to be able to hold its caller for the length of the clip, on
+    the reasoning that a sound still in the mixer when the process goes is
+    a sound nobody hears.  The other side of that is a program that will
+    not close while a sound finishes, which is worse: the shell's goodbye
+    is something to hear on the way out, not something to wait through.
+    Titan's own shutdown takes long enough that most of it is heard anyway.
     """
     path = shell_sound_path(name)
     if not path:
         return False
-    duration = 0.0
-    if wait:
-        try:
-            if not _mixer_initialized or pygame.mixer.get_init() is None:
-                initialize_sound()
-            duration = pygame.mixer.Sound(path).get_length()
-        except Exception:
-            duration = 0.0
-    played = play_sound_file(path, pan)
-    if played and wait:
-        time.sleep(max(0.0, min(duration, 4.0) - 0.1) if duration > 0 else 1.0)
-    return played
+    return play_sound_file(path, pan)
 
 
 def play_connecting_sound():

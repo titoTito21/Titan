@@ -36,6 +36,11 @@ from src.shell.controls import ShellControl
 from src.ui.classic_start_menu import ClassicStartMenu
 from src.titan_core.translation import _
 
+# How long to wait for the activation that hands the keyboard over before
+# doing it anyway.  There is no activation when the menu was already the
+# active window, and Windows can refuse the foreground outright.
+FOCUS_FALLBACK_MS = 300
+
 MENU_WIDTH = 420
 MENU_HEIGHT = 520
 HEADER_HEIGHT = 58
@@ -324,6 +329,9 @@ class XPStartMenu(ClassicStartMenu):
         self._prefetching = False
         self._announce_timer = None
         self._announce_count = 0
+        # Set while the menu is opening: the keyboard belongs to the
+        # opening sequence until the activation has handed it over.
+        self._focus_pending = False
         super().__init__(parent)
 
     # ------------------------------------------------------------------
@@ -1107,6 +1115,10 @@ class XPStartMenu(ClassicStartMenu):
 
     def _on_char_hook(self, event):
         key = event.GetKeyCode()
+        # A key before the activation has handed the keyboard over: take it
+        # now, so the first keystroke is never the one that goes nowhere.
+        if self._focus_pending:
+            self._hand_over_focus()
         focused = wx.Window.FindFocus()
 
         if key == wx.WXK_F4 and event.AltDown():
@@ -1211,6 +1223,11 @@ class XPStartMenu(ClassicStartMenu):
         self.build_menu_structure()
         self.prefetch()
         self.position_menu()
+        # Claimed BEFORE the window is shown: `Show()` answers the
+        # activation synchronously, and `on_activate` focusing the tree
+        # there and then is what put the control in front of the window's
+        # name however carefully the name was said first.
+        self._focus_pending = True
         self.Show()
         self.Raise()
         # A menu is furniture too - it must not turn up in Alt+Tab beside
@@ -1224,9 +1241,44 @@ class XPStartMenu(ClassicStartMenu):
             force_foreground(self)
         except Exception:
             pass
-        wx.CallAfter(lambda: self.left_column().SetFocus())
+        # The keyboard is handed over from the ACTIVATION (see
+        # `on_activate`), not from here; this is only the fallback for when
+        # no activation arrives - the menu was already the active window,
+        # or Windows refused the foreground.
+        wx.CallLater(FOCUS_FALLBACK_MS, self._hand_over_focus)
         if self.shell is not None:
             self.shell.set_start_button_pressed(True)
+
+    def _hand_over_focus(self):
+        """Put the keyboard in the menu, once however this is reached.
+
+        Once, because twice is what a screen reader reads as the control
+        twice: wxWidgets answers WM_ACTIVATE by focusing the FRAME, so a
+        focus set before the window has finished becoming active is undone
+        and then put back.  That is why the hand-over is driven by the
+        activation (see `on_activate`) and why this is a one-shot.
+
+        Nothing is SAID here.  The window is called "Start menu" and a
+        screen reader reads the name of a window it has just entered -
+        Titan Access does it from `context_presenter`, NVDA from the
+        foreground change - so an announcement of Titan's own would be a
+        second copy of the title, and the focus would have to be held back
+        for it or the reader would cut it off mid-word.
+        """
+        if not self._focus_pending:
+            return
+        self._focus_pending = False
+        self.focus_now()
+
+    def focus_now(self):
+        """The keyboard goes to whichever column the menu is showing."""
+        self._focus_pending = False
+        try:
+            column = self.left_column()
+            if column is not None and wx.Window.FindFocus() is not column:
+                column.SetFocus()
+        except Exception:
+            pass
 
     def Hide(self):  # noqa: N802 - wx naming
         result = super().Hide()
@@ -1239,6 +1291,22 @@ class XPStartMenu(ClassicStartMenu):
 
     def on_activate(self, event):
         if event.GetActive():
+            # Opening: this is the hand-over.  It happens here because
+            # wxWidgets has just focused the frame in answer to
+            # WM_ACTIVATE, so this is the first moment a focus will stay
+            # where it is put - and doing it before that meant setting it,
+            # having it undone, and setting it again, which a screen reader
+            # reads as the control twice.
+            if self._focus_pending:
+                wx.CallAfter(self._hand_over_focus)
+                return
+            # Already in the menu - an activation that changes nothing must
+            # not make the reader say the control again.
+            focused = wx.Window.FindFocus()
+            if focused is not None and self.IsDescendant(focused):
+                return
+            # No announcement here: coming back to a menu that is already
+            # up must not say its name a second time.
             wx.CallAfter(lambda: self.left_column().SetFocus())
 
     def apply_skin_settings(self):

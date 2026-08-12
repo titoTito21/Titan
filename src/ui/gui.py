@@ -180,6 +180,22 @@ class TaskBarIcon(wx.adv.TaskBarIcon):
         self.frame.restore_from_tray()
 
 
+def shell_owns_the_keyboard():
+    """True while the Titan shell is the system interface on the screen.
+
+    Titan's own function keys are Titan's while Titan is an application.
+    With the shell up it is the DESKTOP, and the keys belong to Windows'
+    meanings of them - F4 is the file browser's address band there, and
+    switching windows is what the taskbar and Alt+Tab are for.  Windows+W
+    and Windows+F2 still open Titan's switcher, so nothing is lost.
+    """
+    try:
+        from src.shell.shell_manager import is_shell_running
+        return bool(is_shell_running())
+    except Exception:
+        return False
+
+
 class TitanApp(wx.Frame):
     def __init__(self, *args, version, settings=None, component_manager=None, start_minimized=False, **kw):
         """Initialize TitanApp with comprehensive error handling to prevent segfaults."""
@@ -1501,10 +1517,42 @@ class TitanApp(wx.Frame):
         except Exception:
             return None
 
+    def _key_belongs_to_this_window(self, event, current_focus):
+        """True when the key was pressed in THIS window and not in another.
+
+        `EVT_CHAR_HOOK` is not confined to the window it is bound to: a key
+        pressed in a frame this one is the parent of travels up the parent
+        chain and arrives here, and every window Titan opens with the main
+        frame as its parent is such a frame - the shell's desktop, taskbar
+        and Start menu, the file browser, the settings.  Answering those
+        keys here means answering them twice: a full stop typed into the
+        browser's address bar was read as the Buffer System's "next
+        element" and never reached the field, F1 opened Titan's help over
+        the shell, and F4 the window switcher.
+
+        The Buffer System is deliberately host-local ("no global hook"), so
+        the rule is simply that this handler answers for its own window.
+        """
+        window = event.GetEventObject()
+        if not isinstance(window, wx.Window):
+            window = current_focus
+        if window is None:
+            return True
+        try:
+            return wx.GetTopLevelParent(window) is self
+        except Exception:
+            return True
+
     def on_key_down(self, event):
         keycode = event.GetKeyCode()
         modifiers = event.GetModifiers()
         current_focus = self.FindFocus()
+
+        # A key pressed in another of Titan's windows only passes through
+        # here on its way up; it is that window's key, not this window's.
+        if not self._key_belongs_to_this_window(event, current_focus):
+            event.Skip()
+            return
 
         # ---- Titan Buffer System review keys ----
         # Local to this focused window (no global hook); suppressed while a
@@ -1571,8 +1619,13 @@ class TitanApp(wx.Frame):
                 self.start_menu.toggle_menu()
                 return
 
-        # Handle F4 (Switch To) - only bare F4, not Alt+F4/Ctrl+F4/etc.
+        # Handle F4 (Switch To) - only bare F4, not Alt+F4/Ctrl+F4/etc.,
+        # and not while the Titan shell is the system interface: there F4
+        # is Windows' key, not Titan's.
         if keycode == wx.WXK_F4 and modifiers == wx.MOD_NONE:
+            if shell_owns_the_keyboard():
+                event.Skip()
+                return
             self.on_show_window_switcher(event)
             return
 
@@ -4422,8 +4475,17 @@ class TitanApp(wx.Frame):
         return True
 
     def _global_f4_handler(self):
-        """Handle global F4 - show window switcher only when a TCE window is focused."""
+        """Global F4 - the window switcher, when a TCE window is focused.
+
+        This is a hook of its own, outside `on_key_down` entirely, which is
+        why gating F4 in the key handler was not enough: the shell's
+        desktop, taskbar, Start menu and file browser are all TCE windows,
+        so the global hotkey fired in them however the key handler had been
+        told to stand aside.  With the shell up, F4 is Windows' key.
+        """
         try:
+            if shell_owns_the_keyboard():
+                return
             if not self._is_foreground_tce_process():
                 return
             show_window_switcher(parent=None)
@@ -4804,7 +4866,7 @@ class TitanApp(wx.Frame):
                 # and this is idempotent, so nothing is done twice.
                 try:
                     from src.shell.shell_manager import stop_shell
-                    stop_shell(quiet=quick_start, wait=True)
+                    stop_shell(quiet=quick_start)
                 except Exception as e:
                     print(f"Warning: Error stopping the Titan shell: {e}")
 

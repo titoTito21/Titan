@@ -196,21 +196,20 @@ class TitanShell:
         thread.start()
         return thread
 
-    def stop(self, quiet=False, wait=False):
+    def stop(self, quiet=False):
         """Put the screen back exactly as it was.
 
         `quiet` skips the goodbye sound - a quick start's quick exit, or an
-        exit that has already said it.  `wait` holds until the sound has
-        played, which only the way OUT of Titan needs: the process may go
-        the moment this returns, and a sound still in the mixer then is a
-        sound nobody hears.  Turning the shell off from the settings does
-        not wait, or the dialog would sit there for the length of the clip.
+        exit that has already said it.  Nothing here waits for that sound:
+        it is something to hear on the way out, not something to hold the
+        program up, and Titan's own shutdown takes long enough that most of
+        it is heard anyway.
         """
         was_running = self._running
         self._running = False
 
         if was_running and not quiet:
-            shell_sound(SOUND_SHUTDOWN, wait=wait)
+            shell_sound(SOUND_SHUTDOWN)
 
         # Restored whenever the shell was ever going to hide it, not only
         # when the flag says it managed to: hiding it happens on a worker
@@ -518,7 +517,7 @@ def start_shell(parent=None, force=False):
     return shell.start()
 
 
-def stop_shell(quiet=False, wait=False):
+def stop_shell(quiet=False):
     """Take the shell down. Called twice on the way out, and idempotent."""
     global _shell
     with _lock:
@@ -526,7 +525,7 @@ def stop_shell(quiet=False, wait=False):
         _shell = None
     if shell is None:
         return False
-    shell.stop(quiet=quiet, wait=wait)
+    shell.stop(quiet=quiet)
     return True
 
 

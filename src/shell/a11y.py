@@ -95,11 +95,32 @@ def screen_position(window):
         return 0.0
 
 
+def mixer_pan(position):
+    """The shell's -1.0 .. 1.0 turned into the mixer's 0.0 .. 1.0.
+
+    Everything Titan puts in front of a user says -1 (left), 0 (centre), 1
+    (right); `sound.py` has always taken 0 (left), 0.5 (centre), 1 (right)
+    and works out the two channel volumes as `1 - pan` and `pan`.  Handing
+    one straight to the other is the same bug the Titan Script `play`
+    statement had: every position left of centre - INCLUDING the centre -
+    comes out hard left.  That is why the shell's own sounds were only in
+    the left channel, and why the taskbar's focus cues used only the right
+    half of the stereo image (the Start button and everything before the
+    middle of the screen clamped to 0.0, hard left).
+    """
+    try:
+        position = float(position)
+    except (TypeError, ValueError):
+        position = 0.0
+    position = max(-1.0, min(1.0, position))
+    return (position + 1.0) / 2.0
+
+
 def focus_cue(position=0.0):
     if not cues_enabled():
         return
     try:
-        play_sound('core/FOCUS.ogg', pan=position)
+        play_sound('core/FOCUS.ogg', pan=mixer_pan(position))
     except Exception:
         pass
 
@@ -108,7 +129,7 @@ def select_cue(position=0.0):
     if not cues_enabled():
         return
     try:
-        play_sound('core/SELECT.ogg', pan=position)
+        play_sound('core/SELECT.ogg', pan=mixer_pan(position))
     except Exception:
         pass
 
@@ -128,17 +149,26 @@ def sounds_enabled():
     return bool(shell_setting('shell_sounds', True))
 
 
-def shell_sound(name, position=0.0, wait=False):
+def shell_sound(name, position=None):
     """Play one of the shell's sounds, if the user wants to hear them.
 
     This is a sound and never speech: the shell says nothing through TTS,
     because the screen reader is already announcing every focus change in
     it.
+
+    `position` is None because these sounds have no position: the shell
+    starting, the shell going away and a folder opening happen to the
+    whole desktop, not at a place on it, so they belong in BOTH channels.
+    An unpanned sound is also the only way to get both channels at full
+    volume - `sound.py`'s pan law is linear, so a sound placed dead centre
+    is half in each.  A caller that really does mean somewhere says so in
+    the shell's own -1 .. 1, and `mixer_pan` converts it.
     """
     if not sounds_enabled():
         return False
     try:
-        return bool(play_shell_sound(name, pan=position, wait=wait))
+        pan = None if position is None else mixer_pan(position)
+        return bool(play_shell_sound(name, pan=pan))
     except Exception:
         return False
 

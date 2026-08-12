@@ -106,6 +106,53 @@ def is_desktop_shell_enabled():
     return str(value).lower() in ('true', '1')
 
 
+# Control's virtual key code, for asking Windows itself whether it is held.
+# See `_key_physically_down` below for why the keyboard library's own answer
+# is not good enough - and `_windows_key_held` for why the Windows key
+# cannot be asked about this way at all.
+VK_CONTROL = 0x11
+
+# How long a gap between two Windows key presses means a NEW press rather
+# than the auto-repeat of one that is still held.  Windows' longest repeat
+# delay is one second; a repeat after that comes every few tens of ms.
+_WIN_REPEAT_GAP = 1.5
+
+# A tracked "the Windows key is down" that nothing has refreshed for this
+# long is not a held key: it is a key up that never reached the hook.
+# Generous on purpose - the cost of being wrong the other way is a shortcut
+# that does nothing for somebody who really was holding the key.
+_WIN_HELD_STALE = 15.0
+
+
+def _key_physically_down(vk):
+    """Whether a key is really held, asked of Windows rather than of a table.
+
+    `keyboard.is_pressed()` answers out of a table the library fills from
+    the events its own low-level hook saw, so ONE missed event leaves that
+    table wrong for the rest of the session - and events do go missing:
+    the lock screen (Windows+L is one of these very shortcuts),
+    Ctrl+Alt+Del and a UAC prompt all take the key UP on their own desktop,
+    where no hook of ours runs.  A Control left "held" that way made
+    `_win_passthrough` true for every Windows key press from then on, which
+    is exactly the failure the user sees - the Windows key opens WINDOWS'
+    Start menu and no Titan shortcut works at all until Titan is restarted.
+
+    `GetAsyncKeyState` cannot go stale: it is the state, not a record of
+    events.  It can only be asked about a key the hooks let through, which
+    Control is and the Windows key is not - a SUPPRESSED key never reaches
+    the system, so Windows reports it up even while it is held down
+    (measured, not assumed).  See `_windows_key_held`.
+    """
+    if not IS_WINDOWS:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        user32.GetAsyncKeyState.restype = ctypes.c_short
+        return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+    except Exception:
+        return False
+
+
 def is_binding_enabled(binding_id, default=True):
     """True when a single shell shortcut is enabled in the settings."""
     value = get_setting(binding_id, None, SHELL_SECTION)
@@ -133,6 +180,9 @@ class SystemHooksManager:
         self._win_passthrough = False
         self._win_injected = False
         self._injecting = False
+        # When the last Windows key event reached us, so an auto-repeat can
+        # be told from a fresh press whose predecessor's key up went astray.
+        self._win_event_at = 0.0
         # Titan Menu owned by this manager when the host frame has none
         # (Klango mode, launcher mode, invisible interface).
         self._own_menu = None
@@ -336,6 +386,36 @@ class SystemHooksManager:
     # keyboard).
     # ------------------------------------------------------------------
 
+    def _windows_key_held(self):
+        """Is the Windows key held? Only these hooks can know.
+
+        NOT `GetAsyncKeyState`, and this was measured rather than assumed: a
+        key SUPPRESSED in a low-level hook never reaches the system at all,
+        so Windows reports the Windows key up the whole time the user is
+        holding it down - which is precisely what Titan does to it.  Asking
+        Windows here made every Windows+<key> shortcut pass through and do
+        nothing.  Control is the opposite case and IS asked of Windows: the
+        hook lets it through, so the system's answer about it is real.
+
+        What can be done about the tracked flag going stale is to notice
+        that nothing has refreshed it for a long time.  A key up does go
+        missing - the lock screen (Windows+L is one of these shortcuts),
+        Ctrl+Alt+Del and a UAC prompt each take one on a desktop no hook of
+        ours runs on - and a flag stuck down turns an ordinary "d" into
+        Windows+D in the middle of a sentence.
+        """
+        if not self._win_down:
+            return False
+        if time.monotonic() - self._win_event_at > _WIN_HELD_STALE:
+            self._win_down = False
+            self._win_passthrough = False
+            self._win_consumed = False
+            self._win_injected = False
+            return False
+        # Still held: this is as good a sign of life as an auto-repeat.
+        self._win_event_at = time.monotonic()
+        return True
+
     def _on_win_key(self, event):
         """Windows key: swallow it and act on a bare tap."""
         try:
@@ -343,13 +423,31 @@ class SystemHooksManager:
                 return True
 
             if event.event_type == keyboard.KEY_DOWN:
-                if not self._win_down:
+                # A key down while we already think the key is down is the
+                # auto-repeat of one press - unless it has been quiet long
+                # enough that the key up must simply never have reached us
+                # (the lock screen and Ctrl+Alt+Del both swallow one), in
+                # which case this is a new press and the state left over
+                # from the last one has to go.
+                now = time.monotonic()
+                fresh = (not self._win_down
+                         or now - self._win_event_at > _WIN_REPEAT_GAP)
+                self._win_event_at = now
+                if fresh:
                     self._win_down = True
                     self._win_consumed = False
                     self._win_injected = False
                     # Control already held means the user is going for a
                     # system shortcut - stay out of the way entirely.
-                    self._win_passthrough = keyboard.is_pressed('ctrl')
+                    # Asked of Windows, not of the keyboard library's
+                    # table: a table that has missed one Control key up
+                    # says Control is held for ever, and then every
+                    # Windows key press goes to Windows and no Titan
+                    # shortcut fires again.  Only on a fresh press - a
+                    # repeat must not undo the passthrough that
+                    # `_on_ctrl_key` has already acted on by handing
+                    # Windows a key press of its own.
+                    self._win_passthrough = _key_physically_down(VK_CONTROL)
                 return self._win_passthrough
 
             # Key up.
@@ -387,7 +485,7 @@ class SystemHooksManager:
         try:
             if self._injecting or event.event_type != keyboard.KEY_DOWN:
                 return True
-            if self._win_down and not self._win_passthrough:
+            if self._windows_key_held() and not self._win_passthrough:
                 self._win_passthrough = True
                 self._win_consumed = True
                 self._win_injected = True
@@ -401,7 +499,7 @@ class SystemHooksManager:
         try:
             if self._injecting or event.event_type != keyboard.KEY_DOWN:
                 return True
-            if not self._win_down or self._win_passthrough:
+            if not self._windows_key_held() or self._win_passthrough:
                 return True
             self._win_consumed = True
             threading.Thread(target=self._lock_workstation, daemon=True).start()
@@ -416,7 +514,7 @@ class SystemHooksManager:
             try:
                 if self._injecting or event.event_type != keyboard.KEY_DOWN:
                     return True
-                if not self._win_down or self._win_passthrough:
+                if not self._windows_key_held() or self._win_passthrough:
                     return True
                 self._win_consumed = True
                 handler = getattr(self, f'_handle_{binding_id}', None)

@@ -475,6 +475,17 @@ def announce_shell_group(label):
     return True
 
 
+# There is deliberately NO "announce this window" helper here.  A window
+# says what it is by being CALLED it: the Start menu's title is "Start
+# menu", and a screen reader reads the name of a window it has just entered
+# by itself - Titan Access from its context presenter, NVDA from the
+# foreground change.  Speaking it from the host as well was a second copy of
+# the title, and one that had to be protected from being cut off (a focus
+# event makes a reader cancel what it is saying), which meant holding the
+# keyboard back from the window the user had just opened.  The title does
+# the work instead.
+
+
 def announce_shell_location(name, count):
     """Say where the file browser has just gone - to the screen reader alone.
 

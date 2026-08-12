@@ -118,6 +118,9 @@ class ClassicStartMenu(wx.Frame):
         self.menu_items = []
         self.current_submenu = None
         self._shown_at = 0.0
+        # Set while the menu is opening: the keyboard belongs to the
+        # opening sequence until the activation has handed it over.
+        self._focus_pending = False
 
         # Cache for applications and games to avoid reloading
         self._apps_cache = None
@@ -147,6 +150,10 @@ class ClassicStartMenu(wx.Frame):
         itself - Alt+F4 keeps closing the menu, which is what it does for
         every other Titan window.
         """
+        # A key before the activation has handed the keyboard over: take
+        # it now, so the first keystroke never goes nowhere.
+        if getattr(self, '_focus_pending', False):
+            self._hand_over_focus()
         if event.GetKeyCode() == wx.WXK_F4 and event.AltDown():
             try:
                 from src.shell.shell_manager import is_shell_running
@@ -1169,6 +1176,18 @@ class ClassicStartMenu(wx.Frame):
     def on_activate(self, event):
         """Obsługa aktywacji okna"""
         if event.GetActive():
+            # Opening: this is the hand-over, and it happens here because
+            # wxWidgets has just focused the frame in answer to
+            # WM_ACTIVATE - the first moment a focus will stay where it is
+            # put.
+            if getattr(self, '_focus_pending', False):
+                wx.CallAfter(self._hand_over_focus)
+                return
+            # Already in the menu - an activation that changes nothing must
+            # not make the reader say the control again.
+            focused = wx.Window.FindFocus()
+            if focused is not None and self.IsDescendant(focused):
+                return
             wx.CallAfter(self.menu_tree.SetFocus)
     
     def on_kill_focus(self, event):
@@ -1214,6 +1233,10 @@ class ClassicStartMenu(wx.Frame):
         self.apply_skin_settings()
         self._shown_at = time.time()
         self.position_menu()
+        # Claimed before the window is shown: `Show()` answers the
+        # activation synchronously, and `on_activate` focusing the tree
+        # there and then would put the control in front of the name.
+        self._focus_pending = True
         self.Show()
         self.Raise()
         # Global shortcuts fire while another application owns the foreground,
@@ -1223,7 +1246,37 @@ class ClassicStartMenu(wx.Frame):
             force_foreground(self)
         except Exception as e:
             print(f"Warning: could not foreground the Titan Menu: {e}")
-        wx.CallAfter(self.menu_tree.SetFocus)
+        # The keyboard is handed over from the ACTIVATION (see
+        # `on_activate`); this is only the fallback for when none arrives.
+        # wxWidgets answers WM_ACTIVATE by focusing the FRAME, so a focus
+        # set before the window has finished becoming active is undone and
+        # then put back - and the reader says the control twice.
+        wx.CallLater(300, self._hand_over_focus)
+
+    def _hand_over_focus(self):
+        """Put the keyboard in the menu, once however this is reached.
+
+        Once, because twice is what a screen reader reads as the control
+        twice: wxWidgets answers WM_ACTIVATE by focusing the FRAME, so a
+        focus set before the window has finished becoming active is undone
+        and then put back.
+
+        Nothing is said here: the window is called "Start menu" and a
+        screen reader reads the name of a window it has just entered.
+        """
+        if not getattr(self, '_focus_pending', False):
+            return
+        self._focus_pending = False
+        self.focus_now()
+
+    def focus_now(self):
+        """The keyboard goes to the menu tree."""
+        self._focus_pending = False
+        try:
+            if wx.Window.FindFocus() is not self.menu_tree:
+                self.menu_tree.SetFocus()
+        except Exception:
+            pass
 
     def toggle_menu(self):
         """Przełącz widoczność menu"""

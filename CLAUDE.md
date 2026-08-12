@@ -557,6 +557,28 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   = Start menu, Win+D = show desktop, Win+M = minimise all, Win+B =
   notification area, Win+T = the window buttons, Win+E, Win+R, Win+F,
   Win+Pause, and Win+L still locks.
+  - **Control is asked of Windows; the Windows key can only be
+    remembered** - and the two are opposites for one measured reason: a
+    key SUPPRESSED in a low-level hook never reaches the system, so
+    `GetAsyncKeyState` reports the Windows key up the whole time the user
+    holds it, while Control (which the hook lets through) it answers about
+    correctly. Asking Windows about the held Windows key makes every
+    Windows+<key> shortcut pass through and do nothing.
+    `keyboard.is_pressed('ctrl')` was the bug on the other side: it
+    answers out of a table the library fills from the events its own hook
+    saw, and events DO go missing - the lock screen (Win+L is one of these
+    shortcuts), Ctrl+Alt+Del and a UAC prompt each take the key UP on
+    their own desktop, where no hook of Titan's runs. One Control left
+    "held" that way made `_win_passthrough` true for every Windows key
+    press from then on: the Windows key opened WINDOWS' Start menu and not
+    one Titan shortcut fired again until Titan was restarted. So Control
+    goes through `_key_physically_down(VK_CONTROL)`, and the tracked
+    Windows key heals itself by time instead - a press nothing has
+    refreshed for `_WIN_HELD_STALE` is a key up that never arrived (a flag
+    stuck DOWN turns an ordinary "d" into Windows+D mid-sentence), and a
+    press more than `_WIN_REPEAT_GAP` after the last one is a new press
+    rather than auto-repeat, which is what re-reads Control after a lost
+    key up.
 - **Action API**: a built-in `shell` provider (`shell_actions.py`,
   `actions/builtin.py`) - `status`, `start`/`stop`, `open_start_menu`,
   `show_desktop`, `list_windows`, `activate_window` / `minimize_window` /
@@ -644,6 +666,20 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   (`start_menu.py`), and the classic menu's separators, which were thirteen
   box-drawing dashes, say "Separator" - what a screen reader says for a real
   menu separator.
+- **Titan's own function keys are Titan's only while Titan is an
+  application.** With the shell up Titan IS the desktop, so bare **F4 no
+  longer opens Titan's window switcher** (`gui.shell_owns_the_keyboard`):
+  there F4 is Windows' key - the file browser's address band - and
+  switching windows is what the taskbar and Alt+Tab are for. Windows+W and
+  Windows+F2 still open the switcher, and so does the taskbar's own menu.
+  **F4 arrives by four routes and all four had to be asked**: `gui.py`'s
+  `on_key_down`, both of Klango mode's key handlers (the wx one and the
+  pygame one), and - the one that kept firing after the others were shut -
+  a **global hotkey** registered through the keyboard library
+  (`_global_f4_handler`), which fires whenever any TCE window is in the
+  foreground and never goes through a key handler at all. The shell's
+  desktop, taskbar, Start menu and browser are all TCE windows, so gating
+  the key handlers did nothing for it.
 - **The shell's windows are furniture, not applications.** The desktop, the
   bar and the Start menu are taken out of Alt+Tab and off every taskbar
   (`win_shell.hide_from_alt_tab`, `WS_EX_TOOLWINDOW` set on the window,
@@ -709,6 +745,28 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   whole Windows Start Menu, indexed once per open, names that *start* with
   what was typed first), the two columns, and Lock / Log Off / Turn Off
   Computer.
+- **The menu says what it is by being CALLED it.** Its window title is
+  "Start menu", and a screen reader reads the name of a window it has just
+  entered by itself - Titan Access from `context_presenter` (which already
+  emits "<name>, window" for a newly entered window), NVDA from the
+  foreground change. Titan saying it as well was a second copy of the
+  title, and one that had to be protected from being cut off (a focus event
+  makes a reader cancel what it is saying), which meant holding the
+  keyboard back from the window the user had just opened. The title does
+  the work; there is deliberately no "announce this window" helper in
+  `accessibility.messages`.
+- **The keyboard is handed over exactly once, and from the activation**
+  (`_focus_pending` -> `_hand_over_focus`, `FOCUS_FALLBACK_MS` for when no
+  activation arrives). Twice is what a reader says as the control twice,
+  and there are two ways to get there: wxWidgets answers WM_ACTIVATE by
+  focusing the FRAME, so a focus set before the window has finished
+  becoming active is undone and then put back; and **inside the shell there
+  is a second activation** - the bar is deactivated when the menu takes the
+  foreground, answers that with `send_to_background()`, and re-shuffling
+  the z-order bounces the activation back onto the menu. That is why the
+  double focus happened in the shell and nowhere else. So: an activation
+  that finds the keyboard already in the menu is ignored (`IsDescendant`),
+  and `focus_now` never re-focuses what is already focused.
 - **The left column is a tree, not a chain of submenus** (`MenuTree`). A
   flyout is a menu a keyboard cannot follow, and the word "submenu" written
   into an entry is a word the screen reader then reads out - a tree control
@@ -831,9 +889,10 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
     apps, the Windows Start Menu) are warmed by `prefetch()` on a thread.
 - **The shell has three sounds of its own**, in `sfx/<theme>/shell/`:
   `shell_startup.ogg` when the shell is up and complete, `shell_shutdown.ogg`
-  when it goes away (waited out, because Titan may be exiting through Windows
-  shutting down and a sound still in the mixer when the process goes is a
-  sound nobody hears), and `shell_start.ogg` on every navigation in the file
+  when it goes away (never waited for: the goodbye is something to hear on
+  the way out, not something to hold the program up, and Titan's own
+  shutdown takes long enough that most of the clip is heard anyway -
+  `play_shell_sound` cannot block at all any more), and `shell_start.ogg` on every navigation in the file
   browser - Explorer's own "Start Navigation". They say what the shell is
   *doing*, which is a different thing from the focus cues, so they have a
   switch of their own: Settings -> Titan shell -> Sounds -> "Play the shell's
@@ -842,7 +901,17 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   resolve them - the user's theme first, then the **default set even when
   the user never opted into theme fallback**, because these belong to the
   feature rather than to a theme. Still not speech: the shell says nothing
-  through TTS.
+  through TTS. They are also **unpanned**: the shell starting, going away
+  or opening a folder happens to the whole desktop rather than at a place
+  on it, so it belongs in both channels - and an unpanned sound is the
+  only one at full volume in both, `sound.py`'s pan law being linear.
+  Where the shell DOES mean a place (the focus cues, panned to where the
+  control is), `a11y.mixer_pan` converts: the shell says -1 (left), 0
+  (centre), 1 (right) while `sound.py` has always taken 0, 0.5, 1, so
+  handing one straight to the other put everything from the centre
+  leftwards into the left speaker alone - the same bug the Titan Script
+  `play` statement had, here making the shell's own sounds left-channel
+  only and squeezing the taskbar's cues into half the stereo image.
 - **Alt+F4 anywhere in the shell means Shut Down, not a closed shell**
   (`shutdown_dialog.shell_alt_f4`). The bar, the desktop and the Start menu
   are furniture: they have no document to close, and letting wx destroy one
@@ -907,7 +976,19 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   (a folder, or "My Computer", listed the way the browser shows it).
   `focus_desktop` no longer needs the shell.
 - Translation domain: **`shell`**.
-- Tests: `tests/test_shell.py` (run it directly; 207 tests).
+- **A key pressed in a shell window is that window's key.** Every shell
+  window - the desktop, the bar, the Start menu, the file browser - is a
+  frame whose PARENT is Titan's main window, and `EVT_CHAR_HOOK` is not
+  confined to the window it is bound to: it travels up the parent chain.
+  So `gui.py`'s own char hook was answering keys pressed in the shell, and
+  answering them first: a full stop or a comma typed into the browser's
+  address band was read as the Buffer System's "next element" and never
+  reached the field, F1 opened Titan's help over the shell and F4 the
+  window switcher. `TitanApp._key_belongs_to_this_window()` now compares
+  the event's own window's top-level parent against the frame and skips
+  anything from another one - which is what the Buffer System's "no global
+  hook, hosts wire these into their own windows" was supposed to mean.
+- Tests: `tests/test_shell.py` (run it directly; 238 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 

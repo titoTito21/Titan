@@ -539,9 +539,16 @@ class KlangoMode:
     
     def handle_keypress(self, key, mod):
         """Handle keyboard input."""
-        # F4 opens window switcher (bare F4 only)
+        # F4 opens window switcher (bare F4 only) - unless the Titan shell
+        # is the system interface, where F4 belongs to Windows.
         if key == pygame.K_F4 and not (mod & (pygame.KMOD_ALT | pygame.KMOD_CTRL | pygame.KMOD_SHIFT)):
-            self.open_window_switcher()
+            try:
+                from src.shell.shell_manager import is_shell_running
+                shell_up = bool(is_shell_running())
+            except Exception:
+                shell_up = False
+            if not shell_up:
+                self.open_window_switcher()
             return
 
         # Alt key opens main menu
@@ -1245,7 +1252,7 @@ class KlangoMode:
                 # stops it too and this is idempotent.
                 try:
                     from src.shell.shell_manager import stop_shell
-                    stop_shell(quiet=quick_start, wait=True)
+                    stop_shell(quiet=quick_start)
                 except Exception as e:
                     print(f"Warning: Error stopping the Titan shell: {e}")
 
@@ -1588,9 +1595,18 @@ class KlangoFrame(wx.Frame):
         """Handle keyboard input."""
         keycode = event.GetKeyCode()
 
-        # F4 opens window switcher (bare F4 only, not Alt+F4)
+        # F4 opens window switcher (bare F4 only, not Alt+F4) - unless the
+        # Titan shell is the system interface, where F4 belongs to Windows.
         if keycode == wx.WXK_F4 and not event.HasAnyModifiers():
-            self.open_window_switcher()
+            try:
+                from src.shell.shell_manager import is_shell_running
+                shell_up = bool(is_shell_running())
+            except Exception:
+                shell_up = False
+            if not shell_up:
+                self.open_window_switcher()
+                return
+            event.Skip()
             return
 
         # Alt key toggles main menu
@@ -2488,7 +2504,7 @@ class KlangoFrame(wx.Frame):
                 # stops it too and this is idempotent.
                 try:
                     from src.shell.shell_manager import stop_shell
-                    stop_shell(quiet=quick_start, wait=True)
+                    stop_shell(quiet=quick_start)
                 except Exception as e:
                     print(f"Warning: Error stopping the Titan shell: {e}")
 

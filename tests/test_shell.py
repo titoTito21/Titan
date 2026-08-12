@@ -63,6 +63,7 @@ import re
 import sys
 import threading
 import types
+import time
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -2474,30 +2475,42 @@ class ShellSoundTests(unittest.TestCase):
             a11y.play_shell_sound = real_play
             a11y.shell_setting = real_setting
 
-    def test_the_shell_says_when_it_goes_away_and_waits_for_it(self):
-        """Titan may exit the moment stop() returns, so it is waited out."""
+    def test_the_shell_says_when_it_goes_away_without_waiting(self):
+        """The goodbye is heard on the way out, not waited through.
+
+        It used to hold its caller for the length of the clip, so that a
+        sound still in the mixer when the process went was not lost.  The
+        other side of that is a program that will not close while a sound
+        finishes, which is worse - and Titan's own shutdown takes long
+        enough that most of the clip is heard anyway.
+        """
         from src.shell import shell_manager
         played = []
         real = shell_manager.shell_sound
         shell_manager.shell_sound = lambda name, **kwargs: played.append(
-            (name, kwargs.get('wait', False)))
+            (name, kwargs))
         try:
             shell = shell_manager.TitanShell(parent=None)
             shell.stop()
             self.assertEqual(played, [], "a shell that never ran said goodbye")
             shell._running = True
-            shell.stop(wait=True)
-            self.assertEqual(played,
-                             [(shell_manager.SOUND_SHUTDOWN, True)])
-            # Turning the shell off from the settings still says goodbye,
-            # but does not hold the dialog for the length of the clip.
-            del played[:]
-            shell._running = True
             shell.stop()
-            self.assertEqual(played,
-                             [(shell_manager.SOUND_SHUTDOWN, False)])
+            self.assertEqual(played, [(shell_manager.SOUND_SHUTDOWN, {})],
+                             "the goodbye still asks to be waited for")
         finally:
             shell_manager.shell_sound = real
+
+    def test_nothing_can_ask_the_shell_sounds_to_block(self):
+        from src.titan_core import sound
+        with open(sound.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('def play_shell_sound'):
+                      source.index('def play_connecting_sound')]
+        self.assertNotIn('time.sleep', body,
+                         "the shell's goodbye still holds up the exit")
+        signature = body.splitlines()[0]
+        self.assertNotIn('wait', signature,
+                         "something can still ask it to block")
 
     def test_the_shell_says_when_it_has_started(self):
         from src.shell import shell_manager
@@ -2650,7 +2663,7 @@ class ExitTitanTests(unittest.TestCase):
         for path in (os.path.join(REPO, 'src', 'ui', 'gui.py'),
                      os.path.join(REPO, 'src', 'system', 'klangomode.py')):
             source = open(path, encoding='utf-8').read()
-            self.assertIn('stop_shell(quiet=quick_start, wait=True)', source,
+            self.assertIn('stop_shell(quiet=quick_start)', source,
                           "{} does not stop the shell".format(path))
             self.assertLess(source.index('stop_shell(quiet=quick_start'),
                             source.index('play_shutdown_sound()'),
@@ -2917,6 +2930,422 @@ class ExplorerHandoverTests(unittest.TestCase):
                       source.index('    def _start_startup_items')]
         self.assertIn('prefetch()', body,
                       "the slow lists are not warmed with it")
+
+class WindowsKeyStateTests(unittest.TestCase):
+    """The shortcuts must not be killable by one key event going missing.
+
+    The Windows key opened WINDOWS' Start menu and no Titan shortcut fired
+    at all, until Titan was restarted.  The cause was not the shell: the
+    hooks asked `keyboard.is_pressed('ctrl')`, which answers out of a table
+    the library fills from the events its own hook saw - and the lock
+    screen (Windows+L is one of these shortcuts), Ctrl+Alt+Del and a UAC
+    prompt all take the key UP on a desktop no hook of ours runs on.  One
+    such Control left "held" made every Windows key press a passthrough for
+    the rest of the session.
+
+    The two keys are asked about in opposite ways, and that is the point:
+    Control is let through, so Windows knows about it; the Windows key is
+    SUPPRESSED, so Windows never sees it and only these hooks can say
+    whether it is held.
+    """
+
+    def _manager(self):
+        from src.titan_core import tce_system
+        return tce_system, tce_system.SystemHooksManager()
+
+    def _source(self, module, start, end):
+        with open(module.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        return source[source.index(start):source.index(end)]
+
+    def test_control_is_asked_of_windows_and_not_of_the_library(self):
+        from src.titan_core import tce_system
+        handler = self._source(tce_system, '    def _on_win_key',
+                               '    def _on_ctrl_key')
+        self.assertNotIn("keyboard.is_pressed('ctrl')", handler,
+                         "a table that has missed one key up is believed again")
+        self.assertIn('_key_physically_down(VK_CONTROL)', handler)
+
+    def test_a_held_windows_key_is_never_asked_of_windows(self):
+        """A suppressed key does not exist as far as Windows is concerned.
+
+        Measured: a key blocked in a low-level hook never reaches the
+        system, so `GetAsyncKeyState` reports the Windows key UP the whole
+        time the user is holding it - and Titan blocks that key.  Asking
+        Windows here made every Windows+<key> shortcut do nothing at all.
+        """
+        from src.titan_core import tce_system
+        held = self._source(tce_system, '    def _windows_key_held',
+                            '    def _on_win_key')
+        self.assertNotIn('_key_physically_down', held,
+                         "the held Windows key is being asked of Windows, "
+                         "which cannot see a key Titan suppresses")
+
+    def test_the_key_counts_as_held_while_it_is_being_used(self):
+        _tce, manager = self._manager()
+        manager._win_down = True
+        manager._win_event_at = time.monotonic()
+        self.assertTrue(manager._windows_key_held())
+
+    def test_a_stale_held_flag_is_thrown_away(self):
+        """A key up that never arrived must not fire shortcuts for ever."""
+        tce_system, manager = self._manager()
+        manager._win_down = True
+        manager._win_passthrough = True
+        manager._win_event_at = (time.monotonic()
+                                 - tce_system._WIN_HELD_STALE - 1)
+        self.assertFalse(manager._windows_key_held(),
+                         "a press nothing has refreshed is still believed")
+        self.assertFalse(manager._win_passthrough,
+                         "the passthrough survived the key it belonged to")
+        self.assertFalse(manager._win_down)
+
+    def test_a_binding_fires_only_while_the_key_is_really_held(self):
+        """Both ways round: it works when held, and not when merely stale."""
+        import keyboard
+        tce_system, manager = self._manager()
+        fired = []
+        manager._handle_show_desktop = lambda: fired.append(True)
+        hook = manager._make_binding_hook('show_desktop')
+
+        class Event:
+            event_type = keyboard.KEY_DOWN
+
+        # Held: the key is Titan's, so it is swallowed and the shortcut runs.
+        manager._win_down = True
+        manager._win_event_at = time.monotonic()
+        self.assertFalse(hook(Event()),
+                         "Windows+D was handed to Windows instead of running")
+
+        # Stale: nothing has refreshed the press, so "d" is just a letter.
+        fired.clear()
+        manager._win_down = True
+        manager._win_event_at = (time.monotonic()
+                                 - tce_system._WIN_HELD_STALE - 1)
+        self.assertTrue(hook(Event()), "an ordinary letter was swallowed")
+        self.assertEqual(fired, [])
+
+    def test_a_new_press_after_a_lost_release_starts_over(self):
+        """Auto-repeat is not a new press; a press 1.5 s later is."""
+        from src.titan_core import tce_system
+        handler = self._source(tce_system, '    def _on_win_key',
+                               '    def _on_ctrl_key')
+        self.assertIn('_WIN_REPEAT_GAP', handler)
+        self.assertGreaterEqual(tce_system._WIN_REPEAT_GAP, 1.0,
+                                "Windows' own repeat delay reaches one second")
+
+
+class WindowSwitcherKeyTests(unittest.TestCase):
+    """Titan's function keys are Titan's only while Titan is an application.
+
+    With the shell up, Titan IS the desktop and the keys have Windows'
+    meanings: F4 is the file browser's address band, and switching windows
+    is what the taskbar and Alt+Tab are for.  Windows+W and Windows+F2
+    still open Titan's own switcher, so nothing is taken away.
+    """
+
+    def _with_shell(self, running):
+        from src.shell import shell_manager
+        from src.ui.gui import shell_owns_the_keyboard
+        original = shell_manager.is_shell_running
+        shell_manager.is_shell_running = lambda: running
+        try:
+            return shell_owns_the_keyboard()
+        finally:
+            shell_manager.is_shell_running = original
+
+    def test_the_shell_takes_the_key(self):
+        self.assertTrue(self._with_shell(True))
+
+    def test_without_the_shell_it_is_still_titan_s(self):
+        self.assertFalse(self._with_shell(False))
+
+    def test_f4_asks_before_it_switches(self):
+        from src.ui import gui as gui_module
+        with open(gui_module.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('        # Handle F4 (Switch To)'):]
+        body = body[:body.index('        # Handle Alt+F4')]
+        self.assertLess(body.index('shell_owns_the_keyboard'),
+                        body.index('on_show_window_switcher'),
+                        "F4 switches windows before asking whose key it is")
+
+    def test_klango_asks_the_same_question(self):
+        """Both of its key handlers - the wx one and the pygame one."""
+        from src.system import klangomode
+        with open(klangomode.__file__, encoding='utf-8') as handle:
+            lines = handle.read().splitlines()
+        blocks = 0
+        for position, line in enumerate(lines):
+            if '# F4 opens window switcher' not in line:
+                continue
+            blocks += 1
+            block = ' '.join(lines[position:position + 14])
+            self.assertIn('is_shell_running', block,
+                          "an F4 handler that never asks whose key it is")
+            self.assertLess(block.index('is_shell_running'),
+                            block.index('self.open_window_switcher()'))
+        self.assertEqual(blocks, 2, "Klango mode has two F4 handlers")
+
+    def test_the_global_f4_hotkey_stands_aside_too(self):
+        """The route that was still firing in the shell's own windows.
+
+        F4 is not only a key `on_key_down` sees: `gui.py` registers a
+        GLOBAL hotkey through the keyboard library that fires whenever any
+        TCE window is in the foreground - and the shell's desktop, taskbar,
+        Start menu and file browser are all TCE windows.  Gating the key
+        handler did nothing for it.
+        """
+        from src.ui import gui as gui_module
+        with open(gui_module.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('    def _global_f4_handler'):
+                      source.index('    def _unregister_global_f2_hotkey')]
+        self.assertIn('shell_owns_the_keyboard()', body,
+                      "the global F4 hotkey still opens the switcher "
+                      "inside the shell")
+        self.assertLess(body.index('shell_owns_the_keyboard'),
+                        body.index('show_window_switcher'))
+
+    def test_the_browser_keeps_f4_for_the_address_band(self):
+        """Windows' own meaning of the key, which is the point of all this."""
+        from src.shell import explorer
+        with open(explorer.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        hook = source[source.index('    def _on_char_hook'):
+                      source.index('    def panes(self)')]
+        self.assertIn('self.address.SetFocus()', hook)
+
+
+class ShellPanTests(unittest.TestCase):
+    """The shell says -1..1; the mixer takes 0..1. Somebody has to convert.
+
+    Nobody did, so `shell_sound`'s own default of 0.0 - the CENTRE in the
+    shell's units - was hard left in the mixer's, and every shell sound came
+    out of the left speaker alone.  The taskbar's focus cues had it worse:
+    the whole left half of the screen clamped to hard left, so only the
+    right half of the stereo image was ever used.  This is the same bug the
+    Titan Script `play` statement had.
+    """
+
+    def test_the_centre_is_the_centre(self):
+        from src.shell.a11y import mixer_pan
+        self.assertAlmostEqual(mixer_pan(0.0), 0.5)
+
+    def test_the_ends_are_the_ends(self):
+        from src.shell.a11y import mixer_pan
+        self.assertAlmostEqual(mixer_pan(-1.0), 0.0)
+        self.assertAlmostEqual(mixer_pan(1.0), 1.0)
+
+    def test_nothing_lands_outside_the_image(self):
+        from src.shell.a11y import mixer_pan
+        for position in (-9.0, 9.0, 'nonsense', None):
+            self.assertTrue(0.0 <= mixer_pan(position) <= 1.0)
+
+    def test_the_left_half_of_the_screen_is_not_all_hard_left(self):
+        """What made the cues unusable: -1..0 all clamped to 0.0."""
+        from src.shell.a11y import mixer_pan
+        self.assertLess(mixer_pan(-1.0), mixer_pan(-0.5))
+        self.assertLess(mixer_pan(-0.5), mixer_pan(0.0))
+
+    def test_a_shell_sound_has_no_position_at_all(self):
+        """Started, stopped, navigated: they happen to the whole desktop.
+
+        And an unpanned sound is the only one at full volume in both
+        channels - `sound.py`'s pan law is linear, so dead centre is half
+        in each.
+        """
+        from src.shell import a11y
+        asked = {}
+
+        def fake(name, pan=None, wait=False):
+            asked['pan'] = pan
+            return True
+
+        original = a11y.play_shell_sound
+        enabled = a11y.sounds_enabled
+        a11y.play_shell_sound = fake
+        a11y.sounds_enabled = lambda: True
+        try:
+            a11y.shell_sound(a11y.SOUND_STARTUP)
+            self.assertIsNone(asked['pan'], "the fanfare is being panned")
+            a11y.shell_sound(a11y.SOUND_NAVIGATE, position=-1.0)
+            self.assertAlmostEqual(asked['pan'], 0.0,
+                                   msg="a position that IS given is ignored")
+        finally:
+            a11y.play_shell_sound = original
+            a11y.sounds_enabled = enabled
+
+
+class StartMenuIdentityTests(unittest.TestCase):
+    """The menu says what it is by being CALLED it, not by talking.
+
+    It opens straight onto a control, so the user needs to hear where that
+    control is - but a window that has a title is already something every
+    screen reader reads on entering it (Titan Access from its context
+    presenter, NVDA from the foreground change).  Saying it from here as
+    well was a second copy of the title, and one that had to be protected
+    from being cut off, which meant holding the keyboard back from the
+    window the user had just opened.
+
+    What is left is the part that was really broken: the keyboard must be
+    handed over exactly ONCE.  wxWidgets answers WM_ACTIVATE by focusing
+    the FRAME, so a focus set before the window has finished becoming
+    active is undone and then put back - two focus events, which a reader
+    reads as the control twice.
+    """
+
+    def _source(self, module, start, end):
+        with open(module.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        return source[source.index(start):source.index(end)]
+
+    def test_the_window_is_called_the_start_menu(self):
+        """Its own title is the whole of what identifies it."""
+        from src.ui import classic_start_menu
+        with open(classic_start_menu.__file__, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('title=_("Start menu")', source)
+
+    def test_the_menu_says_nothing_itself(self):
+        for module_name, path in (
+                ('start menu', 'src/shell/start_menu.py'),
+                ('classic start menu', 'src/ui/classic_start_menu.py')):
+            with open(path, encoding='utf-8') as handle:
+                source = handle.read()
+            self.assertNotIn('announce_shell_window', source, module_name)
+            self.assertNotIn('speak_sr_only', source, module_name)
+
+    def test_the_keyboard_is_handed_over_once(self):
+        from src.shell import start_menu
+        body = self._source(start_menu, '    def _hand_over_focus',
+                            '    def focus_now')
+        self.assertIn('if not self._focus_pending:', body,
+                      "the hand-over can run more than once")
+        self.assertIn('self._focus_pending = False', body)
+
+    def test_the_activation_is_what_hands_it_over(self):
+        from src.shell import start_menu
+        body = self._source(start_menu, '    def show_menu',
+                            '    def _hand_over_focus')
+        self.assertNotIn('wx.CallAfter(self._focus_menu)', body,
+                         "the focus is set without waiting for the activation")
+        self.assertIn('FOCUS_FALLBACK_MS', body,
+                      "nothing focuses the menu if no activation arrives")
+
+    def test_the_focus_is_claimed_before_the_window_is_shown(self):
+        from src.shell import start_menu
+        body = self._source(start_menu, '    def show_menu',
+                            '    def _hand_over_focus')
+        self.assertLess(body.index('self._focus_pending = True'),
+                        body.index('self.Show()'),
+                        "the activation gets in before the flag is set")
+
+    def test_focusing_what_is_already_focused_is_not_done_twice(self):
+        """The last way a second focus event could still be fired."""
+        from src.shell import start_menu
+        body = self._source(start_menu, '    def focus_now',
+                            '    def Hide(self)')
+        self.assertIn('FindFocus() is not column', body)
+
+    def test_an_activation_that_changes_nothing_is_ignored(self):
+        from src.shell import start_menu
+        body = self._source(start_menu, '    def on_activate',
+                            '    def apply_skin_settings')
+        self.assertIn('IsDescendant', body,
+                      "the menu re-focuses itself when it is already focused")
+        self.assertLess(body.index('IsDescendant'), body.index('SetFocus'))
+
+    def test_the_classic_menu_hands_over_the_same_way(self):
+        from src.ui import classic_start_menu
+        body = self._source(classic_start_menu, '    def on_activate',
+                            '    def on_kill_focus')
+        self.assertLess(body.index('_focus_pending'), body.index('SetFocus'))
+        with open(classic_start_menu.__file__, encoding='utf-8') as handle:
+            self.assertIn('def _hand_over_focus', handle.read())
+
+    def test_a_key_before_the_hand_over_is_never_lost(self):
+        from src.shell import start_menu
+        hook = self._source(start_menu, '    def _on_char_hook',
+                            '    def position_menu')
+        self.assertIn('self._hand_over_focus()', hook)
+
+
+class ShellWindowKeysTests(unittest.TestCase):
+    """A key pressed in a shell window is that window's key.
+
+    `EVT_CHAR_HOOK` is not confined to the window it is bound to: it travels
+    up the parent chain, and every shell window is a frame whose parent is
+    Titan's main window.  So the main window's own char hook was answering
+    keys pressed on the desktop, on the taskbar, in the Start menu and in the
+    file browser - which is why a full stop typed into the browser's address
+    band was read as the Buffer System's "next element" and never reached the
+    field.
+    """
+
+    def test_a_key_in_a_child_frame_arrives_at_the_parent(self):
+        """The mechanism itself - this is why the guard has to exist."""
+        seen = []
+        parent = wx.Frame(None)
+        parent.Bind(wx.EVT_CHAR_HOOK, lambda e: (seen.append(e.GetKeyCode()),
+                                                 e.Skip()))
+        child = wx.Frame(parent)
+        field = wx.TextCtrl(child)
+        try:
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetEventObject(field)
+            event.SetId(field.GetId())
+            # ProcessEvent on the child's handler chain is what wx does with
+            # a char hook that the focused window did not claim.
+            field.GetEventHandler().ProcessEvent(event)
+            self.assertTrue(
+                seen, "wx no longer propagates a char hook to the parent "
+                      "frame; the containment guard can go")
+        finally:
+            child.Destroy()
+            parent.Destroy()
+
+    def test_the_main_window_ignores_another_window_s_key(self):
+        from src.ui.gui import TitanApp
+        parent = wx.Frame(None)
+        own = wx.TextCtrl(parent)
+        shell_window = wx.Frame(parent)          # the desktop, the browser...
+        theirs = wx.TextCtrl(shell_window)
+        try:
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetEventObject(theirs)
+            self.assertFalse(
+                TitanApp._key_belongs_to_this_window(parent, event, None),
+                "the main window still answers keys pressed in a shell window")
+
+            mine = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            mine.SetEventObject(own)
+            self.assertTrue(
+                TitanApp._key_belongs_to_this_window(parent, mine, None),
+                "the main window stopped answering its own keys")
+        finally:
+            shell_window.Destroy()
+            parent.Destroy()
+
+    def test_the_guard_runs_before_the_buffer_keys(self):
+        """Order matters: the buffer branch is the first thing in there."""
+        from src.ui import gui as gui_module
+        source = open(gui_module.__file__, encoding='utf-8').read()
+        body = source[source.index('    def on_key_down(self, event):'):]
+        body = body[:body.index('    def handle_navigation')]
+        self.assertLess(body.index('_key_belongs_to_this_window'),
+                        body.index('buffer_controller'),
+                        "the Buffer System still sees other windows' keys")
+
+    def test_the_browser_hands_unclaimed_keys_to_its_controls(self):
+        """A full stop is the list's first-letter jump or a typed character."""
+        from src.shell import explorer
+        source = open(explorer.__file__, encoding='utf-8').read()
+        hook = source[source.index('    def _on_char_hook'):
+                      source.index('    def panes(self)')]
+        self.assertTrue(hook.rstrip().endswith('event.Skip()'),
+                        "the browser swallows the keys it does not answer")
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
