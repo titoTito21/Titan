@@ -100,12 +100,15 @@ class ClassicStartMenu(wx.Frame):
 
     def __init__(self, parent):
         try:
-            super().__init__(parent, title="Titan Menu",
+            # It is the Start menu of the machine, so that is what it is
+            # called - "Titan Menu" named the program that draws it, which
+            # is not what a user (or a screen reader) is looking for.
+            super().__init__(parent, title=_("Start menu"),
                              style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP)
         except Exception as e:
             print(f"Warning: ClassicStartMenu init error: {e}")
             # Fallback to simpler style
-            super().__init__(parent, title="Titan Menu")
+            super().__init__(parent, title=_("Start menu"))
 
         self.parent = parent
         # Disable TTS in Start Menu to avoid conflicts with screen readers

@@ -14,6 +14,12 @@ announcement on top of that would say every button twice.  All the effort
 goes into the name, the role and the state instead.  The only sound the shell
 makes on its own is Titan's non-speech focus cue, which is a cue, not an
 announcement, and which the user can turn off.
+
+There is one thing a name cannot carry: which *part* of the bar the keyboard
+has just arrived in.  That is announced exactly the way a Titan window
+announces its virtual tab bar - through
+`accessibility.messages.announce_shell_group`, which reaches the screen
+reader and nothing else, so with no reader running nothing is said at all.
 """
 
 import wx
@@ -26,6 +32,13 @@ try:
 except Exception:  # pragma: no cover - sound is optional for the shell
     def play_sound(*_args, **_kwargs):
         pass
+
+
+# What the shell calls itself.  It is the system interface, not a window of
+# the Titan application, so its own windows are announced as TCEShell rather
+# than as "the Titan taskbar" - and it is deliberately not translated, being
+# a name.
+SHELL_NAME = 'TCEShell'
 
 
 # Roles the shell uses, mapped to what MSAA calls them.
@@ -170,6 +183,63 @@ class ShellAccessible(wx.Accessible):
             return wx.ACC_OK
         except Exception:
             return wx.ACC_NOT_IMPLEMENTED
+
+
+class NamedAccessible(wx.Accessible):
+    """Give a **native** control a name a screen reader will actually read.
+
+    `wxWindow.SetName` is wx's own name and never reaches MSAA: a list view
+    or a tree view answers with its own IAccessible, whose name comes from
+    the window text (which these controls have none of) or from a label
+    beside it (which a desktop has none of).  That is why the desktop list
+    was read as an unnamed list however many times it was called "Desktop".
+
+    Only the name of the control itself is answered here.  Everything else -
+    the items, their states, their positions - returns
+    `wxACC_NOT_IMPLEMENTED`, which is the documented way of saying "use the
+    standard behaviour", so the control keeps every bit of the native
+    accessibility a screen reader relies on.
+    """
+
+    def __init__(self, window, name=''):
+        super().__init__(window)
+        self._name = name
+
+    def set_name(self, name):
+        self._name = name or ''
+
+    def GetName(self, child_id):
+        if child_id == 0 and self._name:
+            return (wx.ACC_OK, str(self._name))
+        return (wx.ACC_NOT_IMPLEMENTED, '')
+
+
+def name_control(window, name):
+    """Name a native control for wx **and** for every screen reader.
+
+    Returns the accessible object, so a control whose name changes (the
+    search results and their count) can be renamed without building a new
+    one.
+    """
+    try:
+        window.SetName(name or '')
+    except Exception:
+        pass
+    accessible = getattr(window, '_shell_accessible', None)
+    try:
+        if accessible is None:
+            accessible = NamedAccessible(window, name)
+            window.SetAccessible(accessible)
+            window._shell_accessible = accessible
+        else:
+            accessible.set_name(name)
+        wx.Accessible.NotifyEvent(
+            getattr(wx, 'ACC_EVENT_OBJECT_NAMECHANGE', 0x800C), window,
+            getattr(wx, 'OBJID_CLIENT', -4), 0)
+    except Exception:
+        # A wx build without MSAA support still has the wx-side name.
+        pass
+    return accessible
 
 
 class AccessibleMixin:

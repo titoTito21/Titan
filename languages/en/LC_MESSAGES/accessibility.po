@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-11 14:56+0200\n"
+"POT-Creation-Date: 2026-08-12 12:47+0200\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -134,26 +134,35 @@ msgstr "{}, {} of {}"
 msgid "tab"
 msgstr "tab"
 
-#: src/accessibility/messages.py:443
+#: src/accessibility/messages.py:445
+#, python-brace-format
+msgid "Results: {count}"
+msgstr "Results: {count}"
+
+#: src/accessibility/messages.py:447
+msgid "No results"
+msgstr "No results"
+
+#: src/accessibility/messages.py:496
 #, python-brace-format
 msgid "at position {}"
 msgstr "at position {}"
 
-#: src/accessibility/messages.py:461 src/accessibility/messages.py:502
-#: src/accessibility/messages.py:521
+#: src/accessibility/messages.py:514 src/accessibility/messages.py:555
+#: src/accessibility/messages.py:574
 msgid "checked"
 msgstr "checked"
 
-#: src/accessibility/messages.py:461 src/accessibility/messages.py:502
-#: src/accessibility/messages.py:521
+#: src/accessibility/messages.py:514 src/accessibility/messages.py:555
+#: src/accessibility/messages.py:574
 msgid "unchecked"
 msgstr "unchecked"
 
-#: src/accessibility/messages.py:539
+#: src/accessibility/messages.py:592
 msgid "Fn keys enabled"
 msgstr "Fn keys enabled"
 
-#: src/accessibility/messages.py:552
+#: src/accessibility/messages.py:605
 msgid "Fn keys disabled"
 msgstr "Fn keys disabled"
 

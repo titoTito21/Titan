@@ -424,6 +424,28 @@ def list_windows(own_hwnds=()):
     return windows
 
 
+def hide_from_alt_tab(hwnd):
+    """Make a window furniture: no Alt+Tab entry, no taskbar button.
+
+    The shell's own windows are the system interface, not applications -
+    a desktop, a taskbar and a Start menu that answer Alt+Tab are three
+    extra "programs" the user has to tab past to reach their own.
+    `WS_EX_TOOLWINDOW` is the documented way to say so, and it has to be
+    set on the window rather than asked for at construction because
+    wxWidgets only offers it on frames that also draw a small caption.
+    """
+    if not available() or not hwnd:
+        return False
+    try:
+        style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
+                              (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
+        return True
+    except Exception as error:
+        print(f"[TitanShell] could not hide a shell window: {error}")
+        return False
+
+
 def take_foreground(hwnd):
     """Give a window the keyboard, even though it is not the foreground one.
 
@@ -697,6 +719,159 @@ def explorer_taskbar_hwnd():
         return user32.FindWindowW('Shell_TrayWnd', None) or 0
     except Exception:
         return 0
+
+
+_APPS_CACHE = []
+_APPS_CACHE_AT = 0.0
+# Reading the Apps folder is over a second, and what is installed does not
+# change while a menu is open.
+APPS_CACHE_SECONDS = 300
+
+
+def installed_apps(refresh=False):
+    """Every application Windows itself lists, UWP ones included.
+
+    `shell:AppsFolder` is what the Windows Start menu is made of: Store and
+    packaged apps beside desktop programs.  It is the only place a UWP app
+    can be found at all - there is no shortcut on disk, only an Application
+    User Model ID - and it is also the only handle you can launch one by.
+
+    Returns [(name, app id)], cached, because the walk costs over a second.
+    """
+    global _APPS_CACHE, _APPS_CACHE_AT
+    import time
+    if not IS_WINDOWS:
+        return []
+    if not refresh and _APPS_CACHE and             (time.time() - _APPS_CACHE_AT) < APPS_CACHE_SECONDS:
+        return list(_APPS_CACHE)
+    apps = []
+    try:
+        import pythoncom
+        import win32com.client
+        # A worker thread has no apartment of its own; the Shell objects
+        # need one, and this is where the walk is done from.
+        initialised = False
+        try:
+            pythoncom.CoInitialize()
+            initialised = True
+        except Exception:
+            pass
+        try:
+            shell = win32com.client.Dispatch('Shell.Application')
+            folder = shell.NameSpace('shell:AppsFolder')
+            if folder is not None:
+                for item in folder.Items():
+                    try:
+                        name = item.Name
+                        app_id = item.Path
+                    except Exception:
+                        continue
+                    if name and app_id:
+                        apps.append((str(name), str(app_id)))
+        finally:
+            if initialised:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
+    except Exception as error:
+        print(f"[TitanShell] could not read the app list: {error}")
+        return list(_APPS_CACHE)
+    apps.sort(key=lambda pair: pair[0].lower())
+    _APPS_CACHE, _APPS_CACHE_AT = apps, time.time()
+    return list(apps)
+
+
+def launch_app_id(app_id):
+    """Start something out of the Apps folder, UWP or not.
+
+    A packaged app has no executable to run: Explorer is asked for it by its
+    Application User Model ID, which is what Windows' own Start menu does.
+    """
+    if not app_id:
+        return False
+    try:
+        if os.path.exists(str(app_id)):
+            return open_path(app_id)
+        return shell_execute(
+            r'explorer.exe shell:appsFolder\{}'.format(app_id))
+    except Exception as error:
+        print(f"[TitanShell] could not start {app_id}: {error}")
+        return False
+
+
+def windows_desktop_hwnd():
+    """Windows' own desktop - the icon list, not the wallpaper behind it.
+
+    It lives either under `Progman` or, once a slideshow wallpaper has run,
+    under one of the `WorkerW` windows Explorer creates beside it, which is
+    why both are looked in.  What comes back is the `SysListView32` itself,
+    because that is the window that takes the keyboard and that a screen
+    reader reads; its parents are containers with nothing in them.
+    """
+    if not available():
+        return 0
+
+    # A window handle is a pointer, and ctypes' default return type is a
+    # 32-bit int: without this the handle of a real desktop comes back
+    # truncated and every call made with it silently does nothing.
+    try:
+        user32.FindWindowW.restype = wintypes.HWND
+        user32.FindWindowExW.restype = wintypes.HWND
+        user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND,
+                                         wintypes.LPCWSTR, wintypes.LPCWSTR]
+    except Exception:
+        pass
+
+    def defview_list(parent):
+        if not parent:
+            return 0
+        try:
+            view = user32.FindWindowExW(parent, None, 'SHELLDLL_DefView',
+                                        None)
+            if not view:
+                return 0
+            return user32.FindWindowExW(view, None, 'SysListView32', None) or 0
+        except Exception:
+            return 0
+
+    try:
+        found = defview_list(user32.FindWindowW('Progman', None))
+        if found:
+            return found
+        # Walk the WorkerW windows: the desktop moves into one of them when
+        # Explorer is showing a wallpaper it animates.
+        result = []
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND,
+                                         wintypes.LPARAM)
+
+        def callback(hwnd, _lparam):
+            buffer = ctypes.create_unicode_buffer(64)
+            user32.GetClassNameW(hwnd, buffer, 64)
+            if buffer.value == 'WorkerW':
+                child = defview_list(hwnd)
+                if child:
+                    result.append(child)
+                    return False
+            return True
+
+        user32.EnumWindows(WNDENUMPROC(callback), 0)
+        return result[0] if result else 0
+    except Exception:
+        return 0
+
+
+def focus_windows_desktop():
+    """Put the keyboard on Windows' own desktop.
+
+    What Windows+D and Windows+M mean when Titan is not drawing the desktop
+    itself: the icons are still there, they are still a list view, and the
+    shortcut has to land on them rather than doing nothing at all.
+    """
+    hwnd = windows_desktop_hwnd()
+    if not hwnd:
+        return False
+    return take_foreground(hwnd)
 
 
 def is_explorer_shell_running():
@@ -990,6 +1165,32 @@ def recycle(paths, confirm=True):
         return False
 
 
+FO_MOVE = 0x0001
+FO_COPY = 0x0002
+
+
+def file_operation(paths, destination, move=False):
+    """Copy or move files the way Explorer does: with undo and its own
+    progress box.  The double-NUL terminated list is the shell's own
+    calling convention, and the same one `recycle` above uses."""
+    if not available() or not paths or not destination:
+        return False
+    try:
+        separator = chr(0)
+        source = separator.join(str(p) for p in paths) + separator * 2
+        operation = SHFILEOPSTRUCTW()
+        operation.hwnd = None
+        operation.wFunc = FO_MOVE if move else FO_COPY
+        operation.pFrom = source
+        operation.pTo = str(destination) + separator * 2
+        operation.fFlags = FOF_ALLOWUNDO
+        result = shell32.SHFileOperationW(ctypes.byref(operation))
+        return result == 0 and not operation.fAnyOperationsAborted
+    except Exception as error:
+        print(f"[TitanShell] copy or move failed: {error}")
+        return False
+
+
 class SHELLEXECUTEINFOW(ctypes.Structure):
     _fields_ = [
         ('cbSize', wintypes.DWORD),
@@ -1014,14 +1215,23 @@ SEE_MASK_INVOKEIDLIST = 0x0000000C
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 
 
-def show_properties(path):
-    """Windows' own properties sheet - it is accessible, so use it."""
+def show_properties(path, owner=0):
+    """Windows' own properties sheet - it is accessible, so use it.
+
+    This is the whole of "properties of a desktop shortcut": the sheet the
+    shell puts up has the Shortcut tab with the target, the working folder,
+    the shortcut key and the window state, and it is a real dialog that
+    every screen reader reads.  `owner` is the window it belongs to - the
+    desktop - without which the sheet can open behind the shell, which with
+    Explorer's taskbar hidden means behind everything.
+    """
     if not available():
         return False
     try:
         info = SHELLEXECUTEINFOW()
         info.cbSize = ctypes.sizeof(info)
         info.fMask = SEE_MASK_INVOKEIDLIST
+        info.hwnd = owner or None
         info.lpVerb = 'properties'
         info.lpFile = str(path)
         info.nShow = SW_SHOW
@@ -1029,6 +1239,64 @@ def show_properties(path):
     except Exception as error:
         print(f"[TitanShell] properties failed: {error}")
         return False
+
+
+def shortcut_target(path):
+    """What a .lnk points at, or '' for anything that is not one."""
+    if not IS_WINDOWS or not str(path).lower().endswith('.lnk'):
+        return ''
+    try:
+        import win32com.client
+        shell = win32com.client.Dispatch('WScript.Shell')
+        return shell.CreateShortCut(str(path)).Targetpath or ''
+    except Exception as error:
+        print(f"[TitanShell] could not read the shortcut: {error}")
+        return ''
+
+
+def reveal_in_explorer(path):
+    """Open the folder something is in, with the thing itself selected.
+
+    For a shortcut it is the *target's* folder that is wanted - "open file
+    location" on a shortcut to a program is how somebody finds the program.
+    """
+    target = shortcut_target(path) or path
+    if not target or not os.path.exists(target):
+        target = path
+    try:
+        if IS_WINDOWS:
+            shell32.ShellExecuteW(None, 'open', 'explorer.exe',
+                                  '/select,"{}"'.format(target), None, SW_SHOW)
+            return True
+        return open_path(os.path.dirname(target))
+    except Exception as error:
+        print(f"[TitanShell] could not reveal {path}: {error}")
+        return False
+
+
+def create_shortcut(target, folder=None, name=None):
+    """Make a .lnk to something, the way "Create shortcut" does."""
+    if not IS_WINDOWS:
+        return ''
+    folder = folder or os.path.dirname(target)
+    base = name or (os.path.splitext(os.path.basename(target))[0] + ' - '
+                    + 'Shortcut')
+    path = os.path.join(folder, base + '.lnk')
+    index = 2
+    while os.path.exists(path):
+        path = os.path.join(folder, '{} ({}).lnk'.format(base, index))
+        index += 1
+    try:
+        import win32com.client
+        shell = win32com.client.Dispatch('WScript.Shell')
+        link = shell.CreateShortCut(path)
+        link.Targetpath = target
+        link.WorkingDirectory = os.path.dirname(target) or ''
+        link.save()
+        return path
+    except Exception as error:
+        print(f"[TitanShell] could not create the shortcut: {error}")
+        return ''
 
 
 def open_path(path):

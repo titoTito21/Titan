@@ -28,13 +28,19 @@ import wx
 from src.platform_utils import IS_WINDOWS
 from src.shell import luna, win_shell
 from src.shell.a11y import (ROLE_BUTTON, ROLE_LISTITEM, ROLE_TOOLBAR,
-                            STATE_FOCUSABLE, STATE_FOCUSED, STATE_PRESSED,
-                            edge_cue, shell_setting)
+                            SHELL_NAME, STATE_FOCUSABLE, STATE_FOCUSED,
+                            STATE_PRESSED, edge_cue, shell_setting)
 from src.shell.controls import (IconTextControl, ShellControl, TextControl,
                                 bitmap_from_icon_handle)
 from src.shell.quick_launch import (QuickLaunchButton, quick_launch_folder,
                                     quick_launch_items)
 from src.titan_core.translation import _
+
+try:
+    from src.accessibility.messages import announce_shell_group as announce_group
+except Exception:  # pragma: no cover - the shell works without the helper
+    def announce_group(_label):
+        return False
 
 START_BUTTON_WIDTH = 99          # XP's own, at 96 dpi
 TASK_BUTTON_MAX_WIDTH = 160
@@ -58,6 +64,25 @@ VERTICAL_THICKNESS = 100
 # One window button on a vertical bar, where they stack instead of sharing a
 # row.
 VERTICAL_TASK_HEIGHT = 24
+
+# What a screen reader says when Tab arrives in one of the bar's groups.
+# The bar cannot speak - it is the system interface, and a screen reader is
+# already reading it - so the group's name is put in front of the control's
+# own name for that one announcement, which is how a Titan window's tab bar
+# announces the tab before the list under it.
+GROUP_LABELS = {
+    'start': lambda: _("Start"),
+    'quicklaunch': lambda: _("Dock"),
+    'tasks': lambda: _("Open windows"),
+    'tray': lambda: _("System tray"),
+}
+
+
+def group_label(name):
+    """The words for one group of the bar, in the user's language."""
+    maker = GROUP_LABELS.get(name)
+    return maker() if maker else ''
+
 
 # The edges, by the name a setting or an action uses for them.
 POSITION_EDGES = {
@@ -390,11 +415,13 @@ class TaskbarFrame(wx.Frame):
     def __init__(self, shell, parent=None):
         style = (wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.BORDER_NONE
                  | wx.FRAME_TOOL_WINDOW)
-        super().__init__(parent, title=_("Titan taskbar"), style=style)
+        # The bar is the shell, so it carries the shell's own name rather
+        # than being announced as a piece of the Titan application.
+        super().__init__(parent, title=SHELL_NAME, style=style)
 
         self.shell = shell
         self.palette = luna.get_palette()
-        self.SetName(_("Titan taskbar"))
+        self.SetName(SHELL_NAME)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
         self._appbar = None
@@ -424,6 +451,10 @@ class TaskbarFrame(wx.Frame):
                                               self.Refresh()))
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
+        # A bar that lives in the background is brought to the front to be
+        # used and put back the moment it is done with, so it is never left
+        # standing over the window the user went back to.
+        self.Bind(wx.EVT_ACTIVATE, self._on_activate)
         for target in (self, self.task_area, self.tray_area):
             target.Bind(wx.EVT_RIGHT_UP, self._on_bar_context_menu)
 
@@ -448,7 +479,7 @@ class TaskbarFrame(wx.Frame):
         # Start button and the window buttons, as on the bar it copies.
         self.quick_launch_area = wx.Window(self, style=wx.TAB_TRAVERSAL)
         self.quick_launch_area.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.quick_launch_area.SetName(_("Quick Launch"))
+        self.quick_launch_area.SetName(group_label('quicklaunch'))
         self.quick_launch_area.taskbar = self
         self.quick_launch_area.Bind(wx.EVT_ERASE_BACKGROUND,
                                     lambda event: None)
@@ -459,12 +490,12 @@ class TaskbarFrame(wx.Frame):
         self._quick_launch_buttons = []
         self.task_area = wx.Window(self, style=wx.TAB_TRAVERSAL)
         self.task_area.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.task_area.SetName(_("Open windows"))
+        self.task_area.SetName(group_label('tasks'))
         self.task_area.Bind(wx.EVT_ERASE_BACKGROUND, lambda event: None)
         self.task_area.Bind(wx.EVT_PAINT, self._on_task_area_paint)
         self.tray_area = wx.Window(self, style=wx.TAB_TRAVERSAL)
         self.tray_area.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.tray_area.SetName(_("Notification area"))
+        self.tray_area.SetName(group_label('tray'))
         self.tray_area.Bind(wx.EVT_ERASE_BACKGROUND, lambda event: None)
         self.tray_area.Bind(wx.EVT_PAINT, self._on_tray_paint)
         self.clock = ClockControl(self.tray_area)
@@ -558,7 +589,15 @@ class TaskbarFrame(wx.Frame):
         return bool(shell_setting('taskbar_auto_hide', False))
 
     def always_on_top(self):
-        return bool(shell_setting('taskbar_on_top', True))
+        """Whether the bar covers other windows, or lives behind them.
+
+        Off by default, unlike XP's own: the appbar has already reserved
+        the strip the bar stands on, so nothing the user opens covers it
+        anyway, and a bar that is not topmost can never end up over the
+        Titan window, over a full-screen game or over a dialog it did not
+        put up.
+        """
+        return bool(shell_setting('taskbar_on_top', False))
 
     def shows_quick_launch(self):
         return bool(shell_setting('show_quick_launch', True))
@@ -575,7 +614,37 @@ class TaskbarFrame(wx.Frame):
         The style is set on the window rather than at construction, because
         this is a setting the user changes while the bar is already up.
         """
-        self._set_z_order(topmost=self.always_on_top())
+        if self.always_on_top():
+            self._set_z_order(topmost=True)
+        else:
+            self.send_to_background()
+
+    def send_to_background(self):
+        """Put the bar behind every window, and the desktop behind the bar.
+
+        "In the background" is a place in the z-order, not a state.  Giving
+        up topmost is only half of it: a window that was topmost and is
+        merely told it is not stays exactly where it was in the stack, so
+        the bar is sent to the bottom as well - and the desktop, which is
+        the bottom by definition, is put back underneath it afterwards, or
+        the thing the bar was just put behind would be covering it.  Every
+        move carries SWP_NOACTIVATE, so the bar changes places without ever
+        taking the keyboard.
+        """
+        try:
+            if self.IsBeingDeleted():
+                return
+        except RuntimeError:
+            # The frame has already gone; a queued call must not raise into
+            # wx's event loop.
+            return
+        self._set_z_order(topmost=False, bottom=True)
+        desktop = getattr(self.shell, 'desktop', None)
+        if desktop is not None:
+            try:
+                desktop.send_to_back()
+            except Exception:
+                pass
 
     def is_locked(self):
         return bool(shell_setting('taskbar_locked', True))
@@ -620,6 +689,11 @@ class TaskbarFrame(wx.Frame):
                 print(f"[TitanShell] shell hook failed: {error}")
 
         self.ShowWithoutActivating()
+        # Furniture, not an application: never an Alt+Tab stop.
+        try:
+            win_shell.hide_from_alt_tab(self.GetHandle())
+        except Exception:
+            pass
         self._layout_bar()
         self.refresh_windows()
         self.refresh_tray()
@@ -696,6 +770,11 @@ class TaskbarFrame(wx.Frame):
         """Bring the bar out, and keep it out while it is being used."""
         if not self.auto_hide():
             return
+        if self._auto_hide_timer is None:
+            # Asked to come out before the bar was docked - which happens
+            # when auto-hide is switched on and the shortcut that reveals
+            # the bar is the very next thing to run.
+            self._start_auto_hide()
         if self._auto_hide_state in (AUTOHIDE_SHOWN, AUTOHIDE_SHOWING):
             return
         self._auto_hide_state = AUTOHIDE_SHOWING
@@ -703,7 +782,7 @@ class TaskbarFrame(wx.Frame):
 
     def auto_hide_conceal(self):
         """Let the bar go away again."""
-        if not self.auto_hide():
+        if not self.auto_hide() or self._auto_hide_timer is None:
             return
         if self._auto_hide_state in (AUTOHIDE_HIDDEN, AUTOHIDE_HIDING):
             return
@@ -1260,8 +1339,27 @@ class TaskbarFrame(wx.Frame):
         # your place.
         remembered = self._group_memory.get(name)
         target = remembered if remembered in controls else controls[0]
+        return self.focus_in_group(name, target)
+
+    def focus_in_group(self, group, control):
+        """Put the keyboard on a control and say which group it is in.
+
+        The group is announced the way a Titan window announces its tab bar:
+        to the screen reader only, through
+        `accessibility.messages.announce_shell_group`, and *before* the
+        focus moves, so the reader says "Dock" and then reads the control it
+        landed on.  The bar itself still says nothing - if no screen reader
+        is running, nothing is spoken at all.
+        """
+        if control is None:
+            return False
         try:
-            target.SetFocus()
+            announce_group(group_label(group))
+        except Exception:
+            pass
+        try:
+            control.SetFocus()
+            self._group_memory[group] = control
             return True
         except Exception:
             return False
@@ -1498,6 +1596,14 @@ class TaskbarFrame(wx.Frame):
             win_shell.take_foreground(self.GetHandle())
         return True
 
+    def _on_activate(self, event):
+        try:
+            if not event.GetActive() and not self.always_on_top():
+                wx.CallAfter(self.send_to_background)
+        except Exception:
+            pass
+        event.Skip()
+
     def hand_keyboard_back(self):
         """Escape: back to whatever the user was in before the bar."""
         previous = self._previous_foreground
@@ -1514,8 +1620,7 @@ class TaskbarFrame(wx.Frame):
 
     def focus_clock(self):
         self.activate()
-        self.clock.SetFocus()
-        return True
+        return self.focus_in_group('tray', self.clock)
 
     def focus_first_task(self):
         """Where the keyboard lands when the user asks for the taskbar."""
@@ -1523,24 +1628,19 @@ class TaskbarFrame(wx.Frame):
         for window in self._windows:
             button = self._buttons.get(window.hwnd)
             if button:
-                button.SetFocus()
-                return True
-        self.start_button.SetFocus()
+                return self.focus_in_group('tasks', button)
+        self.focus_in_group('start', self.start_button)
         return False
 
     def focus_start_button(self):
         self.activate()
-        self.start_button.SetFocus()
-        return True
+        return self.focus_in_group('start', self.start_button)
 
     def focus_tray(self):
         """Windows+B: the keyboard goes to the notification area."""
         self.activate()
-        if self._tray_buttons:
-            self._tray_buttons[0].SetFocus()
-        else:
-            self.clock.SetFocus()
-        return True
+        target = self._tray_buttons[0] if self._tray_buttons else self.clock
+        return self.focus_in_group('tray', target)
 
     # ------------------------------------------------------------------
     # Show desktop

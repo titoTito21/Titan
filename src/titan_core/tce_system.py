@@ -77,7 +77,7 @@ EXTRA_SHELL_BINDINGS = (
 def get_binding_descriptions():
     """Return {binding id: translated description} for the settings UI."""
     return {
-        'start_menu': _("Open the Titan Menu"),
+        'start_menu': _("Open the Start menu"),
         'file_manager': _("Open the Titan file manager"),
         'system_tray': _("Open the system tray list"),
         'show_desktop': _("Show or hide the Titan window"),
@@ -578,13 +578,26 @@ class SystemHooksManager:
             print(f"ERROR: Failed to open System Tray list: {e}")
 
     def _handle_show_desktop(self):
-        """Windows+D - show the desktop, or toggle the Titan window."""
+        """Windows+D - show the desktop, or toggle the Titan window.
+
+        With the system interface replaced this means what it means on
+        Windows: everything goes down and the keyboard lands on the
+        desktop - the Titan window included, and whether or not it was
+        open, since "show the desktop" is not "show Titan".
+        """
         try:
             from src.shell.shell_manager import show_desktop
             if show_desktop():
                 return
         except Exception as e:
             print(f"WARNING: Could not show the desktop: {e}")
+
+        if is_shell_mode_enabled():
+            # The shell's own windows are not up (the desktop half of the
+            # mode is off), but the mode is - so the shortcut still means
+            # the desktop rather than the Titan window.
+            self._handle_minimize_all()
+            return
 
         try:
             frame = self._get_main_frame()
@@ -627,16 +640,19 @@ class SystemHooksManager:
         """Windows+M - minimise everything, Titan's own windows included.
 
         As on Windows, the keyboard ends up on the desktop: there is nothing
-        else left on the screen for it to be in.
+        else left on the screen for it to be in.  That is true whether or
+        not Titan is the one drawing the desktop, so the landing is the
+        shell manager's fallback rather than the shell's own window.
         """
         try:
-            from src.shell.shell_manager import get_shell
+            from src.shell.shell_manager import focus_desktop, get_shell
             from src.shell import win_shell
             shell = get_shell()
             own = shell.own_hwnds() if shell and shell.is_running() else ()
             win_shell.minimize_all(own)
-            if shell is not None and shell.is_running():
-                wx.CallLater(150, shell.focus_desktop)
+            # The windows are asked to minimise, not made to, so the
+            # keyboard follows a moment later.
+            wx.CallLater(150, focus_desktop)
         except Exception as e:
             print(f"ERROR: Windows+M failed: {e}")
 

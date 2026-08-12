@@ -68,11 +68,39 @@ def shutdown_actions():
         actions.append(('hibernate', _("Hibernate"),
                         _("Saves the current session and shuts down the "
                           "computer.")))
+    # Titan's own entry.  With the system interface replaced this dialog is
+    # the only "off" the user has, and leaving Titan is one of the things
+    # they may mean by it - the machine keeps running and Windows' own
+    # desktop and taskbar come back.
+    actions.append(('exit_titan', _("Turn off TCE"),
+                    _("Closes Titan and gives the desktop and the taskbar "
+                      "back to Windows. The computer stays on.")))
     return actions
+
+
+def exit_titan():
+    """Close Titan itself, as its own window's close button does.
+
+    The shell is taken down on the way out by Titan's normal shutdown (the
+    system hooks stop the shell, which unregisters the appbar and puts
+    Explorer's taskbar back), so this is the ordinary exit and not a
+    separate teardown that could get out of step with it.
+    """
+    app = wx.GetApp()
+    if app is None:
+        return False
+    frame = app.GetTopWindow()
+    if frame is not None and hasattr(frame, 'shutdown_app'):
+        wx.CallAfter(frame.shutdown_app)
+        return True
+    wx.CallAfter(app.ExitMainLoop)
+    return True
 
 
 def perform_shutdown_action(action):
     """Do what was chosen.  True if the machine took it."""
+    if action == 'exit_titan':
+        return exit_titan()
     if action in ('sleep', 'hibernate'):
         return win_shell.suspend(hibernate=(action == 'hibernate'))
     if action in ('logoff', 'shutdown', 'restart'):

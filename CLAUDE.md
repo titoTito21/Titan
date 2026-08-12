@@ -644,10 +644,131 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   (`start_menu.py`), and the classic menu's separators, which were thirteen
   box-drawing dashes, say "Separator" - what a screen reader says for a real
   menu separator.
+- **The shell's windows are furniture, not applications.** The desktop, the
+  bar and the Start menu are taken out of Alt+Tab and off every taskbar
+  (`win_shell.hide_from_alt_tab`, `WS_EX_TOOLWINDOW` set on the window,
+  because wx only offers the style on a frame that also draws a caption) -
+  otherwise Titan's own shell is three more "programs" to tab past.
+- **The bar lives in the background** (`taskbar_on_top` now defaults off).
+  Not topmost is a *place in the z-order*, not a style bit: a window that
+  was topmost and is merely told it is not stays where it was, so
+  `send_to_background()` sends the bar to the bottom and puts the desktop
+  back underneath it, all with `SWP_NOACTIVATE`. It comes forward to be
+  used and goes back the moment it is deactivated. The appbar keeps the
+  strip reserved either way, so nothing covers it.
+- **A group of the bar announces itself, to the screen reader only.** Tab
+  between the groups says "Start", "Dock", "Open windows", "System tray"
+  through `accessibility.messages.announce_shell_group` - the same
+  mechanism as a Titan window's virtual tab bar (Titan Access first, then
+  `speak_sr_only`), so with no reader running nothing is said and the shell
+  still never speaks through the platform TTS. The arrows inside a group
+  say nothing extra.
+- **The desktop list is called "Desktop"** and nothing longer: the list *is*
+  the desktop, and "Desktop / Desktop icons" said the word twice.
+- **The keyboard really lands on the icons.** `SetForegroundWindow` makes
+  the frame active, but the `WM_ACTIVATE` behind it is processed *after* the
+  call returns and wxWidgets answers it by focusing the frame - undoing the
+  `SetFocus` just made on the list. Windows' focus was therefore on the
+  frame and the icons could only be reached with object navigation. So
+  `focus_icons()` sets it now **and** again once the activation has been
+  through the queue, `focus_list()` sets it with Windows' own `SetFocus` on
+  the list's HWND and gives an icon the focused state (a list view with no
+  focused item reads as an empty container), and `EVT_ACTIVATE` does the
+  same whenever the desktop becomes the active window - unless a rename is
+  in progress, where the keyboard belongs to the edit box.
+- **The desktop does what Explorer's does**: open, open file location
+  (a shortcut resolves to its *target's* folder), cut / copy / paste
+  (CF_HDROP plus the "Preferred DropEffect" format, without which a cut
+  quietly behaves as a copy), create shortcut, rename, delete, and Windows'
+  own property sheet - given the desktop as its owner window, or the sheet
+  comes up behind a shell that has hidden Explorer's bar. **Alt+F4 on the
+  desktop opens the Shut Down dialog**, as it does on Windows.
+- **The Shut Down dialog has one entry that is Titan's**: "Turn off TCE"
+  closes Titan and gives the desktop and the taskbar back to Windows,
+  beside msgina's own log off / shut down / restart / sleep / hibernate.
+- **The Start menu is one ring of real controls** (`start_menu.py`): the
+  user's name is a `UserButton` (a focusable, named control - a painted
+  strip is nothing to a screen reader) that opens their own folder, then a
+  **search box** over everything the menu can start (Titan applications and
+  games, the **Titan IM modules**, the **macros**, the settings and the
+  whole Windows Start Menu, indexed once per open, names that *start* with
+  what was typed first), the two columns, and Lock / Log Off / Turn Off
+  Computer.
+- **The left column is a tree, not a chain of submenus** (`MenuTree`). A
+  flyout is a menu a keyboard cannot follow, and the word "submenu" written
+  into an entry is a word the screen reader then reads out - a tree control
+  has both solved: the arrows open and close a branch and the reader says
+  "collapsed" / "expanded" from the control's own state, so nothing is put
+  into the text. Branches fill themselves the first time they are opened
+  (`_children_of`), because reading the Windows Start Menu, every add-on
+  and every macro up front is most of a second the user would wait for.
+  The branches are Applications, Games, **Titan IM** (the five services
+  Titan brings itself - Telegram, Messenger, WhatsApp, Titan-Net,
+  EltenLink, each opened through the main window's *own* flow so the menu
+  never has a second opinion about who is logged in - and then the
+  installed modules), **Macros** (read from the macro manager component
+  itself, so the list and the shortcuts are its own), **Settings** - where
+  Titan's own settings now live, with the Control Panel, the taskbar
+  properties and the display settings, so "where do I change something"
+  has one answer - **Windows apps** and All Programs.
+- **UWP apps are in the menu and in the search** (`win_shell.installed_apps`,
+  `launch_app_id`). `shell:AppsFolder` is what the Windows Start menu is
+  made of and the only place a packaged app exists at all: there is no
+  shortcut on disk to find, only an Application User Model ID, which is
+  also the only way to start one (`explorer.exe shell:appsFolder\<id>`).
+  The walk costs over a second, so it is cached for five minutes and read
+  **on a background thread** when the menu opens (`prefetch`, which warms
+  the search index too, with its own COM apartment) - the first keystroke
+  in the search box must not be the one that waits for it.
+- **A native control's name has to be given to MSAA, not to wx**
+  (`a11y.name_control` / `NamedAccessible`). `SetName` on a `wx.ListCtrl`
+  is wx's own name and never reaches a screen reader: a list view answers
+  with its own IAccessible, whose name comes from window text these
+  controls have none of. That is why the desktop list stayed unnamed
+  however many times it was called "Desktop". `NamedAccessible` answers the
+  name for the control itself and `wxACC_NOT_IMPLEMENTED` for everything
+  else, so every item, state and position still comes from the native
+  control. Measured through `AccessibleObjectFromWindow` afterwards: name
+  "Pulpit", role 33 (list). Used for the desktop list, both Start-menu
+  columns and the search field.
+- **Search results are a list, not the tree**: results want columns (the
+  name, and where it came from) and a tree cannot have them, so the two
+  controls swap places in the same slot and `left_column()` is whichever
+  is up - which is also what the focus ring walks. **The results read like Windows' own**: the list
+  grows a second column, so a reader says "Notepad, Accessories" for a row,
+  the count goes into the column heading (which is the list's accessible
+  name), and `accessibility.messages.announce_search_results` says it to
+  the screen reader 400 ms after the typing stops - the one control where
+  what changed is not where the focus is. The window is called the **Start
+  menu**, not "Titan Menu". Tab walks that ring and Shift+Tab comes back -
+  handled in the frame's char hook, because both columns ask wx for
+  `WANTS_CHARS` (that is what gives them first-letter jumping) and a
+  control that wants the characters is given Tab as well. The number found
+  goes into the column's *name*, not into speech. **Escape closes onto the
+  Start button** - which is how the taskbar is asked for, bringing a hidden
+  bar back out - and Escape there hands the keyboard back to the window the
+  user came from.
+- **Windows+D and Windows+M put the desktop up, not just the focus on it**
+  (`DesktopFrame.bring_up`): shown if it was hidden, back at the bottom
+  where a desktop belongs, re-read only when the folder's timestamp says
+  something changed, and then focused with an icon selected so there is
+  something for the reader to say.
+- **The Windows shortcuts land where they say, with or without the shell's
+  own windows.** `shell_manager.focus_desktop()` falls back to Windows' own
+  desktop list view (`win_shell.windows_desktop_hwnd()`, `Progman` or a
+  `WorkerW`), Windows+D minimises everything and follows the windows down,
+  and Windows+B lands in the notification area.
 - The **Titan shell settings category** is listed only while "Modify system
   interface" is ticked, and appears and disappears as the box is ticked.
+- **Action API**: the `shell` provider is now 33 actions - the originals
+  plus `focus_tray`, `desktop_item_properties`, `desktop_item_target`,
+  `open_item_location`, `rename_desktop_item`, `delete_desktop_item`,
+  `create_desktop_shortcut`, `search_programs` / `run_program` (the Start
+  Menu read straight off the disk, so they answer with no window open) and
+  `power_options` / `power` (`always_confirm`, and `exit_titan` is one of
+  the choices). `focus_desktop` no longer needs the shell.
 - Translation domain: **`shell`**.
-- Tests: `tests/test_shell.py` (run it directly).
+- Tests: `tests/test_shell.py` (run it directly; 146 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 

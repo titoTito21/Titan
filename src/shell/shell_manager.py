@@ -172,6 +172,12 @@ class TitanShell:
                 import traceback
                 traceback.print_exc()
                 return None
+            # Whichever menu it is, it is part of the shell and not one more
+            # window for the user to tab past.
+            try:
+                win_shell.hide_from_alt_tab(self.start_menu.GetHandle())
+            except Exception:
+                pass
         return self.start_menu
 
     def toggle_start_menu(self):
@@ -258,9 +264,13 @@ class TitanShell:
             return False
 
     def focus_desktop(self):
+        """Windows+D and Windows+M: the desktop is shown and read."""
         if self.desktop is not None:
-            return self.desktop.focus_icons()
-        return False
+            return self.desktop.bring_up()
+        # No Titan desktop (the shell is off, or it was told not to draw
+        # one) - the icons are still Windows' own, and the shortcut has to
+        # land on them rather than doing nothing.
+        return win_shell.focus_windows_desktop()
 
     def focus_taskbar(self):
         """Windows+T: the keyboard goes to the window buttons."""
@@ -274,6 +284,12 @@ class TitanShell:
             return self.taskbar.focus_tray()
         return False
 
+    def focus_taskbar_or_tray(self, tray=False):
+        """Whichever of the two the bar can offer, if there is a bar."""
+        if self.taskbar is None:
+            return False
+        return self.taskbar.focus_tray() if tray else             self.taskbar.focus_first_task()
+
     def focus_start_button(self):
         if self.taskbar is not None:
             return self.taskbar.focus_start_button()
@@ -286,11 +302,18 @@ class TitanShell:
         return self.focus_desktop()
 
     def show_desktop(self):
-        """Minimise everything (the Show desktop button, Windows+D)."""
+        """Minimise everything (the Show desktop button, Windows+D).
+
+        The keyboard follows the windows down: whether the bar did the work
+        or not, what the user asked for is the desktop, so that is where
+        they are put - after a moment, because the windows are asked to
+        minimise rather than made to.
+        """
         if self.taskbar is not None:
             self.taskbar.toggle_show_desktop()
             return True
         win_shell.minimize_all(self.own_hwnds())
+        wx.CallLater(150, self.focus_desktop)
         return True
 
     # ------------------------------------------------------------------
@@ -391,11 +414,17 @@ def focus_tray():
 
 
 def focus_desktop():
-    """Where Windows+D and Windows+M put the keyboard."""
+    """Where Windows+D and Windows+M put the keyboard.
+
+    This one answers whether or not the Titan shell is up: the desktop is
+    the one place that is always there, so the shortcut has to land on it
+    either way - Titan's own icons when Titan is drawing them, and Windows'
+    when it is not.
+    """
     shell = get_shell()
-    if shell is None or not shell.is_running():
-        return False
-    return shell.focus_desktop()
+    if shell is not None and shell.is_running():
+        return shell.focus_desktop()
+    return win_shell.focus_windows_desktop()
 
 
 def refresh_shell(skin_changed=False):

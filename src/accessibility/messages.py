@@ -422,6 +422,59 @@ def announce_view_switched(view_name, idx, total):
     _ta_announce(phrase, interrupt=True)
 
 
+# --- The Titan shell's taskbar groups ------------------------------------
+# The taskbar has no tab bar to say which part of it the keyboard is in, and
+# the shell itself may not speak (it is the system interface - a screen
+# reader is already reading every focus change in it).  So arriving in a
+# group is announced exactly the way the virtual tab bar is: through the
+# screen reader alone, never through the platform TTS fallback, and with the
+# control's own announcement following it.
+
+
+def announce_search_results(count, label=None):
+    """Say how many a search box found - to the screen reader alone.
+
+    A search box is the one control where the *result* of typing is not
+    where the focus is: the reader is reading the letters as they go into
+    the field, and the list underneath changes silently.  Windows says the
+    count, so this does too - through the reader (Titan Access first),
+    never through the platform TTS, and with no sound of its own, because
+    it happens on every keystroke.
+    """
+    if count:
+        text = _("Results: {count}").format(count=count)
+    else:
+        text = _("No results")
+    if label:
+        text = "{}, {}".format(label, text)
+    if _ta_speak(text, interrupt=True):
+        return True
+    if not is_screen_reader_running():
+        return False
+    speak_sr_only(text, interrupt=True)
+    return True
+
+
+def announce_shell_group(label):
+    """Say which group of the taskbar the keyboard has just entered.
+
+    "Dock", "Open windows", "System tray" - said once, when Tab (or one of
+    the Windows shortcuts) arrives in the group, and not when the arrows
+    move inside it.  Returns True when something said it.
+    """
+    if not label:
+        return False
+    # Titan Access first: `announce` replaces the reader's own next focus
+    # announcement, so the label is spoken and the control read after it
+    # rather than the two racing each other.
+    if _ta_announce(label, interrupt=True):
+        return True
+    if not is_screen_reader_running():
+        return False
+    speak_sr_only(label, interrupt=True)
+    return True
+
+
 # --- Drag-and-drop announcement ------------------------------------------
 # Reading the region name a little lower and relabelling status-bar rows as
 # "status bar item" is done by Titan Access itself (it recognises the container

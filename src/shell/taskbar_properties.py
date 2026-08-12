@@ -88,9 +88,12 @@ class TaskbarPage(_Page):
         self.hide = self.add_check(
             box, _("A&uto-hide the taskbar"), 'taskbar_auto_hide', False,
             lambda value: self.dialog.taskbar_do('set_auto_hide', value))
+        # Off by default, unlike Windows': the appbar already keeps the
+        # strip clear, so a bar in the background is covered by nothing the
+        # user opens - and it can never end up over a dialog or a game.
         self.on_top = self.add_check(
             box, _("Keep the &taskbar on top of other windows"),
-            'taskbar_on_top', True,
+            'taskbar_on_top', False,
             lambda value: self.dialog.taskbar_do('apply_always_on_top'))
         self.quick = self.add_check(
             box, _("Show &Quick Launch"), 'show_quick_launch', True,

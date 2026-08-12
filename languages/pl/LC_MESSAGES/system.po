@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-11 14:56+0200\n"
+"POT-Creation-Date: 2026-08-12 12:47+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,9 +20,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/titan_core/tce_system.py:80
-msgid "Open the Titan Menu"
-msgstr "Otwórz Titan Menu"
+#: src/titan_core/tce_system.py:80 src/titan_core/tce_system.py:91
+msgid "Open the Start menu"
+msgstr "Otwórz menu Start"
 
 #: src/titan_core/tce_system.py:81
 msgid "Open the Titan file manager"
@@ -63,10 +63,6 @@ msgstr "Wyszukaj pliki"
 #: src/titan_core/tce_system.py:90
 msgid "Open the system properties"
 msgstr "Otwórz właściwości systemu"
-
-#: src/titan_core/tce_system.py:91
-msgid "Open the Start menu"
-msgstr "Otwórz menu Start"
 
 #: src/titan_core/tce_system_net.py:650
 msgid "Connect to WiFi Network"
@@ -606,7 +602,7 @@ msgstr "Czy chcesz teraz otworzyć ustawienia mikrofonu?"
 msgid "Microphone blocked"
 msgstr "Mikrofon zablokowany"
 
-#: src/system/tray_icons.py:137 src/system/tray_icons.py:617
+#: src/system/tray_icons.py:137 src/system/tray_icons.py:760
 msgid "Notification icon"
 msgstr "Ikona powiadomienia"
 
@@ -1174,4 +1170,7 @@ msgstr "Niedostępne"
 
 #~ msgid "Networks updated"
 #~ msgstr "Sieci zaktualizowane"
+
+#~ msgid "Open the Titan Menu"
+#~ msgstr "Otwórz Titan Menu"
 

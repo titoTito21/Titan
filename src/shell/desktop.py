@@ -30,7 +30,7 @@ import wx
 
 from src.platform_utils import IS_WINDOWS, get_user_data_dir
 from src.shell import luna, win_shell
-from src.shell.a11y import shell_setting
+from src.shell.a11y import edge_cue, name_control, shell_setting
 from src.titan_core.translation import _
 
 if IS_WINDOWS:
@@ -89,13 +89,21 @@ class DesktopFrame(wx.Frame):
         self.SetName(_("Desktop"))
 
         self.items = []            # [{'name','path','type'}]
+        # What was cut, so a paste after a cut moves rather than copies even
+        # where the clipboard's own drop-effect format did not survive.
+        self._cut_paths = []
         self._image_list = None
         self._positions = self._load_positions()
 
         self.list = wx.ListCtrl(
             self, style=wx.LC_ICON | wx.LC_SINGLE_SEL | wx.LC_ALIGN_LEFT
             | wx.NO_BORDER | wx.WANTS_CHARS)
-        self.list.SetName(_("Desktop icons"))
+        # The list **is** the desktop, so it is called the desktop and
+        # nothing else: a screen reader reads the window's name and then the
+        # control's, and "Desktop / Desktop icons" said the word twice.
+        # `name_control` and not `SetName`, because a native list view
+        # answers MSAA itself and never sees wx's name.
+        name_control(self.list, _("Desktop"))
         self._apply_grid()
 
         self._apply_look()
@@ -120,6 +128,10 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
         self.Bind(wx.EVT_SIZE, self._on_size)
         self.Bind(wx.EVT_CLOSE, self._on_close)
+        # Whenever Windows makes the desktop the active window - a shortcut,
+        # Alt+Tab, a click on the background - the keyboard belongs on the
+        # icons and not on the frame around them.
+        self.Bind(wx.EVT_ACTIVATE, self._on_activate)
 
     # ------------------------------------------------------------------
     # Placement
@@ -134,6 +146,12 @@ class DesktopFrame(wx.Frame):
         width, height = win_shell.screen_size()
         self.SetSize(0, 0, width, height)
         self.list.SetSize(0, 0, width, height)
+        # The desktop is not an application: it must not be an Alt+Tab stop
+        # or a button on anybody's taskbar.
+        try:
+            win_shell.hide_from_alt_tab(self.GetHandle())
+        except Exception:
+            pass
         try:
             self.ShowWithoutActivating()
         except Exception:
@@ -537,9 +555,125 @@ class DesktopFrame(wx.Frame):
             self.refresh()
 
     def properties_of_selected(self):
+        """The Windows property sheet - the Shortcut tab and all.
+
+        It is given this window as its owner, or the sheet can come up
+        behind the shell, which with Explorer's taskbar hidden means behind
+        everything on the screen.
+        """
+        entry = self.selected_entry()
+        if not entry:
+            return False
+        owner = 0
+        try:
+            owner = self.GetHandle()
+        except Exception:
+            pass
+        return win_shell.show_properties(entry['path'], owner=owner)
+
+    def open_location_of_selected(self):
+        """"Open file location": for a shortcut, where its target lives."""
         entry = self.selected_entry()
         if entry:
-            win_shell.show_properties(entry['path'])
+            win_shell.reveal_in_explorer(entry['path'])
+
+    def create_shortcut_to_selected(self):
+        entry = self.selected_entry()
+        if not entry:
+            return
+        folders = win_shell.desktop_folders()
+        folder = folders[0] if folders else os.path.dirname(entry['path'])
+        if win_shell.create_shortcut(entry['path'], folder):
+            self.refresh()
+
+    def copy_selected(self, cut=False):
+        """Put the selection on the clipboard as Explorer does.
+
+        A file on the clipboard is a CF_HDROP list, and whether it was cut
+        or copied is a second format Windows calls "Preferred DropEffect" -
+        without it a cut behaves as a copy, which is a data-losing kind of
+        wrong to get quietly.
+        """
+        entry = self.selected_entry()
+        if not entry:
+            return False
+        try:
+            files = wx.FileDataObject()
+            files.AddFile(entry['path'])
+            data = wx.DataObjectComposite()
+            data.Add(files, True)
+            effect = wx.CustomDataObject(
+                wx.DataFormat('Preferred DropEffect'))
+            # DROPEFFECT_MOVE = 2, DROPEFFECT_COPY = 5 (with LINK cleared).
+            effect.SetData((2 if cut else 5).to_bytes(4, 'little'))
+            data.Add(effect)
+            if not wx.TheClipboard.Open():
+                return False
+            try:
+                wx.TheClipboard.SetData(data)
+                wx.TheClipboard.Flush()
+            finally:
+                wx.TheClipboard.Close()
+            self._cut_paths = [entry['path']] if cut else []
+            return True
+        except Exception as error:
+            print(f"[TitanShell] could not copy to the clipboard: {error}")
+            return False
+
+    def clipboard_files(self):
+        """What is on the clipboard, and whether it was cut."""
+        paths, move = [], False
+        try:
+            if not wx.TheClipboard.Open():
+                return paths, move
+            try:
+                files = wx.FileDataObject()
+                if wx.TheClipboard.GetData(files):
+                    paths = list(files.GetFilenames())
+                effect = wx.CustomDataObject(
+                    wx.DataFormat('Preferred DropEffect'))
+                if wx.TheClipboard.GetData(effect):
+                    raw = effect.GetData()
+                    if raw:
+                        move = (int.from_bytes(bytes(raw)[:4], 'little')
+                                & 2) == 2
+            finally:
+                wx.TheClipboard.Close()
+        except Exception as error:
+            print(f"[TitanShell] could not read the clipboard: {error}")
+        if not move and self._cut_paths:
+            move = any(os.path.normcase(path) in
+                       [os.path.normcase(cut) for cut in self._cut_paths]
+                       for path in paths)
+        return paths, move
+
+    def paste(self):
+        paths, move = self.clipboard_files()
+        folders = win_shell.desktop_folders()
+        if not paths or not folders:
+            edge_cue()
+            return False
+        if win_shell.file_operation(paths, folders[0], move=move):
+            self._cut_paths = []
+            self.refresh()
+            return True
+        return False
+
+    def show_shutdown(self):
+        """Alt+F4 on the desktop, as it is on Windows: shut down.
+
+        With no window left to close, Explorer takes Alt+F4 on the desktop
+        to mean the Shut Down dialog - so the shell that replaced it does
+        the same, and it is the shell's own dialog (msgina's), which has
+        turning Titan off on it as well.
+        """
+        try:
+            from src.shell.shutdown_dialog import show_shutdown_dialog
+            show_shutdown_dialog(self)
+            return True
+        except Exception as error:
+            print(f"[TitanShell] could not open the shutdown dialog: {error}")
+            return False
 
     def _on_activate(self, event):
         self.open_selected()
@@ -583,6 +717,10 @@ class DesktopFrame(wx.Frame):
             self.delete_selected()
         elif key == wx.WXK_F5:
             self.refresh()
+        elif key in (ord('C'), ord('X')) and event.ControlDown():
+            self.copy_selected(cut=(key == ord('X')))
+        elif key == ord('V') and event.ControlDown():
+            self.paste()
         else:
             event.Skip()
 
@@ -594,7 +732,13 @@ class DesktopFrame(wx.Frame):
         wherever the user happens to be: forwards is the beginning of the
         bar, backwards is its end.
         """
-        if event.GetKeyCode() != wx.WXK_TAB or event.ControlDown()                 or event.AltDown():
+        key = event.GetKeyCode()
+        if key == wx.WXK_F4 and event.AltDown():
+            # Nothing to close here: on the desktop Alt+F4 is how Windows
+            # is asked to shut down.
+            self.show_shutdown()
+            return
+        if key != wx.WXK_TAB or event.ControlDown() or event.AltDown():
             event.Skip()
             return
         shell = self.shell
@@ -610,8 +754,20 @@ class DesktopFrame(wx.Frame):
             event.Skip()
 
     def _on_item_menu(self, event):
+        """The menu Explorer puts on a desktop item, entry for entry.
+
+        Written as a real `wx.Menu` rather than as the shell's own
+        `IContextMenu`: every command here is a documented shell call, and a
+        wx menu is translated, keyboard-navigable and read by every screen
+        reader - which an owner-drawn shell menu is not.
+        """
         menu = wx.Menu()
         open_item = menu.Append(wx.ID_ANY, _("&Open"))
+        location = menu.Append(wx.ID_ANY, _("Open file &location"))
+        menu.AppendSeparator()
+        cut = menu.Append(wx.ID_ANY, _("Cu&t"))
+        copy = menu.Append(wx.ID_ANY, _("&Copy"))
+        shortcut = menu.Append(wx.ID_ANY, _("Create &shortcut"))
         menu.AppendSeparator()
         rename = menu.Append(wx.ID_ANY, _("Re&name"))
         delete = menu.Append(wx.ID_ANY, _("&Delete"))
@@ -619,6 +775,12 @@ class DesktopFrame(wx.Frame):
         properties = menu.Append(wx.ID_ANY, _("P&roperties"))
 
         self.Bind(wx.EVT_MENU, lambda e: self.open_selected(), open_item)
+        self.Bind(wx.EVT_MENU, lambda e: self.open_location_of_selected(),
+                  location)
+        self.Bind(wx.EVT_MENU, lambda e: self.copy_selected(cut=True), cut)
+        self.Bind(wx.EVT_MENU, lambda e: self.copy_selected(), copy)
+        self.Bind(wx.EVT_MENU, lambda e: self.create_shortcut_to_selected(),
+                  shortcut)
         self.Bind(wx.EVT_MENU, lambda e: self.rename_selected(), rename)
         self.Bind(wx.EVT_MENU, lambda e: self.delete_selected(), delete)
         self.Bind(wx.EVT_MENU, lambda e: self.properties_of_selected(),
@@ -644,6 +806,8 @@ class DesktopFrame(wx.Frame):
         menu.AppendSeparator()
         refresh = menu.Append(wx.ID_ANY, _("Re&fresh"))
         menu.AppendSeparator()
+        paste = menu.Append(wx.ID_ANY, _("&Paste"))
+        paste.Enable(bool(self.clipboard_files()[0]))
         new_folder = menu.Append(wx.ID_ANY, _("&New Folder"))
         menu.AppendSeparator()
         titan = menu.Append(wx.ID_ANY, _("&Titan settings"))
@@ -652,6 +816,7 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda e: self._toggle_auto_arrange(), arrange)
         self.Bind(wx.EVT_MENU, lambda e: self._line_up(), line_up)
         self.Bind(wx.EVT_MENU, lambda e: self.refresh(), refresh)
+        self.Bind(wx.EVT_MENU, lambda e: self.paste(), paste)
         self.Bind(wx.EVT_MENU, lambda e: self._new_folder(), new_folder)
         self.Bind(wx.EVT_MENU, lambda e: self.shell.open_settings(), titan)
         self.Bind(wx.EVT_MENU, lambda e: win_shell.open_path(
@@ -697,25 +862,109 @@ class DesktopFrame(wx.Frame):
                 self.list.EditLabel(index)
                 break
 
+    def bring_up(self):
+        """Put the desktop on the screen and the keyboard on its list.
+
+        What Windows+D and Windows+M actually mean: the desktop is shown
+        (it may have been hidden), it is put back at the bottom where a
+        desktop belongs, its contents are re-read if anything has changed
+        on disk since they were last looked at - a shortcut added by an
+        installer while the desktop was covered - and the keyboard lands on
+        the list itself, with an icon focused so there is something to read.
+        """
+        try:
+            if not self.IsShown():
+                self.ShowWithoutActivating()
+            self.send_to_back()
+            if self._folders_changed():
+                self.refresh()
+        except Exception as error:
+            print(f"[TitanShell] could not bring the desktop up: {error}")
+        return self.focus_icons()
+
+    def _folders_changed(self):
+        """Cheap check: has either desktop folder been written to since?"""
+        stamp = []
+        for folder in win_shell.desktop_folders():
+            try:
+                stamp.append(os.path.getmtime(folder))
+            except Exception:
+                pass
+        stamp = tuple(stamp)
+        if stamp == getattr(self, '_folder_stamp', None):
+            return False
+        self._folder_stamp = stamp
+        return True
+
     def focus_icons(self):
-        """Give the keyboard to the desktop, on the first icon.
+        """Give the keyboard to the desktop, on an icon.
 
         The desktop is not raised over the user's windows to do it - it is
         the bottom of the z-order by definition - but it does have to become
         the foreground window, or `SetFocus` moves a focus that is not
         Windows' idea of the focus and every key still goes elsewhere.
+
+        And the focus has to be set **twice**: `SetForegroundWindow` makes
+        the frame active, but the `WM_ACTIVATE` that follows is processed
+        *after* this function returns, and wxWidgets answers it by focusing
+        the frame - undoing the `SetFocus` we had just made on the list.
+        That is why the icons could only be reached with object navigation:
+        Windows' focus was on the frame, and the list was merely selected.
+        So it is set now and again once the activation has been through the
+        queue.
         """
         try:
+            if not self.IsShown():
+                self.ShowWithoutActivating()
+                self.send_to_back()
             if IS_WINDOWS:
                 win_shell.take_foreground(self.GetHandle())
-            self.list.SetFocus()
-            if self.list.GetItemCount() and self.selected_index() < 0:
-                self.list.Select(0)
-                self.list.Focus(0)
+            self.focus_list()
+            wx.CallAfter(self.focus_list)
             return True
         except Exception as error:
             print(f"[TitanShell] could not focus the desktop: {error}")
             return False
+
+    def focus_list(self):
+        """Put the keyboard on the list itself, and on one of its icons.
+
+        A list view with no focused item is read as an empty container, so
+        an icon is given the focus state as well - the one the user left, or
+        the first.
+        """
+        try:
+            if self.list.GetEditControl() is not None:
+                # A rename is in progress: the keyboard belongs to the edit
+                # box, not to the list around it.
+                return False
+        except Exception:
+            pass
+        try:
+            self.list.SetFocus()
+            if IS_WINDOWS:
+                # wx sets the focus within its own idea of the window tree;
+                # this is Windows' own, which is what the accessibility
+                # layer and every screen reader actually reads.
+                win_shell.user32.SetFocus(self.list.GetHandle())
+        except Exception:
+            return False
+        try:
+            if self.list.GetItemCount():
+                index = self.selected_index()
+                if index < 0:
+                    index = 0
+                self.list.Select(index)
+                self.list.Focus(index)
+                self.list.EnsureVisible(index)
+        except Exception:
+            pass
+        return True
+
+    def _on_activate(self, event):
+        if event.GetActive():
+            wx.CallAfter(self.focus_list)
+        event.Skip()
 
     def _on_close(self, event):
         self._remember_positions()

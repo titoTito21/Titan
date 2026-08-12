@@ -387,24 +387,27 @@ class EnablementTests(unittest.TestCase):
 class MenuGlyphTests(unittest.TestCase):
     """A menu entry says what it is; it does not draw it in text."""
 
-    def test_a_folder_says_submenu_instead_of_showing_an_arrow(self):
-        from src.shell.start_menu import MenuEntry, MenuList
+    def test_a_branch_is_a_branch_and_does_not_say_so_in_words(self):
+        """It is a tree: the control reports "collapsed" and "expanded"
+        itself, so neither a glyph nor the word belongs in the text."""
+        from src.shell.start_menu import MenuEntry, MenuTree
         frame = wx.Frame(None)
         try:
-            menu = MenuList(frame, lambda entry: None,
+            tree = MenuTree(frame, lambda entry: None,
+                            lambda entry: [MenuEntry('Inside', 'action')],
                             wx.WHITE, wx.BLACK, 'Test')
-            menu.set_entries([MenuEntry('Programs', 'folder'),
+            tree.set_entries([MenuEntry('Programs', 'folder'),
                               MenuEntry('Run', 'action')])
-            folder = menu.GetItemText(0)
-            plain = menu.GetItemText(1)
-            # Whatever the wording, no character may be standing in for the
-            # word: a list item's text is what a screen reader reads out.
-            for char in folder + plain:
+            root = tree.GetRootItem()
+            folder, cookie = tree.GetFirstChild(root)
+            plain = tree.GetNextChild(root, cookie)[0]
+            self.assertEqual(tree.GetItemText(folder), 'Programs')
+            self.assertEqual(tree.GetItemText(plain), 'Run')
+            self.assertTrue(tree.ItemHasChildren(folder))
+            self.assertFalse(tree.ItemHasChildren(plain))
+            for char in tree.GetItemText(folder) + tree.GetItemText(plain):
                 self.assertLess(ord(char), 0x2000,
                                 f"a glyph is being read out: {char!r}")
-            self.assertIn('Programs', folder)
-            self.assertNotEqual(folder, 'Programs')
-            self.assertEqual(plain, 'Run')
         finally:
             frame.Destroy()
 
@@ -412,13 +415,18 @@ class MenuGlyphTests(unittest.TestCase):
 class ForegroundTests(unittest.TestCase):
     """Switching windows must never pull the keyboard onto the bar."""
 
+    def _watch_z_order(self, bar):
+        ordered = []
+        bar._set_z_order = lambda topmost=True, bottom=False: ordered.append(
+            (topmost, bottom))
+        return ordered
+
     def test_a_full_screen_app_coming_and_going_never_activates_the_bar(self):
         bar = _bar_with(windows=('Notepad',))
         raised = []
-        ordered = []
         bar.Raise = lambda: raised.append(True)
-        bar._set_z_order = lambda topmost=True, bottom=False: ordered.append(
-            (topmost, bottom))
+        bar.always_on_top = lambda: True
+        ordered = self._watch_z_order(bar)
         try:
             bar._on_fullscreen(True)
             bar._on_fullscreen(False)
@@ -427,6 +435,35 @@ class ForegroundTests(unittest.TestCase):
             self.assertEqual(ordered, [(False, True), (True, False)])
             self.assertEqual(raised, [])
         finally:
+            bar.undock()
+            bar.Destroy()
+
+    def test_the_bar_lives_in_the_background_unless_it_is_asked_not_to(self):
+        """Not topmost is a place in the z-order, not just a style bit."""
+        bar = _bar_with()
+        ordered = self._watch_z_order(bar)
+        try:
+            self.assertFalse(bar.always_on_top(),
+                             "the bar covers other windows by default")
+            bar.apply_always_on_top()
+            # Down to the bottom, not merely told it is no longer topmost.
+            self.assertEqual(ordered, [(False, True)])
+        finally:
+            bar.undock()
+            bar.Destroy()
+
+    def test_the_desktop_is_put_back_under_the_bar(self):
+        """Both are at the bottom, so the order between them is decided."""
+        bar = _bar_with()
+        self._watch_z_order(bar)
+        sent = []
+        bar.shell.desktop = types.SimpleNamespace(
+            send_to_back=lambda: sent.append(True))
+        try:
+            bar.send_to_background()
+            self.assertEqual(sent, [True])
+        finally:
+            bar.shell.desktop = None
             bar.undock()
             bar.Destroy()
 
@@ -630,8 +667,11 @@ class ActionTests(unittest.TestCase):
                          _("The Titan shell is not running."))
 
     def test_actions_that_need_the_shell_say_so(self):
+        # focus_desktop is deliberately not here: the desktop exists whether
+        # or not Titan is drawing it, so that action falls back to Windows'
+        # own rather than refusing.
         for action in (shell_actions.shell_focus_taskbar,
-                       shell_actions.shell_focus_desktop,
+                       shell_actions.shell_focus_tray,
                        shell_actions.shell_open_start_menu):
             result = action()
             self.assertTrue(refused(result), action.__name__)
@@ -791,23 +831,31 @@ class ShellWindowTests(unittest.TestCase):
             bar.undock()
             bar.Destroy()
 
-    def test_the_start_menu_has_both_columns_and_steps_back_out_of_folders(self):
+    def test_the_start_menu_is_a_tree_that_opens_where_it_stands(self):
+        """A branch fills itself when it is opened, and nothing in the text
+        says it is a branch - the tree control says that itself."""
         from src.shell.start_menu import XPStartMenu
         menu = XPStartMenu(None, shell=None)
+        tree = menu.left_tree
         try:
-            self.assertTrue(menu.left_list.entries)
+            self.assertTrue(menu.left_tree.entries)
             self.assertTrue(menu.right_list.entries)
-            top = [entry.label for entry in menu.left_list.entries]
-            folders = [entry for entry in menu.left_list.entries
-                       if entry.kind == 'folder']
-            self.assertTrue(folders, "there is no All Programs")
-            menu._enter_folder(folders[0])
-            self.assertNotEqual([e.label for e in menu.left_list.entries], top)
-            self.assertEqual(menu.left_list.entries[-1].kind, 'back')
-            self.assertTrue(menu._go_back())
-            self.assertEqual([e.label for e in menu.left_list.entries], top)
-            # And at the top there is nothing left to go back to.
-            self.assertFalse(menu._go_back())
+            root = tree.GetRootItem()
+            item, cookie = tree.GetFirstChild(root)
+            branches = []
+            while item.IsOk():
+                entry = tree.GetItemData(item)
+                if entry is not None and entry.kind == 'folder':
+                    branches.append(item)
+                    self.assertTrue(tree.ItemHasChildren(item))
+                    self.assertEqual(tree.GetItemText(item), entry.label,
+                                     "the text says more than the name")
+                item, cookie = tree.GetNextChild(root, cookie)
+            self.assertTrue(branches, "the menu has no branches at all")
+            tree.Expand(branches[0])
+            first = tree.GetFirstChild(branches[0])[0]
+            self.assertTrue(first.IsOk())
+            self.assertTrue(tree.GetItemText(first))
         finally:
             menu.Destroy()
 
@@ -1322,6 +1370,640 @@ class DesktopGridTests(unittest.TestCase):
         finally:
             desktop.Destroy()
 
+
+    def test_the_list_is_called_the_desktop_and_nothing_longer(self):
+        """The list IS the desktop; "Desktop icons" said the word twice."""
+        desktop = self._desktop(count=1)
+        try:
+            self.assertEqual(desktop.list.GetName(), _("Desktop"))
+        finally:
+            desktop.Destroy()
+
+    def test_alt_f4_on_the_desktop_asks_the_computer_to_shut_down(self):
+        """There is no window to close here, so Alt+F4 is Windows' own."""
+        desktop = self._desktop(count=1)
+        asked = []
+        desktop.show_shutdown = lambda: asked.append(True) or True
+        try:
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetKeyCode(wx.WXK_F4)
+            event.SetAltDown(True)
+            desktop._on_char_hook(event)
+            self.assertEqual(asked, [True])
+        finally:
+            desktop.Destroy()
+
+    def test_a_desktop_item_is_opened_and_asked_about_through_the_shell(self):
+        """Every desktop verb goes through a documented shell call."""
+        desktop = self._desktop(count=1)
+        calls = {}
+        real_open = win_shell.open_path
+        real_props = win_shell.show_properties
+        real_reveal = win_shell.reveal_in_explorer
+        win_shell.open_path = lambda path: calls.setdefault('open', path)
+        win_shell.show_properties = lambda path, owner=0: calls.setdefault(
+            'properties', (path, bool(owner)))
+        win_shell.reveal_in_explorer = lambda path: calls.setdefault(
+            'reveal', path)
+        try:
+            desktop.list.Select(0)
+            desktop.list.Focus(0)
+            path = desktop.items[0]['path']
+            desktop.open_selected()
+            desktop.properties_of_selected()
+            desktop.open_location_of_selected()
+            self.assertEqual(calls['open'], path)
+            self.assertEqual(calls['properties'][0], path)
+            self.assertTrue(calls['properties'][1],
+                            "the property sheet has no owner window")
+            self.assertEqual(calls['reveal'], path)
+        finally:
+            win_shell.open_path = real_open
+            win_shell.show_properties = real_props
+            win_shell.reveal_in_explorer = real_reveal
+            desktop.Destroy()
+
+    def test_renaming_keeps_the_extension_the_file_had(self):
+        desktop = self._desktop(count=1)
+        try:
+            was = desktop.items[0]['path']
+            # wx will not let a label-edit event be built with a label in
+            # it, so the event is stood in for by what the handler asks of
+            # it - which is the whole of the contract either way.
+            event = types.SimpleNamespace(
+                IsEditCancelled=lambda: False, GetIndex=lambda: 0,
+                GetLabel=lambda: 'Renamed', Veto=lambda: None)
+            desktop._on_rename(event)
+            self.assertTrue(desktop.items[0]['path'].endswith('Renamed.txt'))
+            self.assertFalse(os.path.exists(was))
+            self.assertTrue(os.path.exists(desktop.items[0]['path']))
+        finally:
+            desktop.Destroy()
+
+
+# --------------------------------------------------------------------------- #
+# 10. What is said to the screen reader, and by whom
+# --------------------------------------------------------------------------- #
+class GroupAnnouncementTests(unittest.TestCase):
+    """Arriving in a group of the bar is announced the way the tab bar is:
+    through the screen reader alone, never through the platform TTS."""
+
+    def test_nothing_is_said_when_no_screen_reader_is_running(self):
+        from src.accessibility import messages
+        real_ta = messages._ta_announce
+        real_sr = messages.is_screen_reader_running
+        real_speak = messages.speak_sr_only
+        spoken = []
+        messages._ta_announce = lambda *args, **kwargs: False
+        messages.is_screen_reader_running = lambda: False
+        messages.speak_sr_only = lambda *args, **kwargs: spoken.append(args)
+        try:
+            self.assertFalse(messages.announce_shell_group('Dock'))
+            self.assertEqual(spoken, [])
+        finally:
+            messages._ta_announce = real_ta
+            messages.is_screen_reader_running = real_sr
+            messages.speak_sr_only = real_speak
+
+    def test_the_reader_is_told_the_group_before_the_control(self):
+        from src.shell import taskbar as taskbar_module
+        bar = _bar_with(windows=('Notepad',),
+                        icons=(FakeTrayIcon('Volume'),))
+        said = []
+        real = taskbar_module.announce_group
+        taskbar_module.announce_group = lambda label: said.append(label)
+        try:
+            bar.start_button.SetFocus()
+            bar._move_between_groups(1)      # into the quick launch band
+            bar._move_between_groups(1)      # into the window buttons
+            self.assertEqual(said, [taskbar_module.group_label('quicklaunch'),
+                                    taskbar_module.group_label('tasks')])
+            # The arrows move inside a group, which is not an arrival.
+            said[:] = []
+            bar._move_within_group(1)
+            self.assertEqual(said, [])
+        finally:
+            taskbar_module.announce_group = real
+            bar.undock()
+            bar.Destroy()
+
+    def test_every_group_has_words_of_its_own(self):
+        from src.shell import taskbar as taskbar_module
+        bar = _bar_with(windows=('Notepad',), icons=(FakeTrayIcon('Volume'),))
+        try:
+            labels = [taskbar_module.group_label(name)
+                      for name, _controls in bar.groups()]
+            self.assertTrue(all(labels), "a group with nothing to say")
+            self.assertEqual(len(set(labels)), len(labels))
+        finally:
+            bar.undock()
+            bar.Destroy()
+
+
+# --------------------------------------------------------------------------- #
+# 11. The Start menu is one ring of real controls
+# --------------------------------------------------------------------------- #
+class StartMenuKeyboardTests(unittest.TestCase):
+
+    def setUp(self):
+        from src.shell.start_menu import XPStartMenu
+        self.menu = XPStartMenu(None, shell=None)
+        self.addCleanup(self.menu.Destroy)
+
+    def test_everything_in_the_menu_is_a_stop_on_the_ring(self):
+        ring = self.menu.focus_ring()
+        self.assertIn(self.menu.header, ring)
+        self.assertIn(self.menu.search_field, ring)
+        self.assertIn(self.menu.left_tree, ring)
+        self.assertNotIn(self.menu.left_list, ring,
+                         "the results list is a stop while it is hidden")
+        self.assertIn(self.menu.right_list, ring)
+        self.assertIn(self.menu.shutdown_button, ring)
+        self.assertTrue(all(control.GetName() for control in ring),
+                        "a stop on the ring with no name to read")
+
+    def test_the_user_is_a_button_and_not_a_painted_strip(self):
+        self.assertTrue(self.menu.header.AcceptsFocus())
+        self.assertEqual(self.menu.header.GetName(),
+                         self.menu.header.shell_name())
+        self.assertTrue(self.menu.header.shell_name())
+
+    def test_tab_goes_round_the_ring_and_shift_tab_comes_back(self):
+        ring = self.menu.focus_ring()
+        self.menu.header.SetFocus()
+        self.menu._move_focus(1)
+        self.assertIs(wx.Window.FindFocus(), ring[1])
+        self.menu._move_focus(-1)
+        self.assertIs(wx.Window.FindFocus(), ring[0])
+
+    def test_the_search_finds_an_entry_by_part_of_its_name(self):
+        target = self.menu.right_list.entries[0].label
+        needle = target[1:4].lower()
+        found = [entry.label for entry in self.menu.search_entries(needle)]
+        self.assertIn(target, found)
+
+    def test_a_name_that_starts_with_what_was_typed_comes_first(self):
+        target = self.menu.right_list.entries[0].label
+        entries = self.menu.search_entries(target[:3])
+        self.assertTrue(entries)
+        self.assertTrue(entries[0].label.lower().startswith(
+            target[:3].lower()))
+
+    def test_an_empty_search_is_the_menu_again(self):
+        self.assertEqual(self.menu.search_entries(''), [])
+        self.menu.search_field.SetValue('zzzz-nothing-matches')
+        self.assertEqual(self.menu.left_list.entries, [])
+        self.assertIs(self.menu.left_column(), self.menu.left_list)
+        self.assertTrue(self.menu.clear_search())
+        self.assertIs(self.menu.left_column(), self.menu.left_tree)
+        self.assertTrue(self.menu.left_tree.entries)
+        self.assertFalse(self.menu.clear_search())
+
+    def test_the_column_says_how_many_were_found(self):
+        self.menu.search_field.SetValue('a')
+        name = self.menu.left_list.GetName()
+        self.assertTrue(name)
+        self.assertNotEqual(name, _("Programs"))
+
+
+class StartMenuContentsTests(unittest.TestCase):
+    """The menu carries everything Titan can start, not only programs."""
+
+    def setUp(self):
+        from src.shell.start_menu import XPStartMenu
+        self.menu = XPStartMenu(None, shell=None)
+        self.addCleanup(self.menu.Destroy)
+
+    def test_the_column_has_a_branch_for_each_kind_of_thing(self):
+        payloads = [entry.payload for entry in self.menu.left_tree.entries
+                    if entry.kind == 'folder']
+        for wanted in ('__apps__', '__games__', '__im__', '__macros__',
+                       '__settings__', '__all_programs__'):
+            self.assertIn(wanted, payloads)
+
+    def test_titan_settings_live_under_settings_and_not_among_the_places(self):
+        settings = [entry.payload for entry in self.menu._settings_entries()]
+        self.assertIn('titan_settings', settings)
+        places = [entry.payload for entry in self.menu._places_entries()]
+        self.assertNotIn('titan_settings', places)
+
+    def test_titans_own_messengers_are_in_the_menu_too(self):
+        """Not only the installed modules: the ones Titan brings itself."""
+        entries = self.menu._im_entries()
+        builtin = [entry.payload for entry in entries
+                   if entry.kind == 'im_builtin']
+        for service in ('telegram', 'messenger', 'whatsapp', 'titannet',
+                        'elten'):
+            self.assertIn(service, builtin)
+
+    def test_the_windows_apps_branch_is_what_windows_itself_lists(self):
+        """UWP apps live nowhere else: no shortcut, only an app id."""
+        entries = self.menu._windows_app_entries()
+        self.assertTrue(entries)
+        if entries[0].kind == 'separator':
+            self.skipTest("this machine's Apps folder could not be read")
+        self.assertTrue(all(entry.kind == 'uwp' for entry in entries))
+        self.assertTrue(all(entry.payload for entry in entries))
+
+    def test_the_im_modules_and_the_macros_are_branches_of_their_own(self):
+        for payload in ('__im__', '__macros__'):
+            entry = [e for e in self.menu.left_tree.entries
+                     if e.payload == payload][0]
+            children = self.menu._children_of(entry)
+            self.assertTrue(children, payload)
+            # Either real entries, or one saying there are none - never
+            # an empty branch that opens onto nothing.
+            kinds = {child.kind for child in children}
+            self.assertTrue(
+                kinds <= {'im_builtin', 'im_module', 'macro', 'separator'},
+                kinds)
+
+    def test_the_search_looks_inside_the_branches_too(self):
+        # "There are no macros" is a line of the menu, not something that
+        # can be found, so only the real entries are compared.
+        labels = {entry.label for entry in self.menu._searchable_branches()
+                  if entry.kind != 'separator'}
+        self.assertTrue(labels, "the settings alone should be searchable")
+        index = {entry.label for entry in self.menu._build_search_index()}
+        self.assertTrue(labels <= index,
+                        "the search does not cover the branches")
+
+    def test_a_macro_and_a_module_know_how_to_be_started(self):
+        from src.shell.start_menu import MenuEntry
+        started = []
+        self.menu._open_im_module = lambda info: started.append(('im', info))
+        self.menu._run_macro = lambda macro: started.append(('macro', macro))
+        self.menu._activate_entry(MenuEntry('X', 'im_module', {'id': 'x'}))
+        self.menu._activate_entry(MenuEntry('Y', 'macro', {'name': 'y'}))
+        self.assertEqual([kind for kind, _payload in started],
+                         ['im', 'macro'])
+
+
+class ShutdownDialogTests(unittest.TestCase):
+    """The dialog is the machine's, plus the one thing that is Titan's."""
+
+    def test_turning_titan_off_is_one_of_the_choices(self):
+        from src.shell import shutdown_dialog
+        ids = [action for action, _label, _desc in
+               shutdown_dialog.shutdown_actions()]
+        self.assertIn('exit_titan', ids)
+        self.assertIn('shutdown', ids)
+        for _id, label, description in shutdown_dialog.shutdown_actions():
+            self.assertTrue(label and description)
+
+    def test_it_closes_titan_and_not_windows(self):
+        from src.shell import shutdown_dialog
+        called = []
+        real = shutdown_dialog.exit_titan
+        real_exit = win_shell.exit_windows
+        shutdown_dialog.exit_titan = lambda: called.append(True) or True
+        win_shell.exit_windows = lambda mode: called.append(mode)
+        try:
+            self.assertTrue(
+                shutdown_dialog.perform_shutdown_action('exit_titan'))
+            self.assertEqual(called, [True])
+        finally:
+            shutdown_dialog.exit_titan = real
+            win_shell.exit_windows = real_exit
+
+
+# --------------------------------------------------------------------------- #
+# 12. The shell's windows are furniture, not applications
+# --------------------------------------------------------------------------- #
+class FurnitureTests(unittest.TestCase):
+    """A desktop, a taskbar and a Start menu are not three more programs."""
+
+    def test_a_shell_window_is_taken_out_of_alt_tab(self):
+        frame = wx.Frame(None, title='Furniture')
+        try:
+            frame.Show()
+            self.assertTrue(win_shell.hide_from_alt_tab(frame.GetHandle()))
+            self.assertFalse(win_shell.is_taskbar_window(frame.GetHandle()),
+                             "a shell window still answers the Alt+Tab rule")
+        finally:
+            frame.Destroy()
+
+    def test_the_bar_asks_wx_for_a_tool_window_too(self):
+        bar = _bar_with()
+        try:
+            self.assertTrue(bar.GetWindowStyleFlag() & wx.FRAME_TOOL_WINDOW)
+            self.assertTrue(bar.GetWindowStyleFlag() & wx.FRAME_NO_TASKBAR)
+        finally:
+            bar.undock()
+            bar.Destroy()
+
+    def test_escape_brings_a_hidden_bar_back_out(self):
+        """Escape in the menu is how the taskbar is asked for."""
+        from src.shell import taskbar as taskbar_module
+        bar = _bar_with()
+        bar.auto_hide = lambda: True
+        bar._auto_hide_state = taskbar_module.AUTOHIDE_HIDDEN
+        bar.take_foreground_called = []
+        bar.Raise = lambda: None
+        try:
+            bar.focus_start_button()
+            self.assertIn(bar._auto_hide_state,
+                          (taskbar_module.AUTOHIDE_SHOWING,
+                           taskbar_module.AUTOHIDE_SHOWN))
+        finally:
+            bar.undock()
+            bar.Destroy()
+
+    def test_escape_in_the_start_menu_lands_on_the_start_button(self):
+        """As on Windows: the menu closes onto the button it came out of."""
+        from src.shell.start_menu import XPStartMenu
+        pressed = []
+        shell = types.SimpleNamespace(
+            focus_start_button=lambda: pressed.append(True) or True,
+            set_start_button_pressed=lambda value: None,
+            taskbar_height=lambda: 30)
+        menu = XPStartMenu(None, shell=shell)
+        try:
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetKeyCode(wx.WXK_ESCAPE)
+            menu._on_char_hook(event)
+            self.assertEqual(pressed, [True])
+            self.assertFalse(menu.IsShown())
+        finally:
+            menu.Destroy()
+
+
+# --------------------------------------------------------------------------- #
+# 13. The actions the new shell grew
+# --------------------------------------------------------------------------- #
+class NewActionTests(unittest.TestCase):
+
+    def setUp(self):
+        self.folder = None
+        self.real_folders = win_shell.desktop_folders
+
+    def tearDown(self):
+        win_shell.desktop_folders = self.real_folders
+        if self.folder:
+            import shutil
+            shutil.rmtree(self.folder, ignore_errors=True)
+
+    def _desktop_folder(self, names=('Report.txt',)):
+        import tempfile
+        self.folder = tempfile.mkdtemp()
+        for name in names:
+            open(os.path.join(self.folder, name), 'w').close()
+        win_shell.desktop_folders = lambda: [self.folder]
+        return self.folder
+
+    def test_every_new_action_is_declared_with_a_callable(self):
+        declared = {name: handler for name, _summary, _params, _risk, handler
+                    in shell_actions.get_shell_actions()}
+        for name in ('focus_tray', 'desktop_item_properties',
+                     'desktop_item_target', 'open_item_location',
+                     'rename_desktop_item', 'delete_desktop_item',
+                     'create_desktop_shortcut', 'search_programs',
+                     'run_program', 'power_options', 'power'):
+            self.assertIn(name, declared)
+            self.assertTrue(callable(declared[name]), name)
+
+    def test_turning_the_computer_off_always_asks_first(self):
+        risks = {name: risk for name, _s, _p, risk, _h
+                 in shell_actions.get_shell_actions()}
+        self.assertEqual(risks['power'], 'always_confirm')
+        for name in ('delete_desktop_item', 'rename_desktop_item',
+                     'run_program', 'create_desktop_shortcut'):
+            self.assertNotEqual(risks[name], 'auto', name)
+
+    def test_power_offers_only_what_this_machine_will_do(self):
+        answer = shell_actions.shell_power_options()
+        self.assertIn('shutdown', answer)
+        self.assertIn('exit_titan', answer)
+        asked_for = shell_actions.shell_power()
+        self.assertTrue(asked(asked_for))
+        self.assertIn('exit_titan', asked_for.options)
+        refusal = shell_actions.shell_power(action='fly')
+        self.assertTrue(refused(refusal))
+
+    def test_a_desktop_item_is_renamed_and_deleted_by_name(self):
+        folder = self._desktop_folder(('Report.txt',))
+        result = shell_actions.shell_rename_desktop_item(name='Report',
+                                                         new_name='Notes')
+        self.assertFalse(refused(result), said(result))
+        self.assertTrue(os.path.exists(os.path.join(folder, 'Notes.txt')))
+        self.assertFalse(os.path.exists(os.path.join(folder, 'Report.txt')))
+
+    def test_renaming_asks_for_the_new_name_rather_than_inventing_one(self):
+        self._desktop_folder(('Report.txt',))
+        result = shell_actions.shell_rename_desktop_item(name='Report')
+        self.assertTrue(asked(result))
+        self.assertEqual(result.name, 'new_name')
+
+    def test_an_ambiguous_desktop_name_is_asked_about(self):
+        self._desktop_folder(('Report one.txt', 'Report two.txt'))
+        result = shell_actions.shell_desktop_item_properties(name='Report')
+        self.assertTrue(asked(result))
+        self.assertEqual(len(result.options), 2)
+
+    def test_a_shortcut_is_made_on_the_desktop_and_read_back(self):
+        folder = self._desktop_folder(())
+        target = os.path.join(folder, 'target.txt')
+        open(target, 'w').close()
+        result = shell_actions.shell_create_desktop_shortcut(target=target)
+        if refused(result):
+            self.skipTest("this machine has no WScript.Shell: " + said(result))
+        links = [name for name in os.listdir(folder)
+                 if name.lower().endswith('.lnk')]
+        self.assertTrue(links)
+        answer = shell_actions.shell_desktop_item_target(
+            name=os.path.splitext(links[0])[0])
+        self.assertIn('target.txt', said(answer))
+
+    def test_creating_a_shortcut_to_nothing_says_so(self):
+        self._desktop_folder(())
+        result = shell_actions.shell_create_desktop_shortcut(
+            target='C:/nothing/at/all.exe')
+        self.assertTrue(refused(result))
+
+    def test_the_search_reads_the_windows_start_menu_off_the_disk(self):
+        """It must answer with no Start menu window open."""
+        entries = shell_actions._windows_programs()
+        self.assertTrue(entries, "no programs found in the Start Menu")
+        for label, where, path in entries[:20]:
+            self.assertTrue(label and where and os.path.exists(path))
+
+    def test_searching_for_nothing_asks_what_for(self):
+        result = shell_actions.shell_search_programs()
+        self.assertTrue(asked(result))
+        self.assertEqual(result.name, 'query')
+
+    def test_the_shell_settings_include_the_new_ones(self):
+        answer = shell_actions.shell_list_settings()
+        for label in ('taskbar on top', 'quick launch', 'clock'):
+            self.assertIn(label, answer)
+
+
+# --------------------------------------------------------------------------- #
+# 14. The keyboard really lands on the desktop, and the search really reads
+# --------------------------------------------------------------------------- #
+class DesktopFocusTests(unittest.TestCase):
+    """Windows+M and Tab must leave the focus on the icons themselves."""
+
+    def _desktop(self):
+        from src.shell.desktop import DesktopFrame
+        from src.shell.shell_manager import TitanShell
+        import tempfile
+        self.folder = tempfile.mkdtemp()
+        for name in ('One.txt', 'Two.txt'):
+            open(os.path.join(self.folder, name), 'w').close()
+        self.real_folders = win_shell.desktop_folders
+        win_shell.desktop_folders = lambda: [self.folder]
+        desktop = DesktopFrame(TitanShell())
+        desktop.refresh()
+        return desktop
+
+    def tearDown(self):
+        win_shell.desktop_folders = getattr(self, 'real_folders',
+                                            win_shell.desktop_folders)
+        import shutil
+        shutil.rmtree(getattr(self, 'folder', ''), ignore_errors=True)
+
+    def test_the_focus_is_set_again_after_the_activation_goes_through(self):
+        """wx answers WM_ACTIVATE by focusing the frame, undoing the first
+        SetFocus - which is why the icons could only be reached with object
+        navigation."""
+        desktop = self._desktop()
+        calls = []
+        desktop.focus_list = lambda: calls.append('focus') or True
+        real_take = win_shell.take_foreground
+        win_shell.take_foreground = lambda hwnd: True
+        try:
+            desktop.focus_icons()
+            wx.Yield()
+            self.assertEqual(calls, ['focus', 'focus'])
+        finally:
+            win_shell.take_foreground = real_take
+            desktop.Destroy()
+
+    def test_the_list_gets_an_icon_focused_and_not_only_the_list(self):
+        """A list view with no focused item reads as an empty container."""
+        desktop = self._desktop()
+        try:
+            desktop.Show()
+            desktop.focus_list()
+            wx.Yield()
+            self.assertEqual(desktop.list.GetFirstSelected(), 0)
+            self.assertNotEqual(
+                desktop.list.GetNextItem(-1, wx.LIST_NEXT_ALL,
+                                         wx.LIST_STATE_FOCUSED), -1)
+        finally:
+            desktop.Hide()
+            desktop.Destroy()
+
+    def test_windows_d_shows_the_list_and_not_only_the_focus(self):
+        """Shown, put back at the bottom, re-read if it changed, focused."""
+        desktop = self._desktop()
+        done = []
+        desktop.send_to_back = lambda: done.append('back')
+        desktop.focus_icons = lambda: done.append('focus') or True
+        desktop.refresh = lambda: done.append('refresh')
+        try:
+            self.assertTrue(desktop.bring_up())
+            self.assertIn('back', done)
+            self.assertIn('focus', done)
+            # The first call learns the folder's stamp, so it re-reads; the
+            # second must not, or every Windows+D would rebuild the desktop.
+            done.clear()
+            desktop.bring_up()
+            self.assertNotIn('refresh', done)
+        finally:
+            desktop.Destroy()
+
+    def test_the_list_carries_its_name_into_msaa(self):
+        """`SetName` is wx's own name and never reaches a screen reader."""
+        desktop = self._desktop()
+        try:
+            self.assertTrue(getattr(desktop.list, '_shell_accessible', None),
+                            "the desktop list has no accessible of its own")
+            name, = desktop.list._shell_accessible.GetName(0)[1],
+            self.assertEqual(name, _("Desktop"))
+        finally:
+            desktop.Destroy()
+
+    def test_becoming_the_active_window_puts_the_keyboard_on_the_icons(self):
+        desktop = self._desktop()
+        calls = []
+        desktop.focus_list = lambda: calls.append('focus') or True
+        try:
+            event = wx.ActivateEvent(wx.wxEVT_ACTIVATE, True)
+            desktop._on_activate(event)
+            wx.Yield()
+            self.assertEqual(calls, ['focus'])
+        finally:
+            desktop.Destroy()
+
+
+class StartMenuSearchTests(unittest.TestCase):
+    """The search box behaves like the one in Windows' own Start menu."""
+
+    def setUp(self):
+        from src.shell.start_menu import XPStartMenu
+        self.menu = XPStartMenu(None, shell=None)
+        self.addCleanup(self.menu.Destroy)
+
+    def test_the_menu_is_called_the_start_menu(self):
+        self.assertEqual(self.menu.GetTitle(), _("Start menu"))
+
+    def test_a_result_says_what_it_is_and_where_it_came_from(self):
+        self.menu.search_field.SetValue(
+            self.menu.right_list.entries[0].label[:3])
+        self.assertEqual(self.menu.left_list.GetColumnCount(), 2)
+        self.assertTrue(self.menu.left_list.GetItemCount())
+        self.assertTrue(self.menu.left_list.GetItemText(0, 0))
+        self.assertTrue(self.menu.left_list.GetItemText(0, 1),
+                        "a result that does not say where it is from")
+
+    def test_the_count_is_in_the_name_the_reader_reads(self):
+        self.menu.search_field.SetValue('a')
+        self.assertIn(str(self.menu.left_list.GetItemCount()),
+                      self.menu.left_list.GetName())
+
+    def test_clearing_the_box_puts_the_menu_back_in_the_column(self):
+        self.menu.search_field.SetValue('a')
+        self.assertTrue(self.menu.left_list.IsShown())
+        self.menu.clear_search()
+        self.assertTrue(self.menu.left_tree.IsShown())
+        self.assertFalse(self.menu.left_list.IsShown())
+        self.assertEqual(self.menu.left_tree.GetName(), _("Programs"))
+
+    def test_the_count_is_announced_once_the_typing_stops(self):
+        said = []
+        from src.accessibility import messages
+        real = messages.announce_search_results
+        messages.announce_search_results = lambda count, label=None: \
+            said.append(count)
+        try:
+            self.menu.search_field.SetValue('a')
+            self.menu._on_announce_tick(None)
+            self.assertEqual(said, [self.menu.left_list.GetItemCount()])
+        finally:
+            messages.announce_search_results = real
+
+    def test_the_count_is_said_to_a_screen_reader_and_to_nobody_else(self):
+        from src.accessibility import messages
+        real_ta = messages._ta_speak
+        real_sr = messages.is_screen_reader_running
+        real_speak = messages.speak_sr_only
+        spoken = []
+        messages._ta_speak = lambda *args, **kwargs: False
+        messages.is_screen_reader_running = lambda: False
+        messages.speak_sr_only = lambda *args, **kwargs: spoken.append(args)
+        try:
+            self.assertFalse(messages.announce_search_results(3))
+            self.assertEqual(spoken, [])
+            messages.is_screen_reader_running = lambda: True
+            self.assertTrue(messages.announce_search_results(3))
+            self.assertEqual(len(spoken), 1)
+            self.assertIn('3', spoken[0][0])
+        finally:
+            messages._ta_speak = real_ta
+            messages.is_screen_reader_running = real_sr
+            messages.speak_sr_only = real_speak
 
 
 if __name__ == '__main__':
