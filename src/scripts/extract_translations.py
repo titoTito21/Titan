@@ -50,7 +50,9 @@ DOMAIN_FILES = {
               'src/shell/start_menu.py', 'src/shell/shell_manager.py',
               'src/shell/shell_actions.py', 'src/shell/run_dialog.py', 'src/shell/quick_launch.py',
               'src/shell/shutdown_dialog.py',
-              'src/shell/taskbar_properties.py'],
+              'src/shell/taskbar_properties.py',
+              # The file browser: My Computer, drives and folders
+              'src/shell/explorer.py', 'src/shell/fileops.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
     'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py', 'src/buffers/ai_buffer.py'],
     'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/titan_tools.py', 'src/ai/action_tools.py', 'src/ai/ai_agent_gui.py', 'src/ai/assistant/personas.py', 'src/ai/assistant/voice_io.py', 'src/ai/assistant/voice_assistant.py', 'src/ai/assistant/assistant_gui.py', 'src/ai/assistant/hotkeys.py', 'src/ai/assistant/headless.py', 'src/ai/assistant/reminder_watcher.py', 'src/ai/ocr/mimic.py', 'src/ai/ocr/form_view.py', 'src/ai/ocr/controls.py', 'src/ai/ocr/overlay.py'],

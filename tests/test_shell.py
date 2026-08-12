@@ -30,6 +30,18 @@ merely present:
    than by a word in one language.
 9. The desktop is a grid - filled column by column, snapped to a cell - and
    not a row of icons across the top of the screen.
+10. Alt+F4 in any shell window means the Shut Down dialog, because the bar,
+    the desktop and the Start menu have nothing to close and destroying one
+    left the shell holding a dead frame.
+11. The file browser - the shell's own Explorer over My Computer, drives and
+    folders - answers the keys Explorer answers, and answers them where the
+    keyboard actually is: Del while typing in the address field must never
+    delete the selected files.
+12. The shell's own three sounds (`sfx/<theme>/shell/`) say what the shell is
+    doing - started, going away, gone somewhere - have a switch of their own,
+    and fall back to the default set on a theme that does not carry them.
+13. The shell settings are in real `wx.StaticBox` groups, which is what makes
+    a screen reader say which group the keyboard has entered.
 
 Run directly: python tests/test_shell.py
 """
@@ -2005,6 +2017,534 @@ class StartMenuSearchTests(unittest.TestCase):
             messages.is_screen_reader_running = real_sr
             messages.speak_sr_only = real_speak
 
+
+class FakeKey:
+    """A key press, as the char hook reads one."""
+
+    def __init__(self, code, alt=False, control=False, shift=False):
+        self.code = code
+        self.alt = alt
+        self.control = control
+        self.shift = shift
+        self.skipped = False
+
+    def GetKeyCode(self):
+        return self.code
+
+    def AltDown(self):
+        return self.alt
+
+    def ControlDown(self):
+        return self.control
+
+    def ShiftDown(self):
+        return self.shift
+
+    def Skip(self, skip=True):
+        self.skipped = skip
+
+
+class AltF4Tests(unittest.TestCase):
+    """Alt+F4 anywhere in the shell means Shut Down, not a closed shell.
+
+    The taskbar, the desktop and the Start menu are furniture: they have no
+    document to close, and wx destroying one leaves the shell holding a dead
+    frame - which is the crash this locks down.  The browser window is the
+    one shell window Alt+F4 really closes, because it IS a window with
+    something in it.
+    """
+
+    def test_the_helper_puts_the_dialog_up_once(self):
+        from src.shell import shutdown_dialog
+        shown = []
+        real = shutdown_dialog.show_shutdown_dialog
+
+        def fake(parent=None, default='shutdown'):
+            shown.append(parent)
+            # A second Alt+F4 while the dialog is up must not stack another.
+            self.assertTrue(shutdown_dialog.is_shutdown_dialog_open())
+            self.assertTrue(shutdown_dialog.shell_alt_f4(None))
+            self.assertEqual(len(shown), 1)
+            return None
+
+        shutdown_dialog.show_shutdown_dialog = fake
+        try:
+            self.assertTrue(shutdown_dialog.shell_alt_f4(None))
+        finally:
+            shutdown_dialog.show_shutdown_dialog = real
+        self.assertEqual(len(shown), 1)
+        self.assertFalse(shutdown_dialog.is_shutdown_dialog_open())
+
+    def test_every_shell_window_answers_the_key(self):
+        """Not only the desktop: the bar and the menu route it too."""
+        import re
+        for name in ('taskbar.py', 'desktop.py', 'start_menu.py'):
+            source = open(os.path.join(REPO, 'src', 'shell', name),
+                          encoding='utf-8').read()
+            self.assertTrue(
+                re.search(r'WXK_F4.*\n?.*AltDown|AltDown.*WXK_F4', source),
+                "{} does not answer Alt+F4".format(name))
+            self.assertIn('shell_alt_f4', source,
+                          "{} does not open the Shut Down dialog".format(name))
+
+    def test_the_furniture_refuses_to_be_closed_by_anything_else(self):
+        """A close that is not the shell's own teardown is vetoed."""
+        for name in ('taskbar.py', 'desktop.py'):
+            source = open(os.path.join(REPO, 'src', 'shell', name),
+                          encoding='utf-8').read()
+            self.assertIn('def allow_close', source)
+            self.assertIn('event.Veto()', source)
+        manager = open(os.path.join(REPO, 'src', 'shell', 'shell_manager.py'),
+                       encoding='utf-8').read()
+        self.assertIn('allow_close()', manager,
+                      "the shell's own teardown must be allowed through")
+
+    def test_the_browser_window_really_closes(self):
+        from src.shell import explorer
+        source = open(explorer.__file__, encoding='utf-8').read()
+        self.assertIn('self.Close()', source)
+
+
+class ExplorerNamespaceTests(unittest.TestCase):
+    """What a place is, and what going up from one means."""
+
+    def test_my_computer_is_the_top(self):
+        from src.shell import explorer
+        self.assertTrue(explorer.is_computer(explorer.COMPUTER))
+        self.assertIsNone(explorer.parent_location(explorer.COMPUTER))
+
+    def test_a_drive_goes_up_to_my_computer_not_to_a_path(self):
+        from src.shell import explorer
+        self.assertEqual(explorer.parent_location('C:' + os.sep),
+                         explorer.COMPUTER)
+        self.assertEqual(explorer.parent_location('C:'), explorer.COMPUTER)
+
+    def test_a_folder_goes_up_one_level(self):
+        from src.shell import explorer
+        deep = os.path.join('C:' + os.sep, 'Users', 'somebody', 'Documents')
+        self.assertEqual(explorer.parent_location(deep),
+                         os.path.join('C:' + os.sep, 'Users', 'somebody'))
+        self.assertEqual(
+            explorer.parent_location(os.path.join('C:' + os.sep, 'Users')),
+            'C:' + os.sep)
+
+    def test_sizes_read_the_way_explorer_writes_them(self):
+        from src.shell import explorer
+        self.assertEqual(explorer.format_size(0), '')
+        self.assertIn('KB', explorer.format_size(1))
+        self.assertIn('KB', explorer.format_size(2048))
+        self.assertIn('GB', explorer.format_size(3 * 1024 ** 3))
+
+    def test_a_folder_is_listed_folders_first(self):
+        import tempfile
+        from src.shell import explorer
+        with tempfile.TemporaryDirectory() as folder:
+            os.mkdir(os.path.join(folder, 'zzz_folder'))
+            open(os.path.join(folder, 'aaa.txt'), 'w').close()
+            names = [entry['name']
+                     for entry in explorer.list_folder(folder)]
+            self.assertEqual(names, ['zzz_folder', 'aaa.txt'])
+
+    def test_hidden_files_are_out_of_the_way_until_they_are_asked_for(self):
+        import tempfile
+        from src.shell import explorer
+        with tempfile.TemporaryDirectory() as folder:
+            open(os.path.join(folder, '.hidden'), 'w').close()
+            open(os.path.join(folder, 'plain.txt'), 'w').close()
+            self.assertEqual(
+                [entry['name'] for entry in explorer.list_folder(folder)],
+                ['plain.txt'])
+            self.assertEqual(
+                sorted(entry['name'] for entry
+                       in explorer.list_folder(folder, show_hidden=True)),
+                ['.hidden', 'plain.txt'])
+
+    def test_my_computer_is_the_drives_windows_reports(self):
+        from src.shell import explorer
+        entries = explorer.list_computer()
+        self.assertTrue(entries, "this machine has no drives?")
+        for entry in entries:
+            self.assertEqual(entry['kind'], 'drive')
+            self.assertIn('(', entry['name'])
+
+
+class ExplorerWindowTests(unittest.TestCase):
+    """The browser as a window: its columns, its history, its status bar."""
+
+    @classmethod
+    def setUpClass(cls):
+        from src.shell import explorer
+        cls.explorer = explorer
+        cls.frame = explorer.ExplorerFrame(None, explorer.COMPUTER)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.frame.Destroy()
+        except Exception:
+            pass
+
+    def test_my_computer_has_my_computers_columns(self):
+        self.frame.navigate(self.explorer.COMPUTER)
+        labels = [label for label, _width in self.frame.columns()]
+        self.assertEqual(len(labels), 4)
+        self.assertEqual(self.frame.list.GetColumnCount(), 4)
+        # A drive answers with its size and free space, not with a date.
+        entry = self.frame.entries[0]
+        self.assertTrue(self.frame.cell_text(entry, 2))
+
+    def test_a_folder_has_a_folders_columns(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            open(os.path.join(folder, 'note.txt'), 'w').write('hello')
+            self.assertTrue(self.frame.navigate(folder))
+            self.assertEqual(self.frame.list.GetItemCount(), 1)
+            self.assertEqual(self.frame.entries[0]['name'], 'note.txt')
+            self.assertIn('KB', self.frame.cell_text(self.frame.entries[0], 1))
+            self.assertTrue(self.frame.cell_text(self.frame.entries[0], 3))
+
+    def test_the_status_bar_says_how_many_and_where(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            open(os.path.join(folder, 'a.txt'), 'w').close()
+            open(os.path.join(folder, 'b.txt'), 'w').close()
+            self.frame.navigate(folder)
+            first, _size, where = self.frame.status_texts()
+            self.assertIn('2', first)
+            self.assertEqual(where, self.explorer.location_name(folder))
+
+    def test_back_forward_and_up_walk_the_history(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            child = os.path.join(folder, 'inside')
+            os.mkdir(child)
+            self.frame.navigate(folder)
+            self.frame.navigate(child)
+            self.assertTrue(self.frame.go_back())
+            self.assertEqual(os.path.normcase(str(self.frame.location)),
+                             os.path.normcase(folder))
+            self.assertTrue(self.frame.go_forward())
+            self.assertEqual(os.path.normcase(str(self.frame.location)),
+                             os.path.normcase(child))
+            self.assertTrue(self.frame.go_up())
+            self.assertEqual(os.path.normcase(str(self.frame.location)),
+                             os.path.normcase(folder))
+
+    def test_going_up_from_a_drive_lands_on_my_computer(self):
+        self.frame.navigate('C:' + os.sep)
+        self.assertTrue(self.frame.go_up())
+        self.assertTrue(self.explorer.is_computer(self.frame.location))
+        # And there is nowhere above it, which is where Backspace stops.
+        self.assertFalse(self.frame.go_up())
+
+    def test_the_list_is_named_after_where_it_is(self):
+        """A native list view answers MSAA itself, so it is named for it."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            self.frame.navigate(folder)
+            source = open(self.explorer.__file__, encoding='utf-8').read()
+            self.assertIn('name_control(self.list', source)
+            self.assertIn('name_control(self.tree', source)
+            self.assertIn('name_control(self.address', source)
+
+    def test_the_four_views_are_all_real(self):
+        for view in (self.explorer.VIEW_LARGE, self.explorer.VIEW_SMALL,
+                     self.explorer.VIEW_LIST, self.explorer.VIEW_DETAILS):
+            self.assertTrue(self.frame.set_view(view))
+            self.assertEqual(self.frame.view, view)
+        self.assertFalse(self.frame.set_view('nonsense'))
+
+
+class ExplorerKeyboardTests(unittest.TestCase):
+    """The keys really work, and they act on what has the keyboard.
+
+    This is the part a menu accelerator gets wrong: an accelerator fires
+    wherever the focus is, so Del would delete the selected files while the
+    user was typing in the address field.  The window asks first.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from src.shell import explorer
+        cls.explorer = explorer
+        cls.frame = explorer.ExplorerFrame(None, explorer.COMPUTER)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.frame.Destroy()
+        except Exception:
+            pass
+
+    def _pressed(self, code, **modifiers):
+        """Press a key at the char hook and say what the window did."""
+        calls = []
+        frame = self.frame
+        watched = ('open_selected', 'delete_selected', 'rename_selected',
+                   'go_up', 'go_back', 'go_forward', 'refresh', 'paste',
+                   'select_all', 'show_properties')
+        originals = {name: getattr(frame, name) for name in watched}
+        original_copy = frame.copy_selection
+        for name in watched:
+            setattr(frame, name,
+                    lambda *args, _name=name, **kwargs: calls.append(_name))
+        frame.copy_selection = lambda cut=False, **kwargs: calls.append(
+            'cut' if cut else 'copy')
+        event = FakeKey(code, **modifiers)
+        try:
+            frame._on_char_hook(event)
+        finally:
+            for name, method in originals.items():
+                setattr(frame, name, method)
+            frame.copy_selection = original_copy
+        return calls, event
+
+    def test_enter_delete_backspace_and_f2_all_do_something(self):
+        self.frame.list.SetFocus()
+        for code, expected in ((wx.WXK_RETURN, 'open_selected'),
+                               (wx.WXK_NUMPAD_ENTER, 'open_selected'),
+                               (wx.WXK_DELETE, 'delete_selected'),
+                               (wx.WXK_F2, 'rename_selected'),
+                               (wx.WXK_BACK, 'go_up'),
+                               (wx.WXK_F5, 'refresh')):
+            calls, event = self._pressed(code)
+            self.assertEqual(calls, [expected],
+                             "key {} did nothing".format(code))
+            self.assertFalse(event.skipped)
+
+    def test_the_clipboard_keys_work_on_the_files(self):
+        self.frame.list.SetFocus()
+        for code, expected in ((ord('C'), 'copy'), (ord('X'), 'cut'),
+                               (ord('V'), 'paste'), (ord('A'), 'select_all')):
+            calls, _event = self._pressed(code, control=True)
+            self.assertEqual(calls, [expected])
+
+    def test_alt_left_right_and_up_move_about(self):
+        for code, expected in ((wx.WXK_LEFT, 'go_back'),
+                               (wx.WXK_RIGHT, 'go_forward'),
+                               (wx.WXK_UP, 'go_up')):
+            calls, _event = self._pressed(code, alt=True)
+            self.assertEqual(calls, [expected])
+
+    def test_alt_enter_opens_the_properties(self):
+        calls, _event = self._pressed(wx.WXK_RETURN, alt=True)
+        self.assertEqual(calls, ['show_properties'])
+
+    def test_typing_in_the_address_field_never_deletes_a_file(self):
+        """The whole reason these are not menu accelerators."""
+        self.frame.address.SetFocus()
+        try:
+            for code in (wx.WXK_DELETE, wx.WXK_F2, wx.WXK_BACK):
+                calls, event = self._pressed(code)
+                self.assertEqual(calls, [], "key {} acted on the files while "
+                                 "the user was typing".format(code))
+                self.assertTrue(event.skipped)
+            # Enter in the address field goes where it says, and does not
+            # open whatever happened to be selected in the list.
+            went = []
+            real = self.frame._on_address_enter
+            self.frame._on_address_enter = lambda event=None: went.append(1)
+            try:
+                calls, _event = self._pressed(wx.WXK_RETURN)
+            finally:
+                self.frame._on_address_enter = real
+            self.assertEqual(calls, [])
+            self.assertEqual(went, [1])
+        finally:
+            self.frame.list.SetFocus()
+
+    def test_the_commands_themselves_know_where_the_keyboard_is(self):
+        """Even reached another way, a command must not act on the files."""
+        self.frame.address.SetFocus()
+        try:
+            self.assertIsNotNone(self.frame.text_focus())
+            self.assertFalse(self.frame.delete_selected())
+            self.assertFalse(self.frame.rename_selected())
+        finally:
+            self.frame.list.SetFocus()
+        self.assertIsNone(self.frame.text_focus())
+
+    def test_alt_f4_closes_this_window_rather_than_the_computer(self):
+        from src.shell import shutdown_dialog
+        shown = []
+        real = shutdown_dialog.show_shutdown_dialog
+        shutdown_dialog.show_shutdown_dialog = lambda *a, **k: shown.append(1)
+        closed = []
+        real_close = self.frame.Close
+        self.frame.Close = lambda *a, **k: closed.append(1)
+        try:
+            self.frame._on_char_hook(FakeKey(wx.WXK_F4, alt=True))
+        finally:
+            shutdown_dialog.show_shutdown_dialog = real
+            self.frame.Close = real_close
+        self.assertEqual(closed, [1])
+        self.assertEqual(shown, [])
+
+
+class ExplorerActionTests(unittest.TestCase):
+    """The browser through the Action API, for macros and the AI."""
+
+    def test_the_actions_are_declared(self):
+        names = [name for name, *_rest in shell_actions.get_shell_actions()]
+        for name in ('open_explorer', 'list_drives', 'list_folder'):
+            self.assertIn(name, names)
+
+    def test_the_drives_are_listed_with_their_free_space(self):
+        answer = said(shell_actions.shell_list_drives())
+        self.assertTrue(answer)
+        self.assertIn('C:', answer)
+
+    def test_a_folder_is_listed_and_a_missing_one_is_refused(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            open(os.path.join(folder, 'thing.txt'), 'w').close()
+            answer = said(shell_actions.shell_list_folder(path=folder))
+            self.assertIn('thing.txt', answer)
+        self.assertTrue(refused(shell_actions.shell_list_folder(
+            path=os.path.join(folder, 'gone'))))
+        self.assertTrue(asked(shell_actions.shell_list_folder()))
+
+    def test_my_computer_can_be_listed_by_name(self):
+        answer = said(shell_actions.shell_list_folder(path='My Computer'))
+        self.assertIn('C:', answer)
+
+class ShellSoundTests(unittest.TestCase):
+    """The shell's own three sounds, and the switch that silences them.
+
+    They say what the shell is DOING - it has started, it is going away, it
+    has gone somewhere - which is a different thing from the focus cues, and
+    so has a switch of its own.  Nothing here is speech: the shell still
+    never speaks.
+    """
+
+    def test_the_three_sounds_are_in_the_theme(self):
+        from src.titan_core import sound
+        from src.shell import a11y
+        for name in (a11y.SOUND_STARTUP, a11y.SOUND_SHUTDOWN,
+                     a11y.SOUND_NAVIGATE):
+            path = sound.shell_sound_path(name)
+            self.assertTrue(path, "{} is missing".format(name))
+            self.assertTrue(os.path.exists(path))
+            # In the theme's own `shell` folder, not loose in the theme.
+            self.assertEqual(os.path.basename(os.path.dirname(path)), 'shell')
+
+    def test_a_theme_without_them_still_hears_the_shell(self):
+        """The sounds belong to the feature, so the default set answers."""
+        from src.titan_core import sound
+        from src.shell import a11y
+        real = sound.current_theme
+        sound.current_theme = 'a theme that does not exist'
+        try:
+            path = sound.shell_sound_path(a11y.SOUND_STARTUP)
+        finally:
+            sound.current_theme = real
+        self.assertTrue(path)
+        self.assertIn('default', path)
+
+    def test_the_switch_silences_them(self):
+        from src.shell import a11y
+        played = []
+        real_play = a11y.play_shell_sound
+        real_setting = a11y.shell_setting
+        a11y.play_shell_sound = lambda *args, **kwargs: played.append(args)
+        a11y.shell_setting = lambda key, default: (
+            False if key == 'shell_sounds' else real_setting(key, default))
+        try:
+            self.assertFalse(a11y.sounds_enabled())
+            self.assertFalse(a11y.shell_sound(a11y.SOUND_STARTUP))
+            self.assertEqual(played, [])
+            a11y.shell_setting = lambda key, default: (
+                True if key == 'shell_sounds' else real_setting(key, default))
+            a11y.shell_sound(a11y.SOUND_STARTUP)
+            self.assertEqual(len(played), 1)
+        finally:
+            a11y.play_shell_sound = real_play
+            a11y.shell_setting = real_setting
+
+    def test_the_shell_says_when_it_goes_away_and_waits_for_it(self):
+        """Titan may exit the moment stop() returns, so it is waited out."""
+        from src.shell import shell_manager
+        played = []
+        real = shell_manager.shell_sound
+        shell_manager.shell_sound = lambda name, **kwargs: played.append(
+            (name, kwargs.get('wait', False)))
+        try:
+            shell = shell_manager.TitanShell(parent=None)
+            shell.stop()
+            self.assertEqual(played, [], "a shell that never ran said goodbye")
+            shell._running = True
+            shell.stop()
+            self.assertEqual(played,
+                             [(shell_manager.SOUND_SHUTDOWN, True)])
+        finally:
+            shell_manager.shell_sound = real
+
+    def test_the_shell_says_when_it_has_started(self):
+        from src.shell import shell_manager
+        source = open(shell_manager.__file__, encoding='utf-8').read()
+        self.assertIn('shell_sound(SOUND_STARTUP)', source)
+        # And only once everything is really up.
+        self.assertLess(source.index('self._running = True'),
+                        source.index('shell_sound(SOUND_STARTUP)'))
+
+    def test_going_to_a_folder_sounds_like_explorer(self):
+        import tempfile
+        from src.shell import explorer
+        played = []
+        real = explorer.shell_sound
+        explorer.shell_sound = lambda name, **kwargs: played.append(name)
+        frame = None
+        try:
+            frame = explorer.ExplorerFrame(None, explorer.COMPUTER)
+            del played[:]
+            with tempfile.TemporaryDirectory() as folder:
+                os.mkdir(os.path.join(folder, 'inside'))
+                frame.navigate(folder)
+                frame.navigate(os.path.join(folder, 'inside'))
+                frame.go_back()
+                frame.go_up()
+            self.assertEqual(played, [explorer.SOUND_NAVIGATE] * 4)
+        finally:
+            explorer.shell_sound = real
+            if frame is not None:
+                frame.Destroy()
+
+    def test_the_sound_is_reachable_as_a_setting(self):
+        answer = said(shell_actions.shell_list_settings())
+        self.assertIn('shell sounds', answer)
+
+
+class ShellSettingsPanelTests(unittest.TestCase):
+    """The shell settings are grouped, and the groups are real ones.
+
+    A `wx.StaticBox` is a grouping Windows itself knows about, so a screen
+    reader says which group the keyboard has entered - which is the whole
+    point of grouping twenty checkboxes rather than listing them.
+    """
+
+    def setUp(self):
+        self.source = open(os.path.join(REPO, 'src', 'ui', 'settingsgui.py'),
+                           encoding='utf-8').read()
+        start = self.source.index('def InitTitanShellPanel')
+        self.panel_source = self.source[start:
+                                        self.source.index(
+                                            'def InitSystemMonitorPanel')]
+
+    def test_the_settings_are_in_static_box_groups(self):
+        self.assertIn('wx.StaticBoxSizer', self.panel_source)
+        for title in ('The system interface', 'The desktop', 'The taskbar',
+                      'Sounds', 'Shortcuts Titan takes over'):
+            self.assertIn(title, self.panel_source,
+                          "no group called {}".format(title))
+
+    def test_a_grouped_control_belongs_to_its_box(self):
+        """wx wants the box itself as the parent, or the group is a drawing."""
+        self.assertIn('box.GetStaticBox()', self.panel_source)
+        self.assertNotIn('wx.CheckBox(panel', self.panel_source)
+
+    def test_the_sound_switch_is_there(self):
+        self.assertIn("'shell_sounds'", self.panel_source)
+        self.assertIn("'focus_cues'", self.panel_source)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -637,6 +637,57 @@ def play_shutdown_sound():
     # fixed delay if the duration couldn't be determined.
     time.sleep(max(0.0, duration - 0.2) if duration > 0 else 2.5)
 
+def shell_sound_path(name):
+    """Where one of the shell's own sounds is: `sfx/<theme>/shell/<name>.ogg`.
+
+    The user's theme wins (per-user overlay first, as everywhere), and the
+    default set answers when the theme does not carry the shell sounds -
+    they belong to the feature rather than to a theme, so somebody on a
+    theme that has never heard of them still hears their shell.
+    """
+    relative = os.path.join('shell', name)
+    try:
+        from src.platform_utils import find_resource
+        found = find_resource(os.path.join('sfx', current_theme, relative))
+        if found and os.path.exists(found):
+            return found
+        found = find_resource(os.path.join('sfx', 'default', relative))
+        if found and os.path.exists(found):
+            return found
+    except Exception:
+        pass
+    for theme in (current_theme, 'default'):
+        candidate = os.path.join(resource_path(os.path.join('sfx', theme)),
+                                 relative)
+        if os.path.exists(candidate):
+            return candidate
+    return ''
+
+
+def play_shell_sound(name, pan=None, wait=False):
+    """Play one of the shell's sounds. `wait` blocks for the length of it.
+
+    The shutdown one needs the wait: Titan may exit the moment the shell has
+    finished stopping, and a sound that is still in the mixer when the
+    process goes is a sound nobody hears.
+    """
+    path = shell_sound_path(name)
+    if not path:
+        return False
+    duration = 0.0
+    if wait:
+        try:
+            if not _mixer_initialized or pygame.mixer.get_init() is None:
+                initialize_sound()
+            duration = pygame.mixer.Sound(path).get_length()
+        except Exception:
+            duration = 0.0
+    played = play_sound_file(path, pan)
+    if played and wait:
+        time.sleep(max(0.0, min(duration, 4.0) - 0.1) if duration > 0 else 1.0)
+    return played
+
+
 def play_connecting_sound():
     play_sound('system/connecting.ogg')
 

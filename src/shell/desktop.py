@@ -29,7 +29,7 @@ import os
 import wx
 
 from src.platform_utils import IS_WINDOWS, get_user_data_dir
-from src.shell import luna, win_shell
+from src.shell import fileops, luna, win_shell
 from src.shell.a11y import edge_cue, name_control, shell_setting
 from src.titan_core.translation import _
 
@@ -538,9 +538,29 @@ class DesktopFrame(wx.Frame):
     # Actions
     # ------------------------------------------------------------------
     def open_selected(self):
+        """Open what is selected - a folder into the shell's own browser.
+
+        A folder on the desktop must not drop the user into Explorer's
+        window: with the shell up that window is the one thing on the
+        screen Titan cannot make readable, so folders (and the shortcuts
+        that point at one) open into Titan's file browser instead.  Files
+        go to whatever program owns them, as before.
+        """
         entry = self.selected_entry()
-        if entry:
-            win_shell.open_path(entry['path'])
+        if not entry:
+            return
+        path = entry['path']
+        target = path
+        if path.lower().endswith('.lnk'):
+            target = win_shell.shortcut_target(path) or path
+        if os.path.isdir(target):
+            try:
+                from src.shell.shell_manager import open_explorer
+                if open_explorer(target) is not None:
+                    return
+            except Exception as error:
+                print(f"[TitanShell] could not open the browser: {error}")
+        win_shell.open_path(path)
 
     def rename_selected(self):
         index = self.selected_index()
@@ -589,63 +609,21 @@ class DesktopFrame(wx.Frame):
     def copy_selected(self, cut=False):
         """Put the selection on the clipboard as Explorer does.
 
-        A file on the clipboard is a CF_HDROP list, and whether it was cut
-        or copied is a second format Windows calls "Preferred DropEffect" -
-        without it a cut behaves as a copy, which is a data-losing kind of
-        wrong to get quietly.
+        The clipboard formats live in `fileops`, because the shell's
+        Explorer window does exactly the same thing and the drop-effect
+        detail must have one implementation.
         """
         entry = self.selected_entry()
         if not entry:
             return False
-        try:
-            files = wx.FileDataObject()
-            files.AddFile(entry['path'])
-            data = wx.DataObjectComposite()
-            data.Add(files, True)
-            effect = wx.CustomDataObject(
-                wx.DataFormat('Preferred DropEffect'))
-            # DROPEFFECT_MOVE = 2, DROPEFFECT_COPY = 5 (with LINK cleared).
-            effect.SetData((2 if cut else 5).to_bytes(4, 'little'))
-            data.Add(effect)
-            if not wx.TheClipboard.Open():
-                return False
-            try:
-                wx.TheClipboard.SetData(data)
-                wx.TheClipboard.Flush()
-            finally:
-                wx.TheClipboard.Close()
-            self._cut_paths = [entry['path']] if cut else []
-            return True
-        except Exception as error:
-            print(f"[TitanShell] could not copy to the clipboard: {error}")
+        if not fileops.copy_to_clipboard([entry['path']], cut=cut):
             return False
+        self._cut_paths = [entry['path']] if cut else []
+        return True
 
     def clipboard_files(self):
         """What is on the clipboard, and whether it was cut."""
-        paths, move = [], False
-        try:
-            if not wx.TheClipboard.Open():
-                return paths, move
-            try:
-                files = wx.FileDataObject()
-                if wx.TheClipboard.GetData(files):
-                    paths = list(files.GetFilenames())
-                effect = wx.CustomDataObject(
-                    wx.DataFormat('Preferred DropEffect'))
-                if wx.TheClipboard.GetData(effect):
-                    raw = effect.GetData()
-                    if raw:
-                        move = (int.from_bytes(bytes(raw)[:4], 'little')
-                                & 2) == 2
-            finally:
-                wx.TheClipboard.Close()
-        except Exception as error:
-            print(f"[TitanShell] could not read the clipboard: {error}")
-        if not move and self._cut_paths:
-            move = any(os.path.normcase(path) in
-                       [os.path.normcase(cut) for cut in self._cut_paths]
-                       for path in paths)
-        return paths, move
+        return fileops.clipboard_files(self._cut_paths)
 
     def paste(self):
         paths, move = self.clipboard_files()
@@ -667,13 +645,8 @@ class DesktopFrame(wx.Frame):
         the same, and it is the shell's own dialog (msgina's), which has
         turning Titan off on it as well.
         """
-        try:
-            from src.shell.shutdown_dialog import show_shutdown_dialog
-            show_shutdown_dialog(self)
-            return True
-        except Exception as error:
-            print(f"[TitanShell] could not open the shutdown dialog: {error}")
-            return False
+        from src.shell.shutdown_dialog import shell_alt_f4
+        return shell_alt_f4(self)
 
     def _on_activate(self, event):
         self.open_selected()
@@ -966,6 +939,18 @@ class DesktopFrame(wx.Frame):
             wx.CallAfter(self.focus_list)
         event.Skip()
 
+    def allow_close(self):
+        """The shell is taking itself down; this frame may really close."""
+        self._allow_close = True
+
     def _on_close(self, event):
         self._remember_positions()
+        if not getattr(self, '_allow_close', False):
+            # Nothing but the shell itself may close the desktop: a window
+            # the shell still holds and Windows has destroyed is what the
+            # next repaint crashes on.  Every other way of asking - Alt+F4,
+            # the system menu - means the Shut Down dialog.
+            event.Veto()
+            self.show_shutdown()
+            return
         event.Skip()

@@ -136,6 +136,28 @@ class ClassicStartMenu(wx.Frame):
         # Bind events
         self.Bind(wx.EVT_ACTIVATE, self.on_activate)
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_char_hook)
+
+    def on_char_hook(self, event):
+        """Alt+F4 means the Shut Down dialog while this menu is the shell's.
+
+        With the Titan shell up, this window is part of the system interface
+        rather than a program, and Windows answers Alt+F4 there with the
+        Shut Down dialog.  On its own - the classic menu opened from Titan
+        itself - Alt+F4 keeps closing the menu, which is what it does for
+        every other Titan window.
+        """
+        if event.GetKeyCode() == wx.WXK_F4 and event.AltDown():
+            try:
+                from src.shell.shell_manager import is_shell_running
+                from src.shell.shutdown_dialog import shell_alt_f4
+                if is_shell_running():
+                    self.Hide()
+                    shell_alt_f4(self.GetParent())
+                    return
+            except Exception as error:
+                print(f"[TitanShell] Alt+F4 in the Start menu: {error}")
+        event.Skip()
     
     def init_ui(self):
         """Inicjalizacja interfejsu w stylu Windows 95"""

@@ -612,6 +612,85 @@ def shell_run_program(name=None, **_kwargs):
 
 
 # --------------------------------------------------------------------------- #
+# The file browser
+# --------------------------------------------------------------------------- #
+def shell_open_explorer(path=None, **_kwargs):
+    """Open the shell's file browser, at My Computer or at a folder.
+
+    It does not need the desktop shell: the browser is an ordinary window,
+    so "show me that folder" works whatever the system interface setting
+    says.
+    """
+    from src.titan_core.actions.interaction import fails
+    if not IS_WINDOWS:
+        return _no_windows()
+    where = None
+    if path:
+        where = os.path.expandvars(os.path.expanduser(str(path)))
+        if not os.path.isdir(where):
+            return fails(_("There is no folder called {name}.").format(
+                name=path))
+    try:
+        import wx
+        from src.shell.shell_manager import open_explorer
+        wx.CallAfter(open_explorer, where)
+    except Exception as error:
+        return fails(_("The file browser could not be opened: {error}")
+                     .format(error=error))
+    if where:
+        return _("The file browser is open at {name}.").format(name=where)
+    return _("The file browser is open at My Computer.")
+
+
+def shell_list_drives(**_kwargs):
+    """The drives, with how big each is and how much of it is free."""
+    if not IS_WINDOWS:
+        return _no_windows()
+    from src.shell.explorer import drive_name, drive_type_name, format_size
+    drives = win_shell.list_drives()
+    if not drives:
+        return _("This computer has no drives Windows will report.")
+    lines = []
+    for drive in drives:
+        lines.append("{}: {}, {} {}, {} {}".format(
+            drive_name(drive), drive_type_name(drive.get('type')),
+            format_size(drive.get('total')) or _("unknown"), _("in total"),
+            format_size(drive.get('free')) or _("unknown"), _("free")))
+    return "\n".join(lines)
+
+
+def shell_list_folder(path=None, **_kwargs):
+    """What is in a folder, the way the browser shows it."""
+    from src.titan_core.actions.interaction import fails, needs
+    from src.shell.explorer import (COMPUTER, format_size, list_location,
+                                    type_name_of)
+    if not path:
+        return needs('path', _("Which folder?"))
+    wanted = str(path).strip()
+    if wanted.lower() in ('my computer', 'computer', COMPUTER):
+        location = COMPUTER
+    else:
+        location = os.path.expandvars(os.path.expanduser(wanted))
+        if not os.path.isdir(location):
+            return fails(_("There is no folder called {name}.").format(
+                name=path))
+    try:
+        entries = list_location(location)
+    except Exception as error:
+        return fails(_("That folder could not be read: {error}").format(
+            error=error))
+    if not entries:
+        return _("That folder is empty.")
+    lines = []
+    for index, entry in enumerate(entries, start=1):
+        size = format_size(entry.get('size') or entry.get('total'))
+        lines.append("{}. {} - {}{}".format(
+            index, entry['name'], type_name_of(entry),
+            ", {}".format(size) if size else ''))
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # Turning things off
 # --------------------------------------------------------------------------- #
 def shell_power_options(**_kwargs):
@@ -731,6 +810,7 @@ _SETTINGS = {
     'seconds': 'clock_seconds',
     'auto arrange': 'auto_arrange_icons',
     'focus cues': 'focus_cues',
+    'shell sounds': 'shell_sounds',
     'hide the windows taskbar': 'hide_system_taskbar',
     'auto-hide the taskbar': 'taskbar_auto_hide',
     'lock the taskbar': 'taskbar_locked',
@@ -748,6 +828,7 @@ def shell_list_settings(**_kwargs):
                 'show_taskbar': True, 'show_tray': True,
                 'show_wallpaper': True, 'clock_seconds': False,
                 'auto_arrange_icons': False, 'focus_cues': True,
+                'shell_sounds': True,
                 'hide_system_taskbar': True, 'taskbar_auto_hide': False,
                 'taskbar_locked': True, 'taskbar_on_top': False,
                 'show_quick_launch': True, 'show_clock': True,
@@ -928,6 +1009,16 @@ def get_shell_actions():
          {'name': dict(string, description="The program's name.",
                        required=True)},
          'confirm', shell_run_program),
+        ('open_explorer', "Open the file browser - My Computer, or a "
+                          "folder.",
+         {'path': dict(string, description="The folder to show (optional).")},
+         'auto', shell_open_explorer),
+        ('list_drives', "List the drives, with their size and free space.",
+         {}, 'auto', shell_list_drives),
+        ('list_folder', "List what is in a folder, or in My Computer.",
+         {'path': dict(string, description="The folder, or 'My Computer'.",
+                       required=True)},
+         'auto', shell_list_folder),
         ('power_options', "List what this computer will do: log off, "
                           "restart, sleep, shut down, or close Titan.", {},
          'auto', shell_power_options),

@@ -759,16 +759,91 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   `WorkerW`), Windows+D minimises everything and follows the windows down,
   and Windows+B lands in the notification area.
 - The **Titan shell settings category** is listed only while "Modify system
-  interface" is ticked, and appears and disappears as the box is ticked.
-- **Action API**: the `shell` provider is now 33 actions - the originals
+  interface" is ticked, and appears and disappears as the box is ticked.  Its options are **grouped** into real
+  `wx.StaticBox` groups - the system interface, the desktop, the taskbar,
+  Sounds, and the shortcuts Titan takes over - because a static box is a
+  grouping Windows itself knows about, so a screen reader says which group
+  the keyboard has entered instead of the panel being twenty checkboxes to
+  count through.
+- **The shell has three sounds of its own**, in `sfx/<theme>/shell/`:
+  `shell_startup.ogg` when the shell is up and complete, `shell_shutdown.ogg`
+  when it goes away (waited out, because Titan may be exiting through Windows
+  shutting down and a sound still in the mixer when the process goes is a
+  sound nobody hears), and `shell_start.ogg` on every navigation in the file
+  browser - Explorer's own "Start Navigation". They say what the shell is
+  *doing*, which is a different thing from the focus cues, so they have a
+  switch of their own: Settings -> Titan shell -> Sounds -> "Play the shell's
+  own sounds" (`shell_sounds`, also `shell.set_setting`). `a11y.shell_sound`
+  is the one way in and `sound.play_shell_sound` / `sound.shell_sound_path`
+  resolve them - the user's theme first, then the **default set even when
+  the user never opted into theme fallback**, because these belong to the
+  feature rather than to a theme. Still not speech: the shell says nothing
+  through TTS.
+- **Alt+F4 anywhere in the shell means Shut Down, not a closed shell**
+  (`shutdown_dialog.shell_alt_f4`). The bar, the desktop and the Start menu
+  are furniture: they have no document to close, and letting wx destroy one
+  left `TitanShell` holding a dead frame - which crashed on the next repaint.
+  So every one of them routes the key to msgina's dialog (the desktop always
+  did), and their `EVT_CLOSE` **vetoes** any close that is not the shell's
+  own teardown (`allow_close()`, called from `TitanShell.stop()`). The
+  classic Start menu does the same, but only while the shell is running -
+  on its own it is a Titan window and Alt+F4 closes it. The file browser is
+  the one shell window Alt+F4 really closes, because it *is* a window with
+  something in it.
+- **The file browser: an accessible Explorer, rebuilt from ReactOS**
+  (`explorer.py`). A folder used to drop the user into Explorer's own
+  window - the one thing on the screen Titan cannot make readable - so the
+  shell now has its own, taken from `browseui`'s `CShellBrowser` (the menu
+  bar, the Back / Forward / Up / Folders / Views band, the address band, the
+  status bar and the Folders bar) and shell32's `CDefView` (the view, its
+  four modes, its columns, the menus on an item). My Computer lists the
+  drives with their size and free space (`win_shell.list_drives`, new), a
+  folder lists Name / Size / Type / Date Modified, and everything Explorer
+  does is there: open, new folder, create shortcut, rename, delete to the
+  Recycle Bin, cut / copy / paste (`fileops.py`, shared with the desktop so
+  the "Preferred DropEffect" format has one implementation), Windows' own
+  property sheet, sorting by a column header, and the address band that
+  navigates or runs what was typed.
+  - **It is accessible because it is native.** The folders bar is a
+    `SysTreeView32`, the view a `SysListView32`, and the menu bar, toolbar
+    and status bar are Windows' own, so a reader already knows how to read
+    them; `a11y.name_control` gives the tree, the list and the address field
+    the MSAA name a native control does not have. Measured with
+    `AccessibleObjectFromWindow`: the list answers with the folder's name and
+    role 33 (list), the tree "Folders" / role 35, the address "Address" /
+    role 46. Navigating is the one change that is not where the focus is, so
+    `accessibility.messages.announce_shell_location` says the new folder and
+    its count to the screen reader alone.
+  - **The keys are answered where the keyboard actually is** - the char
+    hook, not menu accelerators. An accelerator fires wherever the focus
+    happens to be, so a Del written into the File menu would delete the
+    selected files while the user was typing in the address field or over an
+    icon; Enter would open the selection instead of going where the address
+    says. So Enter / Delete / F2 / Backspace / Ctrl+X,C,V,A are routed by
+    `text_focus()`, `editing_label()` and `tree_has_focus()` - in the address
+    field they are the field's own keys, during a rename they belong to the
+    edit box, and in the folders bar they act on that folder. Alt+Left /
+    Alt+Right / Alt+Up, F5, F6 (next pane), F4 and Alt+D (the address),
+    Alt+Enter and Alt+F4 are the rest of Explorer's set.
+  - **Everything that opens a folder comes here**: the desktop (a folder, or
+    a shortcut whose target is one), the Start menu's File manager, My
+    Computer, My Documents, My Pictures and My Music, and Windows+E while
+    the desktop shell is on (`tce_system._handle_file_manager`; with the
+    shell off it stays Titan's own file manager application). One window is
+    reused unless another is asked for, and it appears on the taskbar and in
+    Alt+Tab like any program - it is not shell furniture.
+- **Action API**: the `shell` provider is now 36 actions - the originals
   plus `focus_tray`, `desktop_item_properties`, `desktop_item_target`,
   `open_item_location`, `rename_desktop_item`, `delete_desktop_item`,
   `create_desktop_shortcut`, `search_programs` / `run_program` (the Start
   Menu read straight off the disk, so they answer with no window open) and
   `power_options` / `power` (`always_confirm`, and `exit_titan` is one of
-  the choices). `focus_desktop` no longer needs the shell.
+  the choices), plus the browser's three: `open_explorer` (at My Computer
+  or at a folder), `list_drives` (size and free space) and `list_folder`
+  (a folder, or "My Computer", listed the way the browser shows it).
+  `focus_desktop` no longer needs the shell.
 - Translation domain: **`shell`**.
-- Tests: `tests/test_shell.py` (run it directly; 146 tests).
+- Tests: `tests/test_shell.py` (run it directly; 185 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 

@@ -518,5 +518,25 @@
     "role": "assistant",
     "content": "Oto najważniejsze wiadomości z Polski z ostatnich godzin:\n\n1. **Alert RCB**: Wydano ostrzeżenia RCB dla pięciu województw.\n2. **Utrudnienia drogowe**: Karambol na drodze S3 spowodował ogromny korek pod Szczecinem.\n3. **Cyberbezpieczeństwo**: Doszło do ataku hakerskiego na stronę ZUS, co wywołało jej czasową awarię.\n4. **Polityka i finanse**: Reakcja ministra Tomasza Siemoniaka na doniesienia w sprawie środków dla powodzian.\n5. **Edukacja**: Pilna interwencja kuratorium oświaty po publikacjach dotyczących skandalu z udziałem Jana Bestrego.",
     "timestamp": 1786369817.3656843
+  },
+  {
+    "role": "user",
+    "content": "co potrafisz zrobić z powłoką Titan Shell?",
+    "timestamp": 1786534261.0655959
+  },
+  {
+    "role": "assistant",
+    "content": "Z powłoką **Titan Shell** mogę wykonać wiele zadań związanych z dostosowaniem i obsługą Twojego pulpitu oraz interfejsu:\n\n1. **Zarządzać składnikami powłoki**: Mogę włączać i wyłączać Menu Start Titana, pasek zadań, zasobnik systemowy (tray), okno uruchamiania (Run) oraz przełącznik okien.\n2. **Konfigurować wygląd pulpitu**: Mogę sterować ukrywaniem systemowego paska Windows, pokazywaniem tapety, zegara oraz automatycznym rozmieszczaniem ikon.\n3. **Zarządzać oknami i powiadomieniami**: Mogę minimalizować wszystkie okna, sterować powiadomieniami i przełączać się między otwartymi aplikacjami.\n4. **Dostosowywać ustawienia powłoki**: Mogę zmieniać dowolne parametry z sekcji `titan_shell` w ustawieniach Titana według Twoich potrzeb.\n\nJeśli chcesz zmienić jakieś ustawienie Titan Shell lub coś w nim skonfigurować, po prostu mi powiedz!",
+    "timestamp": 1786534303.5425055
+  },
+  {
+    "role": "user",
+    "content": "a potrafiłbyś zamknąć wszystkie okna?",
+    "timestamp": 1786534435.6035655
+  },
+  {
+    "role": "assistant",
+    "content": "Zamknęłam otwarte okna aplikacji (w tym okno Eksploratora plików). Pozostawiłam jedynie działającego Titana oraz niezbędne procesy systemowe.",
+    "timestamp": 1786534464.5431302
   }
 ]

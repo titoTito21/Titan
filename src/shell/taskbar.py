@@ -1272,6 +1272,12 @@ class TaskbarFrame(wx.Frame):
     # ------------------------------------------------------------------
     def _on_char_hook(self, event):
         key = event.GetKeyCode()
+        if key == wx.WXK_F4 and event.AltDown():
+            # The bar has nothing to close: Alt+F4 on the shell means the
+            # Shut Down dialog, as it does on the desktop.
+            from src.shell.shutdown_dialog import shell_alt_f4
+            shell_alt_f4(self)
+            return
         if key == wx.WXK_ESCAPE:
             self.hand_keyboard_back()
             return
@@ -1677,6 +1683,19 @@ class TaskbarFrame(wx.Frame):
         self._reposition()
         self.Refresh()
 
+    def allow_close(self):
+        """The shell is taking itself down; the bar may really close."""
+        self._allow_close = True
+
     def _on_close(self, event):
+        if not getattr(self, '_allow_close', False):
+            # The taskbar is furniture, not a window with a document in it:
+            # closing it leaves the shell holding a destroyed frame.  Anything
+            # that asks for it - Alt+F4, the system menu - is asking to shut
+            # down instead.
+            event.Veto()
+            from src.shell.shutdown_dialog import shell_alt_f4
+            shell_alt_f4(self)
+            return
         self.undock()
         event.Skip()

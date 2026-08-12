@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TCE Launcher\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-12 12:47+0200\n"
+"POT-Creation-Date: 2026-08-12 17:22+0200\n"
 "PO-Revision-Date: 2026-08-11 14:00+0200\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -22,27 +22,27 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/shell/a11y.py:340
+#: src/shell/a11y.py:373
 msgid "button"
 msgstr "button"
 
-#: src/shell/a11y.py:341
+#: src/shell/a11y.py:374
 msgid "list"
 msgstr "list"
 
-#: src/shell/a11y.py:342
+#: src/shell/a11y.py:375
 msgid "item"
 msgstr "item"
 
-#: src/shell/a11y.py:343
+#: src/shell/a11y.py:376
 msgid "toolbar"
 msgstr "toolbar"
 
-#: src/shell/a11y.py:344
+#: src/shell/a11y.py:377
 msgid "menu item"
 msgstr "menu item"
 
-#: src/shell/a11y.py:345
+#: src/shell/a11y.py:378
 msgid "clock"
 msgstr "clock"
 
@@ -70,7 +70,8 @@ msgstr "Open the Start menu"
 msgid "Click here to begin"
 msgstr "Click here to begin"
 
-#: src/shell/desktop.py:765 src/shell/quick_launch.py:143
+#: src/shell/desktop.py:738 src/shell/explorer.py:378
+#: src/shell/explorer.py:1348 src/shell/quick_launch.py:143
 #: src/shell/taskbar.py:127
 msgid "&Open"
 msgstr "&Open"
@@ -79,8 +80,9 @@ msgstr "&Open"
 msgid "&Explore"
 msgstr "&Explore"
 
-#: src/shell/desktop.py:775 src/shell/quick_launch.py:147
-#: src/shell/taskbar.py:130 src/shell/taskbar.py:1464
+#: src/shell/desktop.py:748 src/shell/explorer.py:1356
+#: src/shell/explorer.py:1366 src/shell/quick_launch.py:147
+#: src/shell/taskbar.py:130 src/shell/taskbar.py:1470
 msgid "P&roperties"
 msgstr "P&roperties"
 
@@ -161,124 +163,127 @@ msgstr "Date and time"
 msgid "Open the &folder"
 msgstr "Open the &folder"
 
-#: src/shell/taskbar.py:517
+#: src/shell/explorer.py:1361 src/shell/taskbar.py:517
 msgid "&Refresh"
 msgstr "&Refresh"
 
-#: src/shell/taskbar.py:1430
+#: src/shell/taskbar.py:1436
 msgid "&Cascade Windows"
 msgstr "&Cascade Windows"
 
-#: src/shell/taskbar.py:1431
+#: src/shell/taskbar.py:1437
 msgid "Tile Windows &Horizontally"
 msgstr "Tile Windows &Horizontally"
 
-#: src/shell/taskbar.py:1432
+#: src/shell/taskbar.py:1438
 msgid "Tile Windows &Vertically"
 msgstr "Tile Windows &Vertically"
 
-#: src/shell/taskbar.py:1434
+#: src/shell/taskbar.py:1440
 msgid "&Show the Desktop"
 msgstr "&Show the Desktop"
 
-#: src/shell/taskbar.py:1436
+#: src/shell/taskbar.py:1442
 msgid "Tas&k Manager"
 msgstr "Tas&k Manager"
 
-#: src/shell/taskbar.py:1437
+#: src/shell/taskbar.py:1443
 msgid "&Window list"
 msgstr "&Window list"
 
-#: src/shell/taskbar.py:1445
+#: src/shell/taskbar.py:1451
 msgid "&Bottom"
 msgstr "&Bottom"
 
-#: src/shell/taskbar.py:1445
+#: src/shell/taskbar.py:1451
 msgid "&Top"
 msgstr "&Top"
 
-#: src/shell/taskbar.py:1446
+#: src/shell/taskbar.py:1452
 msgid "&Left"
 msgstr "&Left"
 
-#: src/shell/taskbar.py:1446
+#: src/shell/taskbar.py:1452
 msgid "&Right"
 msgstr "&Right"
 
-#: src/shell/taskbar.py:1451
+#: src/shell/taskbar.py:1457
 msgid "&Position"
 msgstr "&Position"
 
-#: src/shell/taskbar.py:1458 src/shell/taskbar_properties.py:86
+#: src/shell/taskbar.py:1464 src/shell/taskbar_properties.py:86
 msgid "&Lock the taskbar"
 msgstr "&Lock the taskbar"
 
-#: src/shell/taskbar.py:1461 src/shell/taskbar_properties.py:89
+#: src/shell/taskbar.py:1467 src/shell/taskbar_properties.py:89
 msgid "A&uto-hide the taskbar"
 msgstr "A&uto-hide the taskbar"
 
 #: src/shell/desktop.py:85 src/shell/desktop.py:89 src/shell/desktop.py:106
-#: src/shell/desktop.py:702
+#: src/shell/desktop.py:675 src/shell/explorer.py:621
 msgid "Desktop"
 msgstr "Desktop"
 
-#: src/shell/desktop.py:702
+#: src/shell/desktop.py:675 src/shell/explorer.py:705
+#: src/shell/explorer.py:1070
 msgid "The item could not be renamed."
 msgstr "The item could not be renamed."
 
-#: src/shell/desktop.py:766
+#: src/shell/desktop.py:739
 msgid "Open file &location"
 msgstr "Open file &location"
 
-#: src/shell/desktop.py:768
+#: src/shell/desktop.py:741 src/shell/explorer.py:1350
 msgid "Cu&t"
 msgstr "Cu&t"
 
-#: src/shell/desktop.py:769
+#: src/shell/desktop.py:742 src/shell/explorer.py:1351
 msgid "&Copy"
 msgstr "&Copy"
 
-#: src/shell/desktop.py:770
+#: src/shell/desktop.py:743 src/shell/explorer.py:382
+#: src/shell/explorer.py:1352
 msgid "Create &shortcut"
 msgstr "Create &shortcut"
 
-#: src/shell/desktop.py:772
+#: src/shell/desktop.py:745
 msgid "Re&name"
 msgstr "Re&name"
 
-#: src/shell/desktop.py:773 src/shell/quick_launch.py:146
+#: src/shell/desktop.py:746 src/shell/explorer.py:385
+#: src/shell/explorer.py:1353 src/shell/quick_launch.py:146
 msgid "&Delete"
 msgstr "&Delete"
 
-#: src/shell/desktop.py:803
+#: src/shell/desktop.py:776
 msgid "Auto &Arrange"
 msgstr "Auto &Arrange"
 
-#: src/shell/desktop.py:805
+#: src/shell/desktop.py:778
 msgid "Line Up &Icons"
 msgstr "Line Up &Icons"
 
-#: src/shell/desktop.py:807
+#: src/shell/desktop.py:780
 msgid "Re&fresh"
 msgstr "Re&fresh"
 
-#: src/shell/desktop.py:809
+#: src/shell/desktop.py:782 src/shell/explorer.py:1363
 msgid "&Paste"
 msgstr "&Paste"
 
-#: src/shell/desktop.py:811
+#: src/shell/desktop.py:784
 msgid "&New Folder"
 msgstr "&New Folder"
 
-#: src/shell/desktop.py:813
+#: src/shell/desktop.py:786
 msgid "&Titan settings"
 msgstr "&Titan settings"
 
-#: src/shell/desktop.py:814
+#: src/shell/desktop.py:787
 msgid "Display &properties"
 msgstr "Display &properties"
 
-#: src/shell/desktop.py:847
+#: src/shell/desktop.py:820 src/shell/explorer.py:1014
 msgid "New Folder"
 msgstr "New Folder"
 
@@ -357,7 +362,7 @@ msgstr "Titan IM"
 msgid "Macros"
 msgstr "Macros"
 
-#: src/shell/shell_manager.py:243 src/shell/start_menu.py:437
+#: src/shell/shell_manager.py:262 src/shell/start_menu.py:437
 #: src/shell/start_menu.py:624 src/shell/start_menu.py:626
 #: src/shell/start_menu.py:628 src/shell/start_menu.py:630
 #: src/shell/start_menu.py:632
@@ -420,7 +425,10 @@ msgstr "My Pictures"
 msgid "My Music"
 msgstr "My Music"
 
-#: src/shell/start_menu.py:642
+#: src/shell/explorer.py:117 src/shell/explorer.py:120
+#: src/shell/explorer.py:624 src/shell/explorer.py:724
+#: src/shell/explorer.py:1238 src/shell/explorer.py:1254
+#: src/shell/explorer.py:1267 src/shell/start_menu.py:642
 msgid "My Computer"
 msgstr "My Computer"
 
@@ -467,15 +475,16 @@ msgstr "Nothing found"
 msgid "No games found"
 msgstr "No games found"
 
+#: src/shell/explorer.py:507 src/shell/explorer.py:508
 #: src/shell/start_menu.py:960
 msgid "Back"
 msgstr "Back"
 
-#: src/shell/start_menu.py:1047
+#: src/shell/start_menu.py:1061
 msgid "Do you want to log off?"
 msgstr "Do you want to log off?"
 
-#: src/shell/start_menu.py:1047
+#: src/shell/start_menu.py:1061
 msgid "Log Off"
 msgstr "Log Off"
 
@@ -591,7 +600,7 @@ msgstr "Which window?"
 msgid "Which window did you mean?"
 msgstr "Which window did you mean?"
 
-#: src/shell/shell_actions.py:223 src/shell/shell_actions.py:645
+#: src/shell/shell_actions.py:223 src/shell/shell_actions.py:724
 #: src/shell/shutdown_dialog.py:236
 msgid "Windows refused that."
 msgstr "Windows refused that."
@@ -648,7 +657,7 @@ msgid "There is nothing called {name} on the desktop."
 msgstr "There is nothing called {name} on the desktop."
 
 #: src/shell/shell_actions.py:325 src/shell/shell_actions.py:360
-#: src/shell/shell_actions.py:592 src/shell/shell_actions.py:709
+#: src/shell/shell_actions.py:592 src/shell/shell_actions.py:788
 msgid "Which one did you mean?"
 msgstr "Which one did you mean?"
 
@@ -774,97 +783,145 @@ msgstr "{name} has been started."
 msgid "{name} could not be started: {error}"
 msgstr "{name} could not be started: {error}"
 
-#: src/shell/shell_actions.py:637
+#: src/shell/shell_actions.py:631 src/shell/shell_actions.py:675
+#, python-brace-format
+msgid "There is no folder called {name}."
+msgstr "There is no folder called {name}."
+
+#: src/shell/shell_actions.py:638
+#, python-brace-format
+msgid "The file browser could not be opened: {error}"
+msgstr "The file browser could not be opened: {error}"
+
+#: src/shell/shell_actions.py:641
+#, python-brace-format
+msgid "The file browser is open at {name}."
+msgstr "The file browser is open at {name}."
+
+#: src/shell/shell_actions.py:642
+msgid "The file browser is open at My Computer."
+msgstr "The file browser is open at My Computer."
+
+#: src/shell/shell_actions.py:652
+msgid "This computer has no drives Windows will report."
+msgstr "This computer has no drives Windows will report."
+
+#: src/shell/shell_actions.py:657 src/shell/shell_actions.py:658
+msgid "unknown"
+msgstr "unknown"
+
+#: src/shell/shell_actions.py:657
+msgid "in total"
+msgstr "in total"
+
+#: src/shell/shell_actions.py:658
+msgid "free"
+msgstr "free"
+
+#: src/shell/shell_actions.py:668
+msgid "Which folder?"
+msgstr "Which folder?"
+
+#: src/shell/shell_actions.py:680
+#, python-brace-format
+msgid "That folder could not be read: {error}"
+msgstr "That folder could not be read: {error}"
+
+#: src/shell/shell_actions.py:683
+msgid "That folder is empty."
+msgstr "That folder is empty."
+
+#: src/shell/shell_actions.py:716
 msgid "What should the computer do?"
 msgstr "What should the computer do?"
 
-#: src/shell/shell_actions.py:641
+#: src/shell/shell_actions.py:720
 #, python-brace-format
 msgid "This computer can do: {list}."
 msgstr "This computer can do: {list}."
 
-#: src/shell/shell_actions.py:644
+#: src/shell/shell_actions.py:723
 #, python-brace-format
 msgid "Done: {action}."
 msgstr "Done: {action}."
 
-#: src/shell/shell_actions.py:655
+#: src/shell/shell_actions.py:734
 msgid "The keyboard is in the notification area."
 msgstr "The keyboard is in the notification area."
 
-#: src/shell/shell_actions.py:670 src/shell/shell_actions.py:691
+#: src/shell/shell_actions.py:749 src/shell/shell_actions.py:770
 #, python-brace-format
 msgid "The notification area could not be read: {error}"
 msgstr "The notification area could not be read: {error}"
 
-#: src/shell/shell_actions.py:673
+#: src/shell/shell_actions.py:752
 msgid "The notification area is empty."
 msgstr "The notification area is empty."
 
-#: src/shell/shell_actions.py:676
+#: src/shell/shell_actions.py:755
 msgid "Unnamed"
 msgstr "Unnamed"
 
-#: src/shell/shell_actions.py:686
+#: src/shell/shell_actions.py:765
 msgid "Which notification icon?"
 msgstr "Which notification icon?"
 
-#: src/shell/shell_actions.py:712
+#: src/shell/shell_actions.py:791
 #, python-brace-format
 msgid "There is no notification icon called {name}."
 msgstr "There is no notification icon called {name}."
 
-#: src/shell/shell_actions.py:716
+#: src/shell/shell_actions.py:795
 #, python-brace-format
 msgid "{name} has been activated."
 msgstr "{name} has been activated."
 
-#: src/shell/shell_actions.py:718
+#: src/shell/shell_actions.py:797
 #, python-brace-format
 msgid "That icon could not be activated: {error}"
 msgstr "That icon could not be activated: {error}"
 
-#: src/shell/shell_actions.py:758 src/shell/shell_actions.py:769
-#: src/shell/shell_actions.py:781 src/shell/shell_actions.py:803
+#: src/shell/shell_actions.py:839 src/shell/shell_actions.py:850
+#: src/shell/shell_actions.py:862 src/shell/shell_actions.py:884
 msgid "on"
 msgstr "on"
 
-#: src/shell/shell_actions.py:758 src/shell/shell_actions.py:769
-#: src/shell/shell_actions.py:803
+#: src/shell/shell_actions.py:839 src/shell/shell_actions.py:850
+#: src/shell/shell_actions.py:884
 msgid "off"
 msgstr "off"
 
-#: src/shell/shell_actions.py:766
+#: src/shell/shell_actions.py:847
 msgid "Which setting?"
 msgstr "Which setting?"
 
-#: src/shell/shell_actions.py:769
+#: src/shell/shell_actions.py:850
 msgid "On or off?"
 msgstr "On or off?"
 
-#: src/shell/shell_actions.py:776
+#: src/shell/shell_actions.py:857
 #, python-brace-format
 msgid "There is no shell setting called {name}."
 msgstr "There is no shell setting called {name}."
 
-#: src/shell/shell_actions.py:802
+#: src/shell/shell_actions.py:883
 #, python-brace-format
 msgid "{name} is now {state}."
 msgstr "{name} is now {state}."
 
-#: src/shell/shell_actions.py:815
+#: src/shell/shell_actions.py:896
 msgid "Which edge of the screen?"
 msgstr "Which edge of the screen?"
 
-#: src/shell/shell_actions.py:819
+#: src/shell/shell_actions.py:900
 msgid "The taskbar can be at the bottom, the top, the left or the right."
 msgstr "The taskbar can be at the bottom, the top, the left or the right."
 
-#: src/shell/shell_actions.py:822
+#: src/shell/shell_actions.py:903
 msgid "The taskbar is locked. Turn \"lock the taskbar\" off first."
 msgstr "The taskbar is locked. Turn \"lock the taskbar\" off first."
 
-#: src/shell/shell_actions.py:824
+#: src/shell/shell_actions.py:905
 #, python-brace-format
 msgid "The taskbar is now at the {edge}."
 msgstr "The taskbar is now at the {edge}."
@@ -1097,7 +1154,7 @@ msgstr "Cloc&k"
 msgid "Show &seconds"
 msgstr "Show &seconds"
 
-#: src/shell/taskbar_properties.py:203
+#: src/shell/explorer.py:435 src/shell/taskbar_properties.py:203
 msgid "&Desktop"
 msgstr "&Desktop"
 
@@ -1120,6 +1177,299 @@ msgstr "Notification area"
 #: src/shell/taskbar_properties.py:249
 msgid "Close"
 msgstr "Close"
+
+#: src/shell/explorer.py:89
+msgid "Removable Disk"
+msgstr "Removable Disk"
+
+#: src/shell/explorer.py:90 src/shell/explorer.py:259
+msgid "Local Disk"
+msgstr "Local Disk"
+
+#: src/shell/explorer.py:91
+msgid "Network Drive"
+msgstr "Network Drive"
+
+#: src/shell/explorer.py:92
+msgid "CD Drive"
+msgstr "CD Drive"
+
+#: src/shell/explorer.py:93
+msgid "RAM Disk"
+msgstr "RAM Disk"
+
+#: src/shell/explorer.py:105
+msgid "Disk"
+msgstr "Disk"
+
+#: src/shell/explorer.py:155
+#, python-brace-format
+msgid "{value} GB"
+msgstr "{value} GB"
+
+#: src/shell/explorer.py:158
+#, python-brace-format
+msgid "{value} MB"
+msgstr "{value} MB"
+
+#: src/shell/explorer.py:161
+#, python-brace-format
+msgid "{value} KB"
+msgstr "{value} KB"
+
+#: src/shell/explorer.py:257
+msgid "File folder"
+msgstr "File folder"
+
+#: src/shell/explorer.py:261
+msgid "File"
+msgstr "File"
+
+#: src/shell/explorer.py:378
+msgid "Open what is selected (Enter)"
+msgstr "Open what is selected (Enter)"
+
+#: src/shell/explorer.py:380
+msgid "Ne&w folder\tCtrl+Shift+N"
+msgstr "Ne&w folder\tCtrl+Shift+N"
+
+#: src/shell/explorer.py:386
+msgid "Send what is selected to the Recycle Bin (Delete)"
+msgstr "Send what is selected to the Recycle Bin (Delete)"
+
+#: src/shell/explorer.py:388 src/shell/explorer.py:1354
+msgid "Rena&me"
+msgstr "Rena&me"
+
+#: src/shell/explorer.py:388
+msgid "Rename what is selected (F2)"
+msgstr "Rename what is selected (F2)"
+
+#: src/shell/explorer.py:391
+msgid "P&roperties\tAlt+Enter"
+msgstr "P&roperties\tAlt+Enter"
+
+#: src/shell/explorer.py:393
+msgid "&Close\tAlt+F4"
+msgstr "&Close\tAlt+F4"
+
+#: src/shell/explorer.py:394
+msgid "&File"
+msgstr "&File"
+
+#: src/shell/explorer.py:397
+msgid "Cu&t\tCtrl+X"
+msgstr "Cu&t\tCtrl+X"
+
+#: src/shell/explorer.py:398
+msgid "&Copy\tCtrl+C"
+msgstr "&Copy\tCtrl+C"
+
+#: src/shell/explorer.py:399
+msgid "&Paste\tCtrl+V"
+msgstr "&Paste\tCtrl+V"
+
+#: src/shell/explorer.py:402
+msgid "Select &All\tCtrl+A"
+msgstr "Select &All\tCtrl+A"
+
+#: src/shell/explorer.py:404
+msgid "&Invert Selection"
+msgstr "&Invert Selection"
+
+#: src/shell/explorer.py:405
+msgid "&Edit"
+msgstr "&Edit"
+
+#: src/shell/explorer.py:408
+msgid "&Toolbar"
+msgstr "&Toolbar"
+
+#: src/shell/explorer.py:410
+msgid "&Status Bar"
+msgstr "&Status Bar"
+
+#: src/shell/explorer.py:412
+msgid "&Folders"
+msgstr "&Folders"
+
+#: src/shell/explorer.py:415
+msgid "Lar&ge Icons"
+msgstr "Lar&ge Icons"
+
+#: src/shell/explorer.py:417
+msgid "S&mall Icons"
+msgstr "S&mall Icons"
+
+#: src/shell/explorer.py:418
+msgid "&List"
+msgstr "&List"
+
+#: src/shell/explorer.py:420
+msgid "&Details"
+msgstr "&Details"
+
+#: src/shell/explorer.py:423
+msgid "Show &hidden files"
+msgstr "Show &hidden files"
+
+#: src/shell/explorer.py:425
+msgid "R&efresh\tF5"
+msgstr "R&efresh\tF5"
+
+#: src/shell/explorer.py:426
+msgid "&View"
+msgstr "&View"
+
+#: src/shell/explorer.py:429
+msgid "&Back\tAlt+Left"
+msgstr "&Back\tAlt+Left"
+
+#: src/shell/explorer.py:430
+msgid "&Forward\tAlt+Right"
+msgstr "&Forward\tAlt+Right"
+
+#: src/shell/explorer.py:431
+msgid "&Up One Level\tAlt+Up"
+msgstr "&Up One Level\tAlt+Up"
+
+#: src/shell/explorer.py:433
+msgid "My &Computer"
+msgstr "My &Computer"
+
+#: src/shell/explorer.py:434
+msgid "My &Documents"
+msgstr "My &Documents"
+
+#: src/shell/explorer.py:436 src/shell/explorer.py:530
+msgid "&Go"
+msgstr "&Go"
+
+#: src/shell/explorer.py:439
+msgid "&About"
+msgstr "&About"
+
+#: src/shell/explorer.py:440
+msgid "&Help"
+msgstr "&Help"
+
+#: src/shell/explorer.py:509 src/shell/explorer.py:510
+msgid "Forward"
+msgstr "Forward"
+
+#: src/shell/explorer.py:511
+msgid "Up"
+msgstr "Up"
+
+#: src/shell/explorer.py:512
+msgid "Up One Level"
+msgstr "Up One Level"
+
+#: src/shell/explorer.py:514 src/shell/explorer.py:557
+msgid "Folders"
+msgstr "Folders"
+
+#: src/shell/explorer.py:516
+msgid "Show or hide the folders bar"
+msgstr "Show or hide the folders bar"
+
+#: src/shell/explorer.py:517
+msgid "Views"
+msgstr "Views"
+
+#: src/shell/explorer.py:518
+msgid "Change the view"
+msgstr "Change the view"
+
+#: src/shell/explorer.py:524
+msgid "A&ddress"
+msgstr "A&ddress"
+
+#: src/shell/explorer.py:528
+msgid "Address"
+msgstr "Address"
+
+#: src/shell/explorer.py:723
+#, python-brace-format
+msgid "{name} is not available."
+msgstr "{name} is not available."
+
+#: src/shell/explorer.py:729
+msgid "Windows will not let this folder be opened."
+msgstr "Windows will not let this folder be opened."
+
+#: src/shell/explorer.py:734
+msgid "This folder could not be read."
+msgstr "This folder could not be read."
+
+#: src/shell/explorer.py:805 src/shell/explorer.py:807
+msgid "Name"
+msgstr "Name"
+
+#: src/shell/explorer.py:805 src/shell/explorer.py:807
+msgid "Type"
+msgstr "Type"
+
+#: src/shell/explorer.py:806
+msgid "Total Size"
+msgstr "Total Size"
+
+#: src/shell/explorer.py:806
+msgid "Free Space"
+msgstr "Free Space"
+
+#: src/shell/explorer.py:807
+msgid "Size"
+msgstr "Size"
+
+#: src/shell/explorer.py:808
+msgid "Date Modified"
+msgstr "Date Modified"
+
+#: src/shell/explorer.py:1162
+msgid ""
+"The Titan file browser: My Computer, drives and folders, readable with "
+"the keyboard and with a screen reader."
+msgstr "The Titan file browser: My Computer, drives and folders, readable with the keyboard and with a screen reader."
+
+#: src/shell/explorer.py:1164
+msgid "About"
+msgstr "About"
+
+#: src/shell/explorer.py:1223
+msgid "Large Icons"
+msgstr "Large Icons"
+
+#: src/shell/explorer.py:1224
+msgid "Small Icons"
+msgstr "Small Icons"
+
+#: src/shell/explorer.py:1225
+msgid "List"
+msgstr "List"
+
+#: src/shell/explorer.py:1226
+msgid "Details"
+msgstr "Details"
+
+#: src/shell/explorer.py:1266
+#, python-brace-format
+msgid "Windows cannot find {name}. Check the spelling and try again."
+msgstr "Windows cannot find {name}. Check the spelling and try again."
+
+#: src/shell/explorer.py:1306
+#, python-brace-format
+msgid "{count} of {total} selected"
+msgstr "{count} of {total} selected"
+
+#: src/shell/explorer.py:1310
+#, python-brace-format
+msgid "{count} object(s)"
+msgstr "{count} object(s)"
+
+#: src/shell/explorer.py:1364
+msgid "Ne&w folder"
+msgstr "Ne&w folder"
 
 #~ msgid "Windows would not do that."
 #~ msgstr "Windows would not do that."

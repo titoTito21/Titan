@@ -1469,3 +1469,138 @@ def lock_workstation():
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Drives: what My Computer is a list of
+# ---------------------------------------------------------------------------
+# `GetDriveTypeW`'s answers, in its own order.
+DRIVE_UNKNOWN = 0
+DRIVE_NO_ROOT_DIR = 1
+DRIVE_REMOVABLE = 2
+DRIVE_FIXED = 3
+DRIVE_REMOTE = 4
+DRIVE_CDROM = 5
+DRIVE_RAMDISK = 6
+
+
+def drive_letters():
+    """Every drive root the machine has, as "C:\\", "D:\\", ...
+
+    `GetLogicalDriveStringsW` rather than a walk of the alphabet: it is what
+    the shell itself asks, and a machine with a drive mounted somewhere
+    unusual answers it correctly.
+    """
+    if not available():
+        return []
+    try:
+        size = kernel32.GetLogicalDriveStringsW(0, None)
+        if not size:
+            return []
+        buffer = ctypes.create_unicode_buffer(size)
+        written = kernel32.GetLogicalDriveStringsW(size, buffer)
+        if not written:
+            return []
+        raw = buffer[:written]
+        return [entry for entry in raw.split('\0') if entry]
+    except Exception:
+        return []
+
+
+def drive_type(root):
+    """What kind of drive this is, as `GetDriveTypeW` says it."""
+    if not available():
+        return DRIVE_UNKNOWN
+    try:
+        return int(kernel32.GetDriveTypeW(str(root)))
+    except Exception:
+        return DRIVE_UNKNOWN
+
+
+def drive_label(root):
+    """The volume's own name, or '' - a drive with no label has none."""
+    if not available():
+        return ''
+    try:
+        name = ctypes.create_unicode_buffer(261)
+        file_system = ctypes.create_unicode_buffer(261)
+        serial = wintypes.DWORD()
+        components = wintypes.DWORD()
+        flags = wintypes.DWORD()
+        ok = kernel32.GetVolumeInformationW(
+            str(root), name, len(name), ctypes.byref(serial),
+            ctypes.byref(components), ctypes.byref(flags),
+            file_system, len(file_system))
+        return name.value if ok else ''
+    except Exception:
+        return ''
+
+
+def drive_space(root):
+    """(total bytes, free bytes), or (0, 0) when the drive will not say.
+
+    An empty CD drive and a card reader with no card answer nothing at all,
+    which is exactly what Explorer shows for them: no size and no free
+    space, rather than zero.
+    """
+    if not available():
+        return 0, 0
+    try:
+        free = ctypes.c_ulonglong(0)
+        total = ctypes.c_ulonglong(0)
+        total_free = ctypes.c_ulonglong(0)
+        ok = kernel32.GetDiskFreeSpaceExW(str(root), ctypes.byref(free),
+                                          ctypes.byref(total),
+                                          ctypes.byref(total_free))
+        if not ok:
+            return 0, 0
+        return int(total.value), int(free.value)
+    except Exception:
+        return 0, 0
+
+
+def list_drives():
+    """My Computer's contents: one dict per drive, in Explorer's own order.
+
+    Each is {'root', 'letter', 'label', 'type', 'type_name', 'total',
+    'free', 'name'} - 'name' being what Explorer writes under the icon,
+    "Local Disk (C:)" or the volume's own label with the letter after it.
+    """
+    drives = []
+    for root in drive_letters():
+        kind = drive_type(root)
+        if kind in (DRIVE_UNKNOWN, DRIVE_NO_ROOT_DIR):
+            continue
+        letter = root[:2]
+        label = drive_label(root)
+        total, free = drive_space(root)
+        drives.append({
+            'root': root,
+            'letter': letter,
+            'label': label,
+            'type': kind,
+            'total': total,
+            'free': free,
+        })
+    return drives
+
+
+def make_directory(parent, name):
+    """Create a folder, answering with its path - or '' when it could not.
+
+    A name that is taken gets a number after it, the way the shell's own
+    "New Folder (2)" does, so the command never fails merely because it was
+    used twice.
+    """
+    base = os.path.join(parent, name)
+    candidate = base
+    index = 2
+    while os.path.exists(candidate):
+        candidate = "{} ({})".format(base, index)
+        index += 1
+    try:
+        os.makedirs(candidate)
+        return candidate
+    except Exception as error:
+        print(f"[TitanShell] could not create a folder: {error}")
+        return ''

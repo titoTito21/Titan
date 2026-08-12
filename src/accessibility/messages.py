@@ -475,6 +475,26 @@ def announce_shell_group(label):
     return True
 
 
+def announce_shell_location(name, count):
+    """Say where the file browser has just gone - to the screen reader alone.
+
+    Navigating replaces the whole list under the reader, and the focus does
+    not move while it happens, so nothing would be said at all: the window
+    title changes and the list quietly holds something else.  Windows says
+    where you are, so this does too - through Titan Access first, never
+    through the platform TTS, and with no sound of its own.
+    """
+    if not name:
+        return False
+    text = _("{name}, {count} items").format(name=name, count=int(count or 0))
+    if _ta_announce(text, interrupt=True):
+        return True
+    if not is_screen_reader_running():
+        return False
+    speak_sr_only(text, interrupt=True)
+    return True
+
+
 # --- Drag-and-drop announcement ------------------------------------------
 # Reading the region name a little lower and relabelling status-bar rows as
 # "status bar item" is done by Titan Access itself (it recognises the container

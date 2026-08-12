@@ -28,10 +28,13 @@ from src.settings.settings import get_setting
 from src.titan_core.translation import _
 
 try:
-    from src.titan_core.sound import play_sound
+    from src.titan_core.sound import play_sound, play_shell_sound
 except Exception:  # pragma: no cover - sound is optional for the shell
     def play_sound(*_args, **_kwargs):
         pass
+
+    def play_shell_sound(*_args, **_kwargs):
+        return False
 
 
 # What the shell calls itself.  It is the system interface, not a window of
@@ -108,6 +111,36 @@ def select_cue(position=0.0):
         play_sound('core/SELECT.ogg', pan=position)
     except Exception:
         pass
+
+
+# The shell's own sounds, in `sfx/<theme>/shell/`.  They say what the shell
+# is DOING - it has started, it is going away, it has gone somewhere - which
+# is a different thing from the focus cues (`focus_cues`), and so has its own
+# switch: somebody may want the quiet focus clicks and no fanfare, or the
+# other way round.
+SOUND_STARTUP = 'shell_startup.ogg'
+SOUND_SHUTDOWN = 'shell_shutdown.ogg'
+SOUND_NAVIGATE = 'shell_start.ogg'
+
+
+def sounds_enabled():
+    """Settings -> Titan shell -> Sounds -> "Play the shell's own sounds"."""
+    return bool(shell_setting('shell_sounds', True))
+
+
+def shell_sound(name, position=0.0, wait=False):
+    """Play one of the shell's sounds, if the user wants to hear them.
+
+    This is a sound and never speech: the shell says nothing through TTS,
+    because the screen reader is already announcing every focus change in
+    it.
+    """
+    if not sounds_enabled():
+        return False
+    try:
+        return bool(play_shell_sound(name, pan=position, wait=wait))
+    except Exception:
+        return False
 
 
 def edge_cue():

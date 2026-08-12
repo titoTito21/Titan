@@ -1135,41 +1135,67 @@ class SettingsFrame(wx.Frame):
             "These options are active only when \"Modify system interface\" "
             "is enabled under Environment.")), flag=wx.LEFT | wx.TOP, border=10)
 
-        # The desktop half of the mode: Titan's own desktop, taskbar,
-        # notification area and Start menu instead of Explorer's.
+        # The panel is grouped rather than being one column of twenty
+        # checkboxes: a `wx.StaticBox` is a real grouping to Windows, so a
+        # screen reader says which group it has entered and the settings
+        # stop being a wall of boxes to count through.
         self.shell_option_cbs = {}
-        shell_options = (
-            ('desktop_shell',
-             _("Replace the desktop, taskbar and Start menu (Windows XP look)"),
-             False),
-            ('show_desktop', _("Show the desktop with its icons"), True),
-            ('show_taskbar', _("Show the taskbar"), True),
-            ('show_tray', _("Show the notification area"), True),
-            ('hide_system_taskbar',
-             _("Hide the Windows taskbar while Titan's is shown"), True),
-            ('show_wallpaper', _("Show the Windows wallpaper"), True),
-            ('clock_seconds', _("Show seconds on the clock"), False),
-            ('auto_arrange_icons', _("Arrange desktop icons automatically"),
-             False),
-            ('focus_cues', _("Play a sound when the focus moves"), True),
-        )
-        for option_id, label, default in shell_options:
-            checkbox = wx.CheckBox(panel, label=label)
+
+        def group(title):
+            box = wx.StaticBoxSizer(wx.VERTICAL, panel, title)
+            vbox.Add(box, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP,
+                     border=8)
+            return box
+
+        def option(box, option_id, label, default):
+            checkbox = wx.CheckBox(box.GetStaticBox(), label=label)
             checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
             checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
             checkbox.shell_default = default
-            vbox.Add(checkbox, flag=wx.LEFT | wx.TOP, border=10)
+            box.Add(checkbox, flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=6)
             self.shell_option_cbs[option_id] = checkbox
+            return checkbox
 
-        vbox.Add(wx.StaticText(panel, label=_(
-            "The Titan shell never speaks by itself - your screen reader "
-            "announces it, like any other program.")),
-            flag=wx.LEFT | wx.TOP, border=10)
+        def note(box, message):
+            box.Add(wx.StaticText(box.GetStaticBox(), label=message),
+                    flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=6)
 
-        vbox.Add(wx.StaticLine(panel), flag=wx.EXPAND | wx.ALL, border=6)
-        vbox.Add(wx.StaticText(panel, label=_("Shortcuts Titan takes over:")),
-                 flag=wx.LEFT | wx.TOP, border=10)
+        # What the mode puts on the screen at all.
+        interface = group(_("The system interface"))
+        option(interface, 'desktop_shell',
+               _("Replace the desktop, taskbar and Start menu "
+                 "(Windows XP look)"), False)
+        option(interface, 'show_desktop', _("Show the desktop with its icons"),
+               True)
+        option(interface, 'show_taskbar', _("Show the taskbar"), True)
+        option(interface, 'show_tray', _("Show the notification area"), True)
+        option(interface, 'hide_system_taskbar',
+               _("Hide the Windows taskbar while Titan's is shown"), True)
 
+        desktop = group(_("The desktop"))
+        option(desktop, 'show_wallpaper', _("Show the Windows wallpaper"), True)
+        option(desktop, 'auto_arrange_icons',
+               _("Arrange desktop icons automatically"), False)
+
+        taskbar = group(_("The taskbar"))
+        option(taskbar, 'clock_seconds', _("Show seconds on the clock"), False)
+        note(taskbar, _("The taskbar's own properties - where it sits, "
+                        "whether it hides itself - are on its context menu, "
+                        "under Properties."))
+
+        # Sound, which is the only thing the shell does of its own accord:
+        # it never speaks, because the screen reader is already announcing
+        # every focus change in it.
+        sounds = group(_("Sounds"))
+        option(sounds, 'shell_sounds',
+               _("Play the shell's own sounds (starting, closing, opening a "
+                 "folder)"), True)
+        option(sounds, 'focus_cues', _("Play a sound when the focus moves"),
+               True)
+        note(sounds, _("The Titan shell never speaks by itself - your screen "
+                       "reader announces it, like any other program."))
+
+        shortcuts = group(_("Shortcuts Titan takes over"))
         self.shell_binding_cbs = {}
         try:
             from src.titan_core.tce_system import (SHELL_BINDINGS,
@@ -1180,19 +1206,22 @@ class SettingsFrame(wx.Frame):
             # Windows key at all (Ctrl+Escape).
             for binding_id, _keys, label, default in (tuple(SHELL_BINDINGS)
                                                       + tuple(EXTRA_SHELL_BINDINGS)):
-                checkbox = wx.CheckBox(panel, label="{} - {}".format(
-                    label, descriptions.get(binding_id, binding_id)))
+                checkbox = wx.CheckBox(shortcuts.GetStaticBox(),
+                                       label="{} - {}".format(
+                                           label,
+                                           descriptions.get(binding_id,
+                                                            binding_id)))
                 checkbox.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
                 checkbox.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
-                vbox.Add(checkbox, flag=wx.LEFT | wx.TOP, border=10)
+                shortcuts.Add(checkbox,
+                              flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=6)
                 checkbox.shell_default = default
                 self.shell_binding_cbs[binding_id] = checkbox
         except Exception as e:
             print(f"[Settings] Could not build the Titan shell panel: {e}")
 
-        vbox.Add(wx.StaticText(panel, label=_(
-            "Windows+L keeps locking the workstation and shortcuts using "
-            "Control are left to Windows.")), flag=wx.LEFT | wx.TOP, border=10)
+        note(shortcuts, _("Windows+L keeps locking the workstation and "
+                          "shortcuts using Control are left to Windows."))
 
         panel.SetSizer(vbox)
 

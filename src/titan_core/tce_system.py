@@ -536,7 +536,21 @@ class SystemHooksManager:
             print(f"ERROR: Failed to toggle the Titan Menu: {e}")
 
     def _handle_file_manager(self):
-        """Windows+E - open the TCE file manager."""
+        """Windows+E - the file browser.
+
+        With the desktop shell up that is the shell's own browser, which is
+        what Windows+E opens on Windows: a window over My Computer.  With
+        the shell off it stays what it always was, Titan's file manager
+        application.
+        """
+        try:
+            if is_desktop_shell_enabled():
+                import wx
+                from src.shell.shell_manager import open_explorer
+                wx.CallAfter(open_explorer)
+                return
+        except Exception as e:
+            print(f"ERROR: Failed to open the shell browser: {e}")
         try:
             tfm_app = find_application_by_shortname('tfm')
             if not tfm_app:

@@ -980,21 +980,35 @@ class XPStartMenu(ClassicStartMenu):
                 shell.show_titan_window()
             self.Hide()
         elif action == 'file_manager':
-            self._open_titan_app('tfm')
+            # The shell's own browser while the shell is up - a folder must
+            # open into a window Titan can make readable.  With the shell
+            # off, Titan's file manager application, as before.
             self.Hide()
+            if shell is not None:
+                shell.open_explorer()
+            else:
+                self._open_titan_app('tfm')
         elif action == 'internet':
             self._open_titan_app('tweb')
             self.Hide()
-        elif action == 'my_pictures':
-            win_shell.open_path(os.path.expanduser('~/Pictures'))
+        elif action == 'my_documents' and shell is not None:
             self.Hide()
-        elif action == 'my_music':
-            win_shell.open_path(os.path.expanduser('~/Music'))
+            shell.open_explorer(os.path.expanduser('~/Documents'))
+        elif action in ('my_pictures', 'my_music'):
+            folder = os.path.expanduser(
+                '~/Pictures' if action == 'my_pictures' else '~/Music')
             self.Hide()
+            if shell is not None:
+                shell.open_explorer(folder)
+            else:
+                win_shell.open_path(folder)
         elif action == 'my_computer':
-            win_shell.open_path('shell:MyComputerFolder' if IS_WINDOWS
-                                else os.path.expanduser('~'))
             self.Hide()
+            if shell is not None:
+                shell.open_explorer()
+            else:
+                win_shell.open_path('shell:MyComputerFolder' if IS_WINDOWS
+                                    else os.path.expanduser('~'))
         elif action == 'taskbar_properties':
             self.Hide()
             if shell is not None and shell.taskbar is not None:
@@ -1095,6 +1109,13 @@ class XPStartMenu(ClassicStartMenu):
         key = event.GetKeyCode()
         focused = wx.Window.FindFocus()
 
+        if key == wx.WXK_F4 and event.AltDown():
+            # The menu is part of the shell, so Alt+F4 in it means what it
+            # means anywhere else in the shell: the Shut Down dialog.
+            from src.shell.shutdown_dialog import shell_alt_f4
+            self.Hide()
+            shell_alt_f4(self.shell.parent if self.shell else None)
+            return
         if key == wx.WXK_TAB:
             self._move_focus(-1 if event.ShiftDown() else 1)
             return

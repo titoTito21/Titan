@@ -19,7 +19,8 @@ import wx
 from src.platform_utils import IS_WINDOWS
 from src.settings.settings import get_setting, set_setting
 from src.shell import luna, win_shell
-from src.shell.a11y import shell_setting
+from src.shell.a11y import (SOUND_SHUTDOWN, SOUND_STARTUP,
+                            shell_setting, shell_sound)
 from src.titan_core.translation import _
 
 _shell = None
@@ -92,6 +93,11 @@ class TitanShell:
 
             self._running = True
             print("[TitanShell] shell started")
+            # The shell has the screen: say so with the one sound Windows
+            # itself would make here.  Only once everything is really up -
+            # a sound played before the bar docked would be a promise the
+            # shell had not yet kept.
+            shell_sound(SOUND_STARTUP)
             return True
         except Exception as error:
             print(f"[TitanShell] could not start: {error}")
@@ -100,9 +106,21 @@ class TitanShell:
             self.stop()
             return False
 
-    def stop(self):
-        """Put the screen back exactly as it was."""
+    def stop(self, quiet=False):
+        """Put the screen back exactly as it was.
+
+        `quiet` is for the exit that has already said goodbye, or for a
+        quick start's quick exit - the sound is skipped, nothing else is.
+        """
+        was_running = self._running
         self._running = False
+
+        # Logging out of the shell, and waited out on purpose: Titan may be
+        # exiting - through Windows shutting down, through the menu's Exit,
+        # or through the shell's own Shut Down dialog - and a sound still in
+        # the mixer when the process goes is a sound nobody hears.
+        if was_running and not quiet:
+            shell_sound(SOUND_SHUTDOWN, wait=True)
 
         if self._explorer_hidden:
             win_shell.set_explorer_taskbar_visible(True)
@@ -112,6 +130,11 @@ class TitanShell:
             if window is None:
                 continue
             try:
+                # The bar and the desktop refuse to close for anybody else -
+                # Alt+F4 and the system menu mean "shut down" there - so the
+                # shell says plainly that this one is its own teardown.
+                if hasattr(window, 'allow_close'):
+                    window.allow_close()
                 if hasattr(window, 'undock'):
                     window.undock()
                 window.Destroy()
@@ -248,6 +271,23 @@ class TitanShell:
             print(f"[TitanShell] could not open settings: {error}")
             return False
 
+    def open_explorer(self, path=None, new_window=False):
+        """The shell's own file browser - what My Computer opens into.
+
+        It is a window of Titan's, not Explorer's: the desktop, the Start
+        menu and Windows+E all come here, so a folder is always something
+        the user can read with the keyboard and with a screen reader.
+        """
+        try:
+            from src.shell.explorer import open_explorer as open_browser
+            return open_browser(path, parent=self.parent,
+                                new_window=new_window)
+        except Exception as error:
+            print(f"[TitanShell] could not open the file browser: {error}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def open_programs_folder(self):
         import os
         path = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft',
@@ -380,14 +420,15 @@ def start_shell(parent=None, force=False):
     return shell.start()
 
 
-def stop_shell():
+def stop_shell(quiet=False):
+    """Take the shell down. Called twice on the way out, and idempotent."""
     global _shell
     with _lock:
         shell = _shell
         _shell = None
     if shell is None:
         return False
-    shell.stop()
+    shell.stop(quiet=quiet)
     return True
 
 
@@ -425,6 +466,20 @@ def focus_desktop():
     if shell is not None and shell.is_running():
         return shell.focus_desktop()
     return win_shell.focus_windows_desktop()
+
+
+def open_explorer(path=None, new_window=False):
+    """Open the shell's file browser, starting the shell's own window only.
+
+    It works with the desktop shell switched off as well: the browser is a
+    window like any other, and "Modify system interface" is about the
+    desktop and the bar rather than about being able to read a folder.
+    """
+    shell = get_shell(create=True)
+    if shell is None:
+        from src.shell.explorer import open_explorer as open_browser
+        return open_browser(path, new_window=new_window)
+    return shell.open_explorer(path, new_window=new_window)
 
 
 def refresh_shell(skin_changed=False):

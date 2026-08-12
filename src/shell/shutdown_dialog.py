@@ -236,3 +236,42 @@ def show_shutdown_dialog(parent=None, default='shutdown'):
     wx.MessageBox(_("Windows refused that."), _("Shut Down Windows"),
                   wx.OK | wx.ICON_ERROR, parent)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Alt+F4, everywhere in the shell
+# ---------------------------------------------------------------------------
+_dialog_open = False
+
+
+def shell_alt_f4(window=None):
+    """Alt+F4 in any shell window: the Shut Down dialog.
+
+    Windows answers Alt+F4 with this dialog whenever the shell itself has
+    the keyboard, and every window Titan's shell puts up is furniture rather
+    than a document: the taskbar, the desktop and the Start menu have
+    nothing to close.  Letting wx take Alt+F4 there destroyed a frame the
+    shell still holds - the bar disappeared and the next thing that touched
+    it crashed - so the whole shell answers the key the way the desktop
+    already did.
+
+    Returns True when the key was handled, whatever the user then chose.
+    """
+    global _dialog_open
+    if _dialog_open:
+        # A second Alt+F4 while the dialog is up is the dialog's own key.
+        return True
+    _dialog_open = True
+    try:
+        show_shutdown_dialog(window)
+    except Exception as error:
+        print(f"[TitanShell] could not open the shutdown dialog: {error}")
+        return False
+    finally:
+        _dialog_open = False
+    return True
+
+
+def is_shutdown_dialog_open():
+    """True while the Shut Down dialog is up (it is modal and one at a time)."""
+    return _dialog_open
