@@ -11,12 +11,16 @@ real wx controls, control for control:
     icon   What do you want the computer to do?
            [ Shut down                                   v ]
            Ends your current session and shuts down the
-           system so you can safely shut down the power.
+           computer.
                                           [  OK  ] [ Cancel ]
 
 The wording of every entry and of every description is msgina's own
 (`IDS_SHUTDOWN_*`, `IDS_SHUTDOWN_*_DESC`), which is what makes this the
-ReactOS dialog rather than a dialog that does the same job.
+ReactOS dialog rather than a dialog that does the same job.  One sentence is
+deliberately not msgina's: "so you can safely shut down the power" described
+an AT machine that stayed powered until somebody pressed the switch, and no
+computer this dialog runs on has behaved that way for twenty years - it is a
+relic, so Shut down simply says it shuts the computer down.
 
 Sleep and hibernate are offered only where Windows says it would take them,
 so the list is the list this machine actually has.  There are no pictures
@@ -54,8 +58,7 @@ def shutdown_actions():
          _("Ends your current session and allows other users to log on to "
            "the system.")),
         ('shutdown', _("Shut down"),
-         _("Ends your current session and shuts down the system so you can "
-           "safely shut down the power.")),
+         _("Ends your current session and shuts down the computer.")),
         ('restart', _("Restart"),
          _("Ends your current session and reboots the system.")),
     ]

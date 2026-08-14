@@ -21,6 +21,7 @@ from src.settings.settings import get_setting, set_setting
 from src.shell import luna, win_shell
 from src.shell.a11y import (SOUND_SHUTDOWN, SOUND_STARTUP,
                             shell_setting, shell_sound)
+from src.shell.deferred import alive
 from src.titan_core.translation import _
 
 _shell = None
@@ -241,10 +242,28 @@ class TitanShell:
     def is_running(self):
         return self._running
 
+    def window(self, name):
+        """One of the shell's own windows, or None once it has gone.
+
+        `stop()` sets these to None, but it is not the only way a shell
+        window ends: Titan exiting destroys its children, and a frame whose
+        C++ side has gone answers every call with a `RuntimeError` - raised
+        into whatever asked the shell to focus the desktop or read the
+        taskbar's height.  So the shell asks whether the window is still
+        there rather than only whether it was ever made, and forgets it once
+        it is not.
+        """
+        window = getattr(self, name, None)
+        if window is not None and not alive(window):
+            setattr(self, name, None)
+            return None
+        return window
+
     def own_hwnds(self):
         """Our own windows, which never belong on our own taskbar."""
         handles = []
-        for window in (self.desktop, self.taskbar, self.start_menu):
+        for window in (self.window('desktop'), self.window('taskbar'),
+                       self.window('start_menu')):
             try:
                 if window is not None:
                     handles.append(window.GetHandle())
@@ -253,7 +272,7 @@ class TitanShell:
         return tuple(handles)
 
     def taskbar_height(self):
-        if self.taskbar is not None:
+        if self.window('taskbar') is not None:
             try:
                 return self.taskbar.GetSize().height
             except Exception:
@@ -264,13 +283,7 @@ class TitanShell:
     # The Start menu
     # ------------------------------------------------------------------
     def get_start_menu(self, create=True):
-        if self.start_menu is not None:
-            try:
-                if self.start_menu.IsBeingDeleted():
-                    self.start_menu = None
-            except RuntimeError:
-                self.start_menu = None
-        if self.start_menu is None and create:
+        if self.window('start_menu') is None and create:
             try:
                 # Which of the two menus, the way the taskbar properties
                 # dialog asks it: the two-pane one, or the classic one it is
@@ -279,7 +292,8 @@ class TitanShell:
                 classic = str(shell_setting('start_menu_style', 'xp')).lower()                     == 'classic'
                 if classic:
                     from src.ui.classic_start_menu import ClassicStartMenu
-                    self.start_menu = ClassicStartMenu(self.parent)
+                    self.start_menu = ClassicStartMenu(self.parent,
+                                                       shell=self)
                 else:
                     from src.shell.start_menu import create_xp_start_menu
                     self.start_menu = create_xp_start_menu(self.parent,
@@ -312,13 +326,19 @@ class TitanShell:
             return False
 
     def close_start_menu(self):
-        if self.start_menu is not None and self.start_menu.IsShown():
-            self.start_menu.Hide()
-            return True
+        menu = self.window('start_menu')
+        if menu is None:
+            return False
+        try:
+            if menu.IsShown():
+                menu.Hide()
+                return True
+        except Exception as error:
+            print(f"[TitanShell] could not close the Start menu: {error}")
         return False
 
     def set_start_button_pressed(self, pressed):
-        if self.taskbar is not None:
+        if self.window('taskbar') is not None:
             try:
                 self.taskbar.start_button.set_menu_open(pressed)
             except Exception:
@@ -399,8 +419,9 @@ class TitanShell:
 
     def focus_desktop(self):
         """Windows+D and Windows+M: the desktop is shown and read."""
-        if self.desktop is not None:
-            return self.desktop.bring_up()
+        desktop = self.window('desktop')
+        if desktop is not None:
+            return desktop.bring_up()
         # No Titan desktop (the shell is off, or it was told not to draw
         # one) - the icons are still Windows' own, and the shortcut has to
         # land on them rather than doing nothing.
@@ -408,31 +429,36 @@ class TitanShell:
 
     def focus_taskbar(self):
         """Windows+T: the keyboard goes to the window buttons."""
-        if self.taskbar is not None:
-            return self.taskbar.focus_first_task()
+        bar = self.window('taskbar')
+        if bar is not None:
+            return bar.focus_first_task()
         return False
 
     def focus_tray(self):
         """Windows+B: the keyboard goes to the notification area."""
-        if self.taskbar is not None:
-            return self.taskbar.focus_tray()
+        bar = self.window('taskbar')
+        if bar is not None:
+            return bar.focus_tray()
         return False
 
     def focus_taskbar_or_tray(self, tray=False):
         """Whichever of the two the bar can offer, if there is a bar."""
-        if self.taskbar is None:
+        bar = self.window('taskbar')
+        if bar is None:
             return False
-        return self.taskbar.focus_tray() if tray else             self.taskbar.focus_first_task()
+        return bar.focus_tray() if tray else bar.focus_first_task()
 
     def focus_start_button(self):
-        if self.taskbar is not None:
-            return self.taskbar.focus_start_button()
+        bar = self.window('taskbar')
+        if bar is not None:
+            return bar.focus_start_button()
         return False
 
     def return_focus_to_desktop(self):
         """Escape on the taskbar hands the keyboard back."""
-        if self.taskbar is not None:
-            return self.taskbar.hand_keyboard_back()
+        bar = self.window('taskbar')
+        if bar is not None:
+            return bar.hand_keyboard_back()
         return self.focus_desktop()
 
     def show_desktop(self):
@@ -443,8 +469,9 @@ class TitanShell:
         they are put - after a moment, because the windows are asked to
         minimise rather than made to.
         """
-        if self.taskbar is not None:
-            self.taskbar.toggle_show_desktop()
+        bar = self.window('taskbar')
+        if bar is not None:
+            bar.toggle_show_desktop()
             return True
         win_shell.minimize_all(self.own_hwnds())
         wx.CallLater(150, self.focus_desktop)
@@ -460,8 +487,8 @@ class TitanShell:
         # The desktop off the GUI thread: a refresh re-reads every icon,
         # and F5 must not be a moment of a shell that has stopped answering
         # Windows.
-        for window, method in ((self.desktop, 'refresh_async'),
-                               (self.taskbar, 'refresh_windows')):
+        for window, method in ((self.window('desktop'), 'refresh_async'),
+                               (self.window('taskbar'), 'refresh_windows')):
             if window is None:
                 continue
             try:

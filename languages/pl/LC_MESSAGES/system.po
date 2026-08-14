@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-12 17:22+0200\n"
+"POT-Creation-Date: 2026-08-13 08:44+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -602,7 +602,7 @@ msgstr "Czy chcesz teraz otworzyć ustawienia mikrofonu?"
 msgid "Microphone blocked"
 msgstr "Mikrofon zablokowany"
 
-#: src/system/tray_icons.py:137 src/system/tray_icons.py:760
+#: src/system/tray_icons.py:137 src/system/tray_icons.py:765
 msgid "Notification icon"
 msgstr "Ikona powiadomienia"
 

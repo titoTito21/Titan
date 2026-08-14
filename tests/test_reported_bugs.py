@@ -180,22 +180,180 @@ class TelegramVoiceTest(unittest.TestCase):
         self.assertNotIn('{CALL_REQUEST_PREFIX}', source)
         self.assertNotIn('{CALL_END_PREFIX}', source)
 
-    def test_ringing_state_exists_and_start_call_uses_it(self):
-        """An unanswered call must not be reported as connected."""
+    def test_ringing_state_exists(self):
+        """An unanswered call must not be reported as connected.
+
+        The state itself is still checked in the source - it is a contract
+        other parts of Titan read (`ACTIVE_STATES`, the call window) - but
+        what `start_call` DOES with it is checked by doing it, below.  This
+        test used to slice the file between `async def start_call` and the
+        `# === MICROPHONE ===` heading, which stopped being true of the file
+        the moment the sections were reordered: the assertion was about the
+        shape of the source rather than about the behaviour it was written
+        for, and it broke without anything being wrong.
+        """
         source = self._source()
         self.assertIn("RINGING = 'ringing'", source)
-        start = source.index('async def start_call')
-        end = source.index('# === MICROPHONE ===', start)
-        body = source[start:end]
-        self.assertIn('self.RINGING', body)
-        self.assertNotIn('self.CONNECTED', body,
-                         "start_call still marks the call connected directly")
 
-    def test_connected_transition_is_guarded(self):
-        source = self._source()
-        start = source.index('def _mark_connected')
-        body = source[start:start + 600]
-        self.assertIn('if self.state != self.RINGING', body)
+
+class TelegramVoiceStateTests(unittest.TestCase):
+    """The call state machine, driven rather than read.
+
+    The bug these are for: an outgoing call was announced as CONNECTED the
+    moment it was placed, so Titan said "connected" at a phone that was still
+    ringing - and went on saying it at one that was never answered.
+    """
+
+    def setUp(self):
+        from src.network import telegram_voice
+        self.module = telegram_voice
+        self.client = telegram_voice.TelegramVoiceClient(None)
+        self.events = []
+        # `_notify` marshals to wx with `CallAfter`, which never runs without
+        # a main loop; the events are collected here instead.
+        self.client._notify = lambda event, data=None: self.events.append(
+            (event, data or {}))
+        self._sounds = telegram_voice.play_sound
+        telegram_voice.play_sound = lambda *args, **kwargs: None
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        self.module.play_sound = self._sounds
+
+    def _states(self):
+        return [data.get('new_state') for event, data in self.events
+                if event == 'state_changed']
+
+    # -- placing one ------------------------------------------------------
+    def _fake_out_the_world(self, play):
+        """Everything `start_call` needs that is not the state machine."""
+        client = self.client
+        self.module.PYTGCALLS_AVAILABLE = True
+        self.addCleanup(setattr, self.module, 'PYTGCALLS_AVAILABLE',
+                        self.module.PYTGCALLS_AVAILABLE)
+
+        class FakeCalls:
+            def __init__(self):
+                self.left = []
+
+            async def play(self, *args, **kwargs):
+                return await play(*args, **kwargs)
+
+            async def leave_call(self, chat_id):
+                self.left.append(chat_id)
+
+        client.pytgcalls = FakeCalls()
+        client._check_microphone = lambda: (True, '')
+        client._microphone_stream = lambda: object()
+
+        async def started():
+            return True
+
+        async def resolve(_recipient):
+            return 4242, 'Anna', True
+
+        client._ensure_pytgcalls_started = started
+        client._resolve_target = resolve
+        return client.pytgcalls
+
+    def _run(self, coroutine):
+        """Run one coroutine, and clean up whatever it left running."""
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coroutine)
+        finally:
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+
+    def test_a_call_that_is_placed_is_ringing_not_connected(self):
+        """The peer's phone is ringing; nobody has answered anything yet."""
+        import asyncio
+
+        async def never_answers(*_args, **_kwargs):
+            await asyncio.Event().wait()
+
+        self._fake_out_the_world(never_answers)
+        placed = self._run(self.client.start_call('anna'))
+        self.assertTrue(placed)
+        self.assertEqual(self.client.state, self.client.RINGING)
+        self.assertIn('call_ringing', [event for event, _d in self.events])
+        self.assertNotIn('call_started', [event for event, _d in self.events])
+        self.assertNotIn(self.client.CONNECTED, self._states())
+
+    def test_an_unanswered_call_is_never_reported_as_connected(self):
+        """Sixty seconds of ringing ends the call, it does not connect it."""
+        calls = self._fake_out_the_world(None)
+
+        async def times_out(*_args, **_kwargs):
+            raise self.module.TimedOutAnswer()
+
+        calls.play = times_out
+        self.client.state = self.client.RINGING
+        self.client.current_peer_name = 'Anna'
+        self.client.current_chat_id = 4242
+        self._run(self.client._run_private_call(4242, object()))
+        self.assertEqual(self.client.state, self.client.IDLE)
+        self.assertNotIn(self.client.CONNECTED, self._states())
+        self.assertIn('call_unanswered', [event for event, _d in self.events])
+
+    def test_a_declined_call_is_not_connected_either(self):
+        calls = self._fake_out_the_world(None)
+
+        async def declined(*_args, **_kwargs):
+            raise self.module.CallDeclined()
+
+        calls.play = declined
+        self.client.state = self.client.RINGING
+        self.client.current_peer_name = 'Anna'
+        self.client.current_chat_id = 4242
+        self._run(self.client._run_private_call(4242, object()))
+        self.assertEqual(self.client.state, self.client.IDLE)
+        self.assertNotIn(self.client.CONNECTED, self._states())
+
+    # -- answering one ----------------------------------------------------
+    def test_answering_is_what_connects_it(self):
+        """`play` returning is py-tgcalls saying the call is really up."""
+        calls = self._fake_out_the_world(None)
+
+        async def answered(*_args, **_kwargs):
+            return None
+
+        calls.play = answered
+        self.client.state = self.client.RINGING
+        self.client.current_peer_name = 'Anna'
+        self.client.current_chat_id = 4242
+        self._run(self.client._run_private_call(4242, object()))
+        self.assertEqual(self.client.state, self.client.CONNECTED)
+        self.assertIn('call_started', [event for event, _d in self.events])
+
+    def test_it_connects_exactly_once(self):
+        self.client.state = self.client.RINGING
+        self.client._mark_connected('Anna')
+        self.client._mark_connected('Anna')
+        started = [event for event, _d in self.events
+                   if event == 'call_started']
+        self.assertEqual(len(started), 1)
+
+    def test_a_call_that_is_over_cannot_be_connected_afterwards(self):
+        """A late answer from the library must not revive a dead call."""
+        for state in (self.client.IDLE, self.client.ENDING):
+            self.client.state = state
+            self.events[:] = []
+            self.client._mark_connected('Anna')
+            self.assertEqual(self.client.state, state)
+            self.assertEqual([], [event for event, _d in self.events])
+
+    def test_a_group_voice_chat_connects_without_ringing(self):
+        """There is nobody to answer a room: joining it IS connecting."""
+        self.client.state = self.client.CONNECTING
+        self.client._mark_connected('Some room')
+        self.assertEqual(self.client.state, self.client.CONNECTED)
 
 
 # ---------------------------------------------------------------------------

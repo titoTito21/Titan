@@ -28,6 +28,9 @@ import wx
 
 from src.platform_utils import IS_WINDOWS
 from src.shell import luna, win_shell
+from src.shell import keyboard_handover as handover
+from src.shell.deferred import Coalesced, call_after, call_later
+from src.system import key_state
 from src.shell.a11y import (ROLE_BUTTON, ROLE_LISTITEM, ROLE_TOOLBAR,
                             SHELL_NAME, STATE_FOCUSABLE, STATE_FOCUSED,
                             STATE_PRESSED, edge_cue, shell_setting)
@@ -243,7 +246,7 @@ class TaskButton(IconTextControl):
             win_shell.minimize_window(hwnd)
         else:
             win_shell.activate_window(hwnd)
-        wx.CallLater(120, self.taskbar.refresh_windows)
+        call_later(self.taskbar, 120, self.taskbar.refresh_windows)
 
     def show_context_menu(self):
         menu = wx.Menu()
@@ -273,7 +276,7 @@ class TaskButton(IconTextControl):
         try:
             action(hwnd)
         finally:
-            wx.CallLater(150, self.taskbar.refresh_windows)
+            call_later(self.taskbar, 150, self.taskbar.refresh_windows)
 
 
 class TrayIconButton(ShellControl):
@@ -448,11 +451,15 @@ class TaskbarFrame(wx.Frame):
         self._minimised_by_show_desktop = []
         self._last_foreground = 0
         self._previous_foreground = 0
-        self._refresh_pending = False
         self._auto_hide_state = AUTOHIDE_SHOWN
         self._auto_hide_offset = 0
         self._auto_hide_timer = None
         self._track_timer = None
+
+        # A window opening fires created, activated and redrawn within a
+        # few milliseconds of each other; the bar is rebuilt once, when they
+        # have stopped coming, and never at all once it has gone.
+        self._window_refresh = Coalesced(self, self.refresh_windows, 60)
 
         self._build()
         self._layout_bar()
@@ -462,6 +469,13 @@ class TaskbarFrame(wx.Frame):
         self.Bind(wx.EVT_SIZE, lambda event: (self._layout_bar(),
                                               self.Refresh()))
         self.Bind(wx.EVT_CLOSE, self._on_close)
+        # The last word on the appbar and the shell hook.  `stop()` undocks
+        # the bar before destroying it and that is the ordinary path, but a
+        # frame destroyed some other way - Titan exiting, its parent going -
+        # would otherwise leave Windows holding a subclassed window
+        # procedure that no longer exists and a strip of the screen reserved
+        # for a taskbar that has gone.  `undock` does nothing twice.
+        self.Bind(wx.EVT_WINDOW_DESTROY, self._on_destroy)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
         # A bar that lives in the background is brought to the front to be
         # used and put back the moment it is done with, so it is never left
@@ -713,7 +727,7 @@ class TaskbarFrame(wx.Frame):
         if IS_WINDOWS:
             self.register_appbar(after=after)
         else:
-            wx.CallAfter(self._first_tray_read)
+            call_after(self, self._first_tray_read)
 
     def register_appbar(self, after=None):
         """Claim the strip, on a thread of our own.
@@ -771,7 +785,7 @@ class TaskbarFrame(wx.Frame):
         # move the work area: asking it anything before it has settled is
         # seconds of a shell that has stopped answering Windows, and the
         # answer comes back empty anyway.
-        wx.CallLater(400, self._first_tray_read)
+        call_later(self, 400, self._first_tray_read)
 
     def _first_tray_read(self, attempt=1):
         """Read the notification area, and again if Explorer was not ready.
@@ -790,7 +804,8 @@ class TaskbarFrame(wx.Frame):
             print(f"[TitanShell] the notification area could not be read: "
                   f"{error}")
         if not self._tray_buttons and attempt < 4:
-            wx.CallLater(1000 * attempt, self._first_tray_read, attempt + 1)
+            call_later(self, 1000 * attempt, self._first_tray_read,
+                       attempt + 1)
 
     # ------------------------------------------------------------------
     # Auto-hide
@@ -911,6 +926,14 @@ class TaskbarFrame(wx.Frame):
             self.auto_hide_conceal()
 
     def undock(self):
+        # Anything the bar has asked to have done later must not be done at
+        # all now: the frame is about to go.
+        for coalesced in (getattr(self, '_window_refresh', None),):
+            try:
+                if coalesced is not None:
+                    coalesced.cancel()
+            except Exception:
+                pass
         for timer in (getattr(self, '_clock_timer', None),
                       getattr(self, '_poll_timer', None),
                       getattr(self, '_auto_hide_timer', None),
@@ -1174,6 +1197,7 @@ class TaskbarFrame(wx.Frame):
         # button under the user's focus to say so would throw the keyboard
         # out of the notification area every time the battery moved.
         existing = dict(self._existing_tray)
+        previous_buttons = list(self._tray_buttons)
         buttons = []
         for icon in icons:
             button = existing.pop(icon.key, None)
@@ -1190,8 +1214,14 @@ class TaskbarFrame(wx.Frame):
             except Exception:
                 pass
 
+        # The bar is only laid out again when the STRIP has changed shape.
+        # A tray icon is renamed every few seconds - the battery
+        # percentage, the volume - and re-laying out the whole bar to say so
+        # repainted the taskbar on a timer for no visible difference.
+        changed = [button for button in buttons] != previous_buttons
         self._tray_buttons = buttons
-        self._layout_bar()
+        if changed:
+            self._layout_bar()
         self.tray_area.Refresh()
 
     @staticmethod
@@ -1220,7 +1250,7 @@ class TaskbarFrame(wx.Frame):
         """What pressing "Show hidden icons" does."""
         self._tray_expanded = True
         self.refresh_tray(expand_hidden=True)
-        wx.CallAfter(self.focus_tray)
+        call_after(self, self.focus_tray)
 
     def tray_buttons(self):
         return list(self._tray_buttons)
@@ -1243,7 +1273,7 @@ class TaskbarFrame(wx.Frame):
                     win_shell.HSHELL_REDRAW):
             self._request_refresh()
         elif code == win_shell.HSHELL_FLASH:
-            wx.CallAfter(self._flash, hwnd)
+            call_after(self, self._flash, hwnd)
 
     def _request_refresh(self):
         """Coalesce a burst of notifications into one rebuild.
@@ -1252,15 +1282,7 @@ class TaskbarFrame(wx.Frame):
         milliseconds; rebuilding on each one would rebuild the bar three
         times and take the focus with it.
         """
-        if self._refresh_pending:
-            return
-        self._refresh_pending = True
-
-        def run():
-            self._refresh_pending = False
-            self.refresh_windows()
-
-        wx.CallLater(60, run)
+        self._window_refresh.request()
 
     def _flash(self, hwnd):
         button = self._buttons.get(int(hwnd))
@@ -1272,9 +1294,9 @@ class TaskbarFrame(wx.Frame):
 
     def _on_appbar_event(self, code, _lparam):
         if code in (win_shell.ABN_POSCHANGED, win_shell.ABN_STATECHANGE):
-            wx.CallAfter(self._reposition)
+            call_after(self, self._reposition)
         elif code == win_shell.ABN_FULLSCREENAPP:
-            wx.CallAfter(self._on_fullscreen, bool(_lparam))
+            call_after(self, self._on_fullscreen, bool(_lparam))
 
     def _reposition(self):
         if self._appbar:
@@ -1383,10 +1405,16 @@ class TaskbarFrame(wx.Frame):
             # inside one.  Without this the bar was a dead end - every
             # control asks for all keys (wxWANTS_CHARS), so wx never turns a
             # Tab in one of them into a navigation of its own.
-            self._move_between_groups(-1 if event.ShiftDown() else 1)
+            #
+            # Shift is asked of Windows and not of the event: taking the
+            # foreground attaches this thread's input queue to another's,
+            # and a Shift that was down across that can stay latched in the
+            # queue `ShiftDown()` answers from - after which Tab moved
+            # backwards for ever without the user touching Shift.
+            self._move_between_groups(-1 if key_state.shift_down(event) else 1)
             return
         if key == wx.WXK_WINDOWS_MENU or (key == wx.WXK_F10 and
-                                          event.ShiftDown()):
+                                          key_state.shift_down(event)):
             focused = wx.Window.FindFocus()
             if not isinstance(focused, ShellControl):
                 self._on_bar_context_menu(event)
@@ -1669,7 +1697,7 @@ class TaskbarFrame(wx.Frame):
         try:
             arranger(self.own_hwnds())
         finally:
-            wx.CallLater(200, self.refresh_windows)
+            call_later(self, 200, self.refresh_windows)
 
     def activate(self):
         """Make the bar the window the keyboard is talking to."""
@@ -1695,9 +1723,12 @@ class TaskbarFrame(wx.Frame):
         return True
 
     def _on_activate(self, event):
+        # Tab walks this bar and the arrows walk what is in a group: while
+        # it is the active window those keys are the bar's own.
+        handover.follows_activation(event)
         try:
             if not event.GetActive() and not self.always_on_top():
-                wx.CallAfter(self.send_to_background)
+                call_after(self, self.send_to_background)
         except Exception:
             pass
         event.Skip()
@@ -1754,8 +1785,8 @@ class TaskbarFrame(wx.Frame):
             self._desktop_shown = True
             # The windows are asked to minimise, not made to: the keyboard
             # can only go to the desktop once they have actually gone.
-            wx.CallLater(150, self.shell.focus_desktop)
-        wx.CallLater(200, self.refresh_windows)
+            call_later(self, 150, self.shell.focus_desktop)
+        call_later(self, 200, self.refresh_windows)
 
     # ------------------------------------------------------------------
     # Skin
@@ -1774,6 +1805,14 @@ class TaskbarFrame(wx.Frame):
                 pass
         self._reposition()
         self.Refresh()
+
+    def _on_destroy(self, event):
+        if event.GetEventObject() is self:
+            try:
+                self.undock()
+            except Exception as error:
+                print(f"[TitanShell] could not undock the bar: {error}")
+        event.Skip()
 
     def allow_close(self):
         """The shell is taking itself down; the bar may really close."""

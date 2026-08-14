@@ -27,6 +27,7 @@ import wx
 
 from src.platform_utils import IS_WINDOWS
 from src.shell import win_shell
+from src.shell.deferred import call_after
 from src.shell.a11y import shell_setting
 from src.titan_core.translation import _
 
@@ -207,7 +208,7 @@ class NotificationPage(_Page):
 
     def _clock_toggled(self, event):
         event.Skip()
-        wx.CallAfter(self._sync_seconds)
+        call_after(self, self._sync_seconds)
 
     def _sync_seconds(self):
         # Seconds are a property of a clock that is there; ReactOS greys

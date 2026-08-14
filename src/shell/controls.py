@@ -13,6 +13,7 @@ the keyboard.
 import wx
 
 from src.shell import luna
+from src.system import key_state
 from src.shell.a11y import (AccessibleMixin, ROLE_BUTTON, ROLE_CLOCK,
                             STATE_FOCUSABLE, STATE_FOCUSED, STATE_PRESSED,
                             select_cue, screen_position)
@@ -159,7 +160,7 @@ class ShellControl(AccessibleMixin, wx.Window):
         if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER, wx.WXK_SPACE):
             self.activate()
         elif key == wx.WXK_WINDOWS_MENU or \
-                (key == wx.WXK_F10 and event.ShiftDown()):
+                (key == wx.WXK_F10 and key_state.shift_down(event)):
             self.show_context_menu()
         else:
             event.Skip()
@@ -195,7 +196,13 @@ class TextControl(ShellControl):
         super().__init__(parent, size=size, name=name or text)
 
     def set_text(self, text, name=None):
-        if text == self._text and name is None:
+        # Nothing to say, nothing to repaint.  The clock is told the time
+        # every second and its text changes once a minute; without the name
+        # being compared as well, the taskbar repainted itself and told
+        # MSAA its clock had been renamed sixty times for every one time
+        # either was true.
+        if text == self._text and (name is None
+                                   or name == self.accessible_name):
             return
         self._text = text
         if name is not None:

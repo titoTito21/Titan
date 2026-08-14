@@ -180,6 +180,13 @@ class ProgressDialog(wx.Dialog):
             pass
 
 
+# How long the startup check may wait for the update server: (connect, read).
+# It runs before Titan has a window, and an unreachable server must cost a
+# moment rather than ten seconds of a program that appears not to have
+# started.
+STARTUP_CHECK_TIMEOUT = (3.05, 4.0)
+
+
 class Updater:
     def __init__(self, parent=None):
         self.parent = parent
@@ -246,8 +253,19 @@ class Updater:
                 print("[UPDATER] Could not determine current version; skipping update check")
                 return False, None, None
 
-            # Get remote version
-            response = requests.get(self.version_url, timeout=10)
+            # Get remote version.
+            #
+            # (connect, read), and short on purpose: this runs BEFORE Titan's
+            # window exists, so every second it waits is a second of a
+            # program that has been started and shows nothing at all.  A
+            # server that has not answered in four seconds is a server that
+            # is not going to tell us anything useful about a version, and
+            # failing the check means starting normally - which is the right
+            # answer for a machine that is offline or behind a captive
+            # portal.  The DOWNLOAD keeps its long timeout; by then there is
+            # a window and a progress dialog to wait in.
+            response = requests.get(self.version_url,
+                                    timeout=STARTUP_CHECK_TIMEOUT)
             response.raise_for_status()
             remote_version_raw = response.text.strip()
 
@@ -279,7 +297,8 @@ class Updater:
     def get_changes(self):
         """Get changelog from server."""
         try:
-            response = requests.get(self.changes_url, timeout=10)
+            response = requests.get(self.changes_url,
+                                    timeout=STARTUP_CHECK_TIMEOUT)
             response.raise_for_status()
             return response.text
         except Exception as e:

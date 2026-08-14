@@ -2,7 +2,6 @@ import os
 import platform
 import threading
 import time
-import accessible_output3.outputs.auto
 from src.titan_core.sound import play_sound
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_user_data_dir
 
@@ -15,7 +14,10 @@ else:
     wmi = None
 
 # Inicjalizacja mówienia
-speaker = accessible_output3.outputs.auto.Auto()
+# The one speaker Titan shares, built the first time something speaks -
+# see `src/accessibility/lazy_speaker.py`.
+from src.accessibility.lazy_speaker import LazySpeaker
+speaker = LazySpeaker()
 
 def get_notifications_path():
     return os.path.join(get_user_data_dir(), 'bg5notifications.tno')

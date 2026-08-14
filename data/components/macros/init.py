@@ -4563,6 +4563,28 @@ def _ai_truth(value):
     return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'tak')
 
 
+def _ai_given(value):
+    """Whether an optional yes/no argument was answered at all.
+
+    An action's arguments arrive as strings over the bus, so "not given" is
+    the empty string - but a caller inside Titan passes a real `False`, and
+    `str(value or '')` cannot tell those two apart: `False or ''` is `''`.
+    That is not a nicety.  `macros.check_macro use_ai=false` went through
+    exactly that expression, came out as "not given", fell back to the AI
+    setting and sent the script to a model - a request the caller had just
+    said not to make, and one that hangs for as long as the provider's
+    connect timeout when the machine is offline.
+
+    So: None and an empty (or blank) string mean unanswered.  Everything
+    else, `False` included, is an answer.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ''
+    return True
+
+
 def _ai_is_numeric(text):
     try:
         float(str(text).strip())
@@ -6711,7 +6733,9 @@ def action_check_macro(script="", name="", use_ai=""):
         except Exception as e:
             return fails(f"Could not read '{macro.get('name')}': {e}")
         folder = macro.get('folder_path', '')
-    wanted = None if str(use_ai or '').strip() == '' else _ai_truth(use_ai)
+    # None means "whatever the AI-features setting says"; False means the
+    # caller has said not to, and must be obeyed (see `_ai_given`).
+    wanted = _ai_truth(use_ai) if _ai_given(use_ai) else None
     problems, warnings, notes = review_tcs(text, base_dir=folder,
                                            use_ai=wanted)
     if not problems and not warnings and not notes:

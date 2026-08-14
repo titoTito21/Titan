@@ -54,6 +54,12 @@ merely present:
     gives it up, then ours claims it - because those two calls into Explorer
     take seconds of the whole session's time, and the shell must spend them
     answering Windows rather than queueing behind it.
+17. A modifier the user has let go of is not held.  The shell must not hand
+    the `keyboard` library a suppressed HOTKEY (that switches on a state
+    machine which holds every modifier back and replays it), and it must not
+    believe a Shift that only the input queue remembers - taking the
+    foreground merges this thread's queue with another program's, and a
+    Shift latched there made Tab move backwards for ever.
 
 Run directly: python tests/test_shell.py
 """
@@ -945,10 +951,24 @@ def _bar_with(windows=(), icons=(), launchers=('Chrome', 'Editor')):
     real_items = taskbar_module.quick_launch_items
     taskbar_module.quick_launch_items = lambda: [
         {'name': name, 'path': 'C:/' + name + '.lnk'} for name in launchers]
+    # The band is also a SETTING, and one this machine's user may well have
+    # turned off - which is not something a test about the bar's groups
+    # should depend on.  It is answered for, for as long as the bar is being
+    # built, exactly as the folder is.
+    real_setting = taskbar_module.shell_setting
+
+    def setting(name, default=None):
+        if name == 'show_quick_launch':
+            return True
+        return real_setting(name, default)
+
+    taskbar_module.shell_setting = setting
     try:
         bar = taskbar_module.TaskbarFrame(TitanShell())
+        bar.shows_quick_launch = lambda: True
     finally:
         taskbar_module.quick_launch_items = real_items
+        taskbar_module.shell_setting = real_setting
     bar.SetSize(0, 0, 1024, 30)
     bar._layout_bar()
     for title in windows:
@@ -2813,7 +2833,9 @@ class ShellStartupSpeedTests(unittest.TestCase):
         source = open(taskbar_module.__file__, encoding='utf-8').read()
         dock = source[source.index('    def dock(self, after=None):'):
                       source.index('    def register_appbar')]
-        self.assertIn('wx.CallAfter(self._first_tray_read)', dock)
+        # Deferred through `src.shell.deferred`, which drops the call if the
+        # bar has gone by the time it fires - never `wx.CallAfter` straight.
+        self.assertIn('call_after(self, self._first_tray_read)', dock)
         self.assertNotIn('self.refresh_tray()', dock)
 
     def test_the_appbar_is_claimed_off_the_gui_thread(self):
@@ -2919,7 +2941,7 @@ class ExplorerHandoverTests(unittest.TestCase):
         read = source[source.index('    def _first_tray_read'):
                       source.index('    def refresh_tray')]
         self.assertIn('attempt', read)
-        self.assertIn('wx.CallLater', read)
+        self.assertIn('call_later(', read)
 
     def test_the_start_menu_is_built_before_it_is_asked_for(self):
         """150 ms, and the moment it costs them is the Windows key."""
@@ -3245,7 +3267,7 @@ class StartMenuIdentityTests(unittest.TestCase):
         """The last way a second focus event could still be fired."""
         from src.shell import start_menu
         body = self._source(start_menu, '    def focus_now',
-                            '    def Hide(self)')
+                            '    def on_activate')
         self.assertIn('FindFocus() is not column', body)
 
     def test_an_activation_that_changes_nothing_is_ignored(self):
@@ -3259,8 +3281,8 @@ class StartMenuIdentityTests(unittest.TestCase):
     def test_the_classic_menu_hands_over_the_same_way(self):
         from src.ui import classic_start_menu
         body = self._source(classic_start_menu, '    def on_activate',
-                            '    def on_kill_focus')
-        self.assertLess(body.index('_focus_pending'), body.index('SetFocus'))
+                            '    def check_and_hide')
+        self.assertLess(body.index('_focus_pending'), body.index('focus_now'))
         with open(classic_start_menu.__file__, encoding='utf-8') as handle:
             self.assertIn('def _hand_over_focus', handle.read())
 
@@ -3345,6 +3367,1054 @@ class ShellWindowKeysTests(unittest.TestCase):
                       source.index('    def panes(self)')]
         self.assertTrue(hook.rstrip().endswith('event.Skip()'),
                         "the browser swallows the keys it does not answer")
+
+
+# --------------------------------------------------------------------------- #
+# 21. The classic Start menu
+# --------------------------------------------------------------------------- #
+class ClassicStartMenuTests(unittest.TestCase):
+    """Windows 95's menu, with everything the XP one lists on it.
+
+    The two menus are faces of one menu: the entries come from
+    `src/ui/start_menu_content.py`, so the classic one cannot quietly fall
+    behind the other again - which is what had happened, it having neither
+    the macros nor the Titan IM modules nor the packaged Windows apps.
+    """
+
+    def setUp(self):
+        from src.ui.classic_start_menu import ClassicStartMenu
+        self.menu = ClassicStartMenu(None)
+        self.addCleanup(self._destroy)
+
+    def _destroy(self):
+        self.menu.allow_close()
+        self.menu.Destroy()
+
+    def _labels(self, entries):
+        return [entry.label for entry in entries]
+
+    # -- what is on it ------------------------------------------------------
+    def test_the_top_level_is_reactos_own_start_menu(self):
+        """`IDM_STARTMENU`: Programs, Documents, Settings, Search, then out."""
+        kinds = [(entry.kind, entry.payload)
+                 for entry in self.menu._top_level_entries()]
+        self.assertEqual(
+            [payload for kind, payload in kinds if kind == 'folder'],
+            ['__programs__', '__documents__', '__settings__', '__find__'])
+        actions = [payload for kind, payload in kinds if kind == 'action']
+        self.assertEqual(actions[-4:], ['help', 'run', 'logoff', 'shutdown'])
+        self.assertEqual([kind for kind, payload in kinds].count('separator'),
+                         1, "the separator before Log Off is missing")
+
+    def test_the_separator_is_a_word_and_not_a_row_of_dashes(self):
+        """A menu item's text is its accessible name."""
+        labels = self._labels(self.menu._top_level_entries())
+        self.assertNotIn('---', labels)
+        for label in labels:
+            self.assertNotIn('---', label)
+
+    def test_log_off_names_the_user_as_windows_does(self):
+        entry = [item for item in self.menu._top_level_entries()
+                 if item.payload == 'logoff'][0]
+        user = os.environ.get('USERNAME') or os.environ.get('USER')
+        if user:
+            self.assertIn(user, entry.label)
+
+    def test_the_macros_and_the_im_modules_are_in_programs(self):
+        """The two things the classic menu was missing."""
+        payloads = [entry.payload for entry in self.menu._programs_entries()]
+        for branch in ('__apps__', '__games__', '__im__', '__macros__',
+                       '__windows_apps__'):
+            self.assertIn(branch, payloads)
+
+    def test_titan_im_lists_the_services_titan_brings_itself(self):
+        labels = self._labels(self.menu._im_entries())
+        for service in ('Telegram', 'WhatsApp', 'Titan-Net'):
+            self.assertIn(service, labels)
+
+    def test_every_branch_of_the_menu_can_be_opened(self):
+        """A branch that answers nothing is a branch that opens on nothing."""
+        seen = set()
+        stack = list(self.menu._top_level_entries())
+        while stack:
+            entry = stack.pop()
+            if entry.kind != 'folder':
+                continue
+            if isinstance(entry.payload, str):
+                if entry.payload in seen:
+                    continue
+                seen.add(entry.payload)
+            children = self.menu._children_of(entry)
+            self.assertIsInstance(children, list, entry.label)
+            self.assertTrue(children, f"{entry.label} opens on nothing")
+            stack.extend(child for child in children if child.kind == 'folder')
+        for branch in ('__programs__', '__documents__', '__settings__',
+                       '__find__', '__apps__', '__games__', '__im__',
+                       '__macros__', '__windows_apps__'):
+            self.assertIn(branch, seen, f"{branch} was never reached")
+
+    def test_the_settings_branch_has_what_reactos_settings_has(self):
+        payloads = [entry.payload for entry in self.menu._settings_entries()]
+        for expected in ('titan_settings', 'control_panel',
+                         'taskbar_properties', 'printers',
+                         'network_connections'):
+            self.assertIn(expected, payloads)
+
+    def test_the_recent_documents_are_opened_like_any_shortcut(self):
+        for entry in self.menu._recent_documents():
+            self.assertEqual(entry.kind, 'program')
+            self.assertEqual(entry.payload['type'], 'shortcut')
+
+    def test_the_search_index_reaches_inside_the_branches(self):
+        """Somebody typing three letters is looking for a thing."""
+        index = self.menu._build_search_index()
+        self.assertTrue(index)
+        self.assertFalse([entry for entry in index
+                          if entry.kind in ('folder', 'separator', 'back')],
+                         "a branch cannot be a search result")
+
+    def test_the_search_finds_a_setting_by_its_name(self):
+        # Searched for by the word the menu itself shows, because that word
+        # is translated: a Polish Titan calls it "Panel sterowania" and
+        # "control" would find nothing at all.
+        wanted = [entry for entry in self.menu._settings_entries()
+                  if entry.payload == 'control_panel'][0]
+        results = self.menu.search_entries(wanted.label.split()[0][:5])
+        self.assertTrue([entry for entry in results
+                         if entry.payload == 'control_panel'])
+
+    # -- how it behaves -----------------------------------------------------
+    def test_a_separator_does_nothing_when_it_is_activated(self):
+        separator = [entry for entry in self.menu._top_level_entries()
+                     if entry.kind == 'separator'][0]
+        done = []
+        self.menu._run_action = lambda action: done.append(action)
+        self.menu._activate_entry(separator)
+        self.assertEqual(done, [])
+
+    def test_a_branch_is_the_same_control_the_xp_menu_uses(self):
+        from src.ui.start_menu_content import MenuTree
+        self.assertIsInstance(self.menu.menu_tree, MenuTree)
+
+    def test_escape_closes_the_branch_before_it_closes_the_menu(self):
+        tree = self.menu.menu_tree
+        first = tree.GetFirstChild(tree.GetRootItem())[0]
+        branch = tree.GetNextSibling(first)      # Programs
+        tree.SelectItem(branch)
+        tree.Expand(branch)
+        self.assertTrue(self.menu._collapse_current_branch())
+        self.assertFalse(tree.IsExpanded(branch))
+        self.assertFalse(self.menu._collapse_current_branch(),
+                         "a menu with nothing open would not close")
+
+    def test_the_menu_is_hidden_and_never_destroyed(self):
+        """Titan keeps one of these; destroying it crashed the next open."""
+        event = wx.CloseEvent(wx.wxEVT_CLOSE_WINDOW)
+        event.SetCanVeto(True)
+        self.menu.on_close(event)
+        self.assertTrue(event.GetVeto())
+        self.assertFalse(self.menu.IsShown())
+
+    def test_the_banner_is_decoration_and_takes_no_focus(self):
+        self.assertFalse(self.menu.banner.AcceptsFocus())
+        self.assertFalse(self.menu.banner.AcceptsFocusFromKeyboard())
+
+    # -- the repairs --------------------------------------------------------
+    def test_a_game_is_run_through_the_module_games_actually_live_in(self):
+        """`import game_manager` is not where it lives - every game raised."""
+        with open('src/ui/classic_start_menu.py', encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('from game_manager import', source)
+        self.assertIn('from src.titan_core.game_manager import', source)
+
+    def test_the_settings_window_is_imported_from_where_it_lives(self):
+        with open('src/ui/classic_start_menu.py', encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('from settingsgui import', source)
+        self.assertIn('from src.ui.settingsgui import SettingsFrame', source)
+
+    def test_a_loose_shortcut_in_programs_is_not_thrown_away(self):
+        """Windows 95 shows them at the top of Programs, not nowhere."""
+        structure = self.menu.load_windows_programs_with_folders()
+        self.assertIsInstance(structure, dict)
+        for item in structure.get('', []):
+            self.assertIn('path', item)
+
+    def test_both_menus_read_from_one_set_of_contents(self):
+        """The classic menu fell behind because it had contents of its own."""
+        from src.shell.start_menu import XPStartMenu
+        from src.ui.classic_start_menu import ClassicStartMenu
+        from src.ui.start_menu_content import StartMenuContent
+        self.assertTrue(issubclass(ClassicStartMenu, StartMenuContent))
+        self.assertTrue(issubclass(XPStartMenu, StartMenuContent))
+        for shared in ('_im_entries', '_macro_entries', '_windows_app_entries',
+                       '_settings_entries', '_titan_app_entries',
+                       '_build_search_index'):
+            self.assertNotIn(shared, XPStartMenu.__dict__,
+                             f"{shared} is written twice")
+            self.assertNotIn(shared, ClassicStartMenu.__dict__,
+                             f"{shared} is written twice")
+
+    def test_one_char_hook_answers_a_key_in_either_menu(self):
+        """Two bindings would run both menus' Escape for one press."""
+        with open('src/shell/start_menu.py', encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('EVT_CHAR_HOOK, self._on_char_hook', source)
+        self.assertIn('def on_char_hook', source)
+
+
+class ClassicStartMenuInTheShellTests(unittest.TestCase):
+    """With the shell up it is the shell's menu, not a Titan window."""
+
+    def test_escape_lands_on_the_start_button(self):
+        from src.ui.classic_start_menu import ClassicStartMenu
+        pressed = []
+        shell = types.SimpleNamespace(
+            focus_start_button=lambda: pressed.append(True) or True,
+            set_start_button_pressed=lambda value: None,
+            taskbar_height=lambda: 30)
+        menu = ClassicStartMenu(None, shell=shell)
+        try:
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetKeyCode(wx.WXK_ESCAPE)
+            menu.on_char_hook(event)
+            self.assertEqual(pressed, [True])
+            self.assertFalse(menu.IsShown())
+        finally:
+            menu.allow_close()
+            menu.Destroy()
+
+    def test_the_shell_gets_the_classic_menu_it_asked_for(self):
+        """The style setting picks the face; both are given the shell."""
+        with open('src/shell/shell_manager.py', encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('    def get_start_menu'):
+                      source.index('    def toggle_start_menu')]
+        self.assertIn('ClassicStartMenu(self.parent', body)
+        self.assertIn('shell=self', body)
+
+    def test_a_folder_opens_in_the_shells_own_browser(self):
+        from src.ui.classic_start_menu import ClassicStartMenu
+        opened = []
+        shell = types.SimpleNamespace(
+            open_explorer=lambda *args: opened.append(args or ('',)),
+            set_start_button_pressed=lambda value: None,
+            focus_start_button=lambda: True,
+            taskbar_height=lambda: 30)
+        menu = ClassicStartMenu(None, shell=shell)
+        try:
+            menu.show_find_dialog()
+            self.assertEqual(len(opened), 1)
+        finally:
+            menu.allow_close()
+            menu.Destroy()
+
+
+class ModifierKeysTests(unittest.TestCase):
+    """A modifier is held only while the user is holding it.
+
+    Two mechanisms of Titan's own could say otherwise, and both belong to
+    the shell.  The `keyboard` library's suppression of a whole HOTKEY turns
+    on a state machine that swallows every modifier key down and replays it
+    as a synthetic press later, keyed on scan codes that outlive the events
+    that set them; and `AttachThreadInput` - how the bar takes the keyboard
+    - merges this thread's input queue with another program's, which is
+    where the per-thread key state `wxKeyEvent::ShiftDown()` answers from.
+    """
+
+    def test_the_shell_registers_no_suppressed_hotkey(self):
+        """Measured: one suppressed hotkey costs every modifier in the session.
+
+        With `ctrl+esc` registered through `keyboard.add_hotkey(...,
+        suppress=True)`, `blocking_hotkeys` is non-empty, which is the whole
+        condition `_KeyboardListener.direct_callback` runs its modifier
+        transition table on - after which Control key downs are suppressed
+        and injected back by hand.  A suppressing KEY hook leaves that
+        machinery switched off.
+        """
+        with open('src/titan_core/tce_system.py', encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('suppress=True, trigger_on_release=False', source)
+        self.assertIn('def _make_combination_hook', source)
+
+    def test_a_combination_claims_the_pair_and_not_the_key(self):
+        """Escape stays Escape; only Ctrl+Escape belongs to Titan."""
+        from src.titan_core import tce_system
+        import keyboard as kb
+
+        manager = tce_system.SystemHooksManager()
+        hooked = []
+        manager._add_hook = lambda key, callback: hooked.append((key, callback))
+        manager._handle_start_menu_ctrl_esc = lambda: None
+        manager._add_combination('start_menu_ctrl_esc', 'ctrl+esc')
+
+        self.assertEqual([key for key, _cb in hooked], ['esc'])
+        hook = hooked[0][1]
+        event = types.SimpleNamespace(event_type=kb.KEY_DOWN)
+        release = types.SimpleNamespace(event_type=kb.KEY_UP)
+
+        original = tce_system._key_physically_down
+        try:
+            tce_system._key_physically_down = lambda vk: False
+            self.assertTrue(hook(event), "bare Escape must reach the program")
+            tce_system._key_physically_down = lambda vk: True
+            self.assertFalse(hook(event), "Ctrl+Escape belongs to Titan")
+            self.assertTrue(hook(release), "the release is never swallowed")
+        finally:
+            tce_system._key_physically_down = original
+
+    def test_a_shift_only_the_queue_remembers_is_not_a_shift(self):
+        from src.system import key_state
+
+        class Event:
+            def __init__(self, mask):
+                self._mask = mask
+
+            def GetModifiers(self):
+                return self._mask
+
+            def ShiftDown(self):
+                return bool(self._mask & wx.MOD_SHIFT)
+
+        original = key_state.physically_down
+        try:
+            key_state.physically_down = lambda vk: False
+            self.assertEqual(key_state.modifiers(Event(wx.MOD_SHIFT)), wx.MOD_NONE)
+            self.assertFalse(key_state.shift_down(Event(wx.MOD_SHIFT)))
+            # Control and Alt are left exactly as reported - nothing latches
+            # them, and guessing about them would break real shortcuts.
+            self.assertEqual(key_state.modifiers(Event(wx.MOD_CONTROL)),
+                             wx.MOD_CONTROL)
+            key_state.physically_down = lambda vk: True
+            self.assertTrue(key_state.shift_down(Event(wx.MOD_SHIFT)))
+            self.assertFalse(key_state.shift_down(Event(wx.MOD_NONE)))
+        finally:
+            key_state.physically_down = original
+
+    def test_the_shell_asks_windows_about_shift_everywhere(self):
+        """No shell key handler reads Shift straight off the event."""
+        for name in ('controls', 'desktop', 'explorer', 'start_menu', 'taskbar'):
+            with open('src/shell/%s.py' % name, encoding='utf-8') as handle:
+                source = handle.read()
+            self.assertNotIn('event.ShiftDown()', source, name)
+
+
+class DeferredCallTests(unittest.TestCase):
+    """Work queued for later must never fire into a window that has gone.
+
+    This is the crash the shell produced most often: a taskbar button asks
+    Windows to activate a window and rebuilds the bar 120 ms later, the shell
+    is switched off in the meantime, and the timer calls a method of a frame
+    whose C++ side no longer exists - a RuntimeError raised inside wx's event
+    loop, where nothing catches it.
+    """
+
+    def setUp(self):
+        from src.shell import deferred
+        self.deferred = deferred
+        self.frame = wx.Frame(None)
+
+    def tearDown(self):
+        try:
+            self.frame.Destroy()
+        except Exception:
+            pass
+
+    def test_a_living_window_is_alive_and_a_destroyed_one_is_not(self):
+        self.assertTrue(self.deferred.alive(self.frame))
+        self.frame.Destroy()
+        wx.Yield()
+        self.assertFalse(self.deferred.alive(self.frame))
+        self.assertFalse(self.deferred.alive(None))
+
+    def test_a_call_queued_for_a_window_that_goes_is_dropped(self):
+        ran = []
+        timer = self.deferred.call_later(self.frame, 10000,
+                                         lambda: ran.append(1))
+        self.frame.Destroy()
+        wx.Yield()
+        self.assertFalse(self.deferred.alive(self.frame))
+        # What the timer does when it fires, without waiting ten seconds
+        # for it: the window has gone, so the work does not happen.
+        timer.Notify()
+        timer.Stop()
+        self.assertEqual(ran, [])
+
+    def test_a_call_for_a_window_that_is_still_there_runs(self):
+        ran = []
+        self.deferred.call_after(self.frame, lambda: ran.append(1))
+        wx.Yield()
+        self.assertEqual(ran, [1])
+
+    def test_a_call_that_touches_a_dead_object_does_not_raise(self):
+        """A queued call must never raise into wx's event loop."""
+        other = wx.Frame(None)
+        other.Destroy()
+        wx.Yield()
+        self.deferred.call_after(self.frame, other.GetTitle)
+        wx.Yield()          # no exception is the assertion
+
+    def test_a_burst_of_asks_is_one_piece_of_work(self):
+        ran = []
+        once = self.deferred.Coalesced(self.frame, lambda: ran.append(1))
+        for _ in range(500):
+            once.request()
+        wx.Yield()
+        self.assertEqual(ran, [1])
+        once.request()
+        wx.Yield()
+        self.assertEqual(ran, [1, 1])
+
+    def test_a_cancelled_burst_never_happens(self):
+        ran = []
+        once = self.deferred.Coalesced(self.frame, lambda: ran.append(1))
+        once.request()
+        once.cancel()
+        wx.Yield()
+        self.assertEqual(ran, [])
+
+    def test_the_shell_never_queues_a_bare_wx_call_on_its_own_window(self):
+        """Every deferral in the shell goes through the guarded helpers."""
+        import re
+        allowed = {
+            # `_appbar_ready` has to run even when the bar has gone: it is
+            # what unregisters the appbar, so the strip is given back.
+            'taskbar.py': ['wx.CallAfter(self._appbar_ready, appbar, rect)'],
+            # The desktop's own reader checks "if not self" itself.
+            'desktop.py': ['wx.CallAfter(self._apply_read, entries, handles)'],
+        }
+        pattern = re.compile(r'wx\.Call(?:After|Later)\([^\n]*')
+        for name in ('taskbar.py', 'desktop.py', 'explorer.py',
+                     'start_menu.py', 'quick_launch.py',
+                     'taskbar_properties.py'):
+            with open('src/shell/' + name, encoding='utf-8') as handle:
+                source = handle.read()
+            for call in pattern.findall(source):
+                self.assertIn(call.strip(), allowed.get(name, []),
+                              '%s: %s' % (name, call))
+
+
+class ExplorerSpeedTests(unittest.TestCase):
+    """What made a folder of three thousand files unusable, and what fixed it.
+
+    Measured before the change, on such a folder: opening it 5951 ms, sorting
+    a column 1054 ms, Ctrl+A 37717 ms and F5 51624 ms.  Every one of those was
+    the same mistake in a different place - asking Windows about every file,
+    or asking the list control about every row, when neither had to be asked
+    at all.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        import tempfile
+        from src.shell import explorer
+        cls.shutil = shutil
+        cls.explorer = explorer
+        cls.folder = tempfile.mkdtemp(prefix='titan_explorer_')
+        for index in range(60):
+            for extension in ('.txt', '.log', '.dat'):
+                open(os.path.join(cls.folder, 'file_%03d%s'
+                                  % (index, extension)), 'w').close()
+        os.mkdir(os.path.join(cls.folder, 'a folder'))
+        cls.frame = explorer.ExplorerFrame(None, explorer.COMPUTER)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.frame.Destroy()
+        except Exception:
+            pass
+        cls.shutil.rmtree(cls.folder, ignore_errors=True)
+
+    def setUp(self):
+        self.frame.set_view(self.explorer.VIEW_DETAILS)
+        self.frame.navigate(self.folder)
+
+    def test_the_details_view_is_a_virtual_list(self):
+        """The rows are asked for, not inserted - which is the whole win."""
+        self.assertTrue(self.frame.list.IsVirtual())
+        self.assertEqual(self.frame.list.GetItemCount(),
+                         len(self.frame.entries))
+
+    def test_a_virtual_row_answers_with_its_own_cells(self):
+        row = [entry['name'] for entry in self.frame.entries].index('a folder')
+        self.assertEqual(self.frame.cell_at(row, 0), 'a folder')
+        self.assertTrue(self.frame.cell_at(row, 2))
+        self.assertGreaterEqual(self.frame.image_at(row), 0)
+
+    def test_a_row_that_is_not_there_answers_rather_than_raising(self):
+        """A virtual list asks about rows the folder no longer has."""
+        self.assertEqual(self.frame.cell_at(10 ** 6, 0), '')
+        self.assertEqual(self.frame.cell_at(-1, 0), '')
+        self.assertEqual(self.frame.image_at(10 ** 6), -1)
+
+    def test_windows_is_asked_a_type_once_per_extension(self):
+        """Not once per file: it was three thousand shell calls a folder."""
+        from src.shell import explorer, win_shell
+        explorer.clear_caches()
+        asked = []
+        real = win_shell.file_type_name
+
+        def counted(path):
+            asked.append(path)
+            return real(path)
+
+        explorer.win_shell.file_type_name = counted
+        try:
+            for entry in explorer.list_folder(self.folder):
+                explorer.type_name_of(entry)
+        finally:
+            explorer.win_shell.file_type_name = real
+        self.assertEqual(len(asked), 3, asked)
+
+    def test_the_icon_cache_outlives_a_navigation(self):
+        """Going into a folder and back must not re-fetch every icon."""
+        cache = self.frame._icon_cache(self.explorer.SMALL_ICON)
+        self.frame.navigate(self.explorer.COMPUTER)
+        self.frame.navigate(self.folder)
+        self.assertIs(self.frame._icon_cache(self.explorer.SMALL_ICON), cache)
+
+    def test_the_image_lists_are_lent_to_the_list_never_given(self):
+        """AssignImageList would destroy the cache on the next view."""
+        source = open(self.explorer.__file__, encoding='utf-8').read()
+        self.assertNotIn('.AssignImageList(', source)
+        self.assertIn('.SetImageList(', source)
+
+    def test_selecting_everything_is_one_piece_of_work(self):
+        """A status bar worked out per selected file is what took 37 s."""
+        updates = []
+        real = self.frame._update_status
+        self.frame._update_status = lambda: (updates.append(1), real())[1]
+        try:
+            self.frame.select_all()
+            wx.Yield()
+        finally:
+            self.frame._update_status = real
+        self.assertEqual(self.frame.selected_count(),
+                         len(self.frame.entries))
+        self.assertLessEqual(len(updates), 2, len(updates))
+
+    def test_the_status_bar_says_how_many_are_selected(self):
+        self.frame.select_all()
+        wx.Yield()
+        first = self.frame.status_texts()[0]
+        self.assertIn(str(len(self.frame.entries)), first)
+
+    def test_a_refresh_puts_the_whole_selection_back(self):
+        self.frame.select_all()
+        self.frame.refresh()
+        self.assertEqual(self.frame.selected_count(),
+                         len(self.frame.entries))
+
+    def test_a_refresh_puts_one_selected_file_back(self):
+        wanted = self.frame.entries[1]['path']
+        self.frame._select_paths([wanted])
+        self.frame.refresh()
+        self.assertEqual([entry['path']
+                          for entry in self.frame.selected_entries()],
+                         [wanted])
+
+    def test_an_icon_view_fills_itself_in_blocks(self):
+        """wxWidgets will not make an icon view virtual, so it is chunked."""
+        self.frame.set_view(self.explorer.VIEW_LARGE)
+        try:
+            self.frame.navigate(self.folder, remember=False)
+            self.assertFalse(self.frame.list.IsVirtual())
+            # This folder arrives in one block; either way the list is whole
+            # the moment anything asks for every row.
+            self.frame._finish_fill()
+            self.assertEqual(self.frame.list.GetItemCount(),
+                             len(self.frame.entries))
+        finally:
+            self.frame.set_view(self.explorer.VIEW_DETAILS)
+
+    def test_the_folders_bar_reads_only_the_folders(self):
+        """It wanted the directories, not every file in the folder."""
+        entries = self.explorer.subfolders(self.folder)
+        self.assertEqual([entry['name'] for entry in entries], ['a folder'])
+
+    def test_one_navigation_at_a_time(self):
+        """The folders bar navigating under a navigation must not nest."""
+        self.frame._navigating = True
+        try:
+            self.assertFalse(self.frame.navigate(self.explorer.COMPUTER))
+        finally:
+            self.frame._navigating = False
+
+    def test_a_folder_that_answers_late_still_fills_the_window(self):
+        """The window waits only so long, then fills in when the answer comes."""
+        import time as clock
+        from src.shell import explorer
+        real = explorer.list_location
+        real_wait = explorer.READ_WAIT
+        explorer.READ_WAIT = 0.05
+
+        def slow(location, show_hidden=False):
+            clock.sleep(0.35)
+            return real(location, show_hidden)
+
+        self.frame.navigate(self.explorer.COMPUTER)
+        explorer.list_location = slow
+        try:
+            self.assertTrue(self.frame.navigate(self.folder))
+            # Not read yet: the window went back to answering the keyboard.
+            self.assertTrue(self.explorer.is_computer(self.frame.location))
+            deadline = clock.time() + 5
+            while clock.time() < deadline and \
+                    self.explorer.is_computer(self.frame.location):
+                wx.Yield()
+                clock.sleep(0.02)
+        finally:
+            explorer.list_location = real
+            explorer.READ_WAIT = real_wait
+        self.assertEqual(os.path.normcase(str(self.frame.location)),
+                         os.path.normcase(self.folder))
+        self.assertEqual(self.frame.list.GetItemCount(),
+                         len(self.frame.entries))
+
+    def test_a_stale_answer_is_never_shown_over_a_newer_one(self):
+        request = {'token': self.frame._read_token - 1,
+                   'location': self.folder, 'entries': []}
+        self.assertFalse(self.frame._apply_read(request))
+
+    def test_a_window_that_is_closing_drops_what_it_asked_for(self):
+        frame = self.explorer.ExplorerFrame(None, self.explorer.COMPUTER)
+        token = frame._read_token
+        frame._on_close(FakeCloseEvent())
+        self.assertGreater(frame._read_token, token)
+        frame.Destroy()
+
+
+class FakeCloseEvent:
+    def Skip(self):
+        return None
+
+
+class DriveReadingTests(unittest.TestCase):
+    """A drive with nothing in it is a blank size, never a modal dialog."""
+
+    def test_the_drives_are_read_with_the_media_error_box_switched_off(self):
+        source = open(win_shell.__file__, encoding='utf-8').read()
+        body = source[source.index('def list_drives'):
+                      source.index('def _list_drives')]
+        self.assertIn('quiet_media_errors', body)
+
+    def test_the_error_mode_is_this_threads_and_is_put_back(self):
+        with win_shell.quiet_media_errors():
+            pass
+        # Asked for per thread, never for the whole of Titan: the
+        # process-wide call would change how every other part of Titan
+        # behaves on another thread at that moment.
+        source = open(win_shell.__file__, encoding='utf-8').read()
+        self.assertIn('SetThreadErrorMode', source)
+        self.assertNotIn('kernel32.SetErrorMode(', source)
+
+    def test_the_drives_still_come_back(self):
+        drives = win_shell.list_drives()
+        self.assertTrue(drives)
+        self.assertTrue(all(drive.get('root') for drive in drives))
+
+
+class ShellHookLifetimeTests(unittest.TestCase):
+    """Windows holds the ADDRESS of a callback Python could collect."""
+
+    def test_an_installed_hook_is_kept_alive_until_it_is_removed(self):
+        frame = wx.Frame(None)
+        hook = win_shell.ShellHook(frame.GetHandle())
+        try:
+            if not hook.install():
+                self.skipTest("the shell hook could not be installed here")
+            self.assertIn(hook, win_shell._INSTALLED_HOOKS)
+            hook.uninstall()
+            self.assertNotIn(hook, win_shell._INSTALLED_HOOKS)
+        finally:
+            frame.Destroy()
+
+
+class SettingsReadingTests(unittest.TestCase):
+    """The settings file is parsed when it changes, not when it is asked.
+
+    This is here rather than with the settings because it is the SHELL that
+    made it matter: a taskbar asks whether it has a clock and a Show Desktop
+    button on every paint, whether it is locked on every layout, and whether
+    it auto-hides ten times a second - and every one of those used to open,
+    read and parse the whole of `bg5settings.ini`.  Measured: a thousand
+    reads of one setting, 169 ms before and 1 ms after.
+    """
+
+    def setUp(self):
+        from src.settings import settings
+        self.settings = settings
+        settings.invalidate_settings_cache()
+        self.addCleanup(settings.invalidate_settings_cache)
+        self.addCleanup(self._remove_probe)
+
+    def _remove_probe(self):
+        stored = self.settings.load_settings()
+        if stored.pop('titan_shell_probe', None) is not None:
+            self.settings.save_settings(stored)
+
+    def test_the_file_is_read_once_however_often_it_is_asked(self):
+        reads = []
+        real = self.settings._parse_settings
+
+        def counted():
+            reads.append(1)
+            return real()
+
+        self.settings._parse_settings = counted
+        try:
+            for _ in range(200):
+                self.settings.get_setting('language', 'pl', 'general')
+        finally:
+            self.settings._parse_settings = real
+        self.assertEqual(len(reads), 1, len(reads))
+
+    def test_a_setting_just_written_reads_back_at_once(self):
+        """A file system whose timestamps lag must not hide a new value."""
+        self.settings.set_setting('probe', 'one', 'titan_shell_probe')
+        self.assertEqual(
+            self.settings.get_setting('probe', None, 'titan_shell_probe'),
+            'one')
+        self.settings.set_setting('probe', 'two', 'titan_shell_probe')
+        self.assertEqual(
+            self.settings.get_setting('probe', None, 'titan_shell_probe'),
+            'two')
+
+    def test_what_load_settings_hands_back_is_the_callers_own(self):
+        """The settings wizard keeps its dictionary and changes it."""
+        first = self.settings.load_settings()
+        self.assertIsNot(first, self.settings.load_settings())
+        first['titan_shell_probe'] = {'probe': 'not saved'}
+        self.assertIsNone(
+            self.settings.get_setting('probe', None, 'titan_shell_probe'))
+
+    def test_a_change_made_outside_this_process_is_noticed(self):
+        self.settings.set_setting('probe', 'one', 'titan_shell_probe')
+        stored = self.settings.load_settings()
+        stored['titan_shell_probe']['probe'] = 'changed by somebody else'
+        # Written the way another program would write it - behind the cache.
+        with open(self.settings.SETTINGS_FILE_PATH, 'w',
+                  encoding='utf-8') as handle:
+            for section, values in stored.items():
+                handle.write('[%s]\n' % section)
+                for key, value in values.items():
+                    handle.write('%s=%s\n' % (key, value))
+                handle.write('\n')
+        time.sleep(self.settings.STAT_INTERVAL + 0.05)
+        self.assertEqual(
+            self.settings.get_setting('probe', None, 'titan_shell_probe'),
+            'changed by somebody else')
+
+    def test_no_settings_file_is_no_settings_rather_than_an_error(self):
+        real_path = self.settings.SETTINGS_FILE_PATH
+        self.settings.SETTINGS_FILE_PATH = real_path + '.nonexistent'
+        self.settings.invalidate_settings_cache()
+        try:
+            self.assertEqual(self.settings.load_settings(), {})
+            self.assertEqual(self.settings.get_setting('anything', 'default'),
+                             'default')
+        finally:
+            self.settings.SETTINGS_FILE_PATH = real_path
+            self.settings.invalidate_settings_cache()
+
+
+class ClockRepaintTests(unittest.TestCase):
+    """The clock is told the time every second; it changes once a minute."""
+
+    def test_the_same_time_and_the_same_name_repaint_nothing(self):
+        from src.shell.controls import TextControl
+        frame = wx.Frame(None)
+        try:
+            control = TextControl(frame, name='clock')
+            painted = []
+            control.Refresh = lambda *args, **kwargs: painted.append(1)
+            control.set_text('12:30', name='12:30, Friday')
+            self.assertEqual(len(painted), 1)
+            control.set_text('12:30', name='12:30, Friday')
+            self.assertEqual(len(painted), 1, "it repainted for nothing")
+            control.set_text('12:31', name='12:31, Friday')
+            self.assertEqual(len(painted), 2)
+        finally:
+            frame.Destroy()
+
+
+class PackagedAppTests(unittest.TestCase):
+    """"Windows apps" means the Store apps, and only those.
+
+    `shell:AppsFolder` holds both: the packaged applications, which exist
+    nowhere else on the machine, and every desktop program's shortcut, Steam
+    URL and auto-generated entry besides.  Measured here: 309 entries, 60 of
+    them packaged - so a branch listing all of them was a second, worse copy
+    of All Programs with the Store apps buried in it.
+    """
+
+    def test_a_packaged_app_is_told_by_the_shape_of_its_id(self):
+        for app_id in ('Microsoft.WindowsCamera_8wekyb3d8bbwe!App',
+                       'Microsoft.Copilot_8wekyb3d8bbwe!App',
+                       'AdobeSystemsIncorporated.AdobePhotoshopExpress'
+                       '_mtcwf2zmmt10c!App'):
+            self.assertTrue(win_shell.is_packaged_app(app_id), app_id)
+
+    def test_everything_else_in_the_apps_folder_is_not_one(self):
+        for app_id in (
+                'steam://rungameid/1228500',
+                r'{6D809377-6AF0-444B-8957-A3773F02200E}\7-Zip\7zFM.exe',
+                r'C:\Users\me\AppData\Local\Programs\Thing\thing.exe',
+                'Microsoft.AutoGenerated.{1BEB6467-F4A7-16AE-72BE-F427253BD6}',
+                'AcrobatReader', 'Microsoft.Office.MSACCESS.EXE.15', '', None):
+            self.assertFalse(win_shell.is_packaged_app(app_id), app_id)
+
+    def test_a_path_with_an_exclamation_mark_is_not_a_packaged_app(self):
+        """The `!` alone is not enough - a file name may contain one."""
+        self.assertFalse(win_shell.is_packaged_app(r'C:\Games\Portal 2!\p2.exe'))
+
+    def test_the_filter_is_what_the_branch_asks_for(self):
+        everything = win_shell.installed_apps()
+        packaged = win_shell.installed_apps(packaged_only=True)
+        self.assertLessEqual(len(packaged), len(everything))
+        self.assertTrue(all(win_shell.is_packaged_app(app_id)
+                            for _name, app_id in packaged))
+
+
+class StartMenuSpeedTests(unittest.TestCase):
+    """Both menus open at once, and neither waits for Windows to answer.
+
+    Measured before this: opening the classic menu 60.7 ms and the XP one
+    58.2 ms, of which 14 was putting ten unchanged items back into a tree
+    control - and the Windows apps branch took 897 ms the first time it was
+    opened, because it read the whole Apps folder on the GUI thread.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from src.ui.classic_start_menu import ClassicStartMenu
+        cls.menu = ClassicStartMenu(None)
+        cls.menu.build_menu_structure()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.menu.Destroy()
+        except Exception:
+            pass
+
+    def setUp(self):
+        self.menu.build_menu_structure()
+
+    # -- the top level is not rebuilt for nothing --------------------------
+    def test_an_unchanged_top_level_is_recognised(self):
+        self.assertTrue(self.menu.menu_tree.matches(
+            self.menu._top_level_entries()))
+
+    def test_a_changed_top_level_is_not(self):
+        from src.ui.start_menu_content import MenuEntry
+        entries = self.menu._top_level_entries()
+        entries.append(MenuEntry('Something new', 'action', 'nothing'))
+        self.assertFalse(self.menu.menu_tree.matches(entries))
+
+    def test_opening_the_menu_again_keeps_the_top_level(self):
+        tree = self.menu.menu_tree
+        before = tree.entries
+        self.menu.build_menu_structure()
+        self.assertIs(tree.entries, before)
+
+    def test_but_a_branch_reads_itself_again_on_the_next_open(self):
+        """That is the whole point of rebuilding: new add-ons appear."""
+        tree = self.menu.menu_tree
+        branch = tree.find_branch('__programs__')
+        self.assertIsNotNone(branch)
+        tree.Expand(branch)
+        self.assertGreater(tree.GetChildrenCount(branch, False), 1)
+        self.assertTrue(tree.GetItemData(branch).filled)
+        self.menu.build_menu_structure()
+        branch = tree.find_branch('__programs__')
+        # Back to the one placeholder child that makes it look like a branch.
+        self.assertEqual(tree.GetChildrenCount(branch, False), 1)
+        self.assertFalse(tree.GetItemData(branch).filled)
+
+    def test_rebuilding_makes_no_focus_cue(self):
+        """Selecting the first item again is not the user arriving anywhere."""
+        from src.ui import classic_start_menu
+        played = []
+        real = classic_start_menu.play_sound
+        classic_start_menu.play_sound = lambda name, *a, **k: played.append(name)
+        try:
+            self.menu.build_menu_structure()
+            self.menu.menu_tree.set_entries(self.menu._top_level_entries())
+        finally:
+            classic_start_menu.play_sound = real
+        self.assertEqual(played, [], played)
+
+    # -- the Windows apps branch -------------------------------------------
+    def test_the_windows_apps_branch_is_packaged_apps_only(self):
+        win_shell.installed_apps()          # make sure the list is there
+        labels = [entry.label
+                  for entry in self.menu._windows_app_entries()]
+        packaged = dict((name, app_id) for name, app_id
+                        in win_shell.installed_apps(packaged_only=True))
+        if not packaged:
+            self.skipTest("this machine has no packaged apps")
+        self.assertEqual(sorted(labels), sorted(packaged))
+
+    def test_a_desktop_program_is_not_in_it(self):
+        """It is in All Programs, which is where the user already looks."""
+        labels = set(entry.label
+                     for entry in self.menu._windows_app_entries())
+        desktop = [name for name, app_id in win_shell.installed_apps()
+                   if not win_shell.is_packaged_app(app_id)]
+        if not desktop:
+            self.skipTest("nothing but packaged apps on this machine")
+        self.assertFalse(labels.intersection(desktop))
+
+    def test_the_branch_never_waits_for_windows_to_answer(self):
+        """897 ms of a branch that appears to have hung."""
+        real_cache, real_at = win_shell._APPS_CACHE, win_shell._APPS_CACHE_AT
+        asked = []
+        real_read = win_shell._read_installed_apps
+        win_shell._read_installed_apps = lambda: asked.append(1) or []
+        win_shell._APPS_CACHE, win_shell._APPS_CACHE_AT = [], 0.0
+        try:
+            entries = self.menu._windows_app_entries()
+        finally:
+            win_shell._read_installed_apps = real_read
+            win_shell._APPS_CACHE, win_shell._APPS_CACHE_AT = (real_cache,
+                                                               real_at)
+        # It said so rather than blocking, and asked in the background.
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].kind, 'separator')
+
+    def test_the_branch_fills_itself_in_when_the_answer_comes(self):
+        tree = self.menu.menu_tree
+        branch = tree.find_branch('__windows_apps__', tree.find_branch(
+            '__programs__')) if tree.find_branch('__programs__') else None
+        # The branch lives under Programs, so Programs has to be open first.
+        programs = tree.find_branch('__programs__')
+        tree.Expand(programs)
+        branch = tree.find_branch('__windows_apps__')
+        self.assertIsNotNone(branch)
+        self.assertTrue(tree.refill('__windows_apps__',
+                                    self.menu._windows_app_entries()))
+        self.assertTrue(tree.GetItemData(branch).filled)
+
+    # -- the Start Menu is walked once per open ----------------------------
+    def test_the_windows_start_menu_is_read_once_per_open(self):
+        reads = []
+        real = self.menu.load_windows_programs_with_folders
+        self.menu.load_windows_programs_with_folders = lambda: (
+            reads.append(1) or real())
+        try:
+            self.menu.build_menu_structure()
+            self.menu._all_programs_entries()
+            self.menu._all_programs_entries()
+            self.menu._build_search_index()
+        finally:
+            del self.menu.load_windows_programs_with_folders
+        self.assertEqual(len(reads), 1, len(reads))
+
+    def test_and_again_on_the_next_open(self):
+        """A program installed since the last open must still turn up."""
+        self.menu._all_programs_entries()
+        self.assertIsNotNone(self.menu._programs_structure)
+        self.menu.build_menu_structure()
+        self.assertIsNone(self.menu._programs_structure)
+
+
+class KeyboardHandoverTests(unittest.TestCase):
+    """A Titan window in front means the keys are that window's.
+
+    The Invisible UI answers every key in the session while Titan UI mode is
+    on, which is right while Titan is an application the user has put away
+    and wrong the moment one of Titan's own windows is in front of them.  The
+    main window has always said so; the shell's windows did not, and under the
+    shell that is the common case: Windows+M minimises Titan, which starts the
+    Invisible UI listening, and the same shortcut then puts the keyboard on
+    the desktop - where every arrow key went to the Invisible UI instead of to
+    the list of icons.
+    """
+
+    class FakeInvisibleUI:
+        def __init__(self):
+            self.titan_ui_mode = True
+            self.titan_ui_temporarily_disabled = False
+            self.disabled_by_dialog = None
+
+        def temporarily_disable_titan_ui(self, name):
+            if self.titan_ui_mode and not self.titan_ui_temporarily_disabled:
+                self.titan_ui_temporarily_disabled = True
+                self.disabled_by_dialog = name
+
+        def _on_dialog_close(self, name, _event):
+            if self.titan_ui_temporarily_disabled and \
+                    self.disabled_by_dialog == name:
+                self.titan_ui_temporarily_disabled = False
+                self.disabled_by_dialog = None
+
+    class FakeActivate:
+        def __init__(self, active):
+            self._active = active
+
+        def GetActive(self):
+            return self._active
+
+    def setUp(self):
+        from src.shell import keyboard_handover
+        self.handover = keyboard_handover
+        self.interface = self.FakeInvisibleUI()
+        self._real = keyboard_handover.invisible_ui
+        keyboard_handover.invisible_ui = lambda: self.interface
+        self.addCleanup(setattr, keyboard_handover, 'invisible_ui', self._real)
+
+    def test_a_window_in_front_takes_the_keyboard(self):
+        self.assertTrue(self.handover.take_keyboard())
+        self.assertTrue(self.interface.titan_ui_temporarily_disabled)
+        self.assertEqual(self.interface.disabled_by_dialog,
+                         self.handover.SHELL)
+
+    def test_and_gives_it_back_when_it_goes(self):
+        self.handover.take_keyboard()
+        self.handover.give_keyboard_back()
+        self.assertFalse(self.interface.titan_ui_temporarily_disabled)
+
+    def test_an_activation_is_all_a_window_has_to_say(self):
+        self.handover.follows_activation(self.FakeActivate(True))
+        self.assertTrue(self.interface.titan_ui_temporarily_disabled)
+        self.handover.follows_activation(self.FakeActivate(False))
+        self.assertFalse(self.interface.titan_ui_temporarily_disabled)
+
+    def test_it_never_gives_back_what_somebody_else_took(self):
+        """A dialog of the main window's must not be undone by the shell."""
+        self.interface.temporarily_disable_titan_ui('main_window')
+        self.handover.give_keyboard_back()
+        self.assertTrue(self.interface.titan_ui_temporarily_disabled)
+        self.assertEqual(self.interface.disabled_by_dialog, 'main_window')
+
+    def test_with_no_invisible_ui_it_is_simply_nothing(self):
+        self.handover.invisible_ui = lambda: None
+        self.assertFalse(self.handover.take_keyboard())
+        self.assertFalse(self.handover.give_keyboard_back())
+
+    def test_every_shell_window_says_so_when_it_is_activated(self):
+        """The desktop, the bar, both Start menus and the file browser."""
+        for name in ('src/shell/desktop.py', 'src/shell/taskbar.py',
+                     'src/shell/start_menu.py', 'src/shell/explorer.py',
+                     'src/ui/classic_start_menu.py'):
+            with open(name, encoding='utf-8') as handle:
+                source = handle.read()
+            self.assertIn('handover.follows_activation(event)', source, name)
+
+    def test_minimising_under_the_shell_does_not_start_the_invisible_ui(self):
+        """Windows+M leaves the DESKTOP on the screen, and it is Titan's."""
+        with open('src/ui/gui.py', encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('    def on_minimize'):
+                      source.index('    def open_time_settings')]
+        self.assertIn(
+            'activate_invisible_ui=not shell_owns_the_keyboard()', body)
+        # And the other two answers are untouched: "tray" still means the
+        # tray, and "nothing" still means the window is simply iconized.
+        self.assertIn("elif action == 'tray'", body)
 
 
 if __name__ == '__main__':

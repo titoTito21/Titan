@@ -347,20 +347,70 @@ class SystemHooksManager:
     def _add_combination(self, binding_id, combination):
         """Claim a whole combination (Ctrl+Escape), not a single key.
 
-        `keyboard.add_hotkey` is used rather than a suppressing key hook
-        because Control and Escape both have to keep working on their own;
-        only the pair belongs to Titan.
+        Deliberately NOT `keyboard.add_hotkey(..., suppress=True)`, and this
+        was measured: registering even one suppressed HOTKEY switches on the
+        keyboard library's modifier state machine for every key event in the
+        session, and that machine works by holding a modifier back and
+        replaying it as a synthetic press once it knows what followed
+        (`_KeyboardListener.transition_table`, boppreh/keyboard issue 22).
+        With `ctrl+esc` registered, every Control key down was swallowed and
+        a fake one injected afterwards, a Control left in the machine's
+        `suppressed` state made the shell inject a Control press of its own
+        the next time any other modifier was touched, and the states are
+        keyed on scan codes that outlive the events that set them - a
+        modifier the shell goes on holding after the user has let go, which
+        is exactly the complaint.  A suppressing KEY hook leaves the machine
+        switched off entirely (verified: with no suppressed hotkey,
+        `blocking_hotkeys` stays empty and no modifier is ever held back or
+        replayed).
+
+        The pair is told from the key by asking Windows whether Control is
+        physically down - the same answer `_key_physically_down` gives
+        everywhere else in this file, and a reliable one here because
+        Control is a key these hooks let through.
         """
         try:
             handler = getattr(self, f'_handle_{binding_id}', None)
             if handler is None:
                 return
-            handle = keyboard.add_hotkey(
-                combination, lambda: wx.CallAfter(handler),
-                suppress=True, trigger_on_release=False)
-            self._hotkey_handles.append(handle)
+            # 'ctrl+esc' - the LAST name is the key, the rest are modifiers.
+            parts = [part for part in combination.split('+') if part]
+            key, modifiers = parts[-1], parts[:-1]
+            self._add_hook(key, self._make_combination_hook(binding_id, modifiers))
         except Exception as e:
             print(f"WARNING: Could not claim {combination}: {e}")
+
+    # Which virtual key each modifier name in a combination stands for.
+    _COMBINATION_MODIFIERS = {'ctrl': VK_CONTROL, 'control': VK_CONTROL}
+
+    def _make_combination_hook(self, binding_id, modifiers):
+        """Build the suppressing hook for a combination that is not Windows+key.
+
+        Both halves have to keep working on their own - Escape is Escape and
+        Control is Control - so the event is swallowed only when every
+        modifier the combination names is really held.
+        """
+        if isinstance(modifiers, str):
+            modifiers = [modifiers] if modifiers else []
+        keys = [self._COMBINATION_MODIFIERS.get(name.strip().lower())
+                for name in modifiers]
+
+        def hook(event):
+            try:
+                if self._injecting or event.event_type != keyboard.KEY_DOWN:
+                    return True
+                if not keys or not all(vk and _key_physically_down(vk)
+                                       for vk in keys):
+                    return True
+                handler = getattr(self, f'_handle_{binding_id}', None)
+                if handler is None:
+                    return True
+                wx.CallAfter(handler)
+                return False
+            except Exception as e:
+                print(f"ERROR: Shell combination {binding_id} failed: {e}")
+                return True
+        return hook
 
     def _force_unhook(self, key, callback):
         """Detach a hook straight from the keyboard listener tables.

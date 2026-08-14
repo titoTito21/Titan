@@ -23,11 +23,6 @@ Usage from TCE apps (optional - auto-discovery handles most cases):
 import wx
 import os
 import threading
-try:
-    import accessible_output3.outputs.auto
-    _ao3_available = True
-except Exception:
-    _ao3_available = False
 
 from src.titan_core.sound import play_focus_sound, play_select_sound, play_endoflist_sound, play_sound
 from src.titan_core.translation import set_language
@@ -47,11 +42,14 @@ class _SilentSpeaker:
         pass
 
 
+# One speaker for the whole of Titan, made on first use.  Building an
+# `Auto()` at import time walks the entire call stack looking for each
+# backend's library - measured at about 300 ms, and at its worst exactly
+# here, where the stack is deepest because it is nested inside the imports
+# of the main window.
 try:
-    if _ao3_available:
-        speaker = accessible_output3.outputs.auto.Auto()
-    else:
-        speaker = _SilentSpeaker()
+    from src.accessibility.lazy_speaker import LazySpeaker
+    speaker = LazySpeaker()
 except Exception:
     speaker = _SilentSpeaker()
 

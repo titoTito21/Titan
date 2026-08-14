@@ -28,6 +28,7 @@ import wx
 from src.platform_utils import IS_WINDOWS
 from src.shell import luna, win_shell
 from src.shell.controls import ShellControl, bitmap_from_icon_handle
+from src.shell.deferred import call_after
 from src.titan_core.translation import _
 
 # The button is square: XP's quick launch shows the icon and no text.
@@ -175,4 +176,4 @@ class QuickLaunchButton(ShellControl):
                 refresh = getattr(getattr(parent, 'taskbar', None),
                                   'refresh_quick_launch', None)
             if refresh is not None:
-                wx.CallAfter(refresh)
+                call_after(self, refresh)

@@ -9,10 +9,17 @@ import traceback
 import configparser
 import sys
 import time
-from src.network import telegram_client
-from src.network import telegram_windows
-from src.network import messenger_webview
-from src.network import whatsapp_webview
+# Telegram, Messenger and WhatsApp are imported the first time something is
+# read off them, not on the way to Titan's window: between them they are
+# telethon, pytgcalls, aiohttp and requests, and they measured a second and a
+# half of a 2.8-second startup for features the user may never open.  Every
+# use here is `telegram_client.something`, which is exactly what a lazy
+# module answers (see `src/lazy_import.py`).
+from src.lazy_import import lazy_import
+telegram_client = lazy_import('src.network.telegram_client')
+telegram_windows = lazy_import('src.network.telegram_windows')
+messenger_webview = lazy_import('src.network.messenger_webview')
+whatsapp_webview = lazy_import('src.network.whatsapp_webview')
 
 from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
@@ -4421,12 +4428,21 @@ class TitanApp(wx.Frame):
             if IS_WINDOWS:
                 try:
                     import keyboard as kb_module
+                    from src.system import key_state
                     def _on_global_f4(event):
-                        # Only bare F4 - skip Alt+F4, Ctrl+F4, Shift+F4
+                        # Only bare F4 - skip Alt+F4, Ctrl+F4, Shift+F4.
+                        # The modifiers are asked of Windows, never of
+                        # `keyboard.is_pressed`: that answers out of a table
+                        # the library fills from the events its own hook saw,
+                        # and one missed key up (the lock screen, Ctrl+Alt+Del
+                        # and a UAC prompt each take one on a desktop no hook
+                        # of ours runs on) leaves a modifier "held" for the
+                        # rest of the session - after which bare F4 never
+                        # opened the window switcher again.
                         if event.event_type == 'down' and not any([
-                            kb_module.is_pressed('alt'),
-                            kb_module.is_pressed('ctrl'),
-                            kb_module.is_pressed('shift'),
+                            key_state.physically_down(key_state.VK_MENU),
+                            key_state.physically_down(key_state.VK_CONTROL),
+                            key_state.physically_down(key_state.VK_SHIFT),
                         ]):
                             wx.CallAfter(self._global_f4_handler)
                     self._f4_hotkey_handle = kb_module.on_press_key('f4', _on_global_f4, suppress=False)
@@ -4513,7 +4529,16 @@ class TitanApp(wx.Frame):
             except Exception:
                 action = 'invisible_ui'
             if action == 'invisible_ui':
-                self.minimize_to_tray(activate_invisible_ui=True)
+                # Under the shell, Titan minimised does NOT mean there is no
+                # Titan window left on the screen: the DESKTOP is one, and
+                # Windows+M puts the keyboard straight onto it.  Starting
+                # the Invisible UI here took every arrow key away from the
+                # desktop's own list of icons, so the desktop read as though
+                # it had gone and only a key the Invisible UI understood
+                # brought anything back.  Titan still goes to the tray; the
+                # Invisible UI is what does not start.
+                self.minimize_to_tray(
+                    activate_invisible_ui=not shell_owns_the_keyboard())
             elif action == 'tray':
                 self.minimize_to_tray(activate_invisible_ui=False)
             # 'nothing' → leave the window iconized, take no extra action

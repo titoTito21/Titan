@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-12 17:22+0200\n"
+"POT-Creation-Date: 2026-08-13 08:44+0200\n"
 "PO-Revision-Date: 2025-11-22 19:24+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -38,8 +38,8 @@ msgstr "Nie można połączyć się z serwerem Titan-Net"
 msgid "Registration error: {error}"
 msgstr "Błąd rejestracji: {error}"
 
-#: src/network/titan_net.py:548 src/system/klangomode.py:1026
-#: src/system/klangomode.py:2096
+#: src/network/titan_net.py:548 src/system/klangomode.py:1033
+#: src/system/klangomode.py:2122
 msgid "Login successful"
 msgstr "Zalogowano pomyślnie"
 
@@ -932,7 +932,7 @@ msgid "Administration"
 msgstr "Administracja"
 
 #: src/network/titan_net_gui.py:1947 src/system/klangomode.py:211
-#: src/system/klangomode.py:1380
+#: src/system/klangomode.py:1397
 msgid "Components"
 msgstr "Komponenty"
 
@@ -2318,7 +2318,7 @@ msgstr "Ogólne"
 
 #: src/network/titan_net_forum_gui.py:102
 #: src/network/titan_net_forum_gui.py:168 src/network/titan_net_gui.py:6797
-#: src/system/klangomode.py:208 src/system/klangomode.py:1377
+#: src/system/klangomode.py:208 src/system/klangomode.py:1394
 msgid "Help"
 msgstr "Pomoc"
 
@@ -3458,9 +3458,9 @@ msgstr "Serwer niedostępny"
 msgid "Not connected to Titan-Net"
 msgstr "Nie połączono z Titan-Net"
 
-#: src/network/titan_net_gui.py:9235 src/system/klangomode.py:1055
-#: src/system/klangomode.py:1065 src/system/klangomode.py:2125
-#: src/system/klangomode.py:2135
+#: src/network/titan_net_gui.py:9235 src/system/klangomode.py:1062
+#: src/system/klangomode.py:1072 src/system/klangomode.py:2151
+#: src/system/klangomode.py:2161
 msgid "Error opening Titan-Net"
 msgstr "Błąd otwierania Titan-Net"
 
@@ -4700,97 +4700,97 @@ msgid "Deleted: {name}"
 msgstr "Usunięto: {name}"
 
 #: src/system/klangomode.py:191 src/system/klangomode.py:232
-#: src/system/klangomode.py:1360 src/system/klangomode.py:1405
+#: src/system/klangomode.py:1377 src/system/klangomode.py:1422
 msgid "Applications"
 msgstr "Aplikacje"
 
 #: src/system/klangomode.py:192 src/system/klangomode.py:234
-#: src/system/klangomode.py:1361 src/system/klangomode.py:1407
+#: src/system/klangomode.py:1378 src/system/klangomode.py:1424
 msgid "Games"
 msgstr "Gry"
 
 #: src/system/klangomode.py:193 src/system/klangomode.py:236
-#: src/system/klangomode.py:1362 src/system/klangomode.py:1409
+#: src/system/klangomode.py:1379 src/system/klangomode.py:1426
 msgid "Titan IM"
 msgstr "Titan IM"
 
-#: src/system/klangomode.py:194 src/system/klangomode.py:1363
+#: src/system/klangomode.py:194 src/system/klangomode.py:1380
 msgid "Telegram"
 msgstr "Telegram"
 
-#: src/system/klangomode.py:195 src/system/klangomode.py:1364
+#: src/system/klangomode.py:195 src/system/klangomode.py:1381
 msgid "Messenger"
 msgstr "Messenger"
 
-#: src/system/klangomode.py:196 src/system/klangomode.py:1365
+#: src/system/klangomode.py:196 src/system/klangomode.py:1382
 msgid "WhatsApp"
 msgstr "WhatsApp"
 
-#: src/system/klangomode.py:197 src/system/klangomode.py:1366
+#: src/system/klangomode.py:197 src/system/klangomode.py:1383
 msgid "Titan-Net (Beta)"
 msgstr "Titan-Net (Beta)"
 
-#: src/system/klangomode.py:198 src/system/klangomode.py:1367
+#: src/system/klangomode.py:198 src/system/klangomode.py:1384
 msgid "EltenLink (Beta)"
 msgstr "EltenLink (Beta)"
 
-#: src/system/klangomode.py:200 src/system/klangomode.py:1369
+#: src/system/klangomode.py:200 src/system/klangomode.py:1386
 msgid "Status Bar"
 msgstr "Pasek stanu"
 
 #: src/system/klangomode.py:201 src/system/klangomode.py:388
-#: src/system/klangomode.py:1370 src/system/klangomode.py:1573
+#: src/system/klangomode.py:1387 src/system/klangomode.py:1590
 msgid "Current Time"
 msgstr "Aktualny czas"
 
-#: src/system/klangomode.py:202 src/system/klangomode.py:1371
+#: src/system/klangomode.py:202 src/system/klangomode.py:1388
 msgid "Battery Status"
 msgstr "Stan baterii"
 
 #: src/system/klangomode.py:203 src/system/klangomode.py:389
-#: src/system/klangomode.py:1372 src/system/klangomode.py:1574
+#: src/system/klangomode.py:1389 src/system/klangomode.py:1591
 msgid "Volume Level"
 msgstr "Poziom głośności"
 
-#: src/system/klangomode.py:205 src/system/klangomode.py:1374
+#: src/system/klangomode.py:205 src/system/klangomode.py:1391
 msgid "Program"
 msgstr "Program"
 
-#: src/system/klangomode.py:206 src/system/klangomode.py:1171
-#: src/system/klangomode.py:1375 src/system/klangomode.py:2255
+#: src/system/klangomode.py:206 src/system/klangomode.py:1178
+#: src/system/klangomode.py:1392 src/system/klangomode.py:2281
 msgid "Settings"
 msgstr "Ustawienia"
 
-#: src/system/klangomode.py:207 src/system/klangomode.py:1185
-#: src/system/klangomode.py:1376 src/system/klangomode.py:2268
+#: src/system/klangomode.py:207 src/system/klangomode.py:1192
+#: src/system/klangomode.py:1393 src/system/klangomode.py:2294
 msgid "Component Manager"
 msgstr "Menedżer komponentów"
 
-#: src/system/klangomode.py:209 src/system/klangomode.py:1378
+#: src/system/klangomode.py:209 src/system/klangomode.py:1395
 msgid "Exit"
 msgstr "Wyjście"
 
-#: src/system/klangomode.py:297 src/system/klangomode.py:1486
+#: src/system/klangomode.py:297 src/system/klangomode.py:1503
 msgid "Unknown Game"
 msgstr "Nieznana gra"
 
-#: src/system/klangomode.py:310 src/system/klangomode.py:1499
+#: src/system/klangomode.py:310 src/system/klangomode.py:1516
 msgid "No games"
 msgstr "Brak gier"
 
-#: src/system/klangomode.py:349 src/system/klangomode.py:1535
+#: src/system/klangomode.py:349 src/system/klangomode.py:1552
 #, python-brace-format
 msgid "Clock: {}"
 msgstr "Zegar: {}"
 
 # #, python-brace-format
-#: src/system/klangomode.py:352 src/system/klangomode.py:1538
+#: src/system/klangomode.py:352 src/system/klangomode.py:1555
 #, python-brace-format
 msgid "Battery level: {}"
 msgstr "Poziom baterii: {}"
 
 # #, python-brace-format
-#: src/system/klangomode.py:353 src/system/klangomode.py:1539
+#: src/system/klangomode.py:353 src/system/klangomode.py:1556
 #, python-brace-format
 msgid "Volume: {}"
 msgstr "Głośność: {}"
@@ -4803,228 +4803,228 @@ msgstr "Sieć"
 msgid "Error getting network status"
 msgstr "Błąd pobierania statusu sieci"
 
-#: src/system/klangomode.py:414 src/system/klangomode.py:2231
+#: src/system/klangomode.py:414 src/system/klangomode.py:2257
 msgid "Statusbar applet manager not available"
 msgstr "Menedżer apletów paska stanu niedostępny"
 
-#: src/system/klangomode.py:417 src/system/klangomode.py:2234
+#: src/system/klangomode.py:417 src/system/klangomode.py:2260
 msgid "Error activating statusbar item"
 msgstr "Błąd aktywacji elementu paska stanu"
 
-#: src/system/klangomode.py:536 src/system/klangomode.py:557
-#: src/system/klangomode.py:1629
+#: src/system/klangomode.py:536 src/system/klangomode.py:564
+#: src/system/klangomode.py:1655
 msgid "To open a menu, press alt"
 msgstr "Aby otworzyć menu, naciśnij alt"
 
-#: src/system/klangomode.py:580 src/system/klangomode.py:1659
+#: src/system/klangomode.py:587 src/system/klangomode.py:1685
 msgid "Menu"
 msgstr "Menu"
 
-#: src/system/klangomode.py:699 src/system/klangomode.py:1769
+#: src/system/klangomode.py:706 src/system/klangomode.py:1795
 msgid "Error executing action"
 msgstr "Błąd wykonywania akcji"
 
-#: src/system/klangomode.py:704 src/system/klangomode.py:1774
+#: src/system/klangomode.py:711 src/system/klangomode.py:1800
 msgid "Empty menu"
 msgstr "Puste menu"
 
-#: src/system/klangomode.py:849 src/system/klangomode.py:1919
+#: src/system/klangomode.py:856 src/system/klangomode.py:1945
 msgid "Error launching application"
 msgstr "Błąd uruchamiania aplikacji"
 
-#: src/system/klangomode.py:859 src/system/klangomode.py:1929
+#: src/system/klangomode.py:866 src/system/klangomode.py:1955
 msgid "Error launching game"
 msgstr "Błąd uruchamiania gry"
 
-#: src/system/klangomode.py:865 src/system/klangomode.py:1935
+#: src/system/klangomode.py:872 src/system/klangomode.py:1961
 msgid "Telegram GUI not available"
 msgstr "GUI Telegrama niedostępne"
 
-#: src/system/klangomode.py:869 src/system/klangomode.py:1939
+#: src/system/klangomode.py:876 src/system/klangomode.py:1965
 msgid "Opening Telegram..."
 msgstr "Otwieranie Telegrama..."
 
-#: src/system/klangomode.py:883 src/system/klangomode.py:1032
-#: src/system/klangomode.py:1092 src/system/klangomode.py:1953
-#: src/system/klangomode.py:2102 src/system/klangomode.py:2162
+#: src/system/klangomode.py:890 src/system/klangomode.py:1039
+#: src/system/klangomode.py:1099 src/system/klangomode.py:1979
+#: src/system/klangomode.py:2128 src/system/klangomode.py:2188
 msgid "Login cancelled"
 msgstr "Logowanie anulowane"
 
-#: src/system/klangomode.py:888 src/system/klangomode.py:1958
+#: src/system/klangomode.py:895 src/system/klangomode.py:1984
 msgid "Error opening Telegram"
 msgstr "Błąd otwierania Telegrama"
 
-#: src/system/klangomode.py:906 src/system/klangomode.py:1976
+#: src/system/klangomode.py:913 src/system/klangomode.py:2002
 msgid "Messenger not available"
 msgstr "Messenger niedostępny"
 
-#: src/system/klangomode.py:909 src/system/klangomode.py:1979
+#: src/system/klangomode.py:916 src/system/klangomode.py:2005
 msgid "Error opening Messenger"
 msgstr "Błąd otwierania Messengera"
 
-#: src/system/klangomode.py:926 src/system/klangomode.py:1996
+#: src/system/klangomode.py:933 src/system/klangomode.py:2022
 msgid "WhatsApp not available"
 msgstr "WhatsApp niedostępny"
 
-#: src/system/klangomode.py:929 src/system/klangomode.py:1999
+#: src/system/klangomode.py:936 src/system/klangomode.py:2025
 msgid "Error opening WhatsApp"
 msgstr "Błąd otwierania WhatsApp"
 
-#: src/system/klangomode.py:951 src/system/klangomode.py:2021
+#: src/system/klangomode.py:958 src/system/klangomode.py:2047
 msgid "Text Input"
 msgstr "Wprowadzanie tekstu"
 
-#: src/system/klangomode.py:967 src/system/klangomode.py:2037
+#: src/system/klangomode.py:974 src/system/klangomode.py:2063
 msgid "Cancelled"
 msgstr "Anulowano"
 
-#: src/system/klangomode.py:972 src/system/klangomode.py:2042
+#: src/system/klangomode.py:979 src/system/klangomode.py:2068
 msgid "Error getting input"
 msgstr "Błąd pobierania danych"
 
-#: src/system/klangomode.py:988 src/system/klangomode.py:2058
+#: src/system/klangomode.py:995 src/system/klangomode.py:2084
 msgid "Titan-Net GUI not available"
 msgstr "GUI Titan-Net niedostępne"
 
-#: src/system/klangomode.py:1001 src/system/klangomode.py:2071
+#: src/system/klangomode.py:1008 src/system/klangomode.py:2097
 msgid "Titan-Net client not available"
 msgstr "Klient Titan-Net niedostępny"
 
-#: src/system/klangomode.py:1005 src/system/klangomode.py:2075
+#: src/system/klangomode.py:1012 src/system/klangomode.py:2101
 msgid "Opening Titan-Net..."
 msgstr "Otwieranie Titan-Net..."
 
-#: src/system/klangomode.py:1029 src/system/klangomode.py:2099
+#: src/system/klangomode.py:1036 src/system/klangomode.py:2125
 msgid "Continuing in offline mode"
 msgstr "Kontynuacja w trybie offline"
 
-#: src/system/klangomode.py:1058 src/system/klangomode.py:2128
+#: src/system/klangomode.py:1065 src/system/klangomode.py:2154
 msgid "Not logged in to Titan-Net"
 msgstr "Nie zalogowano do Titan-Net"
 
-#: src/system/klangomode.py:1075 src/system/klangomode.py:2145
+#: src/system/klangomode.py:1082 src/system/klangomode.py:2171
 msgid "EltenLink GUI not available"
 msgstr "GUI EltenLink niedostępne"
 
-#: src/system/klangomode.py:1079 src/system/klangomode.py:2149
+#: src/system/klangomode.py:1086 src/system/klangomode.py:2175
 msgid "Opening EltenLink..."
 msgstr "Otwieranie EltenLink..."
 
-#: src/system/klangomode.py:1097 src/system/klangomode.py:2167
+#: src/system/klangomode.py:1104 src/system/klangomode.py:2193
 msgid "Error opening EltenLink"
 msgstr "Błąd otwierania EltenLink"
 
-#: src/system/klangomode.py:1126 src/system/klangomode.py:2196
+#: src/system/klangomode.py:1133 src/system/klangomode.py:2222
 msgid "Current time"
 msgstr "Aktualny czas"
 
-#: src/system/klangomode.py:1129 src/system/klangomode.py:2199
+#: src/system/klangomode.py:1136 src/system/klangomode.py:2225
 msgid "Error getting time"
 msgstr "Błąd pobierania czasu"
 
-#: src/system/klangomode.py:1135 src/system/klangomode.py:2205
+#: src/system/klangomode.py:1142 src/system/klangomode.py:2231
 msgid "Battery"
 msgstr "Bateria"
 
-#: src/system/klangomode.py:1138 src/system/klangomode.py:2208
+#: src/system/klangomode.py:1145 src/system/klangomode.py:2234
 msgid "Error getting battery status"
 msgstr "Błąd pobierania stanu baterii"
 
-#: src/system/klangomode.py:1144 src/system/klangomode.py:2214
+#: src/system/klangomode.py:1151 src/system/klangomode.py:2240
 msgid "Volume"
 msgstr "Głośność"
 
-#: src/system/klangomode.py:1147 src/system/klangomode.py:2217
+#: src/system/klangomode.py:1154 src/system/klangomode.py:2243
 msgid "Error getting volume level"
 msgstr "Błąd pobierania poziomu głośności"
 
-#: src/system/klangomode.py:1156
+#: src/system/klangomode.py:1163
 msgid "Switch To is not available without GUI"
 msgstr "Przełącznik okien niedostępny bez GUI"
 
-#: src/system/klangomode.py:1159 src/system/klangomode.py:2243
+#: src/system/klangomode.py:1166 src/system/klangomode.py:2269
 msgid "Error opening Switch To"
 msgstr "Błąd otwierania przełącznika okien"
 
-#: src/system/klangomode.py:1176 src/system/klangomode.py:2260
+#: src/system/klangomode.py:1183 src/system/klangomode.py:2286
 msgid "Error opening settings"
 msgstr "Błąd otwierania ustawień"
 
-#: src/system/klangomode.py:1189 src/system/klangomode.py:2272
+#: src/system/klangomode.py:1196 src/system/klangomode.py:2298
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
 msgstr ""
 "Nie można załadować Menedżera komponentów (nie znaleziono "
 "componentmanagergui.py)"
 
-#: src/system/klangomode.py:1191 src/system/klangomode.py:2274
+#: src/system/klangomode.py:1198 src/system/klangomode.py:2300
 msgid "Component Manager has not been initialized."
 msgstr "Menedżer komponentów nie został zainicjalizowany."
 
-#: src/system/klangomode.py:1195 src/system/klangomode.py:2278
+#: src/system/klangomode.py:1202 src/system/klangomode.py:2304
 msgid "Error opening component manager"
 msgstr "Błąd otwierania menedżera komponentów"
 
-#: src/system/klangomode.py:1205 src/system/klangomode.py:2288
+#: src/system/klangomode.py:1212 src/system/klangomode.py:2314
 msgid "Error showing help"
 msgstr "Błąd wyświetlania pomocy"
 
-#: src/system/klangomode.py:1219 src/system/klangomode.py:2452
+#: src/system/klangomode.py:1226 src/system/klangomode.py:2478
 msgid "Exit cancelled"
 msgstr "Wyjście anulowane"
 
-#: src/system/klangomode.py:1269 src/system/klangomode.py:2294
+#: src/system/klangomode.py:1286 src/system/klangomode.py:2320
 msgid "Activating component"
 msgstr "Aktywowanie komponentu"
 
-#: src/system/klangomode.py:1283 src/system/klangomode.py:2308
+#: src/system/klangomode.py:1300 src/system/klangomode.py:2334
 msgid "Error activating component"
 msgstr "Błąd aktywacji komponentu"
 
-#: src/system/klangomode.py:1294 src/system/klangomode.py:2319
+#: src/system/klangomode.py:1311 src/system/klangomode.py:2345
 msgid "Invalid component function"
 msgstr "Nieprawidłowa funkcja komponentu"
 
-#: src/system/klangomode.py:1297 src/system/klangomode.py:2322
+#: src/system/klangomode.py:1314 src/system/klangomode.py:2348
 msgid "Error executing component function"
 msgstr "Błąd wykonywania funkcji komponentu"
 
-#: src/system/klangomode.py:2293
+#: src/system/klangomode.py:2319
 msgid "Unknown Component"
 msgstr "Nieznany komponent"
 
-#: src/system/klangomode.py:2341
+#: src/system/klangomode.py:2367
 msgid "Time settings opened"
 msgstr "Otwarto ustawienia czasu"
 
-#: src/system/klangomode.py:2344
+#: src/system/klangomode.py:2370
 msgid "Could not open time settings"
 msgstr "Nie można otworzyć ustawień czasu"
 
-#: src/system/klangomode.py:2364
+#: src/system/klangomode.py:2390
 msgid "Power settings opened"
 msgstr "Otwarto ustawienia zasilania"
 
-#: src/system/klangomode.py:2367
+#: src/system/klangomode.py:2393
 msgid "Could not open power settings"
 msgstr "Nie można otworzyć ustawień zasilania"
 
-#: src/system/klangomode.py:2387
+#: src/system/klangomode.py:2413
 msgid "Volume mixer opened"
 msgstr "Otwarto mikser głośności"
 
-#: src/system/klangomode.py:2390
+#: src/system/klangomode.py:2416
 msgid "Could not open volume mixer"
 msgstr "Nie można otworzyć miksera głośności"
 
-#: src/system/klangomode.py:2410
+#: src/system/klangomode.py:2436
 msgid "Network settings opened"
 msgstr "Otwarto ustawienia sieci"
 
-#: src/system/klangomode.py:2413
+#: src/system/klangomode.py:2439
 msgid "Could not open network settings"
 msgstr "Nie można otworzyć ustawień sieci"
 
-#: src/system/klangomode.py:2529
+#: src/system/klangomode.py:2565
 msgid "Titan App Suite"
 msgstr "Titan App Suite"
 

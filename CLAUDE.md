@@ -183,6 +183,75 @@ TCE Launcher/
 - `src/ui/invisibleui.py`: Alternative non-visual interface for screen readers
 - `src/ui/menu.py`: MenuBar implementation for system menus
 
+### Startup: what Titan does on the way to its window
+
+Measured on this machine before this work: `import main` **2827 ms**, then
+building a Settings window nobody had asked for **2149 ms**, and then a flat
+**`time.sleep(2)`** so the startup sound could play - three seconds and more
+of a program that has been started and shows nothing. After: `import main`
+**~810 ms**, the Settings window built after Titan's own is on the screen, and
+the startup sound's two seconds SPENT loading rather than slept through.
+
+- **Modules imported because Titan MIGHT need them are imported when it does**
+  (`src/lazy_import.py`). Starting Titan imported the whole of Telegram,
+  Messenger and WhatsApp - telethon, pytgcalls, aiohttp, requests - before the
+  window appeared, whether or not the user has ever signed in to any of them:
+  `src.network.telegram_client` alone was 723 ms and
+  `src.network.messenger_client` another 762 ms. They cannot simply be deleted
+  from the top of `gui.py` (about thirty places read
+  `telegram_client.something`), so `lazy_import` binds the NAME at once and
+  imports the module the first time something is read off it. `LazyModule` is
+  a real `types.ModuleType` and the first attribute read makes it *become* the
+  module, so after that there is no indirection left. Used for
+  `telegram_client`, `telegram_windows`, `messenger_webview`,
+  `whatsapp_webview` (`gui.py`), `telegram_client`, `messenger_client`
+  (`invisibleui.py`) and `settingsgui` / `componentmanagergui` (the windows the
+  Invisible UI opens).
+  - **`if telegram_client:` must not import it.** The Invisible UI asks that
+    while building its menu, in `InvisibleUI.__init__`, on every startup - so
+    `__bool__` answers with `importlib.util.find_spec` (the file is found, the
+    module is not run). A module that is installed but broken is now an entry
+    that reports the failure when pressed rather than one that is silently
+    absent, which for a program whose users cannot see a missing entry is the
+    better of the two.
+  - **The trap**: nothing static points at a lazily imported module any more,
+    so PyInstaller cannot see it. Every name given to `lazy_import` is in
+    `compiletorelease.py`'s hidden imports and in `Titan.spec`, and
+    `tests/test_startup.py` fails if a new one is not.
+- **`Auto()` is never built at import time.** `accessible_output3.outputs.auto`
+  locates each backend's library by walking the entire current call stack
+  (`inspect.getouterframes`), which at import time - with every one of Titan's
+  modules on that stack - measured 300 ms, and importing the library itself is
+  another 211 ms. `src/accessibility/lazy_speaker.py` already existed for this;
+  `main.py`, `window_switcher.py` and `notificationcenter.py` were each making
+  their own anyway, and now share the one `LazySpeaker`. The library import
+  moved inside `get_shared_speaker()` as well.
+- **The Settings window is built after Titan's own is shown.** It costs 2149 ms
+  - it enumerates the SAPI voices over COM, loads every Titan TTS engine and
+  probes for the speech subprocess bridge with a `subprocess.run` - and it is a
+  window the user has not asked for. `build_settings_window()` runs on a
+  `wx.CallAfter` after `frame.Show()` and **before** `init_components_delayed`,
+  because that is when the components register their categories into it.
+  Nothing earlier needs it: the Settings menu entry reads it off the frame when
+  it is pressed, and if the user is quick enough to press it first, the menu
+  builds the window and the deferred builder registers into THAT one rather
+  than making a second.
+- **The startup sound gets its two seconds; nothing sleeps through them.**
+  `_start_startup_quiet(2.0)` marks the deadline and everything that follows -
+  the component manager, the IM modules, the window, the menu bar - happens
+  inside it; `_await_startup_quiet()` just before `frame.Show()` waits out
+  whatever is LEFT, which on any real machine is nothing at all.
+- **The update check may not hold a window that does not exist yet.** It runs
+  before the GUI (an update is mandatory), and its version probe asked for
+  `timeout=10` - ten seconds of a program that appears not to have started, on
+  a machine that is offline or behind a captive portal.
+  `updater.STARTUP_CHECK_TIMEOUT` is `(3.05, 4.0)` and a failed probe means
+  "start normally". The DOWNLOAD keeps its long timeout: by then there is a
+  window and a progress dialog to wait in. `src.system.updater` is also
+  imported inside the call rather than at the top of `main.py` - it brings
+  `requests` with it, for one call that happens once.
+- Tests: `tests/test_startup.py` (run it directly; 17 tests).
+
 ### Plugin System
 - **Applications**: Located in `data/applications/`, each has `__app.TCE` config file defining name, description, main file
 - **Components**: Located in `data/components/`, each has `__component__.TCE` config file, loaded by `ComponentManager`
@@ -579,6 +648,31 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
     press more than `_WIN_REPEAT_GAP` after the last one is a new press
     rather than auto-repeat, which is what re-reads Control after a lost
     key up.
+  - **The shell never holds a modifier the user has let go of**, and two
+    mechanisms of Titan's own said otherwise. `keyboard.add_hotkey(...,
+    suppress=True)` - one suppressed HOTKEY, `ctrl+esc` - switches on the
+    library's modifier state machine **for every key event in the
+    session**: it holds a modifier back and replays it as a synthetic
+    press once it knows what followed, keyed on scan codes that outlive
+    the events that set them, so Control key downs were swallowed and
+    injected by hand and a Control left in its `suppressed` state made the
+    shell press Control on its own. `_add_combination` is now a
+    suppressing **key** hook on `esc` that asks Windows whether Control is
+    physically down (`_make_combination_hook`), which leaves that
+    machinery switched off entirely - measured: with no suppressed hotkey
+    `blocking_hotkeys` stays empty and nothing touches a modifier. The
+    other is **`AttachThreadInput`**: `take_foreground()` merges this
+    thread's input queue with another program's, and the queue is where
+    the per-thread key state `wxKeyEvent::ShiftDown()` answers from, so a
+    Shift held across that stays latched there - Tab moved backwards for
+    ever, F10 opened a context menu, and an Escape that arrived as
+    Shift+Escape silently stopped closing windows (`modifiers ==
+    MOD_NONE`). `src/system/key_state.py` asks `GetAsyncKeyState` instead:
+    `shift_down(event)` believes the event only when the hardware agrees,
+    and `modifiers(event)` drops a phantom Shift while leaving Control and
+    Alt exactly as reported. Used by every shell key handler, by the mail
+    windows and by `gui.py`'s global F4 (which read the same stale answer
+    out of `keyboard.is_pressed`).
 - **Action API**: a built-in `shell` provider (`shell_actions.py`,
   `actions/builtin.py`) - `status`, `start`/`stop`, `open_start_menu`,
   `show_desktop`, `list_windows`, `activate_window` / `minimize_window` /
@@ -965,6 +1059,45 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
     shell off it stays Titan's own file manager application). One window is
     reused unless another is asked for, and it appears on the taskbar and in
     Alt+Tab like any program - it is not shell furniture.
+  - **A folder opens in milliseconds, however many files are in it.**
+    Measured on a folder of 3 060 files before this: opening it **5 951 ms**,
+    sorting a column 1 054 ms, Ctrl+A **37 717 ms** and F5 with everything
+    selected **51 624 ms**. After, on the same machine and folder:
+    **~30 ms**, ~35 ms, **0 ms**, **~25 ms**.
+    Four separate versions of one mistake - asking Windows about every file,
+    or asking the list control about every row, when neither had to be asked:
+    - **Details is a VIRTUAL list** (`FileListCtrl`, `wx.LC_VIRTUAL` =
+      `LVS_OWNERDATA`, which is what Explorer's own view uses): the control
+      is told how many rows there are and asks for a row's text and icon when
+      it paints it, so only the thirty rows on the screen cost anything.
+      It is the same native `SysListView32` answering MSAA the same way -
+      which is exactly why the virtual list is worth having rather than a
+      list Titan draws itself. wxWidgets offers virtual mode in report view
+      only, so the three icon views are filled a block at a time
+      (`FILL_CHUNK`, with the message loop run between blocks and
+      `_finish_fill()` for anything that needs every row).
+    - **A file's type is asked of Windows once per EXTENSION** (`_TYPE_NAMES`)
+      and its icon once per extension or per program (`IconCache`, now owned
+      by the WINDOW rather than rebuilt on every fill, and asked only for the
+      size the view is actually showing - it used to fetch both).
+      `SetImageList`, never `AssignImageList`: a control that owned the cache
+      would destroy it when the view changed.
+    - **The status bar is worked out once per burst** (`deferred.Coalesced`).
+      Selecting a thousand files fires a thousand selection events, and each
+      one walked the whole selection to count it - the Ctrl+A number above.
+    - **A selection is put back in one pass** (`_select_paths`), not by
+      searching the folder once per selected file, and the folders bar reads
+      only the directories (`subfolders`) instead of filtering a full listing.
+  - **The read is on a worker, and the window waits only `READ_WAIT` for it.**
+    `os.path.isdir` and `os.scandir` on a share that has gone away take as
+    long as Windows' own timeouts, and this process is the shell - the appbar
+    and the shell hook make it the thing every other program's broadcasts go
+    through, so a GUI thread parked in a file system call is a machine that
+    has stopped rather than a Titan that is thinking. An ordinary folder
+    still fills in before `navigate` returns; a slow one says "Working..." in
+    the status bar and fills itself in when the answer comes. A newer
+    navigation makes an older answer stale (`_read_token`), and one
+    navigation runs at a time (`_navigating`).
 - **Action API**: the `shell` provider is now 36 actions - the originals
   plus `focus_tray`, `desktop_item_properties`, `desktop_item_target`,
   `open_item_location`, `rename_desktop_item`, `delete_desktop_item`,
@@ -975,6 +1108,112 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   or at a folder), `list_drives` (size and free space) and `list_folder`
   (a folder, or "My Computer", listed the way the browser shows it).
   `focus_desktop` no longer needs the shell.
+- **Both Start menus open at once, and "Windows apps" means the Store apps.**
+  Measured before this: the classic menu took **60.7 ms** to open and the XP
+  one **58.2 ms**, and the Windows apps branch **897 ms** the first time it
+  was opened. After: **~15 ms**, **~14 ms**, **0 ms**. Four things were
+  wrong, all in `src/ui/start_menu_content.py` unless said otherwise:
+  - **`shell:AppsFolder` is not a list of apps.** It holds the packaged
+    (UWP / Store) applications, which exist nowhere else on the machine -
+    there is no shortcut on disk, only an Application User Model ID - AND
+    every desktop program's shortcut, `steam://` URL and auto-generated
+    entry besides. Measured here: 309 entries, 60 of them packaged. Listing
+    all 309 made "Windows apps" a second, worse copy of All Programs with
+    the Store apps buried in it, so the branch now keeps only the packaged
+    ones (`win_shell.is_packaged_app`: an AUMID is
+    `PackageFamilyName!ApplicationId`, and a family name is
+    `Name_PublisherId` - no drive letter, no backslashes). Everything else
+    is where the user already looks for it: Programs / All Programs.
+  - **The branch never waits for Windows to answer.** Reading the Apps
+    folder is about a second, so `installed_apps(wait=False)` shows whatever
+    is known at once and reads the rest on a thread
+    (`read_installed_apps_async`, which REMEMBERS the callers waiting rather
+    than refusing them while a read is under way); a branch opened before
+    the first read has finished says "Reading..." and fills itself in where
+    it stands (`MenuTree.refill`) when the answer arrives.
+  - **The top of a menu is not rebuilt for nothing.** A menu rebuilds on
+    every open so that an application, macro or module installed since the
+    last one is on it - but that is what the BRANCHES read, and the ten
+    items of the top level never change. Putting them back into a tree
+    control measured 14 ms per open, so `MenuTree.matches` asks whether
+    anything changed and `reset_branches` throws away only what the opened
+    branches read (~0.5 ms). The Windows Start Menu itself is walked once
+    per open (`windows_programs()`) instead of once for All Programs and
+    again for the search index.
+  - **Building a menu is not the user moving through one.** Emptying the
+    tree moves the selection off each item in turn and putting the first
+    item back selects it, so the classic menu played its focus cue **ten
+    times on every open**. `MenuTree.rebuilding()` is what `on_tree_select`
+    now asks before cueing.
+- **A Titan window in front means the keys are that window's**
+  (`keyboard_handover.py`). The Invisible UI answers every key in the session
+  while Titan UI mode is on - right while Titan is an application the user has
+  put away, wrong the moment a window of Titan's own is in front of them. The
+  main window has always known it (`temporarily_disable_titan_ui`); the
+  shell's windows did not, and under the shell that is the COMMON case:
+  Windows+M minimises Titan, `on_minimize` answers by putting it in the tray
+  and starting the Invisible UI listening, and the same shortcut then puts the
+  keyboard on the desktop - where every arrow key went to the Invisible UI
+  instead of to the list of icons, so the desktop read as though it had gone
+  and only a key the Invisible UI understood brought anything back. Now the
+  desktop, the bar, both Start menus and the file browser all say so from
+  their own `EVT_ACTIVATE` (`follows_activation`), under ONE name - they hand
+  the keyboard between themselves constantly and must not each undo the last
+  one's hand-over - and `gui.on_minimize` does not start the Invisible UI at
+  all while the shell is up, because Titan minimised does not mean there is no
+  Titan window left on the screen.
+- **Nothing queued may fire into a window that has gone** (`deferred.py`).
+  The shell queues constantly - a taskbar button asks Windows to activate a
+  window and rebuilds the bar 120 ms later, the appbar answers on a worker,
+  the notification area is re-read four hundred milliseconds after Explorer
+  has moved the work area - and every one of those held a bound method of a
+  frame the shell destroys the moment it is switched off, Titan exits or the
+  Shut Down dialog is answered. wxPython calls it anyway, the C++ object is
+  gone, and the first attribute touched raises `RuntimeError` *inside wx's
+  event loop*, where nothing catches it. That was the shell's most frequent
+  crash, and it needed only for a window to close within the delay of
+  anything it had queued. So `call_later` / `call_after` ask whether the
+  window is still there **at the moment the call fires**, `Coalesced` turns a
+  burst of asks into one piece of work, and a test walks every shell module
+  to make sure no bare `wx.CallLater` / `wx.CallAfter` on a window of its own
+  has crept back in. `TitanShell.window(name)` does the same for the shell's
+  own three windows - a destroyed one is forgotten rather than called into.
+- **Windows holds the ADDRESS of a callback Python can collect.**
+  `ShellHook` subclasses the taskbar's window procedure with a ctypes
+  callback; a bar destroyed without `undock()` (Titan exiting takes its
+  children with it) left that subclass in place with nothing keeping the
+  callback alive, so the next message Windows sent - including the
+  WM_NCDESTROY of its own destruction - called into freed memory. A hard
+  crash with no traceback. Installed hooks are now held in
+  `win_shell._INSTALLED_HOOKS` until they are removed, and the bar undocks
+  from `EVT_WINDOW_DESTROY` as well, so the appbar reservation and the
+  subclass can never outlive it.
+- **A drive with nothing in it is a blank size, never a modal dialog.**
+  Reading My Computer asks every drive its label and free space, and Windows
+  answers an empty card reader with "There is no disk in drive D:" - a modal
+  system dialog over a shell that only wanted to fill in a column.
+  `win_shell.quiet_media_errors` (`SetThreadErrorMode`, this thread's and not
+  the whole of Titan's) is what `list_drives` reads inside.
+- **Titan's settings are parsed when the FILE changes, not when they are
+  asked for** (`src/settings/settings.py`). `get_setting` opened, read and
+  parsed the whole of `bg5settings.ini` on every call - invisible in a
+  settings dialog, ruinous in a shell that asks on every paint (is there a
+  clock? a Show Desktop button?), on every layout, on every focus cue, once a
+  second for the clock's format and **ten times a second** while the taskbar
+  decides whether to slide away. Measured: a thousand reads of one setting,
+  **169 ms before and 1 ms after**. The parse is kept and thrown away when
+  `os.stat` says the file moved (checked at most every `STAT_INTERVAL`);
+  `save_settings` puts what it has just written straight into the cache, so a
+  setting read immediately after being set can never see the old value
+  through a file system whose timestamps have not caught up; and
+  `load_settings()` still hands back a copy, because the settings wizard and
+  the controller modes keep the dictionary and change it.
+- **The clock is told the time every second and changes once a minute.**
+  `TextControl.set_text` compares the accessible name as well as the text, so
+  the bar no longer repaints itself and tells MSAA its clock was renamed
+  sixty times for every one time either was true. The notification area is
+  likewise only laid out again when the strip has changed shape, not when an
+  icon has merely been renamed (the battery percentage, the volume).
 - Translation domain: **`shell`**.
 - **A key pressed in a shell window is that window's key.** Every shell
   window - the desktop, the bar, the Start menu, the file browser - is a
@@ -988,7 +1227,7 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   the event's own window's top-level parent against the frame and skips
   anything from another one - which is what the Buffer System's "no global
   hook, hosts wire these into their own windows" was supposed to mean.
-- Tests: `tests/test_shell.py` (run it directly; 238 tests).
+- Tests: `tests/test_shell.py` (run it directly; 320 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 
@@ -1497,8 +1736,21 @@ end
   Examples: `data/macros/example_script/` (everything), `voice_demo/`
   (positioned, speeding-up speech), `form_demo/` (a form with its own buttons,
   branching on the option by text and by number, a travelling sound).
+- **"Do not use the AI" has to be distinguishable from "you did not say".**
+  `macros.check_macro use_ai=false` sent the script to a model anyway: an
+  action's arguments arrive as strings over the bus, so "not given" is the
+  empty string - and `str(value or '')` cannot tell `False` from `''`, because
+  `False or ''` IS `''`.  The call fell through to "whatever the AI-features
+  setting says" and made a request the caller had just refused, which offline
+  is a TCP connect timeout with the Macro Manager waiting on it (measured: one
+  test run took 329 seconds).  `_ai_given()` is what decides now - None and a
+  blank string mean unanswered, everything else including `False` is an
+  answer - and `tests/test_tcs_macros.py` replaces `ai_provider.generate` for
+  the whole file with one that raises, so a test reaching a real model is a
+  failure rather than a slow, flaky, billable pass.  That file went from 8-330
+  seconds a run to **0.45 s**.
   Tests: `tests/test_tcs_macros.py` (run it directly - `tests/` has no
-  `__init__.py`).
+  `__init__.py`; 101 tests).
 
 **Every add-on is reachable, declaration or not** (`actions/generic.py`). Most
 kinds share one Python interface with every other add-on of that kind, so the

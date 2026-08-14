@@ -111,6 +111,25 @@ def format_time(timestamp: float) -> str:
         return ''
 
 
+def _real_modifiers(event: wx.KeyEvent) -> int:
+    """The event's modifiers with a phantom Shift taken out.
+
+    ``wxKeyEvent`` reads Shift out of the calling thread's input queue, and
+    the Titan shell merges that queue with another program's whenever it
+    takes the foreground - which can leave Shift latched there long after
+    the user has let go.  ``src.system.key_state`` asks the hardware
+    instead.
+    """
+    try:
+        from src.system import key_state
+        return key_state.modifiers(event)
+    except Exception:
+        try:
+            return event.GetModifiers()
+        except Exception:
+            return 0
+
+
 def pan_for(index: int, count: int) -> float:
     """Stereo pan for row ``index`` of ``count`` real rows: 0.0 left, 1.0 right."""
     if count <= 1:
@@ -127,6 +146,14 @@ class TabbedListFrame(wx.Frame):
 
     VIEW_ID = 'titan_im'
     LIST_LABEL = ''
+
+    # The earcon Escape plays before the window goes.  A subclass that names
+    # its own CLOSE_SOUND blanks this instead, so one close is one sound
+    # however the window was left - the Escape earcon and the closing one
+    # used to be two different clips played back to back.
+    ESCAPE_SOUND = 'ui/popupclose.ogg'
+    # '' means "the Titan IM window-close sound"; a subclass may name its own.
+    CLOSE_SOUND = ''
 
     def __init__(self, parent, title: str, size: Tuple[int, int] = (960, 680)):
         super().__init__(parent, title=title, size=size)
@@ -449,12 +476,18 @@ class TabbedListFrame(wx.Frame):
         modifiers = event.GetModifiers()
         focus = self.FindFocus()
 
-        if keycode == wx.WXK_ESCAPE and modifiers == wx.MOD_NONE:
+        # Escape is answered on the REAL modifiers, not the reported ones:
+        # taking the foreground attaches this thread's input queue to
+        # another's, and a Shift that was down across that stays latched in
+        # the queue wx reads - after which `modifiers` was MOD_SHIFT for
+        # every key and Escape silently stopped closing the window.
+        if keycode == wx.WXK_ESCAPE and _real_modifiers(event) == wx.MOD_NONE:
             if self.on_escape():
-                try:
-                    play_sound('ui/popupclose.ogg')
-                except Exception:
-                    pass
+                if self.ESCAPE_SOUND:
+                    try:
+                        play_sound(self.ESCAPE_SOUND)
+                    except Exception:
+                        pass
                 self.Close()
             return
 
@@ -528,7 +561,9 @@ class TabbedListFrame(wx.Frame):
         except Exception as exc:
             print(f"[Titan IM UI] on_closed failed: {exc}")
         try:
-            if sounds:
+            if self.CLOSE_SOUND:
+                play_sound(self.CLOSE_SOUND)
+            elif sounds:
                 sounds.window_close()
         except Exception:
             pass

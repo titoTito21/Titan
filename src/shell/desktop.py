@@ -31,6 +31,9 @@ import wx
 
 from src.platform_utils import IS_WINDOWS, get_user_data_dir
 from src.shell import fileops, luna, win_shell
+from src.shell import keyboard_handover as handover
+from src.shell.deferred import call_after
+from src.system import key_state
 from src.shell.a11y import edge_cue, name_control, shell_setting
 from src.titan_core.translation import _
 
@@ -883,7 +886,7 @@ class DesktopFrame(wx.Frame):
         shell = self.shell
         moved = False
         try:
-            if event.ShiftDown():
+            if key_state.shift_down(event):
                 moved = shell.focus_tray()
             else:
                 moved = shell.focus_start_button()
@@ -1059,7 +1062,7 @@ class DesktopFrame(wx.Frame):
             if IS_WINDOWS:
                 win_shell.take_foreground(self.GetHandle())
             self.focus_list()
-            wx.CallAfter(self.focus_list)
+            call_after(self, self.focus_list)
             return True
         except Exception as error:
             print(f"[TitanShell] could not focus the desktop: {error}")
@@ -1101,8 +1104,13 @@ class DesktopFrame(wx.Frame):
         return True
 
     def _on_activate(self, event):
+        # The desktop is a Titan window with a list in it, so while it is in
+        # front the keys are the list's - not the Invisible UI's.  This is
+        # the case Windows+M lands in: minimising Titan starts the Invisible
+        # UI listening and then puts the keyboard here.
+        handover.follows_activation(event)
         if event.GetActive():
-            wx.CallAfter(self.focus_list)
+            call_after(self, self.focus_list)
         event.Skip()
 
     def allow_close(self):

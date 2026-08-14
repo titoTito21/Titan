@@ -63,6 +63,32 @@ def _catalogue(language):
 
 MACROS._ = _catalogue('en')
 
+
+def _no_model_in_tests(*_args, **_kwargs):
+    """The tests must never send anything to a model.
+
+    They did.  `action_check_macro(script=..., use_ai=False)` said plainly
+    that it did not want the AI, `use_ai` was read with `str(value or '')` -
+    which cannot tell `False` from "not given" - and the review went to the
+    provider anyway.  Offline that is a TCP connect timeout: one run of this
+    file took **329 seconds** and the test failed with a network error
+    written into the macro's review.
+
+    So the provider is replaced here, once, for the whole file.  Every test
+    that means to exercise the AI puts its own answer in place of this and
+    restores it afterwards; anything else reaching a model is a bug, and
+    this is what says so instead of the suite quietly going to the network.
+    """
+    raise AssertionError("a test tried to call a model - the AI must be "
+                         "faked in the test that wants it")
+
+
+try:
+    import src.ai.ai_provider as _ai_provider
+    _ai_provider.generate = _no_model_in_tests
+except Exception as _error:                       # pragma: no cover
+    print(f"[tests] could not fence off the AI provider: {_error}")
+
 HALLUCINATED = (
     '# Makro: licz do 10\n'
     'voice rate=1\n'
@@ -924,6 +950,38 @@ class CheckScriptIsARealReview(unittest.TestCase):
     def test_the_ai_pass_is_off_when_ai_features_are(self):
         MACROS._ai_features_on = lambda: False
         self.assertEqual([], MACROS.review_with_ai('say "x"'))
+
+    def test_saying_no_to_the_ai_is_obeyed(self):
+        """`use_ai=False` used to be indistinguishable from not saying.
+
+        `str(value or '')` turns `False` into `''`, which the action read as
+        "not given" - so it fell back to the AI-features setting and sent the
+        script to a model the caller had just said not to use.  Over the bus
+        every argument arrives as a string ("false"), which is why it went
+        unnoticed; from inside Titan, and from a test, it is a real `False`.
+        Offline it costs a connect timeout: this file took 329 seconds and
+        the review came back with a network error written into it.
+        """
+        asked = []
+        original = MACROS.review_with_ai
+        MACROS.review_with_ai = lambda text, actions='': asked.append(1) or []
+        MACROS._ai_features_on = lambda: True
+        try:
+            answer = str(MACROS.action_check_macro(script='say "x"',
+                                                   use_ai=False))
+            self.assertEqual([], asked, "the AI was asked anyway")
+            self.assertIn('fine', answer)
+            # And with nothing said either way, the setting still decides.
+            MACROS.action_check_macro(script='say "x"')
+            self.assertEqual([1], asked)
+        finally:
+            MACROS.review_with_ai = original
+
+    def test_the_tests_never_reach_a_real_model(self):
+        """The fence that stops this file going to the network by accident."""
+        import src.ai.ai_provider as provider
+        with self.assertRaises(AssertionError):
+            provider.generate('system', 'conversation')
 
     def test_the_ai_answering_ok_means_nothing_to_report(self):
         import src.ai.ai_provider as provider

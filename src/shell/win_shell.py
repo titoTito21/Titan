@@ -439,8 +439,13 @@ def hide_from_alt_tab(hwnd):
         return False
     try:
         style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        user32.SetWindowLongW(hwnd, GWL_EXSTYLE,
-                              (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
+        wanted = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+        if wanted == style:
+            # Already furniture.  Setting a window's styles to what they
+            # already are still makes Windows re-evaluate the frame, and a
+            # Start menu asks for this on every single open.
+            return True
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, wanted)
         return True
     except Exception as error:
         print(f"[TitanShell] could not hide a shell window: {error}")
@@ -627,6 +632,18 @@ def open_task_manager():
 # ---------------------------------------------------------------------------
 
 
+# Every hook whose window procedure Windows is still holding a pointer to.
+#
+# `self._new_proc` is a ctypes callback object, and Windows has its ADDRESS
+# in the window's own data.  If the Python object is collected while the
+# subclass is still in place - which is what happens when a taskbar is
+# destroyed without `undock()` having run - the next message Windows sends
+# that window, including the WM_NCDESTROY of its own destruction, calls into
+# freed memory.  That is a hard crash with no traceback, so a hook is kept
+# alive here for exactly as long as the subclass is installed.
+_INSTALLED_HOOKS = set()
+
+
 class ShellHook:
     """Subclasses a window so it receives shell and appbar notifications.
 
@@ -684,6 +701,8 @@ class ShellHook:
             self._old_proc = set_long(
                 self.hwnd, GWL_WNDPROC,
                 ctypes.cast(self._new_proc, ctypes.c_void_p))
+            if self._old_proc:
+                _INSTALLED_HOOKS.add(self)
             return bool(self._old_proc)
         except Exception as error:
             print(f"[TitanShell] could not install the shell hook: {error}")
@@ -706,6 +725,8 @@ class ShellHook:
                 self._old_proc = None
         except Exception as error:
             print(f"[TitanShell] could not remove the shell hook: {error}")
+        finally:
+            _INSTALLED_HOOKS.discard(self)
 
 
 # ---------------------------------------------------------------------------
@@ -724,12 +745,39 @@ def explorer_taskbar_hwnd():
 
 _APPS_CACHE = []
 _APPS_CACHE_AT = 0.0
+_APPS_READING = None
+_APPS_WAITING = []
+_APPS_LOCK = threading.Lock()
 # Reading the Apps folder is over a second, and what is installed does not
 # change while a menu is open.
 APPS_CACHE_SECONDS = 300
 
 
-def installed_apps(refresh=False):
+def is_packaged_app(app_id):
+    """True for a UWP / Store app, told apart by the shape of its id.
+
+    `shell:AppsFolder` holds two quite different things.  A **packaged**
+    application is identified by an Application User Model ID of the form
+    `PackageFamilyName!ApplicationId`, and a package family name is
+    `Name_PublisherId` - no drive letter and no backslashes.  Everything
+    else in there is a desktop program's shortcut, a `steam://` URL or one
+    of Windows' own auto-generated entries, and every one of THOSE is
+    already in All Programs.
+
+    Measured on this machine: 309 entries in the Apps folder, of which 60
+    are packaged apps.  A "Windows apps" menu listing all 309 is a second
+    copy of All Programs with the Store apps buried in it.
+    """
+    text = str(app_id or '')
+    if '!' not in text:
+        return False
+    family = text.split('!', 1)[0]
+    if not family or '_' not in family:
+        return False
+    return not any(character in family for character in ('\\', '/', ':'))
+
+
+def installed_apps(refresh=False, packaged_only=False, wait=True):
     """Every application Windows itself lists, UWP ones included.
 
     `shell:AppsFolder` is what the Windows Start menu is made of: Store and
@@ -737,14 +785,80 @@ def installed_apps(refresh=False):
     can be found at all - there is no shortcut on disk, only an Application
     User Model ID - and it is also the only handle you can launch one by.
 
-    Returns [(name, app id)], cached, because the walk costs over a second.
+    Returns [(name, app id)], cached, because the walk costs about a second.
+
+    `packaged_only` keeps just the UWP / Store apps (see `is_packaged_app`).
+    `wait=False` answers with whatever is already known and reads the rest
+    on a thread - which is what a MENU wants: a branch that takes a second
+    to open is a branch that looks broken, and a stale list a moment out of
+    date is better than a menu that stops.
     """
     global _APPS_CACHE, _APPS_CACHE_AT
     import time
     if not IS_WINDOWS:
         return []
-    if not refresh and _APPS_CACHE and             (time.time() - _APPS_CACHE_AT) < APPS_CACHE_SECONDS:
-        return list(_APPS_CACHE)
+    fresh = (_APPS_CACHE
+             and (time.time() - _APPS_CACHE_AT) < APPS_CACHE_SECONDS)
+    if not refresh and fresh:
+        return _filter_apps(_APPS_CACHE, packaged_only)
+    if not wait:
+        read_installed_apps_async()
+        return _filter_apps(_APPS_CACHE, packaged_only)
+    apps = _read_installed_apps()
+    if apps is None:
+        return _filter_apps(_APPS_CACHE, packaged_only)
+    _APPS_CACHE, _APPS_CACHE_AT = apps, time.time()
+    return _filter_apps(apps, packaged_only)
+
+
+def _filter_apps(apps, packaged_only):
+    if packaged_only:
+        return [pair for pair in apps if is_packaged_app(pair[1])]
+    return list(apps)
+
+
+def read_installed_apps_async(then=None):
+    """Read the Apps folder on a thread, once at a time.
+
+    `then` is called with the list when the read finishes - on the reader's
+    own thread, so a caller that wants to touch wx marshals it itself.  It
+    is remembered rather than refused when a read is already under way: a
+    menu asking while the startup prefetch is still going would otherwise
+    never be told the answer had arrived, and its branch would sit saying
+    "Reading..." for ever.
+    """
+    global _APPS_READING
+    if not IS_WINDOWS:
+        return False
+    with _APPS_LOCK:
+        if then is not None:
+            _APPS_WAITING.append(then)
+        if _APPS_READING is not None and _APPS_READING.is_alive():
+            return False
+
+        def work():
+            global _APPS_CACHE, _APPS_CACHE_AT
+            import time
+            apps = _read_installed_apps()
+            if apps is not None:
+                _APPS_CACHE, _APPS_CACHE_AT = apps, time.time()
+            with _APPS_LOCK:
+                waiting = list(_APPS_WAITING)
+                del _APPS_WAITING[:]
+            for callback in waiting:
+                try:
+                    callback(list(_APPS_CACHE))
+                except Exception as error:
+                    print(f"[TitanShell] app list handler failed: {error}")
+
+        _APPS_READING = threading.Thread(target=work, daemon=True,
+                                         name='TitanShellAppList')
+        _APPS_READING.start()
+    return True
+
+
+def _read_installed_apps():
+    """The walk itself - None when it could not be done at all."""
     apps = []
     try:
         import pythoncom
@@ -777,10 +891,9 @@ def installed_apps(refresh=False):
                     pass
     except Exception as error:
         print(f"[TitanShell] could not read the app list: {error}")
-        return list(_APPS_CACHE)
+        return None
     apps.sort(key=lambda pair: pair[0].lower())
-    _APPS_CACHE, _APPS_CACHE_AT = apps, time.time()
-    return list(apps)
+    return apps
 
 
 def launch_app_id(app_id):
@@ -1614,13 +1727,66 @@ def drive_space(root):
         return 0, 0
 
 
+# What Windows does when a drive has nothing in it, unless it is told not
+# to: it puts up "There is no disk in the drive. Please insert a disk into
+# drive D:" - a MODAL system dialog, over the shell, from a call the shell
+# made merely to fill in a column.  With these two bits set for the thread,
+# the call fails and says so instead, which is what Explorer does and what
+# `list_drives` wants: a card reader with no card shows no size.
+SEM_FAILCRITICALERRORS = 0x0001
+SEM_NOOPENFILEERRORBOX = 0x8000
+
+
+class quiet_media_errors:
+    """No system error box while we are asking drives about themselves.
+
+    `SetThreadErrorMode` rather than `SetErrorMode`: the latter is
+    process-wide and would change the behaviour of everything else in Titan
+    - including an add-on running on another thread at that moment.
+    """
+
+    def __init__(self):
+        self._previous = None
+
+    def __enter__(self):
+        if not available():
+            return self
+        try:
+            previous = wintypes.DWORD(0)
+            if kernel32.SetThreadErrorMode(
+                    SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX,
+                    ctypes.byref(previous)):
+                self._previous = previous.value
+        except Exception:
+            self._previous = None
+        return self
+
+    def __exit__(self, *_exception):
+        if self._previous is None:
+            return False
+        try:
+            kernel32.SetThreadErrorMode(self._previous, None)
+        except Exception:
+            pass
+        self._previous = None
+        return False
+
+
 def list_drives():
     """My Computer's contents: one dict per drive, in Explorer's own order.
 
     Each is {'root', 'letter', 'label', 'type', 'type_name', 'total',
     'free', 'name'} - 'name' being what Explorer writes under the icon,
     "Local Disk (C:)" or the volume's own label with the letter after it.
+
+    Asked with the media error box switched off: a drive with nothing in it
+    is a blank size here, never a modal dialog the shell did not ask for.
     """
+    with quiet_media_errors():
+        return _list_drives()
+
+
+def _list_drives():
     drives = []
     for root in drive_letters():
         kind = drive_type(root)

@@ -259,15 +259,34 @@ else:
         print("Lock screen monitoring is only available on Windows")
 from src.titan_core.tce_system import start_system_hooks
 from src.system.system_monitor import initialize_system_monitor
-from src.system.updater import check_for_updates_on_startup
+
+
+def check_for_updates_on_startup(parent=None):
+    """The update check, with `requests` imported when it is made.
+
+    `src.system.updater` pulls in `requests` and everything under it -
+    measured at 157 ms of a startup - for one call that happens once, after
+    the settings have been read.  Importing it here rather than at the top
+    of the file keeps that off the way to the window.
+    """
+    from src.system.updater import check_for_updates_on_startup as check
+    return check(parent)
 
 # Initialize translation system
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
 
 VERSION = "0.5.7"
+# The one speaker the whole program shares, built on first use.  `Auto()`
+# locates each backend's library by walking the entire current call stack
+# (`inspect.getouterframes`), which at import time - with every one of
+# Titan's modules on that stack - is the single most expensive thing on the
+# way to the window.  `LazySpeaker` builds it from a shallow stack the first
+# time something actually speaks, and every `speaker.speak(...)` here reads
+# exactly as it did.
 try:
-    speaker = accessible_output3.outputs.auto.Auto()
+    from src.accessibility.lazy_speaker import LazySpeaker
+    speaker = LazySpeaker()
 except Exception as _e:
     print(f"Warning: Could not initialize accessible_output3: {_e}")
     speaker = None
@@ -374,6 +393,30 @@ def _kill_other_titan_instances():
 
 # Global flag for graceful shutdown
 _shutdown_requested = False
+
+# How long the startup sound and the spoken welcome have the machine to
+# themselves, and when that runs out.  Nothing sleeps for it: the work of
+# starting up happens during it, and only what is LEFT is waited for.
+_startup_quiet_until = 0.0
+
+
+def _start_startup_quiet(seconds):
+    """Give the startup sound its moment, and carry on loading through it."""
+    global _startup_quiet_until
+    _startup_quiet_until = time.monotonic() + float(seconds)
+
+
+def _await_startup_quiet(label='startup'):
+    """Wait out whatever is left of it - usually nothing at all."""
+    global _startup_quiet_until
+    remaining = _startup_quiet_until - time.monotonic()
+    _startup_quiet_until = 0.0
+    if remaining <= 0:
+        return 0.0
+    print(f"[STARTUP] waiting {remaining:.2f}s for the startup sound ({label})")
+    time.sleep(remaining)
+    return remaining
+
 
 def signal_handler(signum, frame):
     """Handle system signals for graceful shutdown"""
@@ -595,8 +638,17 @@ def main(command_line_args=None):
                 speech_thread = threading.Thread(target=delayed_speech, daemon=True)
                 speech_thread.start()
 
-                # Wait 2 seconds before loading the program (allows sounds/speech to play in background)
-                time.sleep(2)
+                # The startup sound and the welcome are given two seconds
+                # of their own - but SPENT, not slept through.  This used to
+                # be `time.sleep(2)` right here, which is two seconds in
+                # which Titan does nothing at all before it even begins to
+                # load; everything that follows - the component manager, the
+                # window, the menu bar - happens inside those two seconds
+                # now, and whatever is left of them is waited out at the end
+                # (`_await_startup_quiet`), just before the window appears.
+                # On a machine where loading takes longer than the clip,
+                # there is nothing left to wait for and nothing is waited.
+                _start_startup_quiet(2.0)
             except Exception as e:
                 print(f"Error playing startup sounds/speech: {e}")
         
@@ -1302,24 +1354,62 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Warning: Failed to load IM modules: {e}")
 
-    # Now create settings frame with component_manager reference
-    try:
-        from src.ui.settingsgui import SettingsFrame
-        settings_frame = SettingsFrame(None, title=_("Settings"), component_manager=component_manager)
-    except Exception as e:
-        print(f"Failed to create settings frame: {e}")
-        sys.exit(1)
+    # The Settings window is NOT built here.  Measured on this machine it
+    # takes 2.1 seconds - it enumerates the SAPI voices over COM, loads every
+    # Titan TTS engine and probes for the speech subprocess bridge with a
+    # `subprocess.run` - and it is a window the user has not asked for yet.
+    # Two seconds of a startup for a window nobody opened is two seconds
+    # Titan's own window could have been on the screen instead, so it is
+    # built (with everything the components register into it) as soon as the
+    # main window is up and the event loop is running.  Nothing before that
+    # point needs it: the Settings menu entry reads it off the frame when it
+    # is pressed, and the components that register categories are themselves
+    # initialised after the window is shown.
+    settings_frame = None
 
-    # Set settings_frame reference in component manager and register component settings
-    if component_manager:
-        component_manager.settings_frame = settings_frame
-        print("[MAIN] Registering component settings...")
-        component_manager.register_component_settings()
-        print("[MAIN] Calling rebuild_category_list...")
-        settings_frame.rebuild_category_list()
-        print("[MAIN] Loading component settings...")
-        settings_frame.load_component_settings()  # Load component settings after registration
-        print("[MAIN] Component settings categories registered")
+    def build_settings_window():
+        """The Settings window and everything the components put in it."""
+        nonlocal_frame = frame
+        existing = getattr(nonlocal_frame, 'settings_frame', None)
+        if existing is not None:
+            # The user was quick: they pressed Settings before this ran, and
+            # the menu made the window itself.  Register into THAT one.
+            window = existing
+            if component_manager:
+                try:
+                    component_manager.settings_frame = window
+                    component_manager.register_component_settings()
+                    window.rebuild_category_list()
+                    window.load_component_settings()
+                except Exception as e:
+                    print(f"Warning: could not register component settings: {e}")
+            return window
+        try:
+            from src.ui.settingsgui import SettingsFrame
+            window = SettingsFrame(None, title=_("Settings"),
+                                   component_manager=component_manager)
+        except Exception as e:
+            print(f"Failed to create settings frame: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+        try:
+            nonlocal_frame.settings_frame = window
+        except Exception:
+            pass
+        if component_manager:
+            try:
+                component_manager.settings_frame = window
+                print("[MAIN] Registering component settings...")
+                component_manager.register_component_settings()
+                window.rebuild_category_list()
+                window.load_component_settings()
+                print("[MAIN] Component settings categories registered")
+            except Exception as e:
+                print(f"Warning: could not register component settings: {e}")
+                import traceback
+                traceback.print_exc()
+        return window
 
 
     try:
@@ -1548,6 +1638,11 @@ if __name__ == "__main__":
     # AI is now managed by the AI component (data/components/AI)
     # Enable it through component settings if needed
 
+    # Everything above happened during the two seconds the startup sound was
+    # given; only what is left of them is waited for, and usually there is
+    # nothing left.
+    _await_startup_quiet('main window')
+
     # Show the GUI normally (unless we should start minimized)
     try:
         if should_start_minimized:
@@ -1575,7 +1670,11 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
 
-    # Use CallAfter to initialize components after event loop starts
+    # In order: the Settings window first (the components register their
+    # categories into it), then the components themselves.  Both after the
+    # main window is on the screen - which is the whole point of doing them
+    # here rather than before it.
+    wx.CallAfter(build_settings_window)
     wx.CallAfter(init_components_delayed)
 
     # Start main event loop with comprehensive error handling

@@ -36,8 +36,12 @@ from src.titan_core.app_manager import get_applications, open_application
 from src.titan_core.game_manager import get_games, open_game
 from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.titan_core.stereo_speech import get_stereo_speech, speak_stereo
-from src.ui import componentmanagergui
-from src.ui import settingsgui
+# Both are windows the user opens from the Invisible UI, and both cost more
+# to import than the Invisible UI itself - the Settings window alone brings in
+# the whole TTS stack.  Imported when one is opened (see `src/lazy_import.py`).
+from src.lazy_import import lazy_import
+componentmanagergui = lazy_import('src.ui.componentmanagergui')
+settingsgui = lazy_import('src.ui.settingsgui')
 import sys
 from src.ui.help import show_help
 import wx
@@ -50,13 +54,13 @@ import platform
 from src.titan_core.skin_manager import apply_skin_to_window
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS
 # F6 program switching removed
-try:
-    from src.network import telegram_client
-    from src.network import messenger_client
-except ImportError:
-    telegram_client = None
-    messenger_client = None
-    print("Warning: Telegram/Messenger clients not available")
+# Imported when something is read off them rather than on the way to
+# Titan's window - see `src/lazy_import.py`.  `if telegram_client:` still
+# answers whether the module can be imported at all, which is what the
+# `try`/`except ImportError` here used to be for.
+from src.lazy_import import lazy_import
+telegram_client = lazy_import('src.network.telegram_client')
+messenger_client = lazy_import('src.network.messenger_client')
 
 _ = set_language(get_setting('language', 'pl'))
 # Thread-safe speaker initialization

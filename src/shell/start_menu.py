@@ -6,8 +6,12 @@ with Log Off and Turn Off Computer.
 
 It is `ClassicStartMenu` with a different face.  Everything that finds
 programs, runs a Titan application or a game, opens the Run dialog or asks
-about shutting down already lives there and is inherited unchanged - this
-module supplies the XP layout and the two panes, not a second start menu.
+about shutting down already lives there and is inherited unchanged, and
+everything the menu LISTS - the applications and games, the Titan IM
+services and modules, the macros, the settings, the Windows apps and the
+Windows Start Menu - lives in `src/ui/start_menu_content.py`, which the
+classic menu lists from as well.  This module supplies the XP layout and
+the two panes, not a second start menu and not a second set of contents.
 
 **Every part of it takes the keyboard.**  ReactOS' own menu is a chain of
 windows a mouse walks and a keyboard cannot, so the pieces here are ordinary
@@ -25,15 +29,18 @@ across the Titan applications and games and the whole Windows Start Menu.
 """
 
 import os
-import threading
 
 import wx
 
 from src.platform_utils import IS_WINDOWS
 from src.shell import luna, win_shell
+from src.shell import keyboard_handover as handover
+from src.shell.deferred import call_after, call_later
+from src.system import key_state
 from src.shell.a11y import ROLE_BUTTON, edge_cue, name_control
 from src.shell.controls import ShellControl
 from src.ui.classic_start_menu import ClassicStartMenu
+from src.ui.start_menu_content import MenuEntry, MenuTree
 from src.titan_core.translation import _
 
 # How long to wait for the activation that hands the keyboard over before
@@ -46,23 +53,6 @@ MENU_HEIGHT = 520
 HEADER_HEIGHT = 58
 FOOTER_HEIGHT = 42
 LEFT_WIDTH = 224
-
-
-class MenuEntry:
-    """One line of either column."""
-
-    __slots__ = ('label', 'kind', 'payload', 'description', 'filled')
-
-    def __init__(self, label, kind='action', payload=None, description=''):
-        self.label = label
-        # action | app | game | program | folder | im_module | macro |
-        # back | separator
-        self.kind = kind
-        self.payload = payload
-        self.description = description
-        # A branch fills itself the first time it is opened; this is how it
-        # knows it already has.
-        self.filled = False
 
 
 class MenuList(wx.ListCtrl):
@@ -123,7 +113,27 @@ class MenuList(wx.ListCtrl):
         except Exception:
             pass
 
+    @staticmethod
+    def signature(entries):
+        return [(entry.label, entry.kind,
+                 entry.payload if isinstance(entry.payload, str) else None)
+                for entry in (entries or [])]
+
+    def matches(self, entries):
+        """True when the column already shows exactly these entries."""
+        current = getattr(self, 'entries', None)
+        if not current or len(current) != len(entries or []):
+            return False
+        return self.signature(current) == self.signature(entries)
+
     def set_entries(self, entries, select_first=True):
+        self.Freeze()
+        try:
+            self._set_entries(entries, select_first)
+        finally:
+            self.Thaw()
+
+    def _set_entries(self, entries, select_first=True):
         self.DeleteAllItems()
         self.entries = list(entries)
         for index, entry in enumerate(self.entries):
@@ -159,99 +169,6 @@ class MenuList(wx.ListCtrl):
     def _on_key(self, event):
         key = event.GetKeyCode()
         if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
-            self._activate(event)
-        else:
-            event.Skip()
-
-
-class MenuTree(wx.TreeCtrl):
-    """The left column: the menu as a tree that opens where it stands.
-
-    A submenu that flies out is a menu a keyboard cannot follow, and the
-    word "submenu" written into an entry is a word a screen reader then
-    reads out.  A tree control has both problems solved already: it is
-    expanded and collapsed with the arrows, and the reader says "collapsed"
-    or "expanded" itself, from the control's own state - so nothing here
-    puts that into the text.
-
-    Branches fill themselves the first time they are opened, because
-    reading the whole Windows Start Menu, every Titan add-on and every
-    macro up front is most of a second the user would wait for a menu.
-    """
-
-    def __init__(self, parent, on_activate, children_of, background,
-                 foreground, name):
-        super().__init__(parent, style=wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS
-                         | wx.TR_SINGLE | wx.TR_LINES_AT_ROOT
-                         | wx.TR_FULL_ROW_HIGHLIGHT | wx.NO_BORDER
-                         | wx.WANTS_CHARS)
-        name_control(self, name)
-        self._on_activate = on_activate
-        self._children_of = children_of
-        self._root = self.AddRoot('')
-        self.SetBackgroundColour(background)
-        self.SetForegroundColour(foreground)
-
-        self.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self._activate)
-        self.Bind(wx.EVT_TREE_ITEM_EXPANDING, self._expanding)
-        self.Bind(wx.EVT_KEY_DOWN, self._on_key)
-
-    # -- contents ---------------------------------------------------------
-    def set_entries(self, entries):
-        self.DeleteChildren(self._root)
-        self.entries = list(entries)
-        for entry in self.entries:
-            self._add(self._root, entry)
-        first = self.GetFirstChild(self._root)[0]
-        if first and first.IsOk():
-            self.SelectItem(first)
-
-    def _add(self, parent, entry):
-        item = self.AppendItem(parent, entry.label)
-        self.SetItemData(item, entry)
-        if entry.kind == 'folder':
-            # A branch has to look like one before it is filled, and this is
-            # how a tree control is told so.
-            self.AppendItem(item, '')
-        return item
-
-    def _expanding(self, event):
-        item = event.GetItem()
-        entry = self.GetItemData(item)
-        if entry is None or entry.kind != 'folder':
-            return
-        if entry.filled:
-            return
-        self.DeleteChildren(item)
-        for child in (self._children_of(entry) or []):
-            self._add(item, child)
-        entry.filled = True
-
-    # -- what is on it ----------------------------------------------------
-    def selected_entry(self):
-        item = self.GetSelection()
-        if item and item.IsOk():
-            return self.GetItemData(item)
-        return None
-
-    def _activate(self, event):
-        entry = self.selected_entry()
-        if entry is None:
-            return
-        if entry.kind == 'folder':
-            # Enter on a branch opens it, which is what Enter does to a
-            # branch everywhere else in Windows.
-            item = self.GetSelection()
-            if self.IsExpanded(item):
-                self.Collapse(item)
-            else:
-                self.Expand(item)
-            return
-        if callable(self._on_activate):
-            self._on_activate(entry)
-
-    def _on_key(self, event):
-        if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
             self._activate(event)
         else:
             event.Skip()
@@ -417,7 +334,6 @@ class XPStartMenu(ClassicStartMenu):
         panel.SetSizer(sizer)
 
         self.SetSize((MENU_WIDTH, MENU_HEIGHT))
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
 
     def _paint_footer(self, event):
         dc = wx.AutoBufferedPaintDC(self.footer)
@@ -428,11 +344,25 @@ class XPStartMenu(ClassicStartMenu):
     # Contents
     # ------------------------------------------------------------------
     def build_menu_structure(self):
+        """Both columns, rebuilt only where something has changed.
+
+        Neither column's top level changes between one open and the next -
+        what changes is what a branch reads when it is opened - and putting
+        the entries back into the controls measured 14 ms of the taskbar's
+        Start button feeling slow.
+        """
         self.menu_items = []
         self._program_stack = []
         self._search_index = None
-        self.left_tree.set_entries(self._top_level_entries())
-        self.right_list.set_entries(self._places_entries())
+        self._programs_structure = None
+        entries = self._top_level_entries()
+        if self.left_tree.matches(entries):
+            self.left_tree.reset_branches()
+        else:
+            self.left_tree.set_entries(entries)
+        places = self._places_entries()
+        if not self.right_list.matches(places):
+            self.right_list.set_entries(places)
 
     def _top_level_entries(self):
         """The left column, as branches that open where they stand."""
@@ -449,198 +379,6 @@ class XPStartMenu(ClassicStartMenu):
             MenuEntry(_("All Programs"), 'folder', '__all_programs__'),
         ]
 
-    def _children_of(self, entry):
-        """What is under a branch, worked out the first time it is opened."""
-        payload = entry.payload
-        if payload == '__all_programs__':
-            return self._all_programs_entries()
-        if payload == '__apps__':
-            return self._titan_app_entries(games=False)
-        if payload == '__games__':
-            return self._titan_app_entries(games=True)
-        if payload == '__im__':
-            return self._im_entries()
-        if payload == '__macros__':
-            return self._macro_entries()
-        if payload == '__settings__':
-            return self._settings_entries()
-        if payload == '__windows_apps__':
-            return self._windows_app_entries()
-        if isinstance(payload, list):
-            return [MenuEntry(program.get('name', ''), 'program', program,
-                              description=entry.label)
-                    for program in payload]
-        return []
-
-    # The services Titan brings itself, in the order its own Titan IM list
-    # has them.  Each is (id, label): what the entry is called, and which of
-    # the main window's own flows opens it - the menu must not have a second
-    # opinion about whether somebody is logged in.
-    BUILTIN_IM = (
-        ('telegram', "Telegram"),
-        ('messenger', "Facebook Messenger"),
-        ('whatsapp', "WhatsApp"),
-        ('titannet', "Titan-Net"),
-        ('elten', "EltenLink"),
-    )
-
-    def _im_entries(self):
-        """Titan IM: the services Titan has built in, then the modules."""
-        entries = [MenuEntry(label, 'im_builtin', identifier,
-                             description=_("Titan IM"))
-                   for identifier, label in self.BUILTIN_IM]
-        try:
-            from src.network.im_module_manager import im_module_manager
-            if not getattr(im_module_manager, 'modules', None)                     and wx.IsMainThread():
-                # Nothing has asked for them yet in this process - the menu
-                # is allowed to be the first, and it happens once, on the
-                # branch actually being opened.  Never off the GUI thread:
-                # loading a module runs its author's code, which is written
-                # expecting to be on it.
-                im_module_manager.load_modules()
-            for info in getattr(im_module_manager, 'modules', []) or []:
-                name = info.get('name') or info.get('id') or ''
-                if name:
-                    entries.append(MenuEntry(name, 'im_module', info,
-                                             description=_("Titan IM")))
-        except Exception as error:
-            print(f"[TitanShell] could not list the IM modules: {error}")
-        return entries
-
-    def _open_builtin_im(self, service):
-        """Open one of Titan's own messengers, through the main window.
-
-        Whether Telegram shows its options or its login, whether Titan-Net
-        is connected, whether EltenLink already has a window open - the main
-        window knows and the menu must not guess, so this calls the very
-        methods its own Titan IM list calls.
-        """
-        frame = self.parent
-        if frame is None:
-            app = wx.GetApp()
-            frame = app.GetTopWindow() if app else None
-        if frame is None:
-            print("[TitanShell] there is no Titan window to open IM in")
-            return False
-
-        def opener():
-            try:
-                active = getattr(frame, 'active_services', {}) or {}
-                if service == 'telegram':
-                    if 'telegram' in active:
-                        frame.current_service = 'telegram'
-                        frame.show_telegram_options()
-                    else:
-                        frame.show_telegram_login()
-                elif service == 'messenger':
-                    frame.show_messenger_login()
-                elif service == 'whatsapp':
-                    frame.show_whatsapp_login()
-                elif service == 'titannet':
-                    if getattr(frame, 'titan_logged_in', False) and \
-                            getattr(getattr(frame, 'titan_client', None),
-                                    'is_connected', False):
-                        frame.show_titannet_main()
-                    else:
-                        frame.titan_logged_in = False
-                        frame.show_titannet_login()
-                elif service == 'elten':
-                    window = (active.get('eltenlink') or {}).get('window')
-                    client = getattr(window, 'client', None)
-                    if window and getattr(client, 'is_connected', False):
-                        window.Show()
-                        window.Raise()
-                    else:
-                        frame.show_elten_login()
-            except Exception as error:
-                print(f"[TitanShell] could not open {service}: {error}")
-
-        wx.CallAfter(opener)
-        return True
-
-    def _macro_entries(self):
-        """The user's macros - the same ones the macro manager lists."""
-        entries = []
-        for macro in self._macros():
-            name = macro.get('name') or macro.get('folder_name') or ''
-            if not name:
-                continue
-            hotkey = macro.get('hotkey') or ''
-            entries.append(MenuEntry(
-                "{} ({})".format(name, hotkey) if hotkey else name,
-                'macro', macro, description=_("Macros")))
-        if not entries:
-            entries.append(MenuEntry(_("No macros"), 'separator'))
-        return entries
-
-    def _macros(self):
-        """Ask the macro manager component itself, so this list is its own.
-
-        The component is already loaded - it is what runs the macros and
-        owns their shortcuts - so the menu reads its manager rather than
-        parsing `__macro__.TCE` a second time and drifting from it.
-        """
-        module = self._macro_component()
-        if module is None:
-            return []
-        try:
-            manager = module.MacroManager(module.MACROS_DIR,
-                                          module.USER_MACROS_DIR)
-            manager.load_macros()
-            return list(manager.macros)
-        except Exception as error:
-            print(f"[TitanShell] could not read the macros: {error}")
-            return []
-
-    @staticmethod
-    def _macro_component():
-        import sys
-        for module in list(sys.modules.values()):
-            if module is None:
-                continue
-            if hasattr(module, 'MacroManager') and hasattr(module, 'run_macro') \
-                    and hasattr(module, 'MACROS_DIR'):
-                return module
-        return None
-
-    def _windows_app_entries(self):
-        """Every app Windows itself would show, UWP ones included.
-
-        `shell:AppsFolder` is the list the Windows Start menu is made of -
-        Store apps, packaged apps and desktop programs alike - and it is the
-        only place a UWP app appears at all: there is no shortcut on disk to
-        find, only an Application User Model ID to launch.  Reading it takes
-        over a second, so it is read once, in the background (see
-        `prefetch`), and kept until the menu is next opened.
-        """
-        entries = []
-        for name, app_id in win_shell.installed_apps():
-            entries.append(MenuEntry(name, 'uwp', app_id,
-                                     description=_("Windows apps")))
-        if not entries:
-            entries.append(MenuEntry(_("No applications"), 'separator'))
-        return entries
-
-    def _settings_entries(self):
-        """Everything that changes how the machine or Titan behaves.
-
-        Titan's own settings belong here rather than out among the places:
-        "where do I change something" has one answer.
-        """
-        entries = [
-            MenuEntry(_("Titan settings"), 'action', 'titan_settings',
-                      description=_("Settings")),
-            MenuEntry(_("Control Panel"), 'action', 'control_panel',
-                      description=_("Settings")),
-            MenuEntry(_("Taskbar and Start menu"), 'action',
-                      'taskbar_properties', description=_("Settings")),
-            MenuEntry(_("Display properties"), 'action', 'display_properties',
-                      description=_("Settings")),
-            MenuEntry(_("Windows settings"), 'action', 'windows_settings',
-                      description=_("Settings")),
-        ]
-        return entries
-
     def _places_entries(self):
         """The right column: places and the things that are not settings."""
         return [
@@ -653,139 +391,6 @@ class XPStartMenu(ClassicStartMenu):
             MenuEntry(_("Run..."), 'action', 'run'),
             MenuEntry(_("Help and Support"), 'action', 'help'),
         ]
-
-    def _all_programs_entries(self):
-        """The Windows Start Menu, folder by folder.
-
-        Titan's own applications and games are branches of their own at the
-        top of the column, so they are not repeated in here.
-        """
-        entries = []
-        try:
-            structure = self.load_windows_programs_with_folders() or {}
-        except Exception as error:
-            print(f"[TitanShell] could not read the Start Menu: {error}")
-            structure = {}
-        for folder, programs in structure.items():
-            entries.append(MenuEntry(folder, 'folder', programs))
-        return entries
-
-    # ------------------------------------------------------------------
-    # Search
-    # ------------------------------------------------------------------
-    def prefetch(self):
-        """Get the slow lists ready before anybody asks for them.
-
-        Reading `shell:AppsFolder` is over a second and walking the Windows
-        Start Menu is a few hundred milliseconds - on the first keystroke in
-        the search box that is a keystroke that appears to hang.  So it is
-        done on a thread the moment the menu opens, and the box uses
-        whatever is ready by the time it is typed in.
-        """
-        if self._prefetching:
-            return
-        self._prefetching = True
-
-        def work():
-            # Everything read here goes through the shell one way or
-            # another - the Apps folder, the shortcut names - and a thread
-            # of its own has no COM apartment until it says so.
-            initialised = False
-            try:
-                import pythoncom
-                pythoncom.CoInitialize()
-                initialised = True
-            except Exception:
-                pass
-            try:
-                win_shell.installed_apps()      # fills its own cache
-                index = self._build_search_index()
-            except Exception as error:
-                print(f"[TitanShell] could not prepare the menu: {error}")
-                index = None
-            finally:
-                self._prefetching = False
-                if initialised:
-                    try:
-                        import pythoncom
-                        pythoncom.CoUninitialize()
-                    except Exception:
-                        pass
-            if index is not None:
-                # Only a plain assignment crosses back to the GUI thread -
-                # the list is finished and never touched again.
-                self._search_index = index
-
-        threading.Thread(target=work, daemon=True,
-                         name='TitanShellMenuIndex').start()
-
-    def _build_search_index(self):
-        """Everything the menu can open, flattened into one list.
-
-        Built once per open of the menu rather than per keystroke: reading
-        the Windows Start Menu is a walk of two folder trees, and doing that
-        on every letter is what would make the box feel broken.
-        """
-        entries = []
-        for entry in self._top_level_entries():
-            entry.description = entry.description or _("Titan")
-            entries.append(entry)
-        for entry in self._places_entries():
-            entry.description = entry.description or _("Places")
-            entries.append(entry)
-        for entry in self._titan_app_entries(games=False):
-            if entry.kind == 'app':
-                entry.description = _("Titan application")
-                entries.append(entry)
-        for entry in self._titan_app_entries(games=True):
-            if entry.kind == 'game':
-                entry.description = _("Titan game")
-                entries.append(entry)
-        entries.extend(self._searchable_branches())
-        try:
-            structure = self.load_windows_programs_with_folders() or {}
-        except Exception as error:
-            print(f"[TitanShell] could not read the Start Menu: {error}")
-            structure = {}
-        for folder, programs in structure.items():
-            for program in programs:
-                name = program.get('name', '')
-                if name:
-                    entries.append(MenuEntry(name, 'program', program,
-                                             description=folder))
-        return [entry for entry in entries
-                if entry.kind not in ('separator', 'back', 'folder')]
-
-    def _searchable_branches(self):
-        """The branches whose contents the search box looks inside.
-
-        A user typing three letters is looking for a thing, not for the
-        branch it happens to live under - so the modules, the macros and
-        the settings are searched exactly like the programs are.
-        """
-        return (self._im_entries() + self._macro_entries()
-                + self._settings_entries() + self._windows_app_entries())
-
-    def search_entries(self, text):
-        """What the left column shows while there is something in the box.
-
-        A name that *starts* with what was typed comes before one that
-        merely contains it, which is the order somebody typing three letters
-        of a program's name is expecting.
-        """
-        needle = (text or '').strip().lower()
-        if not needle:
-            return []
-        if self._search_index is None:
-            self._search_index = self._build_search_index()
-        starts, contains = [], []
-        for entry in self._search_index:
-            label = (entry.label or '').lower()
-            if label.startswith(needle):
-                starts.append(entry)
-            elif needle in label:
-                contains.append(entry)
-        return starts + contains
 
     def _on_search_text(self, event):
         text = self.search_field.GetValue()
@@ -850,7 +455,11 @@ class XPStartMenu(ClassicStartMenu):
     def _show_menu_tree(self):
         """The menu itself is in the left column."""
         self._program_stack = []
-        self.left_tree.set_entries(self._top_level_entries())
+        entries = self._top_level_entries()
+        if self.left_tree.matches(entries):
+            self.left_tree.reset_branches()
+        else:
+            self.left_tree.set_entries(entries)
         if not self.left_tree.IsShown():
             self.left_list.Hide()
             self.left_tree.Show()
@@ -871,87 +480,6 @@ class XPStartMenu(ClassicStartMenu):
         """The header: the user's own files."""
         win_shell.open_path(os.path.expanduser('~'))
         self.Hide()
-
-    def _titan_app_entries(self, games=False):
-        entries = []
-        try:
-            if games:
-                from src.titan_core.game_manager import get_games
-                items = get_games() or []
-            else:
-                from src.titan_core.app_manager import get_applications
-                items = get_applications() or []
-        except Exception as error:
-            print(f"[TitanShell] could not list add-ons: {error}")
-            items = []
-        for item in items:
-            name = item.get('name') or item.get('shortname') or ''
-            if name:
-                entries.append(MenuEntry(name, 'game' if games else 'app',
-                                         item))
-        if not entries:
-            entries.append(MenuEntry(
-                _("No games found") if games else _("No applications"),
-                'separator'))
-        return entries
-
-    # ------------------------------------------------------------------
-    # Activation
-    # ------------------------------------------------------------------
-    def _activate_entry(self, entry):
-        if entry is None:
-            return
-        if entry.kind == 'separator':
-            return
-        if entry.kind == 'im_builtin':
-            self._open_builtin_im(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'im_module':
-            self._open_im_module(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'uwp':
-            win_shell.launch_app_id(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'macro':
-            self._run_macro(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'app':
-            self.run_titan_app(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'game':
-            self.run_titan_game(entry.payload)
-            self.Hide()
-            return
-        if entry.kind == 'program':
-            self.run_program(entry.payload)
-            self.Hide()
-            return
-        self._run_action(entry.payload)
-
-    def _open_im_module(self, info):
-        """Open a Titan IM module the way its own manager does."""
-        try:
-            from src.network.im_module_manager import im_module_manager
-            im_module_manager.open_module(
-                info.get('id') or info.get('name'), self.parent)
-        except Exception as error:
-            print(f"[TitanShell] could not open the IM module: {error}")
-
-    def _run_macro(self, macro):
-        """Run a macro through the macro manager, shortcuts and all."""
-        module = self._macro_component()
-        if module is None:
-            print("[TitanShell] the macro manager is not loaded")
-            return
-        try:
-            module.run_macro(macro, self.parent)
-        except Exception as error:
-            print(f"[TitanShell] could not run the macro: {error}")
 
     def _enter_folder(self, entry):
         """Drill into the left column instead of opening a flyout."""
@@ -979,86 +507,6 @@ class XPStartMenu(ClassicStartMenu):
         self.left_list.set_entries(self._program_stack.pop())
         self.left_list.SetFocus()
         return True
-
-    def _run_action(self, action):
-        """Actions the XP menu has that the classic one does not."""
-        shell = self.shell
-        if action == 'titan_window':
-            if shell:
-                shell.show_titan_window()
-            self.Hide()
-        elif action == 'file_manager':
-            # The shell's own browser while the shell is up - a folder must
-            # open into a window Titan can make readable.  With the shell
-            # off, Titan's file manager application, as before.
-            self.Hide()
-            if shell is not None:
-                shell.open_explorer()
-            else:
-                self._open_titan_app('tfm')
-        elif action == 'internet':
-            self._open_titan_app('tweb')
-            self.Hide()
-        elif action == 'my_documents' and shell is not None:
-            self.Hide()
-            shell.open_explorer(os.path.expanduser('~/Documents'))
-        elif action in ('my_pictures', 'my_music'):
-            folder = os.path.expanduser(
-                '~/Pictures' if action == 'my_pictures' else '~/Music')
-            self.Hide()
-            if shell is not None:
-                shell.open_explorer(folder)
-            else:
-                win_shell.open_path(folder)
-        elif action == 'my_computer':
-            self.Hide()
-            if shell is not None:
-                shell.open_explorer()
-            else:
-                win_shell.open_path('shell:MyComputerFolder' if IS_WINDOWS
-                                    else os.path.expanduser('~'))
-        elif action == 'taskbar_properties':
-            self.Hide()
-            if shell is not None and shell.taskbar is not None:
-                shell.taskbar.show_properties()
-            else:
-                from src.shell.taskbar_properties import show_taskbar_properties
-                show_taskbar_properties(self.parent)
-        elif action == 'display_properties':
-            win_shell.open_path('ms-settings:personalization-background'
-                                if IS_WINDOWS else '')
-            self.Hide()
-        elif action == 'windows_settings':
-            win_shell.open_path('ms-settings:' if IS_WINDOWS else '')
-            self.Hide()
-        elif action == 'notifications':
-            try:
-                from src.ui.notificationcenter import show_notification_center
-                show_notification_center(self.parent)
-            except Exception as error:
-                print(f"[TitanShell] notification centre failed: {error}")
-            self.Hide()
-        elif action == 'titan_apps' and shell is not None:
-            shell.show_titan_window(view='apps')
-            self.Hide()
-        elif action == 'titan_games' and shell is not None:
-            shell.show_titan_window(view='games')
-            self.Hide()
-        else:
-            # Everything else is already implemented by the classic menu.
-            self.execute_action(action)
-
-    def _open_titan_app(self, shortname):
-        try:
-            from src.titan_core.app_manager import (find_application_by_shortname,
-                                                    open_application)
-            app = find_application_by_shortname(shortname)
-            if app:
-                open_application(app)
-                return True
-        except Exception as error:
-            print(f"[TitanShell] could not open {shortname}: {error}")
-        return False
 
     def _on_lock(self, event):
         self.Hide()
@@ -1113,6 +561,16 @@ class XPStartMenu(ClassicStartMenu):
         except Exception:
             pass
 
+    def on_char_hook(self, event):
+        """The frame's char hook, which `ClassicStartMenu` binds.
+
+        Binding a second one here would leave both running for every key -
+        the classic menu's Escape closes the menu, this one's clears the
+        search box first - so the XP menu's keys are an override of the one
+        binding rather than a binding of their own.
+        """
+        self._on_char_hook(event)
+
     def _on_char_hook(self, event):
         key = event.GetKeyCode()
         # A key before the activation has handed the keyboard over: take it
@@ -1129,7 +587,7 @@ class XPStartMenu(ClassicStartMenu):
             shell_alt_f4(self.shell.parent if self.shell else None)
             return
         if key == wx.WXK_TAB:
-            self._move_focus(-1 if event.ShiftDown() else 1)
+            self._move_focus(-1 if key_state.shift_down(event) else 1)
             return
         if key == wx.WXK_ESCAPE:
             # Escape undoes one thing at a time: the search first, then the
@@ -1245,7 +703,7 @@ class XPStartMenu(ClassicStartMenu):
         # `on_activate`), not from here; this is only the fallback for when
         # no activation arrives - the menu was already the active window,
         # or Windows refused the foreground.
-        wx.CallLater(FOCUS_FALLBACK_MS, self._hand_over_focus)
+        call_later(self, FOCUS_FALLBACK_MS, self._hand_over_focus)
         if self.shell is not None:
             self.shell.set_start_button_pressed(True)
 
@@ -1280,16 +738,14 @@ class XPStartMenu(ClassicStartMenu):
         except Exception:
             pass
 
-    def Hide(self):  # noqa: N802 - wx naming
-        result = super().Hide()
-        if self.shell is not None:
-            try:
-                self.shell.set_start_button_pressed(False)
-            except Exception:
-                pass
-        return result
+    # `Hide` is not overridden here: the classic menu's own already lets the
+    # Start button up, and doing it twice is two answers to one question.
 
     def on_activate(self, event):
+        # A menu with a search box in it: every key belongs to the menu
+        # while it is up, exactly as they belong to the main window when
+        # that is up.
+        handover.follows_activation(event)
         if event.GetActive():
             # Opening: this is the hand-over.  It happens here because
             # wxWidgets has just focused the frame in answer to
@@ -1298,7 +754,7 @@ class XPStartMenu(ClassicStartMenu):
             # having it undone, and setting it again, which a screen reader
             # reads as the control twice.
             if self._focus_pending:
-                wx.CallAfter(self._hand_over_focus)
+                call_after(self, self._hand_over_focus)
                 return
             # Already in the menu - an activation that changes nothing must
             # not make the reader say the control again.
@@ -1307,7 +763,7 @@ class XPStartMenu(ClassicStartMenu):
                 return
             # No announcement here: coming back to a menu that is already
             # up must not say its name a second time.
-            wx.CallAfter(lambda: self.left_column().SetFocus())
+            call_after(self, lambda: self.left_column().SetFocus())
 
     def apply_skin_settings(self):
         """The Start menu follows the skin like everything else."""

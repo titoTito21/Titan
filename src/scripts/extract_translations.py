@@ -46,6 +46,9 @@ DOMAIN_FILES = {
     'eltenclient': ['src/eltenlink_client/elten_client.py', 'src/eltenlink_client/elten_gui.py', 'src/eltenlink_client/elten_voip_client.py', 'src/eltenlink_client/accountmanagement.py'],
     'window_switcher': ['src/ui/window_switcher.py'],
     'shell': ['src/shell/a11y.py', 'src/shell/controls.py',
+              # What both Start menus list, shared by the XP one and the
+              # classic one - its strings have always been the shell's
+              'src/ui/start_menu_content.py',
               'src/shell/taskbar.py', 'src/shell/desktop.py',
               'src/shell/start_menu.py', 'src/shell/shell_manager.py',
               'src/shell/shell_actions.py', 'src/shell/run_dialog.py', 'src/shell/quick_launch.py',

@@ -21,8 +21,6 @@ rather than crashing - safer for an accessibility app than the previous
 import-time construction (which would raise during import).
 """
 
-import accessible_output3.outputs.auto
-
 _shared = None
 
 
@@ -34,10 +32,18 @@ class _NullSpeaker:
 
 
 def get_shared_speaker():
-    """Return the process-wide accessible_output3 speaker, created on first use."""
+    """Return the process-wide accessible_output3 speaker, created on first use.
+
+    The LIBRARY is imported here too, not at the top of this module: importing
+    `accessible_output3.outputs.auto` is 211 ms of its own (most of it
+    `platform_utils.paths` hunting for the executable's directory), and a
+    module named for deferring the speaker should not be the reason that
+    happens on the way to the window.
+    """
     global _shared
     if _shared is None:
         try:
+            import accessible_output3.outputs.auto
             _shared = accessible_output3.outputs.auto.Auto()
         except Exception as e:
             print(f"[LazySpeaker] Could not initialize accessible_output3 Auto: {e}")

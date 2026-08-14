@@ -7,7 +7,6 @@ import sys
 import subprocess
 from threading import Thread
 from wx import ProgressDialog
-from src.ui.settingsgui import SettingsFrame
 import traceback
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
@@ -420,8 +419,21 @@ class MenuBar(wx.MenuBar):
         # Use the existing settings_frame from parent instead of creating a new one
         settings_frame = getattr(self.parent, 'settings_frame', None)
         if settings_frame is None:
-            # Fallback: create new one if not available (shouldn't happen in normal flow)
-            settings_frame = SettingsFrame(None, title=_("Settings"))
+            # The window is built a moment after Titan's own is shown, so
+            # for the first instant of a startup there is not one yet.  The
+            # one made here is kept ON THE FRAME, or the components that
+            # register their categories a moment later would fill in a
+            # second Settings window the user is not looking at.
+            from src.ui.settingsgui import SettingsFrame
+            component_manager = getattr(self.parent, 'component_manager', None)
+            settings_frame = SettingsFrame(None, title=_("Settings"),
+                                           component_manager=component_manager)
+            try:
+                self.parent.settings_frame = settings_frame
+                if component_manager is not None:
+                    component_manager.settings_frame = settings_frame
+            except Exception:
+                pass
         settings_frame.Show()
 
     def on_show_help(self, event):

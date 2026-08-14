@@ -42,11 +42,41 @@ import wx
 
 from src.network import mail_format
 from src.network.im_ui_common import (
-    TabbedListFrame, _, apply_skin_tree, show_message, sounds,
+    TabbedListFrame, _, apply_skin_tree, show_message,
     speak_notification, speak_titannet,
 )
 from src.settings.settings import get_setting, set_setting
+from src.system import key_state
 from src.titan_core.sound import play_sound
+
+# Mail is a Titan-Net window like the Feedback Hub, so it sounds like one:
+# the popup pair rather than the Titan IM window pair the shared base class
+# plays for the messenger clients.
+MAIL_OPEN_SOUND = 'ui/popup.ogg'
+MAIL_CLOSE_SOUND = 'ui/popupclose.ogg'
+
+
+def _play(name: str) -> None:
+    try:
+        play_sound(name)
+    except Exception:
+        pass
+
+
+def _escape_pressed(event: wx.KeyEvent) -> bool:
+    """True for a bare Escape - a Shift the input queue has latched aside.
+
+    `wxKeyEvent` reads Shift out of this thread's input queue, and the Titan
+    shell merges that queue with another program's every time it takes the
+    foreground; a Shift held across that stays latched there.  Escape then
+    arrives as Shift+Escape for ever and the window stops closing, which is
+    not something the user can even see happening.  `key_state` asks the
+    hardware instead.
+    """
+    if event.GetKeyCode() != wx.WXK_ESCAPE:
+        return False
+    return key_state.modifiers(event) & (wx.MOD_CONTROL | wx.MOD_ALT) == 0
+
 
 TAB_INBOX = 'inbox'
 TAB_UNREAD = 'unread'
@@ -127,6 +157,10 @@ class MailFrame(TabbedListFrame):
 
     VIEW_ID = 'titan_mail'
     LIST_LABEL = _("Messages:")
+    # One earcon per close: the base class's Escape sound is blanked so the
+    # closing one is the only thing heard, whichever way the window was left.
+    ESCAPE_SOUND = ''
+    CLOSE_SOUND = MAIL_CLOSE_SOUND
 
     def __init__(self, parent, titan_client):
         self.titan_client = titan_client
@@ -149,11 +183,7 @@ class MailFrame(TabbedListFrame):
         self.Bind(wx.EVT_TIMER, lambda e: self._poll(), self._timer)
         self._timer.Start(AUTO_REFRESH_MS)
 
-        if sounds:
-            try:
-                sounds.window_open()
-            except Exception:
-                pass
+        _play(MAIL_OPEN_SOUND)
         self.refresh()
 
     # ------------------------------------------------------------------ setup
@@ -629,6 +659,7 @@ class MailPageFrame(wx.Frame):
             pass
         self._window_name = subject
 
+        _play(MAIL_OPEN_SOUND)
         self._loaded = False
         html = self.message.get('body_html') or self.message.get('body') or ''
         self.webview.SetPage(_sealed_document(html, subject), '')
@@ -673,7 +704,7 @@ class MailPageFrame(wx.Frame):
 
     def _on_key(self, event) -> None:
         keycode, modifiers = event.GetKeyCode(), event.GetModifiers()
-        if keycode == wx.WXK_ESCAPE and modifiers == wx.MOD_NONE:
+        if _escape_pressed(event):
             self.Close()
             return
         if keycode == ord('W') and modifiers == wx.MOD_CONTROL:
@@ -704,11 +735,7 @@ class MailPageFrame(wx.Frame):
             unregister_window(self._window_name)
         except Exception:
             pass
-        try:
-            if sounds:
-                sounds.window_close()
-        except Exception:
-            pass
+        _play(MAIL_CLOSE_SOUND)
         event.Skip()
 
     # ----------------------------------------------------------------- actions
@@ -805,6 +832,8 @@ class MailMessageFrame(TabbedListFrame):
 
     VIEW_ID = 'titan_mail_message'
     LIST_LABEL = _("Message:")
+    ESCAPE_SOUND = ''
+    CLOSE_SOUND = MAIL_CLOSE_SOUND
 
     def __init__(self, parent, titan_client, message: Dict[str, Any],
                  folder: str = TAB_INBOX):
@@ -822,6 +851,7 @@ class MailMessageFrame(TabbedListFrame):
 
         self._build_menu()
         self.header.SetLabel(self._header_text())
+        _play(MAIL_OPEN_SOUND)
         self.refresh()
 
     def _header_text(self) -> str:
@@ -1180,11 +1210,7 @@ class ComposeMailFrame(wx.Frame):
             register_window(_("Compose Mail"), window=self, category='messenger')
         except Exception:
             pass
-        if sounds:
-            try:
-                sounds.window_open()
-            except Exception:
-                pass
+        _play(MAIL_OPEN_SOUND)
 
     def InitUI(self, to_addr: str, subject: str, body: str, fmt: str) -> None:
         self.panel = wx.Panel(self)
@@ -1297,7 +1323,7 @@ class ComposeMailFrame(wx.Frame):
 
     def OnKeyPress(self, event) -> None:
         keycode = event.GetKeyCode()
-        if keycode == wx.WXK_ESCAPE:
+        if _escape_pressed(event):
             self.Close()
             return
         if keycode == wx.WXK_F2:
@@ -1322,11 +1348,7 @@ class ComposeMailFrame(wx.Frame):
             unregister_window(_("Compose Mail"))
         except Exception:
             pass
-        try:
-            if sounds:
-                sounds.window_close()
-        except Exception:
-            pass
+        _play(MAIL_CLOSE_SOUND)
         event.Skip()
 
     def OnPreview(self) -> None:
