@@ -284,9 +284,68 @@ class StartMenuContent:
                 self._programs_structure = {}
         return self._programs_structure
 
+    def addon_entries(self):
+        """What the shell add-ons put on the Start menu.
+
+        Both menus ask for these, because both are built from this file:
+        an add-on writes `start_menu_items` once and it is on the XP menu
+        and on the classic one, in the left column and in the search box.
+
+        An entry is the usual `{'id', 'label', 'action'}`; one that carries
+        `children` (a list of the same, or a callable returning one) becomes
+        a branch instead, which is how an add-on with six commands adds one
+        line to the menu rather than six.
+        """
+        try:
+            from src.shell import addons as shell_addons
+        except Exception:
+            return []
+        entries = []
+        for item in shell_addons.collect('start_menu', 'start_menu_items',
+                                         self):
+            label = str(item.get('label', ''))
+            if not label:
+                continue
+            if item.get('children') is not None:
+                entries.append(MenuEntry(label, 'folder', ('__addon__', item),
+                                         description=item.get('addon_name',
+                                                              '')))
+            else:
+                entries.append(MenuEntry(label, 'addon', item,
+                                         description=item.get('addon_name',
+                                                              '')))
+        return entries
+
+    @staticmethod
+    def _addon_children(item):
+        """A contributed branch's children, asked for when it is opened."""
+        children = item.get('children')
+        if callable(children):
+            try:
+                children = children()
+            except Exception as error:
+                print(f"[ShellAddons] {item.get('addon')} children failed: "
+                      f"{error}")
+                children = []
+        entries = []
+        for child in children or []:
+            if not isinstance(child, dict):
+                continue
+            label = str(child.get('label', ''))
+            if not label or not callable(child.get('action')):
+                continue
+            child = dict(child)
+            child.setdefault('addon', item.get('addon'))
+            child.setdefault('addon_name', item.get('addon_name'))
+            entries.append(MenuEntry(label, 'addon', child,
+                                     description=item.get('label', '')))
+        return entries
+
     def _children_of(self, entry):
         """What is under a branch, worked out the first time it is opened."""
         payload = entry.payload
+        if isinstance(payload, tuple) and payload[:1] == ('__addon__',):
+            return self._addon_children(payload[1])
         if payload == '__all_programs__':
             return self._all_programs_entries()
         if payload == '__apps__':
@@ -732,7 +791,8 @@ class StartMenuContent:
         the settings are searched exactly like the programs are.
         """
         return (self._im_entries() + self._macro_entries()
-                + self._settings_entries() + self._windows_app_entries())
+                + self._settings_entries() + self._windows_app_entries()
+                + self.addon_entries())
 
     def search_entries(self, text):
         """What the left column shows while there is something in the box.
@@ -813,6 +873,21 @@ class StartMenuContent:
         if entry.kind == 'program':
             self.run_program(entry.payload)
             self.Hide()
+            return
+        if entry.kind == 'addon':
+            # The menu goes away first: an add-on's command usually opens a
+            # window, and a Start menu still standing in front of it is a
+            # Start menu the user has to dismiss before they can use what
+            # they just asked for.
+            self.Hide()
+            item = entry.payload or {}
+            try:
+                item['action']()
+            except Exception as error:
+                print(f"[ShellAddons] {item.get('addon')}."
+                      f"{item.get('id')} failed: {error}")
+                import traceback
+                traceback.print_exc()
             return
         self._run_action(entry.payload)
 

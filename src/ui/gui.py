@@ -4523,26 +4523,52 @@ class TitanApp(wx.Frame):
 
     def on_minimize(self, event):
         if self.IsIconized():
+            # Restoring the window told the Invisible UI to stand aside
+            # (`restore_from_tray`); minimising it again is what gives the
+            # keyboard back.  That hand-back used to live in a SECOND
+            # EVT_ICONIZE handler bound by `restore_from_tray`, which is why
+            # minimising after a restore behaved differently from minimising
+            # a window that had never been restored: both handlers ran, so
+            # `minimize_to_tray` ran twice - a second tray icon, the sound
+            # twice - and the first of them ignored `minimize_action`
+            # entirely.  Minimising is one thing, so it is one handler.
+            self._give_the_keyboard_back()
             try:
                 from src.settings.settings import get_setting
                 action = get_setting('minimize_action', 'invisible_ui', section='general')
             except Exception:
                 action = 'invisible_ui'
             if action == 'invisible_ui':
-                # Under the shell, Titan minimised does NOT mean there is no
-                # Titan window left on the screen: the DESKTOP is one, and
-                # Windows+M puts the keyboard straight onto it.  Starting
-                # the Invisible UI here took every arrow key away from the
-                # desktop's own list of icons, so the desktop read as though
-                # it had gone and only a key the Invisible UI understood
-                # brought anything back.  Titan still goes to the tray; the
-                # Invisible UI is what does not start.
-                self.minimize_to_tray(
-                    activate_invisible_ui=not shell_owns_the_keyboard())
+                # The shell is deliberately NOT a special case here.  Titan
+                # UI belongs in the shell as much as anywhere else, and the
+                # reason it once had to be kept out - Windows+M minimising
+                # Titan and then putting the keyboard on the desktop, where
+                # every arrow key went to the Invisible UI instead of to the
+                # list of icons - is what `src/shell/keyboard_handover.py`
+                # answers: a shell window in front means the keys are that
+                # window's, and the Invisible UI has them back the moment it
+                # is not.
+                self.minimize_to_tray()
             elif action == 'tray':
                 self.minimize_to_tray(activate_invisible_ui=False)
             # 'nothing' → leave the window iconized, take no extra action
         event.Skip()
+
+    def _give_the_keyboard_back(self):
+        """Undo the stand-aside `restore_from_tray` asked the Invisible UI for.
+
+        Only the asker may give it back - `_on_dialog_close` checks the name -
+        so a shell window that has the keyboard right now keeps it.
+        """
+        interface = getattr(self, 'invisible_ui', None)
+        if interface is None:
+            return
+        try:
+            if (getattr(interface, 'titan_ui_temporarily_disabled', False)
+                    and getattr(interface, 'disabled_by_dialog', None) == "main_window"):
+                interface._on_dialog_close("main_window", None)
+        except Exception as e:
+            print(f"[GUI] Error handing the keyboard back to the Invisible UI: {e}")
 
     def open_time_settings(self):
         if IS_WINDOWS:
@@ -4805,24 +4831,59 @@ class TitanApp(wx.Frame):
             _show_skinned_message(_("This feature is not supported on this platform."), _("Information"), wx.OK | wx.ICON_INFORMATION)
 
     def minimize_to_tray(self, activate_invisible_ui=True):
+        # Minimising twice is one minimised Titan, not two: a second
+        # TaskBarIcon would leave an icon in the notification area that
+        # `restore_from_tray` never destroys, and the sound would be heard
+        # twice.
+        already_away = self.task_bar_icon is not None
+        if not already_away:
+            skin_name = self.settings.get('interface', {}).get('skin', DEFAULT_SKIN_NAME)
+            skin_data = self.load_skin_data(skin_name)
+            try:
+                self.task_bar_icon = TaskBarIcon(self, self.version, skin_data)
+            except Exception as e:
+                print(f"[GUI] Error creating the tray icon: {e}")
         self.Hide()
-        skin_name = self.settings.get('interface', {}).get('skin', DEFAULT_SKIN_NAME)
-        skin_data = self.load_skin_data(skin_name)
-        self.task_bar_icon = TaskBarIcon(self, self.version, skin_data)
+        if already_away:
+            return
         play_sound('ui/minimalize.ogg')
         vibrate_menu_close()  # Add vibration for minimizing to tray
         if activate_invisible_ui:
             self.invisible_ui.start_listening()
+            # A shell window may already be the one in front - Windows+M
+            # minimises Titan AND puts the keyboard on the desktop, and
+            # whichever of the two happens first, the keys belong to the
+            # window the user is looking at.  An activation the Invisible UI
+            # was not listening for cannot be waited for, so the question is
+            # asked here as well.
+            try:
+                from src.shell.keyboard_handover import (
+                    shell_window_in_front, take_keyboard)
+                if shell_window_in_front():
+                    take_keyboard()
+            except Exception as e:
+                print(f"[GUI] Error asking who has the keyboard: {e}")
             # Show tip about invisible UI after 5-6 seconds
             show_invisible_ui_tip(delay=5.5)
 
     def restore_from_tray(self):
-        # Auto-disable Titan UI when main window is restored
-        if hasattr(self.invisible_ui, 'titan_ui_mode') and self.invisible_ui.titan_ui_mode:
+        """Bring Titan's window back - the one way in, from wherever.
+
+        The tray icon, the Invisible UI, Titan UI mode and the sound all
+        belong to "the window is back", so everything that shows the window
+        again comes through here: the tray icon's own menu, its double
+        click, the Invisible UI's "Back to graphical interface", a component
+        that needs the window in front, and - the one that used to go round
+        it - the shell's `show_titan_window`, which did `Show()` and
+        `Raise()` by hand and so left Titan in the notification area with
+        the Invisible UI still answering every key.
+        """
+        # Auto-disable Titan UI when main window is restored.  `on_minimize`
+        # is what gives it back; nothing is bound here, or minimising would
+        # be handled twice (see the note there).
+        if getattr(self.invisible_ui, 'titan_ui_mode', False):
             self.invisible_ui.temporarily_disable_titan_ui("main_window")
-            # Bind window close event to re-enable if minimized again
-            self.Bind(wx.EVT_ICONIZE, self._on_window_minimize)
-        
+
         # Initialize UI if it wasn't initialized (when started minimized)
         if self.start_minimized and not hasattr(self, 'toolbar'):
             self.InitUI()
@@ -4831,27 +4892,25 @@ class TitanApp(wx.Frame):
             self.apply_selected_skin()
             self._show_first_view()
             self.start_minimized = False  # Mark as no longer in minimized startup state
-        
+
+        was_away = not self.IsShown() or self.IsIconized()
+        try:
+            if self.IsIconized():
+                self.Iconize(False)
+        except Exception as e:
+            print(f"[GUI] Error un-iconizing: {e}")
         self.Show()
         self.Raise()
-        self.task_bar_icon.Destroy()
-        self.task_bar_icon = None
-        play_sound('ui/normalize.ogg')
-        vibrate_menu_open()  # Add vibration for normalizing from tray
+        if self.task_bar_icon is not None:
+            try:
+                self.task_bar_icon.Destroy()
+            except Exception as e:
+                print(f"[GUI] Error destroying the tray icon: {e}")
+            self.task_bar_icon = None
+        if was_away:
+            play_sound('ui/normalize.ogg')
+            vibrate_menu_open()  # Add vibration for normalizing from tray
         self.invisible_ui.stop_listening()
-    
-    def _on_window_minimize(self, event):
-        """Handle window minimization - re-enable Titan UI if it was disabled and minimize to tray"""
-        if event.IsIconized():
-            # Window is being minimized, re-enable Titan UI if it was disabled
-            if (hasattr(self.invisible_ui, 'titan_ui_temporarily_disabled') and 
-                self.invisible_ui.titan_ui_temporarily_disabled and 
-                self.invisible_ui.disabled_by_dialog == "main_window"):
-                self.invisible_ui._on_dialog_close("main_window", None)
-            
-            # Minimize to tray and start invisible UI
-            self.minimize_to_tray()
-        event.Skip()
 
     def shutdown_app(self):
         """Handles the complete shutdown of the application by terminating the process after a delay."""

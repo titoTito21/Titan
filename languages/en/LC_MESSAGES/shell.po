@@ -1549,3 +1549,8 @@ msgstr "Reading..."
 #~ msgid "No Titan IM modules"
 #~ msgstr "No Titan IM modules"
 
+msgid "&Tools"
+msgstr ""
+
+msgid "A Start menu from an installed shell add-on."
+msgstr ""

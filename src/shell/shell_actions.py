@@ -908,6 +908,33 @@ def shell_taskbar_position(position=None, **_kwargs):
 # --------------------------------------------------------------------------- #
 # The declaration the Action API reads
 # --------------------------------------------------------------------------- #
+def shell_list_addons(**_kwargs):
+    """What is installed in `data/shell addons/`, and what each one does."""
+    try:
+        from src.shell import addons
+        described = addons.manager().describe()
+    except Exception as error:
+        return f"Could not read the shell add-ons: {error}"
+    if not described:
+        return ("No shell add-ons are installed. They go in "
+                "data/shell addons/ and can add to the Start menu, the file "
+                "browser, the taskbar and the desktop - or replace the Start "
+                "menu or the file browser outright.")
+    lines = ["Shell add-ons:"]
+    for entry in described:
+        state = "on" if entry['enabled'] else "off"
+        line = f"- {entry['name']} ({entry['id']}): {state}"
+        if entry['provides']:
+            line += f", provides a {entry['provides'].replace('_', ' ')}"
+        if entry['error']:
+            line += f", broken: {entry['error']}"
+        lines.append(line)
+        if entry['description']:
+            lines.append(f"  {entry['description']}")
+    lines.append("Turn one on or off with <its id>.enable / .disable.")
+    return "\n".join(lines)
+
+
 def get_shell_actions():
     """(name, summary, params, risk, callable) for every shell action."""
     string = {'type': 'string'}
@@ -1027,6 +1054,9 @@ def get_shell_actions():
          {'action': dict(string, description="logoff, shutdown, restart, "
                          "sleep, hibernate or exit_titan.", required=True)},
          'always_confirm', shell_power),
+        ('list_addons', "List the shell add-ons installed: what each adds "
+                        "to the shell, and whether it is on.", {}, 'auto',
+         shell_list_addons),
         ('list_settings', "List the shell's settings and their values.", {},
          'auto', shell_list_settings),
         ('set_setting', "Turn one of the shell's settings on or off.",

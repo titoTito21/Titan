@@ -133,14 +133,24 @@ class TaskbarPage(_Page):
 
 
 class StartMenuPage(_Page):
-    """`IDD_TASKBARPROP_STARTMENU`: which of the two menus."""
+    """`IDD_TASKBARPROP_STARTMENU`: which Start menu this machine has.
+
+    XP's own page offers two, and this is where a third belongs as well: a
+    shell add-on that provides a Start menu is a Start menu the user can
+    choose, so it appears here beside them rather than in a settings screen
+    of its own.  Each is a radio button with a line saying what it is -
+    which for an add-on is its manifest's description, so an add-on author
+    writes that sentence once.
+    """
 
     def build(self):
         box = self.add_group(_("Start menu"))
         parent = box.GetStaticBox()
 
-        classic = str(shell_setting('start_menu_style', 'xp')).lower() \
-            == 'classic'
+        style = str(shell_setting('start_menu_style', 'xp')).lower()
+        chosen_addon = str(shell_setting('provider_start_menu', '') or '')
+
+        self.choices = []          # (button, style value, add-on id)
 
         self.modern = wx.RadioButton(parent, label=_("&Start menu"),
                                      style=wx.RB_GROUP)
@@ -150,6 +160,7 @@ class StartMenuPage(_Page):
             label=_("This menu style gives you easy access to your folders, "
                     "favorite programs, and search.")),
             0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 24)
+        self.choices.append((self.modern, 'xp', ''))
 
         self.classic = wx.RadioButton(parent, label=_("Classic Start &menu"))
         box.Add(self.classic, 0, wx.ALL, 6)
@@ -158,14 +169,52 @@ class StartMenuPage(_Page):
             label=_("This menu style gives you the classic look and "
                     "functionality.")),
             0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 24)
+        self.choices.append((self.classic, 'classic', ''))
 
-        (self.classic if classic else self.modern).SetValue(True)
-        for button in (self.modern, self.classic):
+        for config in self._addon_menus():
+            button = wx.RadioButton(parent, label=config.name)
+            box.Add(button, 0, wx.ALL, 6)
+            description = config.description or _(
+                "A Start menu from an installed shell add-on.")
+            box.Add(wx.StaticText(parent, label=description),
+                    0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 24)
+            self.choices.append((button, 'addon', config.id))
+
+        selected = None
+        if style == 'addon' and chosen_addon:
+            selected = next((button for button, kind, addon_id in self.choices
+                             if kind == 'addon' and addon_id == chosen_addon),
+                            None)
+        elif style == 'classic':
+            selected = self.classic
+        # An add-on that has been uninstalled since it was chosen leaves the
+        # user with Titan's own menu, which is what actually opens - never a
+        # ticked box for something that is not there.
+        (selected or self.modern).SetValue(True)
+
+        for button, _kind, _addon_id in self.choices:
             button.Bind(wx.EVT_RADIOBUTTON, self._changed)
 
+    @staticmethod
+    def _addon_menus():
+        """The installed add-ons offering a Start menu of their own."""
+        try:
+            from src.shell import addons
+            return addons.manager().providers('start_menu')
+        except Exception as error:
+            print(f"[TaskbarProperties] could not list Start menus: {error}")
+            return []
+
     def _changed(self, _event):
-        _write('start_menu_style',
-               'classic' if self.classic.GetValue() else 'xp')
+        for button, kind, addon_id in self.choices:
+            if not button.GetValue():
+                continue
+            _write('start_menu_style', kind)
+            # Written even for Titan's own menus, so that turning an add-on
+            # off and on again does not silently bring back a menu the user
+            # has since stopped using.
+            _write('provider_start_menu', addon_id)
+            break
         # The menu is rebuilt the next time it is opened, so the one already
         # made has to go.
         self.dialog.drop_start_menu()

@@ -1319,3 +1319,23 @@ msgstr "Congratulations!"
 #~ "\"Modify system interface\" is enabled "
 #~ "under Environment."
 
+msgid "Settings interface:"
+msgstr ""
+
+msgid "Classic"
+msgstr ""
+
+msgid "Shell add-ons"
+msgstr ""
+
+msgid "Installed shell add-ons:"
+msgstr ""
+
+msgid "Add-ons in data/shell addons/ can add to the Start menu, the file browser, the taskbar and the desktop. Which Start menu you use is on the taskbar's own Properties."
+msgstr ""
+
+msgid "replaces the {part}"
+msgstr ""
+
+msgid "cannot be read"
+msgstr ""

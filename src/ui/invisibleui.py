@@ -1206,9 +1206,13 @@ class InvisibleUI:
         self._shutdown_in_progress = False
         self.debug_log = []  # Store debug messages in memory
 
-        # Game platform navigation state
-        self.in_game_platform = False  # Track if we're inside a platform subfolder
-        self.game_platform_backup = None  # Backup of Games category before entering platform
+        # Subcategory navigation state.  A card whose element opens a list
+        # of its own - a game platform, the Program card's AI and Programmer
+        # - is opened IN PLACE, so one backup is all there is to keep.
+        self.in_subcategory = False  # Track if a card is showing a subcategory
+        self.subcategory_backup = None  # The card as it was before it opened
+        self.in_game_platform = False  # The same thing, said of Games
+        self.game_platform_backup = None  # Kept in step with the above
 
         # Safe initialization
         try:
@@ -1382,14 +1386,23 @@ class InvisibleUI:
             # Auto-disable Titan UI when settings dialog opens
             if self.titan_ui_mode:
                 self.temporarily_disable_titan_ui("settings")
-            # Use the existing settings_frame from main_frame instead of creating a new one
-            settings_frame = getattr(self.main_frame, 'settings_frame', None)
+            # Whichever settings interface the user chose - the classic
+            # window, or one from `data/settings interfaces/`.  Titan UI is
+            # stood down for any of them, because they all take the
+            # keyboard.
+            from src.settings.interfaces import open_settings
+            settings_frame = open_settings(self.main_frame)
             if settings_frame is None:
-                # Fallback: create new one if not available (shouldn't happen in normal flow)
-                settings_frame = settingsgui.SettingsFrame(None, title=_("Settings"))
+                self._on_dialog_close("settings", None)
+                return
             # Bind close event to re-enable Titan UI if it was disabled
-            settings_frame.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("settings", evt))
-            settings_frame.Show()
+            try:
+                settings_frame.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("settings", evt))
+            except Exception:
+                # An interface that answered something other than a window
+                # (a console one, say) has nothing to bind - Titan UI comes
+                # back when it is asked for again.
+                pass
             # Pull the Settings window to the foreground so the user actually
             # sees something happen after pressing Settings from IUI.
             self._bring_window_forward(settings_frame)
@@ -1448,15 +1461,56 @@ class InvisibleUI:
         #     else:
         #         self.speak(_("Titan-Net client not initialized"))
 
-        # Main menu actions
-        main_menu_actions = {
+        # The **Program** menu, in the same order the graphical one has it.
+        program_actions = {
             _("Component Manager"): lambda: safe_call_after(show_component_manager),
             # _("Log in to Titan-Network"): lambda: safe_call_after(show_titan_net_login),  # DISABLED
             _("Program settings"): lambda: safe_call_after(show_settings),
+        }
+
+        # What the graphical Program menu has and this one never did - which
+        # is Install data package.  Shared rather than copied
+        # (`src/ui/program_menu.py`), so the two cannot drift apart.
+        extra_groups = []
+        try:
+            from src.ui import program_menu
+            for entry in program_menu.program_entries(self.main_frame):
+                program_actions[entry['label']] = (
+                    lambda act=entry['action']: safe_call_after(act))
+            # And the menus a face without a menu bar was missing whole: AI
+            # (the Agent, both Assistants, AI OCR) and Programmer (the
+            # creation kit).
+            extra_groups = program_menu.extra_groups(self.main_frame)
+        except Exception as e:
+            print(f"[IUI] Program menu entries: {e}")
+
+        program_actions.update({
             _("Help"): lambda: safe_call_after(show_help),
             _("Back to graphical interface"): lambda: safe_call_after(self.main_frame.restore_from_tray) if self.main_frame else None,
             _("Exit"): lambda: safe_call_after(lambda: self.main_frame.Close()) if self.main_frame else None
-        }
+        })
+
+        # The **Menu** card is the menu bar itself, so it holds the menu bar's
+        # MENUS - Program, AI, Programmer - and each of them opens as a
+        # SUBCATEGORY, exactly as a platform opens inside the Games card.
+        # Everything the menu bar can do is therefore in the menu it is in,
+        # rather than in one list of twenty lines or on a tab-bar card per
+        # menu, which is a menu the graphical Titan does not have.
+        menu_groups = [(_("Program"), program_actions)]
+        for group in extra_groups:
+            menu_groups.append((group['label'],
+                                {entry['label']:
+                                 (lambda act=entry['action']: safe_call_after(act))
+                                 for entry in group['entries']}))
+
+        main_menu_actions = {}
+        for _label, _actions in menu_groups:
+            main_menu_actions[_label] = (
+                lambda label=_label, acts=_actions:
+                self.expand_subcategory(
+                    _("Menu"), label, list(acts.keys()),
+                    (lambda name, a=acts: a[name]()),
+                    "ui/applist.ogg"))
 
         # Component menu actions
         component_menu_actions = {}
@@ -1533,8 +1587,11 @@ class InvisibleUI:
                 {"name": _("Widgets"), "sound": "core/focus.ogg", "elements": widget_names, "action": self.activate_widget, "widget_data": widgets},
                 {"name": _("Titan IM"), "sound": "titannet/iui.ogg", "elements": titan_im_elements, "action": self.activate_titan_im},
                 {"name": _("Status Bar"), "sound": "statusbar.ogg", "elements": statusbar_items, "action": self.activate_statusbar_item},
+                # The menu bar itself: its menus are the elements, and each
+                # opens as a subcategory of this card.
                 {"name": _("Menu"), "sound": "ui/applist.ogg", "elements": list(main_menu_actions.keys()), "action": lambda name: main_menu_actions[name]()}
             ])
+
             self.debug_log.append(f"DEBUG: Categories built successfully")
         except Exception as e:
             self.debug_log.append(f"ERROR building categories: {e}")
@@ -2589,67 +2646,114 @@ class InvisibleUI:
         else:
             self.speak(_("Game not found: {}").format(clean_name))
 
-    def expand_game_platform(self, platform_name):
-        """Expand into a game platform folder (Steam, Battle.net, Titan-Games)"""
+    def expand_subcategory(self, parent_name, sub_name, elements, action,
+                           sound="core/focus.ogg"):
+        """Open a subcategory in the place its parent card occupies.
+
+        This is what a game platform has always done, said once: the card is
+        replaced by a list of its own with **Back** at the top of it, and
+        Back puts the card back.  The Program card's AI and Programmer are
+        the same thing - a group of the graphical menu bar is a subcategory
+        here, not a card of its own, because sixteen more lines in one list
+        is not the same menu and a tab bar with a card per menu is not
+        either.
+        """
         try:
-            # Check if this is the "No games" placeholder
-            if platform_name == _("No games"):
-                return
+            index = next((i for i, cat in enumerate(self.categories)
+                          if cat.get('name') == parent_name), None)
+            if index is None:
+                self.speak(_("Category not found"))
+                return False
 
-            # Get the platform subcategory
-            if not hasattr(self, 'games_platform_subcategories'):
-                self.speak(_("Platform not found"))
-                return
-
-            platform_subcat = self.games_platform_subcategories.get(platform_name)
-            if not platform_subcat:
-                self.speak(_("Platform not found"))
-                return
-
-            # Play expansion sound
             play_sound("ui/focus_expanded.ogg")
 
-            # Backup current Games category
-            games_category_index = None
-            for i, cat in enumerate(self.categories):
-                if cat.get('name') == _("Games"):
-                    games_category_index = i
-                    self.game_platform_backup = cat.copy()
-                    break
+            backup = self.categories[index].copy()
+            self.subcategory_backup = backup
+            self.game_platform_backup = backup
 
-            if games_category_index is None:
-                self.speak(_("Games category not found"))
-                return
+            def _element(name, act=action):
+                if name == _("Back"):
+                    self.collapse_subcategory()
+                else:
+                    act(name)
 
-            # Replace Games category with platform subcategory
-            # Add "Back" element at the beginning
-            platform_elements = [_("Back")] + platform_subcat['elements']
-            self.categories[games_category_index] = {
-                "name": platform_subcat['name'],
-                "sound": "core/focus.ogg",
-                "elements": platform_elements,
-                "action": self.handle_platform_element,
-                "is_platform_expanded": True
+            self.categories[index] = {
+                "name": sub_name,
+                "sound": sound,
+                "elements": [_("Back")] + list(elements),
+                "action": _element,
+                "is_subcategory": True,
+                # The name the game platform code has always used, so that
+                # anything looking for an open platform still finds one.
+                "is_platform_expanded": True,
             }
 
-            # Set state
-            self.in_game_platform = True
+            self.in_subcategory = True
+            self.in_game_platform = (parent_name == _("Games"))
             self.current_element_index = 0
 
             # Announce first element (Back)
             self.speak(_("Back"))
+            return True
 
         except Exception as e:
-            print(f"Error expanding game platform: {e}")
+            print(f"Error expanding subcategory: {e}")
             import traceback
             traceback.print_exc()
-            self.speak(_("Error expanding platform"))
+            self.speak(_("Error"))
+            return False
+
+    def collapse_subcategory(self):
+        """Go back from a subcategory to the card it was opened from."""
+        try:
+            index = next((i for i, cat in enumerate(self.categories)
+                          if cat.get('is_subcategory')
+                          or cat.get('is_platform_expanded')), None)
+            if index is None or self.subcategory_backup is None:
+                self.speak(_("Error returning"))
+                return
+
+            play_sound("ui/focus_collabsed.ogg")
+
+            parent = self.subcategory_backup
+            self.categories[index] = parent
+
+            self.in_subcategory = False
+            self.in_game_platform = False
+            self.subcategory_backup = None
+            self.game_platform_backup = None
+            self.current_element_index = 0
+
+            # Announce we are back in the card it came from
+            self.speak(parent.get('name', ''))
+
+        except Exception as e:
+            print(f"Error collapsing subcategory: {e}")
+            import traceback
+            traceback.print_exc()
+            self.speak(_("Error returning"))
+
+    def expand_game_platform(self, platform_name):
+        """Expand into a game platform folder (Steam, Battle.net, Titan-Games)"""
+        # Check if this is the "No games" placeholder
+        if platform_name == _("No games"):
+            return
+
+        platform_subcat = getattr(self, 'games_platform_subcategories', {}).get(platform_name)
+        if not platform_subcat:
+            self.speak(_("Platform not found"))
+            return
+
+        self.expand_subcategory(_("Games"), platform_subcat['name'],
+                                platform_subcat['elements'],
+                                self.launch_game_by_name,
+                                platform_subcat.get('sound', "core/focus.ogg"))
 
     def handle_platform_element(self, element_name):
         """Handle activation of element in platform view (Back or game name)"""
         try:
             if element_name == _("Back"):
-                self.collapse_game_platform()
+                self.collapse_subcategory()
             else:
                 # Launch the game
                 self.launch_game_by_name(element_name)
@@ -2659,37 +2763,8 @@ class InvisibleUI:
 
     def collapse_game_platform(self):
         """Go back from platform view to Games category"""
-        try:
-            # Play collapse sound
-            play_sound("ui/focus_collabsed.ogg")
+        self.collapse_subcategory()
 
-            # Find and restore Games category
-            games_category_index = None
-            for i, cat in enumerate(self.categories):
-                if cat.get('is_platform_expanded'):
-                    games_category_index = i
-                    break
-
-            if games_category_index is None or self.game_platform_backup is None:
-                self.speak(_("Error returning"))
-                return
-
-            # Restore original Games category
-            self.categories[games_category_index] = self.game_platform_backup
-
-            # Reset state
-            self.in_game_platform = False
-            self.game_platform_backup = None
-            self.current_element_index = 0
-
-            # Announce we're back in Games
-            self.speak(_("Games"))
-
-        except Exception as e:
-            print(f"Error collapsing game platform: {e}")
-            import traceback
-            traceback.print_exc()
-            self.speak(_("Error returning"))
 
     def activate_statusbar_item(self, item_string):
         actions = {

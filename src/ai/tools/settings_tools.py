@@ -288,6 +288,48 @@ def titan_reset_setting(key, section="general", **_):
             f"Titan restarted to take effect.")
 
 
+def titan_settings_interfaces(**_):
+    """Which window Titan's settings open in, and what else is installed."""
+    try:
+        from src.settings.interfaces import manager
+        described = manager().describe()
+        chosen = manager().chosen()
+    except Exception as e:
+        return f"Could not read the settings interfaces: {e}"
+    lines = ["Titan's settings open in: "
+             + (chosen or "the classic window") + "."]
+    if not described:
+        lines.append("No other settings interfaces are installed. They go in "
+                     "data/settings interfaces/ and show the same settings "
+                     "the classic window does, rendered their own way.")
+        return "\n".join(lines)
+    lines.append("Installed:")
+    for entry in described:
+        state = "on" if entry['enabled'] else "off"
+        lines.append(f"- {entry['name']} ({entry['id']}): {state}"
+                     + (f", broken: {entry['error']}" if entry['error'] else ""))
+        if entry['description']:
+            lines.append(f"  {entry['description']}")
+    lines.append("Choose one with titan_use_settings_interface, or '' for the "
+                 "classic window.")
+    return "\n".join(lines)
+
+
+def titan_use_settings_interface(interface="", **_):
+    """Open Titan's settings in a different interface from now on."""
+    try:
+        from src.settings.interfaces import manager
+        ok, answer = manager().choose(interface)
+    except Exception as e:
+        return f"Could not change the settings interface: {e}"
+    if not ok:
+        return answer
+    if not answer:
+        return "Titan's settings will open in the classic window again."
+    return (f"Titan's settings will now open in '{answer}'. Settings -> "
+            f"Interface -> Settings interface changes it back.")
+
+
 def get_settings_tools():
     from src.ai.agent_tools import _tool
     S = {'type': 'string'}
@@ -308,6 +350,17 @@ def get_settings_tools():
         _tool('titan_list_setting_sections',
               "List the sections Titan's settings are grouped into.",
               titan_list_setting_sections),
+        _tool('titan_settings_interfaces',
+              "Say which interface Titan's settings open in - the classic "
+              "window or one installed in data/settings interfaces/ - and "
+              "list the others.", titan_settings_interfaces),
+        _tool('titan_use_settings_interface',
+              "Open Titan's settings in a different interface from now on. "
+              "Pass an empty name for the classic window.",
+              titan_use_settings_interface, risk='confirm',
+              properties={'interface': dict(S, description="The interface's "
+                          "id, or '' for the classic window.")},
+              required=['interface']),
         _tool('titan_reset_setting',
               "Put one Titan setting back to its default.",
               titan_reset_setting, risk='confirm',

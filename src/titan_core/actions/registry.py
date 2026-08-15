@@ -135,6 +135,11 @@ def _friendly_label(kind, path, name):
         return _json_name(path, 'module.json') or name
     if kind == 'tts_engine':
         return _json_name(path, 'engine.json') or name
+    if kind == 'shell_addon':
+        return _ini_name(path, '__shell_addon__.TCE', 'shell addon') or name
+    if kind == 'settings_interface':
+        return _ini_name(path, '__settings_ui__.TCE',
+                         'settings interface') or name
     return name
 
 

@@ -1,0 +1,8 @@
+[settings interface]
+name = Settings as a web page
+name_pl = Ustawienia jako strona internetowa
+description = Every Titan setting rendered as HTML in a Titan window - one page, a search box, and a link at the top of each category.
+description_pl = Wszystkie ustawienia Titana jako jedna strona HTML w oknie Titana - z wyszukiwarką i odnośnikiem do każdej kategorii.
+author = TCE Team
+version = 1.0
+status = 0

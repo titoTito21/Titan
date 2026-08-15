@@ -365,7 +365,13 @@ class XPStartMenu(ClassicStartMenu):
             self.right_list.set_entries(places)
 
     def _top_level_entries(self):
-        """The left column, as branches that open where they stand."""
+        """The left column, as branches that open where they stand.
+
+        What a shell add-on contributes goes at the end, after All
+        Programs: the column's own ten entries are where the user has
+        learnt they are, and something installed afterwards must not move
+        them.
+        """
         return [
             MenuEntry(_("Titan"), 'action', 'titan_window'),
             MenuEntry(_("Applications"), 'folder', '__apps__'),
@@ -377,7 +383,7 @@ class XPStartMenu(ClassicStartMenu):
             MenuEntry(_("Internet"), 'action', 'internet'),
             MenuEntry(_("Windows apps"), 'folder', '__windows_apps__'),
             MenuEntry(_("All Programs"), 'folder', '__all_programs__'),
-        ]
+        ] + self.addon_entries()
 
     def _places_entries(self):
         """The right column: places and the things that are not settings."""

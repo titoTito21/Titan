@@ -23,7 +23,8 @@ This uses PyInstaller to compile the application to a standalone executable in t
 ### Packaging Add-ons (.TCA / .TCD)
 
 Any app, game, component, launcher, Titan IM module, gamepad mode, TTS
-engine, widget/applet, or statusbar applet can OPTIONALLY be packaged into a
+engine, widget/applet, statusbar applet, shell add-on or settings interface
+can OPTIONALLY be packaged into a
 single compressed file instead of shipping as a directory — `.TCA` for
 applications/games, `.TCD` for every other kind. This is purely additive:
 directory-based add-ons keep working unchanged, and the packaged file, once
@@ -35,7 +36,8 @@ identically (see `src/titan_core/titan_package.py` for the format itself).
 python src/scripts/pack_addon.py data/applications/tcalc --kind app -o tcalc.tca
 
 # --kind is inferred from the source path if omitted (data/<subdir>/... ->
-# app/game/component/launcher/im_module/gamepad_mode/tts_engine/widget/statusbar_applet)
+# app/game/component/launcher/im_module/gamepad_mode/tts_engine/widget/
+# statusbar_applet/shell_addon/settings_interface)
 python src/scripts/pack_addon.py data/components/mycomponent
 
 # Inspect/unpack a package for debugging (does not touch the original file)
@@ -51,7 +53,7 @@ Key properties:
   `__component__.TCE`, etc.) — no separate package manifest schema exists.
 - The package file itself is permanent and never deleted or converted into
   a directory. `src/platform_utils.py`'s `discover_data_entries()` (the
-  shared discovery function used by every one of the 9 add-on kinds)
+  shared discovery function used by every one of the 11 add-on kinds)
   transparently extracts a package into a transient runtime cache
   (`%APPDATA%/titosoft/Titan/pkg_cache/`) on demand — this cache is purely
   a performance detail, never user-managed data.
@@ -128,6 +130,8 @@ TCE Launcher/
 │   │   └── notificationcenter.py   # Notification center UI
 │   ├── settings/              # Configuration management
 │   │   ├── settings.py       # Settings handler (JSON-based)
+│   │   ├── ui_model.py       # Every setting, read out of the settings window
+│   │   ├── interfaces.py     # data/settings interfaces/ - the chosen window
 │   │   └── titan_im_config.py # Messaging configuration
 │   ├── network/               # Network and messaging
 │   │   ├── titan_net.py      # Titan-Net WebSocket client
@@ -258,6 +262,11 @@ the startup sound's two seconds SPENT loading rather than slept through.
 - **Applets**: Located in `data/applets/`, UI widgets for taskbar and desktop
 - Applications use format: `name_pl=`, `name_en=`, `openfile=`, `shortname=`
 - Components use INI format with `[component]` section
+- **Shell add-ons**: `data/shell addons/`, each with `__shell_addon__.TCE` —
+  they add to (or replace parts of) the Titan shell; see "Shell add-ons" below
+- **Settings interfaces**: `data/settings interfaces/`, each with
+  `__settings_ui__.TCE` — a window of their own onto Titan's settings; see
+  "Settings interfaces" below
 - Every plugin kind above (plus games, launchers, Titan IM modules, gamepad
   modes, TTS engines, and statusbar applets) can also ship as a single
   packaged `.TCA`/`.TCD` file instead of a directory — see "Packaging
@@ -1159,9 +1168,29 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   desktop, the bar, both Start menus and the file browser all say so from
   their own `EVT_ACTIVATE` (`follows_activation`), under ONE name - they hand
   the keyboard between themselves constantly and must not each undo the last
-  one's hand-over - and `gui.on_minimize` does not start the Invisible UI at
-  all while the shell is up, because Titan minimised does not mean there is no
-  Titan window left on the screen.
+  one's hand-over.
+- **Minimising and restoring behave identically with the shell up.** The
+  first answer to the bug above was to keep the Invisible UI switched off
+  under the shell - which also took Titan's own non-visual interface away
+  from the users most likely to want it, since a user who has replaced
+  Windows' desktop with Titan's has not asked to lose Titan UI. The
+  hand-over above is what answers it, so `gui.on_minimize` has no shell
+  case at all; `minimize_to_tray` asks `shell_window_in_front()` once,
+  because at the moment the Invisible UI starts listening there is no
+  activation left to wait for. Three more things were unequal:
+  - **Minimising after a restore was not minimising.** `restore_from_tray`
+    bound a SECOND `EVT_ICONIZE` handler (`_on_window_minimize`) to hand the
+    keyboard back, so both handlers ran - `minimize_to_tray` twice, a second
+    tray icon, the sound twice, and the extra one ignored `minimize_action`.
+    The hand-back is now a line in `on_minimize` (`_give_the_keyboard_back`),
+    and `minimize_to_tray` is idempotent.
+  - **The shell showed Titan by hand.** `shell_manager.show_titan_window`
+    and `tce_system`'s Titan-window toggle did `Iconize(False)` / `Show()` /
+    `Raise()`, which leaves the tray icon in the notification area and the
+    Invisible UI still answering every key. Both go through
+    `restore_from_tray`, which is the one way back for everything.
+  - `restore_from_tray` plays its sound only when the window really was
+    away, so asking for a window that is already there is silent.
 - **Nothing queued may fire into a window that has gone** (`deferred.py`).
   The shell queues constantly - a taskbar button asks Windows to activate a
   window and rebuilds the bar 120 ms later, the appbar answers on a worker,
@@ -1227,7 +1256,194 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   the event's own window's top-level parent against the frame and skips
   anything from another one - which is what the Buffer System's "no global
   hook, hosts wire these into their own windows" was supposed to mean.
-- Tests: `tests/test_shell.py` (run it directly; 320 tests).
+- **The shell can be added to**: `data/shell addons/` contributes to the
+  Start menu, the file browser, the taskbar and the desktop, or replaces
+  the Start menu or the browser outright - see "Shell add-ons" below.
+- Tests: `tests/test_shell.py` (run it directly; 323 tests).
+
+### The same menus in all three interfaces
+
+`src/ui/program_menu.py` names what the menu bar can do, once. The graphical
+Titan had the lot; the Invisible UI's **Menu** category and Klango mode's
+**Program** submenu had four entries between them, so the AI Agent, both AI
+Assistants, AI OCR, the creation kit and Install data package could be
+reached only from the graphical window - by the users least likely to be
+looking at one.
+
+- **They arrive as the same GROUPS, and a group nests where groups already
+  nest.** The graphical Titan has Program, AI and Programmer; sixteen more
+  lines in one menu is a longer menu rather than the same one.
+  `extra_groups()` hands back the menus a face without a menu bar was missing
+  whole - **AI** (the Agent, both Assistants, AI OCR) and **Programmer** (the
+  creation kit) - and `program_entries()` is the little that merges into the
+  Program menu each face already has (Install data package). Each face then
+  nests them where its own groups already nest:
+  - The Invisible UI's **Menu** card is the menu bar, so its elements are the
+    menu bar's MENUS - **Program** (Component Manager, Program settings,
+    Install data package, Help, Back to graphical interface, Exit), **AI** and
+    **Programmer** - and each opens as a **subcategory**, in the place the
+    card occupies, with **Back** at the top of it. That is exactly what a
+    game platform does inside the Games card, and it is the same code:
+    `InvisibleUI.expand_subcategory` / `collapse_subcategory` is the
+    game-platform machinery generalised, with `expand_game_platform` /
+    `collapse_game_platform` left as thin wrappers so the two interactions
+    cannot drift apart.
+  - Klango mode's **Menu** card is the same thing one level down: it holds
+    **Program** (Settings, Component Manager, Install data package, Help,
+    Exit), **AI** and **Programmer**, each a submenu of its own, exactly as a
+    game platform is a submenu of Games. Its cards are now three lists
+    spliced together, so a card's index is not a way to find one and
+    `load_components` asks `_menu_card(name)` instead of `main_menu[5]`.
+- Each entry is `{'id', 'label', 'icon', 'action'}` with a no-argument
+  callable, and each face renders it its own way: `wx.MenuItem`s with skin
+  icons, an element of an Invisible UI category, a `{"name", "type":
+  "action"}` item in Klango's.
+- Availability is decided in the one place - AI features off means the AI
+  group is not returned at all, developer tools off means Programmer is not,
+  and AI OCR keeps its own switch on top of that.
+- What is deliberately NOT shared is Component Manager / settings / Help /
+  Exit: each face already has its own, and those know things this module does
+  not (standing Titan UI down for a modal dialog, Klango's own exit).
+- Opening one of these from a non-graphical face brings Titan back through
+  `restore_from_tray`, never `Show()`.
+- Translation domain: `menu`.
+
+### Shell add-ons: the parts of the shell somebody else wrote
+
+`data/shell addons/` is the tenth add-on kind, and it exists because the
+Titan shell - the desktop, the taskbar, the notification area, the Start menu
+and the file browser - was entirely Titan's own code. A user who wanted one
+more button on the bar, a column of their own in the file browser, an entry
+on the desktop's menu, or **their own Start menu**, had to change Titan.
+
+- **It copies what is already here rather than inventing a tenth way.**
+  Discovery is `platform_utils.discover_data_entries`, so an add-on ships as
+  a directory OR as a packaged `.TCD` (`KIND_SHELL_ADDON = 10`); the manifest
+  is `__shell_addon__.TCE` with a `[shell addon]` section and `status = 0`
+  meaning enabled, which is the component convention; the code is `init.py`,
+  loaded the way a launcher's is; and a contribution is a
+  `{'id', 'label', 'action'}` dict, the shape `program_menu.py` established.
+- **Two kinds of add-on, and the difference is the whole design.** A
+  **contributor** adds to what is there and any number apply at once. A
+  **provider** (`provides = start_menu` / `explorer`) REPLACES that part -
+  and replaces a *window*, not the shell, so everything else carries on.
+- **Five surfaces, each asked where it is built** (`src/shell/addons.py`):
+  - `start_menu` - `start_menu_items` goes through
+    `src/ui/start_menu_content.py`, so an add-on writes it once and it is on
+    the XP menu, the classic menu **and in the search box**. An entry with
+    `children` becomes a branch instead of a line.
+  - `explorer` - `explorer_menu_items` (they make the browser's **Tools**
+    menu, which exists only when there is something in it),
+    `explorer_toolbar_items`, `explorer_context_items(where, selection)` -
+    Windows' context-menu handler, so a command can be about THIS file - and
+    `explorer_columns`, which is a column handler: asked **once per folder**
+    (`_read_columns` on navigation) and its `value` called per row out of the
+    entry already in hand, because the view is a virtual list and a column
+    that asked Windows something per row would undo what makes a folder of
+    three thousand files open in 30 ms.
+  - `taskbar` - `taskbar_bands` is Windows' deskband: the add-on's control is
+    built **in the notification area**, so it is a real child window of the
+    bar - focusable with Tab and the arrows, and named, so a reader says what
+    it is. Built once with the bar, never on a tray refresh (the tray is
+    re-read every thirty seconds and rebuilding somebody's control that often
+    would throw the keyboard out of it). Plus `taskbar_menu_items`.
+  - `desktop` - `desktop_menu_items(where, entry)` for the icon menu and the
+    background one.
+  - `shell` - `setup`, `on_shell_start`, `on_shell_stop`. They are loaded and
+    told on a **worker**, because `start_shell` costs 214 ms and this process
+    owns the appbar and the shell hook.
+- **Which Start menu you use is chosen where XP chooses it**: the taskbar and
+  Start menu properties sheet (`taskbar_properties.py`), where every
+  installed provider is a third radio button beside Titan's two, with its
+  manifest description as the line under it. `shell_manager._addon_start_menu`
+  only asks for one when `start_menu_style == 'addon'`, so offering a Start
+  menu does not take the Windows key - being chosen does. An add-on chosen
+  and since uninstalled means **Titan's own menu**, never a different add-on
+  silently promoted.
+- **Nothing an add-on does may take the shell down.** Every call out goes
+  through `_safe`; a hook that is missing, raises, or answers something that
+  is not a list of entries contributes nothing and the surface carries on.
+  An entry is real if it has something to DO (`action`), something to SHOW
+  (`control`, `value`) or something to OPEN (`children`) - anything else is a
+  menu item with no words or nothing behind it, and is dropped with a reason
+  printed.
+- An add-on's own name and description are the author's words, not Titan's
+  translatable strings - so the manifest takes `name_pl` / `description_pl`
+  beside `name` / `description`, which is what `__app.TCE` has always done
+  rather than a second answer to the same question.
+- Switched on in **Settings -> Titan shell -> Shell add-ons** (a tick list,
+  written to the add-on's own manifest at once) and through the Action API:
+  `shell.list_addons`, and per add-on `status` / `enable` / `disable` from
+  `actions/generic.py`'s `shell_addon` kind.
+- Examples: `data/shell addons/example_shell_addon/` (one function per
+  surface, the reference) and `simple_start_menu/` (a Start menu provider -
+  one search box, one list). Both ship **off**.
+- Tests: `tests/test_shell_addons.py` (run it directly; 26 tests).
+
+### Settings interfaces: Titan's settings, in a window somebody else wrote
+
+`data/settings interfaces/` answers "I would rather have the settings as a
+web page / in Qt / on a console / one question at a time". It is shaped like
+`data/launchers/` because it is the same idea one level down - a launcher
+replaces Titan's main window, a settings interface replaces its settings
+window - and it is **chosen**, in Settings -> Interface -> "Settings
+interface", where Titan's own window is called **Classic**.
+
+**The interface never learns what a setting is**, and that is what makes the
+whole thing possible. `src/settings/ui_model.py` reads the description out of
+**Titan's own settings window**: its categories are the categories, its
+controls are the settings, their labels are the labels - the same `_("...")`
+strings, already translated. So:
+
+- **A setting is added once.** A new checkbox in `settingsgui.py` appears in
+  every installed interface, in the user's language, with none of them
+  changed. There is deliberately no second table of settings to keep in step.
+- **Component categories are there too** - the Macro Manager's, Titan
+  Access's forty, the AI's - because `register_settings_category` hands the
+  frame a panel and this walks whatever is on it.
+  `interfaces.ensure_component_categories()` makes sure they are registered
+  even when the window was built without a component manager, so an interface
+  shows exactly what the classic window shows. Measured here: 11 categories
+  alone, **14 with the components**, ~147 settings.
+- **The values are live** - the voices, skins, sound themes and TTS engines
+  are lists Titan fills in at run time, and reading the control is reading
+  what the user would see.
+- **Saving is Titan's own save** (`OnSave`), with everything that hangs off
+  it: the SAPI registration, restarting the system monitor, re-hooking the
+  shell, rebuilding the menu bar. An interface that wrote the ini file itself
+  would set the value and change nothing.
+- `kind` is what the CONTROL is (`bool`, `choice`, `number`, `text`,
+  `secret`, `command`, `list`, `multi`, `info`), so an interface renders what
+  Titan renders instead of guessing from a key name; a `wx.Choice` is
+  labelled by the static text in front of it (that is how every wx program is
+  built), a control nobody named is not offered rather than shown as a
+  nameless box, and setting a value **fires the control's own event**,
+  because that is where Titan applies things live.
+- **The settings can never be the thing an add-on takes away**: an interface
+  that is uninstalled, switched off, has no `open_settings()`, raises, or
+  opens nothing means Titan's own window opens instead, said plainly.
+- **Every way into the settings goes through `interfaces.open_settings()`** -
+  the menu bar, the Invisible UI, both Klango classes, both Start menus, the
+  desktop's menu, the shell, and `titan.open_settings` - which is what makes
+  choosing one mean anything. (`titan_open_settings` used to build a SECOND
+  `SettingsFrame`, one the components had never registered into.)
+- An interface's own loop (a console, a server) runs on its own thread and
+  reaches the settings through `api.call(...)`, which marshals onto the GUI
+  thread and waits: the settings are wx controls.
+- A settings interface ships `status = 0` (it is one of the choices, and
+  changes nothing until it is picked), unlike a shell add-on, which starts
+  doing things the moment it is switched on.
+- An interface's name in the list is its manifest's, so it takes `name_pl` /
+  `description_pl` beside `name` / `description`, as `__app.TCE` does.
+- Actions: `settings.settings_interfaces`, `settings.use_settings_interface`,
+  and per interface `status` / `use`.
+- Examples, both installed and neither in use until chosen: `html_settings`
+  (the whole settings as one HTML page in a `wx.html2` window; the page talks
+  back by setting `location.href` to a `titan:` URL and Python vetoes the
+  navigation - the oldest trick there is, and the one that works on every
+  WebView backend with no bridge and no local server) and `console_settings`
+  (`AllocConsole`, a numbered list, one question at a time).
+- Tests: `tests/test_settings_interfaces.py` (run it directly; 36 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
 
@@ -1392,7 +1608,7 @@ does not scale and breaks whenever the add-on changes. Now the add-on
   per-action `summary`, typed `params`, `risk`, `mode`, `promote`)
 - `data/applications/tEdit/tedit_actions.py` - the handlers
 
-All nine add-on kinds use the same file, and because discovery goes through
+All eleven add-on kinds use the same file, and because discovery goes through
 `platform_utils.discover_data_entries()`, a packaged `.TCA`/`.TCD` add-on is
 picked up exactly like a directory. An in-process add-on may skip the JSON and
 declare `TITAN_ACTIONS` in Python with real callables.

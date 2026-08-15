@@ -121,6 +121,12 @@ class TitanShell:
             # that puts a window up can take seconds - and every one of them
             # would have been seconds of a shell that had stopped answering
             # Windows.
+            # The add-ons come up with the shell, and after it: a shell
+            # that is not on the screen yet is one they cannot contribute
+            # to, and `on_shell_start` is where they put their own windows,
+            # timers and hooks.
+            self._start_addons()
+
             self._start_startup_items()
             # The Start menu is built the first time it is asked for, which
             # is about 150 ms - noticeable exactly when the user has just
@@ -159,6 +165,30 @@ class TitanShell:
 
         thread = threading.Thread(target=work, daemon=True,
                                   name='TitanShellExplorerBar')
+        thread.start()
+        return thread
+
+    def _start_addons(self):
+        """Load `data/shell addons/` and tell them the shell is up.
+
+        On a worker for the same reason the desktop's icons are: an add-on
+        may read a folder, ask Windows something or import half a library,
+        and the shell has just registered the appbar - this thread has to be
+        back in the message loop.  What an add-on puts on the screen it puts
+        there with `wx.CallAfter` of its own, which is what the API says.
+        """
+        def work():
+            try:
+                from src.shell import addons
+                loaded = addons.manager().load_all()
+                if loaded:
+                    print(f"[TitanShell] {len(loaded)} shell add-ons")
+                addons.notify('shell', 'on_shell_start', self)
+            except Exception as error:
+                print(f"[TitanShell] shell add-ons failed: {error}")
+
+        thread = threading.Thread(target=work, daemon=True,
+                                  name='TitanShellAddons')
         thread.start()
         return thread
 
@@ -211,6 +241,16 @@ class TitanShell:
 
         if was_running and not quiet:
             shell_sound(SOUND_SHUTDOWN)
+
+        # The add-ons are told before the windows go, so that one holding a
+        # control on the bar can take it off a bar that still exists.
+        if was_running:
+            try:
+                from src.shell import addons
+                addons.notify('shell', 'on_shell_stop', self)
+                addons.manager().unload_all()
+            except Exception as error:
+                print(f"[TitanShell] shell add-ons teardown failed: {error}")
 
         # Restored whenever the shell was ever going to hide it, not only
         # when the flag says it managed to: hiding it happens on a worker
@@ -284,6 +324,18 @@ class TitanShell:
     # ------------------------------------------------------------------
     def get_start_menu(self, create=True):
         if self.window('start_menu') is None and create:
+            # A shell add-on may replace the Start menu outright.  It is
+            # asked first and its answer is used as it stands - the menu is
+            # a window, and the rest of the shell only ever asks it to show
+            # itself, hide itself and say whether it is shown.
+            menu = self._addon_start_menu()
+            if menu is not None:
+                self.start_menu = menu
+                try:
+                    win_shell.hide_from_alt_tab(menu.GetHandle())
+                except Exception:
+                    pass
+                return self.start_menu
             try:
                 # Which of the two menus, the way the taskbar properties
                 # dialog asks it: the two-pane one, or the classic one it is
@@ -311,6 +363,39 @@ class TitanShell:
                 pass
         return self.start_menu
 
+    def _addon_start_menu(self):
+        """The Start menu of whichever add-on provides one, or None.
+
+        Only when the user has actually asked for it.  Which Start menu
+        this machine has is one question with one answer, and it is asked
+        where XP asks it - the taskbar and Start menu properties, where an
+        installed add-on's menu is a third radio button beside Titan's two.
+        So an add-on that merely offers a Start menu does not take the
+        Windows key; being chosen is what does.
+        """
+        from src.shell.a11y import shell_setting
+        if str(shell_setting('start_menu_style', 'xp')).lower() != 'addon':
+            return None
+        try:
+            from src.shell import addons
+            addon = addons.provider('start_menu')
+            if addon is None:
+                return None
+            window = addon.hook('open_start_menu')(addon.api, self.parent)
+        except Exception as error:
+            print(f"[TitanShell] add-on Start menu failed: {error}")
+            return None
+        if window is None:
+            return None
+        # It has to be a window that can be shown and hidden; anything else
+        # is a misunderstanding better reported than crashed on.
+        if not all(hasattr(window, name)
+                   for name in ('Show', 'Hide', 'IsShown')):
+            print("[TitanShell] a Start menu add-on answered something that "
+                  "is not a window")
+            return None
+        return window
+
     def toggle_start_menu(self):
         menu = self.get_start_menu()
         if menu is None:
@@ -319,7 +404,18 @@ class TitanShell:
             if menu.IsShown():
                 menu.Hide()
             else:
-                menu.show_menu()
+                # Titan's own menus place themselves, take the foreground
+                # and hand the keyboard over in `show_menu`; an add-on's
+                # need only be a window, so `Show` is what it falls back to.
+                show = getattr(menu, 'show_menu', None)
+                if callable(show):
+                    show()
+                else:
+                    menu.Show()
+                    try:
+                        menu.Raise()
+                    except Exception:
+                        pass
             return True
         except Exception as error:
             print(f"[TitanShell] could not open the Start menu: {error}")
@@ -356,9 +452,20 @@ class TitanShell:
         if frame is None:
             return False
         try:
-            frame.Iconize(False)
-            frame.Show()
-            frame.Raise()
+            # Through Titan's own way back, never `Show()` by hand.  Titan
+            # minimised is Titan in the notification area with the Invisible
+            # UI answering keys, and only `restore_from_tray` undoes all of
+            # that - the tray icon, the sound, Titan UI standing aside.
+            # Showing the frame here left the icon in the tray and the
+            # Invisible UI still listening, so a Titan restored FROM THE
+            # SHELL behaved nothing like one restored from its own tray icon.
+            restore = getattr(frame, 'restore_from_tray', None)
+            if callable(restore):
+                restore()
+            else:
+                frame.Iconize(False)
+                frame.Show()
+                frame.Raise()
             from src.titan_core.tce_system import force_foreground
             force_foreground(frame)
             if view == 'apps' and hasattr(frame, 'show_app_list'):
@@ -371,16 +478,15 @@ class TitanShell:
             return False
 
     def open_settings(self):
-        """Settings, opened on the shell's own page."""
+        """Settings - in whichever interface the user chose.
+
+        Through `src/settings/interfaces.py` like every other way into the
+        settings in Titan, so somebody whose settings are a web page gets
+        their web page from the desktop's menu and the Start menu too.
+        """
         try:
-            frame = self.parent
-            settings_frame = getattr(frame, 'settings_frame', None)
-            if settings_frame is None:
-                from src.ui.settingsgui import SettingsFrame
-                settings_frame = SettingsFrame(None, title=_("Settings"))
-            settings_frame.Show()
-            settings_frame.Raise()
-            return True
+            from src.settings.interfaces import open_settings
+            return bool(open_settings(self.parent))
         except Exception as error:
             print(f"[TitanShell] could not open settings: {error}")
             return False

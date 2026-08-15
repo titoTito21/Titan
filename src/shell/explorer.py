@@ -48,6 +48,7 @@ import time
 import wx
 
 from src.platform_utils import IS_WINDOWS
+from src.shell import addons as shell_addons
 from src.shell import fileops, win_shell
 from src.shell import keyboard_handover as handover
 from src.shell.deferred import Coalesced, alive, call_after
@@ -600,6 +601,19 @@ class ExplorerFrame(wx.Frame):
         self.menu_desktop = go_menu.Append(wx.ID_ANY, _("&Desktop"))
         bar.Append(go_menu, _("&Go"))
 
+        # What the shell add-ons put in the menu bar.  Explorer's own
+        # `IContextMenu`/band extensions are the thing being copied here:
+        # somebody else's commands belong in a menu of their own rather
+        # than mixed into File and View, so a Tools menu appears only when
+        # there is something in it.
+        self._addon_menu_entries = shell_addons.collect(
+            'explorer', 'explorer_menu_items', self)
+        if self._addon_menu_entries:
+            tools_menu = wx.Menu()
+            shell_addons.add_to_menu(tools_menu, self._addon_menu_entries,
+                                     bind_to=self, separator=False)
+            bar.Append(tools_menu, _("&Tools"))
+
         help_menu = wx.Menu()
         self.menu_about = help_menu.Append(wx.ID_ABOUT, _("&About"))
         bar.Append(help_menu, _("&Help"))
@@ -694,6 +708,25 @@ class ExplorerFrame(wx.Frame):
         self.toolbar.AddControl(self.address)
         self.go_button = wx.Button(self.toolbar, label=_("&Go"), size=(48, -1))
         self.toolbar.AddControl(self.go_button)
+
+        # An add-on's own band: Explorer has toolbars other people wrote,
+        # and this is the same idea kept to what a toolbar can actually be
+        # read as - a named button with its text showing, never a picture
+        # on its own.
+        self._addon_tools = {}
+        tools = shell_addons.collect('explorer', 'explorer_toolbar_items',
+                                     self)
+        if tools:
+            self.toolbar.AddSeparator()
+        for entry in tools:
+            label = str(entry.get('label', ''))
+            tool_id = wx.NewIdRef()
+            self.toolbar.AddTool(tool_id, label,
+                                 art(entry.get('art') or wx.ART_EXECUTABLE_FILE),
+                                 str(entry.get('help') or label))
+            self._addon_tools[int(tool_id)] = entry
+            self.Bind(wx.EVT_TOOL, self._on_addon_tool, id=tool_id)
+
         self.toolbar.Realize()
 
         self.toolbar.ToggleTool(self.ID_FOLDERS, self._folders_shown)
@@ -708,6 +741,16 @@ class ExplorerFrame(wx.Frame):
         self.Bind(wx.EVT_TOOL, self._on_views_tool, id=self.ID_VIEWS)
         self.address.Bind(wx.EVT_TEXT_ENTER, self._on_address_enter)
         self.go_button.Bind(wx.EVT_BUTTON, self._on_address_enter)
+
+    def _on_addon_tool(self, event):
+        entry = self._addon_tools.get(event.GetId())
+        if entry is None:
+            return
+        try:
+            entry['action']()
+        except Exception as error:
+            print(f"[ShellAddons] {entry.get('addon')}."
+                  f"{entry.get('id')} failed: {error}")
 
     def _build_body(self):
         """The folders bar and the view, with the splitter between them."""
@@ -1015,6 +1058,10 @@ class ExplorerFrame(wx.Frame):
 
         self.location = location
         self.entries = entries
+        # Which columns this folder has is asked once per navigation, before
+        # the list is filled: `_fill_list` sets the headings, and a virtual
+        # list asks for a cell while it paints.
+        self._read_columns()
         self._fill_list()
         self._update_address()
         self._update_title()
@@ -1080,10 +1127,34 @@ class ExplorerFrame(wx.Frame):
     def columns(self):
         """What the columns are here - My Computer's are not a folder's."""
         if is_computer(self.location):
-            return [(_("Name"), 220), (_("Type"), 120),
-                    (_("Total Size"), 110), (_("Free Space"), 110)]
-        return [(_("Name"), 240), (_("Size"), 90), (_("Type"), 140),
-                (_("Date Modified"), 150)]
+            own = [(_("Name"), 220), (_("Type"), 120),
+                   (_("Total Size"), 110), (_("Free Space"), 110)]
+        else:
+            own = [(_("Name"), 240), (_("Size"), 90), (_("Type"), 140),
+                   (_("Date Modified"), 150)]
+        return own + [(str(column.get('label', '')),
+                       int(column.get('width', 120) or 120))
+                      for column in self._addon_columns()]
+
+    def _addon_columns(self):
+        """The extra columns the add-ons asked for, in this folder.
+
+        Windows calls this a column handler, and it is the one shell
+        extension that has to be asked per ROW as well as per folder - so
+        the list itself is worked out once per navigation (`_read_columns`)
+        and the value comes from the entry, which is what keeps a virtual
+        list virtual: `cell_text` may be asked thirty times a paint and must
+        not go and ask an add-on thirty times.
+        """
+        return getattr(self, '_extra_columns', ())
+
+    def _read_columns(self):
+        """Ask the add-ons which columns this folder has, once."""
+        self._extra_columns = tuple(
+            entry for entry in shell_addons.collect(
+                'explorer', 'explorer_columns', self, self.location)
+            if entry.get('label') and callable(entry.get('value')))
+        return self._extra_columns
 
     def cell_text(self, entry, column):
         """One cell of the details view, column by column."""
@@ -1094,7 +1165,18 @@ class ExplorerFrame(wx.Frame):
         else:
             values = [entry['name'], format_size(entry.get('size')),
                       type_name_of(entry), format_time(entry.get('modified'))]
-        return values[column] if 0 <= column < len(values) else ''
+        if 0 <= column < len(values):
+            return values[column]
+        extra = self._addon_columns()
+        index = column - len(values)
+        if 0 <= index < len(extra):
+            try:
+                return str(extra[index]['value'](entry) or '')
+            except Exception as error:
+                print(f"[ShellAddons] column {extra[index].get('label')!r} "
+                      f"failed: {error}")
+                return ''
+        return ''
 
     def _icon_cache(self, size):
         """The window's cache for one icon size, built the first time asked."""
@@ -1795,7 +1877,7 @@ class ExplorerFrame(wx.Frame):
             (_("Rena&me"), self.rename_selected),
             (None, None),
             (_("P&roperties"), self.show_properties),
-        ])
+        ] + self._addon_context_entries('item'))
 
     def _on_background_menu(self, event):
         self._popup([
@@ -1805,7 +1887,28 @@ class ExplorerFrame(wx.Frame):
             (_("Ne&w folder"), self.new_folder),
             (None, None),
             (_("P&roperties"), self.show_properties),
-        ])
+        ] + self._addon_context_entries('background'))
+
+    def _addon_context_entries(self, where):
+        """What the add-ons put on this menu, as `_popup` wants them.
+
+        They are handed what the menu is about - the selected entries for an
+        item menu, the folder for a background one - so an add-on can offer
+        a command for THIS file rather than a command in general, which is
+        what a shell context-menu handler is for.
+        """
+        try:
+            selection = self.selected_entries() if where == 'item' else []
+        except Exception:
+            selection = []
+        entries = shell_addons.collect('explorer', 'explorer_context_items',
+                                       self, where, selection)
+        if not entries:
+            return []
+        popup = [(None, None)]
+        for entry in entries:
+            popup.append((str(entry.get('label', '')), entry.get('action')))
+        return popup
 
     def _popup(self, entries):
         menu = wx.Menu()
@@ -1965,6 +2068,25 @@ def _forget(frame):
         _frames.remove(frame)
 
 
+def _addon_explorer(location, parent, new_window):
+    """The file browser of whichever add-on provides one, or None.
+
+    Its window is not put into `_frames`: those are Titan's own browser
+    windows, which the shell reuses, refreshes and closes by hand.  An
+    add-on's window is its own to manage, exactly like an application's.
+    """
+    try:
+        from src.shell import addons as _addons
+        addon = _addons.provider('explorer')
+        if addon is None:
+            return None
+        return addon.hook('open_explorer')(addon.api, location, parent,
+                                           new_window)
+    except Exception as error:
+        print(f"[TitanShell] add-on file browser failed: {error}")
+        return None
+
+
 def open_windows():
     """Every browser window that is open, oldest first."""
     for frame in list(_frames):
@@ -1979,8 +2101,15 @@ def open_explorer(path=None, parent=None, new_window=False):
     XP opens one folder into one window by default, and so does this: a
     second request goes to the window that is already there unless a new
     one was asked for.  Returns the frame.
+
+    A shell add-on may provide a file browser of its own, and then every
+    way into a folder - the desktop, the Start menu, My Computer, Windows+E
+    - opens theirs, because they all come here.
     """
     location = COMPUTER if path in (None, '', COMPUTER) else str(path)
+    replacement = _addon_explorer(location, parent, new_window)
+    if replacement is not None:
+        return replacement
     if not new_window:
         for frame in reversed(list(_frames)):
             # A window destroyed by something other than its own Close -

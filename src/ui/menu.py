@@ -12,6 +12,7 @@ from src.titan_core.translation import set_language
 from src.settings.settings import get_setting
 from src.ui.help import show_help
 from src.titan_core.skin_manager import get_current_skin, apply_skin_to_window
+from src.ui import program_menu as program_menu_entries
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -75,35 +76,14 @@ class MenuBar(wx.MenuBar):
         except:
             pass
 
-        # AI Agent - operates the computer on the user's behalf. Shown only
-        # when AI features are enabled in Settings, AI features.
-        try:
-            from src.ai.ai_provider import is_ai_enabled
-            _ai_on = is_ai_enabled()
-        except Exception:
-            _ai_on = False
-        if _ai_on:
-            agent_item = program_menu.Append(wx.ID_ANY, _("AI Agent..."))
-            self.Bind(wx.EVT_MENU, self.on_open_ai_agent, agent_item)
-            assistant_item = program_menu.Append(wx.ID_ANY, _("AI Assistant..."))
+        # The AI windows - the Agent, both Assistants and AI OCR. The list
+        # itself is `src/ui/program_menu.py`, so that the Invisible UI and
+        # Klango mode offer exactly these and decide their availability the
+        # same way (AI features on, and AI OCR's own switch on top).
+        for entry in program_menu_entries.ai_entries(self.parent):
+            item = program_menu.Append(wx.ID_ANY, entry['label'])
             self.Bind(wx.EVT_MENU,
-                      lambda e: self.on_open_ai_assistant('turn'), assistant_item)
-            assistant_live_item = program_menu.Append(
-                wx.ID_ANY, _("AI Assistant (Live mode)..."))
-            self.Bind(wx.EVT_MENU,
-                      lambda e: self.on_open_ai_assistant('live'), assistant_live_item)
-            # AI OCR - an accessible stand-in for a program that has no
-            # accessibility at all. Its own switch, because a scan sends a
-            # picture of the screen to the provider.
-            try:
-                from src.ai.ai_provider import get_ocr_enabled
-                _ocr_on = get_ocr_enabled()
-            except Exception:
-                _ocr_on = False
-            if _ocr_on:
-                ocr_item = program_menu.Append(
-                    wx.ID_ANY, _("AI OCR (read this screen)..."))
-                self.Bind(wx.EVT_MENU, self.on_open_ai_ocr, ocr_item)
+                      lambda e, act=entry['action']: act(), item)
 
         program_menu.AppendSeparator()
 
@@ -174,20 +154,13 @@ class MenuBar(wx.MenuBar):
 
         # AI creation kit lives in its own submenu, leaving room for future
         # (non-AI) programmer tools directly under the Programmer menu.
-        try:
-            from src.ai.ai_provider import is_ai_enabled
-            from src.ai.ai_creation_kit import KINDS
-        except Exception as e:
-            print(f"[menu] AI creation kit unavailable: {e}")
-            is_ai_enabled, KINDS = (lambda: False), []
-
         ai_menu = wx.Menu()
-        if is_ai_enabled() and KINDS:
-            for kind in KINDS:
-                label = _("Create {kind}...").format(kind=kind['label'])
-                item = ai_menu.Append(wx.ID_ANY, label)
+        kit = program_menu_entries.creation_kit_entries(self.parent)
+        if kit:
+            for entry in kit:
+                item = ai_menu.Append(wx.ID_ANY, entry['label'])
                 self.Bind(wx.EVT_MENU,
-                          lambda e, kid=kind['id']: self._open_ai_creator(kid), item)
+                          lambda e, act=entry['action']: act(), item)
         else:
             placeholder = ai_menu.Append(wx.ID_ANY, _("Enable AI features in Settings, AI features"))
             placeholder.Enable(False)
@@ -196,67 +169,16 @@ class MenuBar(wx.MenuBar):
         self.Append(programmer_menu, _("Programmer"))
 
     def _open_ai_creator(self, kind_id):
-        try:
-            if not self.parent.IsShown():
-                self.parent.restore_from_tray()
-        except Exception:
-            pass
-        try:
-            from src.ai.ai_creation_kit import open_creation_wizard
-            open_creation_wizard(self.parent, kind_id)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            _show_skinned_message(
-                _("Could not open the AI creator: {error}").format(error=e),
-                _("Error"), wx.OK | wx.ICON_ERROR)
-
+        program_menu_entries.open_creation_wizard(self.parent, kind_id)
 
     def on_open_ai_agent(self, event):
-        try:
-            if not self.parent.IsShown():
-                self.parent.restore_from_tray()
-        except Exception:
-            pass
-        try:
-            from src.ai.ai_agent_gui import open_agent
-            open_agent(self.parent)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            _show_skinned_message(
-                _("Could not open the AI Agent: {error}").format(error=e),
-                _("Error"), wx.OK | wx.ICON_ERROR)
+        program_menu_entries.open_ai_agent(self.parent)
 
     def on_open_ai_ocr(self, event):
-        # Deliberately does NOT restore Titan from the tray first: the whole
-        # point is to read the program the user was just in, and putting the
-        # Titan window in front would make that program stop being it.
-        try:
-            from src.ai.ocr.mimic import show_ai_ocr
-            show_ai_ocr(self.parent)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            _show_skinned_message(
-                _("Could not open AI OCR: {error}").format(error=e),
-                _("Error"), wx.OK | wx.ICON_ERROR)
+        program_menu_entries.open_ai_ocr(self.parent)
 
     def on_open_ai_assistant(self, mode='turn'):
-        try:
-            if not self.parent.IsShown():
-                self.parent.restore_from_tray()
-        except Exception:
-            pass
-        try:
-            from src.ai.assistant.assistant_gui import open_assistant
-            open_assistant(self.parent, mode=mode)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            _show_skinned_message(
-                _("Could not open the AI Assistant: {error}").format(error=e),
-                _("Error"), wx.OK | wx.ICON_ERROR)
+        program_menu_entries.open_ai_assistant(self.parent, mode)
 
     def on_install_data_package(self, event):
         with wx.FileDialog(self.parent, _("Select data package"), wildcard=_("Data packages (*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"), style=wx.FD_OPEN) as dlg:
@@ -416,25 +338,13 @@ class MenuBar(wx.MenuBar):
 
 
     def on_open_settings(self, event):
-        # Use the existing settings_frame from parent instead of creating a new one
-        settings_frame = getattr(self.parent, 'settings_frame', None)
-        if settings_frame is None:
-            # The window is built a moment after Titan's own is shown, so
-            # for the first instant of a startup there is not one yet.  The
-            # one made here is kept ON THE FRAME, or the components that
-            # register their categories a moment later would fill in a
-            # second Settings window the user is not looking at.
-            from src.ui.settingsgui import SettingsFrame
-            component_manager = getattr(self.parent, 'component_manager', None)
-            settings_frame = SettingsFrame(None, title=_("Settings"),
-                                           component_manager=component_manager)
-            try:
-                self.parent.settings_frame = settings_frame
-                if component_manager is not None:
-                    component_manager.settings_frame = settings_frame
-            except Exception:
-                pass
-        settings_frame.Show()
+        # Not `SettingsFrame` by hand any more: which window the settings
+        # open in is the user's choice (Settings -> Interface -> Settings
+        # interface), and `src/settings/interfaces.py` is the one place that
+        # knows it.  It still keeps the window on the frame, so the
+        # components' categories go into the one window everything shares.
+        from src.settings.interfaces import open_settings
+        open_settings(self.parent)
 
     def on_show_help(self, event):
         show_help()

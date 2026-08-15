@@ -767,11 +767,20 @@ class SystemHooksManager:
                 print("WARNING: No Titan window to toggle")
                 return
             if frame.IsShown() and not frame.IsIconized():
+                # Iconize is what `on_minimize` answers, so the tray icon,
+                # the sound and the Invisible UI all follow from it.
                 frame.Iconize(True)
             else:
-                frame.Iconize(False)
-                frame.Show()
-                frame.Raise()
+                # And this is its opposite - the one way back in, so that
+                # showing the window from the shell leaves Titan in exactly
+                # the state showing it from its own tray icon would.
+                restore = getattr(frame, 'restore_from_tray', None)
+                if callable(restore):
+                    restore()
+                else:
+                    frame.Iconize(False)
+                    frame.Show()
+                    frame.Raise()
                 force_foreground(frame)
         except Exception as e:
             print(f"ERROR: Failed to toggle the Titan window: {e}")

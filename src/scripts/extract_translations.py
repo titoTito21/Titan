@@ -12,8 +12,12 @@ import sys
 DOMAIN_FILES = {
     'gui': ['src/ui/gui.py'],
     'invisibleui': ['src/ui/invisibleui.py'],
-    'settings': ['src/settings/settings.py', 'src/ui/settingsgui.py', 'src/settings/configvizard.py'],
-    'menu': ['src/ui/menu.py'],
+    'settings': ['src/settings/settings.py', 'src/ui/settingsgui.py', 'src/settings/configvizard.py',
+                 # Choosing which window the settings themselves open in
+                 'src/settings/interfaces.py', 'src/settings/ui_model.py'],
+    # The menu bar, and the Program menu entries it shares with the
+    # Invisible UI and Klango mode.
+    'menu': ['src/ui/menu.py', 'src/ui/program_menu.py'],
     'main': ['main.py'],
     'apps': ['src/titan_core/app_manager.py'],
     'games': ['src/titan_core/game_manager.py'],
@@ -55,7 +59,9 @@ DOMAIN_FILES = {
               'src/shell/shutdown_dialog.py',
               'src/shell/taskbar_properties.py',
               # The file browser: My Computer, drives and folders
-              'src/shell/explorer.py', 'src/shell/fileops.py'],
+              'src/shell/explorer.py', 'src/shell/fileops.py',
+              # Shell add-ons: what somebody else added to the shell
+              'src/shell/addons.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
     'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py', 'src/buffers/ai_buffer.py'],
     'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/titan_tools.py', 'src/ai/action_tools.py', 'src/ai/ai_agent_gui.py', 'src/ai/assistant/personas.py', 'src/ai/assistant/voice_io.py', 'src/ai/assistant/voice_assistant.py', 'src/ai/assistant/assistant_gui.py', 'src/ai/assistant/hotkeys.py', 'src/ai/assistant/headless.py', 'src/ai/assistant/reminder_watcher.py', 'src/ai/ocr/mimic.py', 'src/ai/ocr/form_view.py', 'src/ai/ocr/controls.py', 'src/ai/ocr/overlay.py'],

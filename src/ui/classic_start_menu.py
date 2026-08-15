@@ -327,6 +327,7 @@ class ClassicStartMenu(StartMenuContent, wx.Frame):
             MenuEntry(_("Search"), 'folder', '__find__'),
             MenuEntry(_("Help and Support"), 'action', 'help'),
             MenuEntry(_("Run..."), 'action', 'run'),
+        ] + self.addon_entries() + [
             # Thirteen dashes is what a screen reader reads as thirteen
             # dashes; the word is what it says for a real menu separator.
             MenuEntry(_("Separator"), 'separator'),
@@ -495,17 +496,16 @@ class ClassicStartMenu(StartMenuContent, wx.Frame):
             print(f"Error executing action {action}: {e}")
 
     def show_titan_settings(self):
-        """Titan's settings: the window the menu bar opens."""
+        """Titan's settings: whatever the menu bar opens.
+
+        Which window that is is the user's choice (Settings -> Interface ->
+        Settings interface), so this asks the one place that knows rather
+        than building a `SettingsFrame` - two settings windows being two
+        answers to the same question.
+        """
         try:
-            # Use the existing settings_frame from parent instead of creating
-            # a new one - two settings windows are two answers to the same
-            # question.
-            settings_frame = getattr(self.parent, 'settings_frame', None)
-            if settings_frame is None:
-                from src.ui.settingsgui import SettingsFrame
-                settings_frame = SettingsFrame(None, title=_("Settings"))
-            settings_frame.Show()
-            settings_frame.Raise()
+            from src.settings.interfaces import open_settings
+            open_settings(self.parent)
             self.Hide()
         except Exception as e:
             print(f"Error opening Titan settings: {e}")

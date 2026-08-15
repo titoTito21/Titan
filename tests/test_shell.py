@@ -3527,11 +3527,22 @@ class ClassicStartMenuTests(unittest.TestCase):
         self.assertNotIn('from game_manager import', source)
         self.assertIn('from src.titan_core.game_manager import', source)
 
-    def test_the_settings_window_is_imported_from_where_it_lives(self):
+    def test_the_settings_open_through_the_one_place_that_knows_which(self):
+        """It used to import `SettingsFrame` - from the wrong module, and
+        then from the right one.  It now builds no settings window at all:
+        which window the settings open in is the user's choice (Settings ->
+        Interface -> Settings interface), and `src/settings/interfaces.py`
+        is the only thing that knows it.  A menu with an opinion of its own
+        would open the classic window for somebody who had chosen another.
+        """
         with open('src/ui/classic_start_menu.py', encoding='utf-8') as handle:
             source = handle.read()
         self.assertNotIn('from settingsgui import', source)
-        self.assertIn('from src.ui.settingsgui import SettingsFrame', source)
+        # A call, not the word: the docstring above `show_titan_settings`
+        # says what it no longer does, and saying so is the point of it.
+        self.assertNotIn('SettingsFrame(', source)
+        self.assertIn('from src.settings.interfaces import open_settings',
+                      source)
 
     def test_a_loose_shortcut_in_programs_is_not_thrown_away(self):
         """Windows 95 shows them at the top of Programs, not nowhere."""
@@ -4404,17 +4415,48 @@ class KeyboardHandoverTests(unittest.TestCase):
                 source = handle.read()
             self.assertIn('handover.follows_activation(event)', source, name)
 
-    def test_minimising_under_the_shell_does_not_start_the_invisible_ui(self):
-        """Windows+M leaves the DESKTOP on the screen, and it is Titan's."""
+    def test_minimising_behaves_the_same_with_the_shell_up(self):
+        """Titan UI belongs in the shell; which window is in front decides.
+
+        Keeping the Invisible UI switched off under the shell answered the
+        "Windows+M takes the desktop's arrow keys" bug and took Titan's own
+        non-visual interface away from the users most likely to want it.
+        The hand-over does that job, so minimising is one behaviour again.
+        """
         with open('src/ui/gui.py', encoding='utf-8') as handle:
             source = handle.read()
         body = source[source.index('    def on_minimize'):
-                      source.index('    def open_time_settings')]
-        self.assertIn(
-            'activate_invisible_ui=not shell_owns_the_keyboard()', body)
+                      source.index('    def _give_the_keyboard_back')]
+        self.assertNotIn('shell_owns_the_keyboard', body)
+        self.assertIn('self.minimize_to_tray()', body)
         # And the other two answers are untouched: "tray" still means the
         # tray, and "nothing" still means the window is simply iconized.
         self.assertIn("elif action == 'tray'", body)
+
+    def test_starting_to_listen_asks_who_is_in_front(self):
+        """No activation can be waited for at the moment listening begins."""
+        with open('src/ui/gui.py', encoding='utf-8') as handle:
+            source = handle.read()
+        body = source[source.index('    def minimize_to_tray'):
+                      source.index('    def restore_from_tray')]
+        self.assertIn('shell_window_in_front', body)
+        self.assertIn('take_keyboard', body)
+
+    def test_the_shell_shows_titan_through_titans_own_way_back(self):
+        """`Show()` by hand left the tray icon and the Invisible UI behind."""
+        for name in ('src/shell/shell_manager.py',
+                     'src/titan_core/tce_system.py'):
+            with open(name, encoding='utf-8') as handle:
+                source = handle.read()
+            self.assertIn("getattr(frame, 'restore_from_tray', None)",
+                          source, name)
+
+    def test_minimising_is_answered_by_one_handler(self):
+        """Two EVT_ICONIZE handlers made minimising after a restore differ."""
+        with open('src/ui/gui.py', encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('_on_window_minimize', source)
+        self.assertEqual(source.count('wx.EVT_ICONIZE, self.on_minimize'), 1)
 
 
 if __name__ == '__main__':

@@ -2128,20 +2128,13 @@ def titan_stop_sounds(**_):
 
 
 def titan_open_settings(**_):
-    """Open Titan's Settings window."""
+    """Open Titan's settings - in whichever interface the user chose."""
     def _open():
-        from src.ui.settingsgui import SettingsFrame
-        try:
-            from src.titan_core.translation import set_language
-            from src.settings.settings import get_setting
-            _t = set_language(get_setting('language', 'pl'))
-            title = _t("Settings")
-        except Exception:
-            title = "Settings"
-        frame = SettingsFrame(None, title=title)
-        frame.Show()
-        frame.Raise()
-        return True
+        # Never a `SettingsFrame` of its own: that made a SECOND settings
+        # window, one the components had not registered their categories
+        # into, and it ignored the user's choice of settings interface.
+        from src.settings.interfaces import open_settings
+        return bool(open_settings())
     ok, err = _run_on_gui(_open)
     return "Opened the Settings window." if ok else f"Could not open Settings: {err}"
 

@@ -221,6 +221,9 @@ msgstr "Success"
 msgid "Settings"
 msgstr "Settings"
 
+msgid "Could not install the data package: {error}"
+msgstr "Could not install the data package: {error}"
+
 #~ msgid "Log in to Titan-Network..."
 #~ msgstr "Log in to Titan-Network..."
 

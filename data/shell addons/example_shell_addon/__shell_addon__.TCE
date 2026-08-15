@@ -1,0 +1,9 @@
+[shell addon]
+name = Example shell add-on
+name_pl = Przykładowy dodatek powłoki
+description = Shows every surface a shell add-on can reach: the Start menu, the file browser (menu, toolbar, context menu and a column of its own), the taskbar (a band and a menu item) and the desktop's menu.
+description_pl = Pokazuje każdą powierzchnię, do której sięga dodatek powłoki: menu Start, przeglądarkę plików (menu, pasek, menu kontekstowe i własną kolumnę), pasek zadań (własna kontrolka i pozycja w menu) oraz menu pulpitu.
+author = TCE Team
+version = 1.0
+status = 1
+surfaces = shell, start_menu, explorer, taskbar, desktop

@@ -30,6 +30,7 @@ import threading
 import wx
 
 from src.platform_utils import IS_WINDOWS, get_user_data_dir
+from src.shell import addons as shell_addons
 from src.shell import fileops, luna, win_shell
 from src.shell import keyboard_handover as handover
 from src.shell.deferred import call_after
@@ -927,6 +928,13 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda e: self.delete_selected(), delete)
         self.Bind(wx.EVT_MENU, lambda e: self.properties_of_selected(),
                   properties)
+        # What the shell add-ons offer for this icon - a context menu
+        # handler, in Windows' own words - after everything the desktop
+        # does itself.
+        shell_addons.add_to_menu(
+            menu, shell_addons.collect('desktop', 'desktop_menu_items',
+                                       self, 'item', self.selected_entry()),
+            bind_to=self)
         self.list.PopupMenu(menu)
         menu.Destroy()
 
@@ -963,6 +971,11 @@ class DesktopFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda e: self.shell.open_settings(), titan)
         self.Bind(wx.EVT_MENU, lambda e: win_shell.open_path(
             'ms-settings:personalization-background'), display)
+
+        shell_addons.add_to_menu(
+            menu, shell_addons.collect('desktop', 'desktop_menu_items',
+                                       self, 'background', None),
+            bind_to=self)
 
         self.list.PopupMenu(menu)
         menu.Destroy()

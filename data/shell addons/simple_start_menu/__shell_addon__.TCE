@@ -1,0 +1,10 @@
+[shell addon]
+name = Simple Start menu
+name_pl = Proste menu Start
+description = One list, one search box, nothing else: Titan, the applications and games, the settings, the file manager and the ways out.
+description_pl = Jedna lista, jedno pole wyszukiwania i nic więcej: Titan, aplikacje i gry, ustawienia, menedżer plików i sposoby wyjścia.
+author = TCE Team
+version = 1.0
+status = 1
+surfaces = start_menu
+provides = start_menu

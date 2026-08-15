@@ -1,4 +1,4 @@
-"""The nine add-on kinds, and which transport each one uses.
+"""The eleven add-on kinds, and which transport each one uses.
 
 This table is the single place that knows where a kind lives on disk and
 whether its code runs inside Titan's process or in one of its own. Both
@@ -17,6 +17,9 @@ ADDON_KINDS = {
     'tts_engine':       ("TTS engines",       'titantts engines',  False, 'inproc'),
     'widget':           ("Widgets",           'applets',           False, 'inproc'),
     'statusbar_applet': ("Statusbar applets", 'statusbar_applets', False, 'inproc'),
+    'shell_addon':      ("Shell add-ons",     'shell addons',      False, 'inproc'),
+    'settings_interface': ("Settings interfaces", 'settings interfaces',
+                                                                   False, 'inproc'),
     'language':         ("Languages",         'languages',         True,  None),
 }
 

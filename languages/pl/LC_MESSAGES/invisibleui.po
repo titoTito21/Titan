@@ -289,6 +289,10 @@ msgstr "Platforma nie znaleziona"
 msgid "Games category not found"
 msgstr "Kategoria gier nie znaleziona"
 
+#: src/ui/invisibleui.py:2645
+msgid "Category not found"
+msgstr "Kategoria nie znaleziona"
+
 #: src/ui/invisibleui.py:2622 src/ui/invisibleui.py:2636
 #: src/ui/invisibleui.py:2647 src/ui/invisibleui.py:2852
 #: src/ui/invisibleui.py:2877 src/ui/invisibleui.py:2917

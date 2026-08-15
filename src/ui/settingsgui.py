@@ -1043,6 +1043,38 @@ class SettingsFrame(wx.Frame):
 
         vbox.Add(self.skin_choice, flag=wx.LEFT | wx.EXPAND, border=10)
 
+        # Which window the settings themselves open in.  A skin changes how
+        # Titan looks; this changes what its settings ARE opened in - the
+        # classic window, or one of the interfaces installed in
+        # `data/settings interfaces/` (see src/settings/interfaces.py).
+        # They all show the same settings, because they all read them out
+        # of this very window.
+        vbox.AddSpacer(10)
+        settings_ui_label = wx.StaticText(
+            self.interface_panel, label=_("Settings interface:"))
+        vbox.Add(settings_ui_label, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.settings_ui_choice = wx.Choice(self.interface_panel)
+        self.settings_ui_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.settings_ui_choice.Bind(wx.EVT_CHOICE, self.OnSelect)
+        # Titan's own is always first and always there: the settings are
+        # where somebody goes to fix things, including switching an
+        # interface off, so they can never be the thing an add-on takes
+        # away.
+        self._settings_ui_values = ['']
+        names = [_("Classic")]
+        try:
+            from src.settings.interfaces import manager as _settings_ui
+            for config in _settings_ui().available():
+                self._settings_ui_values.append(config.id)
+                names.append(config.name)
+        except Exception as error:
+            print(f"[Settings] could not list settings interfaces: {error}")
+        self.settings_ui_choice.AppendItems(names)
+        self.settings_ui_choice.SetSelection(0)
+        self.settings_ui_choice.Enable(len(names) > 1)
+        vbox.Add(self.settings_ui_choice, flag=wx.LEFT | wx.EXPAND, border=10)
+
         self.interface_panel.SetSizer(vbox)
 
 
@@ -1194,6 +1226,33 @@ class SettingsFrame(wx.Frame):
                True)
         note(sounds, _("The Titan shell never speaks by itself - your screen "
                        "reader announces it, like any other program."))
+
+        # What somebody else wrote for the shell.  A tick list rather than
+        # a choice, because any number of them apply at once - and it is
+        # the only way to switch one on without the AI or an action, which
+        # a feature nobody can reach is not.
+        addons_box = group(_("Shell add-ons"))
+        note(addons_box, _("Add-ons in data/shell addons/ can add to the "
+                           "Start menu, the file browser, the taskbar and "
+                           "the desktop. Which Start menu you use is on the "
+                           "taskbar's own Properties."))
+        # Its own caption immediately before it: a list control has no
+        # words of its own, so whatever text is nearest in front of it is
+        # what names it - and without this that would have been the
+        # paragraph above, in every interface that reads the window.
+        addons_box.Add(wx.StaticText(addons_box.GetStaticBox(),
+                                     label=_("Installed shell add-ons:")),
+                       flag=wx.LEFT | wx.TOP, border=6)
+        self.shell_addon_list = wx.CheckListBox(addons_box.GetStaticBox(),
+                                                choices=[])
+        self.shell_addon_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.shell_addon_list.Bind(wx.EVT_CHECKLISTBOX,
+                                   self.OnShellAddonToggled)
+        addons_box.Add(self.shell_addon_list,
+                       flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+                       border=6)
+        self._shell_addon_ids = []
+        self._load_shell_addons()
 
         shortcuts = group(_("Shortcuts Titan takes over"))
         self.shell_binding_cbs = {}
@@ -2348,6 +2407,16 @@ class SettingsFrame(wx.Frame):
              else:
                   self.skin_choice.SetSelection(0)
 
+        chosen_settings_ui = str(
+            interface_settings.get('settings_interface', '') or '')
+        try:
+            index = self._settings_ui_values.index(chosen_settings_ui)
+        except ValueError:
+            # Chosen once, uninstalled since: the classic window is what
+            # actually opens, so it is what the list has to say.
+            index = 0
+        self.settings_ui_choice.SetSelection(index)
+
         invisible_interface_settings = self.settings.get('invisible_interface', {})
         self.announce_index_cb.SetValue(str(invisible_interface_settings.get('announce_index', 'False')).lower() in ['true', '1'])
         self.announce_widget_type_cb.SetValue(str(invisible_interface_settings.get('announce_widget_type', 'False')).lower() in ['true', '1'])
@@ -2637,6 +2706,51 @@ class SettingsFrame(wx.Frame):
         import threading
         t = threading.Thread(target=upload_thread, daemon=True)
         t.start()
+
+    def _load_shell_addons(self):
+        """Fill the shell add-on list from what is installed."""
+        try:
+            from src.shell import addons
+            described = addons.manager().describe()
+        except Exception as error:
+            print(f"[Settings] could not list shell add-ons: {error}")
+            described = []
+        self._shell_addon_ids = [entry['id'] for entry in described]
+        labels = []
+        for entry in described:
+            label = entry['name']
+            if entry['provides']:
+                # An add-on that replaces a part of the shell says so: it is
+                # not one more entry on a menu, it is the Start menu.
+                label += " - " + _("replaces the {part}").format(
+                    part=entry['provides'].replace('_', ' '))
+            if entry['error']:
+                label += " - " + _("cannot be read")
+            labels.append(label)
+        self.shell_addon_list.Set(labels)
+        for index, entry in enumerate(described):
+            self.shell_addon_list.Check(index, entry['enabled'])
+
+    def OnShellAddonToggled(self, event):
+        """Turn one on or off, in its own manifest, at once.
+
+        Written straight away rather than on Save, because that is what the
+        add-on's own file says and the component manager does the same -
+        and because a shell add-on is switched on to try it.
+        """
+        index = event.GetSelection()
+        if not (0 <= index < len(self._shell_addon_ids)):
+            return
+        addon_id = self._shell_addon_ids[index]
+        wanted = self.shell_addon_list.IsChecked(index)
+        try:
+            from src.shell import addons
+            if not addons.manager().set_enabled(addon_id, wanted):
+                self.shell_addon_list.Check(index, not wanted)
+        except Exception as error:
+            print(f"[Settings] could not change {addon_id}: {error}")
+            self.shell_addon_list.Check(index, not wanted)
+        self.OnCheckBox(event)
 
     def OnSapiSettings(self, event):
         if sys.platform != 'win32':
@@ -3054,6 +3168,13 @@ class SettingsFrame(wx.Frame):
         if 'interface' not in self.settings:
             self.settings['interface'] = {}
         self.settings['interface']['skin'] = self.skin_choice.GetStringSelection()
+        try:
+            index = self.settings_ui_choice.GetSelection()
+            self.settings['interface']['settings_interface'] = (
+                self._settings_ui_values[index] if 0 <= index
+                < len(self._settings_ui_values) else '')
+        except Exception as error:
+            print(f"[Settings] could not save the settings interface: {error}")
 
         self.settings['invisible_interface'] = {
             'announce_index': str(self.announce_index_cb.GetValue()),

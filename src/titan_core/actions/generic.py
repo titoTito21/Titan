@@ -731,6 +731,121 @@ def _launcher_actions(folder):
 # --------------------------------------------------------------------------- #
 # Building
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Shell add-ons
+# --------------------------------------------------------------------------- #
+def _shell_addons():
+    from src.shell import addons
+    return addons.manager()
+
+
+def _shell_addon_status(folder):
+    try:
+        manager = _shell_addons()
+        config = manager.config(folder)
+    except Exception as e:
+        return f"Could not read the shell add-ons: {e}"
+    if config is None:
+        return f"There is no shell add-on called '{folder}'."
+    if config.error:
+        return f"{config.name} cannot be read: {config.error}"
+    state = "on" if config.enabled else "off"
+    parts = [f"{config.name} is {state}."]
+    if config.surfaces:
+        parts.append("It touches: " + ", ".join(config.surfaces) + ".")
+    if config.provides:
+        parts.append(f"It provides a {config.provides.replace('_', ' ')} of "
+                     f"its own.")
+    if config.description:
+        parts.append(config.description)
+    return " ".join(parts)
+
+
+def _shell_addon_set_enabled(folder, enabled):
+    try:
+        manager = _shell_addons()
+        config = manager.config(folder)
+        if config is None:
+            return f"There is no shell add-on called '{folder}'."
+        if config.enabled == enabled:
+            return f"{config.name} is already {'on' if enabled else 'off'}."
+        if not manager.set_enabled(folder, enabled):
+            return f"Could not change {config.name}."
+    except Exception as e:
+        return f"Could not change '{folder}': {e}"
+    # Contributions are collected when a surface is built, so what is
+    # already on the screen keeps what it had until it is rebuilt.
+    return (f"{config.name} is now {'on' if enabled else 'off'}. The shell "
+            f"picks it up when it is next started (shell.refresh rebuilds "
+            f"the desktop and the bar).")
+
+
+def _shell_addon_actions(folder):
+    return (
+        ('status', "Say whether this shell add-on is on, what parts of the "
+                   "shell it touches and what it replaces.",
+         {}, 'auto', lambda **_: _shell_addon_status(folder)),
+        ('enable', "Turn this shell add-on on.",
+         {}, 'confirm', lambda **_: _shell_addon_set_enabled(folder, True)),
+        ('disable', "Turn this shell add-on off.",
+         {}, 'confirm', lambda **_: _shell_addon_set_enabled(folder, False)),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Settings interfaces
+# --------------------------------------------------------------------------- #
+def _settings_uis():
+    from src.settings import interfaces
+    return interfaces.manager()
+
+
+def _settings_ui_status(folder):
+    try:
+        manager = _settings_uis()
+        config = manager.config(folder)
+        chosen = manager.chosen()
+    except Exception as e:
+        return f"Could not read the settings interfaces: {e}"
+    if config is None:
+        return f"There is no settings interface called '{folder}'."
+    if config.error:
+        return f"{config.name} cannot be read: {config.error}"
+    parts = [f"{config.name} is {'on' if config.enabled else 'off'}."]
+    parts.append("It is the one the settings open in."
+                 if chosen == folder else
+                 "The settings open in the classic window."
+                 if not chosen else
+                 f"The settings open in '{chosen}'.")
+    if config.description:
+        parts.append(config.description)
+    return " ".join(parts)
+
+
+def _settings_ui_use(folder):
+    try:
+        manager = _settings_uis()
+        ok, answer = manager.choose(folder)
+    except Exception as e:
+        return f"Could not choose '{folder}': {e}"
+    if not ok:
+        return answer
+    config = manager.config(folder)
+    name = config.name if config else folder
+    return (f"Titan's settings will now open in {name}. Settings -> "
+            f"Interface -> Settings interface puts the classic window back.")
+
+
+def _settings_ui_actions(folder):
+    return (
+        ('status', "Say whether this settings interface is the one Titan's "
+                   "settings open in.",
+         {}, 'auto', lambda **_: _settings_ui_status(folder)),
+        ('use', "Open Titan's settings in this interface from now on.",
+         {}, 'confirm', lambda **_: _settings_ui_use(folder)),
+    )
+
+
 _BY_KIND = {
     'tts_engine': lambda name, path: _tts_actions(name),
     'component': lambda name, path: _component_actions(name),
@@ -739,6 +854,8 @@ _BY_KIND = {
     'widget': _widget_actions,
     'gamepad_mode': lambda name, path: _gamepad_actions(name),
     'launcher': lambda name, path: _launcher_actions(name),
+    'shell_addon': lambda name, path: _shell_addon_actions(name),
+    'settings_interface': lambda name, path: _settings_ui_actions(name),
 }
 
 # What makes a directory an add-on of its kind rather than a folder that
@@ -752,6 +869,8 @@ _REQUIRED_FILE = {
     'launcher': ('__launcher__.TCE',),
     'statusbar_applet': ('applet.json',),
     'widget': ('init.py', 'init.pyc'),
+    'shell_addon': ('__shell_addon__.TCE',),
+    'settings_interface': ('__settings_ui__.TCE',),
 }
 
 

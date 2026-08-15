@@ -1,0 +1,8 @@
+[settings interface]
+name = Settings on a console
+name_pl = Ustawienia na konsoli
+description = Titan's settings in a text console: a numbered list, one question at a time, and the same save the window does.
+description_pl = Ustawienia Titana w oknie tekstowym: numerowana lista, jedno pytanie naraz i ten sam zapis co w oknie.
+author = TCE Team
+version = 1.0
+status = 0

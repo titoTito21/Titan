@@ -52,6 +52,11 @@ KIND_GAMEPAD_MODE = 6
 KIND_TTS_ENGINE = 7
 KIND_WIDGET = 8
 KIND_STATUSBAR_APPLET = 9
+# The two kinds added with the shell add-on and settings interface systems.
+# Numbers are append-only: a package built today names its kind by number,
+# and a reader that renumbered them would open the wrong subsystem's add-on.
+KIND_SHELL_ADDON = 10
+KIND_SETTINGS_UI = 11
 
 KIND_TO_SUBDIR = {
     KIND_APP: 'applications',
@@ -63,6 +68,8 @@ KIND_TO_SUBDIR = {
     KIND_TTS_ENGINE: 'titantts engines',
     KIND_WIDGET: 'applets',
     KIND_STATUSBAR_APPLET: 'statusbar_applets',
+    KIND_SHELL_ADDON: 'shell addons',
+    KIND_SETTINGS_UI: 'settings interfaces',
 }
 SUBDIR_TO_KIND = {v: k for k, v in KIND_TO_SUBDIR.items()}
 # engine_registry.py scans a second, legacy-named subdir for the same kind.
@@ -73,6 +80,7 @@ KIND_NAMES = {
     KIND_LAUNCHER: 'launcher', KIND_IM_MODULE: 'im_module',
     KIND_GAMEPAD_MODE: 'gamepad_mode', KIND_TTS_ENGINE: 'tts_engine',
     KIND_WIDGET: 'widget', KIND_STATUSBAR_APPLET: 'statusbar_applet',
+    KIND_SHELL_ADDON: 'shell_addon', KIND_SETTINGS_UI: 'settings_interface',
 }
 NAME_TO_KIND = {v: k for k, v in KIND_NAMES.items()}
 

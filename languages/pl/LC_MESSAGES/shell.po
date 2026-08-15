@@ -1550,3 +1550,8 @@ msgstr "Odczytywanie..."
 #~ msgid "No Titan IM modules"
 #~ msgstr "Brak modułów Titan IM"
 
+msgid "&Tools"
+msgstr "&Narzędzia"
+
+msgid "A Start menu from an installed shell add-on."
+msgstr "Menu Start z zainstalowanego dodatku powłoki."

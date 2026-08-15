@@ -202,12 +202,15 @@ class KlangoMode:
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
                 {"name": _("Volume Level"), "type": "action", "action": self.announce_volume}
             ], "expanded": False},
-            {"name": _("Program"), "type": "submenu", "items": [
-                {"name": _("Settings"), "type": "action", "action": self.open_settings},
-                {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
-                {"name": _("Help"), "type": "action", "action": self.show_help},
-                {"name": _("Exit"), "type": "action", "action": self.exit_program}
-            ], "expanded": False},
+            {"name": _("Menu"), "type": "submenu", "items": [
+                {"name": _("Program"), "type": "submenu", "items": [
+                    {"name": _("Settings"), "type": "action", "action": self.open_settings},
+                    {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
+                ] + self._get_program_menu_items() + [
+                    {"name": _("Help"), "type": "action", "action": self.show_help},
+                    {"name": _("Exit"), "type": "action", "action": self.exit_program}
+                ], "expanded": False},
+            ] + self._get_extra_submenus(), "expanded": False},
             {"name": _("Components"), "type": "submenu", "items": [], "expanded": False}
         ]
         
@@ -327,10 +330,10 @@ class KlangoMode:
                         "type": "action",
                         "action": lambda f=func: self.execute_component_function(f)
                     })
-            self.main_menu[5]["items"] = component_items
+            self._menu_card(_("Components"))["items"] = component_items
         except Exception as e:
             print(f"Error loading components: {e}")
-            self.main_menu[5]["items"] = []
+            self._menu_card(_("Components"))["items"] = []
     
     def load_status_bar_items(self):
         """Load status bar items with same names as GUI but console actions.
@@ -830,6 +833,87 @@ class KlangoMode:
             self._load_stereo_settings()
         return self._stereo_speech_enabled
     
+    def _get_program_menu_items(self):
+        """What the graphical Program menu has and this one never did.
+
+        Install data package, and nothing else: Settings, the Component
+        Manager, Help and Exit are Klango's own above and below it.  Shared
+        rather than copied (`src/ui/program_menu.py`), which is what keeps
+        the three interfaces offering the same things.
+        """
+        return self._klango_items(lambda pm, frame: pm.program_entries(frame))
+
+    def _menu_card(self, name):
+        """The main menu's card called `name`, found by NAME.
+
+        The cards are built from three lists spliced together and the Menu
+        card's contents depend on what is switched on, so a card's INDEX is
+        not a way to find it.  A menu that somehow has no such card is
+        answered with a throwaway one rather than an exception:
+        `load_components` only fills items into it, and Klango mode with one
+        card missing is better than Klango mode that would not start.
+        """
+        for card in self.main_menu:
+            if card.get("name") == name:
+                return card
+        return {"name": name, "type": "submenu", "items": [], "expanded": False}
+
+    def _get_extra_submenus(self):
+        """AI and Programmer, as submenus of the **Menu** card beside Program.
+
+        Klango mode is a face of Titan with no menu bar at all, so the AI
+        Agent, both AI Assistants, AI OCR and the creation kit were simply
+        unreachable from it.  The Menu card IS the menu bar, so it holds the
+        bar's menus - Program, AI, Programmer - each as a submenu of its own,
+        which is what the Invisible UI's Menu card does too.  Sixteen more
+        lines inside Program would be a longer menu rather than the same one.
+        """
+        submenus = []
+        try:
+            from src.ui import program_menu
+            frame = self._titan_main_frame()
+            for group in program_menu.extra_groups(frame):
+                submenus.append({
+                    "name": group['label'],
+                    "type": "submenu",
+                    "items": [{"name": entry['label'], "type": "action",
+                               "action": (lambda act=entry['action']: act())}
+                              for entry in group['entries']],
+                    "expanded": False})
+        except Exception as e:
+            print(f"[Klango] Program submenus: {e}")
+        return submenus
+
+    def _klango_items(self, pick):
+        """`pick` run against `program_menu`, as Klango menu items."""
+        items = []
+        try:
+            from src.ui import program_menu
+            for entry in pick(program_menu, self._titan_main_frame()):
+                items.append({"name": entry['label'], "type": "action",
+                              "action": (lambda act=entry['action']: act())})
+        except Exception as e:
+            print(f"[Klango] Program menu entries: {e}")
+        return items
+
+    def _titan_main_frame(self):
+        """Titan's own main window, or None while Klango mode is all there is.
+
+        Recognised by `restore_from_tray`, which only `TitanApp` has: the top
+        window in Klango mode is usually Klango's own, and handing that to
+        something that wants to bring Titan back would raise the wrong one.
+        """
+        try:
+            import wx
+            for window in wx.GetTopLevelWindows():
+                if window is self:
+                    continue
+                if hasattr(window, 'restore_from_tray'):
+                    return window
+        except Exception as e:
+            print(f"[Klango] could not find the Titan window: {e}")
+        return None
+
     def _get_external_im_items(self):
         """Return list of menu items for external IM modules."""
         try:
@@ -1168,15 +1252,11 @@ class KlangoMode:
     def open_settings(self):
         """Open settings."""
         try:
-            # Open without announcement
+            # Open without announcement, in whichever settings interface
+            # the user chose (Settings -> Interface -> Settings interface).
             if WX_AVAILABLE:
-                # Use the existing settings_frame if available (for KlangoMode without wx)
-                settings_frame = getattr(self, 'settings_frame', None)
-                if settings_frame is None:
-                    # Fallback: create new one if not available
-                    from src.ui.settingsgui import SettingsFrame
-                    settings_frame = SettingsFrame(None, title=_("Settings"))
-                settings_frame.Show()
+                from src.settings.interfaces import open_settings
+                open_settings(getattr(self, 'settings_frame', None))
             self.close_menu()
         except Exception as e:
             print(f"Error opening settings: {e}")
@@ -1388,12 +1468,15 @@ class KlangoFrame(wx.Frame):
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
                 {"name": _("Volume Level"), "type": "action", "action": self.announce_volume}
             ], "expanded": False},
-            {"name": _("Program"), "type": "submenu", "items": [
-                {"name": _("Settings"), "type": "action", "action": self.open_settings},
-                {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
-                {"name": _("Help"), "type": "action", "action": self.show_help},
-                {"name": _("Exit"), "type": "action", "action": self.exit_program}
-            ], "expanded": False},
+            {"name": _("Menu"), "type": "submenu", "items": [
+                {"name": _("Program"), "type": "submenu", "items": [
+                    {"name": _("Settings"), "type": "action", "action": self.open_settings},
+                    {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
+                ] + self._get_program_menu_items() + [
+                    {"name": _("Help"), "type": "action", "action": self.show_help},
+                    {"name": _("Exit"), "type": "action", "action": self.exit_program}
+                ], "expanded": False},
+            ] + self._get_extra_submenus(), "expanded": False},
             {"name": _("Components"), "type": "submenu", "items": [], "expanded": False}
         ]
         
@@ -1533,10 +1616,10 @@ class KlangoFrame(wx.Frame):
                         "type": "action",
                         "action": lambda f=func: self.execute_component_function(f)
                     })
-            self.main_menu[5]["items"] = component_items
+            self._menu_card(_("Components"))["items"] = component_items
         except Exception as e:
             print(f"Error loading components: {e}")
-            self.main_menu[5]["items"] = []
+            self._menu_card(_("Components"))["items"] = []
     
     def load_status_bar_items(self):
         """Load status bar items like IUI using GUI functions.
@@ -1919,6 +2002,87 @@ class KlangoFrame(wx.Frame):
             self._load_stereo_settings()
         return self._stereo_speech_enabled
     
+    def _get_program_menu_items(self):
+        """What the graphical Program menu has and this one never did.
+
+        Install data package, and nothing else: Settings, the Component
+        Manager, Help and Exit are Klango's own above and below it.  Shared
+        rather than copied (`src/ui/program_menu.py`), which is what keeps
+        the three interfaces offering the same things.
+        """
+        return self._klango_items(lambda pm, frame: pm.program_entries(frame))
+
+    def _menu_card(self, name):
+        """The main menu's card called `name`, found by NAME.
+
+        The cards are built from three lists spliced together and the Menu
+        card's contents depend on what is switched on, so a card's INDEX is
+        not a way to find it.  A menu that somehow has no such card is
+        answered with a throwaway one rather than an exception:
+        `load_components` only fills items into it, and Klango mode with one
+        card missing is better than Klango mode that would not start.
+        """
+        for card in self.main_menu:
+            if card.get("name") == name:
+                return card
+        return {"name": name, "type": "submenu", "items": [], "expanded": False}
+
+    def _get_extra_submenus(self):
+        """AI and Programmer, as submenus of the **Menu** card beside Program.
+
+        Klango mode is a face of Titan with no menu bar at all, so the AI
+        Agent, both AI Assistants, AI OCR and the creation kit were simply
+        unreachable from it.  The Menu card IS the menu bar, so it holds the
+        bar's menus - Program, AI, Programmer - each as a submenu of its own,
+        which is what the Invisible UI's Menu card does too.  Sixteen more
+        lines inside Program would be a longer menu rather than the same one.
+        """
+        submenus = []
+        try:
+            from src.ui import program_menu
+            frame = self._titan_main_frame()
+            for group in program_menu.extra_groups(frame):
+                submenus.append({
+                    "name": group['label'],
+                    "type": "submenu",
+                    "items": [{"name": entry['label'], "type": "action",
+                               "action": (lambda act=entry['action']: act())}
+                              for entry in group['entries']],
+                    "expanded": False})
+        except Exception as e:
+            print(f"[Klango] Program submenus: {e}")
+        return submenus
+
+    def _klango_items(self, pick):
+        """`pick` run against `program_menu`, as Klango menu items."""
+        items = []
+        try:
+            from src.ui import program_menu
+            for entry in pick(program_menu, self._titan_main_frame()):
+                items.append({"name": entry['label'], "type": "action",
+                              "action": (lambda act=entry['action']: act())})
+        except Exception as e:
+            print(f"[Klango] Program menu entries: {e}")
+        return items
+
+    def _titan_main_frame(self):
+        """Titan's own main window, or None while Klango mode is all there is.
+
+        Recognised by `restore_from_tray`, which only `TitanApp` has: the top
+        window in Klango mode is usually Klango's own, and handing that to
+        something that wants to bring Titan back would raise the wrong one.
+        """
+        try:
+            import wx
+            for window in wx.GetTopLevelWindows():
+                if window is self:
+                    continue
+                if hasattr(window, 'restore_from_tray'):
+                    return window
+        except Exception as e:
+            print(f"[Klango] could not find the Titan window: {e}")
+        return None
+
     def _get_external_im_items(self):
         """Return list of menu items for external IM modules."""
         try:
@@ -2271,15 +2435,11 @@ class KlangoFrame(wx.Frame):
     def open_settings(self):
         """Open settings."""
         try:
-            # Use the existing settings_frame stored in self
-            # (KlangoFrame stores settings_frame as parent in __init__)
-            if self.settings_frame:
-                self.settings_frame.Show()
-            else:
-                # Fallback: create new one if not available (shouldn't happen)
-                from src.ui.settingsgui import SettingsFrame
-                self.settings_frame = SettingsFrame(self, title=_("Settings"))
-                self.settings_frame.Show()
+            # Whichever settings interface the user chose; the classic
+            # window is what `settings_frame` has always been and is still
+            # what everything registers its categories into.
+            from src.settings.interfaces import open_settings
+            open_settings(self.settings_frame or self)
             self.close_menu()
         except Exception as e:
             print(f"Error opening settings: {e}")

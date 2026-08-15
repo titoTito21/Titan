@@ -27,13 +27,15 @@ import time
 import wx
 
 from src.platform_utils import IS_WINDOWS
+from src.shell import addons as shell_addons
 from src.shell import luna, win_shell
 from src.shell import keyboard_handover as handover
 from src.shell.deferred import Coalesced, call_after, call_later
 from src.system import key_state
 from src.shell.a11y import (ROLE_BUTTON, ROLE_LISTITEM, ROLE_TOOLBAR,
                             SHELL_NAME, STATE_FOCUSABLE, STATE_FOCUSED,
-                            STATE_PRESSED, edge_cue, shell_setting)
+                            STATE_PRESSED, edge_cue, name_control,
+                            shell_setting)
 from src.shell.controls import (IconTextControl, ShellControl, TextControl,
                                 bitmap_from_icon_handle)
 from src.shell.quick_launch import (QuickLaunchButton, quick_launch_folder,
@@ -529,7 +531,69 @@ class TaskbarFrame(wx.Frame):
         # is where ReactOS puts it and where Shift+Tab from the desktop
         # expects to arrive.
         self.show_desktop_button = ShowDesktopButton(self.tray_area, self)
+        # A shell add-on's own band, which is what Windows calls a deskband:
+        # a control of the add-on's making, living in the notification area
+        # beside the icons.  Built once with the bar rather than on every
+        # tray refresh, because the tray is re-read every thirty seconds and
+        # rebuilding somebody's control that often would throw the keyboard
+        # out of it - the same reason the tray buttons themselves are
+        # reused.
+        self._addon_bands = self._build_addon_bands()
         self.refresh_quick_launch()
+
+    def _build_addon_bands(self):
+        """The controls the add-ons put on the bar, made and parented here.
+
+        An add-on hands back `{'label': ..., 'control': callable, 'width':
+        n}` and the callable is given the notification area to build in, so
+        the control is a real child window of the bar - which is what makes
+        it focusable, nameable and readable like everything else on it.  A
+        band that is not a window is dropped rather than laid out.
+        """
+        bands = []
+        for entry in shell_addons.collect('taskbar', 'taskbar_bands', self):
+            factory = entry.get('control')
+            if not callable(factory):
+                continue
+            try:
+                control = factory(self.tray_area)
+            except Exception as error:
+                print(f"[ShellAddons] {entry.get('addon')} band failed: "
+                      f"{error}")
+                continue
+            if not isinstance(control, wx.Window):
+                print(f"[ShellAddons] {entry.get('addon')} band is not a "
+                      f"window")
+                continue
+            label = str(entry.get('label') or entry.get('addon') or '')
+            if label:
+                # A painted control answers MSAA through the shell's own
+                # mixin; anything else is given the name the hard way, so a
+                # band is never an unnamed rectangle on the bar.
+                if hasattr(control, 'accessible_name'):
+                    control.accessible_name = label
+                else:
+                    name_control(control, label)
+            try:
+                width = int(entry.get('width') or TRAY_ICON_WIDTH)
+            except (TypeError, ValueError):
+                width = TRAY_ICON_WIDTH
+            bands.append((control, max(16, min(240, width))))
+        if bands:
+            print(f"[TitanShell] {len(bands)} add-on bands on the bar")
+        return bands
+
+    def addon_bands(self):
+        """The band controls, living ones only."""
+        alive = []
+        for control, width in list(getattr(self, '_addon_bands', ())):
+            try:
+                if control and not control.IsBeingDeleted():
+                    alive.append((control, width))
+            except RuntimeError:
+                continue
+        self._addon_bands = alive
+        return alive
 
     def _on_quick_launch_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self.quick_launch_area)
@@ -1055,6 +1119,7 @@ class TaskbarFrame(wx.Frame):
             furniture += CLOCK_WIDTH
         if self.shows_show_desktop():
             furniture += SHOW_DESKTOP_WIDTH
+        furniture += sum(width for _control, width in self.addon_bands())
         return furniture + self._tray_icon_width() * len(
             self._tray_buttons)
 
@@ -1065,7 +1130,8 @@ class TaskbarFrame(wx.Frame):
         and so does Show Desktop.
         """
         row = TRAY_ICON_WIDTH
-        return row * len(self._tray_buttons) + row + row + 10
+        return (row * len(self._tray_buttons) + row * len(self.addon_bands())
+                + row + row + 10)
 
     def _layout_tray(self):
         width, height = self.tray_area.GetSize()
@@ -1077,6 +1143,9 @@ class TaskbarFrame(wx.Frame):
             for button in self._tray_buttons:
                 button.SetSize(0, y, width, row)
                 y += row
+            for control, _band_width in self.addon_bands():
+                control.SetSize(0, y, width, row)
+                y += row
             self.clock.SetSize(0, y + 2, width, row)
             y += 2 + row
             self.show_desktop_button.SetSize(0, y, width, row)
@@ -1086,6 +1155,9 @@ class TaskbarFrame(wx.Frame):
         for button in self._tray_buttons:
             button.SetSize(x, 0, icon_width, height)
             x += icon_width
+        for control, band_width in self.addon_bands():
+            control.SetSize(x, 0, band_width, height)
+            x += band_width
         self.clock.SetSize(x + 2, 0, CLOCK_WIDTH, height)
         x += 2 + CLOCK_WIDTH
         self.show_desktop_button.SetSize(x + 2, 0, SHOW_DESKTOP_WIDTH,
@@ -1442,6 +1514,7 @@ class TaskbarFrame(wx.Frame):
         tasks = [self._buttons.get(window.hwnd) for window in self._windows]
         groups.append(('tasks', [button for button in tasks if button]))
         tray = list(self._tray_buttons)
+        tray.extend(control for control, _width in self.addon_bands())
         if self.shows_clock():
             tray.append(self.clock)
         if self.shows_show_desktop():
@@ -1614,6 +1687,10 @@ class TaskbarFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda e: self.shell.show_window_switcher(),
                   window_list)
         self.Bind(wx.EVT_MENU, lambda e: self.show_properties(), properties)
+
+        shell_addons.add_to_menu(
+            menu, shell_addons.collect('taskbar', 'taskbar_menu_items', self),
+            bind_to=self)
 
         self.PopupMenu(menu)
         menu.Destroy()
