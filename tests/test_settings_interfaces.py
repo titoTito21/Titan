@@ -24,6 +24,7 @@ if ROOT not in sys.path:
 import wx                                                        # noqa: E402
 
 from src.settings import interfaces, ui_model                    # noqa: E402
+from src.titan_core.translation import _         # noqa: E402
 
 _app = wx.App(False)
 
@@ -417,6 +418,60 @@ class RealSettingsWindowTests(unittest.TestCase):
                 any(name in registered for name in names)
                 or True,  # a machine may have no component with settings
                 "component categories were not registered")
+
+
+class OneCategoryAtATimeTests(unittest.TestCase):
+    """A category the user is not on is not on the screen.
+
+    `ShowCategory` hides the panel it is showing and no other, so a panel
+    built for a category that is not registered was never hidden by anybody
+    - it sat over the top of whichever category the user really opened.
+    That is what put the Titan shell's settings (and, with no gamepad
+    plugged in, the Game controller's) into every category at once.
+    """
+
+    def setUp(self):
+        import sys as _sys
+        if _sys.platform != 'win32':
+            self.skipTest("the Titan shell category is Windows only")
+        from src.ui import settingsgui
+        self.frame = settingsgui.SettingsFrame(None)
+        self.addCleanup(self.frame.Destroy)
+
+    def test_only_the_open_category_is_shown(self):
+        name = list(self.frame.categories)[0]
+        self.frame.ShowCategory(name)
+        shown = [category for category, panel
+                 in self.frame.categories.items() if panel.IsShown()]
+        self.assertEqual(shown, [name])
+        self.assertFalse(self.frame.controller_panel.IsShown(),
+                         "the Game controller panel is drawn over the rest")
+
+    def test_the_shell_category_is_always_there(self):
+        """It holds its own master switch, so it cannot be conditional."""
+        self.assertIn(_("Titan shell"), self.frame.categories)
+        self.assertIn(_("Titan shell"), self.frame.category_order)
+
+    def test_the_master_switch_is_in_the_shell_category(self):
+        switch = self.frame.windows_e_hook_cb
+        self.assertIsNotNone(switch)
+        parent = switch.GetParent()
+        while parent is not None and parent is not self.frame.titan_shell_panel:
+            parent = parent.GetParent()
+        self.assertIs(parent, self.frame.titan_shell_panel,
+                      "\"Modify system interface\" is not in Titan shell")
+
+    def test_the_options_follow_the_switch(self):
+        for wanted in (True, False):
+            self.frame.windows_e_hook_cb.SetValue(wanted)
+            self.frame._update_shell_controls()
+            self.assertEqual(
+                self.frame.shell_option_cbs['desktop_shell'].IsEnabled(),
+                wanted)
+            self.assertEqual(self.frame.start_menu_choice.IsEnabled(), wanted)
+            self.assertEqual(self.frame.shell_addon_list.IsEnabled(), wanted)
+        self.assertTrue(self.frame.windows_e_hook_cb.IsEnabled(),
+                        "the switch must never disable itself")
 
 
 if __name__ == '__main__':

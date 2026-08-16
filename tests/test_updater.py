@@ -187,6 +187,85 @@ class ExtractorStandsOutside(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(install, 'Titan.exe.old')))
 
 
+try:
+    import py7zr as _py7zr
+    HAVE_PY7ZR = True
+except Exception:
+    HAVE_PY7ZR = False
+
+
+@unittest.skipUnless(HAVE_7Z and HAVE_PY7ZR, "needs 7z.exe to build the "
+                                             "archive and py7zr to read it")
+class NoBinaryNeeded(unittest.TestCase):
+    """Titan unpacks the update itself, with no external program at all.
+
+    This is the structural half of the fix: an extractor that lives inside
+    the directory being rewritten is an extractor the update can rename out
+    from under itself. py7zr cannot be renamed away because it is not a file
+    on the way to being replaced - it is already in memory.
+    """
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix='titan_updater_nobin_')
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self._was_frozen = updater_module.is_frozen
+        updater_module.is_frozen = lambda: True
+        self.addCleanup(lambda: setattr(updater_module, 'is_frozen',
+                                        self._was_frozen))
+
+    def test_it_extracts_with_no_7zip_anywhere(self):
+        """The real no-binary case: nothing in data/bin and nothing on PATH."""
+        install = build_install(self.root)
+        archive = build_archive(self.root, include_seven_zip=False)
+        shutil.rmtree(os.path.join(install, 'data', 'bin'))
+
+        instance = make_updater(install, archive)
+        self.addCleanup(instance._release_extractor)
+        # No 7-Zip installed on the machine either.
+        was_which = updater_module.shutil.which
+        updater_module.shutil.which = lambda name: None
+        self.addCleanup(setattr, updater_module.shutil, 'which', was_which)
+
+        self.assertTrue(
+            instance._extract_archive(archive, Recorder(), 'extracting'))
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+        # And it never went looking for an external program to do it.
+        self.assertIsNone(instance._extractor)
+
+    def test_the_listing_matches_7zip(self):
+        """The staging decisions must not depend on who read the archive."""
+        install = build_install(self.root)
+        archive = build_archive(self.root)
+        instance = make_updater(install, archive)
+        self.addCleanup(instance._release_extractor)
+
+        from_py7zr = sorted(instance._archive_entries_py7zr(archive))
+        instance._archive_entries_py7zr = lambda path: None
+        from_binary = sorted(instance._list_archive_entries(archive))
+
+        def normalised(entries):
+            # The two readers disagree only about the separator, and the
+            # staging code normalises that itself.
+            return [(path.replace(os.sep, '/'), is_dir)
+                    for path, is_dir in entries]
+
+        self.assertEqual(normalised(from_py7zr), normalised(from_binary))
+
+    def test_a_missing_py7zr_still_updates_through_7zip(self):
+        """The fallback is the one that must never quietly disappear."""
+        install = build_install(self.root)
+        archive = build_archive(self.root)
+        instance = make_updater(install, archive)
+        instance._extract_with_py7zr = lambda *a, **k: False
+        instance._archive_entries_py7zr = lambda path: None
+
+        self.assertTrue(
+            instance._extract_archive(archive, Recorder(), 'extracting'))
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+
+
 @unittest.skipUnless(HAVE_7Z, "data/bin/7z.exe is not present")
 class StandaloneUpdater(unittest.TestCase):
     """The repair tool for the Titans that cannot update themselves."""

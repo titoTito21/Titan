@@ -147,7 +147,7 @@ The window half:
 Two things follow from how the model is built and are worth knowing:
 
 - **A control nobody named is not offered.** A `wx.Choice` is labelled by the static text in front of it — that is how every wx program is built — and a control with no caption is left out rather than shown as a nameless box. It is still reachable in Titan's own window.
-- **Setting a value fires the control's own event**, because that is where Titan applies things live (the speech rate, the sound theme, the switch that makes the Titan shell category appear). Setting it silently would leave the window and the program disagreeing.
+- **Setting a value fires the control's own event**, because that is where Titan applies things live (the speech rate, the sound theme, the switch the whole Titan shell hangs off). Setting it silently would leave the window and the program disagreeing.
 
 ## Threading
 

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The **Titan shell** is the desktop, the taskbar, the notification area, the Start menu and the file browser that Titan puts up when *Settings -> Environment -> "Modify system interface"* and *Settings -> Titan shell -> "Replace the desktop, taskbar and Start menu"* are both on. All five are Titan's own code — and a **shell add-on** is how somebody else gets into them without changing Titan.
+The **Titan shell** is the desktop, the taskbar, the notification area, the Start menu and the file browser that Titan puts up when *Settings -> Titan shell -> "Modify system interface"* and *Settings -> Titan shell -> "Replace the desktop, taskbar and Start menu"* are both on. All five are Titan's own code — and a **shell add-on** is how somebody else gets into them without changing Titan.
 
 There are two kinds, and the difference decides everything about how you write one:
 

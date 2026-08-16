@@ -981,13 +981,23 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   desktop list view (`win_shell.windows_desktop_hwnd()`, `Progman` or a
   `WorkerW`), Windows+D minimises everything and follows the windows down,
   and Windows+B lands in the notification area.
-- The **Titan shell settings category** is listed only while "Modify system
-  interface" is ticked, and appears and disappears as the box is ticked.  Its options are **grouped** into real
-  `wx.StaticBox` groups - the system interface, the desktop, the taskbar,
-  Sounds, and the shortcuts Titan takes over - because a static box is a
-  grouping Windows itself knows about, so a screen reader says which group
-  the keyboard has entered instead of the panel being twenty checkboxes to
-  count through.
+- **The whole system interface is one settings category.** "Modify system
+  interface" is the FIRST control of Settings -> Titan shell, not a checkbox
+  under Environment, and the category is listed like any other: a switch
+  kept inside a category that only appeared once the switch was ticked was
+  a switch nobody could find, and the panel it was hidden behind was never
+  actually hidden - `ShowCategory` only hides the panel it is showing, so a
+  panel built for an unregistered category (the Titan shell one, and the
+  Game controller one whenever no pad is plugged in) was drawn on top of
+  every category the user really opened.  Both are hidden the moment they
+  are built now, and everything below the switch is enabled and disabled
+  with it (`_update_shell_controls`).  The setting itself is unchanged -
+  still `environment/windows_e_hook` - so nothing that reads it moved.  The
+  options are **grouped** into real `wx.StaticBox` groups - the system
+  interface, the desktop, the taskbar, Sounds, and the shortcuts Titan takes
+  over - because a static box is a grouping Windows itself knows about, so a
+  screen reader says which group the keyboard has entered instead of the
+  panel being twenty checkboxes to count through.
 - **Starting the shell must not stop the machine** - measured, then fixed.
   `start_shell()` cost **4240 ms on the GUI thread**; it now costs **214
   ms**, with the desktop's icons, the notification area, the appbar and the
@@ -1580,7 +1590,9 @@ strings, already translated. So:
   API, the `kind` table and how to render each, threading through
   `api.call`, and the rule that the settings can never be what an add-on
   takes away.
-- Tests: `tests/test_settings_interfaces.py` (run it directly; 36 tests).
+- Tests: `tests/test_settings_interfaces.py` (run it directly; 40 tests -
+  the last four are the settings window's own: one category on the screen
+  at a time, and the shell's master switch inside the shell's category).
 
 ### Titan Access: one document over the web, over any app, over anything
 

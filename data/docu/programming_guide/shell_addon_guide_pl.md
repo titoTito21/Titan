@@ -2,7 +2,7 @@
 
 ## Wprowadzenie
 
-**Powłoka Titana** to pulpit, pasek zadań, zasobnik systemowy, menu Start i przeglądarka plików, które Titan stawia, gdy włączone są *Ustawienia -> Środowisko -> "Modyfikuj interfejs systemowy"* oraz *Ustawienia -> Powłoka Titana -> "Zastąp pulpit, pasek zadań i menu Start"*. Wszystkie pięć to kod samego Titana — a **dodatek powłoki** jest sposobem, żeby ktoś inny mógł do nich wejść, nie zmieniając Titana.
+**Powłoka Titana** to pulpit, pasek zadań, zasobnik systemowy, menu Start i przeglądarka plików, które Titan stawia, gdy włączone są *Ustawienia -> Powłoka Titana -> "Modyfikuj interfejs systemowy"* oraz *Ustawienia -> Powłoka Titana -> "Zastąp pulpit, pasek zadań i menu Start"*. Wszystkie pięć to kod samego Titana — a **dodatek powłoki** jest sposobem, żeby ktoś inny mógł do nich wejść, nie zmieniając Titana.
 
 Są dwa rodzaje i to od tej różnicy zależy wszystko:
 

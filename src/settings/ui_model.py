@@ -73,7 +73,7 @@ class SettingsItem:
     `set` writes into the real control and then fires the event the control
     would have fired if the user had done it, because that is where Titan
     applies things live - the speech rate slider, the sound theme, the
-    switch that makes the Titan shell category appear.  Setting the value
+    switch the whole Titan shell hangs off.  Setting the value
     silently would leave the window and the program disagreeing.
     """
 

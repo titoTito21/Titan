@@ -370,14 +370,13 @@ class SettingsFrame(wx.Frame):
             print("[SettingsFrame] No gamepad - removed Game controller category")
 
     def _on_system_interface_toggled(self, event):
-        """The system interface switch also decides whether the Titan shell
-        category is there to be configured, so the list is rebuilt at once."""
+        """The system interface switch is what the rest of this category is
+        about, so everything under it follows it as it is ticked."""
         self.OnCheckBox(event)
         try:
-            self._sync_shell_category()
-            self.force_rebuild_categories()
+            self._update_shell_controls()
         except Exception as error:
-            print(f"[SettingsFrame] Could not refresh the shell category: {error}")
+            print(f"[SettingsFrame] Could not refresh the shell options: {error}")
 
     def _system_interface_enabled(self):
         """Is "Modify system interface" ticked right now?
@@ -398,33 +397,26 @@ class SettingsFrame(wx.Frame):
         except Exception:
             return False
 
-    def _sync_shell_category(self):
-        """Show the Titan shell category only while the system interface is
-        modified - the shell is the other half of that one switch."""
-        if getattr(self, 'titan_shell_panel', None) is None:
-            return
-        name = _("Titan shell")
-        enabled = self._system_interface_enabled()
-        registered = name in self.categories
+    def _update_shell_controls(self):
+        """Everything in the Titan shell category hangs off the switch at the
+        top of it, so the options are enabled and disabled with it.
 
-        if enabled and not registered:
-            self.categories[name] = self.titan_shell_panel
-            if name not in self.category_order:
-                # Where it was registered before it became conditional: next
-                # to Windows, which is the setting it belongs with.
-                try:
-                    self.category_order.insert(
-                        self.category_order.index(_("Windows")) + 1, name)
-                except ValueError:
-                    self.category_order.append(name)
-            self.titan_shell_panel.Hide()
-        elif not enabled and registered:
-            del self.categories[name]
-            if name in self.category_order:
-                self.category_order.remove(name)
-            if self.current_category_panel is self.titan_shell_panel:
-                self.titan_shell_panel.Hide()
-                self.current_category_panel = None
+        The category itself is always listed - that switch is in it, and a
+        category that appears only once its own switch is on could never be
+        turned on.
+        """
+        enabled = self._system_interface_enabled()
+        controls = list(getattr(self, 'shell_option_cbs', {}).values())
+        controls += list(getattr(self, 'shell_binding_cbs', {}).values())
+        for name in ('start_menu_choice', 'shell_addon_list'):
+            control = getattr(self, name, None)
+            if control is not None:
+                controls.append(control)
+        for control in controls:
+            try:
+                control.Enable(enabled)
+            except RuntimeError:
+                pass
 
     def force_rebuild_categories(self):
         """Force complete rebuild of category list"""
@@ -432,7 +424,6 @@ class SettingsFrame(wx.Frame):
 
         # Add/remove the Game controller category based on live gamepad presence.
         self._sync_controller_category()
-        self._sync_shell_category()
 
         # Check if category_list is still valid before accessing it
         try:
@@ -443,9 +434,9 @@ class SettingsFrame(wx.Frame):
             return
 
         # Get current selection.  By its name and not by its index: a
-        # category added or removed above it (the Game controller and the
-        # Titan shell ones both come and go) would otherwise move the
-        # selection onto a different category than the one the user is on.
+        # category added or removed above it (the Game controller one comes
+        # and goes with the pad) would otherwise move the selection onto a
+        # different category than the one the user is on.
         current_category = None
         try:
             current_category = self.category_list.GetStringSelection() or None
@@ -541,6 +532,10 @@ class SettingsFrame(wx.Frame):
 
     def InitCoreCategories(self):
         """Initialize core settings categories"""
+        # Built on Windows only, by InitTitanShellPanel, and read by
+        # LoadSettings and OnSave whatever the platform.
+        self.windows_e_hook_cb = None
+
         # Create panels for each category
         self.general_panel = wx.Panel(self.content_panel)
         self.sound_panel = wx.Panel(self.content_panel)
@@ -551,7 +546,11 @@ class SettingsFrame(wx.Frame):
         self.stereo_speech_panel = wx.Panel(self.content_panel)
         # Game controller panel is built up-front but only registered as a
         # category while a gamepad is connected (see _sync_controller_category).
+        # Hidden the moment it is built: a panel of the content window that
+        # nothing has registered is never hidden by ShowCategory either, so
+        # it would be drawn over whichever category the user is really on.
         self.controller_panel = wx.Panel(self.content_panel)
+        self.controller_panel.Hide()
         self.ai_features_panel = wx.Panel(self.content_panel)
 
         # Register categories
@@ -570,12 +569,14 @@ class SettingsFrame(wx.Frame):
             self.windows_panel = wx.Panel(self.content_panel)
             self.register_category(_("Windows"), self.windows_panel)
 
-            # The Titan shell panel is built either way, but the category is
-            # only listed while "Modify system interface" is ticked - the
-            # shell is that setting's second half, so offering to configure a
-            # desktop that cannot appear is a dead end.  See
-            # _sync_shell_category.
+            # The Titan shell category is listed like any other, because
+            # "Modify system interface" - the switch the whole shell hangs
+            # off - is the first thing inside it.  A switch kept in a
+            # category that only appears once the switch is on is a switch
+            # nobody can find, and the panel it was hidden behind was never
+            # hidden at all: it was drawn over every other category.
             self.titan_shell_panel = wx.Panel(self.content_panel)
+            self.register_category(_("Titan shell"), self.titan_shell_panel)
         else:
             self.titan_shell_panel = None
 
@@ -611,7 +612,6 @@ class SettingsFrame(wx.Frame):
 
         # Register the Game controller category now if a pad is already present.
         self._sync_controller_category()
-        self._sync_shell_category()
 
     def register_category(self, name, panel, save_callback=None, load_callback=None):
         """
@@ -990,6 +990,28 @@ class SettingsFrame(wx.Frame):
         self.minimize_action_radio.Bind(wx.EVT_RADIOBOX, self.OnRadioBox)
         vbox.Add(self.minimize_action_radio, flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
+        # What a gamepad being plugged in means. Full support is what Titan
+        # has always done; the other two are for somebody whose gamepad
+        # belongs to a game rather than to Titan - and who still wants to
+        # hear that Windows has seen it.
+        self._gamepad_detection_values = ['full', 'announce', 'nothing']
+        gamepad_choices = [
+            _("Enable full gamepad support for TCE"),
+            _("Only announce connection and disconnection"),
+            _("Do nothing"),
+        ]
+        self.gamepad_detection_radio = wx.RadioBox(
+            self.general_panel,
+            label=_("When TCE detects a connected gamepad:"),
+            choices=gamepad_choices,
+            majorDimension=1,
+            style=wx.RA_SPECIFY_COLS,
+        )
+        self.gamepad_detection_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.gamepad_detection_radio.Bind(wx.EVT_RADIOBOX, self.OnRadioBox)
+        vbox.Add(self.gamepad_detection_radio,
+                 flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
+
         # Alt+F4 keyboard shortcut
         self._alt_f4_action_values = ['close', 'tray']
         alt_f4_choices = [
@@ -1110,13 +1132,10 @@ class SettingsFrame(wx.Frame):
         self.announce_screen_lock_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.announce_screen_lock_cb, flag=wx.LEFT | wx.TOP, border=10)
 
-        if sys.platform == 'win32':
-            self.windows_e_hook_cb = wx.CheckBox(self.environment_panel, label=_("Modify system interface"))
-            self.windows_e_hook_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
-            self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX, self._on_system_interface_toggled)
-            vbox.Add(self.windows_e_hook_cb, flag=wx.LEFT | wx.TOP, border=10)
-        else:
-            self.windows_e_hook_cb = None
+        # "Modify system interface" is not here any more: it is the first
+        # thing in the Titan shell category, which is what it switches on.
+        # It is still saved in this section (`environment/windows_e_hook`),
+        # so nothing that reads the setting had to change.
 
         self.enable_tce_sounds_cb = wx.CheckBox(self.environment_panel, label=_("Enable TCE sounds outside environment"))
         self.enable_tce_sounds_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
@@ -1159,17 +1178,14 @@ class SettingsFrame(wx.Frame):
 
     def InitTitanShellPanel(self):
         """
-        Shortcuts Titan takes over while "Modify system interface" is on.
+        Everything about the system interface Titan puts up, in one place.
 
-        The master switch stays under Environment; this panel decides which
-        individual Windows+<key> shortcuts Titan claims from the system.
+        The master switch is the first control here rather than under
+        Environment: a user looking for the shell looks in the shell's own
+        category, and the rest of the panel is enabled and disabled with it.
         """
         panel = self.titan_shell_panel
         vbox = wx.BoxSizer(wx.VERTICAL)
-
-        vbox.Add(wx.StaticText(panel, label=_(
-            "These options are active only when \"Modify system interface\" "
-            "is enabled under Environment.")), flag=wx.LEFT | wx.TOP, border=10)
 
         # The panel is grouped rather than being one column of twenty
         # checkboxes: a `wx.StaticBox` is a real grouping to Windows, so a
@@ -1196,8 +1212,19 @@ class SettingsFrame(wx.Frame):
             box.Add(wx.StaticText(box.GetStaticBox(), label=message),
                     flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=6)
 
-        # What the mode puts on the screen at all.
+        # What the mode puts on the screen at all, starting with whether it
+        # is on: this is the switch every other option here depends on, and
+        # it is saved in the environment section as it always was.
         interface = group(_("The system interface"))
+        self.windows_e_hook_cb = wx.CheckBox(
+            interface.GetStaticBox(), label=_("Modify system interface"))
+        self.windows_e_hook_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.windows_e_hook_cb.Bind(wx.EVT_CHECKBOX,
+                                    self._on_system_interface_toggled)
+        interface.Add(self.windows_e_hook_cb,
+                      flag=wx.LEFT | wx.TOP | wx.BOTTOM, border=6)
+        note(interface, _("Everything below is available only while "
+                          "\"Modify system interface\" is ticked."))
         option(interface, 'desktop_shell',
                _("Replace the desktop, taskbar and Start menu "
                  "(Windows XP look)"), False)
@@ -1306,6 +1333,7 @@ class SettingsFrame(wx.Frame):
                           "shortcuts using Control are left to Windows."))
 
         panel.SetSizer(vbox)
+        self._update_shell_controls()
 
     def InitSystemMonitorPanel(self):
         panel = self.system_monitor_panel
@@ -2389,6 +2417,14 @@ class SettingsFrame(wx.Frame):
         self.minimize_action_radio.SetSelection(
             self._minimize_action_values.index(minimize_action_value))
 
+        # Load what a detected gamepad means
+        gamepad_detection_value = general_settings.get(
+            'gamepad_detection', 'full')
+        if gamepad_detection_value not in self._gamepad_detection_values:
+            gamepad_detection_value = 'full'
+        self.gamepad_detection_radio.SetSelection(
+            self._gamepad_detection_values.index(gamepad_detection_value))
+
         # Load Alt+F4 action
         alt_f4_action_value = general_settings.get('alt_f4_action', 'close')
         if alt_f4_action_value not in self._alt_f4_action_values:
@@ -2464,6 +2500,7 @@ class SettingsFrame(wx.Frame):
             checkbox.SetValue(
                 str(shell_settings.get(binding_id, default)).lower() in ['true', '1'])
         self._select_start_menu()
+        self._update_shell_controls()
 
         # Copilot key settings
         if self.copilot_remap_cb is not None:
@@ -3264,6 +3301,11 @@ class SettingsFrame(wx.Frame):
             alt_f4_action_value = self._alt_f4_action_values[self.alt_f4_action_radio.GetSelection()]
         except Exception:
             alt_f4_action_value = 'close'
+        try:
+            gamepad_detection_value = self._gamepad_detection_values[
+                self.gamepad_detection_radio.GetSelection()]
+        except Exception:
+            gamepad_detection_value = 'full'
 
         self.settings['general'] = {
             'quick_start': str(self.quick_start_cb.GetValue()),
@@ -3275,6 +3317,7 @@ class SettingsFrame(wx.Frame):
             'visible_categories': ','.join(checked_cats),
             'minimize_action': minimize_action_value,
             'alt_f4_action': alt_f4_action_value,
+            'gamepad_detection': gamepad_detection_value,
             'titan_ui_key': self._titan_ui_key_value or 'grave',
         }
 

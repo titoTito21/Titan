@@ -40,6 +40,11 @@ SCHEMA = {
     ('general', 'minimize_action'): (
         'string', "What minimising Titan does.", "'tray' or 'taskbar'",
         "minimise, tray"),
+    ('general', 'gamepad_detection'): (
+        'string', "What Titan does when a gamepad is plugged in.",
+        "'full' (full gamepad support), 'announce' (only say it was "
+        "connected or disconnected) or 'nothing'",
+        "gamepad, controller, joystick, pad"),
     ('general', 'titan_ui_key'): (
         'string', "The global hotkey that brings Titan's interface up.",
         "a shortcut such as 'ctrl+alt+t'", "hotkey, shortcut, bring up titan"),

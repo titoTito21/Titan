@@ -139,8 +139,8 @@ def compile_to_release():
         # to the external 7-Zip on every update.
         "py7zr",
         "py7zr.callbacks",
-        "pybcj",
-        "pyzstd",
+        "bcj",
+        "compression.zstd",
         "pyppmd",
         "inflate64",
         "multivolumefile",

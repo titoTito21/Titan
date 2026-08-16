@@ -510,12 +510,17 @@ class Updater:
         rollback leaves neither a half-replaced nor a half-added install.
         """
         staged = []
-        # Only relevant when the private copy could not be made and we are
-        # running Titan's own data/bin/7z.exe: moving THAT aside is what
-        # broke every compiled update (see _resolve_extractor).
-        extractor = os.path.normcase(os.path.abspath(self._resolve_extractor()))
+        # Only relevant when an external 7-Zip is going to be run AND the
+        # private copy of it could not be made, leaving us about to launch
+        # Titan's own data/bin/7z.exe: moving THAT aside is what broke every
+        # compiled update (see _resolve_extractor). Deliberately asks
+        # self._extractor rather than resolving one - unpacking in-process
+        # needs no external program and must not go looking for one.
+        extractor = (os.path.normcase(os.path.abspath(self._extractor))
+                     if self._extractor else None)
         extractor_dir = (os.path.dirname(extractor)
-                         if self._inside_install(extractor) else None)
+                         if extractor and self._inside_install(extractor)
+                         else None)
 
         for rel, is_dir in self._list_archive_entries(archive_path):
             if is_dir:
@@ -569,6 +574,14 @@ class Updater:
                         os.remove(target)  # created by the aborted extraction
             except Exception as e:
                 print(f"Rollback failed for {a}: {e}")
+
+    def _py7zr_available(self):
+        """Whether this Titan can unpack a 7z archive by itself."""
+        try:
+            import py7zr  # noqa: F401
+            return True
+        except Exception:
+            return False
 
     def _extract_with_py7zr(self, archive_path, progress_dialog, status_text):
         """Unpack the archive in this process, with no 7-Zip at all.
@@ -669,6 +682,18 @@ class Updater:
                 print(f"Archive to extract does not exist: {archive_path}")
                 return False
 
+            # Who unpacks this is decided BEFORE anything is moved aside.
+            # An external 7-Zip has to be copied out of the install first -
+            # staging would otherwise rename it away and the launch would
+            # fail - and that copy must exist by the time staging runs.
+            in_process = self._py7zr_available()
+            seven_zip = None
+            if not in_process:
+                seven_zip = self._resolve_extractor()
+                if not os.path.exists(seven_zip):
+                    print(f"7zip not found at {seven_zip}")
+                    return False
+
             # Compiled build: move locked targets (running exe, loaded DLLs)
             # aside so the new copies can be written. Windows does allow a
             # running .exe and a loaded .dll to be RENAMED, which is what
@@ -680,16 +705,17 @@ class Updater:
             # Unpack in this process when we can: no external program means
             # nothing for the update to rename out from under itself, and an
             # install whose data/bin is damaged can still be repaired.
-            if self._extract_with_py7zr(archive_path, progress_dialog,
-                                        status_text):
-                return True
-
-            seven_zip = self._resolve_extractor()
-            if not os.path.exists(seven_zip):
-                print(f"7zip not found at {seven_zip}")
-                if own_staging:
-                    self._rollback_staging(staged)
-                return False
+            if in_process:
+                if self._extract_with_py7zr(archive_path, progress_dialog,
+                                            status_text):
+                    return True
+                # It could be read and still failed part way through. 7-Zip
+                # is the second opinion; -aoa overwrites whatever py7zr left.
+                seven_zip = self._resolve_extractor()
+                if not os.path.exists(seven_zip):
+                    if own_staging:
+                        self._rollback_staging(staged)
+                    return False
 
             # -bsp1 outputs progress percentage to stdout
             # -aoa forces overwrite of ALL existing files (without it a stale

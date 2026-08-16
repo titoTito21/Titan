@@ -270,6 +270,20 @@ class _HapticSyncEngine:
 _engine = _HapticSyncEngine()
 
 
+def _titan_drives_the_gamepad():
+    """Whether Settings -> General lets Titan use the gamepad for feedback.
+
+    The audio-synced engine talks to XInput directly, so it never passes
+    through vibration_controller.vibrate() and has to ask for itself.
+    """
+    try:
+        from src.controller.controller_ui import (
+            gamepad_detection_mode, GAMEPAD_FULL)
+        return gamepad_detection_mode() == GAMEPAD_FULL
+    except Exception:
+        return True
+
+
 def play_for_path(sound_path, volume=1.0):
     """Fire audio-synced haptics for a sound file, if sync mode is active.
 
@@ -279,6 +293,8 @@ def play_for_path(sound_path, volume=1.0):
     try:
         vc = _cv.vibration_controller
         if not getattr(vc, 'vibration_enabled', True):
+            return
+        if not _titan_drives_the_gamepad():
             return
         if getattr(vc, 'haptic_mode', 'sync') != 'sync':
             return
@@ -302,6 +318,8 @@ def play_for_speech(snd, volume=1.0):
             return
         if not getattr(vc, 'vibration_enabled', True):
             return
+        if not _titan_drives_the_gamepad():
+            return
         _engine.add_voice_from_sound(snd, gain=max(0.0, min(1.0, volume)))
     except Exception:
         pass
@@ -321,6 +339,8 @@ def play_for_speech_segment(audio, volume=1.0):
         if not getattr(vc, 'speech_haptic_sync', False):
             return
         if not getattr(vc, 'vibration_enabled', True):
+            return
+        if not _titan_drives_the_gamepad():
             return
         if not _NUMPY_OK or audio is None:
             return

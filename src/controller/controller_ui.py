@@ -28,6 +28,30 @@ def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, p
     dlg.Destroy()
     return result
 
+# What Settings -> General -> "When TCE detects a connected gamepad" says.
+#
+#   full     - Titan's gamepad support, as it has always been
+#   announce - say it was plugged in or unplugged, and nothing else: the
+#              gamepad belongs to the game the user is about to play, but
+#              somebody who cannot see the tray still wants to know Windows
+#              has seen it
+#   nothing  - Titan does not react to gamepads at all
+GAMEPAD_FULL = 'full'
+GAMEPAD_ANNOUNCE = 'announce'
+GAMEPAD_NOTHING = 'nothing'
+
+
+def gamepad_detection_mode():
+    """What Titan does about a gamepad. Read each time - the setting can be
+    changed while Titan runs, and a poll every 50 ms is not a reason to cache
+    (get_setting parses the file only when the file has changed)."""
+    value = str(get_setting('gamepad_detection', GAMEPAD_FULL,
+                            section='general') or GAMEPAD_FULL).strip().lower()
+    if value not in (GAMEPAD_FULL, GAMEPAD_ANNOUNCE, GAMEPAD_NOTHING):
+        return GAMEPAD_FULL
+    return value
+
+
 class ControllerUI:
     """Controller integration for wxPython UI with vibration feedback"""
 
@@ -115,6 +139,10 @@ class ControllerUI:
         if not self.controller_enabled:
             return
 
+        mode = gamepad_detection_mode()
+        if mode == GAMEPAD_NOTHING:
+            return
+
         try:
             pygame.event.pump()
 
@@ -130,12 +158,17 @@ class ControllerUI:
                     # Regular monitoring for changes
                     self._check_controller_connections()
 
-            # Always process controller input. Button/axis/hat events are dispatched to
+            # Process controller input. Button/axis/hat events are dispatched to
             # the mode manager (global keystrokes) regardless of parent_window; only
             # SYSTEM-mode wx navigation (inside navigate_* / activate_* etc.) requires a
             # parent window and is guarded there. This lets joystick keys and modes work
             # in the Invisible UI and Klango interfaces, not just the main GUI.
-            if True:
+            #
+            # "Only announce" stops here: the connection above was reported,
+            # but the buttons belong to whatever the user is playing, not to
+            # Titan - and a mode switch fired by a bumper held in a game is
+            # exactly what that setting exists to prevent.
+            if mode == GAMEPAD_FULL:
                 joystick_count = pygame.joystick.get_count()
 
                 # Keep PERSISTENT Joystick handles. Recreating pygame.joystick.Joystick(i)

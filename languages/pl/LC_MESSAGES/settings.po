@@ -345,13 +345,13 @@ msgstr "Zastąp klawisz Copilot"
 msgid "Replacement key"
 msgstr "Klawisz zastępczy"
 
-#: src/ui/settingsgui.py:1135
+#: src/ui/settingsgui.py:1226
 msgid ""
-"These options are active only when \"Modify system interface\" is enabled"
-" under Environment."
+"Everything below is available only while \"Modify system interface\" is"
+" ticked."
 msgstr ""
-"Te opcje działają tylko wtedy, gdy w kategorii Środowisko włączono "
-"„Modyfikuj interfejs systemowy”."
+"Wszystko poniżej jest dostępne tylko wtedy, gdy zaznaczono „Modyfikuj "
+"interfejs systemu”."
 
 #: src/ui/settingsgui.py:1164
 msgid "The system interface"
@@ -1341,3 +1341,19 @@ msgstr "Zainstalowane dodatki powłoki"
 
 msgid "Add-ons in data/shell addons/ can add to the Start menu, the file browser, the taskbar and the desktop. One that provides a Start menu of its own appears in the list above."
 msgstr "Dodatki w data/shell addons/ mogą dodawać elementy do menu Start, przeglądarki plików, paska zadań i pulpitu. Dodatek z własnym menu Start pojawia się na liście powyżej."
+
+#: src/ui/settingsgui.py
+msgid "When TCE detects a connected gamepad:"
+msgstr "Kiedy TCE wykryje podłączony gamepad:"
+
+#: src/ui/settingsgui.py
+msgid "Enable full gamepad support for TCE"
+msgstr "Włącz całkowitą obsługę gamepadów dla TCE"
+
+#: src/ui/settingsgui.py
+msgid "Only announce connection and disconnection"
+msgstr "Tylko informuj o podłączeniu i odłączeniu"
+
+#: src/ui/settingsgui.py
+msgid "Do nothing"
+msgstr "Nic nie rób"

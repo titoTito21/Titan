@@ -91,6 +91,15 @@ class SimpleControllerVibration:
         Pass force=True to pulse regardless of mode (used by the Test button)."""
         if not self.vibration_enabled:
             return
+        # Settings -> General -> "When TCE detects a connected gamepad". Only
+        # full support drives the motors; the connection pulse is exempt
+        # because that IS the announcement, and "only announce" is the answer
+        # of somebody who wants to be told the gamepad is there.
+        if not force and vibration_type != "connection":
+            from src.controller.controller_ui import (
+                gamepad_detection_mode, GAMEPAD_FULL)
+            if gamepad_detection_mode() != GAMEPAD_FULL:
+                return
         if not force and self.haptic_mode != 'discrete':
             return
 

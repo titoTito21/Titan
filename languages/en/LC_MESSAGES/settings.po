@@ -343,13 +343,13 @@ msgstr "Replace Copilot key"
 msgid "Replacement key"
 msgstr "Replacement key"
 
-#: src/ui/settingsgui.py:1135
+#: src/ui/settingsgui.py:1226
 msgid ""
-"These options are active only when \"Modify system interface\" is enabled"
-" under Environment."
+"Everything below is available only while \"Modify system interface\" is"
+" ticked."
 msgstr ""
-"These options are active only when \"Modify system interface\" is enabled"
-" under Environment."
+"Everything below is available only while \"Modify system interface\" is"
+" ticked."
 
 #: src/ui/settingsgui.py:1164
 msgid "The system interface"
@@ -1354,3 +1354,19 @@ msgstr ""
 
 msgid "Add-ons in data/shell addons/ can add to the Start menu, the file browser, the taskbar and the desktop. One that provides a Start menu of its own appears in the list above."
 msgstr ""
+
+#: src/ui/settingsgui.py
+msgid "When TCE detects a connected gamepad:"
+msgstr "When TCE detects a connected gamepad:"
+
+#: src/ui/settingsgui.py
+msgid "Enable full gamepad support for TCE"
+msgstr "Enable full gamepad support for TCE"
+
+#: src/ui/settingsgui.py
+msgid "Only announce connection and disconnection"
+msgstr "Only announce connection and disconnection"
+
+#: src/ui/settingsgui.py
+msgid "Do nothing"
+msgstr "Do nothing"

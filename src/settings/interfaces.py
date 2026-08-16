@@ -479,10 +479,10 @@ def build_model(parent=None):
     # reader's, the macro manager's and everything else installed.
     ensure_component_categories(window, parent)
     try:
-        # The categories that come and go (the Game controller, the Titan
-        # shell) are decided when the window is shown, so an interface that
-        # never shows it has to ask for that here or it would list a
-        # category the user cannot have.
+        # The category that comes and goes (the Game controller one) is
+        # decided when the window is shown, so an interface that never
+        # shows it has to ask for that here or it would list a category
+        # the user cannot have.
         window.force_rebuild_categories()
         window.load_settings_to_ui()
         window.load_component_settings()
