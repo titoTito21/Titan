@@ -359,6 +359,36 @@ Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, 
     the reserved `__back__` action
   - The server can push a screen at a user unprompted (`push_remote_screen`,
     `POST /api/remote-screens/<slug>/push`)
+- **Titan Mail: three ways to read one message, and Escape leaves all three**
+  (`src/network/mail_gui.py`). The reading list (rows, links, details,
+  source), the **page view** (the HTML as the page it was written as) and the
+  **plain text** (`MailTextFrame`: the whole message in one read-only
+  `wx.TextCtrl`, so the reader's own cursor, say-all, find and Ctrl+C all
+  work on it). Ctrl+W the list, Ctrl+T the text, Ctrl+P the page, and Ctrl+T
+  on a message in the mailbox opens it as text straight away.
+  - **In the page view, Escape did nothing and only Alt+F4 closed the
+    window.** A WebView2 keeps every keystroke that happens inside its
+    document: the frame's `EVT_CHAR_HOOK` never sees it and a menu
+    accelerator never fires. So the document - which is Titan's own, built by
+    `_sealed_document` - carries a small script that hands those keys back
+    through `titan:key/<nonce>/<name>`, vetoed and acted on in
+    `EVT_WEBVIEW_NAVIGATING`. Same trick as the HTML settings interface, for
+    the same reason: it works on every WebView backend, with no bridge and no
+    local server.
+  - **A mail body is markup written by a stranger**, so allowing one script
+    at all is done carefully. The policy names a per-window **nonce**
+    (`script-src 'nonce-...'`), which only Titan's script carries; the URL
+    carries the same nonce and `hmac.compare_digest` checks it, so a message
+    cannot press Titan's keys (open a composer, hand itself to the real
+    browser where its tracking pixels WOULD load, close the window under the
+    reader); `scrub_message_html` takes the message's own `<script>`,
+    `<base>` and `<meta>` policy/refresh out before it is put in the
+    document; and a link is opened only when it is `http`, `https` or
+    `mailto` - `javascript:`, `file:` and `data:` are ways of running
+    something on this machine, and a confirmation dialog does not make them
+    safe.
+  - Tests: `tests/test_mail_reading.py` (16) and `tests/test_mail_window.py`
+    (9). Neither shows a window, raises a dialog or speaks.
 - **Server sounds**: audio uploaded to the server once, then played at one
   user, a role, a room, or everybody.
   - Server: `server_sounds` table, files under `server_sounds/`, HTTP
@@ -2255,14 +2285,19 @@ dialog used to lose all of it.
     chosen.
   - A named project is **written again after every generation**: an hour of
     work must not depend on the user remembering to press a button.
-- **A question has a sound of its own**: `sfx/<theme>/ai/agent_question.ogg`,
-  played wherever the AI asks something - the creation kit's questionnaire,
+- **A question has a sound of its own**: `ui/statusbar.ogg` - the status-bar
+  cue, deliberately NOT an error sound and not `ai/agent_question.ogg`, which
+  reads as one; every theme carries its own, so the cue sounds like the theme
+  the user chose. It is played wherever the AI asks something - the creation kit's questionnaire,
   the agent's and the assistant's follow-up questions, and an action that
   needs an answer before it can run (`ai_speech.SOUND_QUESTION` /
   `play_question_sound`, the one place it is named). The question usually
   arrives while the user is listening to a transcript, so the cue is what
   tells them a dialog is there at all.
-  - It goes through `sound.play_ai_sound` / `feature_sound_path`, which is
+  - `SOUND_QUESTION` is the whole switch: a name inside `ai/` goes through
+    `play_ai_sound` (the feature's own set), anything else is an ordinary
+    theme sound played as one, so the cue is changed by changing that string.
+  - `play_ai_sound` / `feature_sound_path`, used for the AI's own set, is
     also what `shell_sound_path` is now built on: **the user's own theme
     always wins** (a theme is free to ship its own `ai/` set), and the
     default set fills in only when the user has ticked Settings -> Sounds ->

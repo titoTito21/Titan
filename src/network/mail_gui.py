@@ -33,6 +33,7 @@ the message.
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 import webbrowser
@@ -229,6 +230,8 @@ class MailFrame(TabbedListFrame):
 
         message = wx.Menu()
         self._menu_bind(message, _("Open\tEnter"), self._open_selected)
+        self._menu_bind(message, _("Open as plain text\tCtrl+T"),
+                        self._open_selected_as_text)
         self._menu_bind(message, _("Reply\tCtrl+R"), self._reply_selected)
         self._menu_bind(message, _("Forward\tCtrl+Shift+R"), self._forward_selected)
         self._menu_bind(message, _("Copy sender address"), self._copy_peer)
@@ -385,6 +388,9 @@ class MailFrame(TabbedListFrame):
         if keycode == ord('N') and modifiers == wx.MOD_CONTROL:
             self._compose()
             return True
+        if keycode == ord('T') and modifiers == wx.MOD_CONTROL and item is not None:
+            self._open(item, as_text=True)
+            return True
         if keycode == ord('F') and modifiers == wx.MOD_CONTROL:
             self._search()
             return True
@@ -433,6 +439,11 @@ class MailFrame(TabbedListFrame):
         if item:
             self._open(item)
 
+    def _open_selected_as_text(self) -> None:
+        item = self._selected()
+        if item:
+            self._open(item, as_text=True)
+
     def _reply_selected(self) -> None:
         item = self._selected()
         if item:
@@ -464,24 +475,27 @@ class MailFrame(TabbedListFrame):
             wx.TheClipboard.Close()
             speak_titannet(_("Copied: {text}").format(text=text))
 
-    def _open(self, item: MailItem) -> None:
+    def _open(self, item: MailItem, as_text: bool = False) -> None:
         speak_titannet(_("Opening the message..."))
 
         def _fetch():
             result = self.titan_client.get_mail(item.id)
-            wx.CallAfter(self._show, result, item)
+            wx.CallAfter(self._show, result, item, as_text)
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    def _show(self, result: Dict[str, Any], item: MailItem) -> None:
+    def _show(self, result: Dict[str, Any], item: MailItem,
+              as_text: bool = False) -> None:
         if not result.get('success'):
             play_sound('core/error.ogg')
             speak_notification(result.get('error') or _("Could not open the message"),
                                'error')
             return
         message = result.get('message') or {}
-        # An HTML message opens as a page, everything else as the reading list.
-        open_message(self, self.titan_client, message, item.folder)
+        # An HTML message opens as a page, everything else as the reading
+        # list - and Ctrl+T asks for the text whatever it was written as.
+        open_message(self, self.titan_client, message, item.folder,
+                     as_text=as_text)
         # Reading clears the unread marker server-side; mirror that here so the
         # list does not keep saying "unread" until the next poll.
         item.data['read'] = 1
@@ -571,11 +585,68 @@ class MailFrame(TabbedListFrame):
 # the message was opened (and when, and from where). The policy below lets a
 # message use its own layout and inline styling, and blocks every remote fetch
 # and every script: no tracking pixel, no web font, no code.
-MAIL_CSP = ("default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; "
-            "font-src data:; form-action 'none'; frame-src 'none'; script-src 'none'")
+# `script-src` names a nonce rather than 'none': Titan puts ONE script of its
+# own into the document (the key bridge below) and the message's own scripts,
+# having no nonce, stay as blocked as they were.
+def mail_csp(nonce: str = '') -> str:
+    scripts = f"'nonce-{nonce}'" if nonce else "'none'"
+    return ("default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; "
+            f"font-src data:; form-action 'none'; frame-src 'none'; "
+            f"script-src {scripts}")
 
-_CSP_TAG = ('<meta http-equiv="Content-Security-Policy" content="' + MAIL_CSP + '">'
+
+MAIL_CSP = mail_csp()
+
+
+def _csp_tag(nonce: str = '') -> str:
+    return ('<meta http-equiv="Content-Security-Policy" content="'
+            + mail_csp(nonce) + '">'
             '<meta name="referrer" content="no-referrer">')
+
+
+_CSP_TAG = _csp_tag()
+
+# The keys the page hands back to Titan. A WebView2 keeps every keystroke that
+# happens inside the document: the frame's `EVT_CHAR_HOOK` never sees it and a
+# menu accelerator never fires, so Escape did nothing and the only way out of
+# a message was Alt+F4. The document itself is Titan's (it is built by
+# `_sealed_document`), so it listens for these and hands them back through a
+# `titan:` URL, which `_on_navigating` vetoes and acts on - the same trick the
+# HTML settings interface uses, and the one that works on every WebView
+# backend with no bridge and no local server.
+#
+# **The message is written by a stranger, so the channel is nonced.** The URL
+# is `titan:key/<nonce>/<name>` with the same one-off nonce the policy names,
+# and `_on_navigating` compares it before acting. A message cannot read it
+# (it may not run a script, and nothing it can do reaches the DOM), so it
+# cannot press Titan's keys: no message can make the reader open a compose
+# window, hand itself to the real browser - where its tracking pixels WOULD
+# load - or close the window under the reader.
+PAGE_KEY_URL = 'titan:key/'
+
+_KEY_BRIDGE = """
+(function () {
+  var token = '%(nonce)s';
+  function send(name) {
+    window.location.href = '%(prefix)s' + token + '/' + name;
+  }
+  document.addEventListener('keydown', function (event) {
+    var key = (event.key || '').toLowerCase();
+    var control = event.ctrlKey && !event.altKey;
+    var name = '';
+    if (key === 'escape') { name = 'escape'; }
+    else if (control && key === 'w') { name = 'list'; }
+    else if (control && key === 't') { name = 'text'; }
+    else if (control && key === 'b') { name = 'browser'; }
+    else if (control && key === 'r') { name = event.shiftKey ? 'forward'
+                                                            : 'reply'; }
+    if (!name) { return; }
+    event.preventDefault();
+    event.stopPropagation();
+    send(name);
+  }, true);
+})();
+"""
 
 
 def page_view_available() -> bool:
@@ -590,16 +661,52 @@ def page_view_available() -> bool:
         return False
 
 
-def _sealed_document(html: str, title: str) -> str:
-    """The message's own HTML, with the fetch policy put in front of it."""
-    head = f'<head><meta charset="utf-8"><title>{title}</title>{_CSP_TAG}</head>'
+# What is taken out of a message before it is put in a document with Titan's
+# own script in it. The policy already blocks all of it - a script with no
+# nonce does not run, a remote fetch does not happen - but a message that
+# cannot even TRY is one fewer thing depending on the policy being applied
+# correctly by whichever WebView the machine has. `<meta>` policies and
+# `<base>` are removed for a different reason: they are the message telling
+# the document how to behave, and that is not the message's to decide.
+_STRIP_FROM_MESSAGE = (
+    re.compile(r'<script\b.*?</script\s*>', re.IGNORECASE | re.DOTALL),
+    re.compile(r'<script\b[^>]*/?>', re.IGNORECASE),
+    re.compile(r'<meta\b[^>]*http-equiv\s*=\s*["\']?'
+               r'(?:content-security-policy|refresh)["\']?[^>]*>',
+               re.IGNORECASE),
+    re.compile(r'<base\b[^>]*>', re.IGNORECASE),
+)
+
+
+def scrub_message_html(html: str) -> str:
+    """The message's markup with everything that is not its content out of it."""
+    for pattern in _STRIP_FROM_MESSAGE:
+        html = pattern.sub('', html or '')
+    return html
+
+
+def _sealed_document(html: str, title: str, nonce: str = '') -> str:
+    """The message's own HTML, with the fetch policy and the key bridge in
+    front of it.
+
+    The bridge is what makes Escape work at all in a page view; it carries the
+    nonce the policy names, so it is the only script in the document that can
+    run.
+    """
+    html = scrub_message_html(html)
+    policy = _csp_tag(nonce)
+    bridge = ('<script nonce="' + nonce + '">'
+              + (_KEY_BRIDGE % {'prefix': PAGE_KEY_URL, 'nonce': nonce})
+              + '</script>') if nonce else ''
+    head = (f'<head><meta charset="utf-8"><title>{title}</title>'
+            f'{policy}{bridge}</head>')
     lowered = html.lower()
     if '<head' in lowered:
         # Insert straight after the opening <head ...> so the policy is the
         # first thing the renderer sees.
         start = lowered.index('<head')
         end = html.index('>', start) + 1
-        return html[:end] + _CSP_TAG + html[end:]
+        return html[:end] + policy + bridge + html[end:]
     if '<html' in lowered:
         start = lowered.index('<html')
         end = html.index('>', start) + 1
@@ -624,6 +731,10 @@ class MailPageFrame(wx.Frame):
         self.titan_client = titan_client
         self.message = message or {}
         self.folder = folder
+        # One per window, made before anything is put on screen: it is what
+        # the document's key bridge is signed with.
+        import secrets
+        self._nonce = secrets.token_urlsafe(16)
         subject = (self.message.get('subject') or '').strip() or _("(no subject)")
         super().__init__(parent, title=subject, size=(980, 720))
 
@@ -642,7 +753,8 @@ class MailPageFrame(wx.Frame):
         panel.SetSizer(box)
 
         self.CreateStatusBar()
-        self.SetStatusText(_("Page view. Ctrl+W for the reading list."))
+        self.SetStatusText(_("Page view. Escape closes, Ctrl+W is the reading "
+                             "list, Ctrl+T the plain text."))
         self._build_menu()
 
         self.webview.Bind(html2.EVT_WEBVIEW_NAVIGATING, self._on_navigating)
@@ -662,12 +774,13 @@ class MailPageFrame(wx.Frame):
         _play(MAIL_OPEN_SOUND)
         self._loaded = False
         html = self.message.get('body_html') or self.message.get('body') or ''
-        self.webview.SetPage(_sealed_document(html, subject), '')
+        self.webview.SetPage(_sealed_document(html, subject, self._nonce), '')
 
     def _build_menu(self) -> None:
         bar = wx.MenuBar()
         message = wx.Menu()
         self._menu_bind(message, _("Reading list\tCtrl+W"), self._open_list)
+        self._menu_bind(message, _("Plain text\tCtrl+T"), self._open_text)
         self._menu_bind(message, _("Reply\tCtrl+R"), self._reply)
         self._menu_bind(message, _("Forward\tCtrl+Shift+R"), self._forward)
         message.AppendSeparator()
@@ -691,12 +804,43 @@ class MailPageFrame(wx.Frame):
         event.Skip()
 
     def _on_navigating(self, event) -> None:
-        """The page never navigates. A link the user follows is a real link."""
+        """The page never navigates. A link the user follows is a real link.
+
+        The one exception is `titan:key/<name>`, which is not a navigation at
+        all: it is the document handing back a key the WebView2 would
+        otherwise have swallowed.
+        """
         url = event.GetURL() or ''
+        if url.startswith(PAGE_KEY_URL):
+            event.Veto()
+            self._page_key_url(url[len(PAGE_KEY_URL):])
+            return
         if not self._loaded or url.startswith('about:'):
             return  # the message itself being put on screen
         event.Veto()
         open_url_with_confirmation(self, url)
+
+    def _page_key_url(self, rest: str) -> None:
+        """`<nonce>/<name>` from the document - the nonce first.
+
+        Anything else is the message trying to press Titan's keys, which is
+        why the nonce is there; it is reported and dropped.
+        """
+        import hmac
+        nonce, _sep, name = rest.strip('/').partition('/')
+        if not hmac.compare_digest(str(nonce), str(self._nonce)):
+            print("[Mail] a message tried to use the key bridge; ignored")
+            return
+        self._page_key(name.strip('/').lower())
+
+    def _page_key(self, name: str) -> None:
+        """A key pressed inside the document, acted on out here."""
+        actions = {'escape': self.Close, 'list': self._open_list,
+                   'text': self._open_text, 'reply': self._reply,
+                   'forward': self._forward, 'browser': self._open_external}
+        action = actions.get(name)
+        if action is not None:
+            action()
 
     def _on_new_window(self, event) -> None:
         event.Veto()
@@ -709,6 +853,9 @@ class MailPageFrame(wx.Frame):
             return
         if keycode == ord('W') and modifiers == wx.MOD_CONTROL:
             self._open_list()
+            return
+        if keycode == ord('T') and modifiers == wx.MOD_CONTROL:
+            self._open_text()
             return
         if keycode == ord('R') and modifiers == wx.MOD_CONTROL:
             self._reply()
@@ -746,6 +893,13 @@ class MailPageFrame(wx.Frame):
         frame.listbox.SetFocus()
         self.Close()
 
+    def _open_text(self) -> None:
+        frame = MailTextFrame(self.GetParent(), self.titan_client, self.message,
+                              self.folder)
+        frame.Show()
+        frame.body.SetFocus()
+        self.Close()
+
     def _reply(self) -> None:
         open_compose(self, self.titan_client, self.message, forward=False)
 
@@ -756,10 +910,194 @@ class MailPageFrame(wx.Frame):
         open_in_external_browser(self, self.message)
 
 
+class MailTextFrame(wx.Frame):
+    """One message as plain text, in a text box.
+
+    The reading list is the better tool for finding a link or skipping a
+    quoted reply, and the page view is what an HTML message was written as -
+    but neither of them is *the text*, and a message that is text should be
+    readable as text: one read-only edit box the screen reader reads with its
+    own cursor, its own say-all and its own find, and that Ctrl+A and Ctrl+C
+    copy out of like any other text.
+
+    Escape closes it. That is the whole reason this file was touched: in the
+    page view the keystroke never reached Titan at all.
+    """
+
+    def __init__(self, parent, titan_client, message: Dict[str, Any],
+                 folder: str = TAB_INBOX):
+        self.titan_client = titan_client
+        self.message = message or {}
+        self.folder = folder
+        self.rendered = mail_format.render(
+            self.message.get('body') or '',
+            self.message.get('content_type') or '',
+            self.message.get('body_html') or '')
+
+        subject = (self.message.get('subject') or '').strip() or _("(no subject)")
+        super().__init__(parent, title=subject, size=(900, 660))
+
+        panel = wx.Panel(self)
+        box = wx.BoxSizer(wx.VERTICAL)
+        self.header = wx.StaticText(panel, label=self._header_text())
+        box.Add(self.header, flag=wx.ALL, border=8)
+        self.body = wx.TextCtrl(
+            panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2
+            | wx.TE_NOHIDESEL)
+        self.body.SetName(_("Message text"))
+        self.body.SetValue(self._text())
+        self.body.SetInsertionPoint(0)
+        box.Add(self.body, proportion=1, flag=wx.EXPAND | wx.ALL, border=8)
+        panel.SetSizer(box)
+
+        self.CreateStatusBar()
+        self.SetStatusText(_("Plain text. Escape closes, Ctrl+W is the "
+                             "reading list."))
+        self._build_menu()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
+
+        apply_skin_tree(self)
+        self._window_name = subject
+        try:
+            from src.ui.window_switcher import register_window
+            register_window(subject, window=self, category='messenger')
+        except Exception:
+            pass
+        _play(MAIL_OPEN_SOUND)
+
+    # ------------------------------------------------------------------ text
+    def _header_text(self) -> str:
+        return _("From {who}, {when}").format(
+            who=(self.message.get('from_addr') or '').strip()
+            or _("unknown sender"),
+            when=(self.message.get('received_at') or '')[:16].replace('T', ' '))
+
+    def _text(self) -> str:
+        """The message as one piece of text: what it says, headed by who said
+        it - the same thing Copy whole message puts on the clipboard."""
+        lines = [_("Subject: {subject}").format(
+            subject=(self.message.get('subject') or '').strip()
+            or _("(no subject)")),
+            _("From: {who}").format(
+                who=(self.message.get('from_addr') or '').strip()
+                or _("unknown sender")),
+            _("To: {who}").format(
+                who=(self.message.get('to_addr') or '').strip() or ''),
+            _("Date: {when}").format(
+                when=(self.message.get('received_at') or '').replace('T', ' ')),
+            '']
+        body = self.rendered.text().strip()
+        lines.append(body or _("(this message has no text)"))
+        links = self.rendered.links or []
+        if links:
+            lines.append('')
+            lines.append(_("Links:"))
+            for text, url in links:
+                lines.append(f"- {text}: {url}" if text and text != url
+                             else f"- {url}")
+        return '\n'.join(lines)
+
+    # ------------------------------------------------------------------ menu
+    def _build_menu(self) -> None:
+        bar = wx.MenuBar()
+        message = wx.Menu()
+        self._menu_bind(message, _("Reading list\tCtrl+W"), self._open_list)
+        if self.rendered.fmt == mail_format.FORMAT_HTML and page_view_available():
+            self._menu_bind(message, _("Show as a web page\tCtrl+P"),
+                            self._open_page)
+        self._menu_bind(message, _("Reply\tCtrl+R"), self._reply)
+        self._menu_bind(message, _("Forward\tCtrl+Shift+R"), self._forward)
+        message.AppendSeparator()
+        self._menu_bind(message, _("Copy whole message\tCtrl+Shift+C"),
+                        self._copy_all)
+        self._menu_bind(message, _("Close\tEscape"), self.Close)
+        bar.Append(message, _("&Message"))
+        self.SetMenuBar(bar)
+
+    def _menu_bind(self, menu: wx.Menu, label: str, handler) -> None:
+        item = menu.Append(wx.ID_ANY, label)
+        self.Bind(wx.EVT_MENU, lambda e: handler(), item)
+
+    # ---------------------------------------------------------------- events
+    def _on_key(self, event) -> None:
+        keycode, modifiers = event.GetKeyCode(), key_state.modifiers(event)
+        if _escape_pressed(event):
+            self.Close()
+            return
+        if keycode == ord('W') and modifiers == wx.MOD_CONTROL:
+            self._open_list()
+            return
+        if keycode == ord('P') and modifiers == wx.MOD_CONTROL:
+            self._open_page()
+            return
+        if keycode == ord('R') and modifiers == wx.MOD_CONTROL:
+            self._reply()
+            return
+        if keycode == ord('R') and modifiers == (wx.MOD_CONTROL | wx.MOD_SHIFT):
+            self._forward()
+            return
+        if keycode == ord('C') and modifiers == (wx.MOD_CONTROL | wx.MOD_SHIFT):
+            self._copy_all()
+            return
+        event.Skip()
+
+    def _on_close(self, event) -> None:
+        try:
+            from src.ui.window_switcher import unregister_window
+            unregister_window(self._window_name)
+        except Exception:
+            pass
+        _play(MAIL_CLOSE_SOUND)
+        event.Skip()
+
+    # --------------------------------------------------------------- actions
+    def _open_list(self) -> None:
+        frame = MailMessageFrame(self.GetParent(), self.titan_client,
+                                 self.message, self.folder)
+        frame.Show()
+        frame.listbox.SetFocus()
+        self.Close()
+
+    def _open_page(self) -> None:
+        if not page_view_available():
+            return
+        frame = MailPageFrame(self.GetParent(), self.titan_client, self.message,
+                              self.folder)
+        frame.Show()
+        self.Close()
+
+    def _reply(self) -> None:
+        open_compose(self, self.titan_client, self.message, forward=False)
+
+    def _forward(self) -> None:
+        open_compose(self, self.titan_client, self.message, forward=True)
+
+    def _copy_all(self) -> None:
+        if wx.TheClipboard.Open():
+            try:
+                wx.TheClipboard.SetData(wx.TextDataObject(self.body.GetValue()))
+            finally:
+                wx.TheClipboard.Close()
+            _play('ui/X.ogg')
+
+
+#: What a link in a message may be. Everything else - `javascript:`, `file:`,
+#: `data:`, a custom scheme some installed program registered - is a way of
+#: running something on this machine from a message, and no confirmation
+#: dialog makes that a reasonable thing to hand to `webbrowser.open`.
+LINK_SCHEMES = ('http://', 'https://', 'mailto:')
+
+
 def open_url_with_confirmation(parent, url: str) -> None:
     """Open a link from a message in the user's browser, once they agree."""
     url = mail_format.absolute_url(url)
     if not url:
+        return
+    if not url.lower().startswith(LINK_SCHEMES):
+        print(f"[Mail] refused a link that is not a web address: {url[:80]}")
+        speak_notification(_("That link is not a web address, so Titan will "
+                             "not open it"), 'warning')
         return
     answer = show_message(
         parent, _("Open this address in your web browser?\n\n{url}").format(url=url),
@@ -798,17 +1136,24 @@ def open_in_external_browser(parent, message: Dict[str, Any]) -> None:
 
 
 def open_message(parent, titan_client, message: Dict[str, Any],
-                 folder: str = TAB_INBOX, as_page: Optional[bool] = None):
+                 folder: str = TAB_INBOX, as_page: Optional[bool] = None,
+                 as_text: bool = False):
     """Open one message the way its content deserves.
 
     An HTML message opens as a page - that is what it was written as - and
-    everything else opens as the reading list. Either view switches to the
-    other with Ctrl+M, and the list is also what a machine without WebView2
-    falls back to.
+    everything else opens as the reading list. Every view reaches the other
+    two (Ctrl+W the list, Ctrl+T the text, Ctrl+P the page), Escape leaves any
+    of them, and the list is also what a machine without WebView2 falls back
+    to.
     """
     rendered_format = mail_format.detect_format(message.get('body') or '',
                                                 message.get('content_type') or '',
                                                 message.get('body_html') or '')
+    if as_text:
+        frame = MailTextFrame(parent, titan_client, message, folder)
+        frame.Show()
+        frame.body.SetFocus()
+        return frame
     if as_page is None:
         as_page = rendered_format == mail_format.FORMAT_HTML
     if as_page and page_view_available():
@@ -884,6 +1229,7 @@ class MailMessageFrame(TabbedListFrame):
         bar.Append(message, _("&Message"))
 
         view = wx.Menu()
+        self._menu_bind(view, _("Plain text\tCtrl+T"), self._open_text)
         self._menu_bind(view, _("Read this line\tCtrl+M"), self._read_row)
         self._menu_bind(view, _("Copy this line\tCtrl+C"), self._copy_row)
         self._menu_bind(view, _("Open link\tCtrl+L"), self._open_link)
@@ -998,6 +1344,9 @@ class MailMessageFrame(TabbedListFrame):
         if keycode == ord('R') and modifiers == (wx.MOD_CONTROL | wx.MOD_SHIFT):
             self._forward()
             return True
+        if keycode == ord('T') and modifiers == wx.MOD_CONTROL:
+            self._open_text()
+            return True
         if keycode == ord('M') and modifiers == wx.MOD_CONTROL:
             self._read_row()
             return True
@@ -1082,6 +1431,14 @@ class MailMessageFrame(TabbedListFrame):
 
     def _open_url(self, url: str) -> None:
         open_url_with_confirmation(self, url)
+
+    def _open_text(self) -> None:
+        """Switch to the plain text - the message as one piece of text."""
+        frame = MailTextFrame(self.GetParent(), self.titan_client, self.message,
+                              self.folder)
+        frame.Show()
+        frame.body.SetFocus()
+        self.Close()
 
     def _open_page(self) -> None:
         """Switch to the page view - the message as the page it was written as."""

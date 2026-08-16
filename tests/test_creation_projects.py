@@ -435,13 +435,38 @@ class TheQuestionHasASoundOfItsOwn(unittest.TestCase):
     while the user is listening to something else is a question they do not
     know is there."""
 
-    def test_the_sound_ships_and_is_found(self):
-        from src.titan_core import sound
+    def test_it_is_the_status_bar_sound_and_not_an_error(self):
+        """A question is not an error and must not sound like one; every
+        theme has its own `ui/statusbar.ogg`, so the cue also sounds like
+        the theme the user chose."""
         from src.ai import ai_speech
-        path = sound.ai_sound_path(ai_speech.SOUND_QUESTION)
-        self.assertTrue(path, "agent_question.ogg was not found")
-        self.assertTrue(os.path.isfile(path))
+        from src import platform_utils
+        self.assertEqual('ui/statusbar.ogg', ai_speech.SOUND_QUESTION)
+        for name in ('error', 'agent_question'):
+            self.assertNotIn(name, ai_speech.SOUND_QUESTION)
+        found = platform_utils.find_resource(
+            os.path.join('sfx', 'default', 'ui', 'statusbar.ogg'))
+        self.assertTrue(found and os.path.isfile(found))
+
+    def test_the_ai_folder_is_still_reachable_for_a_cue(self):
+        """Pointing SOUND_QUESTION back at `ai/...` has to keep working."""
+        from src.titan_core import sound
+        path = sound.ai_sound_path('agent_question.ogg')
+        self.assertTrue(path)
         self.assertEqual('ai', os.path.basename(os.path.dirname(path)))
+
+    def test_the_question_cue_really_resolves(self):
+        """Whatever it is set to, it must be a sound this machine has."""
+        from src.ai import ai_speech
+        from src.titan_core import sound
+        from src import platform_utils
+        name = ai_speech.SOUND_QUESTION
+        if name.startswith('ai/') or '/' not in name:
+            self.assertTrue(sound.ai_sound_path(name))
+        else:
+            found = platform_utils.find_resource(
+                os.path.join('sfx', 'default', *name.split('/')))
+            self.assertTrue(found and os.path.isfile(found))
 
     def test_it_is_found_with_or_without_its_folder_in_the_name(self):
         from src.titan_core import sound

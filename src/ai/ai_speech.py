@@ -16,19 +16,32 @@ asynchronously) and never raises.
 
 #: The sound of the AI asking the user something - the creation kit's
 #: questionnaire, the agent's and the assistant's follow-up questions, and an
-#: action that needs an answer before it can run. It lives in the AI's own
-#: sound folder (`sfx/<theme>/ai/`) and is played through
-#: :func:`sound.play_ai_sound`, so it is heard on a theme that has never
-#: carried it: the question usually arrives while the user is listening to
-#: something else, and the sound is what tells them a dialog is now there.
-SOUND_QUESTION = 'agent_question.ogg'
+#: action that needs an answer before it can run. The question usually arrives
+#: while the user is listening to something else, and this is what tells them
+#: a dialog is now there.
+#:
+#: It is the STATUS BAR sound, not `ai/agent_question.ogg`: a question is not
+#: an error and must not sound like one. Every theme carries `ui/statusbar.ogg`
+#: and each of them has its own, so the cue also sounds like the rest of the
+#: theme the user chose.
+SOUND_QUESTION = 'ui/statusbar.ogg'
 
 
 def play_question_sound():
-    """Play it. Never raises, never blocks."""
+    """Play it. Never raises, never blocks.
+
+    A name inside the AI's own folder (`ai/...`) goes through
+    `play_ai_sound`, which knows that set belongs to the feature; anything
+    else is an ordinary theme sound and is played as one - so pointing
+    `SOUND_QUESTION` at either kind is all it takes to change the cue.
+    """
+    name = SOUND_QUESTION
     try:
-        from src.titan_core.sound import play_ai_sound
-        return bool(play_ai_sound(SOUND_QUESTION))
+        from src.titan_core import sound
+        if '/' not in name or name.startswith('ai/'):
+            return bool(sound.play_ai_sound(name))
+        sound.play_sound(name)
+        return True
     except Exception:
         return False
 

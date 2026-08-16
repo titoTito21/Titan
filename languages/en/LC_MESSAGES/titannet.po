@@ -6526,3 +6526,42 @@ msgstr "{author} wrote:"
 #~ msgid "From/To"
 #~ msgstr "From/To"
 
+
+msgid "Plain text\tCtrl+T"
+msgstr ""
+
+msgid "Open as plain text\tCtrl+T"
+msgstr ""
+
+msgid "Message text"
+msgstr ""
+
+msgid "Plain text. Escape closes, Ctrl+W is the reading list."
+msgstr ""
+
+msgid "Page view. Escape closes, Ctrl+W is the reading list, Ctrl+T the plain text."
+msgstr ""
+
+msgid "Subject: {subject}"
+msgstr ""
+
+msgid "From: {who}"
+msgstr ""
+
+msgid "To: {who}"
+msgstr ""
+
+msgid "Date: {when}"
+msgstr ""
+
+msgid "(this message has no text)"
+msgstr ""
+
+msgid "Links:"
+msgstr ""
+
+msgid "Show as a web page\tCtrl+P"
+msgstr ""
+
+msgid "That link is not a web address, so Titan will not open it"
+msgstr ""

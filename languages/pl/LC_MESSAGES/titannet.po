@@ -6641,3 +6641,42 @@ msgstr "{author} napisał(a):"
 #~ msgid "From/To"
 #~ msgstr "Od/Do"
 
+
+msgid "Plain text\tCtrl+T"
+msgstr "Zwykły tekst\tCtrl+T"
+
+msgid "Open as plain text\tCtrl+T"
+msgstr "Otwórz jako zwykły tekst\tCtrl+T"
+
+msgid "Message text"
+msgstr "Tekst wiadomości"
+
+msgid "Plain text. Escape closes, Ctrl+W is the reading list."
+msgstr "Zwykły tekst. Escape zamyka, Ctrl+W to lista czytania."
+
+msgid "Page view. Escape closes, Ctrl+W is the reading list, Ctrl+T the plain text."
+msgstr "Widok strony. Escape zamyka, Ctrl+W to lista czytania, Ctrl+T zwykły tekst."
+
+msgid "Subject: {subject}"
+msgstr "Temat: {subject}"
+
+msgid "From: {who}"
+msgstr "Od: {who}"
+
+msgid "To: {who}"
+msgstr "Do: {who}"
+
+msgid "Date: {when}"
+msgstr "Data: {when}"
+
+msgid "(this message has no text)"
+msgstr "(ta wiadomość nie ma tekstu)"
+
+msgid "Links:"
+msgstr "Odnośniki:"
+
+msgid "Show as a web page\tCtrl+P"
+msgstr "Pokaż jako stronę\tCtrl+P"
+
+msgid "That link is not a web address, so Titan will not open it"
+msgstr "Ten odnośnik nie jest adresem internetowym, więc Titan go nie otworzy"

@@ -113,13 +113,19 @@ class MailEscapeTests(unittest.TestCase):
         self.assertFalse(mail_gui._escape_pressed(_Event(keycode=ord('A'))))
 
     def test_every_mail_window_answers_escape(self):
-        """All four: the mailbox, a message, the page view and the composer."""
+        """All five: the mailbox, a message as a list, as a page, as plain
+        text, and the composer."""
         with open(os.path.join(REPO, 'src/network/mail_gui.py'),
                   encoding='utf-8') as handle:
             source = handle.read()
-        # The two plain frames route Escape through the shared test; the two
-        # list frames inherit it from TabbedListFrame's own key hook.
-        self.assertEqual(source.count('if _escape_pressed(event):'), 2)
+        # The three plain frames (page, text, composer) route Escape through
+        # the shared test; the two list frames inherit it from
+        # TabbedListFrame's own key hook.
+        self.assertEqual(source.count('if _escape_pressed(event):'), 3)
+        # And the page view, where the WebView2 swallows the keystroke before
+        # any of that, gets it back out of the document itself.
+        self.assertIn('PAGE_KEY_URL', source)
+        self.assertIn("'escape': self.Close", source)
         self.assertIn('def on_escape', source)
         with open(os.path.join(REPO, 'src/network/im_ui_common.py'),
                   encoding='utf-8') as handle:
