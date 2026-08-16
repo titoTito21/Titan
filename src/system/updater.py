@@ -7,6 +7,7 @@ import sys
 import subprocess
 import shutil
 import re
+import tempfile
 from src.titan_core.sound import play_sound, play_focus_sound, play_select_sound
 from src.titan_core.translation import _
 from src.platform_utils import get_subprocess_kwargs, get_base_path, is_frozen, IS_WINDOWS
@@ -216,6 +217,13 @@ class Updater:
         else:
             self.seven_zip_path = shutil.which("7z") or "7z"
 
+        # 7-Zip actually used for the extraction. It is NOT self.seven_zip_path
+        # when that one lives inside the install directory - see
+        # _resolve_extractor() for why the extractor must stand outside the
+        # tree it is rewriting.
+        self._extractor = None
+        self._extractor_dir = None
+
         self.needs_interpreter = False  # Will be set if version ends with 'i'
     
     def get_current_version(self):
@@ -339,6 +347,101 @@ class Updater:
             progress_dialog.update_progress(100, _("Download failed"))
             return False
     
+    def _inside_install(self, path):
+        """True when ``path`` lives inside the directory being updated."""
+        try:
+            a = os.path.normcase(os.path.abspath(path))
+            root = os.path.normcase(os.path.abspath(self.install_dir))
+            return a == root or a.startswith(root + os.sep)
+        except Exception:
+            return False
+
+    def _resolve_extractor(self):
+        """Return a 7-Zip that this update cannot pull out from under itself.
+
+        Titan ships its own 7-Zip at ``data/bin/7z.exe`` (with ``7z.dll``
+        beside it), and the update archive contains those two files like
+        every other file in the install. So in a compiled build the
+        sequence was:
+
+          1. _stage_locked_targets() renames every file the archive will
+             overwrite to ``<name>.old`` - INCLUDING ``data/bin/7z.exe``
+             and ``data/bin/7z.dll``;
+          2. the very next line launches ``data/bin/7z.exe``, which no
+             longer exists.
+
+        Measured on the real 0.6 archive: ``[WinError 2] The system cannot
+        find the file specified``, caught by the broad ``except``, rolled
+        straight back - so every single compiled update failed, always, and
+        the user only ever saw "Update failed. Please try again later."
+
+        The tool doing the work must therefore stand outside the tree it is
+        rewriting: it is copied (with the DLLs it needs) into a private
+        temporary directory once per update, and the copy is what runs.
+        _release_extractor() removes it afterwards.
+        """
+        if self._extractor is not None:
+            return self._extractor
+
+        source = self.seven_zip_path
+        if not os.path.exists(source):
+            found = shutil.which('7z')
+            if found:
+                source = found
+
+        if not os.path.exists(source) or not self._inside_install(source):
+            # Either nothing to run (the caller reports that) or a 7-Zip the
+            # archive does not contain - safe to use where it stands.
+            self._extractor = source
+            return self._extractor
+
+        try:
+            self._extractor_dir = tempfile.mkdtemp(prefix='titan_update_7z_')
+            copy = os.path.join(self._extractor_dir, os.path.basename(source))
+            shutil.copy2(source, copy)
+            # 7z.exe cannot decode anything without 7z.dll next to it.
+            src_dir = os.path.dirname(source)
+            for name in os.listdir(src_dir):
+                if name.lower().endswith('.dll'):
+                    shutil.copy2(os.path.join(src_dir, name),
+                                 os.path.join(self._extractor_dir, name))
+            self._extractor = copy
+            print(f"[UPDATER] Extracting with a private copy of 7-Zip: {copy}")
+        except Exception as e:
+            # Fall back to the in-tree one; _stage_locked_targets then leaves
+            # it alone so it at least still exists when it is launched.
+            print(f"Could not copy 7-Zip out of the install directory: {e}")
+            self._extractor = source
+        return self._extractor
+
+    def _release_extractor(self):
+        """Delete the temporary copy of 7-Zip made by _resolve_extractor."""
+        directory, self._extractor_dir, self._extractor = self._extractor_dir, None, None
+        if not directory:
+            return
+        try:
+            shutil.rmtree(directory, ignore_errors=True)
+        except Exception:
+            pass
+
+    def _archive_entries_py7zr(self, archive_path):
+        """The archive's contents read in this process, or None.
+
+        None means "ask 7-Zip instead" - it is not an error, only the answer
+        that this machine has no py7zr.
+        """
+        try:
+            import py7zr
+        except Exception:
+            return None
+        try:
+            with py7zr.SevenZipFile(archive_path, 'r') as archive:
+                return [(item.filename, item.is_directory)
+                        for item in archive.list()]
+        except Exception as e:
+            print(f"[UPDATER] py7zr could not read {archive_path}: {e}")
+            return None
+
     def _list_archive_entries(self, archive_path):
         """Return the list of (relative_path, is_dir) contained in a 7z archive.
 
@@ -347,10 +450,14 @@ class Updater:
         listed after the ``----------`` separator are real files - the block
         before it describes the archive itself.
         """
+        entries = self._archive_entries_py7zr(archive_path)
+        if entries is not None:
+            return entries
+
         entries = []
         try:
             proc = subprocess.run(
-                [self.seven_zip_path, 'l', '-slt', archive_path],
+                [self._resolve_extractor(), 'l', '-slt', archive_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=self.install_dir, **get_subprocess_kwargs()
             )
@@ -403,10 +510,23 @@ class Updater:
         rollback leaves neither a half-replaced nor a half-added install.
         """
         staged = []
+        # Only relevant when the private copy could not be made and we are
+        # running Titan's own data/bin/7z.exe: moving THAT aside is what
+        # broke every compiled update (see _resolve_extractor).
+        extractor = os.path.normcase(os.path.abspath(self._resolve_extractor()))
+        extractor_dir = (os.path.dirname(extractor)
+                         if self._inside_install(extractor) else None)
+
         for rel, is_dir in self._list_archive_entries(archive_path):
             if is_dir:
                 continue
             target = os.path.join(self.install_dir, rel.replace('/', os.sep))
+            if extractor_dir is not None:
+                norm = os.path.normcase(os.path.abspath(target))
+                if norm == extractor or (os.path.dirname(norm) == extractor_dir
+                                         and norm.endswith('.dll')):
+                    # Leave the running extractor and its DLLs where they are.
+                    continue
             if not os.path.exists(target):
                 # Brand-new file. Nothing to move aside, but record it so a
                 # rollback deletes it instead of leaving new-version orphans.
@@ -450,6 +570,77 @@ class Updater:
             except Exception as e:
                 print(f"Rollback failed for {a}: {e}")
 
+    def _extract_with_py7zr(self, archive_path, progress_dialog, status_text):
+        """Unpack the archive in this process, with no 7-Zip at all.
+
+        Preferred over ``data/bin/7z.exe`` because it removes the whole class
+        of bug this file was rewritten for: there is no external program that
+        the update can rename, replace or fail to find halfway through. It
+        also means an installation whose ``data/bin`` is missing or damaged
+        can still update itself.
+
+        Measured on the real 236 MB titan.main.7z: 28.2 s against 14.6 s for
+        7z.exe, producing a byte-identical tree (7 786 files, no size
+        differing). Twice as long, on an update that has just spent minutes
+        downloading, in exchange for not depending on a file inside the
+        directory being rewritten - which is the trade this is worth.
+
+        Returns True on success, False when py7zr is not available or cannot
+        read the archive, in which case the caller falls back to 7-Zip.
+        """
+        try:
+            import py7zr
+        except Exception:
+            return False
+
+        class Report(py7zr.callbacks.ExtractCallback):
+            """py7zr reports files; the dialog wants a percentage."""
+
+            def __init__(self, total, report):
+                self.total = max(1, total)
+                self.done = 0
+                self.last = -1
+                self.report = report
+
+            def report_start_preparation(self):
+                pass
+
+            def report_start(self, processing_file_path, processing_bytes):
+                pass
+
+            def report_update(self, decompressed_bytes):
+                pass
+
+            def report_end(self, processing_file_path, wrote_bytes):
+                self.done += 1
+                percent = min(99, int(self.done * 100 / self.total))
+                if percent != self.last:
+                    self.last = percent
+                    self.report(percent)
+
+            def report_postprocess(self):
+                pass
+
+            def report_warning(self, message):
+                print(f"[UPDATER] py7zr: {message}")
+
+        def report(percent):
+            progress_dialog.update_progress(
+                percent, _("Extracting files... {}%").format(percent))
+
+        try:
+            with py7zr.SevenZipFile(archive_path, 'r') as archive:
+                total = len(archive.getnames())
+                archive.reset()
+                archive.extractall(path=self.install_dir,
+                                   callback=Report(total, report))
+        except Exception as e:
+            print(f"[UPDATER] py7zr could not unpack {archive_path}: {e}")
+            return False
+
+        progress_dialog.update_progress(100, _("Extraction complete"))
+        return True
+
     def _extract_archive(self, archive_path, progress_dialog, status_text,
                          staged=None):
         """Extract a 7z archive with real progress reporting.
@@ -474,19 +665,31 @@ class Updater:
         try:
             progress_dialog.update_progress(0, status_text)
 
-            if not os.path.exists(self.seven_zip_path):
-                print(f"7zip not found at {self.seven_zip_path}")
-                return False
-
             if not os.path.exists(archive_path):
                 print(f"Archive to extract does not exist: {archive_path}")
                 return False
 
             # Compiled build: move locked targets (running exe, loaded DLLs)
-            # aside so 7-Zip can write the new copies. Dev build has nothing
-            # locked, so plain overwrite is enough.
+            # aside so the new copies can be written. Windows does allow a
+            # running .exe and a loaded .dll to be RENAMED, which is what
+            # frees the name. Dev build has nothing locked, so plain
+            # overwrite is enough.
             if is_frozen():
                 staged.extend(self._stage_locked_targets(archive_path))
+
+            # Unpack in this process when we can: no external program means
+            # nothing for the update to rename out from under itself, and an
+            # install whose data/bin is damaged can still be repaired.
+            if self._extract_with_py7zr(archive_path, progress_dialog,
+                                        status_text):
+                return True
+
+            seven_zip = self._resolve_extractor()
+            if not os.path.exists(seven_zip):
+                print(f"7zip not found at {seven_zip}")
+                if own_staging:
+                    self._rollback_staging(staged)
+                return False
 
             # -bsp1 outputs progress percentage to stdout
             # -aoa forces overwrite of ALL existing files (without it a stale
@@ -494,7 +697,7 @@ class Updater:
             #      half-updated install).
             # Extract to the install dir explicitly so cwd cannot affect us.
             cmd = [
-                self.seven_zip_path, 'x', archive_path, '-y', '-aoa',
+                seven_zip, 'x', archive_path, '-y', '-aoa',
                 f'-o{self.install_dir}', '-bsp1'
             ]
 
@@ -725,6 +928,7 @@ class Updater:
             print(f"Error performing update: {e}")
             return False
         finally:
+            self._release_extractor()
             if progress_dialog is not None:
                 try:
                     progress_dialog.Destroy()

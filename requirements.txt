@@ -78,3 +78,10 @@ bcrypt
 # Install to compile Python modules to C extensions
 # Usage: python setup_cython.py build_ext --inplace
 Cython>=0.29.0  # Optional - for building optimized extensions
+
+# Unpacking the update archive in-process. Titan also ships 7z.exe in
+# data/bin as a fallback, but the updater prefers py7zr: an external
+# extractor that lives inside the directory being rewritten is a program
+# the update can rename out from under itself, which is exactly the bug
+# that stopped every 0.5.7 from updating.
+py7zr

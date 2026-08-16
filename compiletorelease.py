@@ -132,6 +132,22 @@ def compile_to_release():
         "aiohttp",
         "requests",
 
+        # Unpacking the update archive in-process. The updater prefers this
+        # over data/bin/7z.exe: nothing static imports py7zr at module level
+        # (it is imported inside the extraction call), so PyInstaller cannot
+        # see it and a compiled Titan without these would silently fall back
+        # to the external 7-Zip on every update.
+        "py7zr",
+        "py7zr.callbacks",
+        "pybcj",
+        "pyzstd",
+        "pyppmd",
+        "inflate64",
+        "multivolumefile",
+        "brotli",
+        "Cryptodome",
+        "texttable",
+
         # Async
         "asyncio",
 
