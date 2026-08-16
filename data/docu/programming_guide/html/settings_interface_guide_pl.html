@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia interfejsów ustawień TCE - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
+<li><a href="shell_addon_guide_pl.html">Dodatki powłoki</a></li>
+<li><a href="settings_interface_guide_pl.html" class="active">Interfejsy ustawień</a></li>
+<li><a href="action_api_guide_pl.html">Action API</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia interfejsów ustawień TCE</h1>
+            </div>
+            <h1>Przewodnik tworzenia interfejsów ustawień TCE</h1>
+
+<h2>Wprowadzenie</h2>
+
+<p>Titan ma jedno okno ustawień, napisane w wxPython. <strong>Interfejs ustawień</strong> je zastępuje — stroną internetową, oknem w Qt, konsolą, kreatorem zadającym sześć pytań, dialogiem głosowym, czymkolwiek da się napisać w Pythonie.</p>
+
+<p>Jest celowo zbudowany jak <code>data/launchers/</code>, bo to ta sama idea o poziom niżej: launcher zastępuje główne okno Titana, interfejs ustawień zastępuje jego okno ustawień. Naraz działa jeden, wybrany w <strong>Ustawienia -> Interfejs -> „Interfejs ustawień"</strong>, gdzie własne okno Titana nazywa się <strong>Klasyczny</strong>.</p>
+
+<strong>To, co czyni całą rzecz możliwą: Twój interfejs nigdy nie dowiaduje się, czym jest ustawienie.</strong>
+
+<p><code>src/settings/ui_model.py</code> czyta opis z <strong>własnego okna ustawień Titana</strong> — jego kategorie są kategoriami, jego kontrolki są ustawieniami, ich etykiety są etykietami, już przetłumaczonymi. Dlatego:</p>
+
+<li><strong>Ustawienie dodaje się do Titana raz.</strong> Nowy checkbox w <code>settingsgui.py</code> pojawia się w każdym zainstalowanym interfejsie, w języku użytkownika, bez zmiany w żadnym z nich.</li>
+<li><strong>Kategorie komponentów też tam są</strong> — czterdzieści ustawień czytnika ekranu, menedżera makr, AI — bo komponent rejestruje swoją kategorię, dostając to okno, a to właśnie to okno jest czytane. Zmierzone na normalnej instalacji: 14 kategorii, około 147 ustawień.</li>
+<li><strong>Wartości są żywe.</strong> Głosy, skórki, motywy dźwiękowe i silniki TTS to listy, które Titan wypełnia w trakcie działania; odczyt modelu to odczyt tego, co zobaczyłby użytkownik.</li>
+<li><strong>Zapis to własny zapis Titana</strong>, ze wszystkim, co za nim idzie: rejestracją SAPI, restartem monitora systemu, przepięciem powłoki, przebudową paska menu. Interfejs, który sam zapisałby plik ini, ustawiłby wartość i nic by nie zmienił.</li>
+
+<p>Nigdzie celowo <strong>nie ma drugiej tabeli ustawień</strong>. Jeśli zaczynasz taką pisać, źle zrozumiałeś projekt.</p>
+
+<h2>Architektura</h2>
+
+<pre><code>data/settings interfaces/moj_interfejs/
+├── __settings_ui__.TCE   # Manifest (WYMAGANY, .TCE wielkimi literami)
+├── init.py               # open_settings(api) (WYMAGANY; init.pyc też)
+└── lib/                  # Dołączone biblioteki (opcjonalnie)</code></pre>
+
+<p>Wykrywanie to <code>platform_utils.discover_data_entries()</code>, więc interfejs może też być jednym spakowanym plikiem <strong><code>.TCD</code></strong>. Wszystko jest w <code>src/settings/interfaces.py</code>.</p>
+
+<p><strong>Każde wejście do ustawień w całym programie idzie przez <code>interfaces.open_settings()</code></strong> — pasek menu, Niewidzialny interfejs, obie klasy trybu Klango, oba menu Start, menu pulpitu, powłoka i akcja <code>titan.open_settings</code>. To dlatego wybór czegokolwiek tutaj cokolwiek znaczy.</p>
+
+<h2>Manifest <code>__settings_ui__.TCE</code></h2>
+
+<pre><code class="language-ini">[settings interface]
+name = Settings as a web page
+name_pl = Ustawienia jako strona internetowa
+description = Every Titan setting as one HTML page in a Titan window.
+description_pl = Wszystkie ustawienia Titana jako jedna strona HTML.
+author = Twoje imię
+version = 1.0
+status = 0
+libs = lib</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Pole</th>
+<th>Wymagane</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td>name</td>
+<td>nie</td>
+<td>Nazwa wyświetlana (domyślnie nazwa katalogu)</td>
+</tr>
+<tr>
+<td>name_pl, name_en, ...</td>
+<td>nie</td>
+<td>Nazwa w danym języku; <code>name_&lt;kod&gt;</code> wygrywa z <code>name</code></td>
+</tr>
+<tr>
+<td>description</td>
+<td>nie</td>
+<td>Jedno zdanie, pokazywane obok nazwy przy wyborze</td>
+</tr>
+<tr>
+<td>description_pl, ...</td>
+<td>nie</td>
+<td>To samo, przetłumaczone</td>
+</tr>
+<tr>
+<td>author</td>
+<td>nie</td>
+<td>Autor</td>
+</tr>
+<tr>
+<td>version</td>
+<td>nie</td>
+<td>Wersja (domyślnie <code>1.0</code>)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>tak</td>
+<td><strong><code>0</code> = oferowany, <code>1</code> = nieoferowany</strong></td>
+</tr>
+<tr>
+<td>libs</td>
+<td>nie</td>
+<td>Podkatalogi dopisywane do <code>sys.path</code> (domyślnie <code>lib</code>)</td>
+</tr>
+</tbody></table>
+
+<p><strong>Rozprowadzaj ze <code>status = 0</code>.</strong> Inaczej niż dodatek powłoki, interfejs ustawień nie zmienia niczego przez samo zainstalowanie — jest jedną z możliwości w Ustawieniach -> Interfejs, dopóki ktoś go nie wybierze.</p>
+
+<h2><code>init.py</code></h2>
+
+<p>Jedna funkcja:</p>
+
+<pre><code class="language-python">def open_settings(api):
+    &quot;&quot;&quot;Otwórz ustawienia.  Odpowiedz oknem, albo True, albo None.&quot;&quot;&quot;</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Odpowiedź</th>
+<th>Znaczenie</th>
+</tr></thead><tbody>
+<tr>
+<td>okno</td>
+<td>Titan je pokazuje i wysuwa (<code>wx.Frame</code>, <code>wx.Dialog</code> albo cokolwiek z <code>Show</code>/<code>Raise</code>)</td>
+</tr>
+<tr>
+<td><code>True</code></td>
+<td>Otworzyłeś coś, co nie jest oknem — konsolę, przeglądarkę, dialog głosowy</td>
+</tr>
+<tr>
+<td><code>None</code> / wyjątek</td>
+<td>Nie udało się: <strong>otwiera się własne okno ustawień Titana</strong>, z komunikatem</td>
+</tr>
+</tbody></table>
+
+<p>Ten ostatni wiersz to reguła, a nie zabezpieczenie: ustawienia są miejscem, do którego użytkownik idzie coś naprawić — łącznie z „wyłącz ten interfejs" — więc nigdy nie mogą być tym, co dodatek zabiera. Interfejs odinstalowany, wyłączony, bez <code>open_settings</code>, rzucający wyjątek albo nieotwierający niczego oznacza własne okno Titana, powiedziane wprost.</p>
+
+<h2>Obiekt API</h2>
+
+<p><code>api</code> to <code>SettingsUIAPI</code>. Część od ustawień:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Metoda</th>
+<th>Odpowiada</th>
+</tr></thead><tbody>
+<tr>
+<td><code>api.categories()</code></td>
+<td><code>[{&#x27;name&#x27;: str, &#x27;items&#x27;: [pozycja, ...]}, ...]</code> — wszystko, bezpieczne dla JSON-a</td>
+</tr>
+<tr>
+<td><code>api.items()</code></td>
+<td>Wszystkie ustawienia płasko, dla interfejsu bez kategorii</td>
+</tr>
+<tr>
+<td><code>api.find(text)</code></td>
+<td>Ustawienia, których etykieta lub kategoria pasuje</td>
+</tr>
+<tr>
+<td><code>api.get(item_id)</code></td>
+<td>Jedna wartość</td>
+</tr>
+<tr>
+<td><code>api.set(item_id, value)</code></td>
+<td>Zmiana jednej — nic nie jest zapisane do <code>save</code></td>
+</tr>
+<tr>
+<td><code>api.press(item_id)</code></td>
+<td>Naciśnięcie ustawienia będącego przyciskiem (okno, kreator)</td>
+</tr>
+<tr>
+<td><code>api.refresh()</code></td>
+<td>Ponowny odczyt okna, po zapisie albo pojawieniu się kategorii</td>
+</tr>
+<tr>
+<td><code>api.save()</code></td>
+<td><strong>Własny zapis Titana</strong>, ze wszystkimi skutkami ubocznymi</td>
+</tr>
+<tr>
+<td><code>api.cancel()</code></td>
+<td>Schowanie okna ustawień bez zapisu</td>
+</tr>
+</tbody></table>
+
+<p>Część od bycia oknem:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Metoda</th>
+<th>Co daje</th>
+</tr></thead><tbody>
+<tr>
+<td><code>api.call(function, *args)</code></td>
+<td>Uruchamia coś <strong>na wątku GUI</strong> i czeka na wynik</td>
+</tr>
+<tr>
+<td><code>api.parent()</code></td>
+<td>Okno, do którego podpiąć swoje</td>
+</tr>
+<tr>
+<td><code>api.file(*parts)</code></td>
+<td>Ścieżka wewnątrz Twojego katalogu</td>
+</tr>
+<tr>
+<td><code>api.translate(text)</code>, <code>api.language()</code></td>
+<td>Gettext Titana i kod bieżącego języka</td>
+</tr>
+<tr>
+<td><code>api.speak(text)</code></td>
+<td>Mowa Titana</td>
+</tr>
+<tr>
+<td><code>api.open_builtin()</code></td>
+<td>Własne okno ustawień Titana — droga powrotna, zawsze dostępna</td>
+</tr>
+<tr>
+<td><code>api.log(message)</code></td>
+<td>Linia na konsoli z Twoim prefiksem</td>
+</tr>
+</tbody></table>
+
+<h2>Dane, które renderuje interfejs</h2>
+
+<p><code>api.categories()</code>:</p>
+
+<pre><code class="language-python">[{&#x27;name&#x27;: &quot;Ogólne&quot;,
+  &#x27;items&#x27;: [
+      {&#x27;id&#x27;: &#x27;quick_start_cb&#x27;, &#x27;category&#x27;: &quot;Ogólne&quot;,
+       &#x27;label&#x27;: &quot;Szybki start&quot;, &#x27;kind&#x27;: &#x27;bool&#x27;, &#x27;value&#x27;: True,
+       &#x27;options&#x27;: [], &#x27;minimum&#x27;: None, &#x27;maximum&#x27;: None,
+       &#x27;enabled&#x27;: True, &#x27;description&#x27;: &#x27;&#x27;},
+      ...]},
+ ...]</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Pole</th>
+<th>Znaczenie</th>
+</tr></thead><tbody>
+<tr>
+<td><code>id</code></td>
+<td>Uchwyt, który podajesz do <code>get</code> / <code>set</code> / <code>press</code></td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>Do której kategorii należy</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>Nazwa w języku użytkownika</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td>Czym <strong>jest</strong> kontrolka — tabela niżej</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>Co jest ustawione teraz</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td>Możliwości (<code>choice</code>, <code>list</code>, <code>multi</code>)</td>
+</tr>
+<tr>
+<td><code>minimum</code>, <code>maximum</code></td>
+<td>Zakres (<code>number</code>)</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>Czy Titan pozwala tego teraz zmieniać</td>
+</tr>
+</tbody></table>
+
+<h3>Rodzaje (<code>kind</code>)</h3>
+
+<table class="doc-table">
+<thead><tr>
+<th>Rodzaj</th>
+<th>Kontrolka w Titanie</th>
+<th>Renderuj jako</th>
+<th><code>set</code> przyjmuje</th>
+</tr></thead><tbody>
+<tr>
+<td><code>bool</code></td>
+<td><code>wx.CheckBox</code></td>
+<td>pole wyboru</td>
+<td><code>True</code> / <code>False</code> (albo <code>&quot;tak&quot;</code>, <code>&quot;1&quot;</code>, <code>&quot;yes&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>choice</code></td>
+<td><code>wx.Choice</code>, <code>wx.ComboBox</code>, <code>wx.RadioBox</code></td>
+<td>listę rozwijaną albo grupę przycisków</td>
+<td>jedną z <code>options</code></td>
+</tr>
+<tr>
+<td><code>number</code></td>
+<td><code>wx.Slider</code>, <code>wx.SpinCtrl</code></td>
+<td>suwak albo pole liczbowe, z <code>minimum</code>/<code>maximum</code></td>
+<td>liczbę całkowitą</td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>wx.TextCtrl</code></td>
+<td>pole tekstowe</td>
+<td>tekst</td>
+</tr>
+<tr>
+<td><code>secret</code></td>
+<td><code>wx.TextCtrl</code> z <code>TE_PASSWORD</code></td>
+<td>pole hasła — <strong>nigdy nie pokazuj wartości</strong></td>
+<td>tekst</td>
+</tr>
+<tr>
+<td><code>list</code></td>
+<td><code>wx.ListBox</code></td>
+<td>listę jednokrotnego wyboru</td>
+<td>jedną z <code>options</code></td>
+</tr>
+<tr>
+<td><code>multi</code></td>
+<td>lista z polami wyboru</td>
+<td><strong>pola wyboru</strong>, po jednym na opcję</td>
+<td>listę tekstów</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td><code>wx.Button</code></td>
+<td>przycisk; <code>api.press(id)</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>info</code></td>
+<td><code>wx.TextCtrl</code> tylko do odczytu</td>
+<td>tekst do przeczytania, nie ustawienie</td>
+<td>—</td>
+</tr>
+</tbody></table>
+
+<p><code>kind</code> mówi, czym jest <strong>kontrolka</strong>, a nie jak nazywa się klucz — dzięki temu interfejs renderuje to, co renderuje Titan, zamiast zgadywać z nazwy.</p>
+
+<p>Dwie rzeczy wynikają z tego, jak model jest budowany, i warto je znać:</p>
+
+<li><strong>Kontrolka, której nikt nie nazwał, nie jest oferowana.</strong> <code>wx.Choice</code> jest opisany napisem stojącym przed nim — tak buduje się każdy program w wx — a kontrolka bez podpisu jest pomijana, zamiast być pokazana jako bezimienne pole. Nadal da się ją zmienić we własnym oknie Titana.</li>
+<li><strong>Ustawienie wartości wyzwala zdarzenie kontrolki</strong>, bo to tam Titan stosuje rzeczy na żywo (tempo mowy, motyw dźwiękowy, przełącznik, który powoduje pojawienie się kategorii Powłoka Titana). Ciche ustawienie zostawiłoby okno i program w niezgodzie.</li>
+
+<h2>Wątki</h2>
+
+<p>Ustawienia to kontrolki wx. Odczyt lub zapis poza wątkiem GUI to zachowanie niezdefiniowane, a nie błąd, który byś zobaczył.</p>
+
+<li>Interfejs, który <strong>jest oknem</strong> (wx i wszystko, co Titan otwiera na wątku GUI), może wołać API wprost.</li>
+<li>Interfejs z <strong>własną pętlą</strong> — konsola zadająca pytania, serwer WWW odpowiadający na żądania, dialog głosowy — trzyma ją na własnym wątku i sięga do ustawień przez <code>api.call(...)</code>, które przerzuca wywołanie na wątek GUI i czeka (limit 20 s). Wołane <em>z</em> wątku GUI po prostu woła, więc nigdy nie musisz pytać, na którym wątku jesteś.</li>
+
+<pre><code class="language-python">categories = api.call(api.categories)
+api.call(api.set, &#x27;quick_start_cb&#x27;, True)
+api.call(api.save)</code></pre>
+
+<h2>Dostępność</h2>
+
+<p>Użytkownicy Titana czytają to okno czytnikiem ekranu, a ustawienia są ostatnim miejscem, które może być nieczytelne.</p>
+
+<li><strong>Używaj prawdziwych kontrolek.</strong> Natywne <code>wx.CheckBox</code>, <code>wx.Choice</code>, <code>wx.Slider</code> i <code>wx.TextCtrl</code> czyta każdy czytnik ekranu bez Twojej pomocy. Cokolwiek narysujesz sam, jest pustym prostokątem.</li>
+<li><strong><code>multi</code> to pola wyboru — i muszą być polami wyboru dla systemu.</strong> Nie używaj <code>wx.CheckListBox</code>: na Windows jest rysowany samodzielnie, jego wiersze zgłaszają rolę „element listy" bez stanu zaznaczenia, a czytnik mówi nazwę pozycji i nic o tym, czy jest włączona. Użyj <code>src.ui.check_list.CheckList</code> — listy w trybie raportu z <code>EnableCheckBoxes()</code>, której wiersze zgłaszają rolę „pole wyboru", stan CHECKED i wzorzec toggle w UIA.</li>
+<li><strong>Nazwij swoje listy dla MSAA.</strong> <code>wx.Window.SetName</code> nigdy nie dociera do czytnika na natywnej liście czy drzewie; robi to <code>src.shell.a11y.name_control(control, &quot;Kategorie&quot;)</code>.</li>
+<li><strong>Postaw podpis przed każdym polem</strong>, tak jak robi to okno Titana — tam czytnik ekranu (i <code>ui_model</code>) szuka nazwy kontrolki.</li>
+<li><strong>Nie buduj własnego głosu.</strong> Jeśli chcesz coś powiedzieć — <code>api.speak</code>; jeśli czytnik działa, już czyta Twoje kontrolki, a druga kopia wszystkiego jest gorsza niż cisza.</li>
+
+<h2>Włączanie i sterowanie</h2>
+
+<li><strong>Ustawienia -> Interfejs -> „Interfejs ustawień"</strong> wymienia Klasyczny (własne okno Titana) i każdy zainstalowany interfejs pod nazwą z manifestu.</li>
+<li>Action API ma to samo:</li>
+
+<table class="doc-table">
+<thead><tr>
+<th>Akcja</th>
+<th>Co robi</th>
+</tr></thead><tbody>
+<tr>
+<td><code>settings.settings_interfaces</code></td>
+<td>Co jest zainstalowane i który jest używany</td>
+</tr>
+<tr>
+<td><code>settings.use_settings_interface</code></td>
+<td>Wybiera jeden (pusty = Klasyczny)</td>
+</tr>
+<tr>
+<td><code>&lt;id interfejsu&gt;.status</code> / <code>&lt;id interfejsu&gt;.use</code></td>
+<td>To samo, dla konkretnego</td>
+</tr>
+</tbody></table>
+
+<h2>Dwa przykłady</h2>
+
+<p>Oba są dołączone do Titana, oba zainstalowane i żaden nie jest używany, dopóki nie zostanie wybrany.</p>
+
+<li><strong><code>data/settings interfaces/html_settings/</code></strong> — całe ustawienia jako jedna strona HTML w oknie <code>wx.html2</code>, z wyszukiwarką i odnośnikiem do każdej kategorii. Strona odzywa się z powrotem, ustawiając <code>location.href</code> na adres <code>titan:</code>, który Python blokuje w <code>EVT_WEBVIEW_NAVIGATING</code> i obsługuje — najstarsza sztuczka świata i jedyna, która działa na każdym silniku WebView bez mostka i bez lokalnego serwera.</li>
+<li><strong><code>data/settings interfaces/console_settings/</code></strong> — <code>AllocConsole</code>, numerowana lista kategorii, numerowana lista ustawień, jedno pytanie naraz. To także interfejs, który działa wtedy, gdy graficznego nie da się użyć w ogóle.</li>
+
+<h2>Kompletny minimalny interfejs</h2>
+
+<p><code>data/settings interfaces/quick_settings/__settings_ui__.TCE</code>:</p>
+
+<pre><code class="language-ini">[settings interface]
+name = Quick settings
+name_pl = Szybkie ustawienia
+description = One category at a time, in a plain Titan dialog.
+description_pl = Jedna kategoria naraz, w zwykłym oknie Titana.
+author = Ja
+version = 1.0
+status = 0</code></pre>
+
+<p><code>data/settings interfaces/quick_settings/init.py</code>:</p>
+
+<pre><code class="language-python"># -*- coding: utf-8 -*-
+import wx
+
+try:
+    from src.titan_core.translation import _
+except Exception:
+    def _(text):
+        return text
+
+
+class QuickSettings(wx.Frame):
+    def __init__(self, api, parent=None):
+        super().__init__(parent, title=_(&quot;Ustawienia&quot;), size=(640, 520))
+        self.api = api
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.categories = api.categories()
+        sizer.Add(wx.StaticText(panel, label=_(&quot;Kategoria:&quot;)), 0, wx.ALL, 6)
+        self.choice = wx.Choice(
+            panel, choices=[c[&#x27;name&#x27;] for c in self.categories])
+        self.choice.SetSelection(0)
+        self.choice.Bind(wx.EVT_CHOICE, lambda event: self.fill())
+        sizer.Add(self.choice, 0, wx.EXPAND | wx.ALL, 6)
+
+        self.box = wx.BoxSizer(wx.VERTICAL)
+        self.host = wx.ScrolledWindow(panel)
+        self.host.SetScrollRate(0, 10)
+        self.host.SetSizer(self.box)
+        sizer.Add(self.host, 1, wx.EXPAND | wx.ALL, 6)
+
+        save = wx.Button(panel, wx.ID_SAVE, _(&quot;&amp;Zapisz&quot;))
+        save.Bind(wx.EVT_BUTTON, self.on_save)
+        sizer.Add(save, 0, wx.ALL, 6)
+        panel.SetSizer(sizer)
+        self.fill()
+
+    def fill(self):
+        &quot;&quot;&quot;Tylko pola wyboru, żeby przykład był krótki.&quot;&quot;&quot;
+        self.box.Clear(True)
+        self.controls = {}
+        category = self.categories[self.choice.GetSelection()]
+        for item in category[&#x27;items&#x27;]:
+            if item[&#x27;kind&#x27;] != &#x27;bool&#x27;:
+                continue
+            check = wx.CheckBox(self.host, label=item[&#x27;label&#x27;])
+            check.SetValue(bool(item[&#x27;value&#x27;]))
+            check.Enable(item[&#x27;enabled&#x27;])
+            self.box.Add(check, 0, wx.ALL, 4)
+            self.controls[item[&#x27;id&#x27;]] = check
+        self.host.Layout()
+        self.host.FitInside()
+
+    def on_save(self, event):
+        for item_id, check in self.controls.items():
+            self.api.set(item_id, check.GetValue())
+        self.api.save()
+        self.Close()
+
+
+def open_settings(api):
+    frame = QuickSettings(api, api.parent())
+    frame.Show()
+    frame.Raise()
+    return frame</code></pre>
+
+<p>Potem: Ustawienia -> Interfejs -> Interfejs ustawień -> Szybkie ustawienia. Od tej chwili każde wejście do ustawień otwiera Twój interfejs.</p>
+
+<h2>Jak zlecić to AI</h2>
+
+<p><strong>Programista -> AI -> Utwórz interfejs ustawień...</strong> generuje go z opisu, z
+tym przewodnikiem w zapytaniu. To, co powstanie, jest przed zapisaniem
+sprawdzane względem Titana: <code>open_settings(api)</code> musi być i brać jeden
+argument, klucze manifestu muszą być tymi, które Titan czyta, każde
+<code>api.cokolwiek</code> musi istnieć w prawdziwym <code>SettingsUIAPI</code>, a interfejs, który
+importuje <code>set_setting</code> / <code>save_settings</code>, żeby samemu zapisać plik ini, jest
+odrzucany z podaniem powodu - to ustawia wartość i nic nie zmienia.</p>
+
+<p>Sprawdzenie to <code>ai_creation_kit.check_settings_interface</code>; czyta
+<code>interfaces.ENTRY_POINT</code>, <code>interfaces.MANIFEST_KEYS</code> i samą klasę API, więc
+zawsze opisuje tego Titana, którego masz.</p>
+
+<h2>Diagnostyka</h2>
+
+<li>Uruchom Titana ze źródeł i patrz na konsolę: <code>[SettingsInterfaces] ...</code> mówi, dlaczego interfejs nie został użyty, a <code>api.log</code> poprzedza Twoje własne linie.</li>
+<li><code>python tests/test_settings_interfaces.py</code> (36 testów) to zestaw testów samego modelu — uruchamiaj bezpośrednio, katalog <code>tests/</code> nie ma <code>__init__.py</code>. Buduje sztuczne okno ustawień o znanej zawartości, więc jest też najszybszym sposobem zobaczenia, co <code>ui_model</code> robi z daną kontrolką.</li>
+<li>Żeby zobaczyć same dane, bez żadnego interfejsu:</li>
+
+<pre><code class="language-python">  from src.settings import interfaces
+  model = interfaces.build_model()
+  for category in model.categories():
+      print(category[&#x27;name&#x27;], len(category[&#x27;items&#x27;]))
+  ```
+
+- Titan skompilowany (zamrożony) wykonuje `init.py`, czytając go, więc interfejs zachowuje się w kompilacie tak samo jak ze źródeł. Wszystko, co importujesz ponad to, co Titan już ma, musi leżeć w Twoim `lib/`.
+
+## Pakowanie
+</code></pre>bash
+python src/scripts/pack_addon.py "data/settings interfaces/moj_interfejs" --kind settings_interface -o moj_interfejs.tcd
+<code>`</code>
+
+<p><code>.TCD</code>, znajdowany i używany dokładnie jak katalog, instalowalny dwuklikiem i możliwy do wysłania do repozytorium Titan-Net.</p>
+
+<h2>Lista kontrolna</h2>
+
+<li>[ ] <code>__settings_ui__.TCE</code> z <code>[settings interface]</code> i <code>status = 0</code></li>
+<li>[ ] <code>open_settings(api)</code> odpowiadające oknem albo <code>True</code> i nigdy nierzucające wyjątku</li>
+<li>[ ] Renderujesz z <code>api.categories()</code> — bez własnej tabeli ustawień</li>
+<li>[ ] Każdy <code>kind</code> obsłużony albo świadomie pominięty (a <code>secret</code> nigdy niepokazywany)</li>
+<li>[ ] Zapis przez <code>api.save()</code>, nigdy przez zapis pliku ini</li>
+<li>[ ] Własna pętla na własnym wątku, sięgająca do ustawień przez <code>api.call</code></li>
+<li>[ ] Prawdziwe, nazwane, fokusowalne kontrolki; <code>CheckList</code> dla <code>multi</code></li>
+<li>[ ] Droga powrotna: <code>api.open_builtin()</code> w menu albo na przycisku</li>
+<li>[ ] Sprawdzone z zainstalowanym AI, czytnikiem ekranu i menedżerem makr — ich kategorie też muszą się pojawić</li>
+
+<h2>Zobacz też</h2>
+
+<li><code>data/settings interfaces/html_settings/</code>, <code>console_settings/</code> — dwa działające przykłady</li>
+<li><code>shell_addon_guide_pl.md</code> — ta sama idea dla pulpitu, paska zadań i menu Start</li>
+<li><code>action_api_guide_pl.md</code> — akcje <code>settings.*</code> i wszystko inne, co Titan udostępnia</li>
+<li><code>launcher_creation_guide_pl.md</code> — zastąpienie głównego okna Titana zamiast ustawień</li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

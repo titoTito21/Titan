@@ -406,7 +406,10 @@ class EnablementTests(unittest.TestCase):
         with open(os.path.join(REPO, 'src', 'ui', 'settingsgui.py'),
                   encoding='utf-8') as handle:
             source = handle.read()
-        panel = source.split('def InitTitanShellPanel')[1][:4000]
+        # The whole method, not the first N characters of it: a slice
+        # makes the test fail when something is ADDED to the panel.
+        method = source.split('def InitTitanShellPanel')[1]
+        panel = method.split('\n    def ')[0]
         for option in ('desktop_shell', 'show_desktop', 'show_taskbar',
                        'show_tray', 'hide_system_taskbar', 'show_wallpaper',
                        'clock_seconds', 'auto_arrange_icons', 'focus_cues'):

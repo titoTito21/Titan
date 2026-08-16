@@ -74,6 +74,11 @@ SKINS_DIR = resource_path('skins')
 from src.accessibility.lazy_speaker import LazySpeaker
 speaker = LazySpeaker()
 
+# Every tick list in this window is a list of NATIVE check boxes rather than
+# a `wx.CheckListBox`, whose items report no check state to a screen reader
+# at all - see `src/ui/check_list.py` for the measurement.
+from src.ui.check_list import CheckList
+
 
 def _show_skinned_message(message, caption, style=wx.OK | wx.ICON_INFORMATION, parent=None):
     dlg = wx.MessageDialog(parent, message, caption, style)
@@ -931,12 +936,11 @@ class SettingsFrame(wx.Frame):
 
         self._category_ids = ['apps', 'games', 'network']
         category_names = [_("Applications"), _("Games"), _("Titan IM")]
-        self.categories_checklist = wx.CheckListBox(self.general_panel, choices=category_names)
-        self.categories_checklist.SetLabel(_("Categories:"))
+        self.categories_checklist = CheckList(self.general_panel,
+                                              choices=category_names,
+                                              name=_("Categories"))
         self.categories_checklist.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.categories_checklist.Bind(wx.EVT_CHECKLISTBOX, self.OnCategoryChecklistToggle)
-        self.categories_checklist.Bind(wx.EVT_LISTBOX, self.OnCategoryChecklistSelect)
-        self._categories_last_announced_idx = -1
         # Default: all checked
         for i in range(len(category_names)):
             self.categories_checklist.Check(i, True)
@@ -1204,6 +1208,24 @@ class SettingsFrame(wx.Frame):
         option(interface, 'hide_system_taskbar',
                _("Hide the Windows taskbar while Titan's is shown"), True)
 
+        # Which Start menu this machine has.  XP asks it on the taskbar's own
+        # properties sheet and that is still where it lives, but a user who
+        # has come to the shell's settings to switch the shell on should not
+        # have to find a context menu on a bar to say which menu it puts up -
+        # so it is asked in both places, of the one setting.
+        interface.Add(wx.StaticText(interface.GetStaticBox(),
+                                    label=_("Start menu:")),
+                      flag=wx.LEFT | wx.TOP, border=6)
+        self.start_menu_choice = wx.Choice(interface.GetStaticBox(),
+                                           choices=[])
+        self.start_menu_choice.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.start_menu_choice.Bind(wx.EVT_CHOICE, self.OnStartMenuStyleChanged)
+        interface.Add(self.start_menu_choice,
+                      flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+                      border=6)
+        self._start_menu_options = []
+        self._load_start_menus()
+
         desktop = group(_("The desktop"))
         option(desktop, 'show_wallpaper', _("Show the Windows wallpaper"), True)
         option(desktop, 'auto_arrange_icons',
@@ -1234,8 +1256,8 @@ class SettingsFrame(wx.Frame):
         addons_box = group(_("Shell add-ons"))
         note(addons_box, _("Add-ons in data/shell addons/ can add to the "
                            "Start menu, the file browser, the taskbar and "
-                           "the desktop. Which Start menu you use is on the "
-                           "taskbar's own Properties."))
+                           "the desktop. One that provides a Start menu of "
+                           "its own appears in the list above."))
         # Its own caption immediately before it: a list control has no
         # words of its own, so whatever text is nearest in front of it is
         # what names it - and without this that would have been the
@@ -1243,8 +1265,9 @@ class SettingsFrame(wx.Frame):
         addons_box.Add(wx.StaticText(addons_box.GetStaticBox(),
                                      label=_("Installed shell add-ons:")),
                        flag=wx.LEFT | wx.TOP, border=6)
-        self.shell_addon_list = wx.CheckListBox(addons_box.GetStaticBox(),
-                                                choices=[])
+        self.shell_addon_list = CheckList(addons_box.GetStaticBox(),
+                                          choices=[],
+                                          name=_("Installed shell add-ons"))
         self.shell_addon_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         self.shell_addon_list.Bind(wx.EVT_CHECKLISTBOX,
                                    self.OnShellAddonToggled)
@@ -1444,8 +1467,8 @@ class SettingsFrame(wx.Frame):
             "Add-ons the AI may drive (untick to exclude one):"))
         vbox.Add(_dep(addons_label), flag=wx.LEFT | wx.TOP, border=10)
         self._ai_addon_ids = []
-        self.ai_addon_list = wx.CheckListBox(panel, choices=[])
-        self.ai_addon_list.SetName(_("Add-ons the AI may drive"))
+        self.ai_addon_list = CheckList(panel, choices=[],
+                                       name=_("Add-ons the AI may drive"))
         self.ai_addon_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(_dep(self.ai_addon_list), flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
 
@@ -2440,6 +2463,7 @@ class SettingsFrame(wx.Frame):
             default = str(getattr(checkbox, 'shell_default', True))
             checkbox.SetValue(
                 str(shell_settings.get(binding_id, default)).lower() in ['true', '1'])
+        self._select_start_menu()
 
         # Copilot key settings
         if self.copilot_remap_cb is not None:
@@ -2707,6 +2731,91 @@ class SettingsFrame(wx.Frame):
         t = threading.Thread(target=upload_thread, daemon=True)
         t.start()
 
+    def _load_start_menus(self):
+        """Fill the Start menu list: Titan's two, then every add-on's.
+
+        Exactly what the taskbar properties sheet offers, read from the same
+        place, because it is the same question - `start_menu_style` plus, for
+        an add-on, `provider_start_menu`.  An add-on that has been switched
+        off since it was chosen is simply not in the list, and the selection
+        falls back to Titan's own menu, which is what actually opens.
+        """
+        choice = getattr(self, 'start_menu_choice', None)
+        if choice is None:
+            return
+        options = [('xp', '', _("Start menu (Windows XP)")),
+                   ('classic', '', _("Classic Start menu"))]
+        try:
+            from src.shell import addons
+            for config in addons.manager().providers('start_menu'):
+                options.append(('addon', config.id, config.name))
+        except Exception as error:
+            print(f"[Settings] could not list Start menus: {error}")
+        self._start_menu_options = options
+        choice.Set([label for _style, _addon, label in options])
+        self._select_start_menu()
+
+    def _select_start_menu(self):
+        """Show whichever menu the settings say this machine has."""
+        choice = getattr(self, 'start_menu_choice', None)
+        options = getattr(self, '_start_menu_options', [])
+        if choice is None or not options:
+            return
+        shell_settings = self.settings.get('titan_shell', {}) \
+            if isinstance(getattr(self, 'settings', None), dict) else {}
+        style = str(shell_settings.get(
+            'start_menu_style',
+            get_setting('start_menu_style', 'xp', 'titan_shell'))).lower()
+        addon_id = str(shell_settings.get(
+            'provider_start_menu',
+            get_setting('provider_start_menu', '', 'titan_shell')) or '')
+        selection = 0
+        for index, (option_style, option_addon, _label) in enumerate(options):
+            if option_style != style:
+                continue
+            if style == 'addon' and option_addon != addon_id:
+                continue
+            selection = index
+            break
+        choice.SetSelection(selection)
+
+    def OnStartMenuStyleChanged(self, event):
+        """Write the choice at once, as the properties sheet does.
+
+        Not on Save: the taskbar's own sheet applies this as it is changed,
+        and one setting must not behave differently depending on which
+        window it was changed in.  The menu already built is thrown away so
+        the next press of the Windows key puts up the chosen one.
+        """
+        options = getattr(self, '_start_menu_options', [])
+        index = self.start_menu_choice.GetSelection()
+        if not (0 <= index < len(options)):
+            return
+        style, addon_id, _label = options[index]
+        # Into the window's own copy as well: Save writes that copy back over
+        # the whole file, so a setting written straight to disk from here
+        # would be undone by the next press of Save.
+        shell_settings = dict(self.settings.get('titan_shell', {}))
+        shell_settings['start_menu_style'] = style
+        shell_settings['provider_start_menu'] = addon_id
+        self.settings['titan_shell'] = shell_settings
+        try:
+            set_setting('start_menu_style', style, 'titan_shell')
+            set_setting('provider_start_menu', addon_id, 'titan_shell')
+        except Exception as error:
+            print(f"[Settings] could not write the Start menu choice: {error}")
+        try:
+            from src.shell.shell_manager import get_shell
+            shell = get_shell()
+            menu = getattr(shell, 'start_menu', None) if shell else None
+            if menu is not None:
+                menu.Destroy()
+                shell.start_menu = None
+        except Exception as error:
+            print(f"[Settings] could not drop the built Start menu: {error}")
+        play_sound('core/SELECT.ogg')
+        event.Skip()
+
     def _load_shell_addons(self):
         """Fill the shell add-on list from what is installed."""
         try:
@@ -2750,7 +2859,11 @@ class SettingsFrame(wx.Frame):
         except Exception as error:
             print(f"[Settings] could not change {addon_id}: {error}")
             self.shell_addon_list.Check(index, not wanted)
-        self.OnCheckBox(event)
+        # An add-on that provides a Start menu becomes (or stops being) one of
+        # the choices the moment it is switched on or off, so the list above
+        # is read again rather than being a snapshot from when the window
+        # opened.
+        self._load_start_menus()
 
     def OnSapiSettings(self, event):
         if sys.platform != 'win32':
@@ -3469,75 +3582,14 @@ class SettingsFrame(wx.Frame):
         event.Skip()
 
     def OnCategoryChecklistToggle(self, event):
-        """Handle check/uncheck on the categories CheckListBox.
+        """The categories list ticked or unticked.
 
-        wx.CheckListBox does not expose item check state to screen readers
-        on Windows, so we delegate to the accessibility helper which plays
-        ui/cb_listitem_checked.ogg and — 500 ms later, only when a real
-        screen reader is running — speaks just "checked" / "unchecked"
-        (the item name is already read by the SR on focus).
+        There is nothing to announce here any more: the list is a list of
+        native check boxes (`src/ui/check_list.py`), so the reader says
+        "checked" / "unchecked" itself and the control plays the earcon.
+        Kept because the list is what decides which categories the main
+        window shows, and a future change here belongs on this event.
         """
-        try:
-            idx = event.GetInt()
-        except Exception:
-            idx = event.GetSelection() if hasattr(event, 'GetSelection') else -1
-
-        if idx is None or idx < 0:
-            event.Skip()
-            return
-
-        try:
-            checked = self.categories_checklist.IsChecked(idx)
-        except Exception:
-            event.Skip()
-            return
-
-        self._categories_last_announced_idx = idx
-
-        try:
-            from src.accessibility.messages import announce_checklist_item_toggle
-            announce_checklist_item_toggle(checked)
-        except Exception as e:
-            print(f"[SettingsFrame] announce_checklist_item_toggle error: {e}")
-
-        event.Skip()
-
-    def OnCategoryChecklistSelect(self, event):
-        """Announce the check state while arrowing across CheckListBox rows.
-
-        Screen readers read the item name on focus but not its check state,
-        so for each navigation that lands on a new row we emit the same
-        sound + delayed "checked" / "unchecked" announcement as on toggle.
-        Re-selecting the already-announced row is a no-op so we don't spam
-        the audio when the event fires redundantly.
-        """
-        try:
-            idx = event.GetSelection()
-        except Exception:
-            idx = -1
-
-        if idx is None or idx < 0:
-            event.Skip()
-            return
-
-        if idx == getattr(self, '_categories_last_announced_idx', -1):
-            event.Skip()
-            return
-
-        try:
-            checked = self.categories_checklist.IsChecked(idx)
-        except Exception:
-            event.Skip()
-            return
-
-        self._categories_last_announced_idx = idx
-
-        try:
-            from src.accessibility.messages import announce_checklist_item_navigation
-            announce_checklist_item_navigation(checked)
-        except Exception as e:
-            print(f"[SettingsFrame] announce_checklist_item_navigation error: {e}")
-
         event.Skip()
 
     def _rebuild_engine_config_controls(self, engine_id):

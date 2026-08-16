@@ -50,6 +50,15 @@ INTERFACE_DIR = 'settings interfaces'
 MANIFEST = '__settings_ui__.TCE'
 SECTION = 'settings interface'
 
+#: The one function an interface must define, and the whole of the contract.
+ENTRY_POINT = 'open_settings'
+
+#: The keys `__settings_ui__.TCE` understands, beside `name_<lang>` /
+#: `description_<lang>`.  Written down because it is what an interface author -
+#: and the AI creation kit, which writes interfaces - is checked against: a
+#: manifest key nobody reads is a promise the author believes has been kept.
+MANIFEST_KEYS = ('name', 'description', 'author', 'version', 'status', 'libs')
+
 #: Where the choice is kept.  Empty means Titan's own window, which is what
 #: the Interface tab calls **Classic**.  The `interface` section on purpose:
 #: it is the tab the choice is on, and `OnSave` writes that section key by

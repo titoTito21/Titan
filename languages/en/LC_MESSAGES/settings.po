@@ -1339,3 +1339,18 @@ msgstr ""
 
 msgid "cannot be read"
 msgstr ""
+
+msgid "Start menu:"
+msgstr ""
+
+msgid "Start menu (Windows XP)"
+msgstr ""
+
+msgid "Classic Start menu"
+msgstr ""
+
+msgid "Installed shell add-ons"
+msgstr ""
+
+msgid "Add-ons in data/shell addons/ can add to the Start menu, the file browser, the taskbar and the desktop. One that provides a Start menu of its own appears in the list above."
+msgstr ""

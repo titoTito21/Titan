@@ -48,6 +48,8 @@ renders rather than guessing from a key name.
 
 import wx
 
+from src.ui.check_list import CheckList
+
 KIND_BOOL = 'bool'
 KIND_CHOICE = 'choice'
 KIND_NUMBER = 'number'
@@ -174,8 +176,16 @@ class SettingsItem:
             if self.kind == KIND_MULTI:
                 wanted = {str(item) for item in (value or [])}
                 for index in range(control.GetCount()):
-                    control.Check(index, control.GetString(index) in wanted)
-                _fire(control, wx.EVT_CHECKLISTBOX.typeId)
+                    should = control.GetString(index) in wanted
+                    if bool(control.IsChecked(index)) == should:
+                        continue
+                    control.Check(index, should)
+                    # One event per row that really changed, carrying WHICH
+                    # row: the window's handler acts on the item the event
+                    # names (a shell add-on is switched on in its own
+                    # manifest), so an event with no index applied every
+                    # change to the first entry.
+                    _fire(control, wx.EVT_CHECKLISTBOX.typeId, index)
                 return True
             if self.kind == KIND_COMMAND:
                 # A button is not a value; pressing it is what it is for,
@@ -442,7 +452,9 @@ def _describe_control(control, category, names, ordinal):
     kind = options = None
     minimum = maximum = None
 
-    if isinstance(control, wx.CheckListBox):
+    if isinstance(control, (wx.CheckListBox, CheckList)):
+        # Both are a list of tick boxes to an interface; only one of them is
+        # one to a screen reader (see `src/ui/check_list.py`).
         kind = KIND_MULTI
         options = [control.GetString(i) for i in range(control.GetCount())]
     elif isinstance(control, wx.RadioBox):
@@ -501,7 +513,7 @@ def _as_bool(value):
     return str(value).strip().lower() in ('1', 'true', 'yes', 'on', 'tak')
 
 
-def _fire(control, event_type):
+def _fire(control, event_type, index=None):
     """Tell the window the user changed this control.
 
     `wx.PostEvent` rather than calling the handler: the window binds these
@@ -512,6 +524,8 @@ def _fire(control, event_type):
     try:
         event = wx.CommandEvent(event_type, control.GetId())
         event.SetEventObject(control)
+        if index is not None:
+            event.SetInt(index)
         wx.PostEvent(control, event)
     except Exception as error:
         print(f"[SettingsModel] could not fire an event: {error}")

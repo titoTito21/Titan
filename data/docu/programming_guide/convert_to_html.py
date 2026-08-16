@@ -425,6 +425,9 @@ def generate_navigation(files, current_file, language='pl'):
         'launcher_creation_guide_pl.md': 'Tworzenie launcherów',
         'tts_engine_guide_pl.md': 'Silniki TTS (TitanTTS)',
         'gamepad_mode_guide_pl.md': 'Tryby gamepada',
+        'shell_addon_guide_pl.md': 'Dodatki powłoki',
+        'settings_interface_guide_pl.md': 'Interfejsy ustawień',
+        'action_api_guide_pl.md': 'Action API',
     }
 
     guides_en = {
@@ -437,6 +440,9 @@ def generate_navigation(files, current_file, language='pl'):
         'launcher_creation_guide_en.md': 'Creating Launchers',
         'tts_engine_guide_en.md': 'TitanTTS Engines',
         'gamepad_mode_guide_en.md': 'Gamepad Modes',
+        'shell_addon_guide_en.md': 'Shell Add-ons',
+        'settings_interface_guide_en.md': 'Settings Interfaces',
+        'action_api_guide_en.md': 'Action API',
     }
 
     guides = guides_pl if language == 'pl' else guides_en
@@ -505,6 +511,9 @@ def create_index_page(output_dir, all_files, language='pl'):
         'launcher_creation_guide_pl.md': ('Tworzenie launcherów', 'Zbuduj alternatywny interfejs TCE w wxPython, PyQt5, tkinter lub pygame'),
         'tts_engine_guide_pl.md': ('Silniki TTS (TitanTTS)', 'Zaimplementuj własny silnik syntezy mowy dla TCE'),
         'gamepad_mode_guide_pl.md': ('Tryby gamepada', 'Twórz własne tryby sterowania gamepadem dla TCE'),
+        'shell_addon_guide_pl.md': ('Dodatki powłoki', 'Dokładaj do pulpitu, paska zadań, menu Start i przeglądarki plików - albo zastąp menu Start własnym'),
+        'settings_interface_guide_pl.md': ('Interfejsy ustawień', 'Zastąp okno ustawień Titana własnym - stroną HTML, konsolą, czymkolwiek'),
+        'action_api_guide_pl.md': ('Action API', 'Jak jedna część Titana prosi drugą o zrobienie czegoś - i jak Twój dodatek udostępnia swoje funkcje'),
     }
 
     guides_en = {
@@ -517,6 +526,9 @@ def create_index_page(output_dir, all_files, language='pl'):
         'launcher_creation_guide_en.md': ('Creating Launchers', 'Build alternative TCE interfaces in wxPython, PyQt5, tkinter, or pygame'),
         'tts_engine_guide_en.md': ('TitanTTS Engines', 'Implement custom text-to-speech engines for TCE'),
         'gamepad_mode_guide_en.md': ('Gamepad Modes', 'Build custom gamepad control modes for TCE'),
+        'shell_addon_guide_en.md': ('Shell Add-ons', 'Add to the desktop, taskbar, Start menu and file browser - or replace the Start menu with your own'),
+        'settings_interface_guide_en.md': ('Settings Interfaces', "Replace Titan's settings window with your own - an HTML page, a console, anything"),
+        'action_api_guide_en.md': ('Action API', 'How one part of Titan asks another to do something - and how your add-on offers its own functions'),
     }
 
     guides = guides_pl if language == 'pl' else guides_en

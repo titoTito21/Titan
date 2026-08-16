@@ -138,6 +138,19 @@ def open_creation_wizard(parent=None, kind_id=None):
         _report(_("Could not open the AI creator: {error}").format(error=e))
 
 
+def open_project_browser(parent=None):
+    """Every saved creation-kit project, of every kind, in one list."""
+    frame = _main_frame(parent)
+    _bring_titan_back(frame)
+    try:
+        from src.ai.ai_creation_kit import open_project_browser as _open
+        _open(frame)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _report(_("Could not open the AI projects: {error}").format(error=e))
+
+
 def install_data_package(parent=None):
     """The Install data package flow, wherever it was asked for.
 
@@ -243,6 +256,13 @@ def creation_kit_entries(parent=None):
             'label': _("Create {kind}...").format(kind=kind['label']),
             'icon': None,
             'action': (lambda kid=kind_id: open_creation_wizard(parent, kid))})
+    # Anything bigger than one sitting is a project, and this is the way back
+    # into one - the wizard's own Open lists only its own kind.
+    entries.append({
+        'id': 'ai_projects',
+        'label': _("Projects (continue building)..."),
+        'icon': None,
+        'action': (lambda: open_project_browser(parent))})
     return entries
 
 

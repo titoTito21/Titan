@@ -67,6 +67,23 @@ Key properties:
   "Titan-Net Messaging System" below) the same way as any other repository
   file.
 
+### Programming Guides (data/docu/programming_guide/)
+
+The guides a developer reads, one `_en.md` + `_pl.md` pair per add-on kind,
+and the HTML made of them:
+
+```bash
+# Regenerate every HTML page and both index pages from the Markdown
+python data/docu/programming_guide/convert_to_html.py
+```
+
+A new guide is a new pair of `.md` files plus four lines in
+`convert_to_html.py` (`guides_pl` / `guides_en` in `generate_navigation` and
+in `create_index_page`) - without them the page is still converted but does
+not appear in the sidebar or on the index. The English guides are also what
+`src/ai/creation_docs.py` injects into the AI creation kit's prompts, which
+is why they are the authoritative copy.
+
 ### Translation Management (Modular System)
 
 The translation system uses modular .po/.mo files organized by domain (gui, settings, network, etc.)
@@ -1359,7 +1376,15 @@ on the desktop's menu, or **their own Start menu**, had to change Titan.
   only asks for one when `start_menu_style == 'addon'`, so offering a Start
   menu does not take the Windows key - being chosen does. An add-on chosen
   and since uninstalled means **Titan's own menu**, never a different add-on
-  silently promoted.
+  silently promoted. It is asked **in Settings -> Titan shell as well**, as a
+  labelled list right under the shell's own switches: a user who came here to
+  turn the shell on should not have to find a context menu on a bar to say
+  which Start menu it puts up. One setting, two places that write it - both
+  write `start_menu_style` + `provider_start_menu` at once (not on Save, which
+  is what the properties sheet does) and throw the built menu away, and the
+  settings window puts the same values into its own copy of the settings,
+  since Save writes that copy back over the whole file. Switching an add-on
+  on or off in the tick list below re-reads the list of menus at once.
 - **Nothing an add-on does may take the shell down.** Every call out goes
   through `_safe`; a hook that is missing, raises, or answers something that
   is not a list of entries contributes nothing and the surface carries on.
@@ -1371,14 +1396,91 @@ on the desktop's menu, or **their own Start menu**, had to change Titan.
   translatable strings - so the manifest takes `name_pl` / `description_pl`
   beside `name` / `description`, which is what `__app.TCE` has always done
   rather than a second answer to the same question.
-- Switched on in **Settings -> Titan shell -> Shell add-ons** (a tick list,
+- Switched on in **Settings -> Titan shell -> Shell add-ons** (a tick list of
+  real check boxes - see "A tick list a screen reader can read" below -
   written to the add-on's own manifest at once) and through the Action API:
   `shell.list_addons`, and per add-on `status` / `enable` / `disable` from
   `actions/generic.py`'s `shell_addon` kind.
 - Examples: `data/shell addons/example_shell_addon/` (one function per
   surface, the reference) and `simple_start_menu/` (a Start menu provider -
   one search box, one list). Both ship **off**.
+- Guide: `data/docu/programming_guide/shell_addon_guide_{en,pl}.md` (and the
+  HTML the converter makes of them, `html/shell_addon_guide_*.html`) - the
+  manifest, every hook with its signature, the entry shape, the five
+  surfaces, both provider contracts, the accessibility rules and the
+  packaging.
+- **The AI creation kit writes them** (Programmer -> AI -> Create Shell
+  Add-on / Create Settings Interface), and what it writes is checked against
+  Titan itself before it is saved - `ai_creation_kit.check_shell_addon` /
+  `check_settings_interface`, run by the same auto-fix loop as every other
+  kind. The failure being prevented is the invisible one: an add-on whose
+  functions are ALMOST right loads, is listed, can be ticked, and
+  contributes nothing. So a hook name that is not one Titan calls is refused
+  with the one it meant (`start_menu_entries` -> `start_menu_items`), a hook
+  with the wrong number of parameters is refused with the number it is
+  called with, and so are a manifest key nobody reads, a surface that does
+  not exist, `provides = start_menu` with no `open_start_menu`, an
+  `api.something` the real API object does not have, and a settings
+  interface importing `set_setting` to write the ini itself.
+  - **Every one of those checks reads Titan, never a copy**: `addons.HOOKS`
+    / `HOOK_SIGNATURES` (from which `HOOK_ARGS` is derived), `SURFACES`,
+    `PROVIDABLE`, `MANIFEST_KEYS`, `interfaces.ENTRY_POINT`, and the API
+    classes themselves - `_public_attributes` BUILDS one, because `api.id`
+    and `api.path` are assigned in `__init__` and `dir(cls)` does not have
+    them. The prompt is written out of the same tables, so the kit cannot
+    teach a Titan that does not exist.
+  - The four add-ons Titan ships are run through the same check by
+    `tests/test_creation_kit_kinds.py` (29 tests), and
+    `tests/test_shell_addons.py` parses `src/shell` to prove every hook in
+    the table is really asked for, with the arity documented - so renaming a
+    hook in the shell fails a test rather than producing add-ons that pass
+    every check and do nothing.
 - Tests: `tests/test_shell_addons.py` (run it directly; 26 tests).
+
+### A tick list a screen reader can read
+
+`src/ui/check_list.py`. Every list of tick boxes in the settings window - the
+shell add-ons, the add-ons the AI may drive (its actions), the startup
+categories - said the name of the entry and nothing about whether it was
+switched on. `wx.CheckListBox` on Windows is an **owner-drawn list box**:
+wxWidgets paints the little square itself, so there is no check box there for
+the platform to report. Measured with `AccessibleObjectFromWindow` on a
+`wx.CheckListBox` whose first item is ticked, and on the same list built as a
+report-mode `wx.ListCtrl` with `EnableCheckBoxes()` (`LVS_EX_CHECKBOXES`, the
+native list-view check box Explorer itself uses):
+
+    wx.CheckListBox   item 1 role 34 (list item) state 0x300004  UIA toggle: no
+    CheckList         item 1 role 44 (check box) state 0x300010  UIA toggle: 1
+
+So the fix is the shell's own rule applied to a Titan window - **it is
+accessible because it is native**. NVDA and JAWS read the state out of MSAA,
+Titan Access out of the UIA toggle pattern it already reads for every check
+box (`uia_focus._read_states`), and Titan says nothing: what it used to do was
+*speak* "checked" / "unchecked" itself half a second after the row was read,
+through the readers it can speak through and no others.
+`announce_checklist_item_toggle` / `_navigation` keep the earcon and take
+`speak=False`, which is all that is left for Titan to do.
+
+- It keeps `wx.CheckListBox`'s interface (`Set`, `Check`, `IsChecked`,
+  `GetString`, `GetCount`, `SetName`, `SetLabel`) and fires
+  `wx.EVT_CHECKLISTBOX` and `wx.EVT_LISTBOX` with the row index in
+  `GetSelection()`, so the windows around it did not change.
+- **A change Titan made is not the user ticking something**: `CheckItem`
+  fires the event whoever called it, so filling the list or putting a refused
+  toggle back happens inside `_Quiet` and is silent - no earcon, no handler.
+- **The name goes to MSAA, not to wx**: a native list view has no window
+  text, so `SetName` alone reaches nothing that reads the screen and
+  `a11y.name_control` is what names it - the same helper the shell's native
+  controls use.
+- `ui_model.py` describes it as `multi` beside `wx.CheckListBox`, so the
+  settings interfaces render it unchanged - and setting one now fires **one
+  event per row that really changed, carrying which row**, because the
+  window's handler acts on the item the event names (a shell add-on is
+  switched on in its own manifest) and an event with no index applied every
+  change to the first entry.
+- Tests: `tests/test_check_list.py` (run it directly; 16 tests) - it asks
+  Windows itself, through MSAA and UI Automation, rather than asking wx what
+  it thinks it built.
 
 ### Settings interfaces: Titan's settings, in a window somebody else wrote
 
@@ -1443,6 +1545,11 @@ strings, already translated. So:
   navigation - the oldest trick there is, and the one that works on every
   WebView backend with no bridge and no local server) and `console_settings`
   (`AllocConsole`, a numbered list, one question at a time).
+- Guide: `data/docu/programming_guide/settings_interface_guide_{en,pl}.md`
+  (plus the generated HTML) - the manifest, `open_settings(api)`, the whole
+  API, the `kind` table and how to render each, threading through
+  `api.call`, and the rule that the settings can never be what an add-on
+  takes away.
 - Tests: `tests/test_settings_interfaces.py` (run it directly; 36 tests).
 
 ### Titan Access: one document over the web, over any app, over anything
@@ -2064,6 +2171,126 @@ cannot import is skipped rather than taking the toolset down.
 - `ocr_tools.py` - AI OCR as something the agent reaches for when
   `read_focused_window` comes back empty: read the window, ask one question
   about it, press/type/toggle, or hand it to the user as the real overlay.
+
+### The AI creation kit: nothing it writes is invented
+
+`src/ai/ai_creation_kit.py` (Programmer -> AI) writes a complete add-on of
+any of its **twelve kinds** from a description. The model is not the problem
+- it writes valid Python readily - **invention** is: a function Titan never
+calls, a module that does not exist, an argument nobody reads, an action no
+add-on declares. All of it imports cleanly, none of it raises where the user
+can see, and the add-on simply does nothing.
+
+So everything a generated add-on claims is checked against the running
+program before it is saved, by the same auto-fix loop that already fixed
+syntax errors (`src/ai/creation_check.py`, `static_check(files, kind)`):
+
+- **`from src...` must be real** - the module has to exist in the source
+  tree and the name has to be in it (read with `ast`; nothing is imported).
+  This is the big one: `from src.titan_core.speech import say` and
+  `sound.play_notification(...)` are what a model writes when it is guessing.
+- **an attribute read off a Titan module** must be one that module defines
+  (including names created by `global x` in a function), and a local
+  variable that shadows the import is not mistaken for it (`actions = []`
+  then `actions.append(...)`).
+- **an action named on one of Titan's own providers** must exist -
+  `actions.run('titan', 'open_the_settings')` comes back as "did you mean
+  open_settings?". An add-on the user may not have installed is never
+  second-guessed.
+- **a manifest key or section** must be one that kind's manager reads,
+  learned from the add-ons of that kind that already work plus the ini/json
+  block in that kind's own guide - so there is no table here to drift. It
+  also knows which manifests have no `[section]` at all (`__app.TCE` is a
+  plain list of `key = value`, and a model adds `[app]` to it constantly).
+- **no emoji in the text** - string literals and manifests, not comments,
+  and deliberately not arrows: Titan's own apps write "File -> Settings".
+- **the two kinds with a hook contract** (shell add-ons, settings
+  interfaces) are checked against their live hook tables and API classes -
+  see the shell add-on section above.
+
+The false-positive guard is the important half: **every add-on Titan ships
+is run through the same checks by `tests/test_creation_kit_kinds.py`** (45
+tests, two of which press Generate with the model stubbed out - the auto-fix
+loop is a closure in a worker thread, where a name that is not defined is
+not a syntax error but a message box after the user has waited for a
+generation), because a wrong report is the expensive mistake - the auto-fix loop
+would ask the model to "correct" something that was already right. That
+sweep found one real invention in shipped code: `data/components/macros`
+falls back to `from src.titan_core.sound import speaker`, which has never
+existed.
+
+### The creation kit builds things that take longer than one sitting
+
+A statusbar applet is one round trip. An application with its own file
+format, a component with four screens, a launcher, is not - and closing the
+dialog used to lose all of it.
+
+- **Questions are a real form** (`QuestionnaireDialog`). The model may ask up
+  to 24, and they arrive as `text`, `longtext`, `choice`, `multichoice`,
+  `boolean`, `number` (a spin control with a range), `path` and `folder`
+  (a field and a Browse button) - each the control it deserves, because a
+  control a screen reader already knows how to read needs no explaining.
+  Three things make that many questions bearable: a **`section`** per
+  question, rendered as a `wx.StaticBox` (a grouping Windows itself knows,
+  so a reader says which part of the form the keyboard entered); a **`help`**
+  sentence shown under the question and given to the control as its
+  description; and **follow-ups** (`depends_on` / `depends_value`) that are
+  hidden until the answer they depend on is given - hidden rather than
+  disabled, so a form covering every branch of an add-on does not make the
+  user tab past the branches they are not building. A `required` question is
+  refused empty; a question depending on one that does not exist is dropped
+  rather than being invisible for ever.
+- **A project is the whole session on disk** (`src/ai/creation_project.py`,
+  `%APPDATA%/titosoft/Titan/ai projects/<name>/`): the kind, the
+  description, every question and answer, the plan, the conversation and the
+  files. Reopen it and the next Generate carries on - the model still has
+  the conversation, so "now add a settings page" means what it says. The
+  files are written as **real files** under `files/`, so a half-finished
+  add-on can be opened in an editor or copied into `data/` by hand and is
+  never trapped in a format only this dialog can read.
+  - Saved from the wizard's **Save project**, reopened from its **Open
+    project...** (the projects of the kind it is building) or from
+    **Programmer -> AI -> Projects (continue building)...**, which lists
+    every project of every kind and opens the right wizard for the one
+    chosen.
+  - A named project is **written again after every generation**: an hour of
+    work must not depend on the user remembering to press a button.
+- **A question has a sound of its own**: `sfx/<theme>/ai/agent_question.ogg`,
+  played wherever the AI asks something - the creation kit's questionnaire,
+  the agent's and the assistant's follow-up questions, and an action that
+  needs an answer before it can run (`ai_speech.SOUND_QUESTION` /
+  `play_question_sound`, the one place it is named). The question usually
+  arrives while the user is listening to a transcript, so the cue is what
+  tells them a dialog is there at all.
+  - It goes through `sound.play_ai_sound` / `feature_sound_path`, which is
+    also what `shell_sound_path` is now built on: **the user's own theme
+    always wins** (a theme is free to ship its own `ai/` set), and the
+    default set fills in only when the user has ticked Settings -> Sounds ->
+    "Use equivalent from default theme when a sound is unavailable in the
+    selected sound theme" (`sound/fallback_to_default_theme`, read by
+    `default_theme_fallback_allowed`). Somebody who turned that off has said
+    they do not want sounds their theme has not got, and that answer is not
+    the AI's to overrule. The shell's own three sounds keep
+    `allow_default=True`, which is the rule they were built with.
+  - The assistant's three existing cues (`initialized`, `ui1`, `ui2`) live
+    in the same folder and were reached with plain `play_sound`, so on any
+    theme but `default` they were silent unless that box was ticked; they go
+    the same way now.
+- **A test never puts a window in front of whoever runs it.** Both suites
+  replace `wx.MessageBox` with a recorder: `load_project` reports a failure
+  with a message box, and a test that raises one leaves a modal dialog on
+  the user's own desktop waiting for a click nobody knows to give. It was
+  read from here as a suite gone slow (55 s), and by the user as Titan
+  telling them "That project could not be read" - measured after the guard:
+  **0.5 s**. Titan's own speech is stubbed in the same place, for the same
+  reason (the SAPI subprocess bridge).
+- Tests: `tests/test_creation_projects.py` (40 tests) - the question types,
+  the sections, the follow-ups, the answers, the question sound, a project
+  round trip through the real wizard, and that **everything `list_projects`
+  shows really opens**: the name in the list is the project's own
+  (`project.json`), the folder is `safe_name()` of what was typed, and
+  `find_project` is what makes the two meet - by the obvious path, then by
+  folder name, then by what a project calls itself.
 
 ### AI memory across runs
 

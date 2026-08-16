@@ -5,6 +5,7 @@ description = One list, one search box, nothing else: Titan, the applications an
 description_pl = Jedna lista, jedno pole wyszukiwania i nic więcej: Titan, aplikacje i gry, ustawienia, menedżer plików i sposoby wyjścia.
 author = TCE Team
 version = 1.0
-status = 1
+status = 0
 surfaces = start_menu
 provides = start_menu
+

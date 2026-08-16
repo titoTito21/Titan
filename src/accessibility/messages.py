@@ -569,7 +569,7 @@ def _speak_checklist_state_after(checked, delay_ms):
         pass
 
 
-def announce_checklist_item_toggle(checked, delay_ms=500):
+def announce_checklist_item_toggle(checked, delay_ms=500, speak=True):
     """Announce a check/uncheck toggle on a CheckListBox item.
 
     Uses the SAME earcons as a regular ``wx.CheckBox`` (``ui/X.ogg`` when
@@ -578,11 +578,18 @@ def announce_checklist_item_toggle(checked, delay_ms=500):
     The item name is NOT spoken — the SR already read it on focus — and
     the "checked" / "unchecked" state marker is spoken ``delay_ms`` ms
     later, only when a real screen reader is running.
+
+    ``speak=False`` leaves the state to the control itself: a list whose
+    rows are native check boxes (``src/ui/check_list.py``) reports the
+    state through MSAA and UIA, so every reader says it in its own words
+    and Titan saying it too would be the second, later copy.
     """
     try:
         play_sound('ui/X.ogg' if checked else 'core/FOCUS.ogg')
     except Exception:
         pass
+    if not speak:
+        return
     message = _("checked") if checked else _("unchecked")
     # Toggling fires no focus change, so speak the new state straight away
     # through Titan Access; only fall back to the delayed AO3 path otherwise.
@@ -590,18 +597,23 @@ def announce_checklist_item_toggle(checked, delay_ms=500):
         _speak_checklist_state_after(checked, delay_ms)
 
 
-def announce_checklist_item_navigation(checked, delay_ms=500):
+def announce_checklist_item_navigation(checked, delay_ms=500, speak=True):
     """Announce the check state while arrowing across CheckListBox rows.
 
     Uses the dedicated list-item earcon ``ui/cb_listitem_checked.ogg`` —
     distinct from the toggle sound so the user can tell nav from actual
     state change — and speaks "checked" / "unchecked" ``delay_ms`` ms
     later (SR only). Intended for ``wx.EVT_LISTBOX`` handlers.
+
+    ``speak=False`` is for a list of native check boxes, which reports its
+    own state to the reader (see :func:`announce_checklist_item_toggle`).
     """
     try:
         play_sound('ui/cb_listitem_checked.ogg')
     except Exception:
         pass
+    if not speak:
+        return
     message = _("checked") if checked else _("unchecked")
     # Arrowing onto a row fires a focus change, so let Titan Access append the
     # state to the item name it is about to read; only fall back to the delayed

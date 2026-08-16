@@ -25,6 +25,15 @@ except Exception:
         pass
 
 
+def _question_sound():
+    """The sound of the AI asking something - see `ai_speech.SOUND_QUESTION`."""
+    try:
+        from src.ai.ai_speech import play_question_sound
+        play_question_sound()
+    except Exception:
+        pass
+
+
 def _speak(text):
     from src.ai.ai_speech import speak
     speak(text)
@@ -131,7 +140,7 @@ class AIAgentFrame(wx.Frame):
         def ask():
             self._append(_("Agent"), question)
             _speak(question)
-            play_sound('core/dialog.ogg')
+            _question_sound()
             dlg = wx.TextEntryDialog(self, question, _("The agent is asking"))
             box['answer'] = dlg.GetValue() if dlg.ShowModal() == wx.ID_OK else ''
             dlg.Destroy()

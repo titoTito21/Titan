@@ -154,6 +154,16 @@ def wx_ask(question, parent=None):
             def _(text):
                 return text
         title = _("Titan needs to know")
+        # The same cue as the AI's own questions: from where the user sits
+        # this IS one - most of these dialogs come from an action the AI or a
+        # macro is running - and a question that appears silently while they
+        # are listening to something else is a question they do not know is
+        # there.
+        try:
+            from src.ai.ai_speech import play_question_sound
+            play_question_sound()
+        except Exception:
+            pass
         if question.options:
             dialog = wx.SingleChoiceDialog(parent, question.prompt, title,
                                            question.options)

@@ -29,6 +29,8 @@ KIND_GUIDE = {
     'tts_engine':       'tts_engine_guide_en.md',
     'widget':           'widget_creation_guide_en.md',
     'statusbar_applet': 'statusbar_applet_guide_en.md',
+    'shell_addon':      'shell_addon_guide_en.md',
+    'settings_interface': 'settings_interface_guide_en.md',
     'macro':            None,        # documented by the macro manager itself
     'language':         None,
 }

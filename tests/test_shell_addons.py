@@ -339,5 +339,103 @@ class StartMenuContentTests(unittest.TestCase):
         self.assertEqual(["Real"], [child.label for child in children])
 
 
+class HookTableTests(unittest.TestCase):
+    """`addons.HOOKS` has to say what the shell really asks for.
+
+    The table is not decoration: it is what the AI creation kit teaches and
+    what it checks a generated add-on against, so a hook renamed in the shell
+    and not here would produce add-ons that pass every check and do nothing.
+    So the surfaces' own source is read - every `collect(...)` / `notify(...)`
+    and every `hook('...')` call - and compared with the table, name by name
+    and argument by argument.
+    """
+
+    @staticmethod
+    def _asked_for():
+        """{hook name: how many arguments it is called with}, from the source."""
+        import ast
+        found = {}
+        roots = [os.path.join(ROOT, 'src', 'shell')]
+        files = [os.path.join(ROOT, 'src', 'ui', 'start_menu_content.py')]
+        for root in roots:
+            for name in sorted(os.listdir(root)):
+                if name.endswith('.py'):
+                    files.append(os.path.join(root, name))
+        for path in files:
+            try:
+                with open(path, encoding='utf-8') as handle:
+                    tree = ast.parse(handle.read(), filename=path)
+            except (OSError, SyntaxError):
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                # shell_addons.collect('surface', 'hook', extra...)
+                if isinstance(func, ast.Attribute) and func.attr in ('collect',
+                                                                     'notify'):
+                    if len(node.args) >= 2 and all(
+                            isinstance(a, ast.Constant) for a in node.args[:2]):
+                        hook = node.args[1].value
+                        found[hook] = 1 + len(node.args) - 2
+                # addon.hook('open_start_menu')(addon.api, ...)
+                if isinstance(func, ast.Call) and isinstance(func.func,
+                                                             ast.Attribute) \
+                        and func.func.attr == 'hook' and func.args \
+                        and isinstance(func.args[0], ast.Constant):
+                    found[func.args[0].value] = len(node.args)
+        return found
+
+    def test_every_hook_in_the_table_is_really_asked_for(self):
+        asked = self._asked_for()
+        # `setup` and `teardown` are called by the manager itself rather than
+        # by a surface, so they are looked for where they are called from.
+        with open(os.path.join(ROOT, 'src', 'shell', 'addons.py'),
+                  encoding='utf-8') as handle:
+            manager_source = handle.read()
+        for name in sorted(addons.ALL_HOOKS):
+            if name in asked:
+                continue
+            self.assertIn(f"hook('{name}')", manager_source,
+                          f"{name} is in the table but nothing asks for it")
+
+    def test_the_documented_signatures_match_the_calls(self):
+        asked = self._asked_for()
+        for name, count in sorted(asked.items()):
+            if name not in addons.HOOK_ARGS:
+                self.fail(f"{name} is asked for but is not in addons.HOOKS")
+            self.assertEqual(addons.HOOK_ARGS[name], count,
+                             f"{name} is documented as taking "
+                             f"{addons.HOOK_ARGS[name]} arguments and called "
+                             f"with {count}")
+
+    def test_the_reference_add_on_matches_the_table(self):
+        """The example is the shape every generated add-on is grown from."""
+        import ast
+        path = os.path.join(ROOT, 'data', 'shell addons',
+                            'example_shell_addon', 'init.py')
+        with open(path, encoding='utf-8') as handle:
+            tree = ast.parse(handle.read(), filename=path)
+        defined = {node.name: len(node.args.args) for node in tree.body
+                   if isinstance(node, ast.FunctionDef)}
+        for name, count in defined.items():
+            if name.startswith('_'):
+                continue
+            self.assertIn(name, addons.ALL_HOOKS,
+                          f"the example defines {name}, which Titan never calls")
+            self.assertEqual(addons.HOOK_ARGS[name], count,
+                             f"the example's {name} takes {count} arguments")
+
+    def test_the_manifest_keys_are_the_ones_that_are_read(self):
+        """Every key in the table is read by the parser, and vice versa."""
+        with open(os.path.join(ROOT, 'src', 'shell', 'addons.py'),
+                  encoding='utf-8') as handle:
+            source = handle.read()
+        body = source.split('def _parse(self):')[1].split('\n    @property')[0]
+        for key in addons.MANIFEST_KEYS:
+            self.assertIn(f"'{key}'", body,
+                          f"{key} is offered to add-on authors but never read")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

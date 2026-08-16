@@ -29,6 +29,7 @@ import wx
 
 from src.ai import ai_provider
 from src.ai import creation_docs
+from src.ai import creation_project
 from src.ai import web_search
 from src.titan_core import titan_package
 from src import platform_utils
@@ -66,6 +67,15 @@ def _macro_text(text):
     except Exception as e:
         print(f"[AICreationKit] macro translations unavailable: {e}")
     return text
+
+
+def _question_sound():
+    """The sound of the AI asking something - see `ai_speech.SOUND_QUESTION`."""
+    try:
+        from src.ai.ai_speech import play_question_sound
+        play_question_sound()
+    except Exception:
+        pass
 
 
 def _speak(text):
@@ -107,6 +117,8 @@ KINDS = [
     {'id': 'tts_engine',       'label': _("TTS Engine"),      'subdir': 'titantts engines',  'manifests': ('__engine__.TCE',),                  'package': True},
     {'id': 'widget',           'label': _("Widget"),          'subdir': 'applets',           'manifests': ('applet.json', 'init.py', 'main.py'), 'package': True},
     {'id': 'statusbar_applet', 'label': _("Statusbar Applet"),'subdir': 'statusbar_applets', 'manifests': ('applet.json',),                     'package': True},
+    {'id': 'shell_addon',      'label': _("Shell Add-on"),    'subdir': 'shell addons',      'manifests': ('__shell_addon__.TCE',),             'package': True},
+    {'id': 'settings_interface', 'label': _("Settings Interface"), 'subdir': 'settings interfaces', 'manifests': ('__settings_ui__.TCE',),        'package': True},
     {'id': 'macro',            'label': _macro_text("Macro (Titan Script)"), 'subdir': 'macros', 'manifests': ('__macro__.TCE',),             'package': False},
     {'id': 'language',         'label': _("Language"),        'subdir': None,                'manifests': (),                                   'package': False},
 ]
@@ -248,20 +260,44 @@ def _questions_protocol_block(kind):
         "- Ask the standard wizard details for this kind (for example: display "
         "names, a short id/shortname, an optional description, the entry point, "
         "and the key feature/behaviour/layout choices), plus anything specific "
-        "to this request. Keep it to the few questions that actually matter.",
+        "to this request. Ask as much as the add-on really needs - a small "
+        "one needs three questions and a complicated one may need fifteen - "
+        "but never ask what the user has already told you.",
+        "- Group them: give every question a 'section' (\"Names\", "
+        "\"Behaviour\", \"Sounds\"...) and Titan renders each section as a "
+        "real group in the form. Add a 'help' sentence wherever the question "
+        "alone is not clear, and mark a question the add-on cannot be built "
+        "without as \"required\": true.",
+        "- Ask about a branch only when the user is on it: a question with "
+        "'depends_on' (another question's id) and 'depends_value' appears "
+        "only once that answer is given, so a form that covers every option "
+        "asks only about the one being built.",
         "- The questions JSON schema is:",
         '  {"questions": [',
         '    {"id": "name_en", "text": "English name?", "type": "text",',
-        '     "default": ""},',
+        '     "section": "Names", "required": true, "default": ""},',
+        '    {"id": "summary", "text": "What should it do?",',
+        '     "type": "longtext", "section": "Names",',
+        '     "help": "A few sentences - this shapes the whole add-on."},',
         '    {"id": "layout", "text": "Which layout?", "type": "choice",',
-        '     "options": ["List", "Grid"], "default": "List"},',
-        '    {"id": "features", "text": "Which features?", "type": "multichoice",',
+        '     "section": "Interface", "options": ["List", "Grid"],',
+        '     "default": "List"},',
+        '    {"id": "columns", "text": "How many columns?", "type": "number",',
+        '     "section": "Interface", "minimum": 1, "maximum": 8,',
+        '     "depends_on": "layout", "depends_value": "Grid"},',
+        '    {"id": "features", "text": "Which features?",',
+        '     "type": "multichoice", "section": "Behaviour",',
         '     "options": ["Sound", "Notifications"]},',
         '    {"id": "settings", "text": "Include settings?", "type": "boolean",',
-        '     "default": true}',
+        '     "section": "Behaviour", "default": true},',
+        '    {"id": "data_file", "text": "A data file to start from?",',
+        '     "type": "path", "section": "Data"}',
         '  ]}',
-        f"- 'type' is one of: {', '.join(_QUESTION_TYPES)}; ask at most "
-        f"{_MAX_QUESTIONS}. 'choice'/'multichoice' need an 'options' list.",
+        f"- 'type' is one of: {', '.join(_QUESTION_TYPES)} - 'text' one line, "
+        f"'longtext' several, 'number' a spin control (give 'minimum' and "
+        f"'maximum'), 'path' a file and 'folder' a directory, both with a "
+        f"Browse button. 'choice'/'multichoice' need an 'options' list. Ask "
+        f"at most {_MAX_QUESTIONS}.",
         "- Once the request is clear (either originally or after answers), STOP "
         "asking and output the files in the strict format below.",
         "",
@@ -296,12 +332,110 @@ _MACRO_REQUIREMENTS = [
 ]
 
 
+def _shell_addon_requirements():
+    """Written from the live tables, so the prompt cannot describe a Titan
+    that does not exist: the hooks are `shell.addons.HOOKS`, the surfaces and
+    the providable parts are that module's own constants, and the API is the
+    real `ShellAddonAPI`."""
+    try:
+        from src.shell import addons
+    except Exception:
+        return []
+    hooks = []
+    for surface in ('shell', 'start_menu', 'explorer', 'taskbar', 'desktop'):
+        for name in addons.HOOKS.get(surface, ()):
+            hooks.append(name + addons.HOOK_SIGNATURES.get(name, '(api, ...)'))
+    api = ", ".join("api." + name
+                    for name in sorted(_public_attributes(addons.ShellAddonAPI)))
+    return [
+        "- EVERY function Titan calls in init.py is one of these, spelled "
+        "exactly, with exactly that many arguments (`api` is always the "
+        "first): " + ", ".join(hooks) + ". Define only the ones your add-on "
+        "needs; give any helper of your own a name starting with '_'. A "
+        "function with an invented name is never called and the add-on "
+        "silently does nothing.",
+        "- Do NOT invent hooks, manifest keys, surfaces or API methods. The "
+        "manifest keys are: " + ", ".join(addons.MANIFEST_KEYS)
+        + " (plus name_<lang> / description_<lang>). The surfaces are: "
+        + ", ".join(addons.SURFACES) + ".",
+        "- The only methods the api object has are: " + api + ". Anything "
+        "else Titan can do is reached with api.run_action(addon, action, "
+        "**params).",
+        "- Every contributed entry is a dict with 'label' and something "
+        "behind it - 'action' (a callable taking no arguments), 'children' "
+        "(more entries), 'control' (a callable(parent) -> wx.Window) or "
+        "'value' (a callable(entry) -> str for an explorer column). An entry "
+        "without both is dropped.",
+        "- status = 1 in the manifest: a shell add-on starts doing things the "
+        "moment it is switched on, so the user switches it on.",
+        "- Set provides = start_menu or provides = explorer ONLY if the "
+        "add-on really replaces that window, and then define "
+        + " or ".join(addons.PROVIDER_HOOKS[part]
+                      + addons.HOOK_SIGNATURES[addons.PROVIDER_HOOKS[part]]
+                      for part in addons.PROVIDABLE)
+        + ", answering a window.",
+        "- Never speak what the screen reader already says, and build every "
+        "control as a real focusable window (src.shell.controls, or "
+        "src.shell.a11y.name_control for a native one).",
+    ]
+
+
+def _settings_interface_requirements():
+    """The same, from `SettingsUIAPI` and the interfaces module's constants."""
+    try:
+        from src.settings import interfaces
+        from src.settings import ui_model
+    except Exception:
+        return []
+    api = ", ".join(
+        "api." + name
+        for name in sorted(_public_attributes(interfaces.SettingsUIAPI)))
+    kinds = ", ".join(sorted({
+        getattr(ui_model, name) for name in dir(ui_model)
+        if name.startswith('KIND_')}))
+    return [
+        "- init.py defines exactly one entry point: {0}(api), taking one "
+        "argument, answering the window it opened (or True when it opened "
+        "something that is not a window). Anything else and Titan opens its "
+        "own settings window instead.".format(interfaces.ENTRY_POINT),
+        "- Render from api.categories() - NEVER hard-code a list of Titan's "
+        "settings. Each item is {'id', 'category', 'label', 'kind', 'value', "
+        "'options', 'minimum', 'maximum', 'enabled'} and 'kind' is one of: "
+        + kinds + ".",
+        "- Change a setting with api.set(item_id, value) and SAVE with "
+        "api.save(). Never write bg5settings.ini yourself and never import "
+        "set_setting/save_settings: that sets the value and changes nothing.",
+        "- The only methods the api object has are: " + api + ".",
+        "- Do not invent manifest keys. They are: "
+        + ", ".join(interfaces.MANIFEST_KEYS)
+        + " (plus name_<lang> / description_<lang>), and status = 0, because "
+        "an interface changes nothing until the user chooses it.",
+        "- A loop of your own (a console, a server) runs on its own thread and "
+        "touches the settings only through api.call(function, *args), which "
+        "runs it on the GUI thread; the settings are wx controls.",
+        "- Use real, named, focusable controls; for a 'multi' use "
+        "src.ui.check_list.CheckList, never wx.CheckListBox, which tells a "
+        "screen reader nothing about what is ticked.",
+    ]
+
+
 def _kind_requirements(kind):
     """The REQUIREMENTS lines that apply to this kind."""
     if kind['id'] == 'macro':
         return [_manifest_line(kind)] + _MACRO_REQUIREMENTS
-    return [
+    extra = []
+    if kind['id'] == 'shell_addon':
+        extra = _shell_addon_requirements()
+    elif kind['id'] == 'settings_interface':
+        extra = _settings_interface_requirements()
+    return extra + [
         _manifest_line(kind),
+        "- Do NOT invent Titan APIs. Every `from src...` import, every "
+        "attribute you read off a Titan module, every action id and every "
+        "manifest key you write is checked against the running Titan before "
+        "the add-on is saved, and anything that does not exist is reported "
+        "back to you by name. If you are unsure a helper exists, use the one "
+        "the documentation and the reference example below actually show.",
         "- The code MUST be valid Python with no syntax errors and must import "
         "cleanly. Any manifest JSON must be valid JSON.",
         "- All user-facing UI text and messages MUST be in English. Use the "
@@ -389,11 +523,19 @@ def build_plan_prompt(kind, extra_context=None):
 # The model returns a machine-readable set of questions which the app renders as
 # an accessible GUI wizard (see :class:`QuestionnaireDialog`); the collected
 # answers are folded back into the conversation before generation.
-_MAX_QUESTIONS = 8
+# Enough for something real. A statusbar applet needs three questions and a
+# component with four screens needs fifteen, which is only bearable because
+# they arrive in named sections and a question can depend on an earlier
+# answer - so the user answers what applies to the add-on they are actually
+# describing, not every branch of it.
+_MAX_QUESTIONS = 24
 # How many times the model may pause to ask the user questions during a single
 # generation before we insist it just build with its best judgement.
 _MAX_QUESTION_ROUNDS = 3
-_QUESTION_TYPES = ('text', 'choice', 'multichoice', 'boolean')
+#: What a question can be. Each is a real control in the wizard, so each is
+#: something a screen reader already knows how to read.
+_QUESTION_TYPES = ('text', 'longtext', 'choice', 'multichoice', 'boolean',
+                   'number', 'path', 'folder')
 # Delimiters the model wraps the JSON in, so we can extract it even if the model
 # adds stray prose despite instructions.
 _QJSON_START = '@@QUESTIONS_JSON'
@@ -505,17 +647,89 @@ def _normalise_questions(raw):
             if not options:
                 # A choice with no options is useless; degrade to free text.
                 qtype = 'text'
+        minimum, maximum = None, None
+        if qtype == 'number':
+            minimum = _as_number(q.get('minimum', q.get('min')))
+            maximum = _as_number(q.get('maximum', q.get('max')))
+            if minimum is not None and maximum is not None \
+                    and maximum < minimum:
+                minimum, maximum = maximum, minimum
+        # A follow-up: shown only while an earlier answer says so.  Anything
+        # that does not name a real earlier question is dropped rather than
+        # hiding a question for ever.
+        depends_on = str(q.get('depends_on') or '').strip()
+        if depends_on and depends_on not in seen_ids:
+            depends_on = ''
+        depends_value = q.get('depends_value')
+        if isinstance(depends_value, (list, tuple)):
+            depends_value = [str(value).strip() for value in depends_value]
+        elif depends_value is not None:
+            depends_value = [str(depends_value).strip()]
         out.append({
             'id': qid,
             'text': text,
             'type': qtype,
             'options': options,
-            'multiline': bool(q.get('multiline', False)),
+            'multiline': bool(q.get('multiline', False)) or qtype == 'longtext',
             'default': q.get('default'),
+            # What the question is FOR, in a sentence - shown under it and
+            # given to the control as its description, because a question
+            # short enough to be a label is often too short to be clear.
+            'help': str(q.get('help') or q.get('description') or '').strip(),
+            # Questions arrive grouped: a static box is a grouping Windows
+            # itself knows, so a screen reader says which part of the form
+            # the keyboard has entered.
+            'section': str(q.get('section') or q.get('group') or '').strip(),
+            'required': bool(q.get('required', False)),
+            'minimum': minimum,
+            'maximum': maximum,
+            'depends_on': depends_on,
+            'depends_value': depends_value,
         })
         if len(out) >= _MAX_QUESTIONS:
             break
     return out
+
+
+def _as_number(value):
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def question_sections(questions):
+    """The questions grouped, in the order the sections first appear."""
+    sections = []
+    index = {}
+    for question in questions:
+        name = question.get('section', '')
+        if name not in index:
+            index[name] = len(sections)
+            sections.append((name, []))
+        sections[index[name]][1].append(question)
+    return sections
+
+
+def question_applies(question, answers):
+    """Is this follow-up's condition met by what has been answered?"""
+    depends_on = question.get('depends_on')
+    if not depends_on:
+        return True
+    given = answers.get(depends_on)
+    if given is None:
+        return False
+    wanted = question.get('depends_value')
+    if isinstance(given, (list, tuple)):
+        given_values = [str(value).strip().lower() for value in given]
+    else:
+        given_values = [str(given).strip().lower()]
+    if not wanted:
+        # No value named: any answer that is not empty and not "no".
+        return any(value not in ('', 'no', 'false', '0', _("No").lower())
+                   for value in given_values)
+    wanted_values = [str(value).strip().lower() for value in wanted]
+    return any(value in wanted_values for value in given_values)
 
 
 def format_answers_for_prompt(questions, answers):
@@ -579,10 +793,297 @@ def check_titan_script(text):
     return [said.splitlines()[0]] if said and not ok else []
 
 
-def static_check(files):
+# --------------------------------------------------------------------------- #
+# Checking a generated add-on against the REAL host, not against a copy of it
+# --------------------------------------------------------------------------- #
+# The failures worth catching here are the ones that are invisible at run time.
+# A shell add-on whose functions are ALMOST right (`start_menu_entries`,
+# `on_taskbar_start`) loads, is listed and can be ticked - and contributes
+# nothing; a settings interface that calls `api.get_settings()` raises inside a
+# guard and Titan quietly opens its own window instead. Neither is a traceback
+# anybody sees, so both are checked before the files are saved - against the
+# LIVE classes and the live hook tables (`shell.addons.HOOKS`,
+# `ShellAddonAPI`, `SettingsUIAPI`) rather than against a list copied in here,
+# which is the only way the check cannot drift from what Titan really asks for.
+_DUNDER = re.compile(r'^__.*__$')
+
+
+def _generated_file(files, name):
+    """One generated file by base name, wherever the model put it."""
+    if name in files:
+        return files[name]
+    for path, text in files.items():
+        if os.path.basename(path) == name:
+            return text
+    return None
+
+
+def _module_tree(files, name='init.py'):
+    """The parsed AST of one generated file, or None."""
+    content = _generated_file(files, name)
+    if content is None:
+        return None
+    try:
+        return ast.parse(content, filename=name)
+    except SyntaxError:
+        return None          # already reported by the syntax pass
+
+
+def _top_level_functions(tree):
+    """{name: argument count} for every function defined at module level."""
+    found = {}
+    for node in getattr(tree, 'body', []):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            found[node.name] = (len(getattr(args, 'posonlyargs', []))
+                                + len(args.args)
+                                + (1 if args.vararg else 0))
+    return found
+
+
+def _attributes_used_on(tree, variable):
+    """Every `<variable>.<name>` read anywhere in the module."""
+    used = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == variable):
+            used.add(node.attr)
+    return used
+
+
+def _public_attributes(cls):
+    """What that API object really offers - asked of the object, not the class.
+
+    `dir(cls)` finds the methods but not `api.id` / `api.path`, which are
+    assigned in `__init__`, and a check that did not know about those would
+    refuse a generated add-on for using exactly what the guide tells it to.
+    So one is BUILT, with a stand-in for every constructor argument (both API
+    objects only store what they are handed), and its instance attributes are
+    added. If that ever fails, the class's own names are still the answer.
+    """
+    names = {name for name in dir(cls) if not _DUNDER.match(name)}
+    try:
+        import inspect
+        import types as _types
+        stub = _types.SimpleNamespace(id='x', path='x', name='x')
+        parameters = inspect.signature(cls).parameters
+        instance = cls(*[stub] * len(parameters))
+        names |= {name for name in vars(instance)
+                  if not name.startswith('_')}
+    except Exception:
+        pass
+    return names
+
+
+def _did_you_mean(name, candidates):
+    import difflib
+    close = difflib.get_close_matches(str(name), sorted(candidates), n=1,
+                                      cutoff=0.72)
+    return close[0] if close else None
+
+
+def _parse_manifest(files, filename, section):
+    """(parser, problems) for the INI manifest a generated add-on must have."""
+    import configparser
+    content = _generated_file(files, filename)
+    if content is None:
+        return None, ["{0} is missing - it is the manifest Titan looks for "
+                      "and its name is not negotiable.".format(filename)]
+    parser = configparser.ConfigParser()
+    try:
+        parser.read_string(content)
+    except Exception as error:
+        return None, ["{0}: not a readable INI file ({1})".format(filename,
+                                                                  error)]
+    if not parser.has_section(section):
+        return None, ["{0}: there is no [{1}] section - that exact heading is "
+                      "what Titan reads.".format(filename, section)]
+    return parser, []
+
+
+def _check_manifest_keys(parser, filename, section, allowed):
+    """A key nobody reads is a promise its author believes has been kept."""
+    problems = []
+    for key in parser.options(section):
+        base = re.sub(r'_[a-z]{2}$', '', key)
+        if key in allowed or base in ('name', 'description'):
+            continue
+        suggestion = _did_you_mean(key, allowed)
+        problems.append(
+            "{0}: '{1}' is not a key Titan reads{2}".format(
+                filename, key,
+                " - did you mean '{0}'?".format(suggestion) if suggestion
+                else " - the keys are: {0}.".format(', '.join(allowed))))
+    status = parser.get(section, 'status', fallback=None)
+    if status is None:
+        problems.append("{0}: 'status' is missing (0 = enabled, "
+                        "1 = disabled).".format(filename))
+    elif str(status).strip() not in ('0', '1'):
+        problems.append("{0}: status must be 0 or 1, not {1!r}.".format(
+            filename, status))
+    return problems
+
+
+def _check_api_use(tree, api_class, problems):
+    """Every `api.<something>` must be something that object really has."""
+    known = _public_attributes(api_class)
+    for attribute in sorted(_attributes_used_on(tree, 'api')):
+        if attribute in known:
+            continue
+        suggestion = _did_you_mean(attribute, known)
+        problems.append(
+            "init.py: api.{0} does not exist{1}".format(
+                attribute,
+                " - did you mean api.{0}?".format(suggestion) if suggestion
+                else " - the API is: {0}.".format(', '.join(sorted(known)))))
+
+
+def check_shell_addon(files):
+    """Everything wrong with a generated shell add-on."""
+    try:
+        from src.shell import addons
+    except Exception:
+        return []
+    problems = []
+    parser, manifest_problems = _parse_manifest(files, addons.MANIFEST,
+                                                addons.SECTION)
+    problems += manifest_problems
+    provides = ''
+    if parser is not None:
+        problems += _check_manifest_keys(parser, addons.MANIFEST,
+                                         addons.SECTION, addons.MANIFEST_KEYS)
+        surfaces = [part.strip() for part in parser.get(
+            addons.SECTION, 'surfaces', fallback='').split(',') if part.strip()]
+        for surface in surfaces:
+            if surface in addons.SURFACES:
+                continue
+            suggestion = _did_you_mean(surface, addons.SURFACES)
+            problems.append(
+                "{0}: '{1}' is not a surface{2}".format(
+                    addons.MANIFEST, surface,
+                    " - did you mean '{0}'?".format(suggestion) if suggestion
+                    else " - they are: {0}.".format(', '.join(addons.SURFACES))))
+        provides = parser.get(addons.SECTION, 'provides',
+                              fallback='').strip().lower()
+        if provides and provides not in addons.PROVIDABLE:
+            problems.append(
+                "{0}: an add-on can only provide {1}, not '{2}'.".format(
+                    addons.MANIFEST, ' or '.join(addons.PROVIDABLE), provides))
+
+    tree = _module_tree(files, 'init.py')
+    if tree is None:
+        if _generated_file(files, 'init.py') is None:
+            problems.append("init.py is missing - it is where every hook "
+                            "Titan calls has to live.")
+        return problems
+
+    functions = _top_level_functions(tree)
+    real = [name for name in functions if name in addons.ALL_HOOKS]
+    for name in sorted(functions):
+        count = functions[name]
+        if name in addons.ALL_HOOKS:
+            expected = addons.HOOK_ARGS.get(name)
+            if expected is not None and count != expected:
+                problems.append(
+                    "init.py: {0}() takes {1} argument(s); Titan calls it with "
+                    "{2} (the first is always `api`).".format(name, count,
+                                                              expected))
+            continue
+        if name.startswith('_'):
+            continue
+        suggestion = _did_you_mean(name, addons.ALL_HOOKS)
+        if suggestion:
+            problems.append(
+                "init.py: {0}() is not a function Titan ever calls - did you "
+                "mean {1}()? Anything else is a helper of your own and should "
+                "start with an underscore.".format(name, suggestion))
+    if not real:
+        problems.append(
+            "init.py: not one of Titan's hooks is defined, so this add-on "
+            "would load and do nothing. They are: {0}.".format(
+                ', '.join(sorted(addons.ALL_HOOKS))))
+    if provides in addons.PROVIDER_HOOKS:
+        needed = addons.PROVIDER_HOOKS[provides]
+        if needed not in functions:
+            problems.append(
+                "init.py: the manifest says provides = {0}, so {1}() must be "
+                "defined - it is what Titan calls to open it.".format(
+                    provides, needed))
+
+    _check_api_use(tree, addons.ShellAddonAPI, problems)
+    return problems
+
+
+def check_settings_interface(files):
+    """Everything wrong with a generated settings interface."""
+    try:
+        from src.settings import interfaces
+    except Exception:
+        return []
+    problems = []
+    parser, manifest_problems = _parse_manifest(files, interfaces.MANIFEST,
+                                                interfaces.SECTION)
+    problems += manifest_problems
+    if parser is not None:
+        problems += _check_manifest_keys(parser, interfaces.MANIFEST,
+                                         interfaces.SECTION,
+                                         interfaces.MANIFEST_KEYS)
+
+    tree = _module_tree(files, 'init.py')
+    if tree is None:
+        if _generated_file(files, 'init.py') is None:
+            problems.append("init.py is missing - it is where {0}() has to "
+                            "live.".format(interfaces.ENTRY_POINT))
+        return problems
+
+    functions = _top_level_functions(tree)
+    if interfaces.ENTRY_POINT not in functions:
+        suggestion = _did_you_mean(interfaces.ENTRY_POINT, functions)
+        problems.append(
+            "init.py: {0}(api) is missing - it is the whole contract, and "
+            "Titan opens its own settings window when it is not there.{1}"
+            .format(interfaces.ENTRY_POINT,
+                    " ({0}() is not it.)".format(suggestion) if suggestion
+                    else ""))
+    elif functions[interfaces.ENTRY_POINT] != 1:
+        problems.append(
+            "init.py: {0}() takes {1} argument(s); Titan calls it with exactly "
+            "one, the api object.".format(interfaces.ENTRY_POINT,
+                                          functions[interfaces.ENTRY_POINT]))
+
+    _check_api_use(tree, interfaces.SettingsUIAPI, problems)
+
+    # Writing the ini file sets the value and changes nothing: Titan applies a
+    # setting in the control's own event and in `OnSave`, which is what
+    # `api.save()` runs.
+    for path, content in files.items():
+        if not path.lower().endswith('.py'):
+            continue
+        for written in ('save_settings(', 'set_setting('):
+            if written in content:
+                problems.append(
+                    "{0}: {1}() writes the settings file behind Titan's back - "
+                    "a settings interface changes a setting with "
+                    "api.set(id, value) and saves with api.save().".format(
+                        path, written[:-1]))
+    return problems
+
+
+#: Kinds Titan can check beyond syntax. A kind absent from here is checked
+#: exactly as before.
+_KIND_CHECKS = {
+    'shell_addon': check_shell_addon,
+    'settings_interface': check_settings_interface,
+}
+
+
+def static_check(files, kind=None):
     """Return a list of human-readable problems found by cheap static analysis:
-    Python syntax errors (via :func:`ast.parse`), invalid JSON manifests and
-    Titan Scripts that would not run. Empty list means the files pass."""
+    Python syntax errors (via :func:`ast.parse`), invalid JSON manifests,
+    Titan Scripts that would not run, and - when ``kind`` is one Titan can
+    check - everything the host would silently ignore at run time. Empty list
+    means the files pass."""
     problems = []
     for path, content in files.items():
         low = path.lower()
@@ -602,6 +1103,20 @@ def static_check(files):
         elif low.endswith('.tcs'):
             for problem in check_titan_script(content):
                 problems.append(f"{path}: {problem}")
+    kind_id = kind.get('id') if isinstance(kind, dict) else kind
+    # What every kind is checked for: an import, an attribute, an action or a
+    # manifest key that Titan does not have (`src/ai/creation_check.py`).
+    try:
+        from src.ai import creation_check
+        problems += creation_check.check_everything(files, kind)
+    except Exception as error:          # pragma: no cover - defensive
+        print(f"[AI creation kit] the generic checks failed: {error}")
+    check = _KIND_CHECKS.get(kind_id)
+    if check is not None:
+        try:
+            problems += check(files)
+        except Exception as error:      # pragma: no cover - defensive
+            print(f"[AI creation kit] {kind_id} check failed: {error}")
     return problems
 
 
@@ -717,10 +1232,16 @@ def _derive_name(kind, files):
             if m:
                 return _safe_dirname(m.group(1))
             # A macro's manifest has no shortname; its English name is what the
-            # user will look for, so the folder is named after that.
-            m = re.search(r'^\s*name_en\s*=\s*"?([^"\r\n]+)"?', content, re.M)
-            if m:
-                return _safe_dirname(m.group(1))
+            # user will look for, so the folder is named after that. A shell
+            # add-on and a settings interface have neither, and for them the
+            # folder name IS the add-on's id - `addon_1755...` would be what
+            # the settings, the Start menu chooser and every action then call
+            # it - so the plain `name` answers as well.
+            for key in ('name_en', 'name'):
+                m = re.search(r'^\s*' + key + r'\s*=\s*"?([^"\r\n]+)"?',
+                              content, re.M)
+                if m:
+                    return _safe_dirname(m.group(1))
             # applet.json manifests carry the name under a JSON key instead.
             if os.path.basename(path) == 'applet.json':
                 try:
@@ -794,36 +1315,60 @@ def save_as_package(kind, files, name=None):
 # Questionnaire wizard (renders AI-generated structured questions)
 # --------------------------------------------------------------------------- #
 class QuestionnaireDialog(wx.Dialog):
-    """An accessible GUI wizard that renders a list of AI-generated questions
-    (see :func:`parse_questions`) using the control type appropriate to each
-    question, and returns the user's answers as {question id -> value}.
+    """The AI's questions as a real form.
 
-    Text -> text field, choice -> radio group, multichoice -> checkbox group,
-    boolean -> yes/no checkbox. Every control carries an accessible name so a
-    screen reader announces the question it belongs to."""
+    Every question is the control it deserves - a tick box, a radio group, a
+    number field, a file picker - because a control a screen reader already
+    knows how to read needs no explaining, and because "answer 12 things
+    about the component you want" is only bearable when the answers are
+    typed the way they would be in any settings window.
+
+    Three things make it work for something complicated:
+
+    - **Sections.** Questions carry a `section`, and each becomes a
+      `wx.StaticBox` - a grouping Windows itself knows, so a reader says
+      which part of the form the keyboard has just entered.
+    - **Help.** A question may carry a sentence saying what it is for, shown
+      under it and given to the control as its accessible description.
+    - **Follow-ups.** A question may depend on an earlier answer and appears
+      only when that answer is given, so a form covering every branch of an
+      add-on asks only about the branch being built.
+    """
 
     def __init__(self, parent, kind, questions):
         title = _("Answer questions about your {kind}").format(
             kind=kind['label'])
-        super().__init__(parent, title=title, size=(620, 560),
+        super().__init__(parent, title=title, size=(660, 620),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.questions = questions
         self.answers = {}
-        self._controls = {}   # id -> (question, control-or-list)
+        self._controls = {}       # id -> (question, control-or-list)
+        self._rows = {}           # id -> [windows to show or hide]
+        self._followers = [q for q in questions if q.get('depends_on')]
 
         outer = wx.BoxSizer(wx.VERTICAL)
         intro = wx.StaticText(self, label=_(
-            "The AI has a few questions. Answer what you can; leave anything "
+            "The AI has some questions. Answer what you can; leave anything "
             "blank to let the AI decide."))
         outer.Add(intro, flag=wx.ALL, border=10)
 
-        # Scrollable area so any number of questions fits.
         self.scroller = wx.ScrolledWindow(self, style=wx.VSCROLL)
         self.scroller.SetScrollRate(0, 12)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        for idx, q in enumerate(self.questions, 1):
-            self._build_question(self.scroller, sizer, idx, q)
-        self.scroller.SetSizer(sizer)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        number = 0
+        for name, group in question_sections(questions):
+            if name:
+                box = wx.StaticBoxSizer(wx.VERTICAL, self.scroller, name)
+                parent_window = box.GetStaticBox()
+                target = box
+                self.sizer.Add(box, flag=wx.EXPAND | wx.ALL, border=6)
+            else:
+                parent_window = self.scroller
+                target = self.sizer
+            for question in group:
+                number += 1
+                self._build_question(parent_window, target, number, question)
+        self.scroller.SetSizer(self.sizer)
         outer.Add(self.scroller, proportion=1,
                   flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=10)
 
@@ -837,71 +1382,220 @@ class QuestionnaireDialog(wx.Dialog):
 
         self.SetSizer(outer)
         self.Bind(wx.EVT_BUTTON, self.OnOk, id=wx.ID_OK)
+        self._apply_conditions()
         if self.questions:
             first = self._controls[self.questions[0]['id']][1]
-            ctrl = first[0] if isinstance(first, list) else first
-            ctrl.SetFocus()
+            control = first[0] if isinstance(first, list) else first
+            control.SetFocus()
 
-    def _build_question(self, parent, sizer, idx, q):
-        label = f"{idx}. {q['text']}"
-        qtype = q['type']
-        default = q.get('default')
+    # -- building ---------------------------------------------------------
+    def _build_question(self, parent, sizer, number, question):
+        label = f"{number}. {question['text']}"
+        if question.get('required'):
+            label += " *"
+        kind = question['type']
+        default = question.get('default')
+        rows = []
 
-        if qtype == 'boolean':
-            cb = wx.CheckBox(parent, label=label)
-            cb.SetValue(bool(default) if default is not None else False)
-            cb.SetName(q['text'])
-            sizer.Add(cb, flag=wx.EXPAND | wx.TOP, border=12)
-            self._controls[q['id']] = (q, cb)
-            return
+        def add(window, **flags):
+            sizer.Add(window, **flags)
+            rows.append(window)
+            return window
 
-        sizer.Add(wx.StaticText(parent, label=label),
-                  flag=wx.EXPAND | wx.TOP, border=12)
+        if kind == 'boolean':
+            control = wx.CheckBox(parent, label=label)
+            control.SetValue(_as_bool_answer(default))
+            control.SetName(question['text'])
+            add(control, flag=wx.EXPAND | wx.TOP, border=12)
+        else:
+            add(wx.StaticText(parent, label=label),
+                flag=wx.EXPAND | wx.TOP, border=12)
+            control = self._build_control(parent, sizer, question, rows)
 
-        if qtype == 'choice':
-            options = q['options']
-            rb = wx.RadioBox(parent, label='', choices=options,
-                             majorDimension=1, style=wx.RA_SPECIFY_COLS)
-            if default in options:
-                rb.SetSelection(options.index(default))
-            rb.SetName(q['text'])
-            sizer.Add(rb, flag=wx.EXPAND | wx.LEFT, border=8)
-            self._controls[q['id']] = (q, rb)
+        if question.get('help'):
+            help_text = wx.StaticText(parent, label=question['help'])
+            help_text.SetForegroundColour(
+                wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+            add(help_text, flag=wx.EXPAND | wx.LEFT | wx.BOTTOM, border=8)
+            for window in (control if isinstance(control, list) else [control]):
+                try:
+                    window.SetToolTip(question['help'])
+                    window.SetHelpText(question['help'])
+                except Exception:
+                    pass
 
-        elif qtype == 'multichoice':
+        self._controls[question['id']] = (question, control)
+        self._rows[question['id']] = rows
+        # An answer that a follow-up depends on has to be watched.
+        for window in (control if isinstance(control, list) else [control]):
+            for event in (wx.EVT_CHECKBOX, wx.EVT_RADIOBOX, wx.EVT_TEXT,
+                          wx.EVT_CHOICE):
+                try:
+                    window.Bind(event, self._on_answer_changed)
+                except Exception:
+                    pass
+
+    def _build_control(self, parent, sizer, question, rows):
+        kind = question['type']
+        default = question.get('default')
+
+        def add(window, **flags):
+            sizer.Add(window, **flags)
+            rows.append(window)
+            return window
+
+        if kind == 'choice':
+            options = question['options']
+            control = wx.RadioBox(parent, label='', choices=options,
+                                  majorDimension=1, style=wx.RA_SPECIFY_COLS)
+            if isinstance(default, str) and default in options:
+                control.SetSelection(options.index(default))
+            control.SetName(question['text'])
+            add(control, flag=wx.EXPAND | wx.LEFT, border=8)
+            return control
+
+        if kind == 'multichoice':
             defaults = default if isinstance(default, (list, tuple)) else []
             boxes = []
-            for opt in q['options']:
-                cb = wx.CheckBox(parent, label=opt)
-                cb.SetValue(opt in defaults)
-                cb.SetName(f"{q['text']}: {opt}")
-                sizer.Add(cb, flag=wx.EXPAND | wx.LEFT, border=16)
-                boxes.append(cb)
-            self._controls[q['id']] = (q, boxes)
+            for option in question['options']:
+                box = wx.CheckBox(parent, label=option)
+                box.SetValue(option in defaults)
+                box.SetName(f"{question['text']}: {option}")
+                add(box, flag=wx.EXPAND | wx.LEFT, border=16)
+                boxes.append(box)
+            return boxes
 
-        else:  # text
-            style = wx.TE_MULTILINE if q.get('multiline') else 0
-            tc = wx.TextCtrl(parent, style=style,
-                             size=(-1, 70 if q.get('multiline') else -1))
-            if isinstance(default, str) and default:
-                tc.SetValue(default)
-            tc.SetName(q['text'])
-            sizer.Add(tc, flag=wx.EXPAND | wx.LEFT, border=8)
-            self._controls[q['id']] = (q, tc)
+        if kind == 'number':
+            minimum = question.get('minimum')
+            maximum = question.get('maximum')
+            control = wx.SpinCtrl(
+                parent,
+                min=minimum if minimum is not None else 0,
+                max=maximum if maximum is not None else 100000,
+                initial=_as_number(default) or (minimum or 0))
+            control.SetName(question['text'])
+            add(control, flag=wx.LEFT, border=8)
+            return control
+
+        if kind in ('path', 'folder'):
+            row = wx.BoxSizer(wx.HORIZONTAL)
+            field = wx.TextCtrl(parent)
+            if isinstance(default, str):
+                field.SetValue(default)
+            field.SetName(question['text'])
+            row.Add(field, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=6)
+            browse = wx.Button(parent, label=_("Browse..."))
+            browse.SetName(_("Browse for {what}").format(
+                what=question['text']))
+            browse.Bind(wx.EVT_BUTTON,
+                        lambda event, f=field, k=kind: self._browse(f, k))
+            row.Add(browse)
+            sizer.Add(row, flag=wx.EXPAND | wx.LEFT, border=8)
+            rows.extend([field, browse])
+            return field
+
+        style = wx.TE_MULTILINE if (question.get('multiline')
+                                    or kind == 'longtext') else 0
+        control = wx.TextCtrl(parent, style=style,
+                              size=(-1, 90 if style else -1))
+        if isinstance(default, str) and default:
+            control.SetValue(default)
+        control.SetName(question['text'])
+        add(control, flag=wx.EXPAND | wx.LEFT, border=8)
+        return control
+
+    def _browse(self, field, kind):
+        if kind == 'folder':
+            dialog = wx.DirDialog(self, _("Choose a folder"))
+        else:
+            dialog = wx.FileDialog(self, _("Choose a file"),
+                                   style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        try:
+            if dialog.ShowModal() == wx.ID_OK:
+                field.SetValue(dialog.GetPath())
+                field.SetFocus()
+        finally:
+            dialog.Destroy()
+
+    # -- follow-ups -------------------------------------------------------
+    def _on_answer_changed(self, event):
+        event.Skip()
+        if self._followers:
+            self._apply_conditions()
+
+    def _apply_conditions(self):
+        """Show only the follow-ups whose condition the answers now meet.
+
+        Hidden rather than disabled: a hidden control is not in the tab order
+        at all, so a form that asks about the branch the user is not building
+        does not make them tab past it.
+        """
+        if not self._followers:
+            return
+        answers = self.current_answers()
+        changed = False
+        for question in self._followers:
+            wanted = question_applies(question, answers)
+            for window in self._rows.get(question['id'], ()):
+                try:
+                    if window.IsShown() != wanted:
+                        window.Show(wanted)
+                        changed = True
+                except Exception:
+                    pass
+        if changed:
+            self.scroller.Layout()
+            self.scroller.FitInside()
+
+    # -- answers ----------------------------------------------------------
+    def current_answers(self):
+        """What the form says right now, without closing it."""
+        answers = {}
+        for question_id, (question, control) in self._controls.items():
+            kind = question['type']
+            try:
+                if kind == 'boolean':
+                    answers[question_id] = (_("Yes") if control.GetValue()
+                                            else _("No"))
+                elif kind == 'choice':
+                    answers[question_id] = control.GetStringSelection()
+                elif kind == 'multichoice':
+                    answers[question_id] = [box.GetLabel() for box in control
+                                            if box.GetValue()]
+                elif kind == 'number':
+                    answers[question_id] = str(control.GetValue())
+                else:
+                    answers[question_id] = control.GetValue().strip()
+            except Exception:
+                answers[question_id] = ''
+        return answers
 
     def OnOk(self, event):
-        for qid, (q, ctrl) in self._controls.items():
-            qtype = q['type']
-            if qtype == 'boolean':
-                self.answers[qid] = _("Yes") if ctrl.GetValue() else _("No")
-            elif qtype == 'choice':
-                self.answers[qid] = ctrl.GetStringSelection()
-            elif qtype == 'multichoice':
-                self.answers[qid] = [cb.GetLabel() for cb in ctrl
-                                     if cb.GetValue()]
-            else:
-                self.answers[qid] = ctrl.GetValue().strip()
+        answers = self.current_answers()
+        # A question the user cannot see was not asked, and must not be
+        # answered on their behalf.
+        for question in self._followers:
+            if not question_applies(question, answers):
+                answers.pop(question['id'], None)
+        missing = [question['text'] for question in self.questions
+                   if question.get('required')
+                   and question['id'] in answers
+                   and not str(answers.get(question['id']) or '').strip()]
+        if missing:
+            wx.MessageBox(
+                _("These still need an answer:\n\n{questions}").format(
+                    questions="\n".join(missing)),
+                _("Answer needed"), wx.OK | wx.ICON_INFORMATION, self)
+            return
+        self.answers = answers
         event.Skip()  # let the dialog close with wx.ID_OK
+
+
+def _as_bool_answer(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in ('1', 'true', 'yes', 'tak',
+                                                'on')
 
 
 # --------------------------------------------------------------------------- #
@@ -918,6 +1612,14 @@ class AICreationWizardDialog(wx.Dialog):
         self.messages = []          # multi-turn conversation
         self.generated_files = {}   # last parsed {relpath: content}
         self._last_raw = ''         # raw text of the last generation
+        # A project is this whole session on disk (`creation_project.py`):
+        # once it has a name, every generation is written to it, so closing
+        # the dialog - or Titan - is not the end of an add-on that took an
+        # afternoon.
+        self.project_name = ''
+        self._plan_text = ''
+        self._interview = []        # [{'questions': [...], 'answers': {...}}]
+        self._first_description = ''
         self._stream_buf = []       # streamed text accumulator (this turn)
         self._gen_start = 0.0
         self._file_announced = set()
@@ -998,6 +1700,15 @@ class AICreationWizardDialog(wx.Dialog):
         self.save_btn.Bind(wx.EVT_BUTTON, self.OnSave)
         self.save_btn.Enable(False)
         btns.Add(self.save_btn, flag=wx.RIGHT, border=6)
+        self.save_project_btn = wx.Button(panel, label=_("Save project"))
+        self.save_project_btn.SetToolTip(_(
+            "Keep this session - the description, the questions and answers, "
+            "the conversation and the files - so you can carry on later."))
+        self.save_project_btn.Bind(wx.EVT_BUTTON, self.OnSaveProject)
+        btns.Add(self.save_project_btn, flag=wx.RIGHT, border=6)
+        self.open_project_btn = wx.Button(panel, label=_("Open project..."))
+        self.open_project_btn.Bind(wx.EVT_BUTTON, self.OnOpenProject)
+        btns.Add(self.open_project_btn, flag=wx.RIGHT, border=6)
         close_btn = wx.Button(panel, wx.ID_CANCEL, _("Close"))
         btns.Add(close_btn)
         vbox.Add(btns, flag=wx.ALIGN_RIGHT | wx.ALL, border=10)
@@ -1021,6 +1732,8 @@ class AICreationWizardDialog(wx.Dialog):
         if self._last_raw and (not self.messages or self.messages[-1]['role'] != 'assistant'):
             self.messages.append({"role": "assistant", "content": self._last_raw})
         self.messages.append({"role": "user", "content": text})
+        if not self._first_description:
+            self._first_description = text
         self._append_transcript(_("You"), text)
         self.desc.SetValue("")
         self.plan_btn.Enable(False)
@@ -1073,7 +1786,7 @@ class AICreationWizardDialog(wx.Dialog):
             try:
                 self.status.SetLabel(_("Waiting for your answers..."))
                 _speak(_("The AI has some questions"))
-                play_sound('core/NOTIFICATION.ogg')
+                _question_sound()
                 dlg = QuestionnaireDialog(self, self.kind, questions)
                 try:
                     if dlg.ShowModal() == wx.ID_OK:
@@ -1154,6 +1867,7 @@ class AICreationWizardDialog(wx.Dialog):
             return
         # Keep the plan/questions in the conversation so Generate builds on them.
         self.messages.append({"role": "assistant", "content": raw or ''})
+        self._plan_text = raw or ''
         self._last_raw = ''  # the plan is not a file set
         self.gauge.SetValue(100)
         self.status.SetLabel(_("Plan ready. Answer any questions above, then "
@@ -1210,6 +1924,10 @@ class AICreationWizardDialog(wx.Dialog):
                         convo.append({"role": "user", "content":
                                       format_answers_for_prompt(
                                           questions, answers['answers'])})
+                        # Kept for the project: the interview is most of what
+                        # a complicated add-on knows about itself.
+                        self._interview.append({'questions': questions,
+                                                'answers': answers['answers']})
                         # Persist the interview so a later Generate/refine keeps it.
                         self.messages = list(convo)
                     self._begin_stream_section(
@@ -1219,7 +1937,7 @@ class AICreationWizardDialog(wx.Dialog):
                 files = parse_files(raw)
                 fixed_note = ''
                 if autofix:
-                    problems = static_check(files)
+                    problems = static_check(files, self.kind)
                     rounds = 0
                     while problems and rounds < _MAX_AUTOFIX_ROUNDS:
                         rounds += 1
@@ -1235,7 +1953,7 @@ class AICreationWizardDialog(wx.Dialog):
                         raw = ai_provider.generate(system, convo,
                                                    on_chunk=self._on_chunk)
                         files = parse_files(raw)
-                        problems = static_check(files)
+                        problems = static_check(files, self.kind)
                     if rounds:
                         fixed_note = (_("auto-fixed") if not problems
                                       else _("auto-fix incomplete"))
@@ -1316,6 +2034,10 @@ class AICreationWizardDialog(wx.Dialog):
             + _("Review below, then Save."))
         play_sound('core/SELECT.ogg')
         _speak(_("Done, {n} files generated").format(n=len(files)))
+        # A named project is written after every generation: an hour of work
+        # must not depend on the user remembering to press a button.
+        if self.project_name:
+            self._store_project(self.project_name, quiet=True)
 
     # -- preview ---------------------------------------------------------- #
     def _populate_preview(self, files):
@@ -1336,6 +2058,146 @@ class AICreationWizardDialog(wx.Dialog):
 
     def _append_transcript(self, who, text):
         self.transcript.AppendText(f"\n=== {who} ===\n{text}\n")
+
+    # -- projects ---------------------------------------------------------- #
+    def _store_project(self, name, quiet=False):
+        """Write the session to disk under `name`."""
+        try:
+            folder = creation_project.save(
+                name,
+                self.kind['id'],
+                description=self._first_description or self.desc.GetValue(),
+                messages=self.messages,
+                files=self.generated_files,
+                questions=[question for round_ in self._interview
+                           for question in round_['questions']],
+                answers={key: value for round_ in self._interview
+                         for key, value in round_['answers'].items()},
+                plan=self._plan_text,
+                raw=self._last_raw,
+                options={'web': self.web_cb.GetValue(),
+                         'autofix': self.autofix_cb.GetValue(),
+                         'ask': self.ask_cb.GetValue()})
+        except Exception as error:
+            traceback.print_exc()
+            if not quiet:
+                wx.MessageBox(str(error), _("Could not save the project"),
+                              wx.OK | wx.ICON_ERROR, self)
+            return None
+        self.project_name = name
+        self.SetTitle(_("Create {kind} with AI - {project}").format(
+            kind=self.kind['label'], project=name))
+        if quiet:
+            self.status.SetLabel(_("Project saved."))
+        else:
+            play_sound('core/SELECT.ogg')
+            _speak(_("Project saved"))
+            wx.MessageBox(_("Saved to:\n{path}").format(path=folder),
+                          _("Project saved"), wx.OK | wx.ICON_INFORMATION,
+                          self)
+        return folder
+
+    def OnSaveProject(self, event):
+        if not (self.messages or self.generated_files
+                or self.desc.GetValue().strip()):
+            wx.MessageBox(_("There is nothing to save yet."), _("Project"),
+                          wx.OK | wx.ICON_INFORMATION, self)
+            return
+        suggestion = self.project_name or creation_project.suggest_name(
+            self.kind['label'],
+            self._first_description or self.desc.GetValue())
+        dialog = wx.TextEntryDialog(self, _("Name for this project:"),
+                                    _("Save project"), suggestion)
+        try:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            name = dialog.GetValue().strip()
+        finally:
+            dialog.Destroy()
+        if not name:
+            return
+        if (name != self.project_name and creation_project.exists(name)
+                and wx.MessageBox(
+                    _("A project called {name} already exists. Replace it?")
+                    .format(name=name), _("Save project"),
+                    wx.YES_NO | wx.ICON_QUESTION, self) != wx.YES):
+            return
+        self._store_project(name)
+
+    def OnOpenProject(self, event):
+        projects = [entry for entry in creation_project.list_projects()
+                    if entry['kind'] == self.kind['id']]
+        if not projects:
+            wx.MessageBox(
+                _("There are no saved {kind} projects yet. Press Save "
+                  "project to keep this one.").format(
+                      kind=self.kind['label']),
+                _("Open project"), wx.OK | wx.ICON_INFORMATION, self)
+            return
+        if self.messages and wx.MessageBox(
+                _("Opening a project replaces what is in this window. "
+                  "Continue?"), _("Open project"),
+                wx.YES_NO | wx.ICON_QUESTION, self) != wx.YES:
+            return
+        labels = [_("{name} - {files} file(s), last changed {when}").format(
+            name=entry['name'], files=entry['files'],
+            when=entry['updated']) for entry in projects]
+        dialog = wx.SingleChoiceDialog(self, _("Which project?"),
+                                       _("Open project"), labels)
+        try:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            chosen = projects[dialog.GetSelection()]
+        finally:
+            dialog.Destroy()
+        self.load_project(chosen['name'])
+
+    def load_project(self, name):
+        """Put a saved session back into this window."""
+        data = creation_project.load(name)
+        if not data:
+            # Say where it looked: "could not be read" on its own is
+            # something the user can do nothing about.
+            wx.MessageBox(
+                _("That project could not be read.\n\nIt should be in:\n"
+                  "{path}").format(path=creation_project.project_path(name)),
+                _("Project"), wx.OK | wx.ICON_ERROR, self)
+            return False
+        self.project_name = data.get('name', name)
+        self.messages = list(data.get('messages') or [])
+        self.generated_files = dict(data.get('files') or {})
+        self._last_raw = str(data.get('raw') or '')
+        self._plan_text = str(data.get('plan') or '')
+        self._first_description = str(data.get('description') or '')
+        answers = dict(data.get('answers') or {})
+        questions = list(data.get('questions') or [])
+        self._interview = ([{'questions': questions, 'answers': answers}]
+                           if questions else [])
+        options = data.get('options') or {}
+        self.web_cb.SetValue(bool(options.get('web', False)))
+        self.autofix_cb.SetValue(bool(options.get('autofix', True)))
+        self.ask_cb.SetValue(bool(options.get('ask', True)))
+
+        self.transcript.SetValue('')
+        self._append_transcript(
+            _("Project"),
+            _("{name}: {files} file(s), {turns} turn(s) so far.\n"
+              "Describe what to change and press Generate - the AI still has "
+              "the whole conversation.").format(
+                  name=self.project_name, files=len(self.generated_files),
+                  turns=len(self.messages)))
+        if self._first_description:
+            self._append_transcript(_("Asked for"), self._first_description)
+        if self._plan_text:
+            self._append_transcript(_("Plan"), self._plan_text)
+        self._populate_preview(self.generated_files)
+        self.save_btn.Enable(bool(self.generated_files))
+        self.SetTitle(_("Create {kind} with AI - {project}").format(
+            kind=self.kind['label'], project=self.project_name))
+        self.status.SetLabel(_("Project opened."))
+        _speak(_("Project {name} opened").format(name=self.project_name))
+        self.desc.SetFocus()
+        return True
 
     # -- save ------------------------------------------------------------- #
     def OnSave(self, event):
@@ -1376,17 +2238,82 @@ class AICreationWizardDialog(wx.Dialog):
                 actions.run('macros', 'reload')
             except Exception as e:
                 print(f"[AICreationKit] could not refresh the macro list: {e}")
+        # The same for the two kinds whose managers scan once and remember:
+        # without this the add-on exists on disk and is in no list until
+        # Titan is restarted, which reads as "it did not save".
+        elif self.kind['id'] in ('shell_addon', 'settings_interface'):
+            try:
+                if self.kind['id'] == 'shell_addon':
+                    from src.shell import addons as _addons
+                    _addons.manager().scan(force=True)
+                else:
+                    from src.settings import interfaces as _interfaces
+                    _interfaces.manager().scan(force=True)
+                from src.titan_core import actions
+                actions.invalidate()
+            except Exception as e:
+                print(f"[AICreationKit] could not refresh the add-on "
+                      f"list: {e}")
         wx.MessageBox(_("Saved to:\n{path}").format(path=dest), _("Saved"),
                       wx.OK | wx.ICON_INFORMATION, self)
         self.EndModal(wx.ID_OK)
 
 
-def open_creation_wizard(parent, kind_id):
-    """Entry point used by the Programmer menu."""
+def open_creation_wizard(parent, kind_id, project=None):
+    """Entry point used by the Programmer menu.
+
+    `project` opens a saved session (`creation_project`) in the wizard for
+    its kind, which is what "carry on with the thing I was building" means.
+    """
     if not ai_provider.is_ai_enabled():
         wx.MessageBox(_("Enable AI components in Settings, AI features first."),
                       _("AI features disabled"), wx.OK | wx.ICON_INFORMATION, parent)
         return
     dlg = AICreationWizardDialog(parent, kind_id)
+    if project:
+        dlg.load_project(project)
     dlg.ShowModal()
     dlg.Destroy()
+
+
+def open_project_browser(parent):
+    """Every saved project, of every kind, in one list.
+
+    The wizard's own Open lists the projects of the kind it is building;
+    this is the way in when what the user remembers is the add-on, not which
+    kind of add-on it was.
+    """
+    if not ai_provider.is_ai_enabled():
+        wx.MessageBox(_("Enable AI components in Settings, AI features first."),
+                      _("AI features disabled"), wx.OK | wx.ICON_INFORMATION,
+                      parent)
+        return
+    projects = creation_project.list_projects()
+    if not projects:
+        wx.MessageBox(
+            _("No projects yet. Create an add-on with AI and press Save "
+              "project to keep the session."),
+            _("AI projects"), wx.OK | wx.ICON_INFORMATION, parent)
+        return
+    labels = []
+    for entry in projects:
+        kind = get_kind(entry['kind'])
+        labels.append(_("{name} ({kind}) - {files} file(s), last changed "
+                        "{when}").format(
+                            name=entry['name'],
+                            kind=kind['label'] if kind else entry['kind'],
+                            files=entry['files'], when=entry['updated']))
+    dialog = wx.SingleChoiceDialog(parent, _("Which project?"),
+                                   _("AI projects"), labels)
+    try:
+        if dialog.ShowModal() != wx.ID_OK:
+            return
+        chosen = projects[dialog.GetSelection()]
+    finally:
+        dialog.Destroy()
+    if not get_kind(chosen['kind']):
+        wx.MessageBox(_("This project was made for {kind}, which this Titan "
+                        "does not have.").format(kind=chosen['kind']),
+                      _("AI projects"), wx.OK | wx.ICON_WARNING, parent)
+        return
+    open_creation_wizard(parent, chosen['kind'], project=chosen['name'])

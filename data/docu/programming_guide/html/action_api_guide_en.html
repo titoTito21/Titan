@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titan Action API - letting Titan call your add-on - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
+<li><a href="shell_addon_guide_en.html">Shell Add-ons</a></li>
+<li><a href="settings_interface_guide_en.html">Settings Interfaces</a></li>
+<li><a href="action_api_guide_en.html" class="active">Action API</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Titan Action API - letting Titan call your add-on</h1>
+            </div>
+            <h1>Titan Action API - letting Titan call your add-on</h1>
+
+<h2>What this is for</h2>
+
+<p>Your add-on can do things. A text editor opens and saves files, a media player
+plays them, a file manager copies them, a component watches something. Until
+you declare those things, nothing outside your add-on can ask for them: not the
+user through another add-on, not a component, and not Titan's AI agent or voice
+assistant.</p>
+
+<p>The Action API is one file that says what your add-on can do, and one module
+that does it. Once both exist, this works from anywhere in Titan:</p>
+
+<pre><code class="language-python">from src.titan_core import actions
+
+actions.run(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=r&#x27;C:\notes.txt&#x27;)</code></pre>
+
+<p>and the AI can do the same thing because the user asked it to in words.</p>
+
+<p>This is optional. An add-on without a manifest keeps working exactly as before.</p>
+
+<h2>The two files</h2>
+
+<p>Put them in your add-on's own directory, next to its existing manifest
+(<code>__app.TCE</code>, <code>__component__.TCE</code>, <code>applet.json</code>, ...):</p>
+
+<pre><code>data/applications/tEdit/
+    __app.TCE           &lt;- your existing manifest, unchanged
+    __actions.json      &lt;- what you can do
+    tedit_actions.py    &lt;- how you do it
+    tedit.py</code></pre>
+
+<p>Both are picked up identically when your add-on ships as a packaged <code>.TCA</code> or
+<code>.TCD</code> file, so packaging changes nothing here.</p>
+
+<h2><code>__actions.json</code></h2>
+
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;id&quot;: &quot;tedit&quot;,
+  &quot;label&quot;: &quot;Text Editor&quot;,
+  &quot;description&quot;: &quot;Opens, edits and saves text files.&quot;,
+  &quot;transport&quot;: &quot;process&quot;,
+  &quot;entry&quot;: &quot;tedit_actions.py&quot;,
+  &quot;launch_if_needed&quot;: true,
+  &quot;actions&quot;: [
+    {
+      &quot;name&quot;: &quot;open_file&quot;,
+      &quot;summary&quot;: &quot;Open a text file in the editor.&quot;,
+      &quot;params&quot;: {
+        &quot;path&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;required&quot;: true,
+                 &quot;description&quot;: &quot;Full path of the file to open.&quot;}
+      },
+      &quot;risk&quot;: &quot;confirm&quot;,
+      &quot;mode&quot;: &quot;live&quot;,
+      &quot;promote&quot;: true
+    }
+  ]
+}</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>id</code></td>
+<td>Stable identifier. This is what callers type. Lowercase, letters, digits, underscores. Defaults to the folder name.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>Human name, used when Titan or the AI talks about your add-on.</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>One sentence on what the add-on is for. The AI reads this when deciding whether you are the right add-on for a request.</td>
+</tr>
+<tr>
+<td><code>transport</code></td>
+<td><code>process</code> for applications and games, <code>inproc</code> for everything else. You rarely need to set it - the default is right for your kind.</td>
+</tr>
+<tr>
+<td><code>entry</code></td>
+<td>The module holding your handlers, relative to your directory. It must be inside your directory.</td>
+</tr>
+<tr>
+<td><code>launch_if_needed</code></td>
+<td>May Titan start your application to deliver an action? Default <code>true</code>.</td>
+</tr>
+</tbody></table>
+
+<p>Each action:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>name</code></td>
+<td>What the action is called. Lowercase with underscores.</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>One sentence, in the imperative: "Open a text file in the editor." This is what the AI is shown, so write it for a reader who has never seen your add-on.</td>
+</tr>
+<tr>
+<td><code>params</code></td>
+<td>Named parameters. Types: <code>string</code>, <code>number</code>, <code>integer</code>, <code>boolean</code>. Mark the ones you cannot work without as <code>&quot;required&quot;: true</code>. Give every one a <code>description</code>.</td>
+</tr>
+<tr>
+<td><code>risk</code></td>
+<td><code>auto</code> (just do it), <code>confirm</code> (the user is asked first), <code>always_confirm</code> (asked every time, whatever their settings say). Anything that writes, sends, deletes or spends money is at least <code>confirm</code>.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>live</code>, <code>headless</code> or <code>any</code>. See below.</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td>Seconds a headless run may take, when the default 45 is not enough.</td>
+</tr>
+<tr>
+<td><code>launch_if_needed</code></td>
+<td>May Titan start the add-on to deliver <em>this</em> action? Overrides the add-on's setting. Set it <code>true</code> only where showing the user something is the point ("open this file"); an action that reports on the open window ("what have you got open") must leave it false, or Titan opens a fresh window to answer a question about nothing.</td>
+</tr>
+<tr>
+<td><code>promote</code></td>
+<td><code>true</code> makes it a first-class AI tool instead of one reached through a generic dispatcher. Promote the two or three things users actually ask for; leave the rest alone.</td>
+</tr>
+</tbody></table>
+
+<h2>The three modes - and why <code>live</code> is the last resort</h2>
+
+<p>Applications and games run in their own process, which is why <code>mode</code> exists.</p>
+
+<li><strong><code>headless</code></strong> - the action stands alone. Titan runs your action module as a</li>
+  short-lived process. Nothing appears on screen.
+<li><strong><code>any</code></strong> (the default) - the open instance when there is one, headless</li>
+  otherwise. <strong>This is what almost everything should be.</strong>
+<li><strong><code>live</code></strong> - the action <em>cannot work</em> without the running window.</li>
+
+<p>**Do not make an action <code>live</code> because your window happens to be where you
+wrote the code.** A user who asks for "a note, then read it out in my
+ElevenLabs voice" is not going to open two applications first, and should not
+have to. Ask whether the action really needs the window, or only your data:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Really needs the window</th>
+<th>Only needs your data</th>
+</tr></thead><tbody>
+<tr>
+<td>"save the document I have open"</td>
+<td>"read this file", "write this file"</td>
+</tr>
+<tr>
+<td>"what is selected right now"</td>
+<td>"copy this to there", "find files called X"</td>
+</tr>
+<tr>
+<td>"go back a page"</td>
+<td>"what are my bookmarks"</td>
+</tr>
+<tr>
+<td>"show me this page"</td>
+<td>"download this file", "say this out loud"</td>
+</tr>
+</tbody></table>
+
+<p>Everything in the right column belongs in a module that reads your settings
+file and does the work - your API key, your download folder and your saved data
+are all on disk, and the window is not what owns them. Titan's own ElevenLabs
+and Download Manager actions are written exactly that way: they prefer the open
+window when there is one, so the result joins its history and its list, and
+work perfectly well without it.</p>
+
+<p>Two practical notes for headless work:</p>
+
+<li>A long job gets <code>&quot;timeout&quot;: 180</code> (seconds) in its manifest rather than being</li>
+  killed at the default 45.
+<li>Anything that keeps going after the answer - playing audio, fetching a large</li>
+  file - is started <strong>detached</strong>, so the action can return at once and the work
+  is not cut off when the short-lived process ends.
+
+<p>In-process add-ons (components, widgets, statusbar applets, TTS engines,
+gamepad modes, launchers, Titan IM modules) ignore <code>mode</code> entirely: they are
+already inside Titan, they are simply called, and they never need a window.</p>
+
+<p>To have something read out, call <code>actions.run(&#x27;titan&#x27;, &#x27;speak&#x27;, text=...)</code> -
+Titan's speech engines are in Titan's own process, so no window is involved and
+no add-on needs a voice of its own.</p>
+
+<h2>The handler module</h2>
+
+<p>A handler is an ordinary function. It gets the parameters it declares as
+keyword arguments - parameters it does not declare are dropped, so adding one
+later never breaks an old handler.</p>
+
+<p><strong>Return a sentence.</strong> The caller may be a screen reader reading it out or an AI
+telling the user what it just did. <code>&quot;Saved notes.txt.&quot;</code> is a good return value;
+<code>True</code> is not.</p>
+
+<pre><code class="language-python">import os, sys
+
+# Titan&#x27;s root is on the path for every application it launches.
+_TITAN_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                           &#x27;..&#x27;, &#x27;..&#x27;, &#x27;..&#x27;))
+if _TITAN_ROOT not in sys.path:
+    sys.path.insert(0, _TITAN_ROOT)
+
+_frame = None
+
+
+def open_file(path):
+    &quot;&quot;&quot;Open a text file in the editor.&quot;&quot;&quot;
+    if not os.path.isfile(path):
+        return f&quot;There is no file at {path}.&quot;
+    _frame.LoadFile(path)
+    return f&quot;Opened {os.path.basename(path)} in the text editor.&quot;
+
+
+def read_file(path):
+    &quot;&quot;&quot;Read a text file without opening a window.&quot;&quot;&quot;
+    with open(path, encoding=&#x27;utf-8&#x27;, errors=&#x27;replace&#x27;) as handle:
+        return handle.read()
+
+
+LIVE_HANDLERS = {&#x27;open_file&#x27;: open_file, &#x27;read_file&#x27;: read_file}
+HEADLESS_HANDLERS = {&#x27;read_file&#x27;: read_file}
+
+
+def attach(frame):
+    &quot;&quot;&quot;Called once the window exists: from here on Titan can drive us.&quot;&quot;&quot;
+    global _frame
+    _frame = frame
+    try:
+        from src.titan_core.titan_actions import serve
+    except Exception as e:
+        print(f&quot;[tEdit] Titan actions unavailable: {e}&quot;)
+        return False
+    return serve(LIVE_HANDLERS, id=&#x27;tedit&#x27;, label=&#x27;Text Editor&#x27;, kind=&#x27;app&#x27;)
+
+
+if __name__ == &#x27;__main__&#x27;:
+    from src.titan_core.titan_actions import run_cli
+    sys.exit(run_cli(HEADLESS_HANDLERS))</code></pre>
+
+<p>And one call in your application's startup:</p>
+
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    app = wx.App()
+    frame = TextEditor(None)
+    frame.Show()
+    try:
+        import tedit_actions
+        tedit_actions.attach(frame)
+    except Exception as e:
+        print(f&quot;[tEdit] Titan actions unavailable: {e}&quot;)
+    app.MainLoop()</code></pre>
+
+<p><strong>Joining must never be fatal.</strong> Your add-on has to run exactly as before when
+Titan is not there, so wrap it and carry on.</p>
+
+<h3>Threads</h3>
+
+<p><code>serve()</code> answers Titan on a background thread. If your handler touches a
+window, it must not run there. wxPython is detected and handled for you. A Tk
+add-on passes its own marshaller:</p>
+
+<pre><code class="language-python">from src.titan_core.titan_actions import serve, tk_marshal
+serve(HANDLERS, marshal=tk_marshal(root))</code></pre>
+
+<h2>Three outcomes, not two</h2>
+
+<p>A handler can end in three ways, and saying which one in prose is not enough -
+a caller chaining several actions cannot tell "there is no such note" from
+success, and carries on to the step that assumed otherwise.</p>
+
+<pre><code class="language-python">from src.titan_core.actions import fails, needs      # inside Titan
+from src.titan_core.titan_actions import fails, needs  # in your own process</code></pre>
+
+<p><strong>It worked</strong> - return a sentence.</p>
+
+<pre><code class="language-python">return f&quot;Saved {os.path.basename(path)}.&quot;</code></pre>
+
+<p><strong>It could not</strong> - return <code>fails(reason)</code>. The reason is what the user is
+told, so write it for them.</p>
+
+<pre><code class="language-python">if not os.path.isfile(path):
+    return fails(f&quot;There is no file at {path}.&quot;)</code></pre>
+
+<p><strong>It needs to ask</strong> - return <code>needs(name, prompt, options=...)</code>. Asking is an
+outcome, not a failure: Titan hands the question to whoever called. The AI puts
+it to the user and calls again with the answer; a component shows a dialog. The
+action then runs once, with a real answer, instead of running now on a guess.</p>
+
+<pre><code class="language-python">if len(matches) &gt; 1:
+    return needs(&#x27;which&#x27;, f&quot;&#x27;{name}&#x27; matches {len(matches)} macros. &quot;
+                 f&quot;Which one should run?&quot;,
+                 options=[m[&#x27;name&#x27;] for m in matches])</code></pre>
+
+<p>Use <code>needs</code> where guessing would be <strong>harmful or annoying</strong>: a destination that
+cannot be invented, an ambiguous name, something about to be overwritten. Do
+not use it for a detail you can reasonably default - ask once, not three times.</p>
+
+<p>You get some of this free: **a required parameter that was not supplied
+becomes a question automatically**, built from the <code>description</code> in your
+manifest. So write those descriptions as if a user will hear them, because
+they will.</p>
+
+<p>Answering, from a caller's side:</p>
+
+<pre><code class="language-python">result = actions.run(&#x27;tfm&#x27;, &#x27;copy_path&#x27;, source=path)
+if result.pending:
+    print(result.question.prompt, result.question.options)
+
+# or let Titan do the whole loop, asking through a dialog:
+actions.run_interactive(&#x27;tfm&#x27;, &#x27;copy_path&#x27;, source=path)</code></pre>
+
+<h2>Composite commands</h2>
+
+<p>"Write me a summary, save it as a note, then remind me about it tomorrow" is
+three actions where the later ones need what the earlier one produced.</p>
+
+<pre><code class="language-python">actions.run_sequence([
+    {&#x27;addon&#x27;: &#x27;tnotes&#x27;, &#x27;action&#x27;: &#x27;create_note&#x27;,
+     &#x27;args&#x27;: {&#x27;title&#x27;: &#x27;Shopping&#x27;, &#x27;text&#x27;: &#x27;milk, bread&#x27;}},
+    {&#x27;addon&#x27;: &#x27;tnotes&#x27;, &#x27;action&#x27;: &#x27;read_note&#x27;, &#x27;args&#x27;: {&#x27;title&#x27;: &#x27;Shopping&#x27;}},
+    {&#x27;addon&#x27;: &#x27;treminder&#x27;, &#x27;action&#x27;: &#x27;create_reminder&#x27;,
+     &#x27;args&#x27;: {&#x27;name&#x27;: &#x27;Buy: {{2}}&#x27;, &#x27;date&#x27;: &#x27;tomorrow&#x27;, &#x27;time&#x27;: &#x27;17:00&#x27;}},
+])</code></pre>
+
+<p><code>{{2}}</code> is what step 2 returned - the whole substitution language, on purpose.
+The run stops at the first step that fails or asks, and <code>result.text</code> names
+every step either way, so the user hears which parts happened.</p>
+
+<p>From an application, in its own process, the same thing:
+<code>titan_actions.call_sequence([...])</code>. The AI has it as <code>titan_run_actions</code>.</p>
+
+<p>This is also why <code>fails()</code> matters: a step that reports trouble in prose looks
+like success, and the sequence carries on regardless.</p>
+
+<h2>In-process add-ons: no JSON needed</h2>
+
+<p>A component, widget, statusbar applet, TTS engine, gamepad mode, launcher or
+Titan IM module can skip <code>__actions.json</code> entirely and declare actions in
+Python, with real callables:</p>
+
+<pre><code class="language-python">def say_time():
+    &quot;&quot;&quot;Speak the current time.&quot;&quot;&quot;
+    import time
+    return time.strftime(&quot;It is %H:%M.&quot;)
+
+
+TITAN_ACTIONS = [
+    {&#x27;name&#x27;: &#x27;say_time&#x27;, &#x27;summary&#x27;: &#x27;Speak the current time.&#x27;,
+     &#x27;run&#x27;: say_time},
+    {&#x27;name&#x27;: &#x27;set_alarm&#x27;, &#x27;summary&#x27;: &#x27;Set an alarm.&#x27;,
+     &#x27;params&#x27;: {&#x27;time&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;, &#x27;required&#x27;: True,
+                         &#x27;description&#x27;: &#x27;When, as HH:MM.&#x27;}},
+     &#x27;risk&#x27;: &#x27;confirm&#x27;, &#x27;run&#x27;: set_alarm},
+]</code></pre>
+
+<p>Titan finds this on the module it already loaded, so your handlers see your
+add-on's live state. You can also ship both: the JSON describes the actions
+well and <code>TITAN_ACTIONS</code> adds ones that only exist at runtime.</p>
+
+<h2>Calling other add-ons</h2>
+
+<p>Your add-on is also a caller. Anything Titan can do, you can do:</p>
+
+<pre><code class="language-python">from src.titan_core import actions
+
+for addon in actions.list_addons():
+    print(addon[&#x27;id&#x27;], addon[&#x27;label&#x27;], addon[&#x27;actions&#x27;])
+
+result = actions.run(&#x27;tmedia&#x27;, &#x27;play&#x27;, query=&#x27;the news&#x27;)
+if result:
+    print(result.text)
+else:
+    print(&quot;could not:&quot;, result.text)</code></pre>
+
+<p><code>run()</code> never raises. <code>result.ok</code> says whether it worked, <code>result.text</code> is
+always worth showing to a user, and <code>result.raised()</code> turns a failure into an
+exception if you would rather handle it that way.</p>
+
+<p>That import works for anything running <strong>inside</strong> Titan: a component calling
+another component, a widget calling a statusbar applet, a gamepad mode calling
+a launcher. An <strong>application or game</strong> is a separate process, so importing the
+registry there would build a second, blind copy that cannot see Titan's loaded
+components or the other applications. From a separate process, ask Titan over
+the connection you already have:</p>
+
+<pre><code class="language-python">from src.titan_core.titan_actions import call, list_addons
+
+for addon in list_addons():
+    print(addon[&#x27;id&#x27;], addon[&#x27;label&#x27;], addon[&#x27;actions&#x27;])
+
+result = call(&#x27;tmedia&#x27;, &#x27;play&#x27;, query=&#x27;the news&#x27;)
+if result:
+    print(result.text)</code></pre>
+
+<p><code>call()</code> needs a connection, and the same one carries both directions. An
+add-on that offers nothing and only wants to call others uses <code>connect()</code>
+instead of <code>serve()</code>:</p>
+
+<pre><code class="language-python">from src.titan_core.titan_actions import connect, call
+
+connect(id=&#x27;myapp&#x27;, label=&#x27;My App&#x27;)
+call(&#x27;tweb&#x27;, &#x27;open_url&#x27;, url=&#x27;https://example.org&#x27;)</code></pre>
+
+<p>Neither raises, and both return the same truthy result object.</p>
+
+<h3>Do not rewrite what Titan already has</h3>
+
+<p>There is no permission wall between add-ons: whatever another add-on declares,
+you can call. That is deliberate, and it is the point of the whole contract -
+nobody should ship their own editor, browser, file manager or downloader.</p>
+
+<pre><code class="language-python">actions.run(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=path)        # show text to the user
+actions.run(&#x27;tweb&#x27;, &#x27;open_url&#x27;, url=url)            # show a web page
+actions.run(&#x27;tfm&#x27;, &#x27;copy_path&#x27;, source=a, destination=b)
+actions.run(&#x27;tdownloader&#x27;, &#x27;download&#x27;, url=url)     # fetch a file
+actions.run(&#x27;tnotes&#x27;, &#x27;create_note&#x27;, title=t, text=body)
+actions.run(&#x27;treminder&#x27;, &#x27;create_reminder&#x27;, name=n, date=&#x27;tomorrow&#x27;, time=&#x27;09:00&#x27;)</code></pre>
+
+<p>Each of those gets the user their own settings, their own download folder,
+their own history and their own announcements - which a private copy inside
+your add-on never would.</p>
+
+<h3>Titan itself is callable too</h3>
+
+<p>Titan's own subsystems answer to the same three calls, so an add-on never has
+to reach into <code>src/</code> to change something Titan owns:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Provider</th>
+<th>What it covers</th>
+</tr></thead><tbody>
+<tr>
+<td><code>titan</code></td>
+<td>Titan's settings, components, add-ons, TTS engines, launching things</td>
+</tr>
+<tr>
+<td><code>settings</code></td>
+<td>finding and explaining a setting by what it does</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>volume, playback device, brightness, power plan, theme, Wi-Fi, autostart</td>
+</tr>
+<tr>
+<td><code>gamepad</code></td>
+<td>the gamepad's modes - list, read, set, cycle</td>
+</tr>
+<tr>
+<td><code>titannet</code></td>
+<td>forum topics and replies, mail, groups, rooms, private messages</td>
+</tr>
+<tr>
+<td><code>elten</code></td>
+<td>Elten messages, forums, blogs</td>
+</tr>
+<tr>
+<td><code>im</code></td>
+<td>WhatsApp and Messenger conversations</td>
+</tr>
+<tr>
+<td><code>ocr</code></td>
+<td>reading an inaccessible window, and pressing what it finds</td>
+</tr>
+<tr>
+<td><code>memory</code></td>
+<td>what the AI remembers between conversations</td>
+</tr>
+</tbody></table>
+
+<pre><code class="language-python">actions.run(&#x27;system&#x27;, &#x27;set_volume&#x27;, percent=30)
+actions.run(&#x27;gamepad&#x27;, &#x27;set_mode&#x27;, mode=&#x27;screen reader&#x27;)
+actions.run(&#x27;titan&#x27;, &#x27;set_setting&#x27;, key=&#x27;rate&#x27;, value=&#x27;60&#x27;)</code></pre>
+
+<p><code>actions.list_addons()</code> and <code>actions.describe_addon(id)</code> enumerate everything -
+built-in providers and installed add-ons alike - so nothing has to be
+hard-coded. An installed add-on can never take one of these ids: if it declares
+<code>id: &quot;system&quot;</code>, Titan keeps its own and makes the add-on reachable as
+<code>system_addon</code>.</p>
+
+<h2>Writing actions the AI can actually use</h2>
+
+<p>The AI has your <code>summary</code> and your parameter descriptions and nothing else.</p>
+
+<li><strong>Name the action after the user's intent</strong>, not your internal method:</li>
+  <code>play_audiobook</code>, not <code>set_playlist_mode_2</code>.
+<li><strong>Write the summary as an instruction</strong>: "Play a whole folder as one</li>
+  audiobook, continuing from where the user stopped."
+<li><strong>Say what a parameter accepts</strong> in its description, including the formats:</li>
+  "'50%', '49 minutes' or '1:23:45'".
+<li><strong>Return what actually happened</strong>, including the parts that did not: "Played</li>
+  episode 6. Three other episodes matched - say which if this was the wrong
+  one."
+<li><strong>Offer a way to look before leaping.</strong> An action that searches and returns</li>
+  identifiers pairs well with an action that acts on one of them, and stops the
+  AI guessing.
+<li><strong>Be honest about risk.</strong> Getting <code>risk</code> wrong is the one mistake the user</li>
+  cannot undo.
+
+<h2>Checklist</h2>
+
+<li>[ ] <code>__actions.json</code> sits in the add-on's own directory</li>
+<li>[ ] every action has a <code>summary</code> written for a stranger</li>
+<li>[ ] every parameter has a <code>description</code> and the right <code>type</code></li>
+<li>[ ] anything that writes, sends or deletes is at least <code>risk: confirm</code></li>
+<li>[ ] handlers return a sentence, not a boolean</li>
+<li>[ ] <code>serve()</code> is wrapped so a missing Titan never breaks the add-on</li>
+<li>[ ] GUI work is marshalled onto the interface thread</li>
+<li>[ ] at most two or three actions are <code>promote: true</code></li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

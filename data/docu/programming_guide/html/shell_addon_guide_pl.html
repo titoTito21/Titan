@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przewodnik tworzenia dodatków powłoki TCE - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
+<li><a href="shell_addon_guide_pl.html" class="active">Dodatki powłoki</a></li>
+<li><a href="settings_interface_guide_pl.html">Interfejsy ustawień</a></li>
+<li><a href="action_api_guide_pl.html">Action API</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Przewodnik tworzenia dodatków powłoki TCE</h1>
+            </div>
+            <h1>Przewodnik tworzenia dodatków powłoki TCE</h1>
+
+<h2>Wprowadzenie</h2>
+
+<p><strong>Powłoka Titana</strong> to pulpit, pasek zadań, zasobnik systemowy, menu Start i przeglądarka plików, które Titan stawia, gdy włączone są <em>Ustawienia -> Środowisko -> "Modyfikuj interfejs systemowy"</em> oraz <em>Ustawienia -> Powłoka Titana -> "Zastąp pulpit, pasek zadań i menu Start"</em>. Wszystkie pięć to kod samego Titana — a <strong>dodatek powłoki</strong> jest sposobem, żeby ktoś inny mógł do nich wejść, nie zmieniając Titana.</p>
+
+<p>Są dwa rodzaje i to od tej różnicy zależy wszystko:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Rodzaj</th>
+<th>Co robi</th>
+<th>Ile działa naraz</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Współtwórca</strong> (contributor)</td>
+<td>Dodaje do tego, co już jest: pozycje w menu Start, menu/przycisk/kolumnę w przeglądarce plików, pozycje w menu kontekstowym pulpitu i paska zadań, kontrolkę w zasobniku</td>
+<td>Dowolnie wiele, wszystkie naraz</td>
+</tr>
+<tr>
+<td><strong>Dostawca</strong> (provider)</td>
+<td><strong>Zastępuje</strong> jedną część powłoki w całości — <code>provides = start_menu</code> albo <code>provides = explorer</code></td>
+<td>Jeden, wybrany przez użytkownika</td>
+</tr>
+</tbody></table>
+
+<p>Dostawca zastępuje <strong>okno</strong>, a nie powłokę: gdy wybierzesz cudze menu Start, pulpit, pasek zadań, zasobnik i przeglądarka plików działają dokładnie tak jak wcześniej.</p>
+
+<p>Dodatki mieszkają w <code>data/shell addons/</code>. To dziesiąty rodzaj dodatku i celowo powtarza konwencje pozostałych dziewięciu — ten sam styl manifestu, to samo <code>status = 0</code> znaczące „włączony", ten sam <code>init.py</code>, to samo pakowanie.</p>
+
+<h2>Architektura</h2>
+
+<pre><code>data/shell addons/moj_dodatek/
+├── __shell_addon__.TCE   # Manifest (WYMAGANY, .TCE wielkimi literami)
+├── init.py               # Kod (WYMAGANY; init.pyc też jest akceptowany)
+└── lib/                  # Dołączone biblioteki (opcjonalnie)</code></pre>
+
+<p>Wykrywanie idzie przez <code>platform_utils.discover_data_entries()</code>, więc ten sam dodatek może być <strong>katalogiem</strong> albo jednym spakowanym plikiem <strong><code>.TCD</code></strong> — patrz „Pakowanie" niżej. Oba są znajdowane tak samo, w <code>data/</code> programu i w nakładce użytkownika.</p>
+
+<p>Ładowanie to <code>src/shell/addons.py</code>:</p>
+
+<li>Każdy <code>__shell_addon__.TCE</code> jest czytany przy starcie (<code>ShellAddonManager.scan</code>).</li>
+<li>Dodatek ze <code>status = 0</code> jest <strong>ładowany na żądanie</strong> — przy pierwszym pytaniu którejś powierzchni albo gdy startuje powłoka.</li>
+<li><code>setup(api)</code> uruchamia się raz, zaraz po zaimportowaniu modułu.</li>
+<li>Potem każda powierzchnia woła te funkcje, które istnieją.</li>
+
+<p><strong>Nic, co robi dodatek, nie może położyć powłoki.</strong> Każde wyjście do dodatku jest osłonięte: funkcja, której nie ma, która rzuci wyjątek albo odpowie czymś, co nie jest listą pozycji, nie wnosi nic, a powierzchnia działa dalej. To ważniejsze niż gdziekolwiek indziej — z zarejestrowanym appbarem i zainstalowanym shell hookiem proces Titana jest tym, przez co przechodzą komunikaty wszystkich innych programów, więc wyjątek, który ucieknie do obsługi rysowania, to nie zepsuty dodatek, tylko maszyna, która przestała odpowiadać.</p>
+
+<h2>Manifest <code>__shell_addon__.TCE</code></h2>
+
+<p>Format INI, jedna sekcja:</p>
+
+<pre><code class="language-ini">[shell addon]
+name = My shell add-on
+name_pl = Mój dodatek powłoki
+description = What it adds, in one sentence.
+description_pl = Co dodaje, jednym zdaniem.
+author = Twoje imię
+version = 1.0
+status = 1
+surfaces = start_menu, explorer
+provides =
+libs = lib</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Pole</th>
+<th>Wymagane</th>
+<th>Opis</th>
+</tr></thead><tbody>
+<tr>
+<td>name</td>
+<td>nie</td>
+<td>Nazwa wyświetlana (domyślnie nazwa katalogu)</td>
+</tr>
+<tr>
+<td>name_pl, name_en, ...</td>
+<td>nie</td>
+<td>Nazwa w danym języku; <code>name_&lt;kod&gt;</code> wygrywa z <code>name</code></td>
+</tr>
+<tr>
+<td>description</td>
+<td>nie</td>
+<td>Jedno zdanie — pokazywane pod przyciskiem wyboru dostawcy</td>
+</tr>
+<tr>
+<td>description_pl, ...</td>
+<td>nie</td>
+<td>To samo, przetłumaczone</td>
+</tr>
+<tr>
+<td>author</td>
+<td>nie</td>
+<td>Autor</td>
+</tr>
+<tr>
+<td>version</td>
+<td>nie</td>
+<td>Wersja (domyślnie <code>1.0</code>)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>tak</td>
+<td><strong><code>0</code> = włączony, <code>1</code> = wyłączony</strong> (konwencja komponentów)</td>
+</tr>
+<tr>
+<td>surfaces</td>
+<td>nie</td>
+<td>Po przecinku: <code>shell</code>, <code>start_menu</code>, <code>explorer</code>, <code>taskbar</code>, <code>desktop</code></td>
+</tr>
+<tr>
+<td>provides</td>
+<td>nie</td>
+<td><code>start_menu</code> albo <code>explorer</code> — czyni dodatek <strong>dostawcą</strong></td>
+</tr>
+<tr>
+<td>libs</td>
+<td>nie</td>
+<td>Podkatalogi dopisywane do <code>sys.path</code> (domyślnie <code>lib</code>)</td>
+</tr>
+</tbody></table>
+
+<p>Uwagi:</p>
+
+<li><strong><code>surfaces</code> to pomoc, nie bramka.</strong> Dodatek, który nie wymieni żadnej, jest pytany o wszystko — bo pomyłka tutaj ma znaczyć trochę wolniejsze menu, a nie dodatek, który po cichu nic nie robi. Mimo to je wypisz: to dzięki temu menu Start jest szybkie przy dwudziestu zainstalowanych dodatkach.</li>
+<li><strong>Rozprowadzaj ze <code>status = 1</code>.</strong> Dodatek powłoki zaczyna działać w chwili włączenia, więc włącza go użytkownik — Ustawienia -> Powłoka Titana -> Dodatki powłoki. (Odwrotnie niż interfejs ustawień, który ma <code>status = 0</code>, bo samo zainstalowanie czyni go tylko jedną z możliwości.)</li>
+<li>Nazwa i opis to <strong>Twoje</strong> słowa, a nie tłumaczone teksty Titana — dlatego istnieją <code>name_pl</code> / <code>description_pl</code>.</li>
+
+<h2><code>init.py</code>: wszystkie funkcje</h2>
+
+<p>Każda jest opcjonalna. Titan pyta o to, co jest, i pomija to, czego nie ma — dodatek, który chce jednej pozycji w menu pulpitu, pisze <code>desktop_menu_items</code> i nic więcej.</p>
+
+<p>Każda dostaje najpierw <code>api</code> (obiekt <code>ShellAddonAPI</code>), potem to, o czym jest dana powierzchnia.</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Powierzchnia</th>
+<th>Funkcja</th>
+<th>Sygnatura</th>
+<th>Odpowiada</th>
+</tr></thead><tbody>
+<tr>
+<td>shell</td>
+<td><code>setup</code></td>
+<td><code>(api)</code></td>
+<td>— (raz, przy ładowaniu)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>teardown</code></td>
+<td><code>(api)</code></td>
+<td>— (przy wyłączeniu)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>on_shell_start</code></td>
+<td><code>(api, shell)</code></td>
+<td>— (<strong>wątek roboczy</strong>)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>on_shell_stop</code></td>
+<td><code>(api, shell)</code></td>
+<td>— (<strong>wątek roboczy</strong>)</td>
+</tr>
+<tr>
+<td>start_menu</td>
+<td><code>start_menu_items</code></td>
+<td><code>(api, menu)</code></td>
+<td>listę pozycji</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_menu_items</code></td>
+<td><code>(api, browser)</code></td>
+<td>listę pozycji (menu Narzędzia)</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_toolbar_items</code></td>
+<td><code>(api, browser)</code></td>
+<td>listę pozycji (pasek)</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_context_items</code></td>
+<td><code>(api, browser, where, selection)</code></td>
+<td>listę pozycji</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_columns</code></td>
+<td><code>(api, browser, location)</code></td>
+<td>listę kolumn</td>
+</tr>
+<tr>
+<td>taskbar</td>
+<td><code>taskbar_bands</code></td>
+<td><code>(api, taskbar)</code></td>
+<td>listę kontrolek</td>
+</tr>
+<tr>
+<td>taskbar</td>
+<td><code>taskbar_menu_items</code></td>
+<td><code>(api, taskbar)</code></td>
+<td>listę pozycji</td>
+</tr>
+<tr>
+<td>desktop</td>
+<td><code>desktop_menu_items</code></td>
+<td><code>(api, desktop, where, entry)</code></td>
+<td>listę pozycji</td>
+</tr>
+<tr>
+<td>dostawca</td>
+<td><code>open_start_menu</code></td>
+<td><code>(api, parent)</code></td>
+<td>okno</td>
+</tr>
+<tr>
+<td>dostawca</td>
+<td><code>open_explorer</code></td>
+<td><code>(api, location, parent, new_window)</code></td>
+<td>okno</td>
+</tr>
+</tbody></table>
+
+<p>Wszystko poza dwoma dostawcami i czterema funkcjami cyklu życia działa na <strong>wątku GUI</strong>, bo tam żyją menu, paski i listy. Cokolwiek wolnego — na własny wątek.</p>
+
+<h2>Pozycja (entry)</h2>
+
+<p>Wkład to zwykły słownik — ten sam kształt, który ustalił <code>src/ui/program_menu.py</code> dla „rzeczy, którą menu może zaproponować":</p>
+
+<pre><code class="language-python">{&#x27;id&#x27;: &#x27;copy_path&#x27;, &#x27;label&#x27;: &quot;Kopiuj pełną ścieżkę&quot;, &#x27;action&#x27;: copy_path}</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Klucz</th>
+<th>Znaczenie</th>
+</tr></thead><tbody>
+<tr>
+<td><code>id</code></td>
+<td>Twój, unikalny w obrębie dodatku (jeśli go nie ma, zostanie nadany)</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>Co pisze. <strong>Wymagane</strong> — pozycja menu bez słów to pozycja, której czytnik ekranu nie przeczyta</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>Wywoływalny obiekt bez argumentów, uruchamiany na wątku GUI</td>
+</tr>
+<tr>
+<td><code>children</code></td>
+<td>Lista pozycji — robi z tego gałąź menu Start zamiast pojedynczej linii</td>
+</tr>
+<tr>
+<td><code>control</code></td>
+<td>Wywoływalne <code>(parent) -&gt; wx.Window</code> — kontrolka na pasku zadań</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>Wywoływalne <code>(entry) -&gt; str</code> — kolumna w przeglądarce plików</td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td>Podpowiedź / tekst na pasku stanu (pozycje paska narzędzi)</td>
+</tr>
+<tr>
+<td><code>art</code></td>
+<td>Identyfikator <code>wx.ART_*</code> — obrazek pozycji paska</td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td>Piksele (kontrolka paska, kolumna przeglądarki)</td>
+</tr>
+</tbody></table>
+
+<p>Pozycja jest prawdziwa, jeśli ma coś do <strong>zrobienia</strong> (<code>action</code>), coś do <strong>pokazania</strong> (<code>control</code>, <code>value</code>) albo coś do <strong>otwarcia</strong> (<code>children</code>). Wszystko inne jest odrzucane, z podaniem powodu na konsoli — pozycja menu, za którą nic nie stoi, jest kłamstwem.</p>
+
+<p>Do każdej przyjętej pozycji Titan dopisuje <code>addon</code> i <code>addon_name</code> — dzięki temu menu Start potrafi powiedzieć, skąd wzięła się pozycja.</p>
+
+<h2>Obiekt API</h2>
+
+<pre><code class="language-python">def start_menu_items(api, menu):
+    api.log(&quot;zapytano o moje pozycje w menu Start&quot;)
+    ...</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Metoda</th>
+<th>Co daje</th>
+</tr></thead><tbody>
+<tr>
+<td><code>api.id</code>, <code>api.path</code></td>
+<td>Identyfikator i katalog dodatku</td>
+</tr>
+<tr>
+<td><code>api.file(*parts)</code></td>
+<td>Ścieżka wewnątrz Twojego katalogu — ikony, dźwięki, dane</td>
+</tr>
+<tr>
+<td><code>api.shell()</code></td>
+<td>Działający <code>TitanShell</code> albo <code>None</code>, gdy powłoki nie ma</td>
+</tr>
+<tr>
+<td><code>api.window(name)</code></td>
+<td><code>&#x27;desktop&#x27;</code>, <code>&#x27;taskbar&#x27;</code> albo <code>&#x27;start_menu&#x27;</code></td>
+</tr>
+<tr>
+<td><code>api.run_action(addon, action, <strong>params)</code></td>
+<td></strong>Dowolna akcja Titana** — patrz przewodnik po Action API</td>
+</tr>
+<tr>
+<td><code>api.setting(key, default)</code></td>
+<td>Twoje własne ustawienie (sekcja <code>shell_addon_&lt;id&gt;</code>)</td>
+</tr>
+<tr>
+<td><code>api.set_setting(key, value)</code></td>
+<td>To samo, zapisane</td>
+</tr>
+<tr>
+<td><code>api.speak(text)</code></td>
+<td>Mowa Titana</td>
+</tr>
+<tr>
+<td><code>api.sound(name)</code></td>
+<td>Jeden z własnych dźwięków powłoki</td>
+</tr>
+<tr>
+<td><code>api.log(message)</code></td>
+<td>Linia na konsoli z Twoim prefiksem</td>
+</tr>
+</tbody></table>
+
+<p><code>api.run_action</code> jest tu najważniejsze: to dzięki niemu dodatek sięga do reszty Titana bez rozrastania się tego obiektu o metodę na podsystem. <code>api.run_action(&#x27;titan&#x27;, &#x27;open_settings&#x27;)</code>, <code>api.run_action(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=...)</code>, <code>api.run_action(&#x27;shell&#x27;, &#x27;list_windows&#x27;)</code> — te same wywołania, które robi AI, makro i Action Bus. Sięgnij po nie, zanim sięgniesz po wnętrzności Titana.</p>
+
+<h2>Pięć powierzchni</h2>
+
+<h3>1. Sama powłoka</h3>
+
+<pre><code class="language-python">def setup(api):
+    &quot;&quot;&quot;Raz, przy ładowaniu dodatku.&quot;&quot;&quot;
+    api.log(&quot;załadowany&quot;)
+
+
+def on_shell_start(api, shell):
+    &quot;&quot;&quot;Pulpit, pasek i menu Start już istnieją.
+
+    Wołane na WĄTKU ROBOCZYM - `start_shell()` kosztuje około 200 ms, a ten
+    proces posiada appbar i shell hook, więc dodatki są ładowane i
+    powiadamiane poza wątkiem GUI.  Cokolwiek dotyka okna, idzie przez
+    `wx.CallAfter`.
+    &quot;&quot;&quot;
+    import wx
+    wx.CallAfter(lambda: api.log(str(api.window(&#x27;taskbar&#x27;))))
+
+
+def on_shell_stop(api, shell):
+    &quot;&quot;&quot;Powłoka znika - posprzątaj po sobie.&quot;&quot;&quot;</code></pre>
+
+<h3>2. Menu Start</h3>
+
+<p>Jedna funkcja zasila <strong>oba</strong> wbudowane menu — dwukolumnowe XP i klasyczne — <strong>oraz wyszukiwarkę</strong>, bo oba są budowane z <code>src/ui/start_menu_content.py</code>. Piszesz to raz.</p>
+
+<pre><code class="language-python">def start_menu_items(api, menu):
+    def open_home():
+        from src.shell import explorer
+        explorer.open_explorer(os.path.expanduser(&#x27;~&#x27;))
+
+    return [
+        {&#x27;id&#x27;: &#x27;home&#x27;, &#x27;label&#x27;: _(&quot;Mój katalog domowy&quot;), &#x27;action&#x27;: open_home},
+        {&#x27;id&#x27;: &#x27;more&#x27;, &#x27;label&#x27;: _(&quot;Mój dodatek&quot;), &#x27;children&#x27;: [
+            {&#x27;id&#x27;: &#x27;hello&#x27;, &#x27;label&#x27;: _(&quot;Przywitaj się&quot;),
+             &#x27;action&#x27;: lambda: api.speak(_(&quot;Cześć&quot;))},
+        ]},
+    ]</code></pre>
+
+<p>Pozycja z <code>children</code> staje się <strong>gałęzią</strong>, która otwiera się w miejscu (lewa kolumna to drzewo, a nie łańcuch wysuwanych menu, za którymi klawiatura nie nadąża). Nie wpisuj słowa „podmenu" do etykiety: kontrolka drzewa sama zgłasza „zwinięte" / „rozwinięte", więc czytnik powiedziałby to dwa razy.</p>
+
+<h3>3. Przeglądarka plików</h3>
+
+<p>Cztery funkcje — odbudowane punkty rozszerzeń samego Explorera.</p>
+
+<pre><code class="language-python">def explorer_menu_items(api, browser):
+    &quot;&quot;&quot;Menu Narzędzia przeglądarki - istnieje tylko wtedy, gdy coś w nim jest.&quot;&quot;&quot;
+    return [{&#x27;id&#x27;: &#x27;where&#x27;, &#x27;label&#x27;: _(&quot;Gdzie jestem?&quot;),
+             &#x27;action&#x27;: lambda: wx.MessageBox(str(browser.location))}]
+
+
+def explorer_toolbar_items(api, browser):
+    return [{&#x27;id&#x27;: &#x27;up_twice&#x27;, &#x27;label&#x27;: _(&quot;Dwa w górę&quot;),
+             &#x27;help&#x27;: _(&quot;Przejdź dwa katalogi wyżej naraz&quot;),
+             &#x27;art&#x27;: wx.ART_GO_DIR_UP,
+             &#x27;action&#x27;: lambda: (browser.go_up(), browser.go_up())}]
+
+
+def explorer_context_items(api, browser, where, selection):
+    &quot;&quot;&quot;`where` to &#x27;item&#x27; albo &#x27;background&#x27;; `selection` to to, czego menu
+    dotyczy - więc polecenie może dotyczyć TEGO pliku.&quot;&quot;&quot;
+    if where != &#x27;item&#x27; or not selection:
+        return []
+    path = selection[0].get(&#x27;path&#x27;) or &#x27;&#x27;
+
+    def copy_path():
+        if wx.TheClipboard.Open():
+            try:
+                wx.TheClipboard.SetData(wx.TextDataObject(path))
+            finally:
+                wx.TheClipboard.Close()
+
+    return [{&#x27;id&#x27;: &#x27;copy&#x27;, &#x27;label&#x27;: _(&quot;Kopiuj pełną ścieżkę&quot;),
+             &#x27;action&#x27;: copy_path}]
+
+
+def explorer_columns(api, browser, location):
+    &quot;&quot;&quot;Własna kolumna w widoku szczegółów.&quot;&quot;&quot;
+    def extension(entry):
+        if entry.get(&#x27;directory&#x27;):
+            return &#x27;&#x27;
+        return os.path.splitext(entry.get(&#x27;name&#x27;) or &#x27;&#x27;)[1].lstrip(&#x27;.&#x27;).upper()
+
+    return [{&#x27;id&#x27;: &#x27;extension&#x27;, &#x27;label&#x27;: _(&quot;Rozszerzenie&quot;), &#x27;width&#x27;: 90,
+             &#x27;value&#x27;: extension}]</code></pre>
+
+<p><strong>Regułę o kolumnach trzeba zapamiętać.</strong> <code>explorer_columns</code> jest pytane <strong>raz na katalog</strong>, a <code>value</code> wołane potem dla każdego wiersza, z pozycji, którą przeglądarka już ma w ręku. Widok jest listą wirtualną — to dzięki temu katalog z trzema tysiącami plików otwiera się w około 30 ms zamiast sześciu sekund — więc <code>value</code>, które pyta Windows o cokolwiek per wiersz (wywołanie powłoki, odczyt pliku, zapytanie sieciowe), niszczy to. Zwykle wszystko, czego potrzebujesz, jest już w pozycji: <code>name</code>, <code>path</code>, <code>directory</code>, <code>size</code>, <code>modified</code>.</p>
+
+<h3>4. Pasek zadań</h3>
+
+<pre><code class="language-python">def taskbar_bands(api, taskbar):
+    &quot;&quot;&quot;Własna kontrolka na pasku - Windows nazywa to deskbandem.&quot;&quot;&quot;
+    def make(parent):
+        from src.shell.controls import TextControl
+        return TextControl(parent, _(&quot;Przykład&quot;))
+
+    return [{&#x27;id&#x27;: &#x27;band&#x27;, &#x27;label&#x27;: _(&quot;Przykładowa kontrolka&quot;), &#x27;width&#x27;: 70,
+             &#x27;control&#x27;: make}]
+
+
+def taskbar_menu_items(api, taskbar):
+    return [{&#x27;id&#x27;: &#x27;refresh&#x27;, &#x27;label&#x27;: _(&quot;Odśwież pasek&quot;),
+             &#x27;action&#x27;: taskbar.refresh_windows}]</code></pre>
+
+<p>Kontrolka jest budowana <strong>w zasobniku systemowym</strong>, więc jest prawdziwym oknem potomnym paska: osiągalna Tabem i strzałkami jak wszystko inne tam, i nazwana, więc czytnik ekranu mówi, czym jest. Budowana jest <strong>raz, razem z paskiem</strong>, i nigdy przy odświeżaniu zasobnika — zasobnik jest odczytywany co trzydzieści sekund, a przebudowywanie czyjejś kontrolki tak często wyrzucałoby z niej klawiaturę.</p>
+
+<p>Kontrolka, która nie jest <code>wx.Window</code>, jest odrzucana, z linijką na konsoli.</p>
+
+<h3>5. Pulpit</h3>
+
+<pre><code class="language-python">def desktop_menu_items(api, desktop, where, entry):
+    &quot;&quot;&quot;`where` to &#x27;item&#x27; (kliknięto ikonę) albo &#x27;background&#x27;.&quot;&quot;&quot;
+    if where == &#x27;background&#x27;:
+        return [{&#x27;id&#x27;: &#x27;count&#x27;, &#x27;label&#x27;: _(&quot;Ile ikon?&quot;),
+                 &#x27;action&#x27;: lambda: api.speak(str(len(desktop.entries)))}]
+    name = (entry or {}).get(&#x27;name&#x27;) or &#x27;&#x27;
+    return [{&#x27;id&#x27;: &#x27;say&#x27;, &#x27;label&#x27;: _(&quot;Powiedz nazwę&quot;),
+             &#x27;action&#x27;: lambda: api.speak(name)}] if name else []</code></pre>
+
+<h2>Dostawcy: zastępowanie części powłoki</h2>
+
+<h3>Własne menu Start</h3>
+
+<pre><code class="language-ini">provides = start_menu
+surfaces = start_menu</code></pre>
+
+<pre><code class="language-python">def open_start_menu(api, parent):
+    &quot;&quot;&quot;Odpowiedz oknem.  To cała umowa.&quot;&quot;&quot;
+    return MyStartMenu(api, parent)</code></pre>
+
+<p>Okno musi mieć <code>Show</code>, <code>Hide</code> i <code>IsShown</code>. Cała reszta — gdzie się pojawia, co na nim jest, jak się po nim chodzi — jest Twoja. <code>data/shell addons/simple_start_menu/</code> to kompletne, działające menu w około 200 liniach: pole wyszukiwania, lista i każde polecenie przez <code>api.run_action</code>.</p>
+
+<p><strong>Samo zainstalowanie nie zabiera klawisza Windows.</strong> Titan pyta o menu Start dodatku dopiero wtedy, gdy użytkownik wybrał Twoje — w jednym z dwóch miejsc, które o to pytają:</p>
+
+<li><strong>Właściwości paska zadań -> Menu Start</strong>, gdzie każdy zainstalowany dostawca jest przyciskiem wyboru obok dwóch menu Titana, z opisem z manifestu jako linijką pod spodem;</li>
+<li><strong>Ustawienia -> Powłoka Titana -> Menu Start</strong>, ta sama lista jako lista rozwijana.</li>
+
+<p>Oba zapisują <code>start_menu_style = addon</code> i <code>provider_start_menu = &lt;twój id&gt;</code> w sekcji <code>titan_shell</code>. Dodatek wybrany, a potem odinstalowany lub wyłączony, oznacza <strong>własne menu Titana</strong> — nigdy po cichu awansowany inny dodatek.</p>
+
+<h3>Własna przeglądarka plików</h3>
+
+<pre><code class="language-ini">provides = explorer
+surfaces = explorer</code></pre>
+
+<pre><code class="language-python">def open_explorer(api, location, parent, new_window):
+    &quot;&quot;&quot;`location` to katalog do pokazania (albo nazwa wirtualna, jak Mój
+    komputer), `new_window` mówi, czy użytkownik prosił o drugie okno.&quot;&quot;&quot;
+    return MyBrowser(api, location, parent)</code></pre>
+
+<p>Wszystko, co w Titanie otwiera katalog, trafia tutaj: pulpit, Menedżer plików z menu Start, Mój komputer, Windows+E przy włączonej powłoce.</p>
+
+<h2>Dostępność: reguły, które nie są opcjonalne</h2>
+
+<p>Powłoka zastępuje interfejs systemowy, więc jej użytkownicy czytają ją czytnikiem ekranu. Cztery reguły, każda okupiona błędem:</p>
+
+<li><strong>Nigdy nie mów tego, co czytnik już mówi.</strong> Sama powłoka nie mówi nic przez TTS: jest interfejsem systemowym, a komunikat Titana na wierzchu powtarzałby każdy przycisk dwa razy. <code>api.speak</code> istnieje, bo dodatek jest programem zainstalowanym przez użytkownika, a nie interfejsem systemowym — ale najpierw zapytaj siebie, czy czytnik już tego nie powiedział.</li>
+<li><strong>Każda kontrolka, którą zbudujesz, musi być prawdziwym, fokusowalnym, nazwanym oknem.</strong> Narysowany prostokąt jest dla czytnika niczym. Używaj kontrolek powłoki (<code>src/shell/controls.py</code> — odpowiadają MSAA nazwą, rolą i stanem przez <code>a11y.AccessibleMixin</code>), albo nazwij kontrolkę natywną „na twardo":</li>
+
+<pre><code class="language-python">   from src.shell.a11y import name_control
+   name_control(self.list, _(&quot;Menu Start&quot;))
+   ```
+
+   Samo `wx.Window.SetName` nigdy nie dociera do MSAA na kontrolce natywnej (lista odpowiada własnym IAccessible, którego nazwa bierze się z tekstu okna, a tego te kontrolki nie mają). Po to jest `name_control`.
+3. **Lista z polami wyboru musi być polami wyboru dla systemu.** `wx.CheckListBox` jest na Windows rysowany samodzielnie: jego wiersze zgłaszają rolę „element listy&quot; bez stanu zaznaczenia, więc czytnik mówi nazwę i nic o tym, czy jest włączona. Użyj `src.ui.check_list.CheckList` — listy w trybie raportu z `EnableCheckBoxes()`, której wiersze zgłaszają rolę „pole wyboru&quot;, stan CHECKED i wzorzec toggle w UIA.
+4. **Żaden znak nie zastępuje obrazka ani słowa.** Tekst pozycji listy *jest* jej nazwą dla czytnika, więc strzałka po nazwie katalogu zostanie przeczytana jako strzałka. Powiedz „podmenu&quot; słowami — albo lepiej, użyj kontrolki, która sama zgłasza stan.
+
+## Własne ustawienia
+</code></pre>python
+value = api.setting('greeting', 'Cześć')
+api.set_setting('greeting', "Dzień dobry")
+<pre><code>
+Trafiają do sekcji `shell_addon_&lt;twój id&gt;` w pliku ustawień Titana. `get_setting` jest buforowane względem znacznika czasu pliku, więc odczyt w obsłudze rysowania jest tani (około mikrosekundy) — zapis nie, więc nie zapisuj w pętli.
+
+## Tłumaczenia
+</code></pre>python
+try:
+    from src.titan_core.translation import _
+except Exception:
+    def _(text):
+        return text
+<pre><code>
+Katalogi samego Titana są już załadowane, więc wszystko, co Titan mówi, dostajesz w języku użytkownika za darmo. Na słowa, których Titan nie ma, dołóż własny `.mo` obok dodatku i załaduj go przez `gettext`. **Nazwa i opis** dodatku nie są w ogóle tłumaczonymi tekstami — to `name_pl` / `description_pl` w manifeście.
+
+## Włączanie i sterowanie
+
+- **Ustawienia -&gt; Powłoka Titana -&gt; Dodatki powłoki** to lista z polami wyboru. Zaznaczenie zapisuje `status` w manifeście danego dodatku od razu, dokładnie jak robi to menedżer komponentów — dodatek powłoki włącza się po to, żeby go wypróbować.
+- **Action API** ma to samo dla makra, AI albo innego dodatku:
+
+| Akcja | Co robi |
+|-------|---------|
+| `shell.list_addons` | Wszystko zainstalowane, z `enabled`, `provides` i `surfaces` |
+| `&lt;id dodatku&gt;.status` | Czy jest włączony? |
+| `&lt;id dodatku&gt;.enable` / `&lt;id dodatku&gt;.disable` | Przełącza |
+
+## Jak zlecić to AI
+
+**Programista -&gt; AI -&gt; Utwórz dodatek powłoki...** generuje taki dodatek z
+opisu. Model dostaje w całości ten przewodnik i dodatek wzorcowy, a to, co
+napisze, jest przed zapisaniem sprawdzane względem samego Titana: funkcje
+muszą być tymi, które Titan naprawdę woła (z właściwą liczbą argumentów),
+klucze manifestu i powierzchnie muszą być tymi, które Titan czyta, dodatek z
+`provides = start_menu` musi definiować `open_start_menu`, a każde
+`api.cokolwiek` musi istnieć w prawdziwym `ShellAddonAPI`. Problem jest
+zgłaszany z nazwy i model jest proszony o poprawkę - bo błąd, przed którym to
+chroni, jest inaczej niewidoczny: dodatek, który się ładuje, jest na liście,
+da się go zaznaczyć - i nic nie wnosi, bo jego funkcje nazywają się tak, jak
+Titan nigdy nie pyta.
+
+Sprawdzenie to `ai_creation_kit.check_shell_addon`; czyta
+`shell.addons.HOOKS`, `HOOK_SIGNATURES`, `SURFACES`, `PROVIDABLE`,
+`MANIFEST_KEYS` i samą klasę API - nigdy kopii - więc nie potrafi opisać
+Titana, którego nie ma.
+
+## Pakowanie
+
+Każdy katalog dodatku można zamienić w jeden skompresowany plik:
+</code></pre>bash
+python src/scripts/pack_addon.py "data/shell addons/moj_dodatek" --kind shell_addon -o moj_dodatek.tcd
+python src/scripts/pack_addon.py --unpack moj_dodatek.tcd -o /tmp/podglad
+<pre><code>
+- Dodatki powłoki pakuje się jako **`.TCD`** (`.TCA` to aplikacje i gry).
+- Spakowany plik jest znajdowany i używany dokładnie jak katalog — bez osobnego manifestu, bez konwersji, bez ręcznej instalacji. Dwuklik w Eksploratorze instaluje go do `data/shell addons/` użytkownika.
+- Można go wysłać do repozytorium aplikacji Titan-Net i pobrać stamtąd jak każdy inny dodatek.
+
+## Diagnostyka
+
+- Uruchom Titana ze źródeł (`python main.py`) i patrz na konsolę: wszystko, co warstwa dodatków odrzuci, mówi dlaczego — `[ShellAddons] moj_dodatek.start_menu_items failed: ...`, `contributed an entry with no label or nothing behind it`, `answered str, which is not a list of entries`.
+- `api.log(...)` poprzedza Twoje własne linie tak samo.
+- Testy powłoki to `tests/test_shell_addons.py` (26 testów) i `tests/test_shell.py`; uruchamiaj je bezpośrednio (`python tests/test_shell_addons.py`) — katalog `tests/` nie ma `__init__.py`. Jeśli dokładasz powierzchnię, dołóż tam test.
+- Titan skompilowany (zamrożony) ładuje `init.py`, czytając go i wykonując, więc dodatek działa w kompilacie tak samo jak ze źródeł. Wszystko, co importujesz, a czego Titan nie ma, musi leżeć w Twoim `lib/`.
+
+## Kompletny minimalny dodatek
+
+`data/shell addons/hello_shell/__shell_addon__.TCE`:
+</code></pre>ini
+[shell addon]
+name = Hello shell
+name_pl = Witaj powłoko
+description = One entry on the Start menu and one on the desktop's menu.
+description_pl = Jedna pozycja w menu Start i jedna w menu pulpitu.
+author = Ja
+version = 1.0
+status = 1
+surfaces = start_menu, desktop
+<pre><code>
+`data/shell addons/hello_shell/init.py`:
+</code></pre>python
+<h1>-<em>- coding: utf-8 -</em>-</h1>
+try:
+    from src.titan_core.translation import _
+except Exception:
+    def _(text):
+        return text
+
+<p>def setup(api):
+    api.log("cześć")</p>
+
+<p>def start_menu_items(api, menu):
+    return [{'id': 'hello', 'label': _("Przywitaj się"),
+             'action': lambda: api.speak(_("Cześć z mojego dodatku"))}]</p>
+
+def desktop_menu_items(api, desktop, where, entry):
+    if where != 'background':
+        return []
+    return [{'id': 'count', 'label': _("Ile ikon?"),
+             'action': lambda: api.speak(str(len(desktop.entries)))}]
+<code>`</code>
+
+<p>Potem: Ustawienia -> Powłoka Titana -> Dodatki powłoki -> zaznacz, i naciśnij klawisz Windows.</p>
+
+<h2>Lista kontrolna</h2>
+
+<li>[ ] <code>__shell_addon__.TCE</code> z <code>[shell addon]</code>, <code>status = 1</code> i faktycznie dotykanymi <code>surfaces</code></li>
+<li>[ ] <code>name_pl</code> / <code>description_pl</code>, jeśli Twoi użytkownicy są Polakami</li>
+<li>[ ] Tylko te funkcje, których potrzebujesz — każda jest opcjonalna</li>
+<li>[ ] Każda pozycja ma <code>label</code> i coś za sobą</li>
+<li>[ ] Nic wolnego na wątku GUI; <code>value</code> kolumny czyta pozycję, a nie Windows</li>
+<li>[ ] Każda zbudowana kontrolka jest fokusowalna i nazwana (<code>name_control</code> albo kontrolki powłoki)</li>
+<li>[ ] Nie mówisz tego, co czytnik ekranu już powiedział</li>
+<li>[ ] Do reszty Titana sięgasz przez <code>api.run_action</code>, a nie przez wnętrzności Titana</li>
+<li>[ ] Sprawdzone także wyłączone — powłoka nie może zauważyć Twojej nieobecności</li>
+<li>[ ] Spakowane do <code>.TCD</code> do rozpowszechniania</li>
+
+<h2>Zobacz też</h2>
+
+<li><code>data/shell addons/example_shell_addon/</code> — jedna funkcja na powierzchnię, wzorzec</li>
+<li><code>data/shell addons/simple_start_menu/</code> — kompletny dostawca menu Start</li>
+<li><code>action_api_guide_pl.md</code> — wszystko, do czego sięga <code>api.run_action</code></li>
+<li><code>settings_interface_guide_pl.md</code> — ta sama idea dla okna ustawień</li>
+<li><code>component_creation_guide_pl.md</code> — dla wszystkiego, co nie jest częścią powłoki</li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

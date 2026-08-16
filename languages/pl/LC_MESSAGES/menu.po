@@ -256,3 +256,9 @@ msgstr "Nie można zainstalować pakietu danych: {error}"
 #~ msgid "Finished unpacking .tcepackage."
 #~ msgstr "Zakończono rozpakowywanie .tcepackage."
 
+
+msgid "Could not open the AI projects: {error}"
+msgstr "Nie udało się otworzyć projektów AI: {error}"
+
+msgid "Projects (continue building)..."
+msgstr "Projekty (kontynuuj budowanie)..."

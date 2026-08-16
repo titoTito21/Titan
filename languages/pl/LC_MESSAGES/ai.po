@@ -1499,3 +1499,105 @@ msgstr "Nakładka z powrotem"
 #~ msgid "Accessible controls: {title}"
 #~ msgstr "Dostępne kontrolki: {title}"
 
+
+msgid "Shell Add-on"
+msgstr "Dodatek powłoki"
+
+msgid "Settings Interface"
+msgstr "Interfejs ustawień"
+
+msgid "The AI has some questions. Answer what you can; leave anything blank to let the AI decide."
+msgstr "AI ma kilka pytań. Odpowiedz na co możesz; puste pole oznacza, że decyduje AI."
+
+msgid "Browse..."
+msgstr "Przeglądaj..."
+
+msgid "Browse for {what}"
+msgstr "Przeglądaj: {what}"
+
+msgid "Choose a folder"
+msgstr "Wybierz katalog"
+
+msgid "Choose a file"
+msgstr "Wybierz plik"
+
+msgid "These still need an answer:\n\n{questions}"
+msgstr "Te pytania wciąż czekają na odpowiedź:\n\n{questions}"
+
+msgid "Answer needed"
+msgstr "Potrzebna odpowiedź"
+
+msgid "Save project"
+msgstr "Zapisz projekt"
+
+msgid "Keep this session - the description, the questions and answers, the conversation and the files - so you can carry on later."
+msgstr "Zachowuje całą sesję - opis, pytania i odpowiedzi, rozmowę i pliki - żeby dało się wrócić do pracy później."
+
+msgid "Open project..."
+msgstr "Otwórz projekt..."
+
+msgid "Could not save the project"
+msgstr "Nie udało się zapisać projektu"
+
+msgid "Create {kind} with AI - {project}"
+msgstr "Utwórz: {kind} z pomocą AI - {project}"
+
+msgid "Project saved."
+msgstr "Projekt zapisany."
+
+msgid "Project saved"
+msgstr "Projekt zapisany"
+
+msgid "There is nothing to save yet."
+msgstr "Nie ma jeszcze czego zapisać."
+
+msgid "Project"
+msgstr "Projekt"
+
+msgid "Name for this project:"
+msgstr "Nazwa projektu:"
+
+msgid "A project called {name} already exists. Replace it?"
+msgstr "Projekt o nazwie {name} już istnieje. Zastąpić go?"
+
+msgid "There are no saved {kind} projects yet. Press Save project to keep this one."
+msgstr "Nie ma jeszcze zapisanych projektów tego rodzaju ({kind}). Naciśnij Zapisz projekt, żeby zachować ten."
+
+msgid "Open project"
+msgstr "Otwórz projekt"
+
+msgid "Opening a project replaces what is in this window. Continue?"
+msgstr "Otwarcie projektu zastąpi to, co jest w tym oknie. Kontynuować?"
+
+msgid "{name} - {files} file(s), last changed {when}"
+msgstr "{name} - plików: {files}, ostatnia zmiana: {when}"
+
+msgid "Which project?"
+msgstr "Który projekt?"
+
+msgid "That project could not be read."
+msgstr "Nie udało się odczytać tego projektu."
+
+msgid "{name}: {files} file(s), {turns} turn(s) so far.\nDescribe what to change and press Generate - the AI still has the whole conversation."
+msgstr "{name}: plików: {files}, tur rozmowy: {turns}.\nOpisz, co zmienić, i naciśnij Generuj - AI wciąż pamięta całą rozmowę."
+
+msgid "Asked for"
+msgstr "Prośba"
+
+msgid "Project opened."
+msgstr "Projekt otwarty."
+
+msgid "Project {name} opened"
+msgstr "Projekt {name} otwarty"
+
+msgid "No projects yet. Create an add-on with AI and press Save project to keep the session."
+msgstr "Nie ma jeszcze żadnych projektów. Utwórz dodatek z pomocą AI i naciśnij Zapisz projekt, żeby zachować sesję."
+
+msgid "AI projects"
+msgstr "Projekty AI"
+
+msgid "{name} ({kind}) - {files} file(s), last changed {when}"
+msgstr "{name} ({kind}) - plików: {files}, ostatnia zmiana: {when}"
+
+msgid "This project was made for {kind}, which this Titan does not have."
+msgstr "Ten projekt powstał dla rodzaju {kind}, którego ten Titan nie ma."

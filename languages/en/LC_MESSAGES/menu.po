@@ -263,3 +263,9 @@ msgstr "Could not install the data package: {error}"
 #~ msgid "Finished unpacking .tcepackage."
 #~ msgstr "Finished unpacking .tcepackage."
 
+
+msgid "Could not open the AI projects: {error}"
+msgstr ""
+
+msgid "Projects (continue building)..."
+msgstr ""

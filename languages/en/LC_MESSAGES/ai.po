@@ -1502,3 +1502,105 @@ msgstr ""
 #~ msgid "Accessible controls: {title}"
 #~ msgstr ""
 
+
+msgid "Shell Add-on"
+msgstr ""
+
+msgid "Settings Interface"
+msgstr ""
+
+msgid "The AI has some questions. Answer what you can; leave anything blank to let the AI decide."
+msgstr ""
+
+msgid "Browse..."
+msgstr ""
+
+msgid "Browse for {what}"
+msgstr ""
+
+msgid "Choose a folder"
+msgstr ""
+
+msgid "Choose a file"
+msgstr ""
+
+msgid "These still need an answer:\n\n{questions}"
+msgstr ""
+
+msgid "Answer needed"
+msgstr ""
+
+msgid "Save project"
+msgstr ""
+
+msgid "Keep this session - the description, the questions and answers, the conversation and the files - so you can carry on later."
+msgstr ""
+
+msgid "Open project..."
+msgstr ""
+
+msgid "Could not save the project"
+msgstr ""
+
+msgid "Create {kind} with AI - {project}"
+msgstr ""
+
+msgid "Project saved."
+msgstr ""
+
+msgid "Project saved"
+msgstr ""
+
+msgid "There is nothing to save yet."
+msgstr ""
+
+msgid "Project"
+msgstr ""
+
+msgid "Name for this project:"
+msgstr ""
+
+msgid "A project called {name} already exists. Replace it?"
+msgstr ""
+
+msgid "There are no saved {kind} projects yet. Press Save project to keep this one."
+msgstr ""
+
+msgid "Open project"
+msgstr ""
+
+msgid "Opening a project replaces what is in this window. Continue?"
+msgstr ""
+
+msgid "{name} - {files} file(s), last changed {when}"
+msgstr ""
+
+msgid "Which project?"
+msgstr ""
+
+msgid "That project could not be read."
+msgstr ""
+
+msgid "{name}: {files} file(s), {turns} turn(s) so far.\nDescribe what to change and press Generate - the AI still has the whole conversation."
+msgstr ""
+
+msgid "Asked for"
+msgstr ""
+
+msgid "Project opened."
+msgstr ""
+
+msgid "Project {name} opened"
+msgstr ""
+
+msgid "No projects yet. Create an add-on with AI and press Save project to keep the session."
+msgstr ""
+
+msgid "AI projects"
+msgstr ""
+
+msgid "{name} ({kind}) - {files} file(s), last changed {when}"
+msgstr ""
+
+msgid "This project was made for {kind}, which this Titan does not have."
+msgstr ""

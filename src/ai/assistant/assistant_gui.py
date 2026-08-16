@@ -27,6 +27,15 @@ except Exception:
         pass
 
 
+def _question_sound():
+    """The sound of the AI asking something - see `ai_speech.SOUND_QUESTION`."""
+    try:
+        from src.ai.ai_speech import play_question_sound
+        play_question_sound()
+    except Exception:
+        pass
+
+
 def _speak(text):
     from src.ai.ai_speech import speak
     speak(text)
@@ -156,6 +165,7 @@ class AssistantFrame(wx.Frame):
 
         def ask():
             _speak(question)
+            _question_sound()
             dlg = wx.TextEntryDialog(self, question, _("The assistant needs more information"))
             result['ok'] = (dlg.ShowModal() == wx.ID_OK)
             result['text'] = dlg.GetValue().strip()

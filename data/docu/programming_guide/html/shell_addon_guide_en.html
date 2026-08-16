@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCE Shell Add-on Creation Guide - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
+<li><a href="shell_addon_guide_en.html" class="active">Shell Add-ons</a></li>
+<li><a href="settings_interface_guide_en.html">Settings Interfaces</a></li>
+<li><a href="action_api_guide_en.html">Action API</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>TCE Shell Add-on Creation Guide</h1>
+            </div>
+            <h1>TCE Shell Add-on Creation Guide</h1>
+
+<h2>Introduction</h2>
+
+<p>The <strong>Titan shell</strong> is the desktop, the taskbar, the notification area, the Start menu and the file browser that Titan puts up when <em>Settings -> Environment -> "Modify system interface"</em> and <em>Settings -> Titan shell -> "Replace the desktop, taskbar and Start menu"</em> are both on. All five are Titan's own code — and a <strong>shell add-on</strong> is how somebody else gets into them without changing Titan.</p>
+
+<p>There are two kinds, and the difference decides everything about how you write one:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Kind</th>
+<th>What it does</th>
+<th>How many apply</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Contributor</strong></td>
+<td>Adds to what is already there: entries in the Start menu, a menu/toolbar button/column in the file browser, items on the desktop's and the taskbar's context menus, a control in the notification area</td>
+<td>Any number, all at once</td>
+</tr>
+<tr>
+<td><strong>Provider</strong></td>
+<td><strong>Replaces</strong> one part of the shell outright — <code>provides = start_menu</code> or <code>provides = explorer</code></td>
+<td>One, chosen by the user</td>
+</tr>
+</tbody></table>
+
+<p>A provider replaces a <strong>window</strong>, not the shell: choose somebody else's Start menu and the desktop, the taskbar, the notification area and the file browser carry on exactly as they were.</p>
+
+<p>Add-ons live in <code>data/shell addons/</code>. They are the tenth add-on kind, and they deliberately copy the conventions of the other nine — the same manifest style, the same <code>status = 0</code> meaning enabled, the same <code>init.py</code>, the same packaging.</p>
+
+<h2>Architecture</h2>
+
+<pre><code>data/shell addons/my_addon/
+├── __shell_addon__.TCE   # Manifest (REQUIRED, .TCE in uppercase)
+├── init.py               # The code (REQUIRED; init.pyc also accepted)
+└── lib/                  # Bundled dependencies (optional)</code></pre>
+
+<p>Discovery goes through <code>platform_utils.discover_data_entries()</code>, so the same add-on may ship as a <strong>directory</strong> or as a single packaged <strong><code>.TCD</code></strong> file — see "Packaging" below. Both are found the same way, from the program's own <code>data/</code> and from the per-user overlay.</p>
+
+<p>Loading is <code>src/shell/addons.py</code>:</p>
+
+<li>Every <code>__shell_addon__.TCE</code> is read at startup (<code>ShellAddonManager.scan</code>).</li>
+<li>An add-on with <code>status = 0</code> is <strong>loaded on demand</strong> — the first time a surface asks it for something, or when the shell starts.</li>
+<li><code>setup(api)</code> runs once, immediately after the module is imported.</li>
+<li>Each surface then calls the hooks it cares about, if they exist.</li>
+
+<p><strong>Nothing an add-on does may take the shell down.</strong> Every call out goes through a guard: a hook that is missing, raises, or answers something that is not a list of entries contributes nothing, and the surface carries on. This matters more than it would anywhere else — with the appbar registered and the shell hook installed, Titan's process is what every other program's broadcasts pass through, so an exception escaping into a paint handler is not a broken add-on, it is a machine that has stopped answering.</p>
+
+<h2>Manifest <code>__shell_addon__.TCE</code></h2>
+
+<p>INI format, one section:</p>
+
+<pre><code class="language-ini">[shell addon]
+name = My shell add-on
+name_pl = Mój dodatek powłoki
+description = What it adds, in one sentence.
+description_pl = Co dodaje, jednym zdaniem.
+author = Your Name
+version = 1.0
+status = 1
+surfaces = start_menu, explorer
+provides =
+libs = lib</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr></thead><tbody>
+<tr>
+<td>name</td>
+<td>no</td>
+<td>Display name (defaults to the folder name)</td>
+</tr>
+<tr>
+<td>name_pl, name_en, ...</td>
+<td>no</td>
+<td>The name in that language; <code>name_&lt;code&gt;</code> wins over <code>name</code></td>
+</tr>
+<tr>
+<td>description</td>
+<td>no</td>
+<td>One sentence — shown under a provider's radio button in the properties sheet</td>
+</tr>
+<tr>
+<td>description_pl, ...</td>
+<td>no</td>
+<td>The same, translated</td>
+</tr>
+<tr>
+<td>author</td>
+<td>no</td>
+<td>Author</td>
+</tr>
+<tr>
+<td>version</td>
+<td>no</td>
+<td>Version string (default <code>1.0</code>)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>yes</td>
+<td><strong><code>0</code> = enabled, <code>1</code> = disabled</strong> (the component convention)</td>
+</tr>
+<tr>
+<td>surfaces</td>
+<td>no</td>
+<td>Comma-separated: <code>shell</code>, <code>start_menu</code>, <code>explorer</code>, <code>taskbar</code>, <code>desktop</code></td>
+</tr>
+<tr>
+<td>provides</td>
+<td>no</td>
+<td><code>start_menu</code> or <code>explorer</code> — makes this add-on a <strong>provider</strong></td>
+</tr>
+<tr>
+<td>libs</td>
+<td>no</td>
+<td>Comma-separated subdirectories added to <code>sys.path</code> (default: <code>lib</code>)</td>
+</tr>
+</tbody></table>
+
+<p>Notes:</p>
+
+<li><strong><code>surfaces</code> is a help, not a gate.</strong> An add-on that names none is asked about everything, because getting this wrong should mean a slightly slower menu rather than an add-on that silently does nothing. Name them anyway: it is what keeps the Start menu fast when twenty add-ons are installed.</li>
+<li><strong>Ship <code>status = 1</code>.</strong> A shell add-on starts doing things the moment it is switched on, so the user switches it on — Settings -> Titan shell -> Shell add-ons. (This is the opposite of a settings interface, which ships <code>status = 0</code> because being installed only makes it one of the choices.)</li>
+<li>The name and the description are <strong>your</strong> words, not Titan's translatable strings, which is why <code>name_pl</code> / <code>description_pl</code> exist instead.</li>
+
+<h2><code>init.py</code>: every hook</h2>
+
+<p>Each hook is optional. Titan asks for what is there and skips what is not — an add-on that only wants one entry on the desktop's menu writes <code>desktop_menu_items</code> and nothing else.</p>
+
+<p>Every hook is handed <code>api</code> first (a <code>ShellAddonAPI</code>), then whatever the surface is about.</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Surface</th>
+<th>Hook</th>
+<th>Signature</th>
+<th>Answers</th>
+</tr></thead><tbody>
+<tr>
+<td>shell</td>
+<td><code>setup</code></td>
+<td><code>(api)</code></td>
+<td>— (called once, at load)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>teardown</code></td>
+<td><code>(api)</code></td>
+<td>— (called when switched off)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>on_shell_start</code></td>
+<td><code>(api, shell)</code></td>
+<td>— (<strong>worker thread</strong>)</td>
+</tr>
+<tr>
+<td>shell</td>
+<td><code>on_shell_stop</code></td>
+<td><code>(api, shell)</code></td>
+<td>— (<strong>worker thread</strong>)</td>
+</tr>
+<tr>
+<td>start_menu</td>
+<td><code>start_menu_items</code></td>
+<td><code>(api, menu)</code></td>
+<td>list of entries</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_menu_items</code></td>
+<td><code>(api, browser)</code></td>
+<td>list of entries (the Tools menu)</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_toolbar_items</code></td>
+<td><code>(api, browser)</code></td>
+<td>list of entries (the band)</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_context_items</code></td>
+<td><code>(api, browser, where, selection)</code></td>
+<td>list of entries</td>
+</tr>
+<tr>
+<td>explorer</td>
+<td><code>explorer_columns</code></td>
+<td><code>(api, browser, location)</code></td>
+<td>list of column entries</td>
+</tr>
+<tr>
+<td>taskbar</td>
+<td><code>taskbar_bands</code></td>
+<td><code>(api, taskbar)</code></td>
+<td>list of control entries</td>
+</tr>
+<tr>
+<td>taskbar</td>
+<td><code>taskbar_menu_items</code></td>
+<td><code>(api, taskbar)</code></td>
+<td>list of entries</td>
+</tr>
+<tr>
+<td>desktop</td>
+<td><code>desktop_menu_items</code></td>
+<td><code>(api, desktop, where, entry)</code></td>
+<td>list of entries</td>
+</tr>
+<tr>
+<td>provider</td>
+<td><code>open_start_menu</code></td>
+<td><code>(api, parent)</code></td>
+<td>a window</td>
+</tr>
+<tr>
+<td>provider</td>
+<td><code>open_explorer</code></td>
+<td><code>(api, location, parent, new_window)</code></td>
+<td>a window</td>
+</tr>
+</tbody></table>
+
+<p>Every hook except the two providers and the four lifecycle ones runs on the <strong>GUI thread</strong>, because menus, toolbars and lists live there. Anything slow belongs on a thread of your own.</p>
+
+<h2>The entry</h2>
+
+<p>A contribution is a plain dict — the same shape <code>src/ui/program_menu.py</code> established for "a thing a menu can offer":</p>
+
+<pre><code class="language-python">{&#x27;id&#x27;: &#x27;copy_path&#x27;, &#x27;label&#x27;: &quot;Copy the full path&quot;, &#x27;action&#x27;: copy_path}</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>id</code></td>
+<td>Yours, unique inside your add-on (one is generated if you leave it out)</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>What it says. <strong>Required</strong> — a menu item with no words is one a screen reader cannot read</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>A callable taking no arguments, run on the GUI thread</td>
+</tr>
+<tr>
+<td><code>children</code></td>
+<td>A list of entries — makes a Start menu branch instead of a line</td>
+</tr>
+<tr>
+<td><code>control</code></td>
+<td>A callable <code>(parent) -&gt; wx.Window</code> — a taskbar band</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>A callable <code>(entry) -&gt; str</code> — a file browser column</td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td>Tooltip / status bar text (toolbar items)</td>
+</tr>
+<tr>
+<td><code>art</code></td>
+<td>A <code>wx.ART_*</code> id for a toolbar item's picture</td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td>Pixels (a taskbar band, a browser column)</td>
+</tr>
+</tbody></table>
+
+<p>An entry is real if it has something to <strong>do</strong> (<code>action</code>), something to <strong>show</strong> (<code>control</code>, <code>value</code>) or something to <strong>open</strong> (<code>children</code>). Anything else is dropped and the reason is printed to the console — a menu item with nothing behind it is a lie.</p>
+
+<p>Titan adds <code>addon</code> and <code>addon_name</code> to every entry it accepts, which is how the Start menu can say where an entry came from.</p>
+
+<h2>The API object</h2>
+
+<pre><code class="language-python">def start_menu_items(api, menu):
+    api.log(&quot;asked for my Start menu entries&quot;)
+    ...</code></pre>
+
+<table class="doc-table">
+<thead><tr>
+<th>Method</th>
+<th>What it gives you</th>
+</tr></thead><tbody>
+<tr>
+<td><code>api.id</code>, <code>api.path</code></td>
+<td>Your add-on's id and folder</td>
+</tr>
+<tr>
+<td><code>api.file(*parts)</code></td>
+<td>A path inside your own folder — use it for icons, sounds, data</td>
+</tr>
+<tr>
+<td><code>api.shell()</code></td>
+<td>The running <code>TitanShell</code>, or <code>None</code> when the shell is not up</td>
+</tr>
+<tr>
+<td><code>api.window(name)</code></td>
+<td><code>&#x27;desktop&#x27;</code>, <code>&#x27;taskbar&#x27;</code> or <code>&#x27;start_menu&#x27;</code></td>
+</tr>
+<tr>
+<td><code>api.run_action(addon, action, <strong>params)</code></td>
+<td></strong>Any Titan action** — see the Action API guide</td>
+</tr>
+<tr>
+<td><code>api.setting(key, default)</code></td>
+<td>A setting of your own (section <code>shell_addon_&lt;id&gt;</code>)</td>
+</tr>
+<tr>
+<td><code>api.set_setting(key, value)</code></td>
+<td>The same, written</td>
+</tr>
+<tr>
+<td><code>api.speak(text)</code></td>
+<td>Titan's own speech</td>
+</tr>
+<tr>
+<td><code>api.sound(name)</code></td>
+<td>One of the shell's own sounds</td>
+</tr>
+<tr>
+<td><code>api.log(message)</code></td>
+<td>A line on the console, prefixed with your id</td>
+</tr>
+</tbody></table>
+
+<p><code>api.run_action</code> is the important one: it is how an add-on reaches the rest of Titan without this object growing a method per subsystem. <code>api.run_action(&#x27;titan&#x27;, &#x27;open_settings&#x27;)</code>, <code>api.run_action(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=...)</code>, <code>api.run_action(&#x27;shell&#x27;, &#x27;list_windows&#x27;)</code> — the same calls the AI, a macro and the Action Bus make. Reach for it before you reach for Titan's internals.</p>
+
+<h2>The five surfaces</h2>
+
+<h3>1. The shell itself</h3>
+
+<pre><code class="language-python">def setup(api):
+    &quot;&quot;&quot;Once, when the add-on is loaded.&quot;&quot;&quot;
+    api.log(&quot;loaded&quot;)
+
+
+def on_shell_start(api, shell):
+    &quot;&quot;&quot;The desktop, the bar and the Start menu now exist.
+
+    Called on a WORKER thread - `start_shell()` costs about 200 ms and this
+    process owns the appbar and the shell hook, so add-ons are loaded and
+    told off the GUI thread.  Anything touching a window goes through
+    `wx.CallAfter`.
+    &quot;&quot;&quot;
+    import wx
+    wx.CallAfter(lambda: api.log(str(api.window(&#x27;taskbar&#x27;))))
+
+
+def on_shell_stop(api, shell):
+    &quot;&quot;&quot;Take down anything of yours that is left.&quot;&quot;&quot;</code></pre>
+
+<h3>2. The Start menu</h3>
+
+<p>One hook feeds <strong>both</strong> built-in menus — the XP two-pane one and the classic one — <strong>and the search box</strong>, because both are built from <code>src/ui/start_menu_content.py</code>. Write it once.</p>
+
+<pre><code class="language-python">def start_menu_items(api, menu):
+    def open_home():
+        from src.shell import explorer
+        explorer.open_explorer(os.path.expanduser(&#x27;~&#x27;))
+
+    return [
+        {&#x27;id&#x27;: &#x27;home&#x27;, &#x27;label&#x27;: _(&quot;My home folder&quot;), &#x27;action&#x27;: open_home},
+        {&#x27;id&#x27;: &#x27;more&#x27;, &#x27;label&#x27;: _(&quot;My add-on&quot;), &#x27;children&#x27;: [
+            {&#x27;id&#x27;: &#x27;hello&#x27;, &#x27;label&#x27;: _(&quot;Say hello&quot;),
+             &#x27;action&#x27;: lambda: api.speak(_(&quot;Hello&quot;))},
+        ]},
+    ]</code></pre>
+
+<p>An entry with <code>children</code> becomes a <strong>branch</strong> that opens where it stands (the left column is a tree, not a chain of flyouts a keyboard cannot follow). Do not write the word "submenu" into the label: the tree control reports "collapsed" / "expanded" itself and a screen reader would then say it twice.</p>
+
+<h3>3. The file browser</h3>
+
+<p>Four hooks, and they are Explorer's own extension points rebuilt.</p>
+
+<pre><code class="language-python">def explorer_menu_items(api, browser):
+    &quot;&quot;&quot;The browser&#x27;s Tools menu - it exists only when something is in it.&quot;&quot;&quot;
+    return [{&#x27;id&#x27;: &#x27;where&#x27;, &#x27;label&#x27;: _(&quot;Where am I?&quot;),
+             &#x27;action&#x27;: lambda: wx.MessageBox(str(browser.location))}]
+
+
+def explorer_toolbar_items(api, browser):
+    return [{&#x27;id&#x27;: &#x27;up_twice&#x27;, &#x27;label&#x27;: _(&quot;Up twice&quot;),
+             &#x27;help&#x27;: _(&quot;Go up two folders at once&quot;),
+             &#x27;art&#x27;: wx.ART_GO_DIR_UP,
+             &#x27;action&#x27;: lambda: (browser.go_up(), browser.go_up())}]
+
+
+def explorer_context_items(api, browser, where, selection):
+    &quot;&quot;&quot;`where` is &#x27;item&#x27; or &#x27;background&#x27;; `selection` is what the menu is
+    about - so a command can be about THIS file.&quot;&quot;&quot;
+    if where != &#x27;item&#x27; or not selection:
+        return []
+    path = selection[0].get(&#x27;path&#x27;) or &#x27;&#x27;
+
+    def copy_path():
+        if wx.TheClipboard.Open():
+            try:
+                wx.TheClipboard.SetData(wx.TextDataObject(path))
+            finally:
+                wx.TheClipboard.Close()
+
+    return [{&#x27;id&#x27;: &#x27;copy&#x27;, &#x27;label&#x27;: _(&quot;Copy the full path&quot;),
+             &#x27;action&#x27;: copy_path}]
+
+
+def explorer_columns(api, browser, location):
+    &quot;&quot;&quot;A column of your own in the details view.&quot;&quot;&quot;
+    def extension(entry):
+        if entry.get(&#x27;directory&#x27;):
+            return &#x27;&#x27;
+        return os.path.splitext(entry.get(&#x27;name&#x27;) or &#x27;&#x27;)[1].lstrip(&#x27;.&#x27;).upper()
+
+    return [{&#x27;id&#x27;: &#x27;extension&#x27;, &#x27;label&#x27;: _(&quot;Extension&quot;), &#x27;width&#x27;: 90,
+             &#x27;value&#x27;: extension}]</code></pre>
+
+<p><strong>The column rule is the one to remember.</strong> <code>explorer_columns</code> is asked <strong>once per folder</strong>, and <code>value</code> is then called per row out of the entry already in hand. The view is a virtual list — that is what opens a folder of three thousand files in about 30 ms instead of six seconds — so a <code>value</code> that asks Windows something per row (a shell call, a file read, a network lookup) undoes it. Everything you need is usually already in the entry: <code>name</code>, <code>path</code>, <code>directory</code>, <code>size</code>, <code>modified</code>.</p>
+
+<h3>4. The taskbar</h3>
+
+<pre><code class="language-python">def taskbar_bands(api, taskbar):
+    &quot;&quot;&quot;A control of your own on the bar - Windows calls this a deskband.&quot;&quot;&quot;
+    def make(parent):
+        from src.shell.controls import TextControl
+        return TextControl(parent, _(&quot;Example&quot;))
+
+    return [{&#x27;id&#x27;: &#x27;band&#x27;, &#x27;label&#x27;: _(&quot;Example band&quot;), &#x27;width&#x27;: 70,
+             &#x27;control&#x27;: make}]
+
+
+def taskbar_menu_items(api, taskbar):
+    return [{&#x27;id&#x27;: &#x27;refresh&#x27;, &#x27;label&#x27;: _(&quot;Refresh the bar&quot;),
+             &#x27;action&#x27;: taskbar.refresh_windows}]</code></pre>
+
+<p>A band is built <strong>in the notification area</strong>, so it is a real child window of the bar: reachable with Tab and the arrows like everything else there, and named, so a screen reader says what it is. It is built <strong>once with the bar</strong> and never on a tray refresh — the notification area is re-read every thirty seconds, and rebuilding somebody's control that often would throw the keyboard out of it.</p>
+
+<p>A band that is not a <code>wx.Window</code> is dropped, with a line on the console.</p>
+
+<h3>5. The desktop</h3>
+
+<pre><code class="language-python">def desktop_menu_items(api, desktop, where, entry):
+    &quot;&quot;&quot;`where` is &#x27;item&#x27; (an icon was right-clicked) or &#x27;background&#x27;.&quot;&quot;&quot;
+    if where == &#x27;background&#x27;:
+        return [{&#x27;id&#x27;: &#x27;count&#x27;, &#x27;label&#x27;: _(&quot;How many icons?&quot;),
+                 &#x27;action&#x27;: lambda: api.speak(str(len(desktop.entries)))}]
+    name = (entry or {}).get(&#x27;name&#x27;) or &#x27;&#x27;
+    return [{&#x27;id&#x27;: &#x27;say&#x27;, &#x27;label&#x27;: _(&quot;Say the name&quot;),
+             &#x27;action&#x27;: lambda: api.speak(name)}] if name else []</code></pre>
+
+<h2>Providers: replacing a part of the shell</h2>
+
+<h3>A Start menu of your own</h3>
+
+<pre><code class="language-ini">provides = start_menu
+surfaces = start_menu</code></pre>
+
+<pre><code class="language-python">def open_start_menu(api, parent):
+    &quot;&quot;&quot;Answer a window.  That is the whole contract.&quot;&quot;&quot;
+    return MyStartMenu(api, parent)</code></pre>
+
+<p>The window must have <code>Show</code>, <code>Hide</code> and <code>IsShown</code>. Everything else — where it appears, what is on it, how it is navigated — is yours. <code>data/shell addons/simple_start_menu/</code> is a complete working one in about 200 lines: a search box, a list, and every command reached through <code>api.run_action</code>.</p>
+
+<p><strong>Being installed does not take the Windows key.</strong> Titan asks for an add-on Start menu only when the user has chosen yours, in either of the two places that ask:</p>
+
+<li>the taskbar's own <strong>Properties -> Start menu</strong>, where every installed provider is a radio button beside Titan's two, with your manifest's description as the line under it;</li>
+<li><strong>Settings -> Titan shell -> Start menu</strong>, the same list as a drop-down.</li>
+
+<p>Both write <code>start_menu_style = addon</code> and <code>provider_start_menu = &lt;your id&gt;</code> in the <code>titan_shell</code> section. An add-on chosen and since uninstalled or switched off means <strong>Titan's own menu</strong>, never a different add-on silently promoted.</p>
+
+<h3>A file browser of your own</h3>
+
+<pre><code class="language-ini">provides = explorer
+surfaces = explorer</code></pre>
+
+<pre><code class="language-python">def open_explorer(api, location, parent, new_window):
+    &quot;&quot;&quot;`location` is the folder to show (or a virtual name like My Computer),
+    `new_window` says whether the user asked for a second window.&quot;&quot;&quot;
+    return MyBrowser(api, location, parent)</code></pre>
+
+<p>Everything that opens a folder in Titan comes here: the desktop, the Start menu's File manager, My Computer, Windows+E while the shell is on.</p>
+
+<h2>Accessibility: the rules that are not optional</h2>
+
+<p>The shell replaces the system interface, so its users are reading it with a screen reader. Four rules, all of them learned the hard way:</p>
+
+<li><strong>Never speak what the reader already says.</strong> The shell itself says nothing through TTS: it is the system interface, and a Titan announcement on top of the reader's would say every button twice. <code>api.speak</code> exists because an add-on is a program the user installed, not the system interface — but ask yourself first whether the reader has not said this already.</li>
+<li><strong>Every control you build must be a real, focusable, named window.</strong> A painted rectangle is nothing to a screen reader. Use the shell's own controls (<code>src/shell/controls.py</code> — they answer MSAA with a name, a role and a state through <code>a11y.AccessibleMixin</code>), or name a native control the hard way:</li>
+
+<pre><code class="language-python">   from src.shell.a11y import name_control
+   name_control(self.list, _(&quot;Start menu&quot;))
+   ```
+
+   `wx.Window.SetName` alone never reaches MSAA on a native control (a list view answers with its own IAccessible, whose name comes from window text these controls do not have). That is what `name_control` is for.
+3. **A tick list must be tick boxes to the platform.** `wx.CheckListBox` is owner-drawn on Windows: its rows report role &quot;list item&quot; with no checked state, so a reader says the name and nothing about whether it is on. Use `src.ui.check_list.CheckList`, which is a report-mode list with `EnableCheckBoxes()` — its rows report role &quot;check box&quot; with the CHECKED state and a UIA toggle pattern.
+4. **No character ever stands in for a picture or a word.** A list item&#x27;s text *is* its accessible name, so an arrow after a folder&#x27;s name is read out as the arrow. Say &quot;submenu&quot; in words, or better, use a control that reports the state itself.
+
+## Settings of your own
+</code></pre>python
+value = api.setting('greeting', 'Hello')
+api.set_setting('greeting', "Good morning")
+<pre><code>
+They go into the `shell_addon_&lt;your id&gt;` section of Titan&#x27;s own settings file. `get_setting` is cached against the file&#x27;s timestamp, so reading one in a paint handler is cheap (about a microsecond) — writing one is not, so do not write in a loop.
+
+## Translations
+</code></pre>python
+try:
+    from src.titan_core.translation import _
+except Exception:
+    def _(text):
+        return text
+<pre><code>
+Titan&#x27;s own catalogues are already loaded, so anything Titan says, you get in the user&#x27;s language for free. For words Titan does not have, ship a `.mo` beside your add-on and load it yourself with `gettext`. Your add-on&#x27;s **name and description** are not translatable strings at all — they are `name_pl` / `description_pl` in the manifest.
+
+## Turning it on, and driving it
+
+- **Settings -&gt; Titan shell -&gt; Shell add-ons** is a tick list of everything installed. Ticking one writes `status` into that add-on&#x27;s own manifest at once, exactly as the component manager does — a shell add-on is switched on to try it.
+- The **Action API** has the same thing for a macro, the AI, or another add-on:
+
+| Action | What it does |
+|--------|--------------|
+| `shell.list_addons` | Everything installed, with `enabled`, `provides` and `surfaces` |
+| `&lt;addon id&gt;.status` | Is it on? |
+| `&lt;addon id&gt;.enable` / `&lt;addon id&gt;.disable` | Switch it |
+
+## Letting the AI write one
+
+**Programmer -&gt; AI -&gt; Create Shell Add-on...** generates one from a
+description. It is given this guide and the reference add-on in full, and
+what it writes is then checked against Titan itself before it is saved: the
+hooks it defined must be hooks Titan really calls (with the right number of
+arguments), the manifest keys and surfaces must be ones Titan reads, an
+add-on that says `provides = start_menu` must define `open_start_menu`, and
+every `api.something` must exist on the real `ShellAddonAPI`. A problem is
+reported by name and the model is asked to correct it, so the failure this
+prevents is the one that is otherwise invisible: an add-on that loads, is
+listed, can be ticked - and contributes nothing, because its functions are
+called something Titan never asks for.
+
+The check is `ai_creation_kit.check_shell_addon`, and it reads
+`shell.addons.HOOKS`, `HOOK_SIGNATURES`, `SURFACES`, `PROVIDABLE`,
+`MANIFEST_KEYS` and the API class itself - never a copy - so it cannot
+describe a Titan that does not exist.
+
+## Packaging
+
+Any add-on directory can become one compressed file:
+</code></pre>bash
+python src/scripts/pack_addon.py "data/shell addons/my_addon" --kind shell_addon -o my_addon.tcd
+python src/scripts/pack_addon.py --unpack my_addon.tcd -o /tmp/inspect
+<pre><code>
+- Shell add-ons pack as **`.TCD`** (`.TCA` is applications and games).
+- The packaged file is found and used exactly like the directory — no separate manifest, no conversion, nothing to install by hand. Double-clicking it in Explorer installs it into the per-user `data/shell addons/`.
+- It can be uploaded to and downloaded from the Titan-Net application repository like any other add-on.
+
+## Debugging
+
+- Run Titan from source (`python main.py`) and watch the console: everything the add-on layer refuses says why — `[ShellAddons] my_addon.start_menu_items failed: ...`, `contributed an entry with no label or nothing behind it`, `answered str, which is not a list of entries`.
+- `api.log(...)` prefixes your own lines the same way.
+- The shell&#x27;s own tests are `tests/test_shell_addons.py` (26 tests) and `tests/test_shell.py`; run them directly (`python tests/test_shell_addons.py`) — `tests/` has no `__init__.py`. If you add a surface, add a test there.
+- A frozen (compiled) Titan loads `init.py` by reading and executing it, so an add-on works the same in a build as it does from source. Anything you import that is not in Titan already must be inside your `lib/`.
+
+## A complete minimal add-on
+
+`data/shell addons/hello_shell/__shell_addon__.TCE`:
+</code></pre>ini
+[shell addon]
+name = Hello shell
+name_pl = Witaj powłoko
+description = One entry on the Start menu and one on the desktop's menu.
+description_pl = Jedna pozycja w menu Start i jedna w menu pulpitu.
+author = Me
+version = 1.0
+status = 1
+surfaces = start_menu, desktop
+<pre><code>
+`data/shell addons/hello_shell/init.py`:
+</code></pre>python
+<h1>-<em>- coding: utf-8 -</em>-</h1>
+try:
+    from src.titan_core.translation import _
+except Exception:
+    def _(text):
+        return text
+
+<p>def setup(api):
+    api.log("hello")</p>
+
+<p>def start_menu_items(api, menu):
+    return [{'id': 'hello', 'label': _("Say hello"),
+             'action': lambda: api.speak(_("Hello from my add-on"))}]</p>
+
+def desktop_menu_items(api, desktop, where, entry):
+    if where != 'background':
+        return []
+    return [{'id': 'count', 'label': _("How many icons?"),
+             'action': lambda: api.speak(str(len(desktop.entries)))}]
+<code>`</code>
+
+<p>Then: Settings -> Titan shell -> Shell add-ons -> tick it, and press the Windows key.</p>
+
+<h2>Checklist</h2>
+
+<li>[ ] <code>__shell_addon__.TCE</code> with <code>[shell addon]</code>, <code>status = 1</code>, and the <code>surfaces</code> you actually touch</li>
+<li>[ ] <code>name_pl</code> / <code>description_pl</code> if your users are Polish</li>
+<li>[ ] Only the hooks you need — every one of them optional</li>
+<li>[ ] Every entry has a <code>label</code> and something behind it</li>
+<li>[ ] Nothing slow on the GUI thread; <code>explorer_columns</code> values read the entry, not Windows</li>
+<li>[ ] Every control you build is focusable and named (<code>name_control</code>, or the shell's own controls)</li>
+<li>[ ] Nothing spoken that the screen reader already says</li>
+<li>[ ] Reached the rest of Titan through <code>api.run_action</code>, not through Titan's internals</li>
+<li>[ ] Tried it switched off as well as on — the shell must not notice your absence</li>
+<li>[ ] Packed as <code>.TCD</code> for distribution</li>
+
+<h2>See also</h2>
+
+<li><code>data/shell addons/example_shell_addon/</code> — one function per surface, the reference</li>
+<li><code>data/shell addons/simple_start_menu/</code> — a Start menu provider, complete</li>
+<li><code>action_api_guide_en.md</code> — everything <code>api.run_action</code> can reach</li>
+<li><code>settings_interface_guide_en.md</code> — the same idea for the settings window</li>
+<li><code>component_creation_guide_en.md</code> — for anything that is not part of the shell</li>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

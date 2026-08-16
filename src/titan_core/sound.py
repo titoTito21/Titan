@@ -637,31 +637,97 @@ def play_shutdown_sound():
     # fixed delay if the duration couldn't be determined.
     time.sleep(max(0.0, duration - 0.2) if duration > 0 else 2.5)
 
-def shell_sound_path(name):
-    """Where one of the shell's own sounds is: `sfx/<theme>/shell/<name>.ogg`.
+def default_theme_fallback_allowed():
+    """Has the user asked for the default theme to fill in a missing sound?
 
-    The user's theme wins (per-user overlay first, as everywhere), and the
-    default set answers when the theme does not carry the shell sounds -
-    they belong to the feature rather than to a theme, so somebody on a
-    theme that has never heard of them still hears their shell.
+    Settings -> Sounds -> "Use equivalent from default theme when a sound is
+    unavailable in the selected sound theme" (`sound/fallback_to_default_theme`,
+    off by default). It is what `play_sound` has always read; anything else
+    that reaches for the default set asks the same question, so there is one
+    answer to "do not play sounds that are not in my theme".
     """
-    relative = os.path.join('shell', name)
+    try:
+        settings = load_settings()
+        return str(settings.get('sound', {}).get(
+            'fallback_to_default_theme', 'False')).lower() in ('true', '1')
+    except Exception:
+        return False
+
+
+def feature_sound_path(subdir, name, allow_default=None):
+    """Where one of a FEATURE's own sounds is: `sfx/<theme>/<subdir>/<name>`.
+
+    The user's theme always wins (per-user overlay first, as everywhere) - a
+    theme is free to ship its own `ai/` or `shell/` set and it is what will
+    be heard.
+
+    `allow_default` decides what happens when it does not carry that sound:
+    `True` always falls back to the default set, `False` never does, and
+    `None` - what the AI's sounds use - asks the user, through the same
+    setting `play_sound` reads (`default_theme_fallback_allowed`). A user who
+    has turned that off has said they do not want sounds their theme does not
+    have, and that answer is not the AI's to overrule.
+    """
+    name = str(name or '').replace('\\', '/')
+    if '/' in name:
+        # `play_ai_sound('ai/agent_question.ogg')` and
+        # `play_ai_sound('agent_question.ogg')` mean the same thing.
+        head, tail = name.rsplit('/', 1)
+        if head == subdir:
+            name = tail
+        else:
+            subdir, name = os.path.join(subdir, head), tail
+    relative = os.path.join(subdir, name)
+    if allow_default is None:
+        allow_default = default_theme_fallback_allowed()
+    themes = [current_theme]
+    if allow_default and current_theme != 'default':
+        themes.append('default')
     try:
         from src.platform_utils import find_resource
-        found = find_resource(os.path.join('sfx', current_theme, relative))
-        if found and os.path.exists(found):
-            return found
-        found = find_resource(os.path.join('sfx', 'default', relative))
-        if found and os.path.exists(found):
-            return found
+        for theme in themes:
+            found = find_resource(os.path.join('sfx', theme, relative))
+            if found and os.path.exists(found):
+                return found
     except Exception:
         pass
-    for theme in (current_theme, 'default'):
+    for theme in themes:
         candidate = os.path.join(resource_path(os.path.join('sfx', theme)),
                                  relative)
         if os.path.exists(candidate):
             return candidate
     return ''
+
+
+def shell_sound_path(name):
+    """Where one of the shell's own sounds is: `sfx/<theme>/shell/<name>`.
+
+    `allow_default=True`: the shell's three sounds are part of the system
+    interface rather than of a theme, which is the rule they were built with.
+    """
+    return feature_sound_path('shell', name, allow_default=True)
+
+
+def ai_sound_path(name, allow_default=None):
+    """Where one of the AI's own sounds is: `sfx/<theme>/ai/<name>`.
+
+    The user's theme first; the default set only if they have asked for
+    missing sounds to be filled in from it.
+    """
+    return feature_sound_path('ai', name, allow_default=allow_default)
+
+
+def play_ai_sound(name, pan=None):
+    """Play one of the AI's own sounds (`sfx/<theme>/ai/`). Never blocks.
+
+    A theme that ships its own `ai/` set is what is heard; a theme that does
+    not is silent here unless the user has ticked "use equivalent from
+    default theme" in Settings -> Sounds.
+    """
+    path = ai_sound_path(name)
+    if not path:
+        return False
+    return play_sound_file(path, pan)
 
 
 def play_shell_sound(name, pan=None):

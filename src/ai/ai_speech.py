@@ -14,6 +14,25 @@ asynchronously) and never raises.
 """
 
 
+#: The sound of the AI asking the user something - the creation kit's
+#: questionnaire, the agent's and the assistant's follow-up questions, and an
+#: action that needs an answer before it can run. It lives in the AI's own
+#: sound folder (`sfx/<theme>/ai/`) and is played through
+#: :func:`sound.play_ai_sound`, so it is heard on a theme that has never
+#: carried it: the question usually arrives while the user is listening to
+#: something else, and the sound is what tells them a dialog is now there.
+SOUND_QUESTION = 'agent_question.ogg'
+
+
+def play_question_sound():
+    """Play it. Never raises, never blocks."""
+    try:
+        from src.titan_core.sound import play_ai_sound
+        return bool(play_ai_sound(SOUND_QUESTION))
+    except Exception:
+        return False
+
+
 def titan_tts_enabled():
     """True when the user has turned on Titan TTS (stereo speech) for the
     invisible interface. Best effort - returns False on any error.

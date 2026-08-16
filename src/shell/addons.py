@@ -66,6 +66,60 @@ SURFACES = ('shell', 'start_menu', 'explorer', 'taskbar', 'desktop')
 # The parts an add-on can REPLACE outright.
 PROVIDABLE = ('start_menu', 'explorer')
 
+# Every function Titan ever looks for in an add-on's `init.py`, by surface.
+# This is written down for one reason: it is what an add-on author - and the
+# AI creation kit, which writes add-ons - is checked against.  A generated
+# add-on whose functions are ALMOST right (`start_menu_entries`,
+# `on_taskbar_start`) is worse than one that is missing them, because it
+# loads, contributes nothing, and says nothing about why.  The names here are
+# the names the surfaces ask for; `tests/test_shell_addons.py` fails if one
+# of them stops being asked for anywhere in `src/shell`.
+HOOKS = {
+    'shell': ('setup', 'teardown', 'on_shell_start', 'on_shell_stop'),
+    'start_menu': ('start_menu_items',),
+    'explorer': ('explorer_menu_items', 'explorer_toolbar_items',
+                 'explorer_context_items', 'explorer_columns'),
+    'taskbar': ('taskbar_bands', 'taskbar_menu_items'),
+    'desktop': ('desktop_menu_items',),
+}
+
+# What a `provides = <part>` add-on must define for the claim to be real.
+PROVIDER_HOOKS = {'start_menu': 'open_start_menu', 'explorer': 'open_explorer'}
+
+ALL_HOOKS = frozenset(name for names in HOOKS.values() for name in names) \
+    | frozenset(PROVIDER_HOOKS.values())
+
+# The signature each one is CALLED with, `api` always first.  A hook with the
+# wrong parameters is the failure that looks like nothing happening: it raises
+# inside `_safe`, which reports it on the console and carries on, so the add-on
+# is loaded, listed, ticked - and silent.
+HOOK_SIGNATURES = {
+    'setup': '(api)',
+    'teardown': '(api)',
+    'on_shell_start': '(api, shell)',
+    'on_shell_stop': '(api, shell)',
+    'start_menu_items': '(api, menu)',
+    'explorer_menu_items': '(api, browser)',
+    'explorer_toolbar_items': '(api, browser)',
+    'explorer_context_items': '(api, browser, where, selection)',
+    'explorer_columns': '(api, browser, location)',
+    'taskbar_bands': '(api, taskbar)',
+    'taskbar_menu_items': '(api, taskbar)',
+    'desktop_menu_items': '(api, desktop, where, entry)',
+    'open_start_menu': '(api, parent)',
+    'open_explorer': '(api, location, parent, new_window)',
+}
+
+# Derived, never written twice.
+HOOK_ARGS = {name: signature.strip('()').count(',') + 1
+             for name, signature in HOOK_SIGNATURES.items()}
+
+# The keys `__shell_addon__.TCE` understands, beside the `name_<lang>` /
+# `description_<lang>` pairs.  Anything else in the manifest is a key its
+# author believed in and Titan has never read.
+MANIFEST_KEYS = ('name', 'description', 'author', 'version', 'status',
+                 'surfaces', 'provides', 'libs')
+
 
 def _truthy(value, default=False):
     if value is None:

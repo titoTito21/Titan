@@ -1326,3 +1326,18 @@ msgstr "zastępuje: {part}"
 
 msgid "cannot be read"
 msgstr "nie da się odczytać"
+
+msgid "Start menu:"
+msgstr "Menu Start:"
+
+msgid "Start menu (Windows XP)"
+msgstr "Menu Start (Windows XP)"
+
+msgid "Classic Start menu"
+msgstr "Klasyczne menu Start"
+
+msgid "Installed shell add-ons"
+msgstr "Zainstalowane dodatki powłoki"
+
+msgid "Add-ons in data/shell addons/ can add to the Start menu, the file browser, the taskbar and the desktop. One that provides a Start menu of its own appears in the list above."
+msgstr "Dodatki w data/shell addons/ mogą dodawać elementy do menu Start, przeglądarki plików, paska zadań i pulpitu. Dodatek z własnym menu Start pojawia się na liście powyżej."

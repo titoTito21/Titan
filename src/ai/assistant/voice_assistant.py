@@ -27,7 +27,12 @@ from src.ai.assistant.assistant_tools import get_assistant_tools
 from src.buffers import ai_buffer
 
 try:
-    from src.titan_core.sound import play_sound
+    # The assistant's cues live in the AI's own sound folder, so they go
+    # through `play_ai_sound`: a theme that has never carried them still
+    # plays them, exactly as the shell's own sounds do.  With `play_sound`
+    # they were silent on every theme but the default unless the user had
+    # asked for the default theme to fill gaps in.
+    from src.titan_core.sound import play_ai_sound as play_sound
 except Exception:  # pragma: no cover
     def play_sound(*_a, **_k):
         pass
