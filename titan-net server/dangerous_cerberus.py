@@ -304,6 +304,19 @@ class FirewallManager:
             return
         try:
             for port in self.PROTECTED_PORTS:
+                # Idempotent: only insert the ACCEPT rule if the kernel does not
+                # already carry it. Without this check every process start (and
+                # every restore_bans / block_ip call before the flag was set)
+                # inserted another identical rule at the top of INPUT - the
+                # production chain had accumulated 144 duplicate SSH-ACCEPT rules
+                # this way, one per restart, that netfilter walks on every packet.
+                exists = subprocess.run(
+                    ['iptables', '-C', 'INPUT', '-p', 'tcp',
+                     '--dport', str(port), '-j', 'ACCEPT'],
+                    capture_output=True, timeout=5
+                )
+                if exists.returncode == 0:
+                    continue
                 subprocess.run(
                     ['iptables', '-I', 'INPUT', '1', '-p', 'tcp',
                      '--dport', str(port), '-j', 'ACCEPT'],

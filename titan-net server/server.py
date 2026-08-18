@@ -174,6 +174,31 @@ class TitanNetServer:
         self.cerberus.on_shutdown_attacker = self._cerberus_shutdown_attacker
         self.cerberus.on_disconnect_ip = self._cerberus_disconnect_ip
         self.cerberus.on_ban_ip = self._cerberus_ban_ip
+        # Guard the reserved-username (honeytoken) detector: any reserved name
+        # that is actually a registered account is NOT treated as an attack.
+        # Computed once here so an attack flood never touches the DB per attempt.
+        try:
+            real = set()
+            names = list(self.cerberus._reserved_usernames)
+            conn = self.db.get_connection()
+            try:
+                cur = conn.cursor()
+                # Case-insensitive existence check for each reserved name.
+                q = "SELECT LOWER(username) FROM users WHERE LOWER(username) IN (%s)" % (
+                    ",".join("?" * len(names)) or "''"
+                )
+                cur.execute(q, [n.lower() for n in names])
+                real = {row[0] for row in cur.fetchall()}
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self.cerberus.is_real_account = lambda u, _r=real: u.lower() in _r
+            if real:
+                logger.info(f"[CERBERUS] reserved names that are real accounts (exempt): {sorted(real)}")
+        except Exception as e:
+            logger.error(f"[CERBERUS] reserved-username guard init failed: {e}")
 
         # --- Cerberus AI: behavioral risk engine + optional Gemini analyst ---
         try:

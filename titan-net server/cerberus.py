@@ -125,6 +125,66 @@ class CerberusProtocol:
         self.reset_alert = 5
         self.reset_lockdown = 15
         self.reset_window = 600
+
+        # --- Distributed brute force: MANY IPs against ONE account ---
+        # The classic per-IP thresholds are blind to a coordinated attack where
+        # each of dozens of IPs makes only a handful of tries against the same
+        # username (e.g. 'root'). We track, per username, the DISTINCT source
+        # IPs that have failed against it; when too many different IPs converge
+        # on one account we treat every one of them as an attacker at once.
+        # {username: {ip: last_ts}}
+        self._account_source_ips: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self.distributed_attack_ips = 5        # distinct IPs on one account -> coordinated
+        self.distributed_attack_window = 900   # 15 min correlation window
+
+        # --- Distributed brute force: MANY IPs from one /24, ANY account ---
+        # Counts distinct failing IPs per subnet directly on the failed-login
+        # path, so a low-and-slow spread across a /24 is caught BEFORE any
+        # single IP is individually banned (the old subnet ban only ran after
+        # an IP already tripped its own threshold).
+        # {subnet: {ip: last_ts}}
+        self._subnet_failed_ips: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self.subnet_bruteforce_ips = 4         # distinct failing IPs in a /24 -> ban subnet
+        self.subnet_bruteforce_window = 900
+
+        # --- Reserved / non-existent usernames (honeytokens) ---
+        # Titan-Net has no 'root', 'admin', 'administrator', ... accounts, so
+        # ANY login attempt against one is a near-certain attack, not a typo.
+        # A hit escalates the source IP far faster than an ordinary failure and
+        # feeds the risk engine heavily.
+        # Deliberately conservative: only names that are attack-signatures on a
+        # Titan-Net server, never plausible display names a real accessibility
+        # user would pick. Ambiguous words (user/info/manager/...) are omitted
+        # to avoid punishing a real owner who forgot their password. If any of
+        # these somehow IS a registered account, the ``is_real_account`` hook
+        # below suppresses the honeytoken response for it.
+        self._reserved_usernames: Set[str] = {
+            "root", "admin", "administrator", "administrateur", "superuser",
+            "sysadmin", "supervisor",
+            "test1", "testuser",
+            "oracle", "postgres", "postgresql", "mysql", "mssql",
+            "ubuntu", "debian", "centos", "vagrant",
+            "ftpuser", "www-data", "webmaster", "nginx",
+            "apache", "nobody", "daemon", "jenkins", "tomcat",
+        }
+        # Optional callback -> True if a username is a real registered account.
+        # Wired by server.py so a genuine account is never mistaken for a
+        # honeytoken even if it collides with the reserved list.
+        self.is_real_account: Optional[Callable[[str], bool]] = None
+        # {ip: [timestamps of reserved-username hits]}
+        self._reserved_hits: Dict[str, List[float]] = defaultdict(list)
+        self.reserved_alert = 1                # a single hit is already suspicious
+        self.reserved_lockdown = 3             # ban the IP fast
+        self.reserved_window = 1800
+
+        # --- Escalating response for repeat offenders ---
+        # The report asks for "escalating ban durations for repeat offenders".
+        # We escalate SEVERITY: an IP (or its /24) that has been banned before
+        # and comes back is taken straight to CERBERUS (permaban) instead of a
+        # soft lockdown ban it could wait out.
+        self._offense_history: Dict[str, int] = defaultdict(int)  # ip -> times escalated
+        self._subnet_offense_history: Dict[str, int] = defaultdict(int)
+
         # Optional risk engine + AI analyst (wired by server.py if enabled).
         self.risk_engine: Optional[Any] = None
         self.on_account_event: Optional[Callable] = None
@@ -245,9 +305,25 @@ class CerberusProtocol:
 
     def _set_ip_threat(self, ip: str, level: int, reason: str):
         """Set threat level for a SPECIFIC IP only"""
+        # Escalating response for repeat offenders: an IP we have banned before
+        # that comes back for more is not given another soft, wait-it-out ban -
+        # it goes straight to CERBERUS (permaban + countermeasures). This is the
+        # "escalating durations for repeat offenders" the threat report asks for.
+        if level >= THREAT_LOCKDOWN and not self.is_whitelisted(ip):
+            prior = self._offense_history.get(ip, 0)
+            if prior >= 1 and level < THREAT_CERBERUS:
+                level = THREAT_CERBERUS
+                reason = f"Repeat offender (offense #{prior + 1}): {reason}"
+
         old = self._ip_threat.get(ip, {}).get("level", THREAT_NORMAL)
         if level <= old:
             return
+
+        # Only count an offense once the ban actually takes effect (i.e. this
+        # call really raised the IP's threat), so re-banning within one pass
+        # does not inflate the repeat counter.
+        if level >= THREAT_LOCKDOWN and not self.is_whitelisted(ip):
+            self._offense_history[ip] = self._offense_history.get(ip, 0) + 1
 
         self._ip_threat[ip] = {
             "level": level,
@@ -741,10 +817,38 @@ class CerberusProtocol:
         if not username or username == "unknown":
             return
         now = time.time()
+        key = username.lower()
+
+        # --- Reserved / non-existent username (honeytoken) ---
+        # No legitimate user ever logs in as 'root'/'admin'/etc. on Titan-Net,
+        # so a hit is a near-certain attack and escalates the IP fast.
+        _is_reserved = key in self._reserved_usernames
+        if _is_reserved and self.is_real_account is not None:
+            try:
+                if self.is_real_account(key):
+                    _is_reserved = False  # a genuine account, not a honeytoken
+            except Exception as e:
+                logger.error(f"is_real_account check failed: {e}")
+        if _is_reserved and ip and not self.is_whitelisted(ip):
+            self._reserved_hits[ip] = self._prune(self._reserved_hits[ip], self.reserved_window, now)
+            self._reserved_hits[ip].append(now)
+            n = len(self._reserved_hits[ip])
+            # Heavy risk-engine weight - correlates with any other signal.
+            self._emit_account_event("privilege_escalation", ip,
+                                     f"login attempt on reserved account '{username}' (x{n})",
+                                     count=n, reserved=username)
+            if n >= self.reserved_lockdown:
+                self._set_ip_threat(ip, THREAT_LOCKDOWN,
+                                    f"Reserved-account attack: {n} attempts on non-existent "
+                                    f"accounts (last '{username}')")
+            elif n >= self.reserved_alert:
+                self._set_ip_threat(ip, THREAT_ALERT,
+                                    f"Login attempt on reserved account '{username}'")
+
         # Credential stuffing: distinct usernames from this IP.
         if ip and not self.is_whitelisted(ip):
             users = self._usernames_by_ip[ip]
-            users[username.lower()] = now
+            users[key] = now
             for u in [u for u, ts in users.items() if ts < now - self.cred_stuffing_window]:
                 users.pop(u, None)
             if len(users) >= self.cred_stuffing_distinct:
@@ -752,8 +856,37 @@ class CerberusProtocol:
                                          f"{len(users)} distinct usernames", count=len(users))
                 self._set_ip_threat(ip, THREAT_LOCKDOWN,
                                     f"Credential stuffing: {len(users)} distinct usernames from one IP")
+
+        # --- Distributed brute force: many DISTINCT IPs against ONE account ---
+        # Blind spot of every per-IP detector above. Correlate by username.
+        if ip and not self.is_whitelisted(ip):
+            srcs = self._account_source_ips[key]
+            srcs[ip] = now
+            for old_ip in [i for i, ts in srcs.items() if ts < now - self.distributed_attack_window]:
+                srcs.pop(old_ip, None)
+            if len(srcs) >= self.distributed_attack_ips:
+                self._handle_distributed_account_attack(key, username, list(srcs.keys()))
+            elif not srcs:
+                self._account_source_ips.pop(key, None)
+
+        # --- Distributed brute force: many DISTINCT IPs from one /24 ---
+        if ip and not self.is_whitelisted(ip):
+            try:
+                import ipaddress as _ipaddr
+                subnet = str(_ipaddr.ip_network(f"{ip}/24", strict=False))
+            except Exception:
+                subnet = None
+            if subnet:
+                snet = self._subnet_failed_ips[subnet]
+                snet[ip] = now
+                for old_ip in [i for i, ts in snet.items() if ts < now - self.subnet_bruteforce_window]:
+                    snet.pop(old_ip, None)
+                if len(snet) >= self.subnet_bruteforce_ips:
+                    self._handle_distributed_subnet_attack(subnet, list(snet.keys()))
+                elif not snet:
+                    self._subnet_failed_ips.pop(subnet, None)
+
         # Targeted account attack -> protective lock on that username.
-        key = username.lower()
         self._account_failures[key] = self._prune(self._account_failures[key], self.account_lock_window, now)
         self._account_failures[key].append(now)
         if len(self._account_failures[key]) >= self.account_lock_failures:
@@ -766,6 +899,69 @@ class CerberusProtocol:
             )
             self._log_intrusion("ACCOUNT_LOCK", ip or "?",
                                 f"account '{username}' locked after brute force")
+
+    def _handle_distributed_account_attack(self, key: str, username: str, ips: List[str]):
+        """Many distinct IPs are hammering ONE account. Ban every participant at
+        once (which cascades into subnet analysis), protect the account, and
+        raise a global ALERT so moderators/AI see the coordination."""
+        # Protective lock on the targeted account immediately.
+        now = time.time()
+        self._locked_accounts[key] = now + self.account_lock_seconds
+        self._emit_account_event(
+            "credential_stuffing", ips[0] if ips else "?",
+            f"distributed brute force: {len(ips)} IPs vs account '{username}'",
+            count=len(ips), username=username, distributed=True,
+        )
+        logger.critical(
+            f"CERBERUS: DISTRIBUTED brute force on account '{username}' from "
+            f"{len(ips)} IPs: {', '.join(ips[:10])}"
+        )
+        self._log_intrusion(
+            "DISTRIBUTED_ACCOUNT_ATTACK", ips[0] if ips else "?",
+            f"account '{username}' attacked by {len(ips)} IPs: {', '.join(ips[:10])}"
+        )
+        # Ban each participating IP. Going through _set_ip_threat means the
+        # firewall + persistent-ban + per-/24 subnet analysis (in the Dangerous
+        # subclass) all fire for free.
+        for aip in ips:
+            if not self.is_whitelisted(aip):
+                self._set_ip_threat(
+                    aip, THREAT_LOCKDOWN,
+                    f"Distributed brute force on account '{username}' "
+                    f"({len(ips)} coordinated IPs)"
+                )
+        # Coordinated multi-IP activity is exactly what the GLOBAL threat level
+        # exists for - surface it so the dashboard/AI reflect an active campaign.
+        if self.threat_level < THREAT_ALERT:
+            self._set_global_threat(
+                THREAT_ALERT,
+                f"Distributed attack on account '{username}' ({len(ips)} IPs)",
+                ips[0] if ips else "unknown",
+            )
+
+    def _handle_distributed_subnet_attack(self, subnet: str, ips: List[str]):
+        """Many distinct IPs from one /24 are producing failed logins even
+        though none has tripped its own threshold. Ban every one of them, which
+        drives the Dangerous subclass's subnet ban."""
+        logger.critical(
+            f"CERBERUS: DISTRIBUTED brute force from subnet {subnet} - "
+            f"{len(ips)} IPs: {', '.join(ips[:10])}"
+        )
+        self._log_intrusion(
+            "DISTRIBUTED_SUBNET_ATTACK", ips[0] if ips else "?",
+            f"subnet {subnet}: {len(ips)} coordinated IPs: {', '.join(ips[:10])}"
+        )
+        self._emit_account_event(
+            "credential_stuffing", ips[0] if ips else "?",
+            f"distributed brute force from subnet {subnet} ({len(ips)} IPs)",
+            count=len(ips), subnet=subnet, distributed=True,
+        )
+        for aip in ips:
+            if not self.is_whitelisted(aip):
+                self._set_ip_threat(
+                    aip, THREAT_LOCKDOWN,
+                    f"Distributed brute force from subnet {subnet} ({len(ips)} IPs)"
+                )
 
     def is_account_locked(self, username: str) -> bool:
         """True if this account is under a temporary protective lock."""
@@ -790,6 +986,13 @@ class CerberusProtocol:
         self._locked_accounts.pop(key, None)
         if ip in self._usernames_by_ip:
             self._usernames_by_ip[ip].pop(key, None)
+        # This IP proved it owns a real credential; drop it from the
+        # distributed-attack correlation for this account so a legitimate owner
+        # who fat-fingered their password first does not inflate the counter.
+        if key in self._account_source_ips:
+            self._account_source_ips[key].pop(ip, None)
+            if not self._account_source_ips[key]:
+                self._account_source_ips.pop(key, None)
 
     def record_password_reset_request(self, ip: str) -> bool:
         """Rate-limit / escalate password-reset (and similar sensitive) requests
@@ -824,6 +1027,22 @@ class CerberusProtocol:
                 ip: len(users) for ip, users in self._usernames_by_ip.items()
                 if len(users) >= max(3, self.cred_stuffing_distinct // 2)
             },
+            # Accounts under a coordinated multi-IP attack (username -> #IPs).
+            "distributed_targets": {
+                user: len(ips) for user, ips in self._account_source_ips.items()
+                if len(ips) >= max(2, self.distributed_attack_ips // 2)
+            },
+            # /24s producing failed logins from several distinct IPs.
+            "bruteforce_subnets": {
+                subnet: len(ips) for subnet, ips in self._subnet_failed_ips.items()
+                if len(ips) >= max(2, self.subnet_bruteforce_ips // 2)
+            },
+            # IPs that hit a reserved / non-existent account (honeytoken).
+            "reserved_account_ips": {
+                ip: len(v) for ip, v in self._reserved_hits.items() if v
+            },
+            # Repeat offenders (banned before -> next ban is a permaban).
+            "repeat_offenders": dict(self._offense_history),
         }
 
     # ================================================================
