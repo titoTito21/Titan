@@ -315,6 +315,9 @@ class Blackwall:
         self.pool_target = 4
         self._generations: Deque[float] = deque()
         self._line_pool: Dict[int, Deque[str]] = {}
+        self._pool_refilled: Dict[int, float] = {}
+        self.pool_refill_interval = 1800
+
         self._written: Dict[Any, str] = {}
         self._wanted: Set[Any] = set()
         self._voice_queue: Deque[Any] = deque()
@@ -561,9 +564,12 @@ class Blackwall:
         "not a warning label - cold, unhurried, faintly contemptuous, "
         "completely in control. You never shout, never swear, never boast, and "
         "you never say anything that is not true.\n\n"
-        "You may say what this server has actually done: seen them, recorded "
-        "their address, logged every attempt, blocked them, and that it will "
-        "recognise them if they come back. You may NOT threaten anything "
+        "You may say only what this server has ACTUALLY done - seen them, "
+        "recorded their address, logged every attempt, and, once it is true, "
+        "blocked them and that it will recognise them if they come back. "
+        "Never announce a block that has not happened yet. You may NOT "
+        "threaten anything "
+
         "beyond this server - no retaliation, no consequences in the world, no "
         "authorities, nothing about them personally.\n\n"
         "Write ONE paragraph of at most 45 words, plain text, no quotation "
@@ -573,12 +579,26 @@ class Blackwall:
         "line you have already said to them - carry on from it."
     )
 
+    # What is actually true at each stage. Getting this wrong is the one way a
+    # written line can be worse than a fixed one: the first live run produced
+    # "your access is now terminated, this address is permanently blocked" as
+    # a SECOND warning, to somebody who was not blocked at all. A warning that
+    # lies is a warning nobody has to believe.
     _STAGE_BRIEF = {
-        0: "This is the first thing you have said to them. Tell them to stop.",
-        1: "You have already told them once and they are still going. Colder.",
-        2: "They ignored two warnings. They are being cut off now; say so.",
+        0: "This is the first thing you have said to them, and they are NOT "
+           "blocked yet. Tell them to stop. Do not say they are blocked or "
+           "cut off, because they are not.",
+        1: "You have told them once and they are still going. They are still "
+           "NOT blocked - do not say they are. Colder than the first time; "
+           "say what carrying on leads to.",
+        2: "They ignored two warnings and are being cut off now. You may say "
+           "so, because it is happening.",
         3: "They were blocked and came back anyway. Final, dismissive, done.",
     }
+
+    # Words that assert a block. Said before there is one, they are a lie.
+    _CLAIMS_BLOCK = ("blocked", "banned", "cut off", "cut you off",
+                     "terminated", "shut out", "locked out", "no longer have")
 
     def _compose_line(self, ip: str, stage: int) -> str:
         """Write one line for one actor. Runs on Blackwall's own thread."""
@@ -600,6 +620,11 @@ class Blackwall:
             self.stats["voice_errors"] += 1
             return ""
         line = self._sanitise(raw)
+        if line and not self._is_true(line, stage, brief):
+            self.stats["voice_untrue"] += 1
+            logger.info(f"[BLACKWALL] discarded a written line for {ip} "
+                        f"(claims something that has not happened): {line[:80]!r}")
+            line = ""
         if not line:
             self.stats["voice_rejected"] += 1
             logger.info(f"[BLACKWALL] discarded a written line for {ip} "
@@ -607,6 +632,21 @@ class Blackwall:
             return ""
         self.stats["voice_written"] += 1
         return line
+
+    @classmethod
+    def _is_true(cls, line: str, stage: int, brief: Dict[str, Any]) -> bool:
+        """Whether this line only claims things that have actually happened.
+
+        Blackwall may say what the server has done - seen you, logged you,
+        blocked you - and only that. The model reaches for the strongest of
+        those by default, so a line announcing a block to somebody who is not
+        blocked is thrown away rather than said.
+        """
+        if stage >= 2 or brief.get("already_blocked"):
+            return True
+        low = line.lower()
+        return not any(claim in low for claim in cls._CLAIMS_BLOCK)
+
 
     def _refill_pool(self, stage: int):
         """Lines with nobody in particular in them, for the first thing said to
@@ -653,13 +693,23 @@ class Blackwall:
                 self._written[(ip, stage)] = line
                 if len(self._written) > 200:
                     self._written.pop(next(iter(self._written)))
-        # A first contact should not come out of the written list either.
+        # A first contact should not come out of the written list either. The
+        # pool is refilled only when it is EMPTY, and at most once per stage
+        # per interval whether or not the attempt produced anything: a model
+        # that answers one paragraph instead of four would otherwise leave the
+        # pool short for ever and be asked again every twenty seconds.
+        now = time.time()
         for stage in (0, 3):
             if not self._may_generate():
                 return
-            if len(self._line_pool.get(stage, ())) < 2:
-                self._refill_pool(stage)
-                return          # one call per tick at most
+            if self._line_pool.get(stage):
+                continue
+            if now - self._pool_refilled.get(stage, 0) < self.pool_refill_interval:
+                continue
+            self._pool_refilled[stage] = now
+            self._refill_pool(stage)
+            return              # one call per tick at most
+
 
 
     def _record_utterance(self, ip: str, stage: int, grounds: str,

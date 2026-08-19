@@ -434,7 +434,64 @@ class WrittenVoice(unittest.TestCase):
                              talkative.max_generations_per_hour)
 
 
+class TheBudget(unittest.TestCase):
+    def test_the_pool_is_not_asked_for_again_and_again(self):
+        # A model that answers one paragraph instead of four used to leave the
+        # pool short for ever, and be asked again on every tick.
+        cerb, wall = build()
+        talkative = _WithModel(wall, "One acceptable paragraph, and only one of them.")
+        for _ in range(5):
+            talkative._drain_voice_queue()
+        self.assertLessEqual(len(talkative._generations), 2)
+
+    def test_an_empty_pool_is_filled_once_the_interval_has_passed(self):
+        cerb, wall = build()
+        talkative = _WithModel(wall, "One acceptable paragraph, and only one of them.")
+        talkative._drain_voice_queue()
+        before = len(talkative._generations)
+        talkative._line_pool.clear()
+        talkative._pool_refilled.clear()
+        talkative._drain_voice_queue()
+        self.assertGreater(len(talkative._generations), before)
+
+
+class ItOnlySaysWhatIsTrue(unittest.TestCase):
+
+    """The one way a written line can be worse than a fixed one: the first
+    live run announced "your access is now terminated, this address is
+    permanently blocked" as a SECOND warning, to somebody who was not blocked
+    at all."""
+
+    def true(self, line, stage, blocked=False):
+        return B.Blackwall._is_true(line, stage, {"already_blocked": blocked})
+
+    def test_a_block_announced_before_it_happens_is_refused(self):
+        line = "Your access is terminated and this address is permanently blocked."
+        self.assertFalse(self.true(line, 1))
+
+    def test_the_same_line_is_fine_once_it_is_true(self):
+        line = "Your access is terminated and this address is permanently blocked."
+        self.assertTrue(self.true(line, 1, blocked=True))
+        self.assertTrue(self.true(line, 2))
+
+    def test_an_honest_warning_passes(self):
+        line = ("I can see every account you have asked for, and all of it is "
+                "written down. Stop now.")
+        self.assertTrue(self.true(line, 0))
+
+    def test_a_dishonest_line_never_reaches_the_actor(self):
+        cerb, wall = build()
+        wall.observe_login("45.9.80.1", "root")
+        talkative = _WithModel(
+            wall, "You are cut off. This address is permanently blocked from now on.")
+        talkative._want_line("45.9.80.1", 1)
+        talkative._drain_voice_queue(limit=1)
+        self.assertNotIn(("45.9.80.1", 1), talkative._written)
+        self.assertEqual(talkative.stats["voice_untrue"], 1)
+
+
 class TheCheckOnWhatItSays(unittest.TestCase):
+
     """Every generated line goes to a hostile stranger and into a permanent
     log, so it is checked before it is said."""
 

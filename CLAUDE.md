@@ -474,9 +474,26 @@ and over by an attacker nothing was counting any more.
     gets plain 7-bit ASCII as the SSH banner the tar pit
     (`hackback.py`) drips at them, or as the honeypot's parting words
     (`honeypot.py`, said at the END of the session so the trap keeps working
-    while they are in it). The tone escalates over three stages and it is
+    while they are in it). The tone escalates over four stages and it is
     **only ever said to a source that is provably attacking** - a user who got
     their own password wrong is never spoken to.
+  - **It writes the lines itself.** The sentences in `VOICE` are the floor,
+    not the voice: with a model available Blackwall composes what it says
+    about *this* actor, following on from what it already told them - "I see
+    your four attempts against root, ubuntu, debian, and admin. Your activity
+    is being logged. Stop." Three things make that safe to ship. Nothing is
+    generated **on the attack path** (a login attempt must not wait on a
+    provider, and an attacker able to make the server call an API once per
+    attempt has found a way to spend its money): lines are written ahead of
+    time on Blackwall's own thread, capped per hour, with the written ones
+    standing in until one arrives. Every line is **checked** before it is said
+    (`_sanitise`) - plain 7-bit ASCII, one paragraph, 40 to 320 characters, no
+    link, path, markup, model-refusal or threat beyond this server. And it may
+    only claim what has **actually happened** (`_is_true`): the first live run
+    announced "your access is now terminated, this address is permanently
+    blocked" as a *second warning* to somebody who was not blocked at all, so
+    a line asserting a block before there is one is thrown away.
+
   - **Everything it says is written down** (`_record_utterance`): into the
     intrusion log as `BLACKWALL_SPOKE`, into `logs/blackwall_transcript.log`,
     and back into both AI prompts - the Cerberus analyst is told what the wall
@@ -500,9 +517,11 @@ and over by an attacker nothing was counting any more.
   it on production through `update.py`'s own connection, service stopped.
 - Tests (run them directly): `test_cerberus_hardening.py` (30),
   `test_cerberus_enforcement.py` (22, against a fake iptables so they need no
-  root and can flush the kernel mid-test), `test_blackwall.py` (33, with the
+  root and can flush the kernel mid-test), `test_blackwall.py` (57, with the
   model replaced by a fixed answer - the only way to test that a wrong answer
-  is refused).
+  is refused: an invented address, a low-confidence verdict, a line that lies
+  about a block, a request made while an attacker is waiting).
+
 
 ### Titan IM: WhatsApp and Messenger (web as backend)
 
