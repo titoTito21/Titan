@@ -117,13 +117,155 @@ class RepeatOffender(unittest.TestCase):
         self.assertNotIn("1.1.1.1", c._offense_history)
 
 
+class DefaultAccountSweep(unittest.TestCase):
+    """Several DIFFERENT system accounts from one source is a list being
+    walked - certain long before the per-name count would say so."""
+
+    def test_two_distinct_reserved_names_ban(self):
+        c = fresh()
+        c.record_failed_login("144.48.8.86", "ubuntu")
+        self.assertFalse(c.is_ip_banned("144.48.8.86"))
+        c.record_failed_login("144.48.8.86", "debian")
+        self.assertTrue(c.is_ip_banned("144.48.8.86"))
+
+    def test_soft_name_alone_is_never_an_attack(self):
+        # 'user' is a name a real person could have chosen; on its own it must
+        # do nothing at all, however many times it is tried.
+        c = fresh()
+        for _ in range(4):
+            c.record_failed_login("9.8.7.6", "user")
+        self.assertFalse(c.is_ip_banned("9.8.7.6"))
+
+    def test_soft_name_counts_after_a_certain_one(self):
+        c = fresh()
+        c.record_failed_login("9.8.7.7", "root")     # certain
+        c.record_failed_login("9.8.7.7", "user")     # now it counts
+        self.assertTrue(c.is_ip_banned("9.8.7.7"))
+
+    def test_real_account_named_like_one_is_exempt(self):
+        c = fresh()
+        c.is_real_account = lambda u: u.lower() in ("user", "admin")
+        for name in ("user", "admin"):
+            c.record_failed_login("9.8.7.8", name)
+        self.assertFalse(c.is_ip_banned("9.8.7.8"))
+
+
+class LockoutAbuse(unittest.TestCase):
+    """The protective lock defends the account. On its own it does nothing to
+    the attacker - and used to hide them completely."""
+
+    def test_honeytoken_account_is_never_locked(self):
+        # Locking 'root' protects nobody (there is no owner) and would put the
+        # attacker into the invisible path below.
+        c = fresh()
+        for _ in range(c.account_lock_failures + 2):
+            c.record_failed_login("5.4.3.2", "root")
+        self.assertFalse(c.is_account_locked("root"))
+
+    def test_causing_lockouts_bans_the_source(self):
+        c = fresh()
+        for user in ("alice", "bob"):
+            for _ in range(c.account_lock_failures):
+                c.record_failed_login("6.6.6.1", user)
+        self.assertTrue(c.is_account_locked("alice"))
+        self.assertTrue(c.is_ip_banned("6.6.6.1"))
+
+    def test_one_lockout_is_not_enough(self):
+        c = fresh()
+        for _ in range(c.account_lock_failures):
+            c.record_failed_login("6.6.6.2", "alice")
+        self.assertTrue(c.is_account_locked("alice"))
+        self.assertFalse(c.is_ip_banned("6.6.6.2"))
+
+    def test_attempts_on_a_locked_account_are_counted(self):
+        c = fresh()
+        for _ in range(c.locked_attempt_lockdown - 1):
+            self.assertFalse(c.record_locked_account_attempt("7.7.7.1", "alice"))
+        self.assertTrue(c.record_locked_account_attempt("7.7.7.1", "alice"))
+        self.assertTrue(c.is_ip_banned("7.7.7.1"))
+
+    def test_whitelisted_source_never_counted(self):
+        c = fresh()
+        c.add_whitelisted_ip("1.2.3.4")
+        for _ in range(10):
+            self.assertFalse(c.record_locked_account_attempt("1.2.3.4", "alice"))
+        self.assertFalse(c.is_ip_banned("1.2.3.4"))
+
+
+class BanEvasion(unittest.TestCase):
+    """Traffic from a banned address means the ban is not being enforced."""
+
+    def test_activity_while_banned_asks_for_re_enforcement(self):
+        c = fresh()
+        asked = []
+        c.on_reenforce_ban = lambda ip, reason="": asked.append(ip)
+        c._set_ip_threat("8.8.4.4", C.THREAT_LOCKDOWN, "test")
+        c.record_failed_login("8.8.4.4", "alice")
+        self.assertEqual(asked, ["8.8.4.4"])
+
+    def test_persisting_while_banned_is_a_permaban(self):
+        c = fresh()
+        c._set_ip_threat("8.8.4.5", C.THREAT_LOCKDOWN, "test")
+        self.assertNotIn("8.8.4.5", c._permanent_banned_ips)
+        for _ in range(c.banned_activity_permaban):
+            c.note_banned_activity("8.8.4.5", "still trying")
+        self.assertIn("8.8.4.5", c._permanent_banned_ips)
+
+    def test_the_attempt_that_earns_the_ban_is_not_evasion(self):
+        # Being banned ON this attempt must not also count as talking through
+        # a ban - that would permaban everything on its first offence.
+        c = fresh()
+        c.record_failed_login("8.8.4.6", "root")
+        c.record_failed_login("8.8.4.6", "ubuntu")   # bans here
+        self.assertTrue(c.is_ip_banned("8.8.4.6"))
+        self.assertNotIn("8.8.4.6", c._permanent_banned_ips)
+
+    def test_re_enforcement_is_rate_limited(self):
+        c = fresh()
+        asked = []
+        c.on_reenforce_ban = lambda ip, reason="": asked.append(ip)
+        c._set_ip_threat("8.8.4.7", C.THREAT_LOCKDOWN, "test")
+        for _ in range(5):
+            c.note_banned_activity("8.8.4.7", "flood")
+        self.assertEqual(len(asked), 1)
+
+
+class BanRoutedThroughEnforcement(unittest.TestCase):
+    """ban_ip used to be two set memberships, so a manual ban and the risk
+    engine's own escalation never reached the firewall or the ban database."""
+
+    def test_ban_ip_goes_through_set_ip_threat(self):
+        seen = []
+
+        class Recording(C.CerberusProtocol):
+            def _set_ip_threat(self, ip, level, reason):
+                seen.append((ip, level))
+                super()._set_ip_threat(ip, level, reason)
+
+        d = tempfile.mkdtemp()
+        c = Recording(log_dir=os.path.join(d, "logs"))
+        c.ban_ip("3.3.3.3", permanent=False, reason="manual")
+        self.assertEqual(seen, [("3.3.3.3", C.THREAT_LOCKDOWN)])
+        self.assertTrue(c.is_ip_banned("3.3.3.3"))
+
+    def test_permanent_ban_is_recorded_even_when_already_banned(self):
+        c = fresh()
+        c._set_ip_threat("3.3.3.4", C.THREAT_LOCKDOWN, "first")
+        c.ban_ip("3.3.3.4", permanent=True, reason="risk score climbing")
+        self.assertIn("3.3.3.4", c._permanent_banned_ips)
+
+
 class DashboardStatus(unittest.TestCase):
+
     def test_new_keys_present(self):
         c = fresh()
         st = c.get_account_guard_status()
         for k in ("distributed_targets", "bruteforce_subnets",
-                  "reserved_account_ips", "repeat_offenders"):
+                  "reserved_account_ips", "repeat_offenders",
+                  "reserved_names_tried", "lockout_sources",
+                  "lockout_evasion_ips", "active_while_banned"):
             self.assertIn(k, st)
+
 
     def test_no_global_lockdown_on_distributed(self):
         # A distributed attack must NOT lock the whole server out for real users.

@@ -40,8 +40,25 @@ EVENT_WEIGHTS = {
 }
 
 
+def _accepts_three(fn) -> bool:
+    """True if ``fn`` takes a third positional argument."""
+    try:
+        import inspect
+        params = [
+            p for p in inspect.signature(fn).parameters.values()
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        ]
+        if any(p.kind == p.VAR_POSITIONAL
+               for p in inspect.signature(fn).parameters.values()):
+            return True
+        return len(params) >= 3
+    except (TypeError, ValueError):
+        return False
+
+
 class RiskEngine:
     """Time-decayed, cross-signal risk scoring per source IP."""
+
 
     def __init__(self, on_escalate: Optional[Callable[[str, str], None]] = None,
                  ban_threshold: float = 60.0, half_life_seconds: float = 600.0,
@@ -49,9 +66,18 @@ class RiskEngine:
         self.on_escalate = on_escalate
         self.ban_threshold = ban_threshold
         self.half_life = half_life_seconds
+        # A score that keeps climbing after the first escalation means the ban
+        # is not stopping the attacker. Escalating once and never again is how
+        # an address reached a score of 261 against a threshold of 60 with
+        # nothing further happening to it; each doubling is now acted on, and
+        # past ``permaban_multiple`` the ban is permanent.
+        self.reescalate_multiple = 2.0
+        self.permaban_multiple = 3.0
         # {ip: [score, last_update_ts]}
         self._scores: Dict[str, List[float]] = {}
-        self._escalated: set = set()
+        # {ip: score at which it was last escalated}
+        self._escalated_at: Dict[str, float] = {}
+
         # Per-account known source IPs (novelty / takeover detection).
         self._account_ips: Dict[str, set] = {}
         # Rolling event log for the AI analyst + dashboard.
@@ -80,16 +106,36 @@ class RiskEngine:
         weight = EVENT_WEIGHTS.get(kind, 10)
         score = self._decay(ip, now) + weight
         self._scores[ip] = [score, now]
-        if score >= self.ban_threshold and ip not in self._escalated:
-            self._escalated.add(ip)
-            reason = (f"Cerberus risk score {score:.0f} >= {self.ban_threshold:.0f} "
-                      f"(correlated: last='{kind}')")
-            logger.warning(f"[CERBERUS-AI] Escalating {ip}: {reason}")
-            if self.on_escalate:
-                try:
+        self._maybe_escalate(ip, score, kind)
+
+    def _maybe_escalate(self, ip: str, score: float, kind: str):
+        """Escalate at the threshold, and again at every doubling above it."""
+        if score < self.ban_threshold:
+            return
+        last = self._escalated_at.get(ip)
+        if last is not None and score < last * self.reescalate_multiple:
+            return
+        self._escalated_at[ip] = score
+        permanent = score >= self.ban_threshold * self.permaban_multiple
+        reason = (f"Cerberus risk score {score:.0f} >= {self.ban_threshold:.0f} "
+                  f"(correlated: last='{kind}')")
+        if permanent:
+            reason += " - still climbing after a ban"
+        logger.warning(f"[CERBERUS-AI] Escalating {ip}: {reason}")
+        if self.on_escalate:
+            try:
+                # A callback that wants to know whether this is a permaban gets
+                # told; one written before that argument existed is called as
+                # it always was. Asked of the signature rather than by catching
+                # TypeError, which would also swallow one raised INSIDE it.
+                if _accepts_three(self.on_escalate):
+                    self.on_escalate(ip, reason, permanent)
+                else:
                     self.on_escalate(ip, reason)
-                except Exception as e:
-                    logger.error(f"RiskEngine on_escalate error: {e}")
+            except Exception as e:
+                logger.error(f"RiskEngine on_escalate error: {e}")
+
+
 
     def record_login(self, username: str, ip: str, success: bool = True):
         """Learn an account's usual IPs; flag a successful login from a
@@ -137,12 +183,20 @@ class CerberusAI:
     def __init__(self, risk_engine: RiskEngine,
                  status_provider: Optional[Callable[[], Dict[str, Any]]] = None,
                  log_path: Optional[str] = None,
-                 api_key: str = "", model: str = "gemini-2.5-pro"):
+                 api_key: str = "", model: str = "gemini-2.5-pro",
+                 transcript_provider: Optional[Callable[[], Any]] = None):
         self.risk_engine = risk_engine
         self.status_provider = status_provider
         self.log_path = log_path
         self.api_key = api_key or ""
         self.model = model
+        # What Blackwall has said to the attackers. Part of the evidence: an
+        # actor who was told to stop, in words, and carried on is not the same
+        # actor as one who has never been addressed - and the operator asking
+        # for this assessment wants to know what their server said in its own
+        # defence.
+        self.transcript_provider = transcript_provider
+
 
     @property
     def enabled(self) -> bool:
@@ -199,7 +253,14 @@ class CerberusAI:
             except Exception:
                 status = {}
         log_tail = self._read_log_tail()
+        transcript = []
+        if self.transcript_provider:
+            try:
+                transcript = self.transcript_provider() or []
+            except Exception:
+                transcript = []
         return (
+
             "You are Cerberus, the security analyst for the Titan-Net server. "
             "Analyze the telemetry below and produce a concise threat assessment. "
             "Focus on attempts by one user to break into another user, moderator, "
@@ -209,7 +270,12 @@ class CerberusAI:
             "severity (one of none|low|medium|high|critical), "
             "summary (string), notable_actors (array of {ip, why}), "
             "recommended_actions (array of strings). No prose outside the JSON.\n\n"
+            "BLACKWALL_TRANSCRIPT is what Blackwall, this server's own defence "
+            "layer, has already said to these actors in plain text. Say in the "
+            "summary whether being addressed changed their behaviour.\n\n"
             f"CERBERUS_STATUS:\n{json.dumps(status, default=str)[:4000]}\n\n"
+            f"BLACKWALL_TRANSCRIPT:\n{json.dumps(transcript, default=str)[:3000]}\n\n"
+
             f"TOP_RISK_IPS:\n{json.dumps(risks)}\n\n"
             f"RECENT_EVENTS:\n{json.dumps(events, default=str)[:6000]}\n\n"
             f"INTRUSION_LOG_TAIL:\n{log_tail[:4000]}\n"

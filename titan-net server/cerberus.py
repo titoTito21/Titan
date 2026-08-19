@@ -176,6 +176,49 @@ class CerberusProtocol:
         self.reserved_alert = 1                # a single hit is already suspicious
         self.reserved_lockdown = 3             # ban the IP fast
         self.reserved_window = 1800
+        # Names a real accessibility user COULD plausibly have chosen, so a hit
+        # on one is never an attack by itself - but an attacker sweeping default
+        # accounts tries them alongside the certain ones ('root', 'ubuntu',
+        # 'debian', ... then 'user'). They therefore count only towards the
+        # DISTINCT-name signal below, once the same IP has already produced a
+        # certain hit, and never raise a threat on their own.
+        self._soft_reserved_usernames: Set[str] = {
+            "user", "guest", "support", "operator", "manager", "info",
+            "backup", "deploy", "dev", "git", "pi", "service",
+        }
+        # {ip: {reserved username: last ts}} - an attacker walking a LIST of
+        # default accounts is certain far sooner than one retrying a single
+        # name, because no typo produces two different system accounts.
+        self._reserved_names_by_ip: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self.reserved_distinct_lockdown = 2    # two different reserved names -> ban
+
+        # --- Account-lockout abuse ---
+        # The protective lock defends the ACCOUNT; on its own it does nothing
+        # to the attacker, who simply moves to the next username. An IP that
+        # drives several accounts into lockout is a brute-forcer by definition.
+        self._lockout_sources: Dict[str, List[float]] = defaultdict(list)
+        self.lockout_source_lockdown = 2       # locked N accounts -> ban the IP
+        self.lockout_source_window = 1800
+        # Attempts made against an ALREADY-LOCKED account. Without this the
+        # lock is a blind spot: the login is rejected before any counter sees
+        # it, so an attacker who trips a lock becomes invisible to every
+        # per-IP detector and can hammer the account indefinitely.
+        self._locked_attempts: Dict[str, List[float]] = defaultdict(list)
+        self.locked_attempt_alert = 1
+        self.locked_attempt_lockdown = 3
+        self.locked_attempt_window = 900
+
+        # --- Activity from an IP that is ALREADY banned ---
+        # A ban that the attacker keeps talking through is a ban that is not
+        # being enforced (a flushed firewall rule, a restarted kernel, a rule
+        # shadowed by an earlier ACCEPT). Seeing traffic from a banned IP is
+        # therefore a signal in itself: re-verify the block and escalate.
+        self._banned_activity: Dict[str, List[float]] = defaultdict(list)
+        self.banned_activity_window = 600
+        self.banned_activity_permaban = 3      # still active after N -> permaban
+        self._last_reenforce: Dict[str, float] = {}
+        self.reenforce_interval = 60           # seconds between re-verifications
+
 
         # --- Escalating response for repeat offenders ---
         # The report asks for "escalating ban durations for repeat offenders".
@@ -213,6 +256,16 @@ class CerberusProtocol:
         self.on_shutdown_attacker: Optional[Callable] = None
         self.on_ban_ip: Optional[Callable] = None
         self.on_disconnect_ip: Optional[Callable] = None
+        # Asked to prove a ban is really in force (firewall rule present and
+        # not shadowed). Wired to the firewall layer by DangerousCerberus.
+        self.on_reenforce_ban: Optional[Callable] = None
+        # Every failed login attempt, for the layer that recognises behaviour
+        # rather than counting it (Blackwall). Deliberately separate from
+        # ``on_account_event``: a failed login is not a security event on its
+        # own and must not move anybody's risk score.
+        self.on_login_attempt: Optional[Callable] = None
+
+
 
         # --- Stats ---
         self._total_intrusions_blocked = 0
@@ -463,21 +516,40 @@ class CerberusProtocol:
     # BRUTE FORCE DETECTION
     # ================================================================
 
-    def record_failed_login(self, ip: str, username: str = "unknown") -> bool:
+    def record_failed_login(self, ip: str, username: str = "unknown",
+                            source: str = "app") -> bool:
         """
         Record a failed login attempt.
         Returns True if IP should be blocked NOW.
         Only affects THIS IP - other users are NOT impacted.
+
+        ``source`` says where the attempt came from - ``"app"`` for a Titan-Net
+        login, ``"ssh"`` for one the auth-log monitor read off the system's own
+        SSH service. The enforcement layer needs it: an SSH brute-forcer that is
+        only blocked on the Titan-Net ports carries on attacking untouched.
         """
+        # Was this IP banned BEFORE this attempt? Asked first, because the
+        # account-guard below may ban it on this very attempt - and the attempt
+        # that earns a ban is not evidence that the ban is leaking.
+        was_banned = self.is_ip_banned(ip)
+
         # Account-guard runs even for whitelisted IPs' *targeted-account*
         # tracking is skipped inside; credential-stuffing is IP-gated there.
-        self.account_guard_on_failed_login(ip, username)
+        self.account_guard_on_failed_login(ip, username, source=source)
 
         if self.is_whitelisted(ip):
             return False
 
+        # An IP we have already banned is still getting through: the ban is not
+        # being enforced. Say so, re-verify the block, and escalate.
+        if was_banned:
+            self.note_banned_activity(ip, f"failed login as '{username}' ({source})")
+            return True
+
+
         now = time.time()
         self._check_cooldown()
+
 
         # Clean old entries
         cutoff = now - self.failed_login_window
@@ -810,7 +882,8 @@ class CerberusProtocol:
                                 f"Privilege escalation attempt(s) ({n}) by user={actor_user_id} on {resource}")
         return False
 
-    def account_guard_on_failed_login(self, ip: str, username: str):
+    def account_guard_on_failed_login(self, ip: str, username: str,
+                                      source: str = "app"):
         """Called on each failed login. Detects credential stuffing (many
         usernames from one IP) and targeted attacks on a single account (which
         triggers a protective, temporary account lock)."""
@@ -819,16 +892,38 @@ class CerberusProtocol:
         now = time.time()
         key = username.lower()
 
+        # Hand the raw attempt to whatever recognises behaviour (Blackwall):
+        # which account, from where, at what rhythm. It sees the attempts the
+        # thresholds below deliberately let through.
+        if self.on_login_attempt and ip:
+            try:
+                self.on_login_attempt(ip, username, source)
+            except Exception as e:
+                logger.error(f"on_login_attempt error: {e}")
+
         # --- Reserved / non-existent username (honeytoken) ---
+
         # No legitimate user ever logs in as 'root'/'admin'/etc. on Titan-Net,
         # so a hit is a near-certain attack and escalates the IP fast.
         _is_reserved = key in self._reserved_usernames
-        if _is_reserved and self.is_real_account is not None:
+        _is_soft = key in self._soft_reserved_usernames
+        if (_is_reserved or _is_soft) and self.is_real_account is not None:
             try:
                 if self.is_real_account(key):
-                    _is_reserved = False  # a genuine account, not a honeytoken
+                    # A genuine account, not a honeytoken.
+                    _is_reserved = False
+                    _is_soft = False
             except Exception as e:
                 logger.error(f"is_real_account check failed: {e}")
+        if ip and not self.is_whitelisted(ip) and (_is_reserved or _is_soft):
+            names = self._reserved_names_by_ip[ip]
+            for old_name in [u for u, ts in names.items()
+                             if ts < now - self.reserved_window]:
+                names.pop(old_name, None)
+            # A soft name is recorded only once this IP has already produced a
+            # certain hit - on its own it stays entirely unremarkable.
+            if _is_reserved or names:
+                names[key] = now
         if _is_reserved and ip and not self.is_whitelisted(ip):
             self._reserved_hits[ip] = self._prune(self._reserved_hits[ip], self.reserved_window, now)
             self._reserved_hits[ip].append(now)
@@ -844,6 +939,25 @@ class CerberusProtocol:
             elif n >= self.reserved_alert:
                 self._set_ip_threat(ip, THREAT_ALERT,
                                     f"Login attempt on reserved account '{username}'")
+        # Several DIFFERENT default accounts from one IP: a list being walked,
+        # not a password being remembered. Nobody mistypes their way from
+        # 'ubuntu' to 'debian' to 'root', so this is certain well before the
+        # per-name count above would be.
+        if ip and not self.is_whitelisted(ip):
+            distinct = len(self._reserved_names_by_ip.get(ip, {}))
+            if distinct >= self.reserved_distinct_lockdown:
+                tried = ", ".join(sorted(self._reserved_names_by_ip[ip]))
+                self._emit_account_event(
+                    "privilege_escalation", ip,
+                    f"{distinct} distinct reserved accounts tried ({tried})",
+                    count=distinct, reserved=username,
+                )
+                self._set_ip_threat(
+                    ip, THREAT_LOCKDOWN,
+                    f"Default-account sweep: {distinct} distinct system accounts "
+                    f"tried from one IP ({tried})"
+                )
+
 
         # Credential stuffing: distinct usernames from this IP.
         if ip and not self.is_whitelisted(ip):
@@ -887,9 +1001,15 @@ class CerberusProtocol:
                     self._subnet_failed_ips.pop(subnet, None)
 
         # Targeted account attack -> protective lock on that username.
+        # NOT for a reserved name: there is no owner to protect, the account
+        # does not exist, and a lock would only make the attacker INVISIBLE -
+        # a locked account is rejected before any per-IP counter is reached.
+        if _is_reserved:
+            return
         self._account_failures[key] = self._prune(self._account_failures[key], self.account_lock_window, now)
         self._account_failures[key].append(now)
         if len(self._account_failures[key]) >= self.account_lock_failures:
+            already_locked = self._locked_accounts.get(key, 0) > now
             self._locked_accounts[key] = now + self.account_lock_seconds
             self._emit_account_event("account_locked", ip or "?",
                                      f"account '{username}' locked for {self.account_lock_seconds}s")
@@ -899,6 +1019,12 @@ class CerberusProtocol:
             )
             self._log_intrusion("ACCOUNT_LOCK", ip or "?",
                                 f"account '{username}' locked after brute force")
+            # The lock protects the account; it does nothing to whoever caused
+            # it, who simply moves to the next username. An IP that drives
+            # several accounts into lockout is a brute-forcer by definition.
+            if not already_locked:
+                self._note_lockout_source(ip, username)
+
 
     def _handle_distributed_account_attack(self, key: str, username: str, ips: List[str]):
         """Many distinct IPs are hammering ONE account. Ban every participant at
@@ -963,8 +1089,114 @@ class CerberusProtocol:
                     f"Distributed brute force from subnet {subnet} ({len(ips)} IPs)"
                 )
 
+    def _note_lockout_source(self, ip: str, username: str):
+        """Credit an IP with having driven an account into protective lockout.
+        Several lockouts from one source is a brute-forcer, whatever the
+        per-IP failure count says - and that count is exactly what the lock
+        stops accumulating, so without this an attacker who trips locks is
+        punished less than one who does not."""
+        if not ip or self.is_whitelisted(ip):
+            return
+        now = time.time()
+        self._lockout_sources[ip] = self._prune(
+            self._lockout_sources[ip], self.lockout_source_window, now)
+        self._lockout_sources[ip].append(now)
+        n = len(self._lockout_sources[ip])
+        self._emit_account_event(
+            "credential_stuffing", ip,
+            f"caused {n} account lockouts (last '{username}')", count=n)
+        if n >= self.lockout_source_lockdown:
+            self._set_ip_threat(
+                ip, THREAT_LOCKDOWN,
+                f"Lockout abuse: {n} accounts driven into protective lockout "
+                f"from one IP in {self.lockout_source_window}s"
+            )
+
+    def record_locked_account_attempt(self, ip: str, username: str) -> bool:
+        """A login was attempted against an account that is ALREADY locked.
+
+        This is the blind spot the protective lock creates: the attempt is
+        rejected before ``record_failed_login`` is ever reached, so every
+        per-IP detector stops seeing an attacker the moment they trip a lock -
+        which is what "persistently attempting to bypass account lockouts"
+        looks like from the outside. Returns True if the IP is now blocked.
+        """
+        if not ip or self.is_whitelisted(ip):
+            return False
+        if self.is_ip_banned(ip):
+            self.note_banned_activity(ip, f"attempt on locked account '{username}'")
+            return True
+        now = time.time()
+        self._locked_attempts[ip] = self._prune(
+            self._locked_attempts[ip], self.locked_attempt_window, now)
+        self._locked_attempts[ip].append(now)
+        n = len(self._locked_attempts[ip])
+        self._emit_account_event(
+            "credential_stuffing", ip,
+            f"{n} attempts on locked account '{username}'", count=n)
+        if n >= self.locked_attempt_lockdown:
+            self._set_ip_threat(
+                ip, THREAT_LOCKDOWN,
+                f"Lockout evasion: {n} logins attempted against locked "
+                f"account '{username}'"
+            )
+            return True
+        if n >= self.locked_attempt_alert:
+            self._set_ip_threat(
+                ip, THREAT_ALERT,
+                f"Login attempted against locked account '{username}' (x{n})")
+        return False
+
+    def note_banned_activity(self, ip: str, detail: str = "") -> bool:
+        """Traffic is still arriving from an IP that is already banned.
+
+        A ban the attacker can talk through is a ban that is not in force -
+        a firewall rule that was flushed, never added, or shadowed by an
+        earlier ACCEPT. So this asks the enforcement layer to PROVE the block
+        (``on_reenforce_ban``) rather than trusting the ban list, and escalates
+        an IP that keeps coming back to a permaban. Returns True if the IP was
+        escalated.
+        """
+        if not ip or self.is_whitelisted(ip):
+            return False
+        now = time.time()
+        self._banned_activity[ip] = self._prune(
+            self._banned_activity[ip], self.banned_activity_window, now)
+        self._banned_activity[ip].append(now)
+        n = len(self._banned_activity[ip])
+
+        # Re-verify the block, rate-limited so a flood does not turn into a
+        # flood of iptables calls.
+        if now - self._last_reenforce.get(ip, 0) >= self.reenforce_interval:
+            self._last_reenforce[ip] = now
+            logger.warning(
+                f"CERBERUS: banned IP {ip} is still active ({detail}) - "
+                f"re-verifying the block"
+            )
+            if self.on_reenforce_ban:
+                try:
+                    self.on_reenforce_ban(ip, f"still active while banned: {detail}")
+                except Exception as e:
+                    logger.error(f"Re-enforce ban callback error: {e}")
+
+        if n >= self.banned_activity_permaban:
+            self._banned_activity[ip] = []
+            self._log_intrusion(
+                "BAN_EVASION", ip,
+                f"still active after ban ({n} events): {detail}")
+            self._emit_account_event(
+                "privilege_escalation", ip,
+                f"active while banned ({n} events): {detail}", count=n)
+            self._set_ip_threat(
+                ip, THREAT_CERBERUS,
+                f"Ban evasion: still attacking while banned ({detail})"
+            )
+            return True
+        return False
+
     def is_account_locked(self, username: str) -> bool:
         """True if this account is under a temporary protective lock."""
+
         if not username:
             return False
         key = username.lower()
@@ -1041,9 +1273,29 @@ class CerberusProtocol:
             "reserved_account_ips": {
                 ip: len(v) for ip, v in self._reserved_hits.items() if v
             },
+            # Reserved names each IP has walked through (a default-account
+            # sweep, e.g. root -> ubuntu -> debian -> user).
+            "reserved_names_tried": {
+                ip: sorted(names) for ip, names in self._reserved_names_by_ip.items()
+                if names
+            },
+            # IPs that drove accounts into protective lockout.
+            "lockout_sources": {
+                ip: len(v) for ip, v in self._lockout_sources.items() if v
+            },
+            # IPs still hammering an account that is already locked.
+            "lockout_evasion_ips": {
+                ip: len(v) for ip, v in self._locked_attempts.items() if v
+            },
+            # Banned IPs whose traffic is still arriving - a ban that is not
+            # being enforced, which is the one failure a ban list cannot see.
+            "active_while_banned": {
+                ip: len(v) for ip, v in self._banned_activity.items() if v
+            },
             # Repeat offenders (banned before -> next ban is a permaban).
             "repeat_offenders": dict(self._offense_history),
         }
+
 
     # ================================================================
     # ADMIN CONTROLS
@@ -1065,12 +1317,27 @@ class CerberusProtocol:
         self.threat_level = THREAT_NORMAL
         logger.info(f"LOCKDOWN DEACTIVATED: {reason}")
 
-    def ban_ip(self, ip: str, permanent: bool = False):
-        """Manually ban an IP"""
+    def ban_ip(self, ip: str, permanent: bool = False, reason: str = "Manual ban"):
+        """Ban an IP - down the same path an automatic ban takes.
+
+        This used to add the address to two sets and nothing else, so a ban
+        made here reached neither the firewall nor the persistent ban database:
+        a moderator's ban, and (worse) the risk engine's own escalation of the
+        highest-scoring attacker on the dashboard, were enforced in this
+        process's memory alone and forgotten at the next restart. Going through
+        ``_set_ip_threat`` is what makes the subclass's firewall block, ban
+        record, subnet analysis and repeat-offender escalation all happen.
+        """
+        self._log_intrusion("MANUAL_BAN", ip, f"permanent={permanent} | {reason}")
+        self._set_ip_threat(
+            ip, THREAT_CERBERUS if permanent else THREAT_LOCKDOWN, reason)
+        # _set_ip_threat only ever raises a threat level, so an IP already at
+        # or above this level returns early from it - make sure the ban itself
+        # is recorded either way.
         self._banned_ips.add(ip)
         if permanent:
             self._permanent_banned_ips.add(ip)
-        self._log_intrusion("MANUAL_BAN", ip, f"permanent={permanent}")
+
 
     def unban_ip(self, ip: str):
         """Remove IP ban"""

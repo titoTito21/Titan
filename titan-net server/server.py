@@ -205,15 +205,20 @@ class TitanNetServer:
             from cerberus_ai import RiskEngine, CerberusAI
             from config import Config
 
-            def _risk_escalate(ip, reason):
-                # Correlated multi-signal risk crossed the ban line -> ban the IP.
+            def _risk_escalate(ip, reason, permanent=False):
+                # Correlated multi-signal risk crossed the ban line -> ban the
+                # IP. ban_ip now goes through the firewall and the persistent
+                # ban database; it used to be a set membership and nothing
+                # else, so the highest-scoring attacker on the dashboard was
+                # never actually blocked.
                 try:
-                    self.cerberus.ban_ip(ip, permanent=False)
+                    self.cerberus.ban_ip(ip, permanent=permanent, reason=reason)
                     if self.cerberus.on_disconnect_ip:
                         self.cerberus.on_disconnect_ip(ip)
                     self.cerberus._log_intrusion("RISK_ESCALATION", ip, reason)
                 except Exception as e:
                     logger.error(f"[CERBERUS-AI] risk escalate failed: {e}")
+
 
             self.risk_engine = RiskEngine(on_escalate=_risk_escalate)
             self.cerberus.risk_engine = self.risk_engine
@@ -233,8 +238,50 @@ class TitanNetServer:
             self.risk_engine = None
             self.cerberus_ai = None
 
+        # --- Blackwall: the recognition layer over Cerberus ---
+        # Cerberus counts what an attacker can stay under; Blackwall
+        # recognises HOW a source behaves, groups the addresses running one
+        # operation, remembers a campaign between restarts, tightens the whole
+        # system while an attack is live, and - with a key - has the model
+        # decide, inside guardrails.
+        self.blackwall = None
+        try:
+            from config import Config
+            if getattr(Config, 'BLACKWALL_ENABLED', True):
+                from blackwall import Blackwall
+                self.blackwall = Blackwall(
+                    self.cerberus,
+                    risk_engine=getattr(self, 'risk_engine', None),
+                    memory_path=os.path.join('database', 'blackwall_memory.json'),
+                    api_key=getattr(Config, 'BLACKWALL_KEY', '') or '',
+                    model=getattr(Config, 'BLACKWALL_MODEL', 'gemini-2.5-pro'),
+                    autonomous=getattr(Config, 'BLACKWALL_AUTONOMOUS', True),
+                )
+                self.blackwall_speaks = getattr(Config, 'BLACKWALL_SPEAKS', True)
+                # Every failed attempt, and every account-guard event, go to it.
+                self.cerberus.on_login_attempt = self.blackwall.observe_login
+                self.cerberus.on_account_event = (
+                    lambda kind, ip, detail, extra: self.blackwall.observe_event(
+                        kind, ip, detail, extra)
+                )
+                self.blackwall.start()
+                # The analyst reads what the wall said, alongside everything
+                # else - it is evidence about the actor, not decoration.
+                if getattr(self, 'cerberus_ai', None) is not None:
+                    self.cerberus_ai.transcript_provider = (
+                        lambda: self.blackwall.transcript(40))
+        except Exception as e:
+            logger.error(f"[BLACKWALL] init failed: {e}", exc_info=True)
+            self.blackwall = None
+
+
+
         # --- HackBack Protocol (Active Defense) ---
         self.hackback = HackBackProtocol(cerberus=self.cerberus, log_dir='logs')
+        # An SSH attacker has no Titan-Net client to be told anything in; the
+        # tar pit's banner is the one channel to their terminal.
+        self.hackback.blackwall = getattr(self, 'blackwall', None)
+
         # Store event loop reference for thread-safe countermeasure scheduling
         try:
             self.hackback._loop = asyncio.get_event_loop()
@@ -3872,12 +3919,27 @@ class TitanNetServer:
                         _login_user = (data.get('username') or '').strip()
                         if _login_user and self.cerberus.is_account_locked(_login_user):
                             logger.warning(f"[CERBERUS] Login blocked - account '{_login_user}' temporarily locked")
+                            # The lock protects the account, and used to hide
+                            # the attacker: rejecting here skips
+                            # record_failed_login, so every per-IP detector
+                            # stopped seeing whoever tripped the lock and they
+                            # could hammer it for free. Count it.
+                            _evading = self.cerberus.record_locked_account_attempt(
+                                client_ip, _login_user)
                             await websocket.send(json.dumps({
                                 "type": "login_response",
                                 "success": False,
                                 "error": "This account is temporarily locked after repeated failed logins. Try again later or reset your password.",
                             }))
+                            if _evading:
+                                shutdown_msg = self.cerberus.get_cerberus_client_message(
+                                    "Repeated attempts against a locked account"
+                                )
+                                await websocket.send(json.dumps(shutdown_msg))
+                                await websocket.close(1008, "Cerberus: lockout evasion")
+                                return
                             continue
+
 
                         response = await self.handle_login(websocket, data)
 
@@ -3886,11 +3948,32 @@ class TitanNetServer:
                             blocked = self.cerberus.record_failed_login(
                                 client_ip, data.get('username', 'unknown')
                             )
+                            # Blackwall answers an attacker in its own voice -
+                            # and only an attacker. warn() returns nothing at
+                            # all for a user who simply got their own password
+                            # wrong, which is most people who end up here.
+                            _wall = getattr(self, 'blackwall', None)
+                            _said = None
+                            if _wall is not None and getattr(self, 'blackwall_speaks', False):
+                                try:
+                                    _said = _wall.warn(client_ip,
+                                                       data.get('username', ''))
+                                    if _said and not blocked:
+                                        await websocket.send(json.dumps(_said))
+                                except Exception as e:
+                                    logger.error(
+                                        f"[BLACKWALL] could not answer {client_ip}: {e}")
                             if blocked:
                                 shutdown_msg = self.cerberus.get_cerberus_client_message(
                                     "Too many failed login attempts"
                                 )
+                                if _wall is not None and getattr(self, 'blackwall_speaks', False):
+                                    try:
+                                        shutdown_msg['blackwall'] = _wall.farewell(client_ip)
+                                    except Exception:
+                                        pass
                                 await websocket.send(json.dumps(shutdown_msg))
+
                                 await websocket.close(1008, "Cerberus: Brute force blocked")
                                 # Engage countermeasures against brute force source
                                 asyncio.ensure_future(
@@ -4228,6 +4311,11 @@ class TitanNetServer:
                             response = await self._handle_cerberus_ai_assessment(session_id)
                             await websocket.send(json.dumps(response))
 
+                        elif msg_type == 'blackwall_deliberate':
+                            response = await self._handle_blackwall_deliberate(session_id)
+                            await websocket.send(json.dumps(response))
+
+
                     else:
                         await websocket.send(json.dumps({
                             "type": "error",
@@ -4269,10 +4357,41 @@ class TitanNetServer:
 
         status = self.cerberus.get_status()
         status["hackback"] = self.hackback.get_status()
+        if getattr(self, 'blackwall', None) is not None:
+            status["blackwall"] = self.blackwall.status()
         return {
             "type": "cerberus_status",
             **status
         }
+
+    async def _handle_blackwall_deliberate(self, session_id: str) -> Dict:
+        """Have Blackwall read the current telemetry and decide, now.
+
+        It does this by itself whenever the posture is above calm; this is the
+        moderator asking for it out of turn. The Gemini call is blocking
+        network I/O, so it goes to a worker - the event loop is what every
+        other user is being served by."""
+        client = self.clients.get(session_id)
+        if not client:
+            return {"type": "error", "error": "Not authenticated"}
+        loop = asyncio.get_event_loop()
+        user = await loop.run_in_executor(None, self.db.get_user_by_id, client['user_id'])
+        is_admin = user and (user.get('is_admin') or user.get('role') == 'admin')
+        is_mod = user and await loop.run_in_executor(None, self.db.is_moderator, client['user_id'])
+        if not is_admin and not is_mod:
+            return {"type": "error", "error": "Moderator or admin access required"}
+        if getattr(self, 'blackwall', None) is None:
+            return {"type": "blackwall_deliberation",
+                    "verdict": {"enabled": False, "reason": "Blackwall is switched off."},
+                    "status": {}}
+        verdict = await loop.run_in_executor(
+            None, lambda: self.blackwall.deliberate(force=True))
+        return {
+            "type": "blackwall_deliberation",
+            "verdict": verdict,
+            "status": self.blackwall.status(),
+        }
+
 
     async def _handle_cerberus_ai_assessment(self, session_id: str) -> Dict:
         """Run the optional Cerberus AI analyst (Gemini) on demand. Moderator or

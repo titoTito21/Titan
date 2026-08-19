@@ -71,6 +71,22 @@ class Config:
     # depth matters more than latency.
     CERBERUS_AI_MODEL = os.getenv('CERBERUS_AI_MODEL', 'gemini-2.5-pro')
 
+    # Blackwall: the recognition layer over Cerberus (behavioural
+    # fingerprinting, campaign correlation, threat memory, adaptive posture)
+    # plus, when a key is present, a deliberating AI that carries out its own
+    # verdicts under guardrails. The recognition half needs no key at all.
+    BLACKWALL_ENABLED = os.getenv('BLACKWALL_ENABLED', '1') == '1'
+    # 0 = deliberate and report, never act on the model's verdicts. The
+    # non-AI layers still ban, because they prove what they saw.
+    BLACKWALL_AUTONOMOUS = os.getenv('BLACKWALL_AUTONOMOUS', '1') == '1'
+    # Whether Blackwall answers an attacker in its own voice. Never said to a
+    # user who merely failed to log in - only to a source that is provably
+    # attacking (see blackwall.Blackwall._attack_grounds).
+    BLACKWALL_SPEAKS = os.getenv('BLACKWALL_SPEAKS', '1') == '1'
+    BLACKWALL_KEY = os.getenv('BLACKWALL_KEY', '') or CERBERUS_AI_KEY
+    BLACKWALL_MODEL = os.getenv('BLACKWALL_MODEL', '') or CERBERUS_AI_MODEL
+
+
     # Mail (email verification, password recovery, user mailboxes).
     # Outbound mail is handed to a local Postfix relay by default; point
     # SMTP_* at an external relay to send without self-hosting Postfix.

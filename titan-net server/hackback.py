@@ -243,7 +243,8 @@ class TarPit:
                  delay_min: float = 5.0, delay_max: float = 20.0,
                  max_line_length: int = 32, max_clients: int = 4096,
                  on_connection: Optional[Callable] = None,
-                 on_trapped: Optional[Callable] = None):
+                 on_trapped: Optional[Callable] = None,
+                 banner_provider: Optional[Callable] = None):
         self.host = host
         self.port = port
         self.delay_min = delay_min
@@ -252,6 +253,13 @@ class TarPit:
         self.max_clients = max_clients
         self.on_connection = on_connection  # (ip, port)
         self.on_trapped = on_trapped        # (ip, duration_seconds)
+        # (ip) -> the lines to drip before the endless noise. Whoever is
+        # trapped here is looking at a terminal waiting for an SSH banner,
+        # which is the only channel there is to say anything to them in - so
+        # Blackwall's message goes out as the banner, one line at a time, and
+        # the trap works exactly as before once it has been said.
+        self.banner_provider = banner_provider
+
 
         self.running = False
         self.server_socket = None
@@ -294,8 +302,31 @@ class TarPit:
 
         logger.info(f"[TAR PIT] Trapped: {ip}:{client_addr[1]}")
 
+        # What the wall has to say, first, in words they can read.
+        opening: List[str] = []
+        if self.banner_provider:
+            try:
+                opening = list(self.banner_provider(ip) or [])
+            except Exception as e:
+                logger.error(f"[TAR PIT] banner provider failed: {e}")
+
         try:
+            for text in opening:
+                if not self.running:
+                    break
+                # Slowly, but not tar-pit slowly - a message nobody stays long
+                # enough to read has not been delivered.
+                time.sleep(min(1.0, self.delay_min / 5.0))
+                try:
+                    data = (text + "\r\n").encode('ascii', 'replace')
+                    client_socket.sendall(data)
+                    bytes_sent += len(data)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    opening = []
+                    break
+
             while self.running:
+
                 # Random delay between lines
                 delay = random.uniform(self.delay_min, self.delay_max)
                 time.sleep(delay)
@@ -950,6 +981,11 @@ class HackBackProtocol:
         self.cerberus = cerberus  # DangerousCerberus instance
         self.tar_pit: Optional[TarPit] = None
         self.log_dir = log_dir
+        # Set by the server once Blackwall exists. The tar pit is the only
+        # channel there is to an SSH attacker, so it is what Blackwall speaks
+        # through.
+        self.blackwall = None
+
 
         # HackBack settings
         self.enabled = True
@@ -1014,8 +1050,23 @@ class HackBackProtocol:
             max_clients=4096,
             on_connection=self._on_tar_pit_connection,
             on_trapped=self._on_tar_pit_trapped,
+            banner_provider=self._blackwall_banner,
         )
         self.tar_pit.start()
+
+    def _blackwall_banner(self, ip: str) -> List[str]:
+        """Blackwall's message, as the banner the trapped client is waiting
+        for. Nothing at all when Blackwall is off - the tar pit then behaves
+        exactly as it always did."""
+        wall = getattr(self, 'blackwall', None)
+        if wall is None:
+            return []
+        try:
+            return wall.tarpit_lines(ip)
+        except Exception as e:
+            logger.error(f"[TAR PIT] Blackwall could not speak: {e}")
+            return []
+
 
     def stop_tar_pit(self):
         """Stop the tar pit"""

@@ -275,13 +275,21 @@ class AuthLogMonitor:
             f"[AUTH] Failed SSH login: user={username} from {ip}"
         )
 
-        # Report to Cerberus as failed login (brute force detection)
+        # Report to Cerberus as failed login (brute force detection).
+        # ``source='ssh'`` matters: this attack is against the machine's own
+        # SSH service, so the ban has to cover port 22 - a ban limited to the
+        # Titan-Net ports leaves the brute force running untouched.
         if self.cerberus:
-            blocked = self.cerberus.record_failed_login(ip, username)
+            try:
+                blocked = self.cerberus.record_failed_login(
+                    ip, username, source="ssh")
+            except TypeError:      # an older Cerberus without the argument
+                blocked = self.cerberus.record_failed_login(ip, username)
             if blocked:
                 logger.warning(
                     f"[AUTH] Cerberus blocked IP {ip} after SSH brute force"
                 )
+
 
     def _handle_successful_login(self, ip: str, username: str):
         """Report successful SSH login to Cerberus (clears failed counter)"""

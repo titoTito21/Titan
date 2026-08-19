@@ -93,8 +93,10 @@ class TitanNetMain:
                     host='0.0.0.0',
                     port=honeypot_port,
                     cerberus=self.websocket_server.cerberus,
-                    log_dir='logs'
+                    log_dir='logs',
+                    blackwall=getattr(self.websocket_server, 'blackwall', None),
                 )
+
                 self.honeypot_server.start()
                 logger.info(
                     f"SSH Honeypot: port {honeypot_port} "

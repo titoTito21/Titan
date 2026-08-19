@@ -134,11 +134,18 @@ class HoneypotSession:
 
     def __init__(self, client_socket: socket.socket, client_ip: str,
                  on_command: Optional[Callable] = None,
-                 on_login: Optional[Callable] = None):
+                 on_login: Optional[Callable] = None,
+                 farewell: Optional[Callable] = None):
         self.socket = client_socket
         self.ip = client_ip
         self.on_command = on_command
         self.on_login = on_login
+        # (ip) -> the text Blackwall says on the way out. Said at the END of
+        # the session on purpose: the honeypot's whole value is watching what
+        # an attacker does when they believe they are alone, and announcing
+        # the trap while they are still in it throws that away.
+        self.farewell = farewell
+
         self.cwd = "/home/admin"
         self.user = FAKE_USER
         self.authenticated = False
@@ -146,8 +153,22 @@ class HoneypotSession:
         self.login_attempts = 0
         self.start_time = time.time()
 
+    def _say_farewell(self):
+        """Let Blackwall have the last word, in plain text in their terminal.
+        Never fatal: a session that cannot be spoken to is still a session
+        that was logged."""
+        if not self.farewell:
+            return
+        try:
+            text = self.farewell(self.ip)
+            if text:
+                self.send("\r\n" + text)
+        except Exception as e:
+            logger.error(f"Blackwall could not speak to {self.ip}: {e}")
+
     def send(self, text: str):
         """Send text to attacker"""
+
         try:
             self.socket.sendall(text.encode('utf-8'))
         except (BrokenPipeError, ConnectionResetError, OSError):
@@ -205,7 +226,9 @@ class HoneypotSession:
 
             if not self.authenticated:
                 self.send("Maximum login attempts exceeded.\r\n")
+                self._say_farewell()
                 return
+
 
             # Send fake MOTD
             now = datetime.now()
@@ -235,8 +258,13 @@ class HoneypotSession:
                 output = self.process_command(command)
                 if output is None:
                     # Exit command
-                    self.send("logout\r\nConnection to server closed.\r\n")
+                    self.send("logout\r\n")
+                    # They are leaving; there is nothing left to learn by
+                    # keeping up the illusion, so they are told what this was.
+                    self._say_farewell()
+                    self.send("Connection to server closed.\r\n")
                     break
+
 
                 if output:
                     self.send(output + "\r\n")
@@ -504,10 +532,12 @@ class HoneypotServer:
     """TCP server that simulates SSH for honeypot purposes"""
 
     def __init__(self, host: str = '0.0.0.0', port: int = 2222,
-                 cerberus=None, log_dir: str = "logs"):
+                 cerberus=None, log_dir: str = "logs", blackwall=None):
         self.host = host
         self.port = port
         self.cerberus = cerberus
+        self.blackwall = blackwall
+
         self.running = False
         self.server_socket = None
         self.thread = None
@@ -533,7 +563,22 @@ class HoneypotServer:
             ))
             self._session_logger.addHandler(handler)
 
+    def _farewell(self, ip: str) -> str:
+        """Blackwall's closing words for a honeypot session, or nothing at
+        all when Blackwall is switched off."""
+        wall = getattr(self, 'blackwall', None)
+        if wall is None:
+            return ""
+        try:
+            return wall.terminal_farewell(
+                ip, grounds="a fake SSH shell it took for a real one",
+                channel="honeypot")
+        except Exception as e:
+            logger.error(f"Blackwall farewell failed for {ip}: {e}")
+            return ""
+
     def _on_login(self, ip: str, username: str, password: str):
+
         """Called when attacker tries to login"""
         self._session_logger.info(
             f"LOGIN_ATTEMPT | IP={ip} | user={username} | pass={password}"
@@ -559,8 +604,10 @@ class HoneypotServer:
         session = HoneypotSession(
             client_socket, ip,
             on_command=self._on_command,
-            on_login=self._on_login
+            on_login=self._on_login,
+            farewell=self._farewell,
         )
+
         session.handle_session()
 
         duration = time.time() - session.start_time

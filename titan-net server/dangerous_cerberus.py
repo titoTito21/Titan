@@ -85,11 +85,20 @@ class PersistentBanDB:
         c.execute('CREATE INDEX IF NOT EXISTS idx_banned_subnet ON banned_ips(subnet)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_banned_level ON banned_ips(threat_level)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_profile_subnet ON attacker_profiles(subnet)')
+        # How far the block goes. An SSH brute-forcer is blocked on every port,
+        # not just Titan-Net's, and that has to survive a restart or the
+        # restored ban is narrower than the one that was imposed. Added by
+        # migration so an existing database is upgraded in place.
+        try:
+            c.execute('ALTER TABLE banned_ips ADD COLUMN all_ports INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # column already there
         conn.commit()
         conn.close()
 
     def add_ban(self, ip: str, reason: str, threat_level: int,
-                permanent: bool = True, fingerprint: str = "") -> bool:
+                permanent: bool = True, fingerprint: str = "",
+                all_ports: bool = False) -> bool:
         """Add IP to persistent ban database. Returns True if new ban."""
         subnet = str(ipaddress.ip_network(f"{ip}/24", strict=False))
         now = datetime.now().isoformat()
@@ -98,20 +107,49 @@ class PersistentBanDB:
         try:
             c.execute('''INSERT INTO banned_ips
                 (ip, subnet, reason, threat_level, banned_at, permanent,
-                 attacker_fingerprint, total_attempts, last_attempt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+                 attacker_fingerprint, total_attempts, last_attempt, all_ports)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 ON CONFLICT(ip) DO UPDATE SET
                     reason = excluded.reason,
                     threat_level = MAX(threat_level, excluded.threat_level),
                     permanent = MAX(permanent, excluded.permanent),
                     total_attempts = total_attempts + 1,
-                    last_attempt = excluded.last_attempt
+                    last_attempt = excluded.last_attempt,
+                    all_ports = MAX(all_ports, excluded.all_ports)
             ''', (ip, subnet, reason, threat_level, now, int(permanent),
-                  fingerprint, now))
+                  fingerprint, now, int(all_ports)))
             conn.commit()
             return c.rowcount > 0
         finally:
             conn.close()
+
+    def get_all_port_ips(self) -> List[str]:
+        """IPs whose ban covers every port, not just the Titan-Net ones."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('SELECT ip FROM banned_ips WHERE all_ports = 1')
+            return [row[0] for row in c.fetchall()]
+        except sqlite3.OperationalError:
+            return []
+        finally:
+            conn.close()
+
+    def get_ban_counts(self) -> Dict[str, int]:
+        """{ip: how many times it has been banned}. Seeds the repeat-offender
+        escalation, which otherwise starts from zero at every restart - so an
+        attacker only had to outlast one service restart to get a soft ban
+        again instead of the permaban their history had earned."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('SELECT ip, total_attempts FROM banned_ips')
+            return {row[0]: int(row[1] or 1) for row in c.fetchall()}
+        except sqlite3.OperationalError:
+            return {}
+        finally:
+            conn.close()
+
 
     def add_subnet_ban(self, subnet: str, reason: str, trigger_ips: List[str]) -> bool:
         """Ban an entire subnet"""
@@ -281,139 +319,328 @@ class PersistentBanDB:
 class FirewallManager:
     """Manages iptables/ufw rules for kernel-level IP blocking.
 
-    SAFETY: Only blocks Titan-Net ports (8000, 8001). SSH (port 22) is
-    NEVER blocked — a permanent ACCEPT rule is inserted at position 1
-    on startup to guarantee remote access even if other rules go wrong.
+    Every Cerberus rule lives in a dedicated ``CERBERUS`` chain that INPUT
+    jumps to as its FIRST rule, and that placement is the whole point. SSH is
+    protected by a blanket ``--dport 22 -j ACCEPT`` rule at the top of INPUT,
+    so a per-attacker DROP appended to INPUT after it is never reached: an SSH
+    brute-forcer could sit on the ban list, be "blocked", and carry on
+    attacking untouched. Rules in a chain evaluated BEFORE that ACCEPT can
+    actually stop them.
+
+    SAFETY, in the order it is enforced:
+      - the blanket SSH ACCEPT stays exactly where it is, so the rest of the
+        world's SSH is unaffected; only a named attacker is dropped
+      - an address with a live, logged-in SSH session is never dropped on port
+        22, so the operator cannot lock themselves out with their own ban
+      - loopback and private addresses are never blocked beyond the Titan-Net
+        ports
+      - the kernel is asked before every rule is added (``iptables -C``), so a
+        rule is never duplicated - and never merely assumed to be there
     """
 
-    # Ports that Cerberus is allowed to block (Titan-Net only)
+    # Ports Cerberus blocks for an ordinary Titan-Net attacker.
     BLOCKED_PORTS = [8000, 8001]
 
-    # Ports that must NEVER be blocked (critical for server access)
+    # Ports that must never be blocked for the world at large.
     PROTECTED_PORTS = [22]
+
+    # Cerberus' own chain, evaluated before INPUT's SSH ACCEPT.
+    CHAIN = 'CERBERUS'
 
     def __init__(self):
         self._blocked_ips: Set[str] = set()
         self._blocked_subnets: Set[str] = set()
+        # IPs blocked on EVERY port (SSH attackers, permabans) rather than
+        # just the Titan-Net ones.
+        self._all_port_ips: Set[str] = set()
         self._ssh_protected = False
+        self._chain_ready = False
+        # False once iptables turns out not to be installed (dev machines).
+        self.available = True
+        self._ssh_peers: Set[str] = set()
+        self._ssh_peers_ts = 0.0
+        self.repairs = 0
+
+    # ----------------------------------------------------------------
+    # LOW LEVEL
+    # ----------------------------------------------------------------
+
+    def _run(self, args: List[str], timeout: int = 5, **kw):
+        """Run one firewall command. Returns the CompletedProcess, or None if
+        the command could not run at all."""
+        if not self.available:
+            return None
+        try:
+            return subprocess.run(args, capture_output=True, timeout=timeout, **kw)
+        except FileNotFoundError:
+            if args and args[0] == 'iptables':
+                logger.warning("[FIREWALL] iptables not found, firewall features disabled.")
+                self.available = False
+            return None
+        except Exception as e:
+            logger.error(f"[FIREWALL] {' '.join(args)} failed: {e}")
+            return None
+
+    def _rule_exists(self, chain: str, rule: List[str]) -> bool:
+        r = self._run(['iptables', '-C', chain] + rule)
+        return bool(r) and r.returncode == 0
+
+    def _ensure_rule(self, chain: str, rule: List[str]) -> bool:
+        """Add a rule only if the kernel does not already carry it.
+        Returns True if it had to be added."""
+        if self._rule_exists(chain, rule):
+            return False
+        r = self._run(['iptables', '-A', chain] + rule)
+        return bool(r) and r.returncode == 0
+
+    def _drop_rules(self, source: str, all_ports: bool) -> List[List[str]]:
+        """The rules that constitute a block of ``source``."""
+        if all_ports:
+            return [['-s', source, '-j', 'DROP']]
+        return [
+            ['-s', source, '-p', 'tcp', '--dport', str(port), '-j', 'DROP']
+            for port in self.BLOCKED_PORTS
+        ]
+
+    # ----------------------------------------------------------------
+    # THE CHAIN
+    # ----------------------------------------------------------------
+
+    def _chain_is_first(self) -> bool:
+        """True if INPUT's very first rule is the jump into our chain."""
+        r = self._run(['iptables', '-S', 'INPUT'], timeout=10, text=True)
+        if not r or r.returncode != 0:
+            return False
+        for line in (r.stdout or '').splitlines():
+            if not line.startswith('-A INPUT'):
+                continue  # the -P INPUT policy line
+            return line.split() == ['-A', 'INPUT', '-j', self.CHAIN]
+        return False
+
+    def _ensure_chain(self):
+        """Create the CERBERUS chain and make INPUT enter it first of all."""
+        if self._chain_ready:
+            return
+        # -N fails harmlessly when the chain already exists.
+        self._run(['iptables', '-N', self.CHAIN])
+        if not self._chain_is_first():
+            # A jump further down INPUT is worse than useless - the SSH ACCEPT
+            # above it shadows every port-22 DROP inside. Take it out and put
+            # it back at the top.
+            for _ in range(4):
+                if not self._rule_exists('INPUT', ['-j', self.CHAIN]):
+                    break
+                r = self._run(['iptables', '-D', 'INPUT', '-j', self.CHAIN])
+                if not r or r.returncode != 0:
+                    break
+            self._run(['iptables', '-I', 'INPUT', '1', '-j', self.CHAIN])
+            logger.info(f"[FIREWALL] {self.CHAIN} chain installed as INPUT rule 1")
+        self._chain_ready = self.available
 
     def protect_ssh(self):
         """Insert permanent iptables ACCEPT rule for SSH before any DROP rules.
         Called once on startup to guarantee SSH access cannot be blocked."""
         if self._ssh_protected:
             return
-        try:
-            for port in self.PROTECTED_PORTS:
-                # Idempotent: only insert the ACCEPT rule if the kernel does not
-                # already carry it. Without this check every process start (and
-                # every restore_bans / block_ip call before the flag was set)
-                # inserted another identical rule at the top of INPUT - the
-                # production chain had accumulated 144 duplicate SSH-ACCEPT rules
-                # this way, one per restart, that netfilter walks on every packet.
-                exists = subprocess.run(
-                    ['iptables', '-C', 'INPUT', '-p', 'tcp',
-                     '--dport', str(port), '-j', 'ACCEPT'],
-                    capture_output=True, timeout=5
-                )
-                if exists.returncode == 0:
+        for port in self.PROTECTED_PORTS:
+            # Idempotent: only insert the ACCEPT rule if the kernel does not
+            # already carry it. Without this check every process start (and
+            # every restore_bans / block_ip call before the flag was set)
+            # inserted another identical rule at the top of INPUT - the
+            # production chain had accumulated 144 duplicate SSH-ACCEPT rules
+            # this way, one per restart, that netfilter walks on every packet.
+            if self._rule_exists('INPUT', ['-p', 'tcp', '--dport', str(port),
+                                           '-j', 'ACCEPT']):
+                continue
+            self._run(['iptables', '-I', 'INPUT', '1', '-p', 'tcp',
+                       '--dport', str(port), '-j', 'ACCEPT'])
+        self._ssh_protected = True
+        if self.available:
+            logger.info("[FIREWALL] SSH port protected - ACCEPT rule in INPUT")
+        # Our chain has to sit ABOVE that ACCEPT, so (re)install it after.
+        self._chain_ready = False
+        self._ensure_chain()
+
+    # ----------------------------------------------------------------
+    # WHAT MAY BE BLOCKED, AND HOW FAR
+    # ----------------------------------------------------------------
+
+    def active_ssh_peers(self) -> Set[str]:
+        """Addresses with a live, logged-in SSH session on this machine.
+
+        These are the one thing a firewall must never drop on port 22: they
+        are how the operator is holding the box. Cached for a minute, since it
+        is read on the ban path."""
+        now = time.time()
+        if self._ssh_peers_ts and now - self._ssh_peers_ts < 60:
+            return self._ssh_peers
+        self._ssh_peers_ts = now
+        peers: Set[str] = set()
+        for var in ('SSH_CLIENT', 'SSH_CONNECTION'):
+            val = os.environ.get(var, '')
+            if val:
+                peers.add(val.split()[0])
+        r = self._run(['who'])
+        if r and r.returncode == 0:
+            out = r.stdout
+            if isinstance(out, bytes):
+                out = out.decode('utf-8', 'replace')
+            for line in (out or '').splitlines():
+                if '(' not in line or ')' not in line:
                     continue
-                subprocess.run(
-                    ['iptables', '-I', 'INPUT', '1', '-p', 'tcp',
-                     '--dport', str(port), '-j', 'ACCEPT'],
-                    capture_output=True, timeout=5
-                )
-            self._ssh_protected = True
-            logger.info("[FIREWALL] SSH port protected - ACCEPT rule at position 1")
-        except FileNotFoundError:
-            logger.warning("[FIREWALL] iptables not found, firewall features disabled.")
-            self._ssh_protected = True
-        except Exception as e:
-            logger.error(f"[FIREWALL] Failed to protect SSH: {e}")
+                host = line[line.rfind('(') + 1:line.rfind(')')].strip()
+                try:
+                    ipaddress.ip_address(host)
+                except ValueError:
+                    continue
+                peers.add(host)
+        self._ssh_peers = peers
+        return peers
 
-    def block_ip(self, ip: str) -> bool:
-        """Block IP on Titan-Net ports only (never blocks SSH)"""
-        if ip in self._blocked_ips:
-            return True
-        # Always ensure SSH is protected before adding any DROP rules
-        self.protect_ssh()
+    def may_block_all_ports(self, ip: str) -> bool:
+        """Whether ``ip`` may be dropped on every port, SSH included."""
         try:
-            for port in self.BLOCKED_PORTS:
-                subprocess.run(
-                    ['iptables', '-A', 'INPUT', '-s', ip, '-p', 'tcp',
-                     '--dport', str(port), '-j', 'DROP'],
-                    capture_output=True, timeout=5
-                )
-            # ufw: block only Titan-Net ports
-            for port in self.BLOCKED_PORTS:
-                subprocess.run(
-                    ['ufw', 'deny', 'from', ip, 'to', 'any', 'port', str(port)],
-                    capture_output=True, timeout=5
-                )
-            self._blocked_ips.add(ip)
-            logger.info(f"[FIREWALL] Blocked IP on ports {self.BLOCKED_PORTS}: {ip}")
-            return True
-        except Exception as e:
-            logger.error(f"[FIREWALL] Failed to block {ip}: {e}")
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
             return False
+        if (addr.is_loopback or addr.is_private or addr.is_link_local
+                or addr.is_unspecified):
+            logger.info(
+                f"[FIREWALL] {ip} is a local address - Titan-Net ports only")
+            return False
+        if ip in self.active_ssh_peers():
+            logger.warning(
+                f"[FIREWALL] {ip} holds a live SSH session - refusing to block "
+                f"port 22 for it (Titan-Net ports only)")
+            return False
+        return True
 
-    def block_subnet(self, subnet: str) -> bool:
-        """Block entire /24 subnet on Titan-Net ports only (never blocks SSH)"""
-        if subnet in self._blocked_subnets:
-            return True
-        # Always ensure SSH is protected before adding any DROP rules
+    # ----------------------------------------------------------------
+    # BLOCKING
+    # ----------------------------------------------------------------
+
+    def block_ip(self, ip: str, all_ports: bool = False) -> bool:
+        """Block an IP. ``all_ports`` extends the block past the Titan-Net
+        ports to everything the attacker can reach, which is what an SSH brute
+        force needs - a Titan-Net-ports-only ban leaves it attacking."""
+        # Always ensure SSH is protected (and the chain is on top) first.
         self.protect_ssh()
-        try:
+        self._ensure_chain()
+        if all_ports and not self.may_block_all_ports(ip):
+            all_ports = False
+        added = 0
+        for rule in self._drop_rules(ip, all_ports):
+            if self._ensure_rule(self.CHAIN, rule):
+                added += 1
+        if all_ports:
+            self._all_port_ips.add(ip)
+            self._run(['ufw', 'deny', 'from', ip], timeout=10)
+        else:
             for port in self.BLOCKED_PORTS:
-                subprocess.run(
-                    ['iptables', '-A', 'INPUT', '-s', subnet, '-p', 'tcp',
-                     '--dport', str(port), '-j', 'DROP'],
-                    capture_output=True, timeout=5
-                )
+                self._run(['ufw', 'deny', 'from', ip, 'to', 'any',
+                           'port', str(port)], timeout=10)
+        self._blocked_ips.add(ip)
+        if added:
+            logger.info(
+                f"[FIREWALL] Blocked IP {ip} "
+                f"({'all ports' if all_ports else self.BLOCKED_PORTS})")
+        return True
+
+    def block_subnet(self, subnet: str, all_ports: bool = False) -> bool:
+        """Block an entire /24 (Titan-Net ports unless told otherwise)."""
+        self.protect_ssh()
+        self._ensure_chain()
+        for rule in self._drop_rules(subnet, all_ports):
+            self._ensure_rule(self.CHAIN, rule)
+        if all_ports:
+            self._run(['ufw', 'deny', 'from', subnet], timeout=10)
+        else:
             for port in self.BLOCKED_PORTS:
-                subprocess.run(
-                    ['ufw', 'deny', 'from', subnet, 'to', 'any', 'port', str(port)],
-                    capture_output=True, timeout=5
-                )
-            self._blocked_subnets.add(subnet)
-            logger.warning(f"[FIREWALL] Blocked SUBNET on ports {self.BLOCKED_PORTS}: {subnet}")
-            return True
-        except Exception as e:
-            logger.error(f"[FIREWALL] Failed to block subnet {subnet}: {e}")
+                self._run(['ufw', 'deny', 'from', subnet, 'to', 'any',
+                           'port', str(port)], timeout=10)
+        self._blocked_subnets.add(subnet)
+        logger.warning(f"[FIREWALL] Blocked SUBNET: {subnet}")
+        return True
+
+    def verify_ban(self, ip: str) -> bool:
+        """Prove this ban is really in the kernel, and repair it if it is not.
+
+        A ban list records an intention; only the kernel knows whether the
+        packets are being dropped. A rule can go missing (a flush, a firewall
+        reload, a reboot before the restore ran) or be shadowed (the jump into
+        our chain pushed below the SSH ACCEPT), and the symptom is exactly the
+        one the threat report describes: an address that is on the ban list and
+        still attacking. Returns True if something had to be repaired.
+        """
+        if not self.available:
             return False
+        all_ports = ip in self._all_port_ips
+        missing = [rule for rule in self._drop_rules(ip, all_ports)
+                   if not self._rule_exists(self.CHAIN, rule)]
+        chain_ok = self._chain_is_first()
+        if not missing and chain_ok:
+            return False
+        self.repairs += 1
+        logger.warning(
+            f"[FIREWALL] Ban on {ip} was NOT in force "
+            f"({len(missing)} rule(s) missing"
+            f"{'' if chain_ok else ', chain not first'}) - repairing")
+        self._chain_ready = False
+        self._ensure_chain()
+        for rule in missing:
+            self._ensure_rule(self.CHAIN, rule)
+        return True
+
+    def reconcile(self, ips: List[str], subnets: List[str]) -> int:
+        """Walk every ban and make sure the kernel really carries it.
+        Returns the number of bans that had to be repaired."""
+        if not self.available:
+            return 0
+        repaired = 0
+        self._chain_ready = False
+        self._ensure_chain()
+        for ip in ips:
+            if self.verify_ban(ip):
+                repaired += 1
+        for subnet in subnets:
+            rules = self._drop_rules(subnet, subnet in self._all_port_ips)
+            if any(not self._rule_exists(self.CHAIN, r) for r in rules):
+                self.block_subnet(subnet)
+                repaired += 1
+        if repaired:
+            logger.warning(f"[FIREWALL] Reconciliation repaired {repaired} ban(s)")
+        return repaired
 
     def unblock_ip(self, ip: str) -> bool:
-        """Remove firewall block for IP"""
-        try:
-            for port in self.BLOCKED_PORTS:
-                subprocess.run(
-                    ['iptables', '-D', 'INPUT', '-s', ip, '-p', 'tcp',
-                     '--dport', str(port), '-j', 'DROP'],
-                    capture_output=True, timeout=5
-                )
-                subprocess.run(
-                    ['ufw', 'delete', 'deny', 'from', ip, 'to', 'any',
-                     'port', str(port)],
-                    input=b'y\n', capture_output=True, timeout=5
-                )
-            self._blocked_ips.discard(ip)
-            return True
-        except Exception as e:
-            logger.error(f"[FIREWALL] Failed to unblock {ip}: {e}")
-            return False
+        """Remove every firewall block for an IP - the chain's rules, any
+        legacy rule an older version left in INPUT, and ufw's."""
+        for chain in (self.CHAIN, 'INPUT'):
+            for all_ports in (True, False):
+                for rule in self._drop_rules(ip, all_ports):
+                    for _ in range(8):
+                        if not self._rule_exists(chain, rule):
+                            break
+                        r = self._run(['iptables', '-D', chain] + rule)
+                        if not r or r.returncode != 0:
+                            break
+        self._run(['ufw', 'delete', 'deny', 'from', ip], input=b'y\n', timeout=10)
+        for port in self.BLOCKED_PORTS:
+            self._run(['ufw', 'delete', 'deny', 'from', ip, 'to', 'any',
+                       'port', str(port)], input=b'y\n', timeout=10)
+        self._blocked_ips.discard(ip)
+        self._all_port_ips.discard(ip)
+        return True
 
     def sync_from_kernel(self):
-        """Populate _blocked_ips/_blocked_subnets from current iptables rules.
-        Avoids re-adding rules that already exist after a restart."""
-        try:
-            result = subprocess.run(
-                ['iptables', '-S', 'INPUT'],
-                capture_output=True, timeout=10, text=True
-            )
-            if result.returncode != 0:
-                return 0
-            found = 0
-            for line in result.stdout.splitlines():
-                # -A INPUT -s 1.2.3.4/32 -p tcp -m tcp --dport 8001 -j DROP
+        """Populate _blocked_ips/_blocked_subnets from the rules the kernel
+        already carries, in our chain and in INPUT (where older versions put
+        them). Avoids re-adding rules that already exist after a restart."""
+        found = 0
+        for chain in (self.CHAIN, 'INPUT'):
+            r = self._run(['iptables', '-S', chain], timeout=10, text=True)
+            if not r or r.returncode != 0:
+                continue
+            for line in (r.stdout or '').splitlines():
                 if '-j DROP' not in line or '-s ' not in line:
                     continue
                 parts = line.split()
@@ -421,47 +648,39 @@ class FirewallManager:
                     src = parts[parts.index('-s') + 1]
                 except (ValueError, IndexError):
                     continue
+                all_ports = '--dport' not in parts
                 if '/32' in src:
                     ip = src.replace('/32', '')
                     if ip not in self._blocked_ips:
                         self._blocked_ips.add(ip)
                         found += 1
+                    if all_ports:
+                        self._all_port_ips.add(ip)
                 elif '/' in src:
                     if src not in self._blocked_subnets:
                         self._blocked_subnets.add(src)
                         found += 1
+        if found:
             logger.info(f"[FIREWALL] Synced {found} existing bans from kernel")
-            return found
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            logger.error(f"[FIREWALL] Failed to sync from kernel: {e}")
-            return 0
+        return found
 
-    def restore_bans(self, ips: List[str], subnets: List[str]):
-        """Restore all persistent bans to firewall on startup.
-        Only adds rules that don't already exist in the kernel."""
+    def restore_bans(self, ips: List[str], subnets: List[str],
+                     all_port_ips: Optional[Set[str]] = None):
+        """Restore all persistent bans to the firewall on startup."""
         # CRITICAL: protect SSH FIRST, before any DROP rules
         self.protect_ssh()
-        # Pre-populate from kernel to avoid duplicate rules
+        # Pre-populate from the kernel so nothing is added twice
         self.sync_from_kernel()
+        if all_port_ips:
+            self._all_port_ips.update(all_port_ips)
         restored = 0
-        skipped = 0
         for ip in ips:
-            if ip in self._blocked_ips:
-                skipped += 1
-                continue
-            if self.block_ip(ip):
+            if self.block_ip(ip, all_ports=ip in self._all_port_ips):
                 restored += 1
         for subnet in subnets:
-            if subnet in self._blocked_subnets:
-                skipped += 1
-                continue
             if self.block_subnet(subnet):
                 restored += 1
-        logger.info(
-            f"[FIREWALL] Restored {restored} bans, skipped {skipped} already in kernel"
-        )
+        logger.info(f"[FIREWALL] Restored {restored} bans into the kernel")
 
 
 class DangerousCerberus(CerberusProtocol):
@@ -493,10 +712,25 @@ class DangerousCerberus(CerberusProtocol):
         self.auto_firewall = True   # Auto-add to iptables/ufw
         self.auto_subnet_ban = True # Auto-ban subnets on coordinated attacks
         self.persistent_bans = True # Save bans to database
+        # Block an SSH brute-forcer on EVERY port. A ban that covers only the
+        # Titan-Net ports leaves the attack it was imposed for running - which
+        # is what "the IP is on the ban list but the activity persists" means.
+        self.block_ssh_attackers = True
+        # How often the kernel is re-checked against the ban list.
+        self.reconcile_interval = 300
+
+        # IPs whose offence was against the machine's own SSH (read out of the
+        # auth log) or the SSH honeypot. Their ban has to cover port 22.
+        self._ssh_offenders: Set[str] = set()
+
+        # A ban that is being talked through is a ban that is not in force:
+        # prove it in the kernel rather than trusting the list.
+        self.on_reenforce_ban = self._reenforce_ban
 
         # CRITICAL: protect SSH before restoring any bans
         if self.auto_firewall:
             self.firewall.protect_ssh()
+
 
         # Load persistent whitelist BEFORE restoring bans
         # (so whitelisted IPs that were accidentally banned get purged)
@@ -504,6 +738,67 @@ class DangerousCerberus(CerberusProtocol):
 
         # Restore persistent bans on startup
         self._restore_persistent_bans()
+
+        # Seed the repeat-offender history from the ban database, so an
+        # attacker cannot get a fresh, soft ban simply by outlasting a restart.
+        self._seed_offense_history()
+
+    def _seed_offense_history(self):
+        """Carry each IP's ban count across restarts."""
+        try:
+            for ip, times in self.ban_db.get_ban_counts().items():
+                if times > 0 and not self.is_whitelisted(ip):
+                    self._offense_history[ip] = max(
+                        self._offense_history.get(ip, 0), times)
+        except Exception as e:
+            logger.error(f"Failed to seed offense history: {e}")
+
+    def _reenforce_ban(self, ip: str, reason: str = ""):
+        """Cerberus saw traffic from an IP it has banned. Ask the kernel
+        whether the block is really there and repair it if it is not."""
+        if not self.auto_firewall:
+            return
+        try:
+            if self.firewall.verify_ban(ip):
+                self._log_intrusion(
+                    "BAN_NOT_ENFORCED", ip,
+                    f"firewall rule was missing and has been restored | {reason}")
+                if self.on_admin_notify:
+                    try:
+                        self.on_admin_notify(
+                            f"Cerberus: ban on {ip} was not in force",
+                            f"{ip} is banned and was still active. The firewall "
+                            f"rule was missing and has been restored.",
+                            THREAT_LOCKDOWN,
+                        )
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"[DANGEROUS CERBERUS] re-enforce failed for {ip}: {e}")
+
+    def _reconcile_worker(self):
+        """Periodically prove every ban is really in the kernel.
+
+        Rules disappear for reasons Cerberus never sees - a firewall reload, a
+        `ufw reload`, an iptables flush by another tool, a reboot. Nothing used
+        to notice: the ban list still said 'banned' and the attacker carried on.
+        """
+        while True:
+            try:
+                time.sleep(self.reconcile_interval)
+                if not self.auto_firewall:
+                    continue
+                ips = sorted(self._banned_ips | self._permanent_banned_ips)
+                subnets = self.ban_db.get_all_banned_subnets()
+                repaired = self.firewall.reconcile(ips, subnets)
+                if repaired:
+                    self._log_intrusion(
+                        "FIREWALL_RECONCILE", "-",
+                        f"{repaired} ban(s) were missing from the kernel and "
+                        f"have been restored")
+            except Exception as e:
+                logger.error(f"[DANGEROUS CERBERUS] reconcile worker: {e}")
+
 
     def _load_persistent_whitelist(self):
         """Load whitelist from cerberus_whitelist.txt (one IP per line).
@@ -587,27 +882,62 @@ class DangerousCerberus(CerberusProtocol):
         try:
             # Small delay so the event loop gets to start first
             time.sleep(2)
-            self.firewall.restore_bans(banned_ips, banned_subnets)
+            all_ports = set(self.ban_db.get_all_port_ips())
+            self._ssh_offenders.update(all_ports)
+            self.firewall.restore_bans(banned_ips, banned_subnets,
+                                       all_port_ips=all_ports)
         except Exception as e:
             logger.error(f"[DANGEROUS CERBERUS] Background firewall restore failed: {e}")
+        # From here on, keep proving the bans are really in the kernel.
+        try:
+            import threading
+            threading.Thread(target=self._reconcile_worker, daemon=True,
+                             name='CerberusFirewallReconcile').start()
+        except Exception as e:
+            logger.error(f"[DANGEROUS CERBERUS] reconcile thread failed to start: {e}")
+
+    def _blocks_all_ports(self, ip: str, level: int, reason: str) -> bool:
+        """Whether this ban must cover every port rather than Titan-Net's two.
+
+        Two cases: the offence was against the machine's own SSH (blocking
+        8000/8001 does nothing to an SSH brute force), and a CERBERUS-level
+        permaban, where the point is that this address gets nothing at all.
+        """
+        if not self.block_ssh_attackers:
+            return False
+        if level >= THREAT_CERBERUS:
+            return True
+        if ip in self._ssh_offenders:
+            return True
+        low = (reason or "").lower()
+        return 'ssh' in low or 'honeypot' in low
 
     def _set_ip_threat(self, ip: str, level: int, reason: str):
         """Override: add firewall blocking + persistent bans + subnet analysis"""
+        # A whitelisted address is never blocked, never persisted and never
+        # profiled - the base class tracks it, the kernel must not.
+        if self.is_whitelisted(ip):
+            super()._set_ip_threat(ip, level, reason)
+            return
+
         # Call parent implementation
         super()._set_ip_threat(ip, level, reason)
 
         # --- Dangerous Mode Extensions ---
 
         if level >= THREAT_LOCKDOWN:
+            all_ports = self._blocks_all_ports(ip, level, reason)
+
             # Auto-firewall block
             if self.auto_firewall:
-                self.firewall.block_ip(ip)
+                self.firewall.block_ip(ip, all_ports=all_ports)
 
             # Persist to database
             if self.persistent_bans:
                 self.ban_db.add_ban(
                     ip, reason, level,
-                    permanent=(level >= THREAT_CERBERUS)
+                    permanent=(level >= THREAT_CERBERUS),
+                    all_ports=all_ports,
                 )
 
             # Subnet intelligence
@@ -616,6 +946,7 @@ class DangerousCerberus(CerberusProtocol):
 
         # Update attacker profile
         self.ban_db.update_profile(ip, attack_type=reason)
+
 
     def _analyze_subnet(self, ip: str, reason: str):
         """Check if this IP's subnet has too many attackers -> ban whole subnet"""
@@ -687,6 +1018,10 @@ class DangerousCerberus(CerberusProtocol):
         # CRITICAL: skip whitelisted IPs - don't profile or log them
         if self.is_whitelisted(ip):
             return
+        # Whoever knocks on a fake SSH is attacking SSH: their ban covers
+        # every port, port 22 above all.
+        self._ssh_offenders.add(ip)
+
         # Profile the attacker
         self.ban_db.update_profile(
             ip,
@@ -697,17 +1032,23 @@ class DangerousCerberus(CerberusProtocol):
         # Call parent
         super().honeypot_triggered(ip, username, password)
 
-    def record_failed_login(self, ip: str, username: str = "unknown") -> bool:
+    def record_failed_login(self, ip: str, username: str = "unknown",
+                            source: str = "app") -> bool:
         """Override: profile attacker on failed Titan-Net logins"""
         # CRITICAL: skip whitelisted IPs - don't profile or track them
         if self.is_whitelisted(ip):
             return False
+        if source == "ssh":
+            # The attack is on the machine's own SSH; a ban limited to the
+            # Titan-Net ports would not touch it.
+            self._ssh_offenders.add(ip)
         self.ban_db.update_profile(
             ip,
-            attack_type="brute_force",
+            attack_type=f"brute_force_{source}" if source != "app" else "brute_force",
             username=username
         )
-        return super().record_failed_login(ip, username)
+        return super().record_failed_login(ip, username, source=source)
+
 
     def unban_ip(self, ip: str):
         """Override: also remove from firewall + database"""
