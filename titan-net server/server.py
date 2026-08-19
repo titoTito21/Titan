@@ -244,6 +244,13 @@ class TitanNetServer:
         # Map IP -> session_ids for Cerberus tracking
         self._ip_sessions: Dict[str, Set[str]] = {}
 
+        # Legacy-token session binding: {"uid\x00username\x00ip": expiry_ts}.
+        # Records that a user authenticated (WS password login) from an IP, so
+        # the HTTP side can honour that user's forgeable legacy base64 token
+        # ONLY while a real session backs it. Grace tolerates brief WS drops.
+        self._recent_auth: Dict[str, float] = {}
+        self._recent_auth_grace = 900  # 15 min
+
         # --- Dedicated thread pools (executor isolation) ----------------
         # Default loop executor was being saturated by Interactive-Games
         # workers (Gemini Live tool calls hold SQLCipher writer locks for
@@ -3704,6 +3711,55 @@ class TitanNetServer:
             pass
         return "unknown"
 
+    # --- Legacy-token session binding -----------------------------------
+    @staticmethod
+    def _auth_key(uid, username, ip) -> str:
+        return f"{int(uid)}\x00{str(username or '').lower()}\x00{ip or ''}"
+
+    def record_authenticated_identity(self, uid, username, ip):
+        """Remember that (uid, username) authenticated over WS from ``ip``."""
+        try:
+            self._recent_auth[self._auth_key(uid, username, ip)] = (
+                time.time() + self._recent_auth_grace
+            )
+        except Exception:
+            pass
+
+    def is_session_authenticated(self, uid, username, ip) -> bool:
+        """True if (uid, username) has a live WS session from ``ip`` right now,
+        or authenticated from it within the recent grace window. Used by the
+        HTTP side to bind forgeable legacy tokens to a real login."""
+        if not ip:
+            return False
+        try:
+            uid_i = int(uid)
+        except (TypeError, ValueError):
+            return False
+        uname = str(username or '').lower()
+        # 1) Live authenticated WS session from this IP.
+        try:
+            for sid in list(self._ip_sessions.get(ip, ())):
+                c = self.clients.get(sid)
+                if c and c.get('user_id') == uid_i and \
+                        str(c.get('username', '')).lower() == uname:
+                    self.record_authenticated_identity(uid_i, uname, ip)  # refresh
+                    return True
+        except Exception:
+            pass
+        # 2) Recent grace (covers a brief WS reconnect between HTTP calls).
+        key = self._auth_key(uid_i, uname, ip)
+        exp = self._recent_auth.get(key)
+        now = time.time()
+        if exp and exp > now:
+            return True
+        if exp:
+            self._recent_auth.pop(key, None)
+        # Opportunistic prune so the map cannot grow without bound.
+        if len(self._recent_auth) > 4096:
+            for k in [k for k, e in list(self._recent_auth.items()) if e <= now]:
+                self._recent_auth.pop(k, None)
+        return False
+
     async def handle_client(self, websocket: websockets.WebSocketServerProtocol):
         """Handle individual client connection"""
         session_id = None
@@ -3860,6 +3916,17 @@ class TitanNetServer:
                             session_id = response['session_id']
                             # Track IP -> session
                             self._ip_sessions.setdefault(client_ip, set()).add(session_id)
+                            # Bind this authenticated identity to the IP so the
+                            # HTTP side can honour this user's legacy token while
+                            # (and only while) this login is live.
+                            try:
+                                _u = response.get('user', {}) or {}
+                                self.record_authenticated_identity(
+                                    _u.get('id'), _u.get('username') or _login_user,
+                                    client_ip,
+                                )
+                            except Exception:
+                                pass
 
                         # Send login response first
                         response_copy = response.copy()

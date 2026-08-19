@@ -44,6 +44,16 @@ class Config:
     # hole once all clients issue signed tokens.
     LEGACY_TOKENS = os.getenv('LEGACY_TOKENS', '0') == '1'
 
+    # When legacy tokens are accepted (LEGACY_TOKENS=1), bind them to a live
+    # session: a forgeable base64("id:username") token is honoured ONLY while
+    # that user is (or was, within a short grace) authenticated over WebSocket
+    # from the SAME IP. This closes the impersonation hole for old compiled
+    # clients (which self-mint legacy tokens but always hold a password-backed
+    # WS session) with no client update. Set to 0 to fall back to the old
+    # accept-any-legacy-token behaviour if it ever misfires. No effect when
+    # LEGACY_TOKENS=0 (legacy tokens rejected outright).
+    LEGACY_STRICT_SESSION = os.getenv('LEGACY_STRICT_SESSION', '1') == '1'
+
     # Local development flag. When LOCAL_MODE=1 (set only in the local .env),
     # the first registered user is automatically promoted to administrator.
     # Never enable this in production.

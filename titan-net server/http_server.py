@@ -382,6 +382,26 @@ class TitanNetHTTPServer:
             if not user or user['username'] != username:
                 self._note_forged_token(ip, f"legacy token invalid user {user_id}")
                 return None
+            # Session binding: a legacy base64("id:username") token is forgeable
+            # by anyone, so honour it only while its owner is (or was just)
+            # authenticated over WebSocket from THIS ip. The real (old) client
+            # always holds such a session; a forger has none -> rejected. This
+            # closes the impersonation hole with no client update. Gated by
+            # Config.LEGACY_STRICT_SESSION; degrades to accept if the WS server
+            # is somehow unavailable (never lock users out on a wiring error).
+            if getattr(Config, 'LEGACY_STRICT_SESSION', True):
+                ws = getattr(self, 'ws_server', None)
+                if ws is not None and hasattr(ws, 'is_session_authenticated'):
+                    try:
+                        bound = ws.is_session_authenticated(user_id, username, ip)
+                    except Exception as e:
+                        logger.error(f"session-binding check failed: {e}")
+                        bound = True  # fail open rather than lock out
+                    if not bound:
+                        self._note_forged_token(
+                            ip, f"legacy token without live session (user {user_id})"
+                        )
+                        return None
             return self._auth_user_dict(user)
         except (ValueError, TypeError, KeyError):
             self._note_forged_token(ip, "malformed token")
