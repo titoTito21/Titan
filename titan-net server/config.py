@@ -83,7 +83,13 @@ class Config:
     # user who merely failed to log in - only to a source that is provably
     # attacking (see blackwall.Blackwall._attack_grounds).
     BLACKWALL_SPEAKS = os.getenv('BLACKWALL_SPEAKS', '1') == '1'
+    # Whether Blackwall writes its own lines with the model instead of using
+    # the ones in blackwall.py. Never on the attack path - they are written
+    # ahead of time on its own thread, capped per hour, and checked before
+    # anything is said.
+    BLACKWALL_VOICE_AI = os.getenv('BLACKWALL_VOICE_AI', '1') == '1'
     BLACKWALL_KEY = os.getenv('BLACKWALL_KEY', '') or CERBERUS_AI_KEY
+
     BLACKWALL_MODEL = os.getenv('BLACKWALL_MODEL', '') or CERBERUS_AI_MODEL
 
 

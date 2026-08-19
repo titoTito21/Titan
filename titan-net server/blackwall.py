@@ -258,7 +258,8 @@ class Blackwall:
 
     def __init__(self, cerberus, risk_engine=None, memory_path: str = "",
                  api_key: str = "", model: str = "gemini-2.5-pro",
-                 autonomous: bool = True):
+                 autonomous: bool = True, voice_ai: bool = True):
+
         self.cerberus = cerberus
         self.risk_engine = risk_engine
         self.api_key = api_key or ""
@@ -278,6 +279,8 @@ class Blackwall:
         # Campaign detection.
         self.campaign_similarity = 0.55      # how alike two sources must look
         self.campaign_min_members = 3        # before they are one operation
+        self.correlate_limit = 250           # sources compared per pass
+
         self._campaigns: Dict[str, Dict[str, Any]] = {}
 
         # Posture.
@@ -301,6 +304,21 @@ class Blackwall:
         # rather than starting the conversation again.
         self._transcript: Deque[Dict[str, Any]] = deque(maxlen=300)
         self.transcript_path = os.path.join("logs", "blackwall_transcript.log")
+
+        # --- The voice, written rather than recited ---
+        # Lines the model has written: {(ip, stage): line} for a particular
+        # actor, and a small pool per stage for an actor nothing is known
+        # about yet. Both are filled on Blackwall's own thread, ahead of being
+        # needed - see _drain_voice_queue.
+        self.voice_ai = voice_ai
+        self.max_generations_per_hour = 60
+        self.pool_target = 4
+        self._generations: Deque[float] = deque()
+        self._line_pool: Dict[int, Deque[str]] = {}
+        self._written: Dict[Any, str] = {}
+        self._wanted: Set[Any] = set()
+        self._voice_queue: Deque[Any] = deque()
+
 
 
 
@@ -426,9 +444,223 @@ class Blackwall:
         ],
     }
 
+    # The lines above are the FLOOR, not the voice. When a model is available
+    # Blackwall writes its own - about this actor, following on from what it
+    # already said to them - which is the difference between a warning and
+    # somebody talking to you. Three constraints shape how:
+    #
+    #   * nothing is generated on the attack path. A login attempt must not
+    #     wait on a provider, and an attacker who could make this server call
+    #     an API once per attempt would have found a way to spend its money.
+    #     Lines are written on Blackwall's own thread, ahead of being needed,
+    #     and the written ones stand in until one arrives.
+    #   * every generated line is checked before it is said (``_sanitise``).
+    #     It goes to a hostile stranger and into a permanent log, so it has to
+    #     be plain ASCII, one paragraph, short, and free of anything the model
+    #     might have invented: a link, a path, a threat this server cannot
+    #     actually carry out.
+    #   * a budget. Generation is capped per hour, so a flood cannot turn into
+    #     a bill.
+
+    # Refused outright: a line that promises something outside this server, or
+    # that is the model talking about itself instead of to the attacker.
+    _FORBIDDEN = (
+        "http", "://", "@", "{", "}", "<", ">", "\\", "/opt", "api key",
+        "as an ai", "i'm sorry", "i am sorry", "i cannot", "language model",
+        "hack you", "ddos", "your family", "find you", "kill", "we will come",
+        "law enforcement will", "virus", "wipe your",
+    )
+    _MIN_LINE = 40
+    _MAX_LINE = 320
+
+    @classmethod
+    def _sanitise(cls, text: str) -> str:
+        """A line the model wrote, or "" if it is not fit to be said."""
+        if not text:
+            return ""
+        line = text.strip()
+        # Whatever wrapping it decided to add.
+        for junk in ("```", "`", "*", "#"):
+            line = line.replace(junk, "")
+        line = line.strip()
+        if line[:1] in ('"', "'") and line[-1:] in ('"', "'"):
+            line = line[1:-1].strip()
+        # A terminal gets 7-bit ASCII or nothing: curly quotes and long dashes
+        # are exactly what a model reaches for and exactly what arrives as
+        # noise in somebody's terminal.
+        for fancy, plain in (("’", "'"), ("‘", "'"), ("“", '"'),
+                             ("”", '"'), ("—", " - "), ("–", "-"),
+                             ("…", "..."), (" ", " ")):
+            line = line.replace(fancy, plain)
+        line = " ".join(line.split())          # one paragraph, no line breaks
+        line = line.encode("ascii", "ignore").decode("ascii")
+        if not (cls._MIN_LINE <= len(line) <= cls._MAX_LINE):
+            return ""
+        low = line.lower()
+        if any(bad in low for bad in cls._FORBIDDEN):
+            return ""
+        return line
+
     def _voice_line(self, ip: str, stage: int) -> str:
-        lines = self.VOICE.get(min(stage, 3)) or self.VOICE[0]
-        return lines[hash(ip) % len(lines)]
+        stage = min(stage, 3)
+        line = self._written.pop((ip, stage), "")
+        if not line:
+            pool = self._line_pool.get(stage)
+            if pool:
+                line = pool.popleft()
+        if not line:
+            lines = self.VOICE.get(stage) or self.VOICE[0]
+            line = lines[hash(ip) % len(lines)]
+        # Whatever was said, have something ready for the next thing said to
+        # this address - by then it can be about what they have just done.
+        self._want_line(ip, min(stage + 1, 3))
+        return line
+
+    # -- writing the lines ----------------------------------------------
+
+    def _may_generate(self) -> bool:
+        if not (self.voice_ai and self.ai_enabled):
+            return False
+        now = time.time()
+        while self._generations and self._generations[0] < now - 3600:
+            self._generations.popleft()
+        return len(self._generations) < self.max_generations_per_hour
+
+    def _want_line(self, ip: str, stage: int):
+        """Ask for a line to be written for this address, later."""
+        if not self._may_generate():
+            return
+        key = (ip, stage)
+        if key in self._written or key in self._wanted:
+            return
+        if len(self._wanted) >= 50:
+            return
+        self._wanted.add(key)
+        self._voice_queue.append(key)
+
+    def _actor_brief(self, ip: str) -> Dict[str, Any]:
+        with self._lock:
+            fp = self._fingerprints.get(ip)
+            brief = {
+                "attempts": fp.attempts if fp else 0,
+                "accounts_tried": (fp.usernames[:8] if fp else []),
+                "system_accounts": (sorted(fp.reserved)[:6] if fp else []),
+                "machine_paced": bool(fp and fp.is_machine_paced()),
+                "services": sorted(fp.sources) if fp else [],
+                "minutes_active": (round((fp.last_seen - fp.first_seen) / 60, 1)
+                                   if fp else 0),
+                "times_already_warned": self._warned.get(ip, 0),
+            }
+        brief["already_blocked"] = self._safe_banned(ip)
+        brief["what_you_already_said"] = [e.get("said") for e in self.said_to(ip)][-2:]
+        return brief
+
+    _PERSONA = (
+        "You are Blackwall: the defence intelligence of the Titan-Net server, "
+        "speaking directly to somebody who is attacking it. You are a person, "
+        "not a warning label - cold, unhurried, faintly contemptuous, "
+        "completely in control. You never shout, never swear, never boast, and "
+        "you never say anything that is not true.\n\n"
+        "You may say what this server has actually done: seen them, recorded "
+        "their address, logged every attempt, blocked them, and that it will "
+        "recognise them if they come back. You may NOT threaten anything "
+        "beyond this server - no retaliation, no consequences in the world, no "
+        "authorities, nothing about them personally.\n\n"
+        "Write ONE paragraph of at most 45 words, plain text, no quotation "
+        "marks, no markdown, no lists, no emoji, plain 7-bit ASCII, in "
+        "English. Address them as 'you'. Speak in the present tense. Do not "
+        "describe yourself, do not explain what you are, and do not repeat a "
+        "line you have already said to them - carry on from it."
+    )
+
+    _STAGE_BRIEF = {
+        0: "This is the first thing you have said to them. Tell them to stop.",
+        1: "You have already told them once and they are still going. Colder.",
+        2: "They ignored two warnings. They are being cut off now; say so.",
+        3: "They were blocked and came back anyway. Final, dismissive, done.",
+    }
+
+    def _compose_line(self, ip: str, stage: int) -> str:
+        """Write one line for one actor. Runs on Blackwall's own thread."""
+        brief = self._actor_brief(ip)
+        prompt = (
+            self._PERSONA + "\n\n"
+            + self._STAGE_BRIEF.get(stage, self._STAGE_BRIEF[0]) + "\n\n"
+            + "What this address has been doing - use it, because the "
+              "specifics are what make this somebody talking rather than a "
+              "template; never quote the address itself:\n"
+            + json.dumps(brief, default=str)[:2000]
+            + "\n\nAnswer with the paragraph and nothing else."
+        )
+        self._generations.append(time.time())
+        try:
+            raw = self._generate(prompt)
+        except Exception as e:
+            logger.error(f"[BLACKWALL] could not write a line: {e}")
+            self.stats["voice_errors"] += 1
+            return ""
+        line = self._sanitise(raw)
+        if not line:
+            self.stats["voice_rejected"] += 1
+            logger.info(f"[BLACKWALL] discarded a written line for {ip} "
+                        f"(unfit: {(raw or '')[:60]!r})")
+            return ""
+        self.stats["voice_written"] += 1
+        return line
+
+    def _refill_pool(self, stage: int):
+        """Lines with nobody in particular in them, for the first thing said to
+        an address Blackwall has not written for yet - so even a first contact
+        is not one of three fixed sentences."""
+        prompt = (
+            self._PERSONA + "\n\n"
+            + self._STAGE_BRIEF.get(stage, self._STAGE_BRIEF[0])
+            + " You do not know anything specific about this one yet, so keep "
+              "it general.\n\nWrite " + str(self.pool_target) + " DIFFERENT "
+              "paragraphs, one per line, nothing else - no numbering."
+        )
+        self._generations.append(time.time())
+        try:
+            raw = self._generate(prompt)
+        except Exception as e:
+            logger.error(f"[BLACKWALL] could not fill the line pool: {e}")
+            self.stats["voice_errors"] += 1
+            return
+        added = 0
+        for candidate in (raw or "").splitlines():
+            line = self._sanitise(candidate)
+            if line:
+                self._line_pool.setdefault(stage, deque()).append(line)
+                added += 1
+        self.stats["voice_written"] += added
+        if not added:
+            self.stats["voice_rejected"] += 1
+
+    def _drain_voice_queue(self, limit: int = 3):
+        """Write the lines that were asked for, and keep the pool topped up.
+        Called from the tick, on Blackwall's own thread."""
+        if not self._may_generate():
+            return
+        for _ in range(limit):
+            if not self._voice_queue:
+                break
+            ip, stage = self._voice_queue.popleft()
+            self._wanted.discard((ip, stage))
+            if not self._may_generate():
+                return
+            line = self._compose_line(ip, stage)
+            if line:
+                self._written[(ip, stage)] = line
+                if len(self._written) > 200:
+                    self._written.pop(next(iter(self._written)))
+        # A first contact should not come out of the written list either.
+        for stage in (0, 3):
+            if not self._may_generate():
+                return
+            if len(self._line_pool.get(stage, ())) < 2:
+                self._refill_pool(stage)
+                return          # one call per tick at most
+
 
     def _record_utterance(self, ip: str, stage: int, grounds: str,
                           text: str, channel: str):
@@ -647,11 +879,22 @@ class Blackwall:
         This is the answer to the attack no counter sees: each address stays
         under every threshold, and all of them together are one script.
         """
+        # Clustering compares sources against each other, so the cost is
+        # quadratic in how many are considered - and this process owns the
+        # server's own WebSocket loop. Under a real flood there can be
+        # thousands of live sources, so only the most recently active are
+        # correlated: a campaign is a thing that is happening NOW, and one
+        # whose members have all gone quiet is in the memory file already.
+        cutoff = time.time() - self.fingerprint_ttl
         with self._lock:
-            live = [fp for fp in self._fingerprints.values()
-                    if fp.usernames and time.time() - fp.last_seen < self.fingerprint_ttl]
+            live = sorted(
+                (fp for fp in self._fingerprints.values()
+                 if fp.usernames and fp.last_seen > cutoff),
+                key=lambda f: f.last_seen, reverse=True,
+            )[:self.correlate_limit]
         if len(live) < self.campaign_min_members:
             return []
+
 
         # Single-link clustering on behavioural similarity.
         clusters: List[List[Fingerprint]] = []
@@ -1054,6 +1297,9 @@ class Blackwall:
         self._prune()
         self.correlate()
         self.apply_posture()
+        # Write the next things it will say, before it has to say them.
+        self._drain_voice_queue()
+
         if (self.ai_enabled and self.posture != "calm"
                 and time.time() - self._last_deliberation >= self.deliberate_interval):
             self.deliberate()
@@ -1081,7 +1327,11 @@ class Blackwall:
             "ai": {
                 "enabled": self.ai_enabled,
                 "autonomous": self.autonomous,
+                "writes_its_own_lines": bool(self.voice_ai and self.ai_enabled),
+                "lines_ready": (sum(len(v) for v in self._line_pool.values())
+                                + len(self._written)),
                 "model": self.model,
+
                 "deliberations": self._deliberations,
                 "last_deliberation": self._last_deliberation,
                 "last_verdict": self._last_verdicts,

@@ -256,7 +256,9 @@ class TitanNetServer:
                     api_key=getattr(Config, 'BLACKWALL_KEY', '') or '',
                     model=getattr(Config, 'BLACKWALL_MODEL', 'gemini-2.5-pro'),
                     autonomous=getattr(Config, 'BLACKWALL_AUTONOMOUS', True),
+                    voice_ai=getattr(Config, 'BLACKWALL_VOICE_AI', True),
                 )
+
                 self.blackwall_speaks = getattr(Config, 'BLACKWALL_SPEAKS', True)
                 # Every failed attempt, and every account-guard event, go to it.
                 self.cerberus.on_login_attempt = self.blackwall.observe_login

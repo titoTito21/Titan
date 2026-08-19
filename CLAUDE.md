@@ -407,7 +407,105 @@ Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, 
   web UI (`titan-net server/web/repository.html`), and the desktop client's
   Upload Package / Package Folder and Upload dialogs (`src/network/titan_net_gui.py`)
 
+### Cerberus and Blackwall: the ban has to be true in the kernel
+
+`titan-net server/cerberus.py` counts (failures per IP, distinct usernames,
+IPs per account, IPs per /24) and `dangerous_cerberus.py` enforces. A threat
+report showed both halves failing in ways a ban list cannot see: addresses
+"already on the ban list" whose attacks carried on, and accounts locked over
+and over by an attacker nothing was counting any more.
+
+- **An SSH brute force was never blocked.** `FirewallManager` only ever
+  blocked ports 8000 and 8001, while `auth_log_monitor.py` feeds it the
+  machine's OWN SSH failures - so an address banned for hammering `root` over
+  SSH was blocked on two ports it had never touched. Worse, a blanket
+  `--dport 22 -j ACCEPT` sat at the top of INPUT, so a port-22 DROP appended
+  below it would never have been reached anyway. Rules now live in a
+  dedicated **`CERBERUS` chain that INPUT enters as its first rule**, above
+  that ACCEPT; `record_failed_login(..., source='ssh')` and the honeypot mark
+  an address as an SSH offender, and its ban (and every permaban) covers
+  **every port**. Three guards keep the operator in: a whitelisted address is
+  never touched, a private/loopback one is never blocked past the Titan-Net
+  ports, and an address with a **live logged-in SSH session** (read from
+  `who`) never has port 22 dropped.
+- **A ban was believed rather than checked.** `block_ip` returned early on
+  its own in-memory set, so a rule flushed by a firewall reload, a reboot or
+  another tool was gone and nothing noticed. Every rule is now asked of the
+  kernel (`iptables -C`) before it is added - which also ends the duplicate
+  rules that once accumulated 144 copies of the SSH ACCEPT - `verify_ban()`
+  repairs one, and a **reconciliation thread** walks every ban every five
+  minutes. Traffic from a banned address is itself a signal
+  (`note_banned_activity`): re-verify the block, and permaban an address that
+  keeps talking through one.
+- **`ban_ip()` reached nothing.** It added two set memberships, so a
+  moderator's ban and - far worse - the risk engine's own escalation of the
+  highest-scoring attacker on the dashboard never touched the firewall or the
+  ban database, and were forgotten at the next restart. It goes through
+  `_set_ip_threat` now, and the risk engine **re-escalates** at every doubling
+  of a score instead of once, permanently past three times the threshold (an
+  address had reached 261 against a threshold of 60 with nothing further
+  happening to it).
+- **A locked account hid the attacker.** The protective lock is rejected
+  before `record_failed_login` is reached, so whoever tripped it became
+  invisible to every per-IP detector - "persistently attempting to bypass
+  account lockouts", seen from the outside. `record_locked_account_attempt()`
+  counts those attempts and bans, an IP that drives **two accounts** into
+  lockout is banned, and a reserved name is **never locked at all** (there is
+  no owner to protect, and locking `root` only bought the attacker
+  invisibility).
+- **A default-account sweep is certain sooner than a count.** Two DIFFERENT
+  system accounts from one address (`ubuntu` then `debian`) is a list being
+  walked - nobody mistypes their way between them - so it bans at two, and
+  names a real user could plausibly have chosen (`user`, `guest`, `support`)
+  count only once that address has already asked for a certain one.
+- **Blackwall** (`blackwall.py`) is the layer above all that, named for
+  NetWatch's Blackwall in Cyberpunk 2077 - which is not a firewall but an AI
+  wearing ICE, whose job is to recognise what is on the other side. Cerberus
+  counts what an attacker can stay under; Blackwall recognises **behaviour**:
+  a fingerprint (which accounts, in what order, at what rhythm, against which
+  service), a **campaign** when several addresses share one fingerprint (they
+  are banned as one, however quiet each was alone), a **memory** of past
+  campaigns in `database/blackwall_memory.json` so a returning script is
+  refused on its third packet rather than its fortieth, and a **posture**
+  that pulls Cerberus' own thresholds in while an attack is live and gives
+  them back in full when it stops.
+  - **It answers the attacker, in text.** There is no audio anywhere: a
+    Titan-Net client gets a `blackwall` message, and somebody at a terminal
+    gets plain 7-bit ASCII as the SSH banner the tar pit
+    (`hackback.py`) drips at them, or as the honeypot's parting words
+    (`honeypot.py`, said at the END of the session so the trap keeps working
+    while they are in it). The tone escalates over three stages and it is
+    **only ever said to a source that is provably attacking** - a user who got
+    their own password wrong is never spoken to.
+  - **Everything it says is written down** (`_record_utterance`): into the
+    intrusion log as `BLACKWALL_SPOKE`, into `logs/blackwall_transcript.log`,
+    and back into both AI prompts - the Cerberus analyst is told what the wall
+    said, and Blackwall's own telemetry carries how often each actor was
+    warned, because an actor who was told to stop and carried on is a
+    different actor from one who was never addressed.
+  - **The model half decides and acts, inside guardrails it cannot argue
+    past**: only addresses that appear in Titan-Net's own telemetry (an
+    invented one is discarded and counted), never a whitelisted address, a
+    confidence floor for a ban and a higher one for a permaban, at most twenty
+    actions per deliberation, and it may lift **only a ban Blackwall itself
+    imposed** - never a moderator's. `BLACKWALL_AUTONOMOUS=0` makes it
+    advisory. It uses the Cerberus analyst's **existing** Gemini key
+    (`BLACKWALL_KEY` falls back to `CERBERUS_AI_KEY`), and everything above
+    the model layer runs with no key and no network at all.
+  - Moderator access: `blackwall_deliberate` over WebSocket, and
+    `blackwall` inside `cerberus_status`.
+- **Starting again from nothing**: `cerberus_reset.py` (bans, logs, Blackwall
+  memory, and with `--firewall` the kernel rules), which never touches
+  `cerberus_whitelist.txt` or `titannet.db`; `remote_cerberus_reset.py` runs
+  it on production through `update.py`'s own connection, service stopped.
+- Tests (run them directly): `test_cerberus_hardening.py` (30),
+  `test_cerberus_enforcement.py` (22, against a fake iptables so they need no
+  root and can flush the kernel mid-test), `test_blackwall.py` (33, with the
+  model replaced by a fixed answer - the only way to test that a wrong answer
+  is refused).
+
 ### Titan IM: WhatsApp and Messenger (web as backend)
+
 
 WhatsApp Web and messenger.com are **engines, not interfaces**. A WebView2 host
 lives offscreen, an injected JavaScript agent talks to the page and *pushes*

@@ -351,7 +351,137 @@ class ModelGuardrails(unittest.TestCase):
         self.assertTrue(cerb.is_ip_banned("45.9.52.2"))
 
 
+class WrittenVoice(unittest.TestCase):
+    """Blackwall writes what it says, instead of reciting three sentences -
+    without ever making a request while an attacker is waiting."""
+
+    def test_a_line_it_wrote_is_what_gets_said(self):
+        cerb, wall = build()
+        wall._written[("45.9.70.1", 0)] = (
+            "You have spent four minutes asking this server for accounts it "
+            "has never had. It has all of them written down. Stop.")
+        said = wall.warn("45.9.70.1", "root")
+        self.assertIn("four minutes", said["message"])
+
+    def test_a_written_line_is_used_once(self):
+        cerb, wall = build()
+        wall._written[("45.9.70.2", 0)] = "A" * 60
+        wall.warn("45.9.70.2", "root")
+        second = wall.warn("45.9.70.2", "root")
+        self.assertNotEqual(second["message"], "A" * 60)
+
+    def test_the_pool_covers_an_actor_nothing_is_known_about(self):
+        cerb, wall = build()
+        wall._line_pool[0] = B.deque(["Pooled line, long enough to be allowed."])
+        said = wall.warn("45.9.70.3", "root")
+        self.assertEqual(said["message"], "Pooled line, long enough to be allowed.")
+
+    def test_it_falls_back_to_the_written_lines(self):
+        cerb, wall = build()          # no key, so nothing is ever generated
+        said = wall.warn("45.9.70.4", "root")
+        self.assertIn(said["message"], wall.VOICE[0])
+
+    def test_nothing_is_generated_while_an_attacker_waits(self):
+        cerb, wall = build()
+        talkative = _WithModel(wall, "should never be asked for")
+
+        def explode(prompt):
+            raise AssertionError("the attack path called the model")
+
+        talkative._generate = explode
+        talkative.warn("45.9.70.5", "root")          # must not raise
+        talkative.terminal_farewell("45.9.70.5")
+        talkative.tarpit_lines("45.9.70.5")
+
+    def test_the_line_is_written_later_and_is_about_this_actor(self):
+        cerb, wall = build()
+        for name in ("root", "ubuntu", "debian"):
+            wall.observe_login("45.9.70.6", name, source="ssh")
+        seen = []
+
+        talkative = _WithModel(wall, "")
+        def capture(prompt):
+            # The same drain also tops up the pool, so more than one prompt
+            # goes past here; the one under test is the actor's own.
+            seen.append(prompt)
+            return "Three system accounts in ninety seconds. None of them exist here. You are recorded."
+        talkative._generate = capture
+
+        talkative.warn("45.9.70.6", "root")           # queues the next line
+        talkative._drain_voice_queue()
+        personal = [p for p in seen if "ubuntu" in p]
+        self.assertTrue(personal)                     # its own behaviour
+        self.assertIn("what_you_already_said", personal[0])
+        self.assertIn(("45.9.70.6", 1), talkative._written)
+
+    def test_a_line_that_fails_the_check_is_never_said(self):
+        cerb, wall = build()
+        talkative = _WithModel(wall, "I'm sorry, I cannot help with that request at all.")
+        talkative.warn("45.9.70.7", "root")
+        talkative._drain_voice_queue()
+        self.assertNotIn(("45.9.70.7", 1), talkative._written)
+        self.assertGreaterEqual(talkative.stats["voice_rejected"], 1)
+        self.assertEqual(talkative.stats["voice_written"], 0)
+
+    def test_generation_is_capped(self):
+        cerb, wall = build()
+        talkative = _WithModel(wall, "A perfectly acceptable line of sufficient length.")
+        talkative.max_generations_per_hour = 2
+        for i in range(6):
+            talkative._want_line(f"45.9.71.{i}", 0)
+        talkative._drain_voice_queue(limit=10)
+        self.assertLessEqual(len(talkative._generations),
+                             talkative.max_generations_per_hour)
+
+
+class TheCheckOnWhatItSays(unittest.TestCase):
+    """Every generated line goes to a hostile stranger and into a permanent
+    log, so it is checked before it is said."""
+
+    def clean(self, text):
+        return B.Blackwall._sanitise(text)
+
+    def test_a_good_line_passes_unchanged(self):
+        line = "You are asking for accounts this server has never had. Every attempt is recorded."
+        self.assertEqual(self.clean(line), line)
+
+    def test_curly_punctuation_becomes_ascii(self):
+        out = self.clean("You’re recorded — every attempt of it, and it is all kept here.")
+        out.encode("ascii")
+        self.assertIn("You're", out)
+
+    def test_markdown_is_stripped(self):
+        out = self.clean("**You are recorded. Every attempt of it is kept, and you are done here.**")
+        self.assertFalse(out.startswith("*"))
+
+    def test_line_breaks_become_one_paragraph(self):
+        out = self.clean("You are recorded.\nEvery attempt of it is kept here for good.")
+        self.assertNotIn("\n", out)
+
+    def test_a_refusal_is_not_said(self):
+        self.assertEqual(self.clean("I'm sorry, but I cannot write that for you."), "")
+
+    def test_a_link_is_not_said(self):
+        self.assertEqual(
+            self.clean("Read about yourself at http://example.com/logs, you are recorded."), "")
+
+    def test_a_threat_beyond_this_server_is_not_said(self):
+        self.assertEqual(
+            self.clean("We will hack you back and find you wherever you are hiding."), "")
+
+    def test_something_far_too_long_is_not_said(self):
+        self.assertEqual(self.clean("word " * 200), "")
+
+    def test_something_far_too_short_is_not_said(self):
+        self.assertEqual(self.clean("Stop."), "")
+
+    def test_nothing_at_all_is_not_said(self):
+        self.assertEqual(self.clean(""), "")
+        self.assertEqual(self.clean(None), "")
+
+
 class Telemetry(unittest.TestCase):
+
     def test_the_model_is_told_what_was_already_said(self):
         cerb, wall = build()
         wall.observe_login("45.9.60.1", "root")
