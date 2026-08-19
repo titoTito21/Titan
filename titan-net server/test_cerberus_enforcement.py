@@ -40,8 +40,12 @@ class Result:
 class FakeIptables:
     """Enough of iptables to be wrong in the same ways the real one can be."""
 
-    def __init__(self, who_output=""):
+    def __init__(self, who_output="", nat=True):
         self.chains = {"INPUT": []}     # chain -> [rule as tuple]
+        # The nat table, where the answering redirect lives. ``nat=False`` is
+        # a host that has not got one - a container, an nftables-only box -
+        # where the ban has to stay silent rather than grow a hole.
+        self.nat = {"PREROUTING": []} if nat else None
         self.who_output = who_output
         self.calls = []
 
@@ -49,6 +53,9 @@ class FakeIptables:
 
     def rules(self, chain):
         return list(self.chains.get(chain, []))
+
+    def nat_rules(self, chain="PREROUTING"):
+        return list((self.nat or {}).get(chain, []))
 
     def flush(self, chain):
         self.chains[chain] = []
@@ -74,26 +81,34 @@ class FakeIptables:
         if cmd != "iptables":
             return Result(1, "")
 
+        args = list(args)
+        table = self.chains
+        if args[1] == "-t":
+            if args[2] != "nat" or self.nat is None:
+                return Result(1, "")
+            table = self.nat
+            del args[1:3]
         op = args[1]
+        chains = table
         if op == "-N":
             chain = args[2]
-            if chain in self.chains:
+            if chain in chains:
                 return Result(1, "")
-            self.chains[chain] = []
+            chains[chain] = []
             return Result(0, "")
         if op == "-S":
             chain = args[2]
-            if chain not in self.chains:
+            if chain not in chains:
                 return Result(1, "")
             out = [f"-P {chain} ACCEPT"] if chain == "INPUT" else []
-            out += [f"-A {chain} " + " ".join(r) for r in self.chains[chain]]
+            out += [f"-A {chain} " + " ".join(r) for r in chains[chain]]
             return Result(0, "\n".join(out) + "\n")
         if op == "-C":
             chain, rule = args[2], tuple(args[3:])
-            return Result(0 if rule in self.chains.get(chain, []) else 1, "")
+            return Result(0 if rule in chains.get(chain, []) else 1, "")
         if op == "-A":
             chain, rule = args[2], tuple(args[3:])
-            self.chains.setdefault(chain, []).append(rule)
+            chains.setdefault(chain, []).append(rule)
             return Result(0, "")
         if op == "-I":
             chain = args[2]
@@ -101,19 +116,19 @@ class FakeIptables:
             pos = 1
             if rest and rest[0].isdigit():
                 pos = int(rest.pop(0))
-            self.chains.setdefault(chain, []).insert(pos - 1, tuple(rest))
+            chains.setdefault(chain, []).insert(pos - 1, tuple(rest))
             return Result(0, "")
         if op == "-D":
             chain, rule = args[2], tuple(args[3:])
-            if rule in self.chains.get(chain, []):
-                self.chains[chain].remove(rule)
+            if rule in chains.get(chain, []):
+                chains[chain].remove(rule)
                 return Result(0, "")
             return Result(1, "")
         return Result(1, "")
 
 
-def firewall(who_output=""):
-    fake = FakeIptables(who_output)
+def firewall(who_output="", nat=True):
+    fake = FakeIptables(who_output, nat=nat)
     fw = D.FirewallManager()
     D.subprocess.run = fake.run          # the only seam that matters
     return fw, fake
@@ -229,8 +244,103 @@ class Verification(unittest.TestCase):
     def test_the_scope_of_a_ban_survives_a_restart(self):
         fw, fake = firewall()
         fw.restore_bans(["144.48.8.86"], [], all_port_ips={"144.48.8.86"})
+        self.assertIn(("-s", "144.48.8.86", "-j", "DROP"),
+                      fake.rules("CERBERUS"))
+
+    def test_a_restored_all_ports_ban_is_answered_again(self):
+        """An all-ports ban is exactly the case where port 22 is dropped, so
+        it is exactly the case that is silent on the service being attacked.
+        The answering channel has to come back with the ban, or every address
+        banned before the last restart goes mute."""
+        fw, fake = firewall()
+        fw.restore_bans(["144.48.8.86"], [], all_port_ips={"144.48.8.86"})
+        self.assertIn("144.48.8.86", fw.answered_ips())
+        self.assertIn(("-p", "tcp", "-s", "144.48.8.86", "--dport", "22",
+                       "-j", "REDIRECT", "--to-ports", str(fw.ANSWER_PORT)),
+                      fake.nat_rules())
+
+
+class Answering(unittest.TestCase):
+    """A ban that says something rather than dropping the attacker into
+    silence. This is what left the Blackwall transcript empty: every attacker
+    was on SSH, and a DROP has nothing to say."""
+
+    def test_the_redirect_and_the_way_through_are_both_installed(self):
+        fw, fake = firewall()
+        fw.block_ip("185.246.130.20", all_ports=True)
+        self.assertTrue(fw.open_answer_channel("185.246.130.20"))
+        self.assertIn(("-p", "tcp", "-s", "185.246.130.20", "--dport", "22",
+                       "-j", "REDIRECT", "--to-ports", str(fw.ANSWER_PORT)),
+                      fake.nat_rules())
+        self.assertIn(("-s", "185.246.130.20", "-p", "tcp",
+                       "--dport", str(fw.ANSWER_PORT), "-j", "ACCEPT"),
+                      fake.rules("CERBERUS"))
+
+    def test_the_way_through_sits_above_this_address_own_drop(self):
+        """Appended below the DROP it would never be reached, and the
+        redirected packet would be eaten by the very ban that redirected it."""
+        fw, fake = firewall()
+        fw.block_ip("185.246.130.21", all_ports=True)
+        fw.open_answer_channel("185.246.130.21")
+        rules = fake.rules("CERBERUS")
+        accept = rules.index(("-s", "185.246.130.21", "-p", "tcp",
+                              "--dport", str(fw.ANSWER_PORT), "-j", "ACCEPT"))
+        drop = rules.index(("-s", "185.246.130.21", "-j", "DROP"))
+        self.assertLess(accept, drop)
+
+    def test_the_ban_itself_is_untouched(self):
+        fw, fake = firewall()
+        fw.block_ip("185.246.130.22", all_ports=True)
+        fw.open_answer_channel("185.246.130.22")
+        self.assertIn(("-s", "185.246.130.22", "-j", "DROP"),
+                      fake.rules("CERBERUS"))
+
+    def test_the_operator_own_ssh_session_is_never_redirected(self):
+        """Sending the operator's next login into a tar pit is how somebody
+        loses their own server."""
+        fw, fake = firewall(who_output="root pts/0 2026-08-19 (203.0.113.55)")
+        self.assertFalse(fw.open_answer_channel("203.0.113.55"))
+        self.assertEqual(fake.nat_rules(), [])
+
+    def test_a_private_address_is_never_redirected(self):
+        fw, fake = firewall()
+        self.assertFalse(fw.open_answer_channel("192.168.1.40"))
+        self.assertEqual(fake.nat_rules(), [])
+
+    def test_no_nat_table_means_a_silent_ban_and_no_hole(self):
+        """With nowhere to redirect to, the ACCEPT would be a hole punched
+        through the ban for a channel that does not exist."""
+        fw, fake = firewall(nat=False)
+        fw.block_ip("185.246.130.23", all_ports=True)
+        self.assertFalse(fw.open_answer_channel("185.246.130.23"))
         self.assertEqual(fake.rules("CERBERUS"),
-                         [("-s", "144.48.8.86", "-j", "DROP")])
+                         [("-s", "185.246.130.23", "-j", "DROP")])
+        self.assertNotIn("185.246.130.23", fw.answered_ips())
+
+    def test_lifting_the_ban_stops_the_answering(self):
+        fw, fake = firewall()
+        fw.block_ip("185.246.130.24", all_ports=True)
+        fw.open_answer_channel("185.246.130.24")
+        fw.unblock_ip("185.246.130.24")
+        self.assertEqual(fake.nat_rules(), [])
+        self.assertEqual(fw.answered_ips(), [])
+
+    def test_a_flushed_channel_is_repaired_with_the_ban(self):
+        fw, fake = firewall()
+        fw.block_ip("185.246.130.25", all_ports=True)
+        fw.open_answer_channel("185.246.130.25")
+        fake.flush("CERBERUS")
+        fake.nat["PREROUTING"] = []
+        self.assertTrue(fw.verify_ban("185.246.130.25"))
+        self.assertIn(("-p", "tcp", "-s", "185.246.130.25", "--dport", "22",
+                       "-j", "REDIRECT", "--to-ports", str(fw.ANSWER_PORT)),
+                      fake.nat_rules())
+
+    def test_it_can_be_switched_off_entirely(self):
+        fw, fake = firewall()
+        fw.answer_ssh = False
+        self.assertFalse(fw.open_answer_channel("185.246.130.26"))
+        self.assertEqual(fake.nat_rules(), [])
 
 
 class ThroughCerberus(unittest.TestCase):

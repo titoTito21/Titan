@@ -46,6 +46,7 @@ def build(**kw):
     cerb.on_login_attempt = wall.observe_login
     cerb.on_account_event = (
         lambda kind, ip, detail, extra: wall.observe_event(kind, ip, detail, extra))
+    cerb.on_ban = wall.note_ban
     return cerb, wall
 
 
@@ -553,6 +554,302 @@ class Telemetry(unittest.TestCase):
         cerb, wall = build()
         wall.observe_login("45.9.60.2", "root")
         json.dumps(wall.status(), default=str)
+
+
+class Speaking(unittest.TestCase):
+    """A ban that says nothing is the bug these are written against.
+
+    The threat report that prompted this said it plainly: two coordinated
+    campaigns, seven addresses, all of them recognised and shut down - and
+    "the Blackwall transcript is empty, so the actors were not addressed
+    directly". Blackwall had been doing its job in complete silence, because
+    every one of those attackers was on SSH and every channel it had went
+    somewhere else.
+    """
+
+    def test_a_ban_is_never_made_in_silence(self):
+        cerb, wall = build()
+        sweep(wall, "45.9.80.1", ("root", "ubuntu", "debian"))
+        wall._ban("45.9.80.1", "Blackwall: default-account sweep")
+        self.assertEqual(wall.pending_for("45.9.80.1"), 1)
+
+    def test_holding_a_line_is_not_saying_it(self):
+        """The transcript is evidence. Something Blackwall merely wanted to
+        say must never appear in it as something it said."""
+        cerb, wall = build()
+        sweep(wall, "45.9.80.2", ("root", "admin"))
+        wall.hold("45.9.80.2", 3, "a default-account sweep")
+        self.assertEqual(wall.transcript(ip="45.9.80.2"), [])
+
+    def test_the_tar_pit_delivers_what_was_held(self):
+        """The tar pit is where a banned SSH attacker actually arrives, so it
+        is the channel that owes them what was decided while they were being
+        dropped in silence."""
+        cerb, wall = build()
+        sweep(wall, "45.9.80.3", ("root", "ubuntu", "debian"))
+        held = wall.hold("45.9.80.3", 3, "a default-account sweep")
+        lines = wall.tarpit_lines("45.9.80.3")
+        self.assertIn(held.split(".")[0], " ".join(lines))
+        said = wall.transcript(ip="45.9.80.3")
+        self.assertEqual(len(said), 1)
+        self.assertEqual(said[0]["said"], held)
+        self.assertEqual(said[0]["channel"], "tarpit")
+        self.assertEqual(wall.pending_for("45.9.80.3"), 0)
+
+    def test_the_honeypot_delivers_it_too(self):
+        cerb, wall = build()
+        sweep(wall, "45.9.80.4", ("root", "ubuntu"))
+        held = wall.hold("45.9.80.4", 3, "a fake SSH shell")
+        text = wall.terminal_farewell("45.9.80.4")
+        self.assertIn(held.split(".")[0], text)
+        self.assertEqual(wall.transcript(ip="45.9.80.4")[0]["said"], held)
+
+    def test_a_titan_net_client_delivers_it_as_well(self):
+        cerb, wall = build()
+        sweep(wall, "45.9.80.5", ("root", "ubuntu"))
+        held = wall.hold("45.9.80.5", 3, "a default-account sweep")
+        answer = wall.warn("45.9.80.5", "root")
+        self.assertEqual(answer["message"], held)
+        self.assertEqual(wall.pending_for("45.9.80.5"), 0)
+
+    def test_nothing_is_held_for_a_whitelisted_address(self):
+        cerb, wall = build()
+        cerb._whitelisted_ips.add("45.9.80.6")
+        wall.hold("45.9.80.6", 3, "nothing at all")
+        self.assertEqual(wall.pending_for("45.9.80.6"), 0)
+
+    def test_only_the_last_few_are_kept_per_address(self):
+        """An address that is banned, recognised and re-banned must not be
+        able to make this server hold an unbounded amount of speech."""
+        cerb, wall = build()
+        sweep(wall, "45.9.80.7", ("root",))
+        for i in range(10):
+            wall.hold("45.9.80.7", 3, f"reason {i}")
+        self.assertLessEqual(wall.pending_for("45.9.80.7"),
+                             wall.max_pending_per_ip)
+
+    def test_a_campaign_tells_its_members_what_they_were_recognised_as(self):
+        """Being banned for being noisy and being banned because six addresses
+        were recognised as one operation are different pieces of news, and the
+        second is the one that tells whoever is running it that spreading out
+        did not work."""
+        cerb, wall = build()
+        wall.campaign_min_members = 3
+        for i in range(1, 4):
+            sweep(wall, f"45.9.81.{i}", ("root", "ubuntu", "debian", "admin"))
+        found = wall.correlate()
+        self.assertTrue(found)
+        for i in range(1, 4):
+            self.assertGreaterEqual(wall.pending_for(f"45.9.81.{i}"), 1)
+
+    def test_a_remembered_campaign_is_told_it_was_remembered(self):
+        cerb, wall = build()
+        sweep(wall, "45.9.82.1", ("root", "ubuntu", "debian"))
+        wall.memory.remember(wall._fingerprints["45.9.82.1"].signature(),
+                             ["45.9.82.1"], "a default-account sweep")
+        # observe_login recognises it as it arrives, which is the point of
+        # the memory - refused on its third packet rather than its fortieth.
+        sweep(wall, "45.9.82.2", ("root", "ubuntu", "debian"))
+        self.assertIn("45.9.82.2", wall._recognised)
+        self.assertGreaterEqual(wall.pending_for("45.9.82.2"), 1)
+
+    def test_the_status_shows_what_has_not_been_said(self):
+        """A number that only grows means the answering channel is reaching
+        nobody, which is the failure this whole change is about."""
+        cerb, wall = build()
+        sweep(wall, "45.9.83.1", ("root",))
+        wall.hold("45.9.83.1", 3, "a reserved account")
+        status = wall.status()
+        self.assertEqual(status["unsaid"]["actors"], 1)
+        self.assertEqual(status["unsaid"]["lines"], 1)
+        json.dumps(status, default=str)
+
+
+class CerberusBansAreAnnouncedToo(unittest.TestCase):
+    """Most bans on a real server are Cerberus', not Blackwall's - it is the
+    counter, and counting is what catches a brute force. Blackwall speaking
+    only about its own bans is why a server that had banned dozens of
+    addresses produced an empty transcript."""
+
+    def test_a_ban_cerberus_made_is_something_to_say(self):
+        cerb, wall = build()
+        for name in ("root", "ubuntu", "debian", "admin"):
+            cerb.account_guard_on_failed_login("45.9.85.1", name, source="ssh")
+        self.assertTrue(cerb.is_ip_banned("45.9.85.1"))
+        self.assertEqual(wall.pending_for("45.9.85.1"), 1)
+
+    def test_one_escalation_is_one_thing_said(self):
+        """ALERT -> LOCKDOWN -> CERBERUS inside a single failed login is three
+        bans and one piece of news. Telling somebody three times in one second
+        that they have been cut off is a machine talking, not a wall."""
+        cerb, wall = build()
+        for name in ("root", "ubuntu", "debian", "admin", "guest", "test"):
+            cerb.account_guard_on_failed_login("45.9.85.2", name, source="ssh")
+        self.assertEqual(wall.pending_for("45.9.85.2"), 1)
+
+    def test_it_is_delivered_when_they_come_back(self):
+        cerb, wall = build()
+        for name in ("root", "ubuntu", "debian", "admin"):
+            cerb.account_guard_on_failed_login("45.9.85.3", name, source="ssh")
+        text = "\n".join(wall.tarpit_lines("45.9.85.3"))
+        said = wall.transcript(ip="45.9.85.3")
+        self.assertEqual(len(said), 1)
+        self.assertIn(said[0]["said"].split(".")[0], text)
+
+    def test_somebody_already_blocked_is_spoken_to_as_such(self):
+        """Anyone arriving through the answering channel is already blocked,
+        and stage 3 is the register for that. Stage 0 would be talking to them
+        as though nothing had happened yet."""
+        cerb, wall = build()
+        for name in ("root", "ubuntu", "debian", "admin"):
+            cerb.account_guard_on_failed_login("45.9.85.4", name, source="ssh")
+        wall.tarpit_lines("45.9.85.4")
+        self.assertEqual(wall.transcript(ip="45.9.85.4")[0]["stage"], 3)
+
+    def test_a_whitelisted_address_is_never_announced(self):
+        cerb, wall = build()
+        cerb._whitelisted_ips.add("45.9.85.5")
+        wall.note_ban("45.9.85.5", "should not happen")
+        self.assertEqual(wall.pending_for("45.9.85.5"), 0)
+
+
+class AnsweringSSH(unittest.TestCase):
+    """Blackwall asking for the one channel there is to an SSH attacker."""
+
+    class FakeFirewall:
+        def __init__(self):
+            self.opened = []
+
+        def open_answer_channel(self, ip):
+            self.opened.append(ip)
+            return True
+
+    def wire(self):
+        cerb, wall = build()
+        firewall = self.FakeFirewall()
+        cerb.firewall = firewall
+        return cerb, wall, firewall
+
+    def test_an_ssh_attacker_gets_a_channel_when_it_is_banned(self):
+        cerb, wall, firewall = self.wire()
+        sweep(wall, "45.9.84.1", ("root", "ubuntu"))       # sweep() is SSH
+        wall._ban("45.9.84.1", "Blackwall: default-account sweep")
+        self.assertEqual(firewall.opened, ["45.9.84.1"])
+
+    def test_an_address_that_never_touched_ssh_does_not(self):
+        """There is no point answering port 22 for somebody who never knocked
+        on it, and every redirected address is one more rule in the kernel."""
+        cerb, wall, firewall = self.wire()
+        for name in ("alice", "bob"):
+            wall.observe_login("45.9.84.2", name, source="app")
+        wall._ban("45.9.84.2", "Blackwall: credential stuffing")
+        self.assertEqual(firewall.opened, [])
+
+    def test_it_can_be_switched_off(self):
+        cerb, wall, firewall = self.wire()
+        wall.answer_ssh = False
+        sweep(wall, "45.9.84.3", ("root", "ubuntu"))
+        wall._ban("45.9.84.3", "Blackwall: default-account sweep")
+        self.assertEqual(firewall.opened, [])
+
+    def test_a_firewall_that_cannot_do_it_is_not_an_error(self):
+        cerb, wall = build()                # CerberusProtocol has no firewall
+        sweep(wall, "45.9.84.4", ("root", "ubuntu"))
+        self.assertTrue(wall._ban("45.9.84.4", "Blackwall: sweep"))
+
+
+class CerberusOwnVoice(unittest.TestCase):
+    """Cerberus saying what it did, in its own words rather than in one fixed
+    sentence about intrusion detection."""
+
+    def build(self):
+        d = tempfile.mkdtemp()
+        return C.CerberusProtocol(log_dir=os.path.join(d, "logs"))
+
+    def test_it_says_something_of_its_own(self):
+        cerb = self.build()
+        said = cerb.say("shut_out", "45.9.90.1", "brute force")
+        self.assertIn(said, cerb.voice.FLOOR["shut_out"])
+
+    def test_the_registers_are_different_things_to_say(self):
+        cerb = self.build()
+        shut = cerb.say("shut_out", "45.9.90.2", "brute force")
+        lock = cerb.say("lockdown", "45.9.90.2", "global lockdown")
+        self.assertNotEqual(shut, lock)
+
+    def test_every_written_line_would_pass_its_own_check(self):
+        """The floor goes to the same stranger and into the same log as a
+        generated line, so it is held to the same rules."""
+        import persona
+        for kind, lines in C.CerberusVoice.FLOOR.items():
+            for line in lines:
+                self.assertEqual(persona.sanitise_line(line), line, kind)
+
+    def test_it_is_written_down(self):
+        cerb = self.build()
+        said = cerb.say("shut_out", "45.9.90.3", "brute force")
+        log = cerb.said(ip="45.9.90.3")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["said"], said)
+        self.assertEqual(log[0]["cause"], "brute force")
+
+    def test_the_client_message_carries_the_words_where_they_are_read(self):
+        """The client reads ``reason`` out to whoever is sitting there. Saying
+        it into a key nothing renders would be the same mistake as banning in
+        silence."""
+        cerb = self.build()
+        msg = cerb.get_cerberus_client_message("Too many failed login attempts",
+                                               "45.9.90.4")
+        self.assertIn(msg["reason"], cerb.voice.FLOOR["shut_out"])
+        self.assertEqual(msg["cause"], "Too many failed login attempts")
+        self.assertEqual(msg["action"], "shutdown")
+        self.assertEqual(msg["speaker"], "Cerberus")
+
+    def test_lockout_evasion_is_its_own_register(self):
+        cerb = self.build()
+        msg = cerb.get_cerberus_client_message(
+            "Repeated attempts against a locked account", "45.9.90.5",
+            kind="lockout_evasion")
+        self.assertIn(msg["reason"], cerb.voice.FLOOR["lockout_evasion"])
+
+    def test_the_lockdown_message_is_plain_and_not_accusing(self):
+        """A global lockdown refuses everybody, so this is the message most
+        likely to be read by somebody who has done nothing at all."""
+        cerb = self.build()
+        msg = cerb.get_lockdown_rejection_message("45.9.90.6")
+        self.assertIn(msg["error"], cerb.voice.FLOOR["lockdown"])
+        self.assertFalse(msg["success"])
+
+    def test_nothing_is_generated_while_somebody_is_waiting(self):
+        cerb = self.build()
+
+        def explode(*a, **kw):
+            raise AssertionError("the attack path called the model")
+
+        cerb.voice.use_ai = True
+        cerb.voice.api_key = "not-a-real-key"
+        import persona
+        # Say the model is there without importing an SDK to find out - the
+        # question under test is who CALLS it, not whether it is installed.
+        original = (persona.generate, persona.gemini_available)
+        persona.generate = explode
+        persona.gemini_available = lambda key: True
+        try:
+            cerb.say("shut_out", "45.9.90.7", "brute force")
+        finally:
+            persona.generate, persona.gemini_available = original
+
+    def test_a_voice_that_fails_never_takes_the_ban_with_it(self):
+        cerb = self.build()
+
+        class Broken:
+            def line(self, *a, **kw):
+                raise RuntimeError("no")
+
+        cerb.voice = Broken()
+        msg = cerb.get_cerberus_client_message("Message flood", "45.9.90.8")
+        self.assertTrue(msg["reason"])
+        self.assertEqual(msg["action"], "shutdown")
 
 
 if __name__ == "__main__":

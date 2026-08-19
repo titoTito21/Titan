@@ -70,6 +70,11 @@ class Config:
     # Default to the most capable Gemini model - this analyst runs on demand, so
     # depth matters more than latency.
     CERBERUS_AI_MODEL = os.getenv('CERBERUS_AI_MODEL', 'gemini-2.5-pro')
+    # Whether Cerberus writes its OWN lines - what it says to somebody it is
+    # shutting out - with the model, instead of using the written ones in
+    # persona.py. Never on the attack path: they are written ahead of time on
+    # a worker of the voice's own and the written ones stand in meanwhile.
+    CERBERUS_VOICE_AI = os.getenv('CERBERUS_VOICE_AI', '1') == '1'
 
     # Blackwall: the recognition layer over Cerberus (behavioural
     # fingerprinting, campaign correlation, threat memory, adaptive posture)
@@ -88,6 +93,13 @@ class Config:
     # ahead of time on its own thread, capped per hour, and checked before
     # anything is said.
     BLACKWALL_VOICE_AI = os.getenv('BLACKWALL_VOICE_AI', '1') == '1'
+    # Whether a banned SSH attacker's port 22 is ANSWERED - redirected into
+    # the tar pit, which is Blackwall's one channel to somebody sitting at a
+    # terminal - instead of being dropped in silence. Without this, Blackwall
+    # has nothing to say an SSH brute force in at all, which is exactly why
+    # its transcript came back empty from a server that had been under attack
+    # for a fortnight. The ban itself is unchanged either way.
+    BLACKWALL_ANSWER_SSH = os.getenv('BLACKWALL_ANSWER_SSH', '1') == '1'
     BLACKWALL_KEY = os.getenv('BLACKWALL_KEY', '') or CERBERUS_AI_KEY
 
     BLACKWALL_MODEL = os.getenv('BLACKWALL_MODEL', '') or CERBERUS_AI_MODEL

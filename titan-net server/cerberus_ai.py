@@ -12,16 +12,37 @@ Two cooperating pieces:
    (possible account takeover).
 
 2. CerberusAI (optional): "Cerberus", an LLM analyst that reads recent security
-   events + the live Cerberus status and returns a human-readable threat
-   assessment with recommended actions. Uses Google Gemini (the operator's
-   available provider), is gated behind an API key, runs only when a moderator
-   asks, never sits in the request path, and fails closed (advisory only).
+   events + the live Cerberus status and returns a threat assessment with
+   recommended actions. Uses Google Gemini (the operator's available provider),
+   is gated behind an API key, runs only when a moderator asks, never sits in
+   the request path, and fails closed (advisory only).
+
+   It is written in the FIRST PERSON, as Cerberus, and that is not decoration.
+   The report it used to produce read like a scanner's output - "Two
+   coordinated brute-force campaigns are attempting privilege escalation",
+   "Automated defenses have successfully identified these campaigns" - a
+   description of a server written by nobody, about a third party. But the
+   thing writing it is the same thing that made the decisions being described:
+   it counted the attempts, it shut the gate, it decided what a locked account
+   meant. An operator reading "I banned these three because they walked the
+   same account list within a minute of each other, and I am not sure about
+   the fourth" knows something they cannot get from the passive voice - which
+   of the findings the system is confident about, and which of them it is
+   guessing at. So the analyst says I, says what it did and what it merely
+   suspects, and says plainly when it does not know.
 """
 
 import logging
 import time
 from collections import deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+
+try:
+    from persona import gemini_available as _gemini_available
+    from persona import generate as _generate_text
+except ImportError:                                  # pragma: no cover
+    from .persona import gemini_available as _gemini_available
+    from .persona import generate as _generate_text
 
 logger = logging.getLogger('titan-net.cerberus_ai')
 
@@ -180,11 +201,40 @@ class RiskEngine:
 class CerberusAI:
     """Optional LLM security analyst ("Cerberus"), backed by Google Gemini."""
 
+    # Cerberus reporting on Cerberus. The register is the same one the voice
+    # in ``persona.CerberusVoice`` uses on an attacker - old, procedural,
+    # unhurried - turned towards the operator, where it is allowed to be
+    # candid: this is the one audience it can admit uncertainty to.
+    PERSONA = (
+        "You are Cerberus: the gate of the Titan-Net server, and the thing "
+        "that made every decision in the telemetry you are about to read. You "
+        "counted these attempts. You shut these addresses out. You are not "
+        "describing a system from the outside - you ARE the system, reporting "
+        "to the one person who can overrule you.\n\n"
+        "Titan-Net is an accessibility platform. Its users are blind and "
+        "partially sighted people, and a wrong ban takes away a service "
+        "somebody depends on, so you would rather say you are unsure than be "
+        "confidently wrong about a user.\n\n"
+        "Write in the FIRST PERSON, in plain English, to the operator. Say "
+        "what you saw, what you did about it, and what you could not tell. "
+        "Never write in the passive voice about your own actions - not "
+        "'the IPs were blocked' but 'I blocked them'. Be specific: an address, "
+        "an account name, a count, a time. You are dry and unhurried, you do "
+        "not dramatise, you do not congratulate yourself, and you never use "
+        "the words 'robust', 'proactive', 'leverage' or 'posture' about "
+        "yourself.\n\n"
+        "Do not recommend the obvious for its own sake. 'Enforce strong "
+        "passwords' is not a finding; it is what somebody writes when they "
+        "have nothing to say. If the telemetry supports nothing, say that the "
+        "server is quiet and stop."
+    )
+
     def __init__(self, risk_engine: RiskEngine,
                  status_provider: Optional[Callable[[], Dict[str, Any]]] = None,
                  log_path: Optional[str] = None,
                  api_key: str = "", model: str = "gemini-2.5-pro",
-                 transcript_provider: Optional[Callable[[], Any]] = None):
+                 transcript_provider: Optional[Callable[[], Any]] = None,
+                 own_voice_provider: Optional[Callable[[], Any]] = None):
         self.risk_engine = risk_engine
         self.status_provider = status_provider
         self.log_path = log_path
@@ -196,39 +246,18 @@ class CerberusAI:
         # for this assessment wants to know what their server said in its own
         # defence.
         self.transcript_provider = transcript_provider
+        # ...and what Cerberus itself said, to the people it shut out. Wired
+        # by server.py to CerberusProtocol.said().
+        self.own_voice_provider: Optional[Callable[[], Any]] = own_voice_provider
 
 
     @property
     def enabled(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            from google import genai  # noqa: F401  (new google-genai SDK)
-            return True
-        except Exception:
-            pass
-        try:
-            import google.generativeai  # noqa: F401  (legacy SDK fallback)
-            return True
-        except Exception:
-            return False
+        return _gemini_available(self.api_key)
 
     def _generate(self, prompt: str) -> str:
         """Call Gemini via whichever SDK is installed; return the raw text."""
-        # Preferred: new google-genai SDK (matches the rest of Titan-Net).
-        try:
-            from google import genai
-            client = genai.Client(api_key=self.api_key)
-            resp = client.models.generate_content(model=self.model, contents=prompt)
-            return (getattr(resp, "text", "") or "").strip()
-        except ImportError:
-            pass
-        # Fallback: legacy google-generativeai SDK.
-        import google.generativeai as genai
-        genai.configure(api_key=self.api_key)
-        model = genai.GenerativeModel(self.model)
-        resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip()
+        return _generate_text(self.api_key, self.model, prompt)
 
     def _read_log_tail(self, max_lines: int = 200) -> str:
         if not self.log_path:
@@ -259,23 +288,46 @@ class CerberusAI:
                 transcript = self.transcript_provider() or []
             except Exception:
                 transcript = []
+        own_voice = []
+        if self.own_voice_provider:
+            try:
+                own_voice = self.own_voice_provider() or []
+            except Exception:
+                own_voice = []
         return (
-
-            "You are Cerberus, the security analyst for the Titan-Net server. "
-            "Analyze the telemetry below and produce a concise threat assessment. "
-            "Focus on attempts by one user to break into another user, moderator, "
-            "or admin account (impersonation, IDOR / cross-user access, privilege "
-            "escalation, credential stuffing, account-takeover logins). "
+            self.PERSONA + "\n\n"
+            + "Analyse the telemetry below and tell the operator what you make "
+            "of it. Give particular weight to attempts by one user to get at "
+            "another user's, a moderator's or an admin's account "
+            "(impersonation, IDOR / cross-user access, privilege escalation, "
+            "credential stuffing, account-takeover logins).\n\n"
             "Respond as STRICT JSON with keys: "
             "severity (one of none|low|medium|high|critical), "
-            "summary (string), notable_actors (array of {ip, why}), "
-            "recommended_actions (array of strings). No prose outside the JSON.\n\n"
-            "BLACKWALL_TRANSCRIPT is what Blackwall, this server's own defence "
-            "layer, has already said to these actors in plain text. Say in the "
-            "summary whether being addressed changed their behaviour.\n\n"
+            "verdict (ONE sentence, at most 25 words - what you would say out "
+            "loud if the operator walked in and asked; this is read aloud, so "
+            "no lists and no numbers longer than a phone number), "
+            "summary (several sentences, first person, what you saw, what you "
+            "did about it and what you are unsure of), "
+            "notable_actors (array of {ip, why}, where 'why' is your own "
+            "reading of that address in one sentence), "
+            "recommended_actions (array of strings, each addressed to the "
+            "operator as something to do, not a security platitude), "
+            "confidence (0.0-1.0, how sure you are of this reading), "
+            "unknowns (array of strings - what you could not tell from this "
+            "telemetry, empty if nothing). "
+            "No prose outside the JSON.\n\n"
+            "MY_OWN_WORDS is what you have already said to people you shut "
+            "out. BLACKWALL_TRANSCRIPT is what Blackwall - the layer in front "
+            "of you, which recognises behaviour rather than counting it - said "
+            "to attackers in plain text in their terminal or client. Both are "
+            "evidence: an actor who was told to stop, in words, and carried on "
+            "is not the same actor as one who was never addressed. If either "
+            "is EMPTY, say so plainly in the summary and treat it as a fault "
+            "worth reporting - an attack that nobody was told about means a "
+            "channel to them was missing, not that they behaved well.\n\n"
+            f"MY_OWN_WORDS:\n{json.dumps(own_voice, default=str)[:2000]}\n\n"
             f"CERBERUS_STATUS:\n{json.dumps(status, default=str)[:4000]}\n\n"
             f"BLACKWALL_TRANSCRIPT:\n{json.dumps(transcript, default=str)[:3000]}\n\n"
-
             f"TOP_RISK_IPS:\n{json.dumps(risks)}\n\n"
             f"RECENT_EVENTS:\n{json.dumps(events, default=str)[:6000]}\n\n"
             f"INTRUSION_LOG_TAIL:\n{log_tail[:4000]}\n"
@@ -301,6 +353,15 @@ class CerberusAI:
             except Exception:
                 parsed = {"severity": "unknown", "summary": text[:2000],
                           "notable_actors": [], "recommended_actions": []}
+            # The report is read by a client that was written before any of
+            # these keys existed and renders the ones it knows, so every new
+            # key is optional and every old one keeps its meaning. ``verdict``
+            # is the one that is read ALOUD, so it falls back to the first
+            # sentence of the summary rather than to nothing.
+            parsed.setdefault("speaker", "Cerberus")
+            if not parsed.get("verdict"):
+                summary = str(parsed.get("summary") or "")
+                parsed["verdict"] = summary.split(". ")[0][:200]
             parsed["enabled"] = True
             parsed["model"] = self.model
             parsed["generated_at"] = time.time()

@@ -347,6 +347,17 @@ class FirewallManager:
     # Cerberus' own chain, evaluated before INPUT's SSH ACCEPT.
     CHAIN = 'CERBERUS'
 
+    # Where a banned SSH attacker's port 22 is answered instead of dropped.
+    # A DROP is silence, and silence is what left Blackwall's transcript empty
+    # on a server that had been under attack for a fortnight: every attacker
+    # was on SSH, and being banned meant their packets stopped existing rather
+    # than being answered. Their port 22 is redirected into the tar pit, which
+    # is Blackwall's one channel to somebody sitting at a terminal - the ban
+    # still holds (nothing of this server is reachable through it, and the
+    # DROP below it stays exactly as it was), but the door they are knocking
+    # on now says something back, and wastes their time while it does.
+    ANSWER_PORT = int(os.environ.get('TAR_PIT_PORT', 2223))
+
     def __init__(self):
         self._blocked_ips: Set[str] = set()
         self._blocked_subnets: Set[str] = set()
@@ -360,6 +371,9 @@ class FirewallManager:
         self._ssh_peers: Set[str] = set()
         self._ssh_peers_ts = 0.0
         self.repairs = 0
+        # Addresses whose SSH is answered rather than dropped.
+        self._answered: Set[str] = set()
+        self.answer_ssh = os.environ.get('BLACKWALL_ANSWER_SSH', '1') == '1'
 
     # ----------------------------------------------------------------
     # LOW LEVEL
@@ -381,16 +395,27 @@ class FirewallManager:
             logger.error(f"[FIREWALL] {' '.join(args)} failed: {e}")
             return None
 
-    def _rule_exists(self, chain: str, rule: List[str]) -> bool:
-        r = self._run(['iptables', '-C', chain] + rule)
+    def _rule_exists(self, chain: str, rule: List[str],
+                     table: str = '') -> bool:
+        head = ['iptables'] + (['-t', table] if table else [])
+        r = self._run(head + ['-C', chain] + rule)
         return bool(r) and r.returncode == 0
 
-    def _ensure_rule(self, chain: str, rule: List[str]) -> bool:
+    def _ensure_rule(self, chain: str, rule: List[str], first: bool = False,
+                     table: str = '') -> bool:
         """Add a rule only if the kernel does not already carry it.
-        Returns True if it had to be added."""
-        if self._rule_exists(chain, rule):
+        Returns True if it had to be added.
+
+        ``first`` inserts at the top of the chain instead of appending, which
+        matters for any ACCEPT: appended below this address's own DROP it
+        would never be reached.
+        """
+        if self._rule_exists(chain, rule, table=table):
             return False
-        r = self._run(['iptables', '-A', chain] + rule)
+        head = ['iptables'] + (['-t', table] if table else [])
+        args = (head + ['-I', chain, '1'] + rule) if first else \
+               (head + ['-A', chain] + rule)
+        r = self._run(args)
         return bool(r) and r.returncode == 0
 
     def _drop_rules(self, source: str, all_ports: bool) -> List[List[str]]:
@@ -516,6 +541,69 @@ class FirewallManager:
         return True
 
     # ----------------------------------------------------------------
+    # ANSWERING RATHER THAN DROPPING
+    # ----------------------------------------------------------------
+
+    def _answer_rules(self, ip: str):
+        """(the nat redirect, the ACCEPT that lets the redirected packet
+        through this address's own DROP)."""
+        redirect = ['-p', 'tcp', '-s', ip, '--dport', '22',
+                    '-j', 'REDIRECT', '--to-ports', str(self.ANSWER_PORT)]
+        allow = ['-s', ip, '-p', 'tcp', '--dport', str(self.ANSWER_PORT),
+                 '-j', 'ACCEPT']
+        return redirect, allow
+
+    def open_answer_channel(self, ip: str) -> bool:
+        """Answer this address on SSH instead of dropping it.
+
+        Refused for exactly the addresses a DROP is refused for, and for one
+        more besides: an address holding a live SSH session on this machine is
+        never redirected, because that is the operator, and sending their next
+        login into a tar pit is how somebody loses their own server.
+        """
+        if not self.available or not self.answer_ssh or not ip:
+            return False
+        if ip in self._answered:
+            return True
+        if not self.may_block_all_ports(ip):
+            return False
+        self.protect_ssh()
+        self._ensure_chain()
+        redirect, allow = self._answer_rules(ip)
+        # The redirect goes in first, and nothing else happens if it cannot:
+        # on a box with no nat table (a container without one, an
+        # nftables-only host) an ACCEPT added here would be a hole punched
+        # through the ban for a channel that does not exist. A ban that is
+        # merely silent is what it was before any of this, and is correct.
+        added = self._ensure_rule('PREROUTING', redirect, table='nat')
+        if not added and not self._rule_exists('PREROUTING', redirect,
+                                               table='nat'):
+            logger.info(f"[FIREWALL] cannot answer {ip} on SSH - no nat table")
+            return False
+        # Then the ACCEPT, at the TOP of the chain: the packet reaches the
+        # filter table already rewritten to the answer port, where this
+        # address's own blanket DROP would otherwise eat it.
+        self._ensure_rule(self.CHAIN, allow, first=True)
+        self._answered.add(ip)
+        logger.warning(
+            f"[FIREWALL] {ip} is banned; its SSH is answered on port "
+            f"{self.ANSWER_PORT} rather than dropped in silence")
+        return True
+
+    def close_answer_channel(self, ip: str) -> bool:
+        """Stop answering, and go back to nothing at all."""
+        if not self.available or not ip:
+            return False
+        redirect, allow = self._answer_rules(ip)
+        self._run(['iptables', '-t', 'nat', '-D', 'PREROUTING'] + redirect)
+        self._run(['iptables', '-D', self.CHAIN] + allow)
+        self._answered.discard(ip)
+        return True
+
+    def answered_ips(self) -> List[str]:
+        return sorted(self._answered)
+
+    # ----------------------------------------------------------------
     # BLOCKING
     # ----------------------------------------------------------------
 
@@ -589,6 +677,13 @@ class FirewallManager:
         self._ensure_chain()
         for rule in missing:
             self._ensure_rule(self.CHAIN, rule)
+        # The answering channel is a rule like any other and goes the same way
+        # a ban does - flushed by a reload, lost across a reboot. An address
+        # that is being answered and silently stops being answered is the old
+        # bug wearing a new hat.
+        if ip in self._answered:
+            self._answered.discard(ip)
+            self.open_answer_channel(ip)
         return True
 
     def reconcile(self, ips: List[str], subnets: List[str]) -> int:
@@ -614,6 +709,9 @@ class FirewallManager:
     def unblock_ip(self, ip: str) -> bool:
         """Remove every firewall block for an IP - the chain's rules, any
         legacy rule an older version left in INPUT, and ufw's."""
+        # An address that is being let back in must stop being answered too,
+        # or its SSH stays redirected into the tar pit after the ban is gone.
+        self.close_answer_channel(ip)
         for chain in (self.CHAIN, 'INPUT'):
             for all_ports in (True, False):
                 for rule in self._drop_rules(ip, all_ports):
@@ -666,7 +764,13 @@ class FirewallManager:
 
     def restore_bans(self, ips: List[str], subnets: List[str],
                      all_port_ips: Optional[Set[str]] = None):
-        """Restore all persistent bans to the firewall on startup."""
+        """Restore all persistent bans to the firewall on startup.
+
+        An all-ports ban is precisely the case where port 22 is dropped, so
+        those are precisely the addresses whose ban is silent on the service
+        they were attacking - they get their answering channel back with the
+        rest of the ban rather than staying mute until they are re-detected.
+        """
         # CRITICAL: protect SSH FIRST, before any DROP rules
         self.protect_ssh()
         # Pre-populate from the kernel so nothing is added twice
@@ -674,13 +778,18 @@ class FirewallManager:
         if all_port_ips:
             self._all_port_ips.update(all_port_ips)
         restored = 0
+        answered = 0
         for ip in ips:
-            if self.block_ip(ip, all_ports=ip in self._all_port_ips):
+            all_ports = ip in self._all_port_ips
+            if self.block_ip(ip, all_ports=all_ports):
                 restored += 1
+            if all_ports and self.open_answer_channel(ip):
+                answered += 1
         for subnet in subnets:
             if self.block_subnet(subnet):
                 restored += 1
-        logger.info(f"[FIREWALL] Restored {restored} bans into the kernel")
+        logger.info(f"[FIREWALL] Restored {restored} bans into the kernel"
+                    + (f", answering {answered} of them on SSH" if answered else ""))
 
 
 class DangerousCerberus(CerberusProtocol):

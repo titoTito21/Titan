@@ -26,6 +26,11 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Callable, Any
 
+try:
+    from persona import CerberusVoice
+except ImportError:                                  # pragma: no cover
+    from .persona import CerberusVoice
+
 logger = logging.getLogger('CerberusProtocol')
 
 # Threat levels
@@ -264,14 +269,78 @@ class CerberusProtocol:
         # ``on_account_event``: a failed login is not a security event on its
         # own and must not move anybody's risk score.
         self.on_login_attempt: Optional[Callable] = None
+        # Every ban, at the moment it is made. Separate from ``on_ban_ip``,
+        # which fires only at CERBERUS level and is the server's own notify
+        # path: this one is what lets Blackwall have something to say about a
+        # ban CERBERUS made rather than only about its own. Most real bans are
+        # Cerberus', which is why an empty transcript was possible on a server
+        # that had banned dozens of addresses.
+        self.on_ban: Optional[Callable] = None
 
 
+
+        # --- Cerberus' own voice ---
+        # Everything Cerberus decides used to be announced with one fixed
+        # sentence about intrusion detection, identical for a brute force, a
+        # lockout evasion, a lockdown and a honeypot, which reads as machinery
+        # rather than as the thing at the gate that has just made a decision
+        # about you. It now says what it did, in the first person, in its own
+        # register - old, procedural, unhurried, and unlike Blackwall's
+        # deliberately not personal, because a gate is not interested in you.
+        #
+        # Never on the calling thread: the lines are written ahead of time on
+        # a worker of the voice's own, and the written floor stands in until
+        # one arrives. Wired to a key by server.py; with no key Cerberus says
+        # the floor for ever and nothing here changes.
+        self.voice = CerberusVoice(use_ai=False)
+        # Everything Cerberus has said, for the operator and for the analyst -
+        # the same reason Blackwall keeps a transcript. An actor that was told
+        # the gate was shut and carried on is not the same actor as one that
+        # was never told anything.
+        self._voice_log: List[Dict[str, Any]] = []
 
         # --- Stats ---
         self._total_intrusions_blocked = 0
         self._total_ddos_blocked = 0
 
         logger.info("Cerberus Protocol initialized - threat level: NORMAL")
+
+    # ------------------------------------------------------------------
+    # What Cerberus says, and to whom
+    # ------------------------------------------------------------------
+
+    def say(self, kind: str, ip: str = "", cause: str = "") -> str:
+        """One line in Cerberus' own voice about ``kind``, written down.
+
+        ``cause`` is the machine-readable reason and stays exactly what it
+        was - it is what the logs, the dashboard and every existing caller
+        read. This is the sentence that goes to the person on the other end.
+        """
+        try:
+            said = self.voice.line(kind, ip)
+        except Exception as e:
+            logger.error(f"[CERBERUS] could not find its words: {e}")
+            return ""
+        entry = {"ts": time.time(), "ip": ip, "kind": kind,
+                 "cause": cause, "said": said}
+        self._voice_log.append(entry)
+        if len(self._voice_log) > 200:
+            del self._voice_log[:-200]
+        try:
+            self._log_intrusion(
+                "CERBERUS_SPOKE", ip or "-",
+                f"{kind}" + (f" ({cause})" if cause else "")
+                + f' | said: "{said}"')
+        except Exception:
+            pass
+        return said
+
+    def said(self, n: int = 40, ip: str = "") -> List[Dict[str, Any]]:
+        """What Cerberus has said - to everyone, or to one address."""
+        items = self._voice_log
+        if ip:
+            items = [e for e in items if e.get("ip") == ip]
+        return items[-n:]
 
     def _setup_intrusion_logger(self):
         """Setup dedicated intrusion log file with auto-rotation every 2 days.
@@ -409,6 +478,11 @@ class CerberusProtocol:
         if level >= THREAT_LOCKDOWN:
             self._banned_ips.add(ip)
             self._total_intrusions_blocked += 1
+            if self.on_ban:
+                try:
+                    self.on_ban(ip, reason, level >= THREAT_CERBERUS)
+                except Exception as e:
+                    logger.error(f"Ban announcement callback error: {e}")
             if self.on_disconnect_ip:
                 try:
                     self.on_disconnect_ip(ip)
@@ -1419,24 +1493,45 @@ class CerberusProtocol:
             logger.error(f"Error reading intrusion log: {e}")
         return logs
 
-    def get_cerberus_client_message(self, reason: str) -> Dict:
-        """Build the cerberus_shutdown message to send to attacker's client"""
+    def get_cerberus_client_message(self, reason: str, ip: str = "",
+                                    kind: str = "shut_out") -> Dict:
+        """Build the cerberus_shutdown message to send to the attacker's client.
+
+        ``reason`` carries Cerberus' own sentence, because that is the field
+        the client actually reads out to whoever is sitting there; the
+        machine-readable cause it was given moves to ``cause``, where the
+        dashboard and the logs still have it. Saying it into a key nothing
+        renders would be the same mistake as banning in silence.
+        """
+        said = self.say(kind, ip, reason)
         return {
             "type": "cerberus_shutdown",
-            "reason": reason,
+            "reason": said or reason,
+            "cause": reason,
+            "speaker": "Cerberus",
             "threat_level": THREAT_NAMES.get(self.threat_level, "CERBERUS"),
-            "message": "Cerberus Protocol activated. Intrusion attempt detected. "
-                       "Your session has been terminated and your system will be shut down.",
+            "message": said or (
+                "Cerberus Protocol activated. Intrusion attempt detected. "
+                "Your session has been terminated and your system will be "
+                "shut down."),
             "action": "shutdown",
             "timestamp": datetime.now().isoformat()
         }
 
-    def get_lockdown_rejection_message(self) -> Dict:
-        """Build rejection message for login attempts during GLOBAL lockdown"""
+    def get_lockdown_rejection_message(self, ip: str = "") -> Dict:
+        """Build rejection message for login attempts during GLOBAL lockdown.
+
+        The one message here most likely to be read by somebody who has done
+        nothing at all - a global lockdown refuses everybody - which is why
+        Cerberus' lockdown lines are plain and not accusing.
+        """
+        said = self.say("lockdown", ip, "global lockdown")
         return {
             "type": "login_response",
             "success": False,
-            "error": "Server is in lockdown mode. No new connections are allowed.",
+            "error": said or (
+                "Server is in lockdown mode. No new connections are allowed."),
+            "speaker": "Cerberus",
             "cerberus_active": True,
             "threat_level": THREAT_NAMES.get(self.threat_level, "LOCKDOWN")
         }

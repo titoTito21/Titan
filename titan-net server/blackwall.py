@@ -53,6 +53,15 @@ import time
 from collections import defaultdict, deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
 
+try:
+    from persona import sanitise_line as _sanitise_line
+    from persona import gemini_available as _gemini_available
+    from persona import generate as _generate_text
+except ImportError:                                  # pragma: no cover
+    from .persona import sanitise_line as _sanitise_line
+    from .persona import gemini_available as _gemini_available
+    from .persona import generate as _generate_text
+
 logger = logging.getLogger('Blackwall')
 
 
@@ -258,7 +267,8 @@ class Blackwall:
 
     def __init__(self, cerberus, risk_engine=None, memory_path: str = "",
                  api_key: str = "", model: str = "gemini-2.5-pro",
-                 autonomous: bool = True, voice_ai: bool = True):
+                 autonomous: bool = True, voice_ai: bool = True,
+                 answer_ssh: bool = True):
 
         self.cerberus = cerberus
         self.risk_engine = risk_engine
@@ -322,6 +332,38 @@ class Blackwall:
         self._wanted: Set[Any] = set()
         self._voice_queue: Deque[Any] = deque()
 
+        # --- Having something to say, and no way to say it yet ---
+        # The transcript was empty on a server that had spent a week under
+        # attack, and the reason was not that Blackwall had nothing to say: it
+        # was that every attacker was on SSH, and Blackwall's only channels
+        # were a Titan-Net client (they have none), the honeypot and the tar
+        # pit (they went for the real sshd). It banned them in silence.
+        #
+        # So what Blackwall wants to say is now separated from the moment it
+        # can be said. A line is composed and PARKED against the address when
+        # the decision is made - a ban, a campaign, a recognition - and the
+        # next channel that reaches that address delivers it, oldest first,
+        # before whatever that channel was going to say on its own. The
+        # transcript still records only what was actually delivered, and to
+        # which channel: something Blackwall merely wanted to say is not
+        # something it said.
+        self._pending: Dict[str, Deque[Dict[str, Any]]] = {}
+        self._held_at: Dict[str, float] = {}
+        self.max_pending_per_ip = 3
+        self.max_pending_actors = 500
+        # One escalation is one thing to say. An address that goes ALERT ->
+        # LOCKDOWN -> CERBERUS inside a single failed login walks through
+        # three bans, and telling somebody three times in one second that
+        # they have been cut off is a machine talking, not a wall.
+        self.hold_debounce = 5.0
+
+        # ...and the channel itself. An SSH brute-forcer's ban DROPs port 22,
+        # which is silence by construction. With this on, such an address has
+        # its port 22 answered by the tar pit instead - the ban still holds
+        # (nothing of the server is reachable), but the door it is now
+        # knocking on says something back. See open_answer_channel().
+        self.answer_ssh = answer_ssh
+
 
 
 
@@ -347,18 +389,7 @@ class Blackwall:
 
     @property
     def ai_enabled(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            from google import genai  # noqa: F401
-            return True
-        except Exception:
-            pass
-        try:
-            import google.generativeai  # noqa: F401
-            return True
-        except Exception:
-            return False
+        return _gemini_available(self.api_key)
 
     # ------------------------------------------------------------------
     # Intake
@@ -478,31 +509,13 @@ class Blackwall:
 
     @classmethod
     def _sanitise(cls, text: str) -> str:
-        """A line the model wrote, or "" if it is not fit to be said."""
-        if not text:
-            return ""
-        line = text.strip()
-        # Whatever wrapping it decided to add.
-        for junk in ("```", "`", "*", "#"):
-            line = line.replace(junk, "")
-        line = line.strip()
-        if line[:1] in ('"', "'") and line[-1:] in ('"', "'"):
-            line = line[1:-1].strip()
-        # A terminal gets 7-bit ASCII or nothing: curly quotes and long dashes
-        # are exactly what a model reaches for and exactly what arrives as
-        # noise in somebody's terminal.
-        for fancy, plain in (("’", "'"), ("‘", "'"), ("“", '"'),
-                             ("”", '"'), ("—", " - "), ("–", "-"),
-                             ("…", "..."), (" ", " ")):
-            line = line.replace(fancy, plain)
-        line = " ".join(line.split())          # one paragraph, no line breaks
-        line = line.encode("ascii", "ignore").decode("ascii")
-        if not (cls._MIN_LINE <= len(line) <= cls._MAX_LINE):
-            return ""
-        low = line.lower()
-        if any(bad in low for bad in cls._FORBIDDEN):
-            return ""
-        return line
+        """A line the model wrote, or "" if it is not fit to be said.
+
+        The rules themselves live in ``persona``, because Cerberus' voice is
+        held to exactly the same ones and two copies of "what may be said to a
+        hostile stranger" is one copy too many.
+        """
+        return _sanitise_line(text, cls._FORBIDDEN, cls._MIN_LINE, cls._MAX_LINE)
 
     def _voice_line(self, ip: str, stage: int) -> str:
         stage = min(stage, 3)
@@ -797,7 +810,16 @@ class Blackwall:
         if self._safe_banned(ip):
             stage = max(stage, 3)
         self.stats["warnings"] += 1
-        said = self._voice_line(ip, stage)
+        # Anything Blackwall parked for this address - a ban it made in
+        # silence, a campaign it recognised - is owed to them first, and is
+        # more specific than anything it would say now.
+        held = self._take_pending(ip)
+        if held:
+            entry = held[0]
+            said, stage = entry["said"], entry["stage"]
+            grounds = entry.get("grounds") or grounds
+        else:
+            said = self._voice_line(ip, stage)
         self._record_utterance(ip, stage, grounds, said, "titan-net")
         return {
             "type": "blackwall",
@@ -810,9 +832,101 @@ class Blackwall:
     def farewell(self, ip: str, reason: str = "") -> str:
         """The line that goes with a ban."""
         stage = 3 if self._safe_banned(ip) else 2
-        said = self._voice_line(ip, stage)
+        held = self._take_pending(ip)
+        said = held[0]["said"] if held else self._voice_line(ip, stage)
         self._record_utterance(ip, stage, reason or "banned", said, "titan-net")
         return said
+
+    # -- what it has to say, waiting for a way to say it -----------------
+
+    def hold(self, ip: str, stage: int, grounds: str) -> str:
+        """Compose what Blackwall would say to this address now, and park it
+        until there is a channel. Returns the line (for the log), which is not
+        the same as having said it.
+
+        Cheap on purpose: it takes whatever the voice already has ready and
+        never waits on a model, because this is called from a ban, and a ban
+        happens while an attack is in progress.
+        """
+        if not ip or self._exempt(ip):
+            return ""
+        stage = max(0, min(int(stage), 3))
+        now = time.time()
+        with self._lock:
+            if now - self._held_at.get(ip, 0.0) < self.hold_debounce:
+                return ""
+            self._held_at[ip] = now
+        said = self._voice_line(ip, stage)
+        with self._lock:
+            if (ip not in self._pending
+                    and len(self._pending) >= self.max_pending_actors):
+                self.stats["unsaid_dropped"] += 1
+                return said
+            queue = self._pending.setdefault(
+                ip, deque(maxlen=self.max_pending_per_ip))
+            queue.append({"ts": now, "stage": stage,
+                          "grounds": grounds, "said": said})
+        self.stats["held"] += 1
+        logger.info(f"[BLACKWALL] holding a line for {ip} ({grounds}) until "
+                    f"there is a channel to say it in")
+        return said
+
+    def note_ban(self, ip: str, reason: str = "", permanent: bool = False):
+        """Cerberus has just banned this address.
+
+        Most bans on a real server are Cerberus', not Blackwall's - it is the
+        counter, and counting is what catches a brute force. So this is the
+        hook that matters most for whether anybody is ever told anything:
+        without it Blackwall only ever speaks about the bans it made itself,
+        which on the server that prompted this was none of them.
+        """
+        if not ip or self._exempt(ip):
+            return
+        # hold() is debounced, and an empty answer means this address has just
+        # been told. One escalation through ALERT -> LOCKDOWN -> CERBERUS is
+        # three bans and one piece of news; opening the channel again on the
+        # second and third of them is work for nothing.
+        if not self.hold(ip, 3, reason or "an address this server has banned"):
+            return
+        self._open_answer_channel(ip)
+
+    def _take_pending(self, ip: str) -> List[Dict[str, Any]]:
+        """Everything parked for this address, oldest first, removed."""
+        with self._lock:
+            queue = self._pending.pop(ip, None)
+        return list(queue) if queue else []
+
+    def pending_for(self, ip: str) -> int:
+        with self._lock:
+            return len(self._pending.get(ip, ()))
+
+    def _open_answer_channel(self, ip: str) -> bool:
+        """Ask the firewall to answer this address on SSH rather than drop it.
+
+        Only for a source that actually attacked SSH: there is no point
+        answering port 22 for somebody who never knocked on it, and every
+        redirected address is one more rule in the kernel.
+        """
+        if not self.answer_ssh:
+            return False
+        with self._lock:
+            fp = self._fingerprints.get(ip)
+        if fp is None or "ssh" not in fp.sources:
+            return False
+        firewall = getattr(self.cerberus, "firewall", None)
+        opener = getattr(firewall, "open_answer_channel", None)
+        if opener is None:
+            return False
+        try:
+            if opener(ip):
+                self.stats["channels_opened"] += 1
+                logger.warning(
+                    f"[BLACKWALL] {ip} is banned, and its SSH is now answered "
+                    f"rather than dropped - it has been told nothing so far")
+                return True
+        except Exception as e:
+            logger.error(f"[BLACKWALL] could not open a channel to {ip}: {e}")
+        return False
 
 
     # -- the same thing, for somebody sitting at a terminal --------------
@@ -825,8 +939,14 @@ class Blackwall:
     TERMINAL_WIDTH = 74
 
     def terminal_lines(self, ip: str, stage: Optional[int] = None,
-                       grounds: str = "") -> List[str]:
-        """Blackwall's message as terminal lines, without the newlines."""
+                       grounds: str = "", said: str = "") -> List[str]:
+        """Blackwall's message as terminal lines, without the newlines.
+
+        ``said`` is a line already decided on - one that was parked when there
+        was no channel to say it in. Passing it here is what makes the tar pit
+        deliver what Blackwall meant to say at the moment it banned this
+        address, rather than a fresh sentence about nothing in particular.
+        """
         import textwrap
         if stage is None:
             with self._lock:
@@ -835,7 +955,8 @@ class Blackwall:
                 stage = 3
         rule = "=" * self.TERMINAL_WIDTH
         lines = [rule, "  B L A C K W A L L   //   Titan-Net", rule, ""]
-        lines += textwrap.wrap(self._voice_line(ip, stage), self.TERMINAL_WIDTH - 2,
+        lines += textwrap.wrap(said or self._voice_line(ip, stage),
+                               self.TERMINAL_WIDTH - 2,
                                initial_indent="  ", subsequent_indent="  ")
         lines.append("")
         lines.append(f"  Source     : {ip}")
@@ -847,31 +968,61 @@ class Blackwall:
         return lines
 
     def terminal_message(self, ip: str, stage: Optional[int] = None,
-                         grounds: str = "") -> str:
+                         grounds: str = "", said: str = "") -> str:
         """The same, as one block ready to write down a socket."""
-        return "\r\n".join(self.terminal_lines(ip, stage, grounds)) + "\r\n"
+        return "\r\n".join(self.terminal_lines(ip, stage, grounds, said)) + "\r\n"
 
     def terminal_farewell(self, ip: str, grounds: str = "",
                           channel: str = "honeypot") -> str:
-        """What somebody sitting in the honeypot is told on their way out."""
+        """What somebody sitting in the honeypot is told on their way out.
+
+        Whatever was parked for this address is what they hear: this may be
+        the first channel Blackwall has had to them since it banned them, and
+        what it decided then is more use to them than a fresh generality.
+        """
         with self._lock:
             self._warned[ip] = min(self._warned.get(ip, 0) + 1, 3)
         self.stats["warnings"] += 1
         grounds = grounds or "brute forcing accounts over SSH"
-        self._record_utterance(ip, 3, grounds, self._voice_line(ip, 3), channel)
-        return self.terminal_message(ip, stage=3, grounds=grounds)
+        held = self._take_pending(ip)
+        if held:
+            entry = held[-1]
+            said = entry["said"]
+            grounds = entry.get("grounds") or grounds
+        else:
+            said = self._voice_line(ip, 3)
+        self._record_utterance(ip, 3, grounds, said, channel)
+        return self.terminal_message(ip, stage=3, grounds=grounds, said=said)
 
     def tarpit_lines(self, ip: str) -> List[str]:
         """What the tar pit drips at whoever is stuck in it, one line at a
-        time. A scanner waiting for an SSH banner reads it as the banner."""
+        time. A scanner waiting for an SSH banner reads it as the banner.
+
+        This is the channel a banned SSH attacker actually arrives on (see
+        ``_open_answer_channel``), so it is the one that most often has
+        something parked to deliver.
+        """
         with self._lock:
             stage = min(self._warned.get(ip, 0) + 1, 3)
             self._warned[ip] = stage
+        # Anybody who arrives here through the answering channel is already
+        # blocked, and stage 3 is the register for that - "you were refused
+        # and came back anyway". Saying it at stage 0 would be talking to them
+        # as though nothing had happened yet, which is not what happened.
+        if self._safe_banned(ip):
+            stage = 3
         self.stats["warnings"] += 1
         grounds = self._attack_grounds(ip, "") or "an SSH connection to a trap"
-        self._record_utterance(ip, stage, grounds,
-                               self._voice_line(ip, stage), "tarpit")
-        return self.terminal_lines(ip, stage=stage, grounds=grounds)
+        held = self._take_pending(ip)
+        if held:
+            entry = held[-1]
+            said = entry["said"]
+            stage = max(stage, entry["stage"])
+            grounds = entry.get("grounds") or grounds
+        else:
+            said = self._voice_line(ip, stage)
+        self._record_utterance(ip, stage, grounds, said, "tarpit")
+        return self.terminal_lines(ip, stage=stage, grounds=grounds, said=said)
 
 
 
@@ -921,6 +1072,8 @@ class Blackwall:
             f"refusing it now")
         self._ban(ip, f"Blackwall: recognised {label} (met {seen} time(s) before)",
                   permanent=seen >= 3)
+        self.hold(ip, 3, f"{label}, which this server has already met "
+                         f"{seen} time(s)")
         return True
 
     def correlate(self) -> List[Dict[str, Any]]:
@@ -999,9 +1152,17 @@ class Blackwall:
                 f"{', '.join(members[:10])}")
         except Exception:
             pass
+        # Every member is told what it was recognised AS. Being banned for
+        # being noisy and being banned because six addresses were recognised
+        # as one operation are different pieces of news, and the second is the
+        # one that tells whoever is running it that spreading out did not
+        # work.
         for ip in fresh:
             self._ban(ip, f"Blackwall: one of {len(members)} sources running "
                           f"the same operation ({label})")
+            self.hold(ip, 3,
+                      f"one of {len(members)} addresses running the same "
+                      f"operation ({label})")
         # Remember it, so the next run of this script is refused on sight.
         try:
             self.memory.remember(campaign["signature"], members, label)
@@ -1073,6 +1234,17 @@ class Blackwall:
     # ------------------------------------------------------------------
 
     def _ban(self, ip: str, reason: str, permanent: bool = False) -> bool:
+        """Ban an address - and have something to say about it.
+
+        A ban made in silence is the whole of the bug this module was written
+        to answer: the server spent a fortnight cutting attackers off without
+        one of them ever being told a thing, and the transcript that was
+        supposed to be evidence of a wall doing its job was empty. So every
+        ban Blackwall makes now composes its farewell at the moment it is
+        made, parks it against the address, and - for an SSH attacker, who
+        would otherwise be dropped into silence by construction - opens the
+        one channel there is to their terminal.
+        """
         if self._exempt(ip):
             return False
         try:
@@ -1086,6 +1258,14 @@ class Blackwall:
                     self.cerberus.on_disconnect_ip(ip)
             except Exception:
                 pass
+            # Stage 3 is the register of somebody who is already blocked, and
+            # by the line above they are: _is_true would refuse a line that
+            # claimed a block earlier than this, and would be right to. This
+            # goes through note_ban so that a ban Blackwall made and a ban
+            # Cerberus made are answered by exactly the same code - the
+            # callback above has usually already run by the time this does,
+            # and the debounce is what makes that harmless.
+            self.note_ban(ip, reason, permanent)
             return True
         except Exception as e:
             logger.error(f"[BLACKWALL] ban failed for {ip}: {e}")
@@ -1198,18 +1378,7 @@ class Blackwall:
         )
 
     def _generate(self, prompt: str) -> str:
-        try:
-            from google import genai
-            client = genai.Client(api_key=self.api_key)
-            resp = client.models.generate_content(model=self.model, contents=prompt)
-            return (getattr(resp, "text", "") or "").strip()
-        except ImportError:
-            pass
-        import google.generativeai as genai
-        genai.configure(api_key=self.api_key)
-        model = genai.GenerativeModel(self.model)
-        resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip()
+        return _generate_text(self.api_key, self.model, prompt)
 
     @staticmethod
     def _parse(text: str) -> Dict[str, Any]:
@@ -1361,6 +1530,9 @@ class Blackwall:
                        if fp.last_seen < cutoff]:
                 self._fingerprints.pop(ip, None)
                 self._recognised.discard(ip)
+            for ip in [ip for ip, ts in self._held_at.items()
+                       if ts < cutoff and ip not in self._pending]:
+                self._held_at.pop(ip, None)
 
     # ------------------------------------------------------------------
     # For the dashboard
@@ -1394,5 +1566,14 @@ class Blackwall:
             ],
             "remembered_campaigns": len(self.memory.entries),
             "own_bans": sorted(self._own_bans),
+            # What it has to say and has not yet had a way to say. A number
+            # that only grows means the answering channel is not reaching
+            # anybody, which is worth seeing on the dashboard.
+            "unsaid": {
+                "actors": len(self._pending),
+                "lines": sum(len(q) for q in self._pending.values()),
+                "answers_ssh": self.answer_ssh,
+            },
+            "transcript": len(self._transcript),
             "stats": dict(self.stats),
         }

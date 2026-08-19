@@ -511,13 +511,98 @@ and over by an attacker nothing was counting any more.
     the model layer runs with no key and no network at all.
   - Moderator access: `blackwall_deliberate` over WebSocket, and
     `blackwall` inside `cerberus_status`.
+- **A ban that says nothing had nobody to say it to.** A threat report read
+  "two coordinated campaigns, seven addresses, all recognised and locked down -
+  the Blackwall transcript is empty, so the actors were not addressed
+  directly". Blackwall had been doing its job in total silence, for two
+  reasons that were both structural rather than accidental:
+  - **Every attacker was on SSH, and Blackwall's channels went somewhere
+    else.** It could speak into a Titan-Net client (an SSH brute-forcer has
+    none), the honeypot (2222) and the tar pit (2223) - and they were all
+    attacking the real sshd on 22, where a ban is a `DROP`, which is silence
+    by construction. So a banned SSH offender's port 22 is now **answered
+    rather than dropped**: `FirewallManager.open_answer_channel()` puts a
+    `nat PREROUTING REDIRECT --to-ports 2223` in front of them, so their next
+    connection lands in the tar pit - Blackwall's one channel to somebody
+    sitting at a terminal - and wastes their time while it talks. The ban is
+    untouched: the blanket `DROP` stays exactly where it was, and the ACCEPT
+    that lets the redirected packet reach the tar pit is inserted at the
+    **top** of the `CERBERUS` chain, because appended below that address's own
+    DROP it would never be reached. Three refusals: a whitelisted or private
+    address, an address holding a **live SSH session** (that is the operator,
+    and sending their next login into a tar pit is how somebody loses their
+    own server), and a host with **no nat table** - there the ACCEPT would be
+    a hole punched through the ban for a channel that does not exist, so the
+    ban simply stays silent, which is what it was before. The channel is
+    verified with the ban (`verify_ban`), restored with it (`restore_bans`,
+    for every all-ports ban - those are exactly the ones that are silent on
+    the service being attacked) and removed with it (`unblock_ip`).
+    `BLACKWALL_ANSWER_SSH=0` turns it off.
+  - **Blackwall only ever spoke about its OWN bans, and almost no ban is
+    Blackwall's.** Cerberus is the counter, and counting is what catches a
+    brute force, so the bans in that report were all Cerberus'.
+    `CerberusProtocol.on_ban` now fires on every LOCKDOWN+ ban and
+    `Blackwall.note_ban()` answers it.
+  - **What it wants to say is now separate from having a way to say it.**
+    `hold()` composes the line at the moment the decision is made and parks
+    it against the address; the next channel that reaches that address -
+    tar pit, honeypot, Titan-Net client - delivers it, before whatever that
+    channel would have said on its own. The transcript still records **only
+    what was delivered**, with the channel: something Blackwall merely wanted
+    to say is not something it said. `status()["unsaid"]` is how many lines
+    are waiting, which growing without bound is the dashboard's way of saying
+    the answering channel is reaching nobody. Holding is **debounced** (one
+    escalation through ALERT -> LOCKDOWN -> CERBERUS is three bans and one
+    piece of news), and somebody who arrives through the answering channel is
+    spoken to at **stage 3** - they are already blocked, and stage 0 would be
+    talking to them as though nothing had happened.
+- **Cerberus is a character too, and says what it did in its own words.**
+  Everything it decided used to be announced with one fixed sentence about
+  intrusion detection, identical for a brute force, a lockout evasion and a
+  lockdown. `persona.py` holds both voices and the rules they share
+  (`sanitise_line` - plain 7-bit ASCII, one paragraph, 40-320 characters, no
+  link, path, markup, model-refusal or threat beyond this server - and the one
+  place Gemini is called). They are deliberately **different characters**,
+  because an operator reading a log should know instantly which layer is
+  talking: Cerberus is the gate, old and procedural and impersonal; Blackwall
+  is what stands in front of it, personal and cold and specific about what
+  you did.
+  - `CerberusVoice` has three registers and each one is a channel that really
+    delivers - `shut_out`, `lockout_evasion`, `lockdown`. A fourth for the
+    honeypot was written and taken out again: the honeypot speaks at the END
+    of a session so the trap keeps working, and a line nothing delivers is
+    the bug this whole change is about, written down twice.
+  - Its words go into `reason`, because that is the field the client actually
+    reads aloud; the machine-readable cause moves to `cause`, where the logs
+    and the dashboard still have it. Saying it into a key nothing renders
+    would be the same mistake as banning in silence.
+  - Never generated on the calling thread (a websocket being closed is the
+    attack path): a pool per register is filled on a worker of the voice's
+    own, capped per hour, and the written floor stands in until one arrives.
+    Same key as the analyst; `CERBERUS_VOICE_AI=0` turns the model half off.
+  - Everything Cerberus says is written down (`say()` / `said()`), into the
+    intrusion log as `CERBERUS_SPOKE` and into `cerberus_status`.
+- **The analyst reports in the first person, because it is not describing the
+  system - it IS the system.** The old report read "Automated defenses have
+  successfully identified these campaigns": a description of a server written
+  by nobody, about a third party, when the thing writing it had made every
+  decision in it. `CerberusAI.PERSONA` now has it say I, say what it did and
+  what it merely suspects, be specific (an address, an account, a count), and
+  say plainly when it does not know - which is the part an operator cannot get
+  from the passive voice. It is handed **both** transcripts (`MY_OWN_WORDS`
+  and `BLACKWALL_TRANSCRIPT`) and told that an EMPTY one is a fault to report,
+  not good behaviour: an attack nobody was told about means a channel was
+  missing. New JSON keys are all optional so the existing client renders
+  unchanged - `verdict` (one sentence, for reading aloud), `confidence`,
+  `unknowns` - and `verdict` falls back to the summary's first sentence.
 - **Starting again from nothing**: `cerberus_reset.py` (bans, logs, Blackwall
   memory, and with `--firewall` the kernel rules), which never touches
   `cerberus_whitelist.txt` or `titannet.db`; `remote_cerberus_reset.py` runs
   it on production through `update.py`'s own connection, service stopped.
 - Tests (run them directly): `test_cerberus_hardening.py` (30),
-  `test_cerberus_enforcement.py` (22, against a fake iptables so they need no
-  root and can flush the kernel mid-test), `test_blackwall.py` (57, with the
+  `test_cerberus_enforcement.py` (32, against a fake iptables so they need no
+  root and can flush the kernel mid-test, and a fake nat table for the
+  answering channel), `test_blackwall.py` (85, with the
   model replaced by a fixed answer - the only way to test that a wrong answer
   is refused: an invented address, a low-confidence verdict, a line that lies
   about a block, a request made while an attacker is waiting).

@@ -222,6 +222,19 @@ class TitanNetServer:
 
             self.risk_engine = RiskEngine(on_escalate=_risk_escalate)
             self.cerberus.risk_engine = self.risk_engine
+            # Cerberus writes its own lines with the same key its analyst uses.
+            # Nothing is ever generated while somebody is waiting: the voice
+            # fills a pool on a worker of its own, and the written floor
+            # stands in until it does.
+            try:
+                from persona import CerberusVoice
+                self.cerberus.voice = CerberusVoice(
+                    api_key=getattr(Config, 'CERBERUS_AI_KEY', '') or '',
+                    model=getattr(Config, 'CERBERUS_AI_MODEL', 'gemini-2.5-pro'),
+                    use_ai=getattr(Config, 'CERBERUS_VOICE_AI', True),
+                )
+            except Exception as e:
+                logger.error(f"[CERBERUS] voice init failed: {e}")
             self.cerberus_ai = CerberusAI(
                 self.risk_engine,
                 status_provider=self.cerberus.get_status,
@@ -257,6 +270,7 @@ class TitanNetServer:
                     model=getattr(Config, 'BLACKWALL_MODEL', 'gemini-2.5-pro'),
                     autonomous=getattr(Config, 'BLACKWALL_AUTONOMOUS', True),
                     voice_ai=getattr(Config, 'BLACKWALL_VOICE_AI', True),
+                    answer_ssh=getattr(Config, 'BLACKWALL_ANSWER_SSH', True),
                 )
 
                 self.blackwall_speaks = getattr(Config, 'BLACKWALL_SPEAKS', True)
@@ -266,12 +280,18 @@ class TitanNetServer:
                     lambda kind, ip, detail, extra: self.blackwall.observe_event(
                         kind, ip, detail, extra)
                 )
+                # ...and every ban Cerberus makes, so the wall has something to
+                # say about it and a channel to say it in.
+                self.cerberus.on_ban = self.blackwall.note_ban
                 self.blackwall.start()
                 # The analyst reads what the wall said, alongside everything
                 # else - it is evidence about the actor, not decoration.
                 if getattr(self, 'cerberus_ai', None) is not None:
                     self.cerberus_ai.transcript_provider = (
                         lambda: self.blackwall.transcript(40))
+                    # ...and what Cerberus itself said, for the same reason.
+                    self.cerberus_ai.own_voice_provider = (
+                        lambda: self.cerberus.said(30))
         except Exception as e:
             logger.error(f"[BLACKWALL] init failed: {e}", exc_info=True)
             self.blackwall = None
@@ -3700,7 +3720,8 @@ class TitanNetServer:
     def _cerberus_shutdown_attacker(self, attacker_ip: str, reason: str):
         """Send shutdown to attacker's client + engage infrastructure countermeasures"""
         # Send cerberus_shutdown to all sessions from attacker's IP (shuts down their client)
-        shutdown_msg = self.cerberus.get_cerberus_client_message(reason)
+        shutdown_msg = self.cerberus.get_cerberus_client_message(
+            reason, attacker_ip)
         shutdown_json = json.dumps(shutdown_msg)
 
         sessions_to_close = []
@@ -3822,7 +3843,8 @@ class TitanNetServer:
                 f"[HACKBACK] Cloud IP rejected: {client_ip} ({provider})"
             )
             shutdown_msg = self.cerberus.get_cerberus_client_message(
-                f"Cloud infrastructure ({provider}) - zero tolerance policy"
+                f"Cloud infrastructure ({provider}) - zero tolerance policy",
+                client_ip,
             )
             try:
                 await websocket.send(json.dumps(shutdown_msg))
@@ -3841,7 +3863,8 @@ class TitanNetServer:
         if self.cerberus.is_ip_banned(client_ip):
             logger.warning(f"[CERBERUS] Blocked banned IP: {client_ip}")
             shutdown_msg = self.cerberus.get_cerberus_client_message(
-                "Your IP has been permanently blocked by Cerberus Protocol"
+                "Your IP has been permanently blocked by Cerberus Protocol",
+                client_ip,
             )
             try:
                 await websocket.send(json.dumps(shutdown_msg))
@@ -3884,7 +3907,7 @@ class TitanNetServer:
                     if self.cerberus.record_message(client_ip):
                         logger.warning(f"[CERBERUS] Message flood from {client_ip}")
                         shutdown_msg = self.cerberus.get_cerberus_client_message(
-                            "Message flood detected"
+                            "Message flood detected", client_ip
                         )
                         await websocket.send(json.dumps(shutdown_msg))
                         await websocket.close(1008, "Message flood")
@@ -3907,7 +3930,8 @@ class TitanNetServer:
                         # --- Cerberus: Block logins during GLOBAL lockdown (whitelisted IPs pass through) ---
                         if self.cerberus.is_lockdown_active() and not self.cerberus.is_whitelisted(client_ip):
                             logger.warning(f"[CERBERUS] Login blocked during lockdown from {client_ip}")
-                            rejection = self.cerberus.get_lockdown_rejection_message()
+                            rejection = self.cerberus.get_lockdown_rejection_message(
+                                client_ip)
                             await websocket.send(json.dumps(rejection))
                             # NOTE: Do NOT record_failed_login here - this is a lockdown
                             # rejection, not a credential failure. Recording it would
@@ -3935,7 +3959,8 @@ class TitanNetServer:
                             }))
                             if _evading:
                                 shutdown_msg = self.cerberus.get_cerberus_client_message(
-                                    "Repeated attempts against a locked account"
+                                    "Repeated attempts against a locked account",
+                                    client_ip, kind="lockout_evasion",
                                 )
                                 await websocket.send(json.dumps(shutdown_msg))
                                 await websocket.close(1008, "Cerberus: lockout evasion")
@@ -3967,7 +3992,7 @@ class TitanNetServer:
                                         f"[BLACKWALL] could not answer {client_ip}: {e}")
                             if blocked:
                                 shutdown_msg = self.cerberus.get_cerberus_client_message(
-                                    "Too many failed login attempts"
+                                    "Too many failed login attempts", client_ip
                                 )
                                 if _wall is not None and getattr(self, 'blackwall_speaks', False):
                                     try:
@@ -4361,6 +4386,21 @@ class TitanNetServer:
         status["hackback"] = self.hackback.get_status()
         if getattr(self, 'blackwall', None) is not None:
             status["blackwall"] = self.blackwall.status()
+        # What Cerberus itself has said, and to whom. The empty transcript is
+        # what told the operator that nobody had been addressed at all, so it
+        # is worth being able to see on the dashboard rather than only in a
+        # log file on the server.
+        try:
+            status["cerberus_voice"] = self.cerberus.voice.status()
+            status["cerberus_said"] = self.cerberus.said(20)
+        except Exception:
+            pass
+        try:
+            firewall = getattr(self.cerberus, 'firewall', None)
+            if firewall is not None:
+                status["answered_on_ssh"] = firewall.answered_ips()
+        except Exception:
+            pass
         return {
             "type": "cerberus_status",
             **status
