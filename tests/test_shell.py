@@ -942,11 +942,21 @@ class FakeTrayIcon:
         return True
 
 
+def _is_addon_payload(payload):
+    """Whether a menu entry was put there by a shell add-on."""
+    return isinstance(payload, tuple) and payload[:1] == ('__addon__',)
+
+
 def _bar_with(windows=(), icons=(), launchers=('Chrome', 'Editor')):
     """A taskbar frame carrying a made-up window list, tray and band.
 
     The quick launch band reads a real folder, so a test that did not say
     what is in it would pass or fail depending on whose machine it ran on.
+    The shell add-ons are the same kind of dependency - one of them puts a
+    control of its own in the notification area, which is a fifth thing in
+    that group and a wider strip - so this bar carries Titan's own furniture
+    and nothing else. What an add-on puts there is tested in
+    tests/test_shell_addons.py.
     """
     from src.shell.shell_manager import TitanShell
     from src.shell import taskbar as taskbar_module
@@ -966,12 +976,21 @@ def _bar_with(windows=(), icons=(), launchers=('Chrome', 'Editor')):
         return real_setting(name, default)
 
     taskbar_module.shell_setting = setting
+    real_collect = taskbar_module.shell_addons.collect
+    taskbar_module.shell_addons.collect = (
+        lambda surface, hook, *args, **kwargs:
+        [] if surface == 'taskbar' else real_collect(surface, hook,
+                                                     *args, **kwargs))
     try:
         bar = taskbar_module.TaskbarFrame(TitanShell())
         bar.shows_quick_launch = lambda: True
+        # And it stays that way through every later refresh of the tray.
+        bar._build_addon_bands = lambda: []
+        bar._addon_bands = []
     finally:
         taskbar_module.quick_launch_items = real_items
         taskbar_module.shell_setting = real_setting
+        taskbar_module.shell_addons.collect = real_collect
     bar.SetSize(0, 0, 1024, 30)
     bar._layout_bar()
     for title in windows:
@@ -3401,8 +3420,13 @@ class ClassicStartMenuTests(unittest.TestCase):
         """`IDM_STARTMENU`: Programs, Documents, Settings, Search, then out."""
         kinds = [(entry.kind, entry.payload)
                  for entry in self.menu._top_level_entries()]
+        # A shell add-on contributing a branch is the system working, not the
+        # menu drifting - this is about the entries that are Titan's own, so
+        # an add-on's are left out rather than making the suite depend on
+        # which add-ons the machine it runs on has switched on.
         self.assertEqual(
-            [payload for kind, payload in kinds if kind == 'folder'],
+            [payload for kind, payload in kinds
+             if kind == 'folder' and not _is_addon_payload(payload)],
             ['__programs__', '__documents__', '__settings__', '__find__'])
         actions = [payload for kind, payload in kinds if kind == 'action']
         self.assertEqual(actions[-4:], ['help', 'run', 'logoff', 'shutdown'])

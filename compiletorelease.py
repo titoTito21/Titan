@@ -273,6 +273,7 @@ def compile_to_release():
         "src.titan_core.tsounds",
         "src.titan_core.stereo_speech",
         "src.titan_core.spatial_audio",
+        "src.titan_core.audio_devices",
         "src.titan_core.sound_calibration",
         "src.titan_core.tce_speech",
         "src.system",
@@ -368,6 +369,11 @@ def compile_to_release():
             # Audio control (Windows)
             "pycaw",
             "pycaw.pycaw",
+            "pycaw.constants",
+            # The endpoint notifications the sound follows the
+            # headphones by (src/titan_core/audio_devices.py) -
+            # nothing else imports it, so nothing else keeps it.
+            "pycaw.callbacks",
             # Windows async
             "asyncio.windows_events",
             # Windows system

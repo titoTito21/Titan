@@ -213,6 +213,12 @@ def initialize_sound():
     """Inicjalizuje system dźwiękowy z bezpiecznym podwójnym sprawdzeniem."""
     global _mixer_initialized, background_channel, voice_message_channel, ai_tts_channel, tts_speech_channel
 
+    # Before the mixer, not after it: a Titan started with every playback
+    # device unplugged cannot open one at all, and the watch is then the only
+    # thing that will notice the headphones arriving. Idempotent and cheap
+    # (a flag) once it is running - see follow_playback_device() below.
+    follow_playback_device()
+
     # If we previously marked the mixer as initialized but pygame.mixer was
     # torn down externally (for example by klangomode.pygame.quit() or by a
     # bundled game/app calling pygame.quit()), the stale flag would otherwise
@@ -281,19 +287,207 @@ def initialize_sound():
         
         _mixer_initialized = True
         print(f"Audio system initialized on {platform.system()}")
-        
+
         try:
             available_systems = get_available_audio_systems()
             print(f"Available audio systems: {', '.join(available_systems)}")
         except Exception as e:
             print(f"Could not get available audio systems: {e}")
-        
+
         return True
         
     except Exception as e:
         print(f"Failed to initialize audio system: {e}")
         _mixer_initialized = False
         return False
+
+
+# ---------------------------------------------------------------------------
+# Following the device the user is actually listening to
+# ---------------------------------------------------------------------------
+# SDL opens ONE audio stream when Titan starts and keeps it for the life of the
+# process. On Windows that stream belongs to whichever endpoint was the default
+# at that moment, so unplugging the headphones leaves Titan talking to an
+# endpoint that is not there (silence, with pygame.mixer.get_init() still
+# cheerfully reporting an initialised mixer - which is why none of the
+# "was the mixer torn down" checks above notice), and plugging them back in
+# does not bring it back: Windows moves the DEFAULT, not an open stream.
+#
+# So the mixer is opened again on the device that is default now. That is a
+# real teardown - pygame.mixer.quit() then init() - which is why it is done
+# only when the default endpoint has really changed, or the endpoint Titan was
+# using has gone away (src/titan_core/audio_devices.py decides that), and never
+# merely because some other device appeared.
+#
+# Sound objects made before the re-open belong to the old mixer. Nothing in
+# this module keeps one (every play builds its own from the file), and neither
+# does the TTS layer, but an add-on might - hence the listener list, so
+# anything holding audio can throw it away.
+_audio_watch_started = False
+_audio_watch_tried = False      # asked once; pycaw does not appear mid-session
+_reopen_listeners = []
+
+# Whatever pygame.mixer.init() was given the first time, so re-opening does not
+# quietly change the format under the TTS layer.
+_MIXER_FREQUENCY = 22050
+_MIXER_SIZE = -16
+_MIXER_CHANNELS = 2
+_MIXER_BUFFER = 512
+
+
+def add_reopen_listener(callback):
+    """Call ``callback()`` after the sound has moved to another device.
+
+    For anything holding a pygame Sound built on the old mixer. Never raises,
+    and a listener that does is dropped rather than allowed to take the audio
+    down with it.
+    """
+    if callable(callback) and callback not in _reopen_listeners:
+        _reopen_listeners.append(callback)
+
+
+def remove_reopen_listener(callback):
+    try:
+        _reopen_listeners.remove(callback)
+    except ValueError:
+        pass
+
+
+def follow_playback_device():
+    """Start watching for the playback device changing. Idempotent.
+
+    Called from initialize_sound(), so every face of Titan gets it without
+    knowing about it. Answers False where there is nothing to watch with
+    (anything but Windows, or pycaw missing) - there the sound behaves exactly
+    as it did before.
+    """
+    global _audio_watch_started, _audio_watch_tried
+    if _audio_watch_started:
+        return True
+    if _audio_watch_tried:
+        # It was not available the first time and will not be now: this runs
+        # on the way to every sound played after the mixer has gone.
+        return False
+    _audio_watch_tried = True
+    try:
+        from src.titan_core import audio_devices
+        if audio_devices.start(_playback_device_changed):
+            _audio_watch_started = True
+            return True
+    except Exception as e:
+        print(f"[Sound] Could not watch the playback devices: {e}")
+    return False
+
+
+def _playback_device_changed(device_id):
+    """Windows is now playing somewhere else; take Titan's sound with it."""
+    name = ''
+    try:
+        from src.titan_core import audio_devices
+        name = audio_devices.default_playback_name()
+    except Exception:
+        pass
+    reopen_audio(reason=name or device_id or 'default playback device changed')
+
+
+def reopen_audio(reason=''):
+    """Re-open the mixer on the playback device Windows is using now.
+
+    Returns True when sound can be played again. Everything that was playing
+    stops - it was going to a device that is not there - except the background
+    loop, which is started again on the new one.
+    """
+    global _mixer_initialized, background_channel, voice_message_channel
+    global ai_tts_channel, tts_speech_channel, current_voice_message
+    global voice_message_playing, voice_message_paused
+
+    print(f"[Sound] Moving the audio to the current device"
+          + (f" ({reason})" if reason else ""))
+
+    with lock:
+        # Read the format back off the live mixer so the new one matches: the
+        # TTS layer renders at whatever the mixer was opened with, and quietly
+        # changing it here would resample every voice from now on.
+        frequency, size, channels = _MIXER_FREQUENCY, _MIXER_SIZE, _MIXER_CHANNELS
+        try:
+            current = pygame.mixer.get_init()
+            if current:
+                frequency, size, channels = current[0], current[1], current[2]
+        except Exception:
+            pass
+
+        loop_was_playing = False
+        try:
+            loop_was_playing = bool(background_channel
+                                    and background_channel.get_busy())
+        except Exception:
+            loop_was_playing = False
+
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
+        try:
+            pygame.mixer.quit()
+        except Exception as e:
+            print(f"[Sound] Error closing the old audio device: {e}")
+
+        _mixer_initialized = False
+        background_channel = None
+        voice_message_channel = None
+        ai_tts_channel = None
+        tts_speech_channel = None
+        current_voice_message = None
+        voice_message_playing = False
+        voice_message_paused = False
+
+        # Windows can still be moving the default when the first notification
+        # arrives, so a failed open is worth a second and a third try rather
+        # than leaving Titan silent until something else re-initialises it.
+        opened = False
+        for attempt in range(3):
+            try:
+                pygame.mixer.init(frequency=frequency, size=size,
+                                  channels=channels, buffer=_MIXER_BUFFER)
+                opened = True
+                break
+            except pygame.error as e:
+                print(f"[Sound] Could not open the new audio device "
+                      f"(attempt {attempt + 1}): {e}")
+                time.sleep(0.3)
+
+        if not opened:
+            print("[Sound] No audio device could be opened; "
+                  "the next sound will try again")
+            return False
+
+    # initialize_sound() re-does the channel count, the reservation and the
+    # four dedicated channels. Outside the lock: it takes none itself, but the
+    # listeners below may play something.
+    if not initialize_sound():
+        return False
+
+    if loop_was_playing:
+        try:
+            play_loop_sound()
+        except Exception as e:
+            print(f"[Sound] Could not restart the background loop: {e}")
+
+    # 3D positioning has a device of its own (OpenAL), opened the same way and
+    # stuck in exactly the same way.
+    try:
+        from src.titan_core import spatial_audio
+        spatial_audio.reopen()
+    except Exception as e:
+        print(f"[Sound] Could not move the spatial backend: {e}")
+
+    for listener in list(_reopen_listeners):
+        try:
+            listener()
+        except Exception as e:
+            print(f"[Sound] Reopen listener failed: {e}")
+
+    return True
 
 
 def _fire_haptics(sound_path):

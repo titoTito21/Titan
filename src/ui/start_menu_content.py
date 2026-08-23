@@ -790,9 +790,21 @@ class StartMenuContent:
         branch it happens to live under - so the modules, the macros and
         the settings are searched exactly like the programs are.
         """
-        return (self._im_entries() + self._macro_entries()
-                + self._settings_entries() + self._windows_app_entries()
-                + self.addon_entries())
+        entries = (self._im_entries() + self._macro_entries()
+                   + self._settings_entries() + self._windows_app_entries())
+        # An add-on's BRANCH is not a thing that can be opened from a list of
+        # search results - _build_search_index() drops every folder, which is
+        # right - so a branch searched as itself is a line the box can never
+        # find, and its commands were not in the index at all. The same rule
+        # as everything else here then: what somebody typing three letters is
+        # looking for is the command, not the branch it lives under.
+        for entry in self.addon_entries():
+            payload = entry.payload
+            if isinstance(payload, tuple) and payload[:1] == ('__addon__',):
+                entries.extend(self._addon_children(payload[1]))
+            else:
+                entries.append(entry)
+        return entries
 
     def search_entries(self, text):
         """What the left column shows while there is something in the box.

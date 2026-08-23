@@ -5021,6 +5021,16 @@ class TitanApp(wx.Frame):
                 except Exception as e:
                     print(f"Warning: Error terminating TTS bridges: {e}")
 
+                # Stop following the playback device first: it is registered
+                # with Windows for endpoint notifications, and a device change
+                # arriving now would re-open the mixer we are about to quit.
+                # os._exit(0) below bypasses atexit, so this has to be said.
+                try:
+                    from src.titan_core import audio_devices
+                    audio_devices.stop(0.5)
+                except Exception as e:
+                    print(f"Warning: Error stopping the audio device watch: {e}")
+
                 # Quit pygame mixer cleanly so audio device handles are
                 # released before the process dies.
                 try:

@@ -5,6 +5,6 @@ description = Shows every surface a shell add-on can reach: the Start menu, the 
 description_pl = Pokazuje każdą powierzchnię, do której sięga dodatek powłoki: menu Start, przeglądarkę plików (menu, pasek, menu kontekstowe i własną kolumnę), pasek zadań (własna kontrolka i pozycja w menu) oraz menu pulpitu.
 author = TCE Team
 version = 1.0
-status = 0
+status = 1
 surfaces = shell, start_menu, explorer, taskbar, desktop
 

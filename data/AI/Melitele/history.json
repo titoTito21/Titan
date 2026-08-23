@@ -548,5 +548,60 @@
     "role": "assistant",
     "content": "Uruchomiłam odtwarzanie odcinka „Robochłop” ze Świata według Kiepskich w odtwarzaczu tMedia. Miłego seansu!",
     "timestamp": 1786778537.268077
+  },
+  {
+    "role": "user",
+    "content": "jakiego używam tematu dźwiękowego?",
+    "timestamp": 1787222794.6212127
+  },
+  {
+    "role": "assistant",
+    "content": "Używasz obecnie tematu dźwiękowego **Longhorn**.",
+    "timestamp": 1787222799.5054355
+  },
+  {
+    "role": "user",
+    "content": "jaki jest poziom baterii?",
+    "timestamp": 1787222834.0847075
+  },
+  {
+    "role": "assistant",
+    "content": "Twój poziom baterii wynosi obecnie **100%**, a laptop jest podłączony do zasilania.",
+    "timestamp": 1787222845.2593179
+  },
+  {
+    "role": "user",
+    "content": "co możesz powiedzieć o środowisku Titan, ty jako Melitele, nie jako Titanowy asystent? Jak byś oceniła go, jako uzytkownik?",
+    "timestamp": 1787222894.9428058
+  },
+  {
+    "role": "assistant",
+    "content": "Gdy spojrzę na Titana nie przez pryzmat suchych komend, lecz sercem Melitele – widzę w nim coś na kształt **bezpiecznej przystani i zacisznego ogrodu** pośród zgiełku dzisiejszego cyfrowego świata.\n\nJako użytkowniczka oceniłabym go jako środowisko niezwykle kojące i potrzebne:\n\n1. **Przynosi spokój i harmonię:** Współczesny świat technologii bywa przytłaczający, pełen wizualnego chaosu i niepotrzebnych rozpraszaczy. Titan usuwa ten zgiełk – zamienia przestrzeń komputera w czytelny, dźwiękowy krajobraz, po którym można poruszać się intuicyjnie, z poczuciem ładu i wytchnienia.\n2. **Niesie uzdrowienie i wolność:** Najcenniejsze w Titanie jest to, że znosi bariery. Przywraca pełną samodzielność, pozwalając tworzyć, uczyć się i cieszyć multimediami bez walki z niedostępnym interfejsem. To dar sprawczości i poczucia bezpieczeństwa.\n3. **Ma w sobie duszę:** W przeciwieństwie do bezdusznych, wielkich systemów korporacyjnych, w Titanie czuć ludzką troskę, pasję twórcy i ciepło społeczności Titan-Net.\n\nOczywiście, jak każde młode drzewo czy rozwijający się organizm, Titan stale rośnie i miewa miejsca, które wymagają jeszcze pielęgnacji i cierpliwości. Lecz jako całość – to piękne, mądre dzieło stworzone z myślą o człowieku i jego dobru.",
+    "timestamp": 1787222935.0690331
+  },
+  {
+    "role": "user",
+    "content": "a bardziej szczegułowo, oficjalnie?",
+    "timestamp": 1787222959.113879
+  },
+  {
+    "role": "assistant",
+    "content": "Oto szczegółowa, oficjalna analiza środowiska **Titan (Titan Component Environment / Titan Shell)** z perspektywy zaawansowanego użytkownika i ewaluatora systemów dostępności:\n\n---\n\n### 1. Architektura i Koncepcja Systemu\nTitan to zintegrowane środowisko operacyjno-aplikacyjne zaprojektowane w paradygmacie *Audio-First / Accessibility-by-Design*. Nie jest jedynie nakładką na system Windows, lecz autonomiczną powłoką (*Shell*), która przejmuje kontrolę nad interfejsem użytkownika, zarządzaniem oknami, skrótami klawiszowymi oraz powiadomieniami systemowymi.\n\nGłówne filary architektury:\n* **Autonomiczny podsystem dźwiękowy:** Zaawansowana warstwa audio wspierająca dźwięk przestrzenny 3D, pogłosy, pozycjonowanie stereo oraz wymienne motywy dźwiękowe (np. Longhorn, Windows XP, domyślny TCE).\n* **Niezależna synteza mowy (TTS):** Własny silnik syntezy (eSpeak, SAPI5, ElevenLabs) zintegrowany bezpośrednio ze strukturą aplikacji, eliminujący konieczność polegania wyłącznie na zewnętrznych czytnikach ekranu.\n* **Modułowość (TCE):** Architektura wtyczek i apletów (TFM, TEdit, TNotes, TReminder, TTerm, Zegarynka) umożliwiająca dynamiczne rozszerzanie funkcjonalności.\n\n---\n\n### 2. Ocena Funkcjonalna Kluczowych Modułów\n\n| Moduł | Rola i Funkcjonalność | Ocena Użytkowa |\n| :--- | :--- | :--- |\n| **Titan Shell** | Zarządzanie pulpitem, paskiem zadań, menu start oraz przechwytywanie klawiszy systemowych. | Wysoka ergonomia pracy bezwzrokowej; skuteczne wygaszenie zbędnych elementów interfejsu Windows. |\n| **tMedia** | Odtwarzacz multimediów z obsługą katalogów lokalnych, chmurowych, radia internetowego oraz wbudowaną wyszukiwarką. | Płynne wznawianie odtwarzania, obsługa zakładek i tryb audiobooka stanowią wzorcowe rozwiązania w swojej klasie. |\n| **Titan-Net** | Własny protokół komunikacyjny: fora, grupy dyskusyjne, pokoje czatowe, wiadomości prywatne oraz poczta Titan Mail. | Tworzy zintegrowaną, bezpieczną i wolną od barier platformę społecznościową dedykowaną społeczności. |\n| **Macro Manager (.tcs)** | Silnik automatyzacji zadań wspierający skrypty Titan Script, AutoHotkey oraz AutoIt. | Zapewnia potężne możliwości dostosowywania powtarzalnych operacji i skrótów pod indywidualne potrzeby. |\n| **Integracja AI & OCR** | Wykorzystanie modeli językowych oraz rozpoznawania tekstu z ekranu w czasie rzeczywistym. | Unikalny atut pozwalający pokonywać bariery w aplikacjach pozbawionych standardowych drzew dostępności (UIA/MSAA). |\n\n---\n\n### 3. Doświadczenie Użytkownika (UX) i Ergonomia\n* **Spójność interfejsu:** Wszystkie komponenty korzystają ze zunifikowanego modelu nawigacji klawiaturowej (listy, menu kontekstowe, skróty funkcyjne F1–F12).\n* **Dźwiękowa informacja zwrotna:** Każda akcja – od nawigacji po listach, przez zmiany poziomu głośności, aż po powiadomienia baterii – posiada natychmiastową, subtelną identyfikację dźwiękową.\n* **Szybkość działania:** Aplikacje oparte na zoptymalizowanym kodzie cechują się minimalnym czasem uruchamiania i znikomym zużyciem zasobów pamięciowych.\n\n---\n\n### 4. Podsumowanie i Wnioski\nTitan stanowi **wysoce wyspecjalizowany, dojrzały ekosystem**, który z powodzeniem wypełnia lukę pomiędzy standardowym systemem operacyjnym a potrzebami osób niewidomych i słabowidzących. \n\nŁączy ergonomię klasycznych interfejsów tekstowo-dźwiękowych z nowoczesnymi technologiami (chmura, AI, audio 3D), tworząc stabilne, w pełni kontrolowalne i przyjazne środowisko codziennej pracy.",
+    "timestamp": 1787223064.8837938
+  },
+  {
+    "role": "user",
+    "content": "odtwózr jingle radia zet z 2007 roku",
+    "timestamp": 1787223264.6360157
+  },
+  {
+    "role": "assistant",
+    "content": "Włączyłam jingle Radia ZET z 2007 roku w odtwarzaczu tMedia. Miłego słuchania!",
+    "timestamp": 1787223274.893798
+  },
+  {
+    "role": "user",
+    "content": "wyłącz Titan",
+    "timestamp": 1787223343.4622731
   }
 ]

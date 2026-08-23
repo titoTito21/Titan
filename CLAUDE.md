@@ -307,6 +307,69 @@ the startup sound's two seconds SPENT loading rather than slept through.
 ### Audio Themes
 Located in `sfx/` directory with multiple theme folders (`default`, `longhorn`, `ubuntu_emacspeak`, etc.)
 
+### The sound follows the headphones
+
+`src/titan_core/audio_devices.py`. SDL opens ONE audio stream when Titan starts
+and keeps it for the life of the process, and on Windows that stream belongs to
+whichever endpoint was the default at that moment. So unplugging the headphones
+left Titan talking into an endpoint that was not there - and plugging them back
+in did not bring it back, because Windows moves the DEFAULT, not an open
+stream. For a program whose entire interface is spoken, that is not a degraded
+experience: it is a program that has disappeared.
+
+- **Nothing noticed, because nothing was looking.** `pygame.mixer.get_init()`
+  goes on reporting an initialised mixer the whole time, which is why every
+  "was the mixer torn down externally" check in `sound.py` looked right and
+  heard nothing. The module watches the endpoints instead: Windows' own
+  `IMMNotificationClient` (through pycaw) says the moment it happens, and a
+  2-second poll is the safety net that DECIDES - reading the endpoints costs
+  about 0.9 ms, so being certain is cheaper than trusting a callback that
+  cannot be tested on every machine.
+- **The apartment is the trap.** The notification client is registered from a
+  thread of Titan's own in the MULTI-threaded apartment, because a client
+  registered in an STA is only called back from a message pump this thread has
+  not got - and *importing comtypes is itself a CoInitializeEx into an STA*, so
+  `start()` imports it on the CALLING thread and the watcher asks for its
+  apartment before anything else COM happens on it. Get that wrong and
+  everything still works, silently one poll slower, for ever.
+- **What counts as a change is deliberately narrow**: the default endpoint is a
+  different one, or the endpoint Titan was using is no longer active. A second
+  sound card appearing, or a monitor with speakers being switched on, is not
+  about us, and re-opening the mixer for it would cut whatever was being said
+  mid-word.
+- **Moving the sound is `sound.reopen_audio()`** - `pygame.mixer.quit()` then
+  `init()` on the device that is default now, the channel count, the
+  reservation and the four dedicated channels re-made by `initialize_sound()`,
+  the background loop started again, and the format read back off the live
+  mixer so re-opening cannot quietly resample every voice from now on. It runs
+  on the watcher's thread on purpose: closing a device that has been physically
+  removed is Windows' work, not something to do on the GUI thread. Anything
+  holding a pygame Sound built on the old mixer can hear about it through
+  `add_reopen_listener`.
+- **OpenAL is opened the same way and gets stuck the same way**, so 3D
+  positioning is given up too (`spatial_audio.reopen()`): the context, its
+  sources and its buffers all belong to the old device, and `_init()` opens the
+  current one for the next sound. The decoded-PCM cache survives - it is bytes
+  from files.
+- **The race is with speech.** Re-opening is a moment with no mixer at all, and
+  every playback path in `stereo_speech.py` used to answer that moment by
+  opening one of its OWN - one of them mono, at eSpeak's sample rate - and
+  whichever spoke first decided what the whole program sounded like from then
+  on. They all go through `_ensure_mixer()` now, which asks Titan's own
+  initialiser first.
+- **The watch starts before the mixer**, at the top of `initialize_sound()`: a
+  Titan started with every playback device unplugged cannot open one at all,
+  and the watch is then the only thing that will notice the headphones
+  arriving. `gui.py` stops it before it quits the mixer, because that path ends
+  in `os._exit()` and runs no atexit handler.
+- Windows only (PulseAudio and CoreAudio both move a running stream
+  themselves). `pycaw.callbacks` is imported by nothing else, so it is in
+  `compiletorelease.py`'s hidden imports and in `Titan.spec`.
+- Tests: `tests/test_audio_device_switch.py` (run it directly; 33 tests, and
+  none of them plays a sound). Live-verified by really moving the default
+  endpoint with `IPolicyConfig` and putting it back: noticed in ~1.0 s, both
+  ways.
+
 ### Titan-Net Messaging System
 - **Server location**: `titan-net server/` directory
   - `server.py`: Main WebSocket server (port 8001) for real-time messaging
@@ -1590,7 +1653,13 @@ on the desktop's menu, or **their own Start menu**, had to change Titan.
   - `start_menu` - `start_menu_items` goes through
     `src/ui/start_menu_content.py`, so an add-on writes it once and it is on
     the XP menu, the classic menu **and in the search box**. An entry with
-    `children` becomes a branch instead of a line.
+    `children` becomes a branch instead of a line - and the search box then
+    looks inside it, because a BRANCH is not something a list of results can
+    open (`_build_search_index` drops every folder, rightly), so a branch
+    searched as itself was a line the box could never find and whose commands
+    were not indexed at all. `_searchable_branches()` expands it into its
+    children, the same rule as everywhere else here: what somebody typing
+    three letters wants is the command, not the branch it lives under.
   - `explorer` - `explorer_menu_items` (they make the browser's **Tools**
     menu, which exists only when there is something in it),
     `explorer_toolbar_items`, `explorer_context_items(where, selection)` -

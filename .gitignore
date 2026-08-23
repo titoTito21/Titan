@@ -151,3 +151,8 @@ data/gamepad/modes/*/__pycache__/
 # ===== Sound themes (only ship "default"; other themes are local-only) =====
 sfx/*/
 !sfx/default/
+# Named for the avoidance of doubt (the rule above already covers them):
+# these are recreations of other systems' sounds, kept locally only.
+sfx/windows xp theme/
+sfx/windows 9x theme/
+

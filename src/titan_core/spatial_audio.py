@@ -531,4 +531,39 @@ def _shutdown():
         _init_ok = False
 
 
+def reopen():
+    """Give the OpenAL device up so the next sound opens the current one.
+
+    ``alcOpenDevice(None)`` binds to whatever is the default playback endpoint
+    at that moment and keeps it, so after the user has unplugged their
+    headphones this context is playing into a device that is not there. The
+    context, its sources and its buffers all belong to that device, so there
+    is nothing to migrate - it is closed, and :func:`_init` opens the current
+    one the next time a sound is positioned.
+
+    The decoded-PCM cache survives on purpose: it is plain bytes read from
+    files, and re-decoding them would be work for nothing.
+    """
+    global _init_tried, _init_ok, _efx_ok, _efx, _reverb_effect, _reverb_slot
+    global _reverb_enabled, _reverb_loaded
+
+    with _lock:
+        if not _init_tried:
+            return          # never opened one; nothing to give up
+        try:
+            _shutdown()
+        except Exception as e:
+            print(f"[SpatialAudio] Error closing the old device: {e}")
+        _active.clear()
+        _init_tried = False
+        _init_ok = False
+        _efx_ok = False
+        _efx = {}
+        _reverb_effect = None
+        _reverb_slot = None
+        _reverb_enabled = False
+        # The saved room calibration is applied again on the new device.
+        _reverb_loaded = False
+
+
 atexit.register(_shutdown)

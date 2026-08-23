@@ -28,6 +28,41 @@ def _get_sound_mode():
             'stereo_speech', 'False', 'invisible_interface').lower() in ['true', '1'] else 'none'
 
 
+def _ensure_mixer(frequency=22050, channels=2, buffer=1024):
+    """Make sure there is a mixer to speak through, Titan's own for choice.
+
+    Every playback path here used to open one of its own when it found none,
+    each with its own format - one of them mono, at eSpeak's sample rate - and
+    whichever spoke first decided what the whole program would sound like from
+    then on. That was survivable while the mixer was opened once at startup and
+    never again; it is not, now that Titan re-opens it whenever the user's
+    headphones move (src/titan_core/sound.py's reopen_audio), because the race
+    is with speech that starts in the moment between the close and the open.
+
+    So the sound module is asked first: it opens the ONE format Titan uses, on
+    the device that is default now, and hands back the reserved TTS channel
+    everything here plays on. The local open is the fallback for a Titan whose
+    sound module is unavailable.
+    """
+    import pygame
+    if pygame.mixer.get_init():
+        return True
+    try:
+        from src.titan_core.sound import initialize_sound
+        if initialize_sound() and pygame.mixer.get_init():
+            return True
+    except Exception as e:
+        print(f"[StereoSpeech] Titan mixer unavailable: {e}")
+    try:
+        pygame.mixer.pre_init(frequency=frequency, size=-16,
+                              channels=channels, buffer=buffer)
+        pygame.mixer.init()
+        return True
+    except Exception as e:
+        print(f"[StereoSpeech] mixer init error: {e}")
+        return False
+
+
 def _spatial_ok():
     """True if the OpenAL HRTF backend is available for 3D playback."""
     try:
@@ -354,9 +389,9 @@ class ESpeakDLL:
                     import struct
                     import wave as _wave
 
-                    if not pygame.mixer.get_init():
-                        pygame.mixer.pre_init(frequency=self.sample_rate, size=-16, channels=1, buffer=512)
-                        pygame.mixer.init()
+                    if not _ensure_mixer(frequency=self.sample_rate,
+                                         channels=1, buffer=512):
+                        return False
 
                     audio_bytes = struct.pack(f'{len(self.audio_buffer)}h', *self.audio_buffer)
                     wav_buf = io.BytesIO()
@@ -2760,15 +2795,10 @@ class StereoSpeech:
                     try:
                         import pygame
 
-                        if not pygame.mixer.get_init():
-                            try:
-                                pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=1024)
-                                pygame.mixer.init()
-                            except Exception as e:
-                                print(f"[StereoSpeech] Error initializing pygame mixer: {e}")
-                                if use_fallback:
-                                    self.fallback_speaker.speak(text)
-                                return
+                        if not _ensure_mixer():
+                            if use_fallback:
+                                self.fallback_speaker.speak(text)
+                            return
 
                         # Always use dedicated TTS channel – never steals UI sound slots
                         tts_channel = None
@@ -3135,12 +3165,11 @@ class StereoSpeech:
             # the ~1 s stall on messages with many pitched segments.
             try:
                 import pygame
-                if not pygame.mixer.get_init():
-                    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2,
-                                          buffer=1024)
-                    pygame.mixer.init()
+                ready = _ensure_mixer()
             except Exception as e:
                 print(f"[StereoSpeech] speak_concat mixer init error: {e}")
+                ready = False
+            if not ready:
                 if my_seq == self._speak_seq:
                     self.is_speaking = False
                 return
@@ -3270,13 +3299,8 @@ class StereoSpeech:
         """
         try:
             import pygame
-            if not pygame.mixer.get_init():
-                try:
-                    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=1024)
-                    pygame.mixer.init()
-                except Exception as e:
-                    print(f"[StereoSpeech] _play_clip mixer init error: {e}")
-                    return
+            if not _ensure_mixer():
+                return
             buf = io.BytesIO()
             audio.export(buf, format="wav")
             buf.seek(0)
