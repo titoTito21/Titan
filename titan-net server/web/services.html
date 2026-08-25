@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="svc.page_title">Services — Titan-Net</title>
+  <meta name="description" content="Screens and services the Titan-Net server itself provides.">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="services.html" data-i18n="nav.services">Services</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences" data-i18n-attr="aria-label:toolbar.label">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="svc-alert" class="alert" hidden></div>
+
+    <!-- The menu of everything the server offers this user -->
+    <section id="svc-index">
+      <h1 data-i18n="svc.title">Services</h1>
+      <p data-i18n="svc.lead">These screens come from the Titan-Net server itself. Anything new the server offers appears here without this site being changed.</p>
+      <p id="svc-index-status" role="status" aria-live="polite"></p>
+      <ul id="svc-index-list" class="card-list"></ul>
+      <p>
+        <button type="button" id="svc-index-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+      </p>
+    </section>
+
+    <!-- One open service -->
+    <section id="svc-screen" hidden aria-labelledby="svc-heading">
+      <nav aria-label="Where you are" data-i18n-attr="aria-label:svc.breadcrumb" class="breadcrumb">
+        <ol id="svc-trail"></ol>
+      </nav>
+
+      <div class="flex toolbar-row">
+        <button type="button" id="svc-back" class="btn-secondary" data-i18n="svc.back">Back</button>
+        <button type="button" id="svc-reload" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+        <button type="button" id="svc-leave" class="btn-secondary" data-i18n="svc.leave">Leave this service</button>
+      </div>
+
+      <h1 id="svc-heading" tabindex="-1"></h1>
+      <p id="svc-description"></p>
+
+      <nav id="svc-menus" aria-label="Service menus" data-i18n-attr="aria-label:svc.menus" hidden></nav>
+
+      <p id="svc-status" role="status" aria-live="polite"></p>
+
+      <h2 id="svc-tabs-label" class="sr-only" data-i18n="svc.tabs_label">Sections</h2>
+      <div id="svc-tabs" class="tabs" aria-labelledby="svc-tabs-label" hidden></div>
+
+      <div id="svc-fields"></div>
+
+      <h2 id="svc-rows-heading" tabindex="-1" data-i18n="svc.rows">Entries</h2>
+      <ul id="svc-rows" class="card-list"></ul>
+      <p id="svc-empty" class="muted" hidden></p>
+
+      <div id="svc-buttons" class="flex dialog-actions"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <!-- A form screen, and any form a service opens on top of itself -->
+  <dialog id="svc-dialog" class="titan-dialog wide" aria-labelledby="svc-dialog-title">
+    <h2 id="svc-dialog-title"></h2>
+    <p id="svc-dialog-description"></p>
+    <form id="svc-dialog-form" novalidate>
+      <div id="svc-dialog-fields"></div>
+      <div id="svc-dialog-buttons" class="flex dialog-actions"></div>
+    </form>
+    <p id="svc-dialog-message" role="status" aria-live="polite"></p>
+  </dialog>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/remote_ui.js?v=20260825b"></script>
+  <script src="js/services.js?v=20260825b"></script>
+</body>
+</html>

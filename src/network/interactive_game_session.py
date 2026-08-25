@@ -764,7 +764,7 @@ class GameSessionFrame(wx.Frame):
             'game_turn_changed', 'game_player_action', 'game_ai_text',
             'game_ai_audio', 'game_play_sound', 'game_stop_sound',
             'game_set_volume', 'game_state_changed', 'game_token_warning',
-            'game_menu',
+            'game_menu', 'game_speak_request', 'game_speak_locally',
         )
         for name in names:
             self._old_callbacks[name] = getattr(self.titan_client, f'on_{name}', None)
@@ -782,6 +782,9 @@ class GameSessionFrame(wx.Frame):
         self.titan_client.on_game_token_warning = self._handle_token_warning
         self.titan_client.on_game_player_speech = self._handle_player_speech
         self.titan_client.on_game_menu = self._handle_game_menu
+        self.titan_client.on_game_speak_request = self._handle_speak_request
+        self.titan_client.on_game_speak_locally = self._handle_speak_locally
+        self._start_narrating()
 
     def _restore_callbacks(self):
         for name, cb in (self._old_callbacks or {}).items():
@@ -909,11 +912,122 @@ class GameSessionFrame(wx.Frame):
                     return
         self._last_ai_text = (text, now)
 
-        # Append to the on-screen log only. Gemini Live ships its own
-        # TTS audio via game_ai_audio broadcasts — re-speaking the same
-        # narration through TitanTTS would double-up the narration and
-        # the user explicitly asked us not to do that.
         wx.CallAfter(self._append_log, f"ai:{actor}", text)
+
+        # Who says it out loud.
+        #
+        # `spoken` true means narration audio is on its way - the session
+        # host's own Titan TTS is rendering this line for the whole table
+        # - and speaking it here as well would be the same sentence twice
+        # in two voices, half a second apart. False means nobody is
+        # narrating centrally, so this machine says it AT ONCE: that is
+        # the fast path, with no round trip between the words existing
+        # and being heard.
+        #
+        # A message with no `spoken` at all is an older server still
+        # sending Gemini's own audio, and staying quiet is right for it.
+        if message.get('spoken') is False:
+            self._say_locally(text)
+
+    # ------------------------------------------------------------------
+    # Narration
+    #
+    # The AI is asked for TEXT and the SESSION HOST speaks it: the server
+    # sends the host a game_speak_request, the host's Titan TTS renders
+    # it and streams it back, and everyone hears one narrator - the one
+    # the person running the game chose. When the host cannot (no engine
+    # that renders to memory, a machine that has gone away), the server
+    # says so and every client speaks the line with its own voice
+    # instead. The words are never lost; only the shared voice is.
+    # ------------------------------------------------------------------
+
+    def _start_narrating(self):
+        """Offer to narrate, if this is the host and Titan can render."""
+        self._narrator = None
+        if not self.is_host:
+            return
+        try:
+            from src.network.game_narrator import GameNarrator
+        except Exception as e:
+            print(f"[Game Session] narrator unavailable: {e}")
+            return
+        capable = False
+        try:
+            capable = GameNarrator.can_narrate()
+        except Exception as e:
+            print(f"[Game Session] narrator probe failed: {e}")
+        if capable:
+            self._narrator = GameNarrator(
+                self._send_narration, int(self.session_id))
+            self._narrator.start()
+
+        # Told either way. "I cannot narrate" is as useful to the server
+        # as "I can": without it every line would wait out a deadline
+        # before the table was allowed to say it.
+        def _tell():
+            try:
+                voice = GameNarrator.voice_name() if capable else None
+                self.titan_client.game_speech_capable(
+                    self.session_id, capable, voice)
+            except Exception as e:
+                print(f"[Game Session] could not report narration: {e}")
+        threading.Thread(target=_tell, daemon=True).start()
+
+    def _send_narration(self, message: Dict):
+        """Called from the narrator's own worker thread - no wx here."""
+        if self._closed:
+            return
+        try:
+            self.titan_client.game_speech_chunk(message)
+        except Exception as e:
+            print(f"[Game Session] narration send failed: {e}")
+
+    def _handle_speak_request(self, message: Dict):
+        if not self._is_for_session(message):
+            return
+        narrator = getattr(self, '_narrator', None)
+        if narrator is None:
+            # Asked to narrate without being able to. Saying so at once is
+            # what stops the table waiting out the deadline in silence.
+            try:
+                self.titan_client.game_speech_chunk({
+                    'type': 'game_speech_failed',
+                    'session_id': int(self.session_id),
+                    'utterance_id': message.get('utterance_id'),
+                    'error': 'no narrator on this machine',
+                })
+            except Exception:
+                pass
+            return
+        narrator.request(message)
+
+    def _handle_speak_locally(self, message: Dict):
+        """The host did not speak this line, so this machine does."""
+        if not self._is_for_session(message):
+            return
+        self._say_locally(message.get('text') or '',
+                          interrupt=bool(message.get('interrupt')))
+
+    def _say_locally(self, text: str, interrupt: bool = False):
+        """Speak a narration line with this machine's own voice.
+
+        Off the GUI thread: an engine is a subprocess, a DLL or an HTTP
+        call, and a second of one on the GUI thread is a second of a
+        frozen window in the middle of a game.
+        """
+        text = (text or '').strip()
+        if not text or self._closed:
+            return
+
+        def _run():
+            try:
+                # Plain speech, not a notification: narration is the game
+                # talking, and a UI beep in front of every sentence is
+                # something to listen past rather than a cue.
+                _speak(text, interrupt=interrupt)
+            except Exception as e:
+                print(f"[Game Session] local narration failed: {e}")
+        threading.Thread(target=_run, daemon=True).start()
 
     def _handle_ai_audio(self, message: Dict):
         if not self._is_for_session(message):
@@ -1238,7 +1352,17 @@ class GameSessionFrame(wx.Frame):
             self.listbox.Append(label, {'type': 'player', 'player': p})
 
     def _render_character_rows(self):
-        sess = self.session or {}
+        """The player's own sheet, as words rather than as JSON.
+
+        The server keeps three parts of a sheet in a shape it can do
+        arithmetic on — ``stats`` as ``{'hp': {'value': 7, 'max': 12}}``,
+        ``inventory`` as a list of ``{item, quantity}``, ``equipment`` as
+        slot to item. Rendering those with ``json.dumps`` put braces,
+        quotes and the word "value" into a line a screen reader then reads
+        out character by character. Each part is spelled out instead, and
+        anything the game invented that is not one of them still appears
+        underneath.
+        """
         my_id = getattr(self.titan_client, 'user_id', None)
         my_state = {}
         for p in self.players_cache:
@@ -1249,14 +1373,67 @@ class GameSessionFrame(wx.Frame):
             self.listbox.Append(_("(no character data yet — the AI will populate this)"),
                                 {'type': 'placeholder'})
             return
-        # Flatten 1 level of dict -> "key: value" rows.
-        for k, v in my_state.items():
-            if isinstance(v, (dict, list)):
-                value_str = json.dumps(v, ensure_ascii=False)
-            else:
-                value_str = str(v)
-            label = _("{key}: {value}").format(key=k, value=value_str[:160])
-            self.listbox.Append(label, {'type': 'character_field', 'key': k, 'value': v})
+
+        stats = my_state.get('stats')
+        if isinstance(stats, dict) and stats:
+            self.listbox.Append(_("Statistics"), {'type': 'heading'})
+            for name, entry in stats.items():
+                if isinstance(entry, dict):
+                    value = entry.get('value')
+                    ceiling = entry.get('max')
+                else:
+                    value, ceiling = entry, None
+                if ceiling is not None:
+                    label = _("{stat}: {value} of {max}").format(
+                        stat=name, value=value, max=ceiling)
+                else:
+                    label = _("{stat}: {value}").format(stat=name, value=value)
+                self.listbox.Append(label,
+                                    {'type': 'character_field', 'key': name,
+                                     'value': value})
+
+        pack = my_state.get('inventory')
+        if isinstance(pack, list) and pack:
+            self.listbox.Append(_("Carrying"), {'type': 'heading'})
+            for entry in pack:
+                if not isinstance(entry, dict):
+                    self.listbox.Append(str(entry), {'type': 'item'})
+                    continue
+                name = entry.get('item', '?')
+                quantity = entry.get('quantity', 1)
+                # "one lantern" reads better than "lantern: 1", and the
+                # number is what a player is listening for when it is not 1.
+                label = (_("{item}").format(item=name) if quantity in (1, None)
+                         else _("{item}, {count}").format(item=name, count=quantity))
+                properties = entry.get('properties')
+                if isinstance(properties, dict) and properties:
+                    detail = ', '.join(
+                        _("{key} {value}").format(key=k, value=v)
+                        for k, v in list(properties.items())[:4])
+                    label = _("{item} ({detail})").format(item=label, detail=detail)
+                self.listbox.Append(label, {'type': 'item', 'item': entry})
+
+        worn = my_state.get('equipment')
+        if isinstance(worn, dict) and worn:
+            self.listbox.Append(_("Worn or held"), {'type': 'heading'})
+            for slot, item in worn.items():
+                self.listbox.Append(
+                    _("{slot}: {item}").format(slot=slot, item=item),
+                    {'type': 'equipment', 'slot': slot, 'item': item})
+
+        # Anything else the game keeps about this character.
+        others = [(k, v) for k, v in my_state.items()
+                  if k not in ('stats', 'inventory', 'equipment')]
+        if others:
+            self.listbox.Append(_("Other"), {'type': 'heading'})
+            for k, v in others:
+                if isinstance(v, (dict, list)):
+                    value_str = json.dumps(v, ensure_ascii=False)
+                else:
+                    value_str = str(v)
+                self.listbox.Append(
+                    _("{key}: {value}").format(key=k, value=value_str[:160]),
+                    {'type': 'character_field', 'key': k, 'value': v})
 
     def _render_sound_rows(self):
         if not self.sounds_cache:
@@ -1476,6 +1653,16 @@ class GameSessionFrame(wx.Frame):
             self.mic.stop()
         except Exception:
             pass
+        # The narrator owns a thread and an engine; a window that has
+        # gone must not leave one rendering into a session nobody is in.
+        narrator = getattr(self, '_narrator', None)
+        if narrator is not None:
+            try:
+                narrator.cancel_all()
+                narrator.stop()
+            except Exception:
+                pass
+            self._narrator = None
         try:
             self.audio.shutdown()
         except Exception:

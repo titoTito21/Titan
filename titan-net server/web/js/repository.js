@@ -94,6 +94,88 @@
 
   $form.addEventListener('submit', (e) => { e.preventDefault(); load(); });
   $cat.addEventListener('change', load);
+
+  // ---------- Uploading ----------
+  // The file is streamed as multipart rather than turned into a base64
+  // string first: a package can be hundreds of megabytes, and reading one
+  // into memory to encode it is how a browser tab dies.
+  const $upload = document.getElementById('repo-upload-form');
+  if ($upload) {
+    const ui = Titan.ui;
+    const $alert = document.getElementById('repo-upload-alert');
+    const $progressWrap = document.getElementById('up-progress-wrap');
+    const $progress = document.getElementById('up-progress');
+    const $progressText = document.getElementById('up-progress-text');
+    const $submit = document.getElementById('up-submit');
+
+    function showUpload() {
+      const section = document.getElementById('repo-upload-section');
+      if (section) section.hidden = !Titan.getUser();
+    }
+    showUpload();
+    window.addEventListener('titan:session-changed', showUpload);
+
+    $upload.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fields = {
+        name: document.getElementById('up-name'),
+        description: document.getElementById('up-description'),
+        version: document.getElementById('up-version'),
+      };
+      const file = document.getElementById('up-file').files[0];
+      let bad = null;
+      Object.keys(fields).forEach((key) => {
+        const value = fields[key].value.trim();
+        ui.fieldError(fields[key].id, value ? '' : t('err.required'));
+        if (!value && !bad) bad = fields[key];
+      });
+      ui.fieldError('up-file', file ? '' : t('err.required'));
+      if (!file && !bad) bad = document.getElementById('up-file');
+      if (bad) { bad.focus(); return; }
+
+      const metadata = {
+        name: fields.name.value.trim(),
+        description: fields.description.value.trim(),
+        category: document.getElementById('up-category').value,
+        version: fields.version.value.trim(),
+      };
+
+      $submit.disabled = true;
+      ui.setAlert($alert, '');
+      $progressWrap.hidden = false;
+      $progress.value = 0;
+      $progressText.textContent = t('repo.up.starting');
+
+      let announced = -1;
+      try {
+        const result = await Titan.API.uploadPackage(file, metadata, (loaded, total) => {
+          const percent = Math.round((loaded / total) * 100);
+          $progress.value = percent;
+          // Announcing every percent would talk over everything else, so
+          // the reader is told every tenth.
+          const tenth = Math.floor(percent / 10);
+          if (tenth !== announced) {
+            announced = tenth;
+            $progressText.textContent = t('repo.up.percent', percent);
+          }
+        });
+        $progress.value = 100;
+        $progressText.textContent = '';
+        $progressWrap.hidden = true;
+        ui.setAlert($alert, result.message || t('repo.up.sent', metadata.name), 'success');
+        if (Titan.sounds) Titan.sounds.play('titannet_success');
+        $upload.reset();
+        document.getElementById('up-version').value = '1.0';
+      } catch (err) {
+        $progressWrap.hidden = true;
+        $progressText.textContent = '';
+        ui.setAlert($alert, (err && err.message) || t('err.generic'), 'error');
+      } finally {
+        $submit.disabled = false;
+      }
+    });
+  }
+
   window.onLangChanged = load;
   document.addEventListener('DOMContentLoaded', load);
   if (document.readyState !== 'loading') load();

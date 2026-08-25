@@ -115,8 +115,34 @@
         btn.disabled = true;
       }
       li.appendChild(btn);
+      // Blocking is per-person and symmetric, and it belongs beside the
+      // person rather than buried in a settings page — this is where
+      // somebody decides they have had enough of a stranger.
+      if (uid && uid !== userId) {
+        const block = document.createElement('button');
+        block.type = 'button';
+        block.className = 'btn-secondary user-block';
+        block.textContent = t('chat.block');
+        block.setAttribute('aria-label', t('chat.block_label', name));
+        block.addEventListener('click', () => blockUser(uid, name));
+        li.appendChild(block);
+      }
       $users.appendChild(li);
     });
+  }
+
+  async function blockUser(uid, name) {
+    const sure = await Titan.ui.confirmDialog(t('chat.block_confirm', name),
+      { danger: true, title: t('chat.block') });
+    if (!sure) return;
+    try {
+      const resp = await ws.blockUser(uid);
+      if (!resp.success) throw new Error(resp.error);
+      Titan.announce(t('chat.blocked', name));
+      ws.getOnlineUsers().catch(() => {});
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
   }
 
   function escapeHtml(s) {
@@ -145,6 +171,30 @@
     const body = document.createElement('div');
     body.innerHTML = escapeHtml(msg.message || msg.content || '').replace(/\n/g, '<br>');
     div.appendChild(body);
+    // A moderator can take a message down, from where the message is.
+    if (msg.id && Titan.session && Titan.session.isModerator()) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-secondary msg-delete';
+      remove.textContent = t('chat.mod.delete_message');
+      remove.setAttribute('aria-label', t('chat.mod.delete_message_label',
+        msg.username || '?'));
+      remove.addEventListener('click', async () => {
+        const sure = await Titan.ui.confirmDialog(
+          t('chat.mod.delete_message_confirm'),
+          { danger: true, title: t('chat.mod.delete_message') });
+        if (!sure) return;
+        try {
+          const result = await Titan.API.deleteRoomMessage(msg.id);
+          if (result && result.success === false) throw new Error(result.error);
+          div.remove();
+          Titan.announce(t('chat.mod.message_deleted'));
+        } catch (err) {
+          Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+        }
+      });
+      div.appendChild(remove);
+    }
     $log.appendChild(div);
     $log.scrollTop = $log.scrollHeight;
   }
@@ -183,6 +233,7 @@
     }
     $form.hidden = false;
     $voiceControls.hidden = false;
+    updateRoomModeration();
     if (voice) {
       voice.setRoom(roomId);
       $voiceStatus.textContent = '';
@@ -735,9 +786,149 @@
   if ($wnBtn) $wnBtn.addEventListener('click', openWhatsNewDialog);
 
   bootstrap();
+  // ============== Push to talk ==============
+  // Held, not toggled: the microphone is open exactly as long as the
+  // button is down. It answers the mouse, and Space or Enter while it has
+  // the focus — a key-repeat while held must not re-open it, so the state
+  // is tracked rather than counted.
+  const $ptt = document.getElementById('ptt-button');
+  let pttOpen = false;
+
+  async function pttDown() {
+    if (pttOpen || !voice || currentRoomId == null) return;
+    pttOpen = true;
+    $ptt.setAttribute('aria-pressed', 'true');
+    $ptt.querySelector('span').textContent = t('voice.ptt_open');
+    try {
+      ws.pttStart(currentRoomId);
+      if (!voice.live) await voice.start();
+      Titan.sounds && Titan.sounds.play('voice_start');
+    } catch (err) {
+      pttOpen = false;
+      $ptt.setAttribute('aria-pressed', 'false');
+      $ptt.querySelector('span').textContent = t('voice.ptt');
+      Titan.announce(t('voice.mic_denied'), 'assertive');
+    }
+  }
+
+  function pttUp() {
+    if (!pttOpen) return;
+    pttOpen = false;
+    $ptt.setAttribute('aria-pressed', 'false');
+    $ptt.querySelector('span').textContent = t('voice.ptt');
+    try {
+      ws.pttStop(currentRoomId);
+      // The stream is left open only while the toggle is on; a push-to-talk
+      // press on its own closes it again.
+      if (voice && voice.live && $voiceToggle.getAttribute('aria-pressed') !== 'true') {
+        voice.stop();
+      }
+      Titan.sounds && Titan.sounds.play('voice_stop');
+    } catch (err) {}
+  }
+
+  if ($ptt) {
+    $ptt.addEventListener('pointerdown', (e) => { e.preventDefault(); pttDown(); });
+    $ptt.addEventListener('pointerup', pttUp);
+    $ptt.addEventListener('pointercancel', pttUp);
+    $ptt.addEventListener('pointerleave', pttUp);
+    $ptt.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pttDown(); }
+    });
+    $ptt.addEventListener('keyup', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); pttUp(); }
+    });
+    // Losing the focus or the window must close the microphone: an open
+    // mic nobody realises is open is the worst failure this control has.
+    $ptt.addEventListener('blur', pttUp);
+    window.addEventListener('blur', pttUp);
+  }
+
+  // ============== Moderating this room ==============
+  // Offered only to a moderator, and every one of these is checked again
+  // on the server — the buttons are a convenience, not the permission.
+  const $roomMod = document.getElementById('room-mod');
+
+  function updateRoomModeration() {
+    if (!$roomMod) return;
+    const staff = Titan.session && Titan.session.isModerator();
+    $roomMod.hidden = !(staff && currentRoomId != null);
+  }
+
+  async function askAndRun(promptKey, run, doneKey) {
+    const name = await Titan.ui.promptDialog(t(promptKey), { required: true });
+    if (name === null) return;
+    try {
+      const result = await run(name.trim());
+      if (result && result.success === false) throw new Error(result.error);
+      Titan.announce(t(doneKey, name.trim()));
+      Titan.sounds && Titan.sounds.play('moderation');
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  if ($roomMod) {
+    document.getElementById('room-kick').addEventListener('click', () => {
+      askAndRun('chat.mod.who_kick',
+        (name) => Titan.API.kickFromRoom(currentRoomId, name), 'chat.mod.kicked');
+    });
+    document.getElementById('room-ban').addEventListener('click', async () => {
+      const name = await Titan.ui.promptDialog(t('chat.mod.who_ban'), { required: true });
+      if (name === null) return;
+      const users = await ws.getOnlineUsers().catch(() => ({}));
+      const match = (users.users || users.online_users || []).filter(
+        (u) => String(u.username || '').toLowerCase() === name.trim().toLowerCase())[0];
+      if (!match) { Titan.announce(t('chat.mod.not_found', name), 'assertive'); return; }
+      const reason = await Titan.ui.promptDialog(t('common.reason'));
+      if (reason === null) return;
+      try {
+        const result = await Titan.API.banRoom(currentRoomId,
+          match.id || match.user_id, { reason });
+        if (result && result.success === false) throw new Error(result.error);
+        Titan.announce(t('chat.mod.banned', name));
+        Titan.sounds && Titan.sounds.play('moderation');
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    });
+    document.getElementById('room-unban').addEventListener('click', async () => {
+      const name = await Titan.ui.promptDialog(t('chat.mod.who_unban'), { required: true });
+      if (name === null) return;
+      const all = await Titan.API.allUsers().catch(() => ({}));
+      const match = (all.users || []).filter(
+        (u) => String(u.username || '').toLowerCase() === name.trim().toLowerCase())[0];
+      if (!match) { Titan.announce(t('chat.mod.not_found', name), 'assertive'); return; }
+      try {
+        const result = await Titan.API.unbanRoom(currentRoomId, match.id);
+        if (result && result.success === false) throw new Error(result.error);
+        Titan.announce(t('chat.mod.unbanned', name));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    });
+  }
+
   // After connect() creates `ws`, attach broadcast listeners.
   function attachBroadcastListeners() {
     if (!ws) { setTimeout(attachBroadcastListeners, 100); return; }
+    // Sounds the server plays at this user, and the moderation broadcast
+    // every client reads out as it arrives.
+    if (Titan.sounds && Titan.sounds.listenForServerSounds) {
+      Titan.sounds.listenForServerSounds(ws);
+    }
+    ws.addEventListener('msg:moderation_broadcast', (e) => {
+      const m = e.detail || {};
+      if (!m.text_message) return;
+      Titan.sounds && Titan.sounds.play('moderation');
+      appendMessage({
+        username: m.moderator_username || '?',
+        message: m.text_message,
+        timestamp: m.timestamp,
+      }, { system: true });
+      Titan.announce(t('chat.broadcast_from',
+        m.moderator_username || '?', m.text_message), 'assertive');
+    });
     ws.addEventListener('msg:room_created', () => refreshRooms().catch(() => {}));
     ws.addEventListener('msg:room_deleted', () => refreshRooms().catch(() => {}));
     // Live-append incoming PMs when the dialog is open with the same sender

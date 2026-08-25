@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-08-25 12:14+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -35,11 +35,11 @@ msgstr "Active sessions"
 msgid "New interactive game"
 msgstr "New interactive game"
 
-#: src/network/interactive_games.py:244 src/network/interactive_games.py:580
+#: src/network/interactive_games.py:244 src/network/interactive_games.py:596
 msgid "Name:"
 msgstr "Name:"
 
-#: src/network/interactive_games.py:249 src/network/interactive_games.py:589
+#: src/network/interactive_games.py:249 src/network/interactive_games.py:605
 msgid "Description:"
 msgstr "Description:"
 
@@ -83,342 +83,354 @@ msgstr ""
 "objects/, classes/, quests/, npcs/ become labeled entity catalogs the AI "
 "references during play."
 
-#: src/network/interactive_games.py:299
+#: src/network/interactive_games.py:301
+msgid ""
+"The server keeps score for you, so you can write rules that rely on it: "
+"world variables (the weather, a quest stage), each player's statistics "
+"(hit points, strength, gold, ammunition) with the arithmetic and the "
+"limits done server-side, what every player is carrying and wearing, dice "
+"rolls, and skill checks the server decides rather than the AI. Just say "
+"what your game needs - \"everyone starts with 12 hit points and a bow\", "
+"\"a locked door needs a strength check against 10\" - and the game master"
+" will use the right one."
+msgstr ""
+
+#: src/network/interactive_games.py:315
 msgid "Add attachment (zip / txt / sound)..."
 msgstr "Add attachment (zip / txt / sound)..."
 
-#: src/network/interactive_games.py:302
+#: src/network/interactive_games.py:318
 msgid "Add folder..."
 msgstr "Add folder..."
 
-#: src/network/interactive_games.py:305
+#: src/network/interactive_games.py:321
 msgid "Remove last"
 msgstr "Remove last"
 
-#: src/network/interactive_games.py:316
+#: src/network/interactive_games.py:332
 msgid "Publish game"
 msgstr "Publish game"
 
-#: src/network/interactive_games.py:319
+#: src/network/interactive_games.py:335
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/network/interactive_games.py:341
+#: src/network/interactive_games.py:357
 msgid "Game rules (*.zip)"
 msgstr "Game rules (*.zip)"
 
-#: src/network/interactive_games.py:342
+#: src/network/interactive_games.py:358
 msgid "Prompt / rules text (*.txt;*.md;*.json)"
 msgstr "Prompt / rules text (*.txt;*.md;*.json)"
 
-#: src/network/interactive_games.py:343
+#: src/network/interactive_games.py:359
 msgid "Sound effects (*.ogg;*.wav;*.mp3;*.flac;*.opus)"
 msgstr "Sound effects (*.ogg;*.wav;*.mp3;*.flac;*.opus)"
 
-#: src/network/interactive_games.py:344
+#: src/network/interactive_games.py:360
 msgid "All files"
 msgstr "All files"
 
-#: src/network/interactive_games.py:346
+#: src/network/interactive_games.py:362
 msgid "Select attachment"
 msgstr "Select attachment"
 
-#: src/network/interactive_games.py:356 src/network/interactive_games.py:375
+#: src/network/interactive_games.py:372 src/network/interactive_games.py:391
 #, python-brace-format
 msgid "Cannot read file: {error}"
 msgstr "Cannot read file: {error}"
 
-#: src/network/interactive_games.py:357 src/network/interactive_games.py:361
-#: src/network/interactive_games.py:368 src/network/interactive_games.py:376
-#: src/network/interactive_games.py:384 src/network/interactive_games.py:445
+#: src/network/interactive_games.py:373 src/network/interactive_games.py:377
+#: src/network/interactive_games.py:384 src/network/interactive_games.py:392
+#: src/network/interactive_games.py:400 src/network/interactive_games.py:461
 msgid "Attachment"
 msgstr "Attachment"
 
-#: src/network/interactive_games.py:360
+#: src/network/interactive_games.py:376
 msgid "Attachment is too large. Maximum size is 25 MB."
 msgstr "Attachment is too large. Maximum size is 25 MB."
 
-#: src/network/interactive_games.py:366
+#: src/network/interactive_games.py:382
 #, python-brace-format
 msgid "Total attachments exceed {limit} MB."
 msgstr "Total attachments exceed {limit} MB."
 
-#: src/network/interactive_games.py:383
+#: src/network/interactive_games.py:399
 msgid ""
 "Unsupported file type. Use .zip (rules), .txt/.md/.json (prompts) or "
 ".ogg/.wav/.mp3/.flac/.opus (sounds)."
 msgstr ""
 
-#: src/network/interactive_games.py:394 src/network/interactive_games.py:464
-#: src/network/interactive_games.py:662
+#: src/network/interactive_games.py:410 src/network/interactive_games.py:480
+#: src/network/interactive_games.py:678
 #, python-brace-format
 msgid "[{type}] {name} ({size} KB)"
 msgstr "[{type}] {name} ({size} KB)"
 
-#: src/network/interactive_games.py:397
+#: src/network/interactive_games.py:413
 #, python-brace-format
 msgid "Attachment added: {name}"
 msgstr "Attachment added: {name}"
 
-#: src/network/interactive_games.py:412
+#: src/network/interactive_games.py:428
 msgid "Select folder to add"
 msgstr "Select folder to add"
 
-#: src/network/interactive_games.py:441
+#: src/network/interactive_games.py:457
 #, python-brace-format
 msgid "Total attachments would exceed {limit} MB. Stopping at {added} files."
 msgstr "Total attachments would exceed {limit} MB. Stopping at {added} files."
 
-#: src/network/interactive_games.py:483
+#: src/network/interactive_games.py:499
 #, python-brace-format
 msgid "Added {n} files from folder"
 msgstr "Added {n} files from folder"
 
-#: src/network/interactive_games.py:486
+#: src/network/interactive_games.py:502
 #, python-brace-format
 msgid "Found {n} rules file(s) at folder root - manual rules text is optional now"
 msgstr "Found {n} rules file(s) at folder root - manual rules text is optional now"
 
-#: src/network/interactive_games.py:494
+#: src/network/interactive_games.py:510
 #, python-brace-format
 msgid "Entity catalogs detected: {sections}"
 msgstr "Entity catalogs detected: {sections}"
 
-#: src/network/interactive_games.py:497
+#: src/network/interactive_games.py:513
 msgid "No supported files found in folder"
 msgstr "No supported files found in folder"
 
-#: src/network/interactive_games.py:510
+#: src/network/interactive_games.py:526
 #, python-brace-format
 msgid "Removed: {name}"
 msgstr "Removed: {name}"
 
-#: src/network/interactive_games.py:516
+#: src/network/interactive_games.py:532
 msgid "Name is required"
 msgstr "Name is required"
 
-#: src/network/interactive_games.py:520
+#: src/network/interactive_games.py:536
 msgid "API key is required"
 msgstr "API key is required"
 
-#: src/network/interactive_games.py:550
+#: src/network/interactive_games.py:566
 msgid "Game details"
 msgstr "Game details"
 
-#: src/network/interactive_games.py:584
+#: src/network/interactive_games.py:600
 msgid "Creator / provider / limits:"
 msgstr "Creator / provider / limits:"
 
-#: src/network/interactive_games.py:595
+#: src/network/interactive_games.py:611
 msgid "Attachments:"
 msgstr "Attachments:"
 
-#: src/network/interactive_games.py:603
+#: src/network/interactive_games.py:619
 msgid "Start session"
 msgstr "Start session"
 
-#: src/network/interactive_games.py:607
+#: src/network/interactive_games.py:623
 msgid "Download attachment"
 msgstr "Download attachment"
 
-#: src/network/interactive_games.py:611 src/network/interactive_games.py:749
-#: src/network/interactive_games.py:1211
+#: src/network/interactive_games.py:627 src/network/interactive_games.py:765
+#: src/network/interactive_games.py:1227
 msgid "Delete game"
 msgstr "Delete game"
 
-#: src/network/interactive_games.py:616 src/network/interactive_games.py:823
+#: src/network/interactive_games.py:632 src/network/interactive_games.py:839
 msgid "Close"
 msgstr "Close"
 
-#: src/network/interactive_games.py:639
+#: src/network/interactive_games.py:655
 msgid "Failed to load game"
 msgstr "Failed to load game"
 
-#: src/network/interactive_games.py:646
+#: src/network/interactive_games.py:662
 #, python-brace-format
 msgid "Creator: {name}"
 msgstr "Creator: {name}"
 
-#: src/network/interactive_games.py:647
+#: src/network/interactive_games.py:663
 #, python-brace-format
 msgid "Provider: {provider}"
 msgstr "Provider: {provider}"
 
-#: src/network/interactive_games.py:648
+#: src/network/interactive_games.py:664
 #, python-brace-format
 msgid "Tokens cap: {n}"
 msgstr "Tokens cap: {n}"
 
-#: src/network/interactive_games.py:649
+#: src/network/interactive_games.py:665
 #, python-brace-format
 msgid "Minutes cap: {n}"
 msgstr "Minutes cap: {n}"
 
-#: src/network/interactive_games.py:650
+#: src/network/interactive_games.py:666
 #, python-brace-format
 msgid "Max players: {n}"
 msgstr "Max players: {n}"
 
-#: src/network/interactive_games.py:658
+#: src/network/interactive_games.py:674
 msgid "(no attachments)"
 msgstr "(no attachments)"
 
-#: src/network/interactive_games.py:685
+#: src/network/interactive_games.py:701
 msgid "Opening session..."
 msgstr "Opening session..."
 
-#: src/network/interactive_games.py:694
+#: src/network/interactive_games.py:710
 msgid "Failed to start session"
 msgstr "Failed to start session"
 
-#: src/network/interactive_games.py:697
+#: src/network/interactive_games.py:713
 msgid "Session opened"
 msgstr "Session opened"
 
-#: src/network/interactive_games.py:710
+#: src/network/interactive_games.py:726
 #, python-brace-format
 msgid "Downloading {name}..."
 msgstr "Downloading {name}..."
 
-#: src/network/interactive_games.py:719
+#: src/network/interactive_games.py:735
 msgid "Failed to download"
 msgstr "Failed to download"
 
-#: src/network/interactive_games.py:729
+#: src/network/interactive_games.py:745
 #, python-brace-format
 msgid "Cannot save attachment: {error}"
 msgstr "Cannot save attachment: {error}"
 
-#: src/network/interactive_games.py:741
+#: src/network/interactive_games.py:757
 #, python-brace-format
 msgid "Cannot open attachment: {error}"
 msgstr "Cannot open attachment: {error}"
 
-#: src/network/interactive_games.py:747
+#: src/network/interactive_games.py:763
 #, python-brace-format
 msgid "Delete '{name}' and all its sessions? This cannot be undone."
 msgstr "Delete '{name}' and all its sessions? This cannot be undone."
 
-#: src/network/interactive_games.py:764 src/network/interactive_games.py:1226
+#: src/network/interactive_games.py:780 src/network/interactive_games.py:1242
 msgid "Failed to delete"
 msgstr "Failed to delete"
 
-#: src/network/interactive_games.py:766
+#: src/network/interactive_games.py:782
 msgid "Game deleted"
 msgstr "Game deleted"
 
-#: src/network/interactive_games.py:791
+#: src/network/interactive_games.py:807
 msgid "Interactive Games"
 msgstr "Interactive Games"
 
-#: src/network/interactive_games.py:813
+#: src/network/interactive_games.py:829
 msgid "Interactive Games (Entertainment)"
 msgstr "Interactive Games (Entertainment)"
 
-#: src/network/interactive_games.py:817
+#: src/network/interactive_games.py:833
 msgid "New game"
 msgstr "New game"
 
 #: src/network/interactive_game_session.py:720
-#: src/network/interactive_games.py:820
+#: src/network/interactive_games.py:836
 msgid "Refresh"
 msgstr "Refresh"
 
-#: src/network/interactive_games.py:828
+#: src/network/interactive_games.py:844
 msgid "Catalog:"
 msgstr "Catalog:"
 
-#: src/network/interactive_games.py:901
+#: src/network/interactive_games.py:917
 #, python-brace-format
 msgid "New game: {name} by {user}"
 msgstr "New game: {name} by {user}"
 
-#: src/network/interactive_games.py:918
+#: src/network/interactive_games.py:934
 #, python-brace-format
 msgid "New session for {name}: hosted by {user}"
 msgstr "New session for {name}: hosted by {user}"
 
 #: src/network/interactive_game_session.py:1186
-#: src/network/interactive_games.py:939
+#: src/network/interactive_games.py:955
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} of {}"
 
-#: src/network/interactive_games.py:951
+#: src/network/interactive_games.py:967
 #, python-brace-format
 msgid "{name} by {user} ({provider}), {n} active session(s)"
 msgstr "{name} by {user} ({provider}), {n} active session(s)"
 
-#: src/network/interactive_games.py:959
+#: src/network/interactive_games.py:975
 #, python-brace-format
 msgid "{game} hosted by {user}, {n} player(s), status: {status}"
 msgstr "{game} hosted by {user}, {n} player(s), status: {status}"
 
-#: src/network/interactive_games.py:982
+#: src/network/interactive_games.py:998
 msgid "Failed to load games"
 msgstr "Failed to load games"
 
-#: src/network/interactive_games.py:993
+#: src/network/interactive_games.py:1009
 msgid "(no games yet)"
 msgstr "(no games yet)"
 
-#: src/network/interactive_games.py:1006
+#: src/network/interactive_games.py:1022
 msgid "Failed to load sessions"
 msgstr "Failed to load sessions"
 
-#: src/network/interactive_games.py:1014
+#: src/network/interactive_games.py:1030
 msgid "(no active sessions)"
 msgstr "(no active sessions)"
 
-#: src/network/interactive_games.py:1029
+#: src/network/interactive_games.py:1045
 #, python-brace-format
 msgid "{tab}: {n} entries"
 msgstr "{tab}: {n} entries"
 
-#: src/network/interactive_games.py:1168
+#: src/network/interactive_games.py:1184
 msgid "Joining session..."
 msgstr "Joining session..."
 
-#: src/network/interactive_games.py:1177
+#: src/network/interactive_games.py:1193
 msgid "Failed to join"
 msgstr "Failed to join"
 
-#: src/network/interactive_games.py:1190
+#: src/network/interactive_games.py:1206
 msgid "Failed to open session window"
 msgstr "Failed to open session window"
 
-#: src/network/interactive_games.py:1207
+#: src/network/interactive_games.py:1223
 msgid "You can only delete your own games"
 msgstr "You can only delete your own games"
 
-#: src/network/interactive_games.py:1210
+#: src/network/interactive_games.py:1226
 #, python-brace-format
 msgid "Delete '{name}'? This cannot be undone."
 msgstr "Delete '{name}'? This cannot be undone."
 
-#: src/network/interactive_games.py:1228
+#: src/network/interactive_games.py:1244
 #, python-brace-format
 msgid "Deleted: {name}"
 msgstr "Deleted: {name}"
 
-#: src/network/interactive_games.py:1241
+#: src/network/interactive_games.py:1257
 msgid "Publishing game..."
 msgstr "Publishing game..."
 
-#: src/network/interactive_games.py:1260
+#: src/network/interactive_games.py:1276
 msgid "Failed to publish"
 msgstr "Failed to publish"
 
-#: src/network/interactive_games.py:1262
+#: src/network/interactive_games.py:1278
 msgid "Game published"
 msgstr "Game published"
 
-#: src/network/interactive_game_session.py:1503
-#: src/network/interactive_games.py:1281
+#: src/network/interactive_game_session.py:1566
+#: src/network/interactive_games.py:1297
 msgid "You must be connected to Titan-Net"
 msgstr "You must be connected to Titan-Net"
 
-#: src/network/interactive_games.py:1287
+#: src/network/interactive_games.py:1303
 msgid "Titan-Net: Interactive Games"
 msgstr "Titan-Net: Interactive Games"
 
@@ -448,12 +460,12 @@ msgid "Send action"
 msgstr "Send action"
 
 #: src/network/interactive_game_session.py:706
-#: src/network/interactive_game_session.py:1424
+#: src/network/interactive_game_session.py:1487
 msgid "Talk (mic OFF)"
 msgstr "Talk (mic OFF)"
 
 #: src/network/interactive_game_session.py:710
-#: src/network/interactive_game_session.py:1443
+#: src/network/interactive_game_session.py:1506
 msgid "Leave"
 msgstr "Leave"
 
@@ -571,50 +583,99 @@ msgstr "{mark}{user} (id {n}){left}"
 msgid " [left]"
 msgstr " [left]"
 
-#: src/network/interactive_game_session.py:1249
+#: src/network/interactive_game_session.py:1259
 msgid "(no character data yet — the AI will populate this)"
 msgstr "(no character data yet — the AI will populate this)"
 
-#: src/network/interactive_game_session.py:1258
-#: src/network/interactive_game_session.py:1391
+#: src/network/interactive_game_session.py:1265
+msgid "Statistics"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1273
+#, python-brace-format
+msgid "{stat}: {value} of {max}"
+msgstr "{stat}: {value} of {max}"
+
+#: src/network/interactive_game_session.py:1276
+msgid "{stat}: {value}"
+msgstr "{stat}: {value}"
+
+#: src/network/interactive_game_session.py:1283
+msgid "Carrying"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1292
+#, python-brace-format
+msgid "{item}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1293
+#, python-brace-format
+msgid "{item}, {count}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1297
+msgid "{key} {value}"
+msgstr "{key} {value}"
+
+#: src/network/interactive_game_session.py:1299
+#, python-brace-format
+msgid "{item} ({detail})"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1304
+msgid "Worn or held"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1307
+#, python-brace-format
+msgid "{slot}: {item}"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1314
+msgid "Other"
+msgstr ""
+
+#: src/network/interactive_game_session.py:1321
+#: src/network/interactive_game_session.py:1454
 #, python-brace-format
 msgid "{key}: {value}"
 msgstr "{key}: {value}"
 
-#: src/network/interactive_game_session.py:1263
+#: src/network/interactive_game_session.py:1326
 msgid "(no sound events yet)"
 msgstr "(no sound events yet)"
 
-#: src/network/interactive_game_session.py:1266
+#: src/network/interactive_game_session.py:1329
 #, python-brace-format
 msgid "Played: {label} at {ts}"
 msgstr "Played: {label} at {ts}"
 
-#: src/network/interactive_game_session.py:1400
+#: src/network/interactive_game_session.py:1463
 msgid "Type something first"
 msgstr "Type something first"
 
-#: src/network/interactive_game_session.py:1415
+#: src/network/interactive_game_session.py:1478
 msgid "Action rejected"
 msgstr "Action rejected"
 
-#: src/network/interactive_game_session.py:1424
+#: src/network/interactive_game_session.py:1487
 msgid "Talk (mic ON)"
 msgstr "Talk (mic ON)"
 
-#: src/network/interactive_game_session.py:1443
+#: src/network/interactive_game_session.py:1506
 msgid "Leave this session?"
 msgstr "Leave this session?"
 
-#: src/network/interactive_game_session.py:1458
+#: src/network/interactive_game_session.py:1521
 msgid "End the session for everyone?"
 msgstr "End the session for everyone?"
 
-#: src/network/interactive_game_session.py:1459
+#: src/network/interactive_game_session.py:1522
 msgid "End Session"
 msgstr "End Session"
 
-#: src/network/interactive_game_session.py:1510
+#: src/network/interactive_game_session.py:1573
 #, python-brace-format
 msgid "Titan-Net: Game Session #{sid}"
 msgstr "Titan-Net: Game Session #{sid}"

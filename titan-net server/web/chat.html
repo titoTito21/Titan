@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="chat.title">Chat — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -17,8 +17,7 @@
           <li><a href="index.html" data-i18n="nav.home">Home</a></li>
           <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
+          <li><a href="groups.html" data-i18n="nav.forum">Forum</a></li>
           <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
@@ -165,7 +164,22 @@
             <button id="voice-toggle" class="btn btn-secondary" type="button" aria-pressed="false">
               <span data-i18n="voice.start">Start voice</span>
             </button>
+            <!-- Push to talk: held down with the mouse, or with Space or
+                 Enter while it has the focus. A toggle would be simpler but
+                 it is not what a walkie-talkie is, and the desktop client
+                 has the same key. -->
+            <button id="ptt-button" class="btn btn-secondary" type="button"
+                    aria-pressed="false" aria-describedby="ptt-help">
+              <span data-i18n="voice.ptt">Push to talk</span>
+            </button>
+            <span id="ptt-help" class="sr-only" data-i18n="voice.ptt_help">Hold this button, or hold Space while it has the focus, to be heard.</span>
             <span id="voice-status" class="muted" role="status" aria-live="polite"></span>
+          </div>
+          <!-- Moderation of THIS room, for the people who may do it. -->
+          <div class="flex" id="room-mod" hidden>
+            <button type="button" id="room-kick" class="btn-secondary" data-i18n="chat.mod.kick">Remove somebody</button>
+            <button type="button" id="room-ban" class="btn-danger" data-i18n="chat.mod.ban">Ban somebody from this room</button>
+            <button type="button" id="room-unban" class="btn-secondary" data-i18n="chat.mod.unban">Lift a room ban</button>
           </div>
         </div>
         <div id="chat-log" class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Messages"></div>
@@ -181,6 +195,7 @@
       <aside class="chat-aside" aria-labelledby="users-heading">
         <h2 id="users-heading" data-i18n="chat.users">Online users</h2>
         <ul id="users-list" class="list-box" role="list"></ul>
+        <p class="help" data-i18n="chat.users_help">Enter on a name opens a private message. Each name also has a button to block that person.</p>
       </aside>
     </div>
   </main>
@@ -191,12 +206,15 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/tts.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
-  <script src="js/ws.js?v=20260804a"></script>
-  <script src="js/voice.js?v=20260804a"></script>
-  <script src="js/chat.js?v=20260804a"></script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/tts.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/voice.js?v=20260825b"></script>
+  <script src="js/chat.js?v=20260825b"></script>
 </body>
 </html>

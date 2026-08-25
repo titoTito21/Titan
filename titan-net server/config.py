@@ -112,7 +112,13 @@ class Config:
     MAIL_DOMAIN = os.getenv('MAIL_DOMAIN', 'titosofttitan.com')
     MAIL_FROM = os.getenv('MAIL_FROM', 'no-reply@titosofttitan.com')
     MAIL_FROM_NAME = os.getenv('MAIL_FROM_NAME', 'Titan-Net')
-    MAIL_PUBLIC_URL = os.getenv('MAIL_PUBLIC_URL', 'https://titosofttitan.com')
+    # Where the WEB PORTAL is, which is not where the site is: Apache
+    # serves it as `Alias /titannet/ /opt/titan-net/web/`, so a link built
+    # from the bare domain lands on the TitoSoft home page's document root,
+    # where there is no verify.html and no reset.html - a 404 for every
+    # person who followed a verification or password-reset mail. It must
+    # name the directory the portal is actually served from.
+    MAIL_PUBLIC_URL = os.getenv('MAIL_PUBLIC_URL', 'https://titosofttitan.com/titannet')
     SMTP_HOST = os.getenv('SMTP_HOST', '127.0.0.1')
     SMTP_PORT = int(os.getenv('SMTP_PORT', 25))
     SMTP_USER = os.getenv('SMTP_USER', '')

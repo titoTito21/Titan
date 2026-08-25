@@ -32,6 +32,18 @@
   window.Titan = window.Titan || {};
   window.Titan.clearRemember = clearRemember;
 
+  // Where to go once the user is in. A page that sent them here (because
+  // it needed a live session) named itself in ?return=, and dropping them
+  // on the chat instead means losing whatever they were doing.
+  function returnTarget() {
+    try {
+      const wanted = new URLSearchParams(location.search).get('return');
+      if (wanted && /^[a-z0-9_-]+\.html$/i.test(wanted)) return wanted;
+      if (wanted && /^[a-z0-9_-]+$/i.test(wanted)) return wanted + '.html';
+    } catch (e) {}
+    return 'chat.html';
+  }
+
   function showAlert(msg, type) {
     const el = document.getElementById('form-alert');
     if (!el) return;
@@ -94,11 +106,20 @@
         id: userData.id,
         username: userData.username,
         titan_number: userData.titan_number,
+        // Only ever used to decide what to OFFER. Every gated call is
+        // checked again on the server against the signed token.
+        role: userData.role || (userData.is_admin ? 'admin' : 'user'),
+        is_admin: !!userData.is_admin,
       },
       motd: resp.motd || null,
     });
     if (remember) saveRemember(u, p);
-    // One-shot password hand-off to chat.html (cleared after one use)
+    // The server only knows who you are inside a WebSocket session, and
+    // every page needs its own. The credentials therefore live as long as
+    // the TAB does, not for one page — otherwise the second page a user
+    // opens is bounced back here. (Kept in sessionStorage, so closing the
+    // tab forgets them.)
+    sessionStorage.setItem('titan.creds', JSON.stringify({ username: u, password: p }));
     sessionStorage.setItem('titan.once_login', JSON.stringify({ username: u, password: p }));
     ws.disconnect();
     return userData;
@@ -116,7 +137,7 @@
       submit.disabled = true;
       Titan.announce(t('login.auto_in'));
       doLogin(stored.username, stored.password, true)
-        .then(() => { location.href = 'chat.html'; })
+        .then(() => { location.href = returnTarget(); })
         .catch((err) => {
           submit.disabled = false;
           // Bad stored creds — wipe so we don't loop on a stale password
@@ -147,7 +168,7 @@
         if (!remember) clearRemember();
         const userData = await doLogin(u, p, remember);
         Titan.announce(t('login.welcome', userData.username));
-        location.href = 'chat.html';
+        location.href = returnTarget();
       } catch (err) {
         showAlert(err.message || t('err.generic'), 'error');
         submit.disabled = false;
@@ -214,7 +235,7 @@
             motd: loginResp.motd || null,
           });
           sessionStorage.setItem('titan.once_login', JSON.stringify({ username: u, password: p }));
-          location.href = 'chat.html';
+          location.href = returnTarget();
         } else {
           location.href = 'login.html';
         }

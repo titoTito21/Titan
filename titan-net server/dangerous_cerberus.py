@@ -93,33 +93,88 @@ class PersistentBanDB:
             c.execute('ALTER TABLE banned_ips ADD COLUMN all_ports INTEGER DEFAULT 0')
         except sqlite3.OperationalError:
             pass  # column already there
+        # When this ban stops applying (unix seconds; 0 = never). The
+        # ``permanent`` column was written from the start and never read back,
+        # so a LOCKDOWN ban the code called temporary was restored on every
+        # boot and enforced for ever: 295 addresses had accumulated here, and
+        # a wrong one among them had no way out but a moderator noticing it by
+        # hand. A term that runs out is what makes a false positive survivable.
+        try:
+            c.execute('ALTER TABLE banned_ips ADD COLUMN expires_at REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # column already there
+        c.execute('CREATE INDEX IF NOT EXISTS idx_banned_expiry ON banned_ips(expires_at)')
+        # A /24 ban is the highest-collateral thing Cerberus does - it blocks
+        # 254 addresses on the evidence of a handful, and behind a CGNAT range
+        # that is an entire neighbourhood of subscribers. It had no expiry
+        # column at all, so it was the one action that was always permanent
+        # and the one that should least have been. Terms are deliberately
+        # SHORTER than an individual ban's for the same reason.
+        try:
+            c.execute('ALTER TABLE banned_subnets ADD COLUMN expires_at REAL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # column already there
         conn.commit()
         conn.close()
 
     def add_ban(self, ip: str, reason: str, threat_level: int,
                 permanent: bool = True, fingerprint: str = "",
-                all_ports: bool = False) -> bool:
-        """Add IP to persistent ban database. Returns True if new ban."""
+                all_ports: bool = False, expires_at: float = 0.0) -> bool:
+        """Add IP to persistent ban database. Returns True if new ban.
+
+        ``expires_at`` is when the ban stops applying (unix seconds); 0 means
+        never. A permanent ban always wins over a temporary one, and between
+        two temporary ones the later expiry wins - re-offending extends a
+        term, it never shortens it.
+        """
         subnet = str(ipaddress.ip_network(f"{ip}/24", strict=False))
         now = datetime.now().isoformat()
+        if permanent:
+            expires_at = 0.0
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             c.execute('''INSERT INTO banned_ips
                 (ip, subnet, reason, threat_level, banned_at, permanent,
-                 attacker_fingerprint, total_attempts, last_attempt, all_ports)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                 attacker_fingerprint, total_attempts, last_attempt, all_ports,
+                 expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 ON CONFLICT(ip) DO UPDATE SET
                     reason = excluded.reason,
                     threat_level = MAX(threat_level, excluded.threat_level),
                     permanent = MAX(permanent, excluded.permanent),
                     total_attempts = total_attempts + 1,
                     last_attempt = excluded.last_attempt,
-                    all_ports = MAX(all_ports, excluded.all_ports)
+                    all_ports = MAX(all_ports, excluded.all_ports),
+                    expires_at = CASE
+                        WHEN MAX(permanent, excluded.permanent) = 1 THEN 0
+                        WHEN expires_at = 0 OR excluded.expires_at = 0 THEN 0
+                        ELSE MAX(expires_at, excluded.expires_at)
+                    END
             ''', (ip, subnet, reason, threat_level, now, int(permanent),
-                  fingerprint, now, int(all_ports)))
+                  fingerprint, now, int(all_ports), float(expires_at or 0.0)))
             conn.commit()
             return c.rowcount > 0
+        finally:
+            conn.close()
+
+    def purge_expired(self) -> List[str]:
+        """Delete every ban whose term has run out. Returns the IPs freed, so
+        the caller can take their firewall rules down too."""
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('SELECT ip FROM banned_ips '
+                      'WHERE permanent = 0 AND expires_at > 0 AND expires_at <= ?',
+                      (now,))
+            freed = [row[0] for row in c.fetchall()]
+            if freed:
+                c.execute('DELETE FROM banned_ips '
+                          'WHERE permanent = 0 AND expires_at > 0 AND expires_at <= ?',
+                          (now,))
+                conn.commit()
+            return freed
         finally:
             conn.close()
 
@@ -128,7 +183,8 @@ class PersistentBanDB:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
-            c.execute('SELECT ip FROM banned_ips WHERE all_ports = 1')
+            c.execute('SELECT ip FROM banned_ips WHERE all_ports = 1 AND '
+                      '(permanent = 1 OR expires_at = 0 OR expires_at > ?)', (time.time(),))
             return [row[0] for row in c.fetchall()]
         except sqlite3.OperationalError:
             return []
@@ -151,22 +207,44 @@ class PersistentBanDB:
             conn.close()
 
 
-    def add_subnet_ban(self, subnet: str, reason: str, trigger_ips: List[str]) -> bool:
-        """Ban an entire subnet"""
+    def add_subnet_ban(self, subnet: str, reason: str, trigger_ips: List[str],
+                       expires_at: float = 0.0) -> bool:
+        """Ban an entire subnet until ``expires_at`` (0 = never)."""
         now = datetime.now().isoformat()
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             c.execute('''INSERT INTO banned_subnets
-                (subnet, reason, ip_count, banned_at, trigger_ips)
-                VALUES (?, ?, ?, ?, ?)
+                (subnet, reason, ip_count, banned_at, trigger_ips, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(subnet) DO UPDATE SET
                     reason = excluded.reason,
-                    ip_count = excluded.ip_count
+                    ip_count = excluded.ip_count,
+                    expires_at = CASE
+                        WHEN expires_at = 0 OR excluded.expires_at = 0 THEN 0
+                        ELSE MAX(expires_at, excluded.expires_at)
+                    END
             ''', (subnet, reason, len(trigger_ips), now,
-                  json.dumps(trigger_ips)))
+                  json.dumps(trigger_ips), float(expires_at or 0.0)))
             conn.commit()
             return True
+        finally:
+            conn.close()
+
+    def purge_expired_subnets(self) -> List[str]:
+        """Delete every subnet ban whose term has run out; return them."""
+        now = time.time()
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        try:
+            c.execute('SELECT subnet FROM banned_subnets '
+                      'WHERE expires_at > 0 AND expires_at <= ?', (now,))
+            freed = [row[0] for row in c.fetchall()]
+            if freed:
+                c.execute('DELETE FROM banned_subnets '
+                          'WHERE expires_at > 0 AND expires_at <= ?', (now,))
+                conn.commit()
+            return freed
         finally:
             conn.close()
 
@@ -176,10 +254,12 @@ class PersistentBanDB:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
-            c.execute('SELECT 1 FROM banned_ips WHERE ip = ?', (ip,))
+            c.execute('SELECT 1 FROM banned_ips WHERE ip = ? AND '
+                      '(permanent = 1 OR expires_at = 0 OR expires_at > ?)', (ip, time.time()))
             if c.fetchone():
                 return True
-            c.execute('SELECT 1 FROM banned_subnets WHERE subnet = ?', (subnet,))
+            c.execute('SELECT 1 FROM banned_subnets WHERE subnet = ? AND '
+                      '(expires_at = 0 OR expires_at > ?)', (subnet, time.time()))
             return c.fetchone() is not None
         finally:
             conn.close()
@@ -189,7 +269,8 @@ class PersistentBanDB:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
-            c.execute('SELECT ip FROM banned_ips')
+            c.execute('SELECT ip FROM banned_ips WHERE '
+                      '(permanent = 1 OR expires_at = 0 OR expires_at > ?)', (time.time(),))
             return [row[0] for row in c.fetchall()]
         finally:
             conn.close()
@@ -199,7 +280,8 @@ class PersistentBanDB:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
-            c.execute('SELECT subnet FROM banned_subnets')
+            c.execute('SELECT subnet FROM banned_subnets WHERE '
+                      '(expires_at = 0 OR expires_at > ?)', (time.time(),))
             return [row[0] for row in c.fetchall()]
         finally:
             conn.close()
@@ -650,6 +732,31 @@ class FirewallManager:
         logger.warning(f"[FIREWALL] Blocked SUBNET: {subnet}")
         return True
 
+    def unblock_subnet(self, subnet: str) -> bool:
+        """Remove every firewall block for a whole /24.
+
+        The counterpart of ``block_subnet``, which had none - so before subnet
+        bans were given a term there was no code path anywhere that took a
+        /24 rule back out of the kernel. The widest-reaching block Cerberus
+        can impose was also the only one with no way to undo it.
+        """
+        for chain in (self.CHAIN, 'INPUT'):
+            for all_ports in (True, False):
+                for rule in self._drop_rules(subnet, all_ports):
+                    for _ in range(8):
+                        if not self._rule_exists(chain, rule):
+                            break
+                        r = self._run(['iptables', '-D', chain] + rule)
+                        if not r or r.returncode != 0:
+                            break
+        self._run(['ufw', 'delete', 'deny', 'from', subnet], input=b'y\n', timeout=10)
+        for port in self.BLOCKED_PORTS:
+            self._run(['ufw', 'delete', 'deny', 'from', subnet, 'to', 'any',
+                       'port', str(port)], input=b'y\n', timeout=10)
+        self._blocked_subnets.discard(subnet)
+        logger.warning(f"[FIREWALL] Lifted SUBNET ban: {subnet}")
+        return True
+
     def verify_ban(self, ip: str) -> bool:
         """Prove this ban is really in the kernel, and repair it if it is not.
 
@@ -911,44 +1018,90 @@ class DangerousCerberus(CerberusProtocol):
 
     def _load_persistent_whitelist(self):
         """Load whitelist from cerberus_whitelist.txt (one IP per line).
-        Also purges whitelisted IPs from ban DB and attacker profiles."""
+        Also purges whitelisted IPs from ban DB and attacker profiles.
+
+        The two early returns here used to skip the "Initialized" line at the
+        end of the function, so a server with no whitelist file - which is
+        what production actually had - started its most aggressive subsystem
+        without saying so in the log.
+        """
         try:
-            if not os.path.exists(self._whitelist_file):
-                return
-            loaded = []
-            with open(self._whitelist_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    self._whitelisted_ips.add(line)
-                    loaded.append(line)
-
-            if not loaded:
-                return
-
-            # Purge whitelisted IPs from ban DB and profiles
-            conn = sqlite3.connect(self.ban_db.db_path)
-            c = conn.cursor()
-            try:
-                for ip in loaded:
-                    c.execute('DELETE FROM banned_ips WHERE ip = ?', (ip,))
-                    c.execute('DELETE FROM attacker_profiles WHERE ip = ?', (ip,))
-                conn.commit()
-            finally:
-                conn.close()
-
-            logger.info(
-                f"[DANGEROUS CERBERUS] Loaded {len(loaded)} persistent "
-                f"whitelist entries, purged them from ban DB"
-            )
+            self._apply_persistent_whitelist()
         except Exception as e:
             logger.error(f"Failed to load persistent whitelist: {e}")
 
         logger.warning(
             "[DANGEROUS CERBERUS] Initialized - "
             "auto_firewall=ON, subnet_intelligence=ON, persistent_bans=ON, "
-            "ssh_protected=ON"
+            "ssh_protected=ON, "
+            f"whitelisted={len(self._whitelisted_ips)}"
+        )
+
+    def _apply_persistent_whitelist(self):
+        """Read the whitelist file and clear its addresses out of the ban DB."""
+        if not os.path.exists(self._whitelist_file):
+            # Worth saying out loud: with no file, only loopback is exempt, so
+            # nothing stands between the operator's own address and a ban.
+            logger.warning(
+                f"[DANGEROUS CERBERUS] {self._whitelist_file} does not exist - "
+                f"only loopback is exempt from banning. Put one address per "
+                f"line in that file (your own address, any monitoring or "
+                f"backup host) so this server cannot lock you out of it."
+            )
+            return
+        loaded = []
+        with open(self._whitelist_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                # Accepts '203.0.113.4' and '203.0.113.0/24' alike.
+                if self._register_whitelist_entry(line):
+                    loaded.append(line)
+
+        if not loaded:
+            return
+
+        # Which BANNED addresses does the whitelist now cover? A CIDR entry
+        # has to be expanded against the rows that exist rather than deleted
+        # by name, or listing your office range would leave every already
+        # banned address inside it banned - a whitelist that does not free
+        # what it covers is a whitelist that does not work.
+        conn = sqlite3.connect(self.ban_db.db_path)
+        c = conn.cursor()
+        freed = []
+        try:
+            known = [r[0] for r in c.execute('SELECT ip FROM banned_ips')]
+            freed = [ip for ip in known if self.is_whitelisted(ip)]
+            for ip in set(freed) | {e for e in loaded if '/' not in e}:
+                c.execute('DELETE FROM banned_ips WHERE ip = ?', (ip,))
+                c.execute('DELETE FROM attacker_profiles WHERE ip = ?', (ip,))
+            for subnet in [r[0] for r in c.execute('SELECT subnet FROM banned_subnets')]:
+                head = subnet.split('/')[0]
+                if self.is_whitelisted(head):
+                    c.execute('DELETE FROM banned_subnets WHERE subnet = ?', (subnet,))
+                    if self.auto_firewall:
+                        try:
+                            self.firewall.unblock_subnet(subnet)
+                        except Exception:
+                            pass
+            conn.commit()
+        finally:
+            conn.close()
+
+        # And out of the kernel, in case one was banned before it was listed.
+        if self.auto_firewall:
+            for ip in set(freed) | {e for e in loaded if '/' not in e}:
+                try:
+                    self.firewall.unblock_ip(ip)
+                    self._banned_ips.discard(ip)
+                    self._permanent_banned_ips.discard(ip)
+                except Exception:
+                    pass
+
+        logger.info(
+            f"[DANGEROUS CERBERUS] Loaded {len(loaded)} persistent "
+            f"whitelist entries, purged them from ban DB"
         )
 
     def _restore_persistent_bans(self):
@@ -1021,6 +1174,116 @@ class DangerousCerberus(CerberusProtocol):
         low = (reason or "").lower()
         return 'ssh' in low or 'honeypot' in low
 
+    # How long a LOCKDOWN ban lasts, by how many times this address has been
+    # banned before. Progressive rather than flat: an occasional hit is gone
+    # in a day, a returning one is held for a week, and an address that keeps
+    # coming back stops being let out at all. Overridable per deployment.
+    # A /24 ban is lifted sooner than an individual one however many
+    # offences are behind it: the addresses it blocks are mostly not the
+    # attacker, and behind a CGNAT range they are somebody's neighbours.
+    SUBNET_BAN_TERM = 7 * 24 * 3600
+
+    BAN_TERMS = (
+        24 * 3600,        # first offence   - one day
+        3 * 24 * 3600,    # second          - three days
+        7 * 24 * 3600,    # third           - a week
+        30 * 24 * 3600,   # fourth          - a month
+    )
+
+    def note_banned_activity(self, ip: str, detail: str = "") -> bool:
+        """Override: an answered address talking to us is not a leaking ban.
+
+        The base class reads traffic from a banned address as proof the block
+        is not in force - "a firewall rule that was flushed, never added, or
+        shadowed by an earlier ACCEPT" - and permabans an address that keeps
+        coming through one. But when the answer channel is open there IS
+        deliberately an ACCEPT, because that is how the packet reaches the tar
+        pit for Blackwall to speak into. So the one thing the check treats as
+        proof of failure is, for these addresses, the design working. Left
+        alone it re-verified a healthy ban over and over and then permabanned
+        the address for the retries the channel exists to receive.
+        """
+        if self._came_through_answer_channel(ip):
+            return False
+        return super().note_banned_activity(ip, detail)
+
+    def _came_through_answer_channel(self, ip: str) -> bool:
+        """True if this address's port 22 is currently being redirected into
+        the tar pit, so a 'honeypot' hit from it is our own doing.
+
+        Asked of the firewall rather than remembered here, because the channel
+        is opened, restored and removed by the firewall and a second copy of
+        that state would drift out of step with the kernel.
+        """
+        if not self.auto_firewall:
+            return False
+        try:
+            return ip in set(self.firewall.answered_ips())
+        except Exception as e:
+            logger.error(f"[DANGEROUS CERBERUS] answer-channel check failed: {e}")
+            # Fail towards NOT manufacturing evidence: if we cannot tell
+            # whether we redirected them, we must not permaban them for it.
+            return True
+
+    def _ban_expiry(self, ip: str) -> float:
+        """When a LOCKDOWN ban on ``ip`` should lapse. 0 = never."""
+        offences = self._offense_history.get(ip, 0)
+        if offences >= len(self.BAN_TERMS):
+            return 0.0          # persistent attacker - the term stops running out
+        return time.time() + self.BAN_TERMS[offences]
+
+    def release_expired_bans(self) -> int:
+        """Lift every ban whose term has run out - database, memory, kernel.
+
+        Called hourly by the server. Without it the expiry columns would be
+        bookkeeping nobody acts on, which is what the ``permanent`` flag was
+        for years.
+        """
+        try:
+            freed = self.ban_db.purge_expired()
+        except Exception as e:
+            logger.error(f"[DANGEROUS CERBERUS] ban expiry query failed: {e}")
+            return 0
+        released = 0
+        try:
+            for subnet in self.ban_db.purge_expired_subnets():
+                if self.auto_firewall:
+                    try:
+                        self.firewall.unblock_subnet(subnet)
+                    except Exception as e:
+                        logger.error(
+                            f"[DANGEROUS CERBERUS] could not lift {subnet}: {e}")
+                        continue
+                self._subnet_tracker.pop(subnet, None)
+                released += 1
+                self._log_intrusion(
+                    "SUBNET_BAN_EXPIRED", subnet,
+                    "the subnet ban's term ran out - the range is free again")
+        except Exception as e:
+            logger.error(f"[DANGEROUS CERBERUS] subnet expiry failed: {e}")
+        for ip in freed:
+            # A permanent ban imposed since the row was read wins; ask again.
+            try:
+                if self.ban_db.is_banned(ip):
+                    continue
+            except Exception:
+                pass
+            self._banned_ips.discard(ip)
+            self._ip_threat.pop(ip, None)
+            if self.auto_firewall:
+                try:
+                    self.firewall.unblock_ip(ip)
+                except Exception as e:
+                    logger.error(
+                        f"[DANGEROUS CERBERUS] could not lift the rule for {ip}: {e}")
+                    continue
+            released += 1
+            self._log_intrusion(
+                "BAN_EXPIRED", ip,
+                f"ban term ran out after {self._offense_history.get(ip, 0)} "
+                f"recorded offence(s) - the address is free again")
+        return released
+
     def _set_ip_threat(self, ip: str, level: int, reason: str):
         """Override: add firewall blocking + persistent bans + subnet analysis"""
         # A whitelisted address is never blocked, never persisted and never
@@ -1041,12 +1304,21 @@ class DangerousCerberus(CerberusProtocol):
             if self.auto_firewall:
                 self.firewall.block_ip(ip, all_ports=all_ports)
 
-            # Persist to database
+            # Persist to database, with a TERM. A ban that never runs out
+            # makes every false positive permanent, and the ones this system
+            # gets wrong are exactly the ones nobody is watching for - an
+            # address that scanned once from a range somebody else is now
+            # renting, or a shared/CGNAT address behind which one infected
+            # machine sits among many innocent subscribers. A repeat offender
+            # earns a longer term each time and eventually a permanent one, so
+            # nothing is lost against an attacker who really is persistent.
             if self.persistent_bans:
+                permanent = (level >= THREAT_CERBERUS)
                 self.ban_db.add_ban(
                     ip, reason, level,
-                    permanent=(level >= THREAT_CERBERUS),
+                    permanent=permanent,
                     all_ports=all_ports,
+                    expires_at=0.0 if permanent else self._ban_expiry(ip),
                 )
 
             # Subnet intelligence
@@ -1085,7 +1357,11 @@ class DangerousCerberus(CerberusProtocol):
                     self.firewall.block_subnet(subnet)
 
                 if self.persistent_bans:
-                    self.ban_db.add_subnet_ban(subnet, reason, all_ips)
+                    # A term, for the same reason an IP ban has one - more so:
+                    # this blocks 254 addresses on the evidence of a handful.
+                    self.ban_db.add_subnet_ban(
+                        subnet, reason, all_ips,
+                        expires_at=time.time() + self.SUBNET_BAN_TERM)
 
                 self._log_intrusion(
                     "SUBNET_BAN", ip,
@@ -1127,6 +1403,34 @@ class DangerousCerberus(CerberusProtocol):
         # CRITICAL: skip whitelisted IPs - don't profile or log them
         if self.is_whitelisted(ip):
             return
+
+        # A connection that arrived through the ANSWER CHANNEL is not evidence.
+        #
+        # The channel is a `nat PREROUTING REDIRECT --to-ports 2223` we put in
+        # front of a banned address's port 22 so Blackwall has somewhere to
+        # speak to them. The attacker did not choose to touch a honeypot port -
+        # they knocked on SSH exactly as before, and we moved the door. Feeding
+        # that back in as a fresh honeypot hit closed a loop that manufactured
+        # its own evidence: ban -> redirect -> bot retries twice (seconds, for
+        # a bot) -> "2nd login attempt, confirmed attacker" -> PERMANENT
+        # all-ports ban plus countermeasures. Measured on production: 217 of
+        # the 224 permanent bans read exactly that, and the permanent count
+        # rose from 194 to 224 in the two hours after ban expiry was
+        # introduced - the loop was quietly undoing it as fast as it was
+        # applied.
+        #
+        # Traffic from an address we have banned is still worth noticing, so
+        # it goes where that belongs: note_banned_activity, which re-verifies
+        # the block is really in the kernel and escalates on a counted
+        # threshold instead of on two retries.
+        if self._came_through_answer_channel(ip):
+            self._log_intrusion(
+                "ANSWER_CHANNEL", ip,
+                "SSH retry delivered into the tar pit by our own redirect - "
+                "recorded, not counted as an attack")
+            self.ban_db.update_profile(ip, attack_type="answer_channel_retry")
+            return
+
         # Whoever knocks on a fake SSH is attacking SSH: their ban covers
         # every port, port 22 above all.
         self._ssh_offenders.add(ip)

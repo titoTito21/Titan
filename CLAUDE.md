@@ -671,6 +671,168 @@ and over by an attacker nothing was counting any more.
   about a block, a request made while an attacker is waiting).
 
 
+### The Titan-Net website: everything the server can do, in a browser
+
+`titan-net server/web/` is the whole of Titan-Net without Titan. Every
+WebSocket message type the server answers and every HTTP route it serves is
+reachable from it — chat and rooms, private messages, voice and push to
+talk, the forum, groups, Titan Mail, the repository (browsing **and**
+uploading), extensions, the Feedback Hub, interactive games (playing,
+speaking into, and writing one), the server's own remote-UI services, the
+account (recovery email, blocked people, your own sounds, connected
+services, your page elsewhere) and the whole moderation panel including the
+Cerberus and Blackwall dashboard.
+
+- **It is accessible because it is native.** A dialog is `<dialog>` (the
+  browser owns the focus trap, Escape and the inert background), a tab bar
+  is a real `role="tablist"` with arrow keys and one Tab stop, a menu is
+  `<details>`/`<summary>` (the platform says "collapsed"/"expanded" itself,
+  so no word is written into the label), a progress bar is `<progress>`, a
+  sound is `<audio controls>`. `src/…`-style hand-rolled widgets are the
+  thing this deliberately does not have.
+  - `js/ui.js` is the shared kit: dialogs that give the focus **back** to
+    whatever opened them (the part the browser does not do), a tablist, two
+    live regions (polite for updates, assertive for errors), per-field
+    errors wired through `aria-describedby`, and `focusHeading` for the
+    navigations that have no page load behind them.
+  - Colour never carries meaning alone: a selected tab is reversed AND
+    bold AND underlined, `aria-current="page"` marks the nav entry, and
+    `@media (forced-colors: active)` keeps all of it when the palette is
+    replaced.
+  - CSS generated content is read out by screen readers, so a separator is
+    **drawn** (a border) rather than written (a guillemet in `::before`).
+- **One socket per tab, not per page.** The server only knows who you are
+  inside a WebSocket session, so every page needs its own login.
+  `js/session.js` holds the credentials for the tab's lifetime and hands
+  every page the same connected socket — before this, the SECOND page a
+  user opened found the one-shot credential already consumed and bounced
+  them back to the login form. It also re-logs in after a dropped
+  connection, or every request after a hiccup answers "Not authenticated".
+- **The navigation is one list** (`js/app.js`), built at run time, with the
+  moderation entry shown only to staff. Fifteen pages each carrying their
+  own copy is how a page ends up missing an entry.
+- **A role decides what is OFFERED; the server decides what is allowed.**
+  Every gated call is checked again server-side against the signed token,
+  so a user who edits their own storage gains a menu entry that answers
+  "permission denied".
+- **Both languages, always.** `js/i18n.js` holds English and Polish; a key
+  that is missing does not fail, it renders the key name to the user, so
+  the sweep below checks every key a page asks for.
+- Checks, run from `titan-net server/web/`: a static accessibility sweep
+  (every control named, no heading skipped, no dangling `aria-*` reference,
+  no `role="button"` on a div), a translation-key sweep (every key used
+  exists in both languages), and a dependency sweep (every page loads the
+  modules its scripts use).
+
+### Interactive games: the server is what remembers
+
+A game on Titan-Net is narrated. The creator writes the rules, the server
+holds a Gemini Live session per table (`titan-net server/gemini_game_worker.py`),
+and what the model does reaches the players as messages their client already
+knows: `game_ai_text`, `game_ai_audio`, `game_menu`, `game_play_sound`,
+`game_turn_changed`. The clients are `src/network/interactive_games.py` +
+`interactive_game_session.py` (desktop) and `titan-net server/web/games.html`
+(web).
+
+- **The prompt is the creator's, sealed as data.** `build_system_prompt`
+  puts `rules_text` and every attached `.txt`/`.md`/`.json` inside
+  `<GAME_RULES_DATA>`, with a folder becoming a labelled catalogue section
+  (`objects/`, `classes/`, `quests/`) so the model looks an entity up
+  instead of inventing it. `sanitize_creator_prompt` redacts the obvious
+  "ignore all previous" attempts; the envelope is what actually stops an
+  override. The API key is decrypted server-side and never enters the
+  prompt.
+  - **An attachment that cannot be decrypted is SKIPPED, never passed
+    through.** Rule files are Fernet-encrypted at rest, and a worker
+    without the key used to put the *ciphertext* into the system prompt -
+    a wall of base64 where the rules should be, which costs tokens,
+    teaches the model nothing, and looks like a working game right up
+    until it ignores every rule it was given.
+- **The RPG layer exists because the model cannot keep a number.** It will
+  say "twelve arrows", let a player fire three, and say eleven two turns
+  later. So arithmetic and possession are the server's:
+  - **world variables** - `state_set` / `state_get`, dotted keys nest
+  - **statistics** - `set_stat` / `change_stat` / `get_stats`. `change_stat`
+    takes a delta, so damage, healing and spending are one atomic step; the
+    server clamps (hit points and gold cannot go below zero, healing stops
+    at the maximum) and answers with the value it ended on
+  - **inventory** - `give_item` / `take_item` / `list_inventory`.
+    Quantities stack, and `take_item` **refuses** when they have not got
+    that many, so the model finds out instead of narrating a spent arrow
+    nobody had
+  - **equipment** - `equip_item` / `unequip_item` / `list_equipment`. A
+    slot holds one thing; equipping into a full slot puts the old one back
+    in the pack, and losing an item takes it off
+  - **checks** - `skill_check` rolls, adds the statistic, compares with the
+    difficulty and says whether it passed. The *server* decides, because a
+    model asked to roll and judge in one breath decides first and rolls
+    afterwards. Every check goes into the session log.
+  - A sheet is one JSON object per player -
+    `{"stats": {"hp": {"value": 9, "max": 12}}, "inventory": [...],
+    "equipment": {...}}` - and every change is one read-modify-write inside
+    the database writer lock (`Database.mutate_character_state`), so two
+    changes in one turn cannot lose each other.
+  - **The sheet is rendered as words, never as JSON.** `json.dumps` put
+    braces, quotes and the word "value" into a line a screen reader then
+    read character by character; both clients spell it out ("hp: 7 of 12",
+    "arrow, 12", "hand: sword").
+  - Every change broadcasts `game_state_changed` (which every client
+    already refreshes on, so an older one keeps working) **and**
+    `game_character_changed`, which says what actually moved.
+- **A player's words reach the model prefixed `[username] `**, which is the
+  only identifier it is ever given - it never sees numeric ids, and the
+  tools that target somebody take `target_username` back. A hallucinated
+  id degrades to the whole table rather than being dropped, because a menu
+  nobody sees is a stuck game.
+- **One AI turn is one line.** Gemini ships text a token at a time; the
+  receive loop buffers to `turn_complete` and de-duplicates, so a player
+  hears one sentence rather than thirty fragments. Audio streams through
+  as it arrives.
+- **A reconnect recaps the players' actions, not the model's replies.** A
+  recorded model turn holds the words but not the function calls that went
+  with them, and feeding that half back is what produced 1011 errors on
+  the next message.
+- **Asking for AUDIO is not the same as giving up the host's voice**, and
+  it used to be treated as though it were. Titan asks Gemini for TEXT
+  precisely so the host's own Titan TTS narrates the table; a key with no
+  text-mode Live model fell back to AUDIO and the room was told the AI
+  would speak in its own voice instead. Two things were wrong with that:
+  - **The fallback was reached over models that were never asked.** The
+    connect loop rotated to the next candidate only on `1008` / "not
+    found" / "not supported for bidi" - and a native-audio model handed
+    `response_modalities=["TEXT"]` refuses with a message about the
+    MODALITY, which matches none of the three. So the loop gave up at the
+    first candidate and never reached `gemini-2.0-flash-live-001`, the
+    persistent 'live' model further down the list that would have taken
+    TEXT happily. It now rotates on anything but an unusable key
+    (`_connect_error_is_fatal`), which is the only failure the next model
+    cannot fix.
+  - **The fallback keeps the host anyway.** `output_audio_transcription`
+    is on the config, so the model captions its own speech: the line
+    still arrives as text and the host narrates it exactly as on the TEXT
+    path. What is really lost is the head start - the model composes the
+    speech before it answers - which is what the room is now told. The
+    model's own PCM is dropped **while a host is narrating**
+    (`_host_narrating()`, asked per turn because audio streams before
+    `turn_complete`); relaying both is the same sentence in two voices a
+    beat apart. A table with no host voice still hears Gemini, and a host
+    who leaves mid-game gives Gemini its voice back on the next turn.
+- **The rules are read once per CONNECTION, not once per turn.** They are
+  the `system_instruction`, so the model holds them for every turn on a
+  persistent 'live' model. A reconnect re-sends them - and the
+  native-audio class closes the socket after every turn, so on that class
+  a long ruleset is paid for once a turn, which is the other reason
+  reaching a persistent model matters. The prompt's size is logged at
+  session start so this is measured rather than guessed. The game's
+  *state* is never in the model's context at all: statistics, inventory,
+  equipment and world variables live on the server, which is why a
+  reconnect loses wording and never loses the game.
+- Tests: `titan-net server/test_interactive_games.py` (run it directly;
+  159 tests, no API key, no network, ~6 s). The model is a scripted
+  stand-in speaking the Live SDK's shape, which is the only way to test the
+  answers a real model gets *wrong* - an invented user id, a menu aimed at
+  nobody, an arrow that was never carried.
+
 ### Titan IM: WhatsApp and Messenger (web as backend)
 
 

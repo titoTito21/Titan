@@ -18,6 +18,7 @@ Detection triggers:
   - Manual admin activation
 """
 
+import ipaddress
 import logging
 import logging.handlers
 import os
@@ -34,6 +35,11 @@ except ImportError:                                  # pragma: no cover
 logger = logging.getLogger('CerberusProtocol')
 
 # Threat levels
+# How many days of intrusion history to keep. Rotation bounds the file size;
+# this bounds the history, and it is deliberately long enough to answer "has
+# this address been here before" - which is the question the log exists for.
+INTRUSION_LOG_DAYS = int(os.environ.get('CERBERUS_LOG_DAYS', '90'))
+
 THREAT_NORMAL = 0
 THREAT_ALERT = 1
 THREAT_LOCKDOWN = 2
@@ -65,6 +71,9 @@ class CerberusProtocol:
             "127.0.0.1",        # localhost
             "::1",              # localhost IPv6
         }
+        # CIDR ranges, from whitelist lines that contain a '/'. Kept apart
+        # from the exact addresses so the common case stays a set lookup.
+        self._whitelisted_networks: List[Any] = []
 
         # --- Per-IP threat tracking ---
         # {ip: {"level": int, "last_activity": float, "reason": str}}
@@ -125,6 +134,10 @@ class CerberusProtocol:
         self.account_lock_window = 600
         self.account_lock_seconds = 900   # 15 min protective lock
         self._locked_accounts: Dict[str, float] = {}   # username -> unlock ts
+        # Which sources may drive a protective lock. The lock exists to stop
+        # somebody guessing a TITAN-NET password, so only a Titan-Net login
+        # can earn one - see the note in ``account_guard_on_failed_login``.
+        self.lock_account_sources: Set[str] = {"app"}
         # Password-reset / sensitive-action abuse per IP.
         self._reset_requests: Dict[str, List[float]] = defaultdict(list)
         self.reset_alert = 5
@@ -137,10 +150,28 @@ class CerberusProtocol:
         # username (e.g. 'root'). We track, per username, the DISTINCT source
         # IPs that have failed against it; when too many different IPs converge
         # on one account we treat every one of them as an attacker at once.
-        # {username: {ip: last_ts}}
-        self._account_source_ips: Dict[str, Dict[str, float]] = defaultdict(dict)
+        # {username: {ip: [failure timestamps]}} - the timestamps, not just the
+        # last one, because how HARD an address pushed at this account is what
+        # separates a participant from a passer-by (see
+        # ``distributed_attack_min_failures``).
+        self._account_source_ips: Dict[str, Dict[str, List[float]]] = defaultdict(dict)
         self.distributed_attack_ips = 5        # distinct IPs on one account -> coordinated
         self.distributed_attack_window = 900   # 15 min correlation window
+        # An IP is a CAMPAIGN PARTICIPANT only once it has produced this many
+        # failures of its own inside the window. Without it, correlating on a
+        # username banned every address that had tried it even once - and a
+        # single attempt is what an internet-wide scanner makes against every
+        # host it walks past. Measured on this server: of the addresses that
+        # ended up banned, 194 had made exactly ONE failed login and 94 had
+        # made two, which is a mass ban of unrelated scanners rather than the
+        # detection of a coordinated campaign. Sharing a target is not
+        # evidence of sharing an operator; sharing a target while individually
+        # hammering it is.
+        self.distributed_attack_min_failures = 3
+        # Names the correlator is allowed to correlate ON. A reserved name is
+        # excluded (see ``_correlatable_account``): 'root' is the most-attacked
+        # username on the internet, so five unrelated botnets converging on it
+        # inside fifteen minutes is the base rate, not a campaign.
 
         # --- Distributed brute force: MANY IPs from one /24, ANY account ---
         # Counts distinct failing IPs per subnet directly on the failed-login
@@ -171,6 +202,17 @@ class CerberusProtocol:
             "ubuntu", "debian", "centos", "vagrant",
             "ftpuser", "www-data", "webmaster", "nginx",
             "apache", "nobody", "daemon", "jenkins", "tomcat",
+            # Service accounts every internet-wide SSH sweep walks through.
+            # They were missing, so a sweep hitting them was read as an
+            # attack on an ordinary Titan-Net account: 'crypto' and 'docker'
+            # each drove a protective lock on this server on 2026-08-24
+            # despite no such account existing. A genuine registration under
+            # any of these is exempted by ``is_real_account`` below.
+            "crypto", "docker", "kubernetes", "k8s", "hadoop", "elastic",
+            "elasticsearch", "redis", "mongodb", "rabbitmq", "zabbix",
+            "nagios", "prometheus", "grafana", "solr", "odoo", "bitnami",
+            "ansible", "teamspeak", "minecraft", "steam", "sftp", "scp",
+            "ec2-user", "azureuser", "opc", "cloud-user", "esadmin",
         }
         # Optional callback -> True if a username is a real registered account.
         # Wired by server.py so a genuine account is never mistaken for a
@@ -244,6 +286,16 @@ class CerberusProtocol:
         # --- Tracked attackers (for countermeasures) ---
         # {ip: {"threat_score": int, "first_seen": float, "type": str}}
         self._tracked_attackers: Dict[str, Dict] = {}
+        # Honeypot attempts are counted inside a WINDOW, not for ever. The
+        # escalation is "a second attempt means they came back deliberately",
+        # which is only true of a second attempt soon after the first: this
+        # dictionary was never pruned, so two knocks a month apart read as a
+        # confirmed attacker and earned a permanent all-ports ban. It also
+        # grew without bound - one entry per address that ever touched this
+        # server, kept for the life of the process.
+        self.honeypot_window = 3600            # 1 hour
+        self.tracked_attacker_ttl = 24 * 3600  # forget a quiet address
+        self._last_attacker_sweep = 0.0
 
         # --- Global lockdown state (only for distributed DDoS / manual) ---
         self._lockdown_active = False
@@ -343,10 +395,16 @@ class CerberusProtocol:
         return items[-n:]
 
     def _setup_intrusion_logger(self):
-        """Setup dedicated intrusion log file with auto-rotation every 2 days.
+        """Setup the dedicated intrusion log: rotated nightly, kept for
+        ``INTRUSION_LOG_DAYS`` days.
 
-        Old rotated logs are pruned after 1 backup so Cerberus never keeps more
-        than ~4 days of history.
+        It used to rotate every 2 days with ``backupCount=1``, so Cerberus
+        never held more than about four days and a threat report asking "when
+        did this address first appear" could not be answered - the evidence
+        had been deleted by the thing that collected it. Rotation is what
+        bounds the size; deleting the history is not, and an intrusion log
+        whose whole point is to establish a pattern over time must not be the
+        one file that forgets.
         """
         self._intrusion_logger = logging.getLogger('CerberusIntrusions')
         self._intrusion_logger.setLevel(logging.WARNING)
@@ -356,9 +414,9 @@ class CerberusProtocol:
             self._intrusion_logger.removeHandler(h)
         handler = logging.handlers.TimedRotatingFileHandler(
             self._intrusion_log,
-            when='D',
-            interval=2,
-            backupCount=1,
+            when='midnight',
+            interval=1,
+            backupCount=INTRUSION_LOG_DAYS,
             encoding='utf-8',
             utc=False,
         )
@@ -406,20 +464,67 @@ class CerberusProtocol:
     # ================================================================
 
     def add_whitelisted_ip(self, ip: str):
-        """Add IP to whitelist - will never be blocked"""
-        self._whitelisted_ips.add(ip)
+        """Add an address OR a CIDR range to the whitelist."""
+        self._register_whitelist_entry(ip)
         # Remove from bans if was accidentally banned
         self._banned_ips.discard(ip)
         self._permanent_banned_ips.discard(ip)
         logger.info(f"[CERBERUS] IP whitelisted: {ip}")
 
     def remove_whitelisted_ip(self, ip: str):
-        """Remove IP from whitelist"""
+        """Remove an address or a CIDR range from the whitelist."""
         self._whitelisted_ips.discard(ip)
+        if '/' in (ip or ''):
+            try:
+                net = ipaddress.ip_network(ip, strict=False)
+            except ValueError:
+                return
+            self._whitelisted_networks = [
+                n for n in self._whitelisted_networks if n != net]
 
     def is_whitelisted(self, ip: str) -> bool:
-        """Check if IP is whitelisted"""
-        return ip in self._whitelisted_ips
+        """Check if IP is whitelisted, by exact address or by CIDR range.
+
+        Exact string matching was all there was, so an operator on a dynamic
+        address, an office range or a monitoring provider could not be
+        protected at all - you cannot list every address a DHCP lease might
+        hand you. The whole point of the whitelist is that the machine cannot
+        lock its owner out, and that promise was only keepable for a static
+        address.
+        """
+        if not ip:
+            return False
+        if ip in self._whitelisted_ips:
+            return True
+        if not self._whitelisted_networks:
+            return False
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        for net in self._whitelisted_networks:
+            try:
+                if addr in net:
+                    return True
+            except TypeError:
+                continue        # v4 address against a v6 network
+        return False
+
+    def _register_whitelist_entry(self, entry: str) -> bool:
+        """Take one whitelist line - an address or a CIDR range."""
+        entry = (entry or "").strip()
+        if not entry:
+            return False
+        if '/' in entry:
+            try:
+                self._whitelisted_networks.append(
+                    ipaddress.ip_network(entry, strict=False))
+                return True
+            except ValueError:
+                logger.error(f"[CERBERUS] not a usable whitelist range: {entry}")
+                return False
+        self._whitelisted_ips.add(entry)
+        return True
 
     # ================================================================
     # PER-IP THREAT MANAGEMENT (not global)
@@ -639,6 +744,8 @@ class CerberusProtocol:
                 "type": "brute_force"
             }
         self._tracked_attackers[ip]["threat_score"] += 1
+        self._tracked_attackers[ip]["last_seen"] = now
+        self._sweep_tracked_attackers(now)
 
         # Escalation: per-IP only (no global lockdown for brute force)
         if count >= self.cerberus_failed_logins:
@@ -815,10 +922,19 @@ class CerberusProtocol:
                 "honeypot_attempts": 0
             }
         self._tracked_attackers[ip]["threat_score"] += 25
-        self._tracked_attackers[ip]["honeypot_attempts"] = \
-            self._tracked_attackers[ip].get("honeypot_attempts", 0) + 1
+        # Count the knocks inside the window, not since the process started.
+        now = time.time()
+        hits = self._prune(
+            self._tracked_attackers[ip].get("honeypot_hits", []),
+            self.honeypot_window, now)
+        hits.append(now)
+        self._tracked_attackers[ip]["honeypot_hits"] = hits
+        self._tracked_attackers[ip]["last_seen"] = now
+        # Kept for the dashboard and for anything reading the old key.
+        self._tracked_attackers[ip]["honeypot_attempts"] = len(hits)
+        self._sweep_tracked_attackers(now)
 
-        attempts = self._tracked_attackers[ip]["honeypot_attempts"]
+        attempts = len(hits)
 
         # Escalate based on attempt count
         if attempts >= 2:
@@ -956,6 +1072,51 @@ class CerberusProtocol:
                                 f"Privilege escalation attempt(s) ({n}) by user={actor_user_id} on {resource}")
         return False
 
+    def _sweep_tracked_attackers(self, now: float):
+        """Forget addresses that have been quiet for ``tracked_attacker_ttl``.
+
+        Rate-limited to once a minute: this runs on the attack path, and an
+        attack is exactly when the dictionary is largest.
+        """
+        if now - self._last_attacker_sweep < 60:
+            return
+        self._last_attacker_sweep = now
+        cutoff = now - self.tracked_attacker_ttl
+        stale = [
+            ip for ip, d in self._tracked_attackers.items()
+            if d.get("last_seen", d.get("first_seen", now)) < cutoff
+            and ip not in self._banned_ips
+            and ip not in self._permanent_banned_ips
+        ]
+        for ip in stale:
+            self._tracked_attackers.pop(ip, None)
+        if stale:
+            logger.debug(f"[CERBERUS] forgot {len(stale)} quiet address(es)")
+
+    def _correlatable_account(self, key: str) -> bool:
+        """True if a shared target on ``key`` can identify a campaign.
+
+        A reserved / default name cannot. Every scanner on the internet tries
+        'root', 'admin', 'ubuntu' and the rest against every host it finds, so
+        several unrelated addresses converging on one inside the correlation
+        window is the internet's background noise - correlating on it turns
+        that noise into a coordinated-campaign verdict and bans everyone in
+        it. A name that is actually registered here IS specific to this
+        server, so a real account keeps the correlation even if it collides
+        with the reserved list.
+        """
+        if not key:
+            return False
+        if key not in self._reserved_usernames and key not in self._soft_reserved_usernames:
+            return True
+        if self.is_real_account is None:
+            return False
+        try:
+            return bool(self.is_real_account(key))
+        except Exception as e:
+            logger.error(f"is_real_account check failed: {e}")
+            return False
+
     def account_guard_on_failed_login(self, ip: str, username: str,
                                       source: str = "app"):
         """Called on each failed login. Detects credential stuffing (many
@@ -1046,14 +1207,28 @@ class CerberusProtocol:
                                     f"Credential stuffing: {len(users)} distinct usernames from one IP")
 
         # --- Distributed brute force: many DISTINCT IPs against ONE account ---
-        # Blind spot of every per-IP detector above. Correlate by username.
-        if ip and not self.is_whitelisted(ip):
+        # Blind spot of every per-IP detector above. Correlate by username -
+        # but only on a username that CAN identify a campaign. Converging on
+        # 'root' identifies nobody: it is what every scanner on the internet
+        # tries first, so the correlation fires on the base rate of the
+        # internet and bans whoever happened to walk past in the same quarter
+        # of an hour. A shared target is evidence of coordination only when
+        # the target is specific to this server.
+        if ip and not self.is_whitelisted(ip) and self._correlatable_account(key):
             srcs = self._account_source_ips[key]
-            srcs[ip] = now
-            for old_ip in [i for i, ts in srcs.items() if ts < now - self.distributed_attack_window]:
-                srcs.pop(old_ip, None)
+            srcs[ip] = self._prune(srcs.get(ip, []),
+                                   self.distributed_attack_window, now)
+            srcs[ip].append(now)
+            for old_ip in list(srcs):
+                if old_ip == ip:
+                    continue
+                srcs[old_ip] = self._prune(srcs[old_ip],
+                                           self.distributed_attack_window, now)
+                if not srcs[old_ip]:
+                    srcs.pop(old_ip, None)
             if len(srcs) >= self.distributed_attack_ips:
-                self._handle_distributed_account_attack(key, username, list(srcs.keys()))
+                self._handle_distributed_account_attack(
+                    key, username, dict(srcs), source=source)
             elif not srcs:
                 self._account_source_ips.pop(key, None)
 
@@ -1080,6 +1255,18 @@ class CerberusProtocol:
         # a locked account is rejected before any per-IP counter is reached.
         if _is_reserved:
             return
+        # NOT for an attempt that never touched Titan-Net either. The lock is
+        # on the Titan-Net account namespace, and ``source='ssh'`` failures
+        # come from the machine's own sshd, where the username is a UNIX
+        # account that has nothing to do with a Titan-Net one that happens to
+        # spell the same. Locking on those conflates two namespaces: an
+        # outside SSH sweep for 'user', 'support' or 'dev' would take a real
+        # Titan-Net owner of that name offline in fifteen-minute slices, from
+        # the far side of the internet, without ever touching Titan-Net. SSH
+        # brute force is answered by banning the address, which is what
+        # ``record_failed_login`` does with ``source='ssh'`` already.
+        if source not in self.lock_account_sources:
+            return
         self._account_failures[key] = self._prune(self._account_failures[key], self.account_lock_window, now)
         self._account_failures[key].append(now)
         if len(self._account_failures[key]) >= self.account_lock_failures:
@@ -1100,13 +1287,51 @@ class CerberusProtocol:
                 self._note_lockout_source(ip, username)
 
 
-    def _handle_distributed_account_attack(self, key: str, username: str, ips: List[str]):
-        """Many distinct IPs are hammering ONE account. Ban every participant at
-        once (which cascades into subnet analysis), protect the account, and
-        raise a global ALERT so moderators/AI see the coordination."""
-        # Protective lock on the targeted account immediately.
+    def _handle_distributed_account_attack(self, key: str, username: str,
+                                           sources, source: str = "app") -> None:
+        """Many distinct IPs are hammering ONE account. Protect the account,
+        ban the addresses that are provably part of it, and raise a global
+        ALERT so moderators/AI see the coordination.
+
+        ``sources`` is ``{ip: [failure timestamps]}`` (a bare list of IPs is
+        still accepted, and every address in it then counts as a participant).
+
+        Protecting the account and banning an address are DIFFERENT decisions
+        and are no longer taken on the same evidence. The lock is cheap,
+        fifteen minutes long and undone by one correct password, so converging
+        on the account at all is enough to earn it. A ban is neither: it was
+        permanent until this change, it covers every port, and the address it
+        lands on may be shared by an entire CGNAT neighbourhood. So an address
+        is banned as a participant only once it has pushed at this account
+        itself - see ``distributed_attack_min_failures``.
+        """
+        # Protective lock on the targeted account immediately - but only on an
+        # account there is an owner to protect. This path used to lock
+        # unconditionally, which is how 'root' came to be locked on this
+        # server despite the rule that a reserved name is never locked: the
+        # single-account path returns early on a reserved name, and this one
+        # did not, so the same protection had two answers. Locking a name that
+        # is not an account protects nobody and hides the attacker, because a
+        # locked account is rejected before any per-IP counter is reached.
         now = time.time()
-        self._locked_accounts[key] = now + self.account_lock_seconds
+        if isinstance(sources, dict):
+            ips = list(sources)
+            participants = [
+                i for i, hits in sources.items()
+                if len(hits) >= self.distributed_attack_min_failures
+            ]
+        else:
+            ips = list(sources)
+            participants = list(ips)
+        # Both gates the single-account path applies, applied here too - this
+        # path having its own, laxer answer to the same question is what let
+        # 'root' be locked. The source gate matters most on THIS path: an SSH
+        # sweep for a name that happens to be a real Titan-Net account reaches
+        # the correlator from dozens of addresses at once, so without it a
+        # user called 'support' or 'dev' would be locked out by traffic that
+        # never touched Titan-Net at all.
+        if self._correlatable_account(key) and source in self.lock_account_sources:
+            self._locked_accounts[key] = now + self.account_lock_seconds
         self._emit_account_event(
             "credential_stuffing", ips[0] if ips else "?",
             f"distributed brute force: {len(ips)} IPs vs account '{username}'",
@@ -1120,15 +1345,26 @@ class CerberusProtocol:
             "DISTRIBUTED_ACCOUNT_ATTACK", ips[0] if ips else "?",
             f"account '{username}' attacked by {len(ips)} IPs: {', '.join(ips[:10])}"
         )
-        # Ban each participating IP. Going through _set_ip_threat means the
+        # Ban each PROVEN participant. Going through _set_ip_threat means the
         # firewall + persistent-ban + per-/24 subnet analysis (in the Dangerous
-        # subclass) all fire for free.
+        # subclass) all fire for free. An address that merely appeared beside
+        # them is raised to ALERT instead - visible to the dashboard and to
+        # the risk engine, correlated with anything else it does, but not
+        # blocked on the strength of somebody else's behaviour.
         for aip in ips:
-            if not self.is_whitelisted(aip):
+            if self.is_whitelisted(aip):
+                continue
+            if aip in participants:
                 self._set_ip_threat(
                     aip, THREAT_LOCKDOWN,
                     f"Distributed brute force on account '{username}' "
-                    f"({len(ips)} coordinated IPs)"
+                    f"({len(participants)} coordinated IPs)"
+                )
+            else:
+                self._set_ip_threat(
+                    aip, THREAT_ALERT,
+                    f"Seen against account '{username}' during a distributed "
+                    f"attack, with too few attempts of its own to be banned for it"
                 )
         # Coordinated multi-IP activity is exactly what the GLOBAL threat level
         # exists for - surface it so the dashboard/AI reflect an active campaign.

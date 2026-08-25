@@ -3,8 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title data-i18n="forum.title">Forum — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <title data-i18n="forum.title">Forum &mdash; Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
+  <!-- The forum IS the groups: every topic lives in a forum inside a
+       group, and has done since the backfill migration moved the flat
+       forum into them. This page was the second, poorer view of the same
+       data - it could not say which forum a topic was in, and its "move
+       to another forum" asked the moderator to type an id they had to go
+       and read off the groups page. It is kept only so that a bookmark,
+       a link in an old post or a search engine still arrives somewhere.
+
+       The redirect is a <meta> rather than script alone so it happens
+       even with JavaScript off, and the page below is a real link, so a
+       reader that has already begun announcing this page is not left
+       with nothing to follow. -->
+  <meta http-equiv="refresh" content="0; url=groups.html">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -12,98 +25,12 @@
   <header class="site-header" role="banner">
     <div class="row">
       <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
-      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
-        <ul>
-          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
-          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
-          <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
-          <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
-          <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
-          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
-          <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
-          <li data-auth="out"><a href="login.html" data-i18n="nav.login">Log in</a></li>
-          <li data-auth="out"><a href="register.html" data-i18n="nav.register">Sign up</a></li>
-          <li data-auth="in" hidden><button id="logout-btn" class="btn btn-secondary" data-i18n="nav.logout">Log out</button></li>
-        </ul>
-      </nav>
-      <div class="toolbar" role="group" aria-label="Display preferences">
-        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
-        <select id="lang-select" aria-label="Language" data-i18n-attr="aria-label:lang.label">
-          <option value="en">English</option>
-          <option value="pl">Polski</option>
-        </select>
-        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
-        <select id="theme-select" aria-label="Color theme" data-i18n-attr="aria-label:theme.label">
-          <option value="auto" data-i18n="theme.auto">System</option>
-          <option value="light" data-i18n="theme.light">Light</option>
-          <option value="dark" data-i18n="theme.dark">Dark</option>
-        </select>
-      </div>
     </div>
   </header>
 
   <main id="main">
-    <!-- List view -->
-    <section id="forum-list-view" aria-labelledby="forum-h1">
-      <div class="flex">
-        <h1 id="forum-h1" data-i18n="forum.title">Forum</h1>
-        <span class="spacer"></span>
-        <button id="new-topic-btn" data-auth="in" hidden data-i18n="forum.new_topic">New topic</button>
-      </div>
-
-      <form id="forum-search" role="search">
-        <div class="field">
-          <label for="forum-q" data-i18n="forum.search_label">Search topics</label>
-          <input id="forum-q" name="q" type="search">
-        </div>
-      </form>
-
-      <p id="forum-status" class="muted" role="status" aria-live="polite"></p>
-
-      <ul id="forum-topics" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
-    </section>
-
-    <!-- Single topic view -->
-    <section id="forum-topic-view" aria-labelledby="topic-title" hidden>
-      <p><a href="#" id="forum-back" data-i18n="forum.back">Back to topics</a></p>
-      <article class="card">
-        <h1 id="topic-title"></h1>
-        <p class="meta" id="topic-meta"></p>
-        <div id="topic-body"></div>
-      </article>
-
-      <h2 data-i18n="forum.replies_heading">Replies</h2>
-      <ul id="topic-replies" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
-
-      <form id="reply-form" data-auth="in" hidden style="margin-top:1rem">
-        <div class="field">
-          <label for="reply-content" data-i18n="forum.reply_label">Write a reply</label>
-          <textarea id="reply-content" required aria-required="true" minlength="1"></textarea>
-        </div>
-        <p><button type="submit" data-i18n="forum.reply_submit">Post reply</button></p>
-      </form>
-    </section>
-
-    <!-- New topic dialog -->
-    <dialog id="new-topic-dialog" aria-labelledby="nt-title">
-      <form id="new-topic-form" style="display:grid;gap:1rem;min-width:min(640px,92vw)">
-        <h2 id="nt-title" data-i18n="forum.new_topic" style="margin:0">New topic</h2>
-        <div class="field">
-          <label for="nt-title-input" data-i18n="forum.new.title">Topic title</label>
-          <input id="nt-title-input" required aria-required="true" maxlength="200">
-        </div>
-        <div class="field">
-          <label for="nt-content" data-i18n="forum.new.content">Topic content</label>
-          <textarea id="nt-content" required aria-required="true" rows="8"></textarea>
-        </div>
-        <p style="text-align:right">
-          <button type="button" id="nt-cancel" class="btn btn-secondary" data-i18n="forum.new.cancel">Cancel</button>
-          <button type="submit" data-i18n="forum.new.submit">Post topic</button>
-        </p>
-      </form>
-    </dialog>
+    <h1 data-i18n="forum.title">Forum</h1>
+    <p><a href="groups.html" id="forum-moved" data-i18n="forum.moved">The forum is now under Groups, where every forum lives. Go to the forum.</a></p>
   </main>
 
   <footer class="site-footer" role="contentinfo">
@@ -112,10 +39,11 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
-  <script src="js/api.js?v=20260804a"></script>
-  <script src="js/forum.js?v=20260804a"></script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script>
+    // Carry the query string over, so a link that named a topic still does.
+    location.replace('groups.html' + location.search + location.hash);
+  </script>
 </body>
 </html>

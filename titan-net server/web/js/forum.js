@@ -135,13 +135,155 @@
         const c = document.createElement('div');
         c.innerHTML = escapeHtml(r.content || '').replace(/\n/g, '<br>');
         card.appendChild(c);
+        // A reply can be changed or taken down by whoever wrote it, and by
+        // a moderator. The buttons sit with the reply rather than in a
+        // menu somewhere else, so it is obvious which one they act on.
+        const me = Titan.getUser();
+        const mine = me && r.author_id && Number(r.author_id) === Number(me.id);
+        if (r.id && (mine || isStaff())) {
+          const actions = document.createElement('div');
+          actions.className = 'flex card-actions';
+          actions.appendChild(replyButton(t('common.edit'),
+            t('forum.mod.edit_reply_label', idx + 1), 'btn-secondary',
+            () => editReply(r, c)));
+          actions.appendChild(replyButton(t('common.delete'),
+            t('forum.mod.delete_reply_label', idx + 1), 'btn-danger',
+            () => removeReply(r, li)));
+          card.appendChild(actions);
+        }
         li.appendChild(card);
         $replies.appendChild(li);
       });
+      renderTopicModeration(topic);
       $title.focus();
     } catch (e) {
       $body.textContent = e.message || t('err.generic');
     }
+  }
+
+  function isStaff() {
+    return !!(Titan.session && Titan.session.isModerator());
+  }
+
+  function replyButton(label, ariaLabel, cls, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = cls;
+    btn.textContent = label;
+    btn.setAttribute('aria-label', ariaLabel);
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  async function editReply(reply, container) {
+    const text = await Titan.ui.promptDialog(t('forum.mod.edit_reply'), {
+      multiline: true,
+      value: reply.content || '',
+      required: true,
+      title: t('common.edit'),
+    });
+    if (text === null) return;
+    try {
+      const resp = await Titan.API.editReply(reply.id, text);
+      if (resp && resp.success === false) throw new Error(resp.error);
+      reply.content = text;
+      container.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+      Titan.announce(t('forum.mod.reply_edited'));
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  async function removeReply(reply, node) {
+    const sure = await Titan.ui.confirmDialog(t('forum.mod.delete_reply_confirm'),
+      { danger: true, title: t('common.delete'), confirmLabel: t('common.delete') });
+    if (!sure) return;
+    try {
+      const resp = await Titan.API.deleteReply(reply.id);
+      if (resp && resp.success === false) throw new Error(resp.error);
+      node.remove();
+      Titan.announce(t('forum.mod.reply_deleted'));
+      // The focus was on a button that no longer exists.
+      $title.focus();
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  // ---------- Moderating a topic ----------
+
+  function renderTopicModeration(topic) {
+    const bar = document.getElementById('topic-mod');
+    if (!bar) return;
+    bar.hidden = !isStaff();
+    if (bar.hidden) return;
+
+    const pin = document.getElementById('topic-pin');
+    const lock = document.getElementById('topic-lock');
+    // aria-pressed carries the state, so a screen reader says "pinned,
+    // pressed" rather than leaving the button meaning two things.
+    pin.setAttribute('aria-pressed', topic.is_pinned ? 'true' : 'false');
+    lock.setAttribute('aria-pressed', topic.is_locked ? 'true' : 'false');
+    pin.textContent = topic.is_pinned ? t('forum.mod.unpin') : t('forum.mod.pin');
+    lock.textContent = topic.is_locked ? t('forum.mod.unlock') : t('forum.mod.lock');
+
+    pin.onclick = async () => {
+      try {
+        const wanted = !topic.is_pinned;
+        const resp = await Titan.API.pinTopic(topic.id, wanted);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        topic.is_pinned = wanted;
+        renderTopicModeration(topic);
+        Titan.announce(t(wanted ? 'forum.mod.pinned' : 'forum.mod.unpinned'));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+    lock.onclick = async () => {
+      try {
+        const wanted = !topic.is_locked;
+        const resp = await Titan.API.lockTopic(topic.id, wanted);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        topic.is_locked = wanted;
+        renderTopicModeration(topic);
+        Titan.announce(t(wanted ? 'forum.mod.locked' : 'forum.mod.unlocked'));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+    document.getElementById('topic-move').onclick = async () => {
+      // The move needs a forum id; the groups page is where those are
+      // listed, so the number is asked for rather than guessed at.
+      const forumId = await Titan.ui.promptDialog(t('forum.mod.move_where'), {
+        required: true,
+        help: t('forum.mod.move_help'),
+        title: t('forum.mod.move'),
+      });
+      if (forumId === null) return;
+      try {
+        const resp = await Titan.API.moveTopicToForum(topic.id, Number(forumId));
+        if (resp && resp.success === false) throw new Error(resp.error);
+        Titan.announce(resp && resp.pending
+          ? t('forum.mod.move_requested') : t('forum.mod.moved'));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+    document.getElementById('topic-delete').onclick = async () => {
+      const sure = await Titan.ui.confirmDialog(
+        t('forum.mod.delete_confirm', topic.title),
+        { danger: true, title: t('common.delete'), confirmLabel: t('common.delete') });
+      if (!sure) return;
+      try {
+        const resp = await Titan.API.deleteTopic(topic.id);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        Titan.announce(t('forum.mod.deleted', topic.title));
+        backToList();
+        loadTopics();
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
   }
 
   function backToList() {

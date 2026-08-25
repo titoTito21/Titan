@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="games.page_title">Games — Titan-Net</title>
+  <meta name="description" content="Interactive audio games played on Titan-Net, narrated as you go.">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="games.html" data-i18n="nav.games">Games</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences" data-i18n-attr="aria-label:toolbar.label">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="games-alert" class="alert" hidden></div>
+
+    <!-- The catalogue -->
+    <section id="games-index">
+      <h1 data-i18n="games.title">Games</h1>
+      <p data-i18n="games.lead">Interactive games narrated by the server. Start a table of your own, or join one somebody is already running.</p>
+
+      <h2 id="games-tabs-label" class="sr-only" data-i18n="games.tabs_label">What to look at</h2>
+      <div id="games-tabs" class="tabs" aria-labelledby="games-tabs-label"></div>
+
+      <section id="games-panel-games" role="tabpanel" tabindex="-1" aria-labelledby="games-tabs-tab-games">
+        <h2 tabindex="-1" data-i18n="games.available">Games you can play</h2>
+        <p id="games-status" role="status" aria-live="polite"></p>
+        <ul id="games-list" class="card-list"></ul>
+      </section>
+
+      <section id="games-panel-sessions" role="tabpanel" tabindex="-1" aria-labelledby="games-tabs-tab-sessions" hidden>
+        <h2 tabindex="-1" data-i18n="games.sessions">Tables that are running</h2>
+        <p id="sessions-status" role="status" aria-live="polite"></p>
+        <ul id="sessions-list" class="card-list"></ul>
+      </section>
+
+      <p>
+        <button type="button" id="games-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+        <button type="button" id="games-new" data-i18n="games.write">Write a game</button>
+      </p>
+    </section>
+
+    <!-- Writing a game: the rules, the files, the sounds and the limits -->
+    <dialog id="games-new-dialog" class="titan-dialog wide" aria-labelledby="games-new-title">
+      <h2 id="games-new-title" data-i18n="games.write">Write a game</h2>
+      <form id="games-new-form" novalidate>
+        <div class="field">
+          <label for="gn-name" data-i18n="games.field.name">Name</label>
+          <input type="text" id="gn-name" required maxlength="120">
+        </div>
+        <div class="field">
+          <label for="gn-description" data-i18n="games.field.description">Description</label>
+          <textarea id="gn-description" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label for="gn-rules" data-i18n="games.field.rules">The rules, in your own words</label>
+          <textarea id="gn-rules" rows="10" aria-describedby="gn-rules-help"></textarea>
+          <p class="help" id="gn-rules-help" data-i18n="games.field.rules_help">The server keeps score for you, so write rules that rely on it: world variables, each player's statistics with the arithmetic and limits done server-side, what everyone carries and wears, dice rolls, and skill checks the server decides. Say what your game needs — "everyone starts with 12 hit points and a bow", "a locked door needs a strength check against 10" — and the game master will use the right one.</p>
+        </div>
+        <div class="field">
+          <label for="gn-rule-files" data-i18n="games.field.rule_files">Rule files (optional)</label>
+          <input type="file" id="gn-rule-files" multiple accept=".txt,.md,.json"
+                 aria-describedby="gn-rule-files-help">
+          <p class="help" id="gn-rule-files-help" data-i18n="games.field.rule_files_help">Text files the game master reads as its rules. Name one "objects.something" or put it in a folder to make a catalogue the game master looks entities up in.</p>
+        </div>
+        <div class="field">
+          <label for="gn-folder" data-i18n="games.field.folder">Put those files in a section called</label>
+          <input type="text" id="gn-folder" maxlength="60"
+                 aria-describedby="gn-folder-help">
+          <p class="help" id="gn-folder-help" data-i18n="games.field.folder_help">Leave it empty for the main rules. "objects", "classes", "quests" or "npcs" become labelled catalogues.</p>
+        </div>
+        <div class="field">
+          <label for="gn-sounds" data-i18n="games.field.sounds">Sound effects (optional)</label>
+          <input type="file" id="gn-sounds" multiple accept=".ogg,.wav,.mp3,.flac,.opus"
+                 aria-describedby="gn-sounds-help">
+          <p class="help" id="gn-sounds-help" data-i18n="games.field.sounds_help">The game master is told the name of every one of these and plays them by name, placed in the stereo field.</p>
+        </div>
+        <div class="field">
+          <label for="gn-key" data-i18n="games.field.key">The API key the game runs on</label>
+          <input type="password" id="gn-key" required autocomplete="off"
+                 aria-describedby="gn-key-help">
+          <p class="help" id="gn-key-help" data-i18n="games.field.key_help">A Gemini key. It is encrypted on the server, never sent to a player, and never put in front of the game master.</p>
+        </div>
+        <fieldset>
+          <legend data-i18n="games.field.limits">Limits</legend>
+          <div class="field">
+            <label for="gn-players" data-i18n="games.field.players">Players at a table</label>
+            <input type="number" id="gn-players" min="1" max="12" value="6">
+          </div>
+          <div class="field">
+            <label for="gn-minutes" data-i18n="games.field.minutes">Minutes a table may run</label>
+            <input type="number" id="gn-minutes" min="5" max="600" value="120">
+          </div>
+          <div class="field">
+            <label for="gn-tokens" data-i18n="games.field.tokens">How much the game master may spend</label>
+            <input type="number" id="gn-tokens" min="1000" step="1000" value="200000">
+          </div>
+        </fieldset>
+        <div class="flex dialog-actions">
+          <button type="submit" id="gn-submit" data-i18n="games.write_submit">Create the game</button>
+          <button type="button" id="gn-cancel" class="btn-secondary" data-i18n="common.cancel">Cancel</button>
+        </div>
+        <p id="gn-progress" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <!-- One table being played -->
+    <section id="game-play" hidden aria-labelledby="play-heading">
+      <div class="flex toolbar-row">
+        <button type="button" id="play-leave" class="btn-secondary" data-i18n="games.leave">Leave the table</button>
+        <button type="button" id="play-advance" class="btn-secondary" data-i18n="games.advance">Pass the turn on</button>
+        <button type="button" id="play-end" class="btn-danger" data-i18n="games.end">End the game</button>
+        <span class="spacer"></span>
+        <!-- Speaking your action instead of typing it. Held, like the
+             chat's push to talk, so the microphone is open exactly as long
+             as the button is down. -->
+        <button type="button" id="play-speak" class="btn-secondary"
+                aria-pressed="false" aria-describedby="play-speak-help">
+          <span data-i18n="games.speak">Hold to speak</span>
+        </button>
+        <span id="play-speak-help" class="sr-only" data-i18n="games.speak_help">Hold this button, or hold Space while it has the focus, and the game master hears you.</span>
+        <div class="field-inline">
+          <input type="checkbox" id="play-audio" checked>
+          <label for="play-audio" data-i18n="games.audio">Play the narration aloud</label>
+        </div>
+      </div>
+
+      <h1 id="play-heading" tabindex="-1"></h1>
+      <p id="play-turn" role="status" aria-live="polite"></p>
+
+      <div class="split">
+        <aside aria-labelledby="play-players-heading">
+          <h2 id="play-players-heading" data-i18n="games.players">Players</h2>
+          <ul id="play-players" class="list-box"></ul>
+
+          <h2 id="play-sheet-heading" data-i18n="games.sheet">Your character</h2>
+          <div id="play-sheet" aria-labelledby="play-sheet-heading">
+            <h3 data-i18n="games.stats">Statistics</h3>
+            <dl id="play-stats" class="detail-list"></dl>
+            <h3 data-i18n="games.carrying">Carrying</h3>
+            <ul id="play-inventory" class="list-plain"></ul>
+            <h3 data-i18n="games.worn">Worn or held</h3>
+            <dl id="play-equipment" class="detail-list"></dl>
+          </div>
+
+          <h2 data-i18n="games.state">Where things stand</h2>
+          <dl id="play-state" class="detail-list"></dl>
+        </aside>
+
+        <div>
+          <h2 id="play-log-heading" data-i18n="games.log">What has happened</h2>
+          <!-- The narration is the game. It is a live region so a screen
+               reader reads each new line as it lands, and a real list so
+               the whole thing can be reviewed afterwards. -->
+          <div id="play-log" class="log-pane" role="log" aria-live="polite"
+               aria-labelledby="play-log-heading" tabindex="0"></div>
+
+          <form id="play-form">
+            <div class="field">
+              <label for="play-input" data-i18n="games.your_move">What do you do?</label>
+              <input type="text" id="play-input" autocomplete="off" maxlength="4000">
+            </div>
+            <p><button type="submit" data-i18n="common.send">Send</button></p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <!-- A choice the game puts to this player -->
+  <dialog id="game-menu-dialog" class="titan-dialog" aria-labelledby="game-menu-title">
+    <h2 id="game-menu-title" data-i18n="games.choose">Choose</h2>
+    <p id="game-menu-prompt"></p>
+    <ul id="game-menu-items" class="card-list"></ul>
+    <div class="flex dialog-actions">
+      <button type="button" id="game-menu-cancel" class="btn-secondary" data-i18n="common.cancel">Cancel</button>
+    </div>
+  </dialog>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/tts.js?v=20260825b"></script>
+  <script src="js/voice.js?v=20260825b"></script>
+  <script src="js/games.js?v=20260825b"></script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="mod.page_title">Moderation — Titan-Net</title>
+  <meta name="description" content="Moderation tools for Titan-Net: users, the repository, extensions, broadcasts, server sounds and the Cerberus protocol.">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="moderation.html" data-i18n="nav.moderation">Moderation</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences" data-i18n-attr="aria-label:toolbar.label">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="mod.title">Moderation</h1>
+    <p id="mod-role" class="meta"></p>
+    <div id="mod-alert" class="alert" hidden></div>
+
+    <h2 id="mod-tabs-label" class="sr-only" data-i18n="mod.tabs_label">Moderation sections</h2>
+    <div id="mod-tabs" class="tabs" aria-labelledby="mod-tabs-label"></div>
+
+    <!-- Users -->
+    <section id="panel-users" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-users" hidden>
+      <h2 tabindex="-1" data-i18n="mod.users">Users</h2>
+      <form id="mod-user-search" class="flex toolbar-row" role="search">
+        <label for="mod-user-q" data-i18n="mod.find_user">Find a user</label>
+        <input type="search" id="mod-user-q" autocomplete="off">
+        <button type="submit" data-i18n="common.search">Search</button>
+        <button type="button" id="mod-users-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+      </form>
+      <p id="mod-users-status" role="status" aria-live="polite"></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="mod-users-caption">
+        <table>
+          <caption id="mod-users-caption" data-i18n="mod.users_caption">Registered users</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-i18n="common.username">Username</th>
+              <th scope="col" data-i18n="mod.role">Role</th>
+              <th scope="col" data-i18n="mod.state">State</th>
+              <th scope="col" data-i18n="common.actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mod-users-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Repository -->
+    <section id="panel-repo" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-repo" hidden>
+      <h2 tabindex="-1" data-i18n="mod.repo">Repository</h2>
+      <p data-i18n="mod.repo_lead">Packages waiting for review before they appear in the repository.</p>
+      <p><button type="button" id="mod-repo-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button></p>
+      <p id="mod-repo-status" role="status" aria-live="polite"></p>
+      <ul id="mod-repo-list" class="card-list"></ul>
+    </section>
+
+    <!-- Extensions -->
+    <section id="panel-ext" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-ext" hidden>
+      <h2 tabindex="-1" data-i18n="mod.ext">Extensions</h2>
+      <p data-i18n="mod.ext_lead">Moderator add-ons. A submission needs two different people to approve it.</p>
+      <p><button type="button" id="mod-ext-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button></p>
+      <p id="mod-ext-status" role="status" aria-live="polite"></p>
+      <h3 data-i18n="mod.ext_pending">Waiting for review</h3>
+      <ul id="mod-ext-pending" class="card-list"></ul>
+      <h3 data-i18n="mod.ext_active">Active</h3>
+      <ul id="mod-ext-active" class="card-list"></ul>
+    </section>
+
+    <!-- Forum -->
+    <section id="panel-forum" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-forum" hidden>
+      <h2 tabindex="-1" data-i18n="mod.forum">Forum</h2>
+      <p data-i18n="mod.forum_lead">Requests to move a topic into a forum you moderate.</p>
+      <p><button type="button" id="mod-forum-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button></p>
+      <p id="mod-forum-status" role="status" aria-live="polite"></p>
+      <ul id="mod-forum-list" class="card-list"></ul>
+    </section>
+
+    <!-- Broadcast -->
+    <section id="panel-broadcast" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-broadcast" hidden>
+      <h2 tabindex="-1" data-i18n="mod.broadcast">Broadcast</h2>
+      <form id="mod-broadcast-form">
+        <div class="field">
+          <label for="mod-broadcast-text" data-i18n="mod.broadcast_text">Message to everyone online</label>
+          <textarea id="mod-broadcast-text" rows="4" required
+                    aria-describedby="mod-broadcast-help"></textarea>
+          <p class="help" id="mod-broadcast-help" data-i18n="mod.broadcast_help">Every connected client reads this out as it arrives.</p>
+        </div>
+        <p><button type="submit" id="mod-broadcast-send" data-i18n="common.send">Send</button></p>
+      </form>
+
+      <h3 data-i18n="mod.motd">Message of the day and welcome texts</h3>
+      <p data-i18n="mod.motd_lead">These files are what a user is shown when they log in.</p>
+      <div class="flex toolbar-row">
+        <label for="mod-motd-file" data-i18n="mod.motd_file">File</label>
+        <select id="mod-motd-file"></select>
+        <button type="button" id="mod-motd-load" class="btn-secondary" data-i18n="mod.motd_load">Load</button>
+      </div>
+      <form id="mod-motd-form">
+        <div class="field">
+          <label for="mod-motd-text" data-i18n="mod.motd_content">Contents</label>
+          <textarea id="mod-motd-text" rows="12"></textarea>
+        </div>
+        <p><button type="submit" id="mod-motd-save" data-i18n="common.save">Save</button></p>
+      </form>
+      <p id="mod-motd-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- Server sounds -->
+    <section id="panel-sounds" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-sounds" hidden>
+      <h2 tabindex="-1" data-i18n="mod.sounds">Server sounds</h2>
+      <p data-i18n="mod.sounds_lead">Audio uploaded once, then played at one user, a role, a room, or everybody. A user who has refused server audio never hears it.</p>
+      <p><button type="button" id="mod-sounds-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button></p>
+      <p id="mod-sounds-status" role="status" aria-live="polite"></p>
+      <ul id="mod-sounds-list" class="card-list"></ul>
+
+      <h3 data-i18n="mod.sound_upload">Upload a sound</h3>
+      <form id="mod-sound-form">
+        <div class="field">
+          <label for="mod-sound-name" data-i18n="mod.sound_name">Name</label>
+          <input type="text" id="mod-sound-name" required aria-describedby="mod-sound-name-help">
+          <p class="help" id="mod-sound-name-help" data-i18n="mod.sound_name_help">What the sound is called when it is played. Lower case, no spaces.</p>
+        </div>
+        <div class="field">
+          <label for="mod-sound-desc" data-i18n="common.description">Description</label>
+          <input type="text" id="mod-sound-desc">
+        </div>
+        <div class="field">
+          <label for="mod-sound-file" data-i18n="mod.sound_file">Audio file</label>
+          <input type="file" id="mod-sound-file" accept="audio/*" required>
+        </div>
+        <p><button type="submit" id="mod-sound-submit" data-i18n="mod.sound_upload">Upload a sound</button></p>
+      </form>
+    </section>
+
+    <!-- Services the server defines, and what people have sent through them -->
+    <section id="panel-services" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-services" hidden>
+      <h2 tabindex="-1" data-i18n="mod.services">Services</h2>
+      <p data-i18n="mod.services_lead">Screens the server offers. A form screen keeps what people send through it.</p>
+      <div class="flex toolbar-row">
+        <label for="mod-screen" data-i18n="mod.screen">Screen</label>
+        <select id="mod-screen"></select>
+        <button type="button" id="mod-screen-open" class="btn-secondary" data-i18n="mod.screen_open">Open it</button>
+        <button type="button" id="mod-screen-push" class="btn-secondary" data-i18n="mod.screen_push">Push it at everybody</button>
+        <button type="button" id="mod-screen-submissions" class="btn-secondary" data-i18n="mod.screen_submissions">What people sent</button>
+      </div>
+      <p id="mod-services-status" role="status" aria-live="polite"></p>
+      <div id="mod-submissions" class="log-pane" tabindex="0" role="region"
+           aria-label="Submissions" data-i18n-attr="aria-label:mod.screen_submissions"></div>
+
+      <h3 data-i18n="mod.game_sessions">Game tables</h3>
+      <p data-i18n="mod.game_sessions_lead">Every table that is running. Wiping them ends each one and shuts its narrator down.</p>
+      <p id="mod-sessions-status" role="status" aria-live="polite"></p>
+      <ul id="mod-sessions-list" class="list-plain"></ul>
+      <p>
+        <button type="button" id="mod-sessions-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+        <button type="button" id="mod-sessions-wipe" class="btn-danger" data-i18n="mod.wipe_sessions">End every table</button>
+      </p>
+    </section>
+
+    <!-- Cerberus -->
+    <section id="panel-cerberus" role="tabpanel" tabindex="-1" aria-labelledby="mod-tabs-tab-cerberus" hidden>
+      <h2 tabindex="-1" data-i18n="mod.cerberus">Cerberus and Blackwall</h2>
+      <p data-i18n="mod.cerberus_lead">Cerberus counts what an attacker can stay under; Blackwall recognises the behaviour and answers it. Everything either of them says is written down.</p>
+      <div class="flex toolbar-row">
+        <button type="button" id="mod-cerb-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+        <button type="button" id="mod-cerb-logs" class="btn-secondary" data-i18n="mod.cerb_logs">Read the log</button>
+        <button type="button" id="mod-cerb-assess" class="btn-secondary" data-i18n="mod.cerb_assess">Ask the analyst</button>
+        <button type="button" id="mod-cerb-deliberate" class="btn-secondary" data-i18n="mod.cerb_deliberate">Have Blackwall decide now</button>
+      </div>
+      <p id="mod-cerb-status" role="status" aria-live="polite"></p>
+
+      <h3 data-i18n="mod.cerb_summary">Where things stand</h3>
+      <dl id="mod-cerb-summary" class="detail-list"></dl>
+
+      <h3 data-i18n="mod.cerb_bans">Banned addresses</h3>
+      <p id="mod-cerb-bans-status" class="muted"></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="mod-cerb-bans-caption">
+        <table>
+          <caption id="mod-cerb-bans-caption" data-i18n="mod.cerb_bans">Banned addresses</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-i18n="mod.cerb_address">Address</th>
+              <th scope="col" data-i18n="common.reason">Reason</th>
+              <th scope="col" data-i18n="common.actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mod-cerb-bans"></tbody>
+        </table>
+      </div>
+
+      <h3 data-i18n="mod.cerb_manual">Act on an address</h3>
+      <form id="mod-cerb-form" class="flex toolbar-row">
+        <label for="mod-cerb-ip" data-i18n="mod.cerb_address">Address</label>
+        <input type="text" id="mod-cerb-ip" inputmode="numeric" autocomplete="off"
+               aria-describedby="mod-cerb-ip-help">
+        <button type="button" id="mod-cerb-ban" class="btn-danger" data-i18n="mod.cerb_ban">Ban</button>
+        <button type="button" id="mod-cerb-unban" class="btn-secondary" data-i18n="mod.cerb_unban">Lift the ban</button>
+        <button type="button" id="mod-cerb-whitelist" class="btn-secondary" data-i18n="mod.cerb_whitelist">Never ban this one</button>
+      </form>
+      <p class="help" id="mod-cerb-ip-help" data-i18n="mod.cerb_ip_help">An IPv4 or IPv6 address. Banning and whitelisting are administrator-only.</p>
+
+      <h3 data-i18n="mod.cerb_said">What was said, and to whom</h3>
+      <div id="mod-cerb-transcript" class="log-pane" tabindex="0" role="region"
+           aria-label="Transcript" data-i18n-attr="aria-label:mod.cerb_said"></div>
+
+      <h3 data-i18n="mod.cerb_log">Intrusion log</h3>
+      <div id="mod-cerb-log" class="log-pane" tabindex="0" role="region"
+           aria-label="Intrusion log" data-i18n-attr="aria-label:mod.cerb_log"></div>
+
+      <h3 data-i18n="mod.cerb_analyst">The analyst's report</h3>
+      <div id="mod-cerb-report" class="prose" tabindex="0" role="region"
+           aria-label="Report" data-i18n-attr="aria-label:mod.cerb_analyst"></div>
+
+      <h3 data-i18n="mod.cerb_level">Protocol level</h3>
+      <div class="flex toolbar-row">
+        <label for="mod-cerb-level" data-i18n="mod.cerb_level">Protocol level</label>
+        <select id="mod-cerb-level">
+          <option value="alert" data-i18n="mod.cerb_level_alert">Alert</option>
+          <option value="lockdown" data-i18n="mod.cerb_level_lockdown">Lockdown</option>
+          <option value="cerberus" data-i18n="mod.cerb_level_cerberus">Cerberus</option>
+        </select>
+        <button type="button" id="mod-cerb-raise" class="btn-danger" data-i18n="mod.cerb_raise">Raise it</button>
+        <button type="button" id="mod-cerb-standdown" class="btn-secondary" data-i18n="mod.cerb_standdown">Stand it down</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/moderation.js?v=20260825b"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="repo.title">Repository — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -17,8 +17,7 @@
           <li><a href="index.html" data-i18n="nav.home">Home</a></li>
           <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
+          <li><a href="groups.html" data-i18n="nav.forum">Forum</a></li>
           <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
@@ -79,6 +78,67 @@
       <h2 id="repo-results-heading" class="sr-only">Repository items</h2>
       <ul id="repo-results" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
     </section>
+
+    <!-- Uploading. Shown only to somebody who is signed in — the server
+         refuses an anonymous upload, so offering the form would be a form
+         that cannot work. -->
+    <section id="repo-upload-section" aria-labelledby="repo-upload-heading" data-auth="in" hidden>
+      <h2 id="repo-upload-heading" data-i18n="repo.upload_heading">Share something of your own</h2>
+      <p data-i18n="repo.upload_lead">Upload an application, component, game, sound theme or a packaged add-on. A moderator reviews it before it appears in the list.</p>
+
+      <div id="repo-upload-alert" class="alert" hidden></div>
+
+      <form id="repo-upload-form" novalidate>
+        <div class="field">
+          <label for="up-name" data-i18n="repo.up.name">Name</label>
+          <input type="text" id="up-name" required maxlength="120">
+        </div>
+        <div class="field">
+          <label for="up-description" data-i18n="repo.up.description">Description</label>
+          <textarea id="up-description" rows="4" required
+                    aria-describedby="up-description-help"></textarea>
+          <p class="help" id="up-description-help" data-i18n="repo.up.description_help">What it does, and what somebody needs in order to use it.</p>
+        </div>
+        <div class="field">
+          <label for="up-category" data-i18n="repo.category">Category</label>
+          <select id="up-category" required>
+            <option value="application" data-i18n="repo.category.application">Applications</option>
+            <option value="component" data-i18n="repo.category.component">Components</option>
+            <option value="sound_theme" data-i18n="repo.category.sound_theme">Sound themes</option>
+            <option value="game" data-i18n="repo.category.game">Games</option>
+            <option value="launcher" data-i18n="repo.category.launcher">Launchers</option>
+            <option value="im_module" data-i18n="repo.category.im_module">Titan IM modules</option>
+            <option value="gamepad_mode" data-i18n="repo.category.gamepad_mode">Gamepad modes</option>
+            <option value="tts_engine" data-i18n="repo.category.tts_engine">TTS engines</option>
+            <option value="widget" data-i18n="repo.category.widget">Widgets/Applets</option>
+            <option value="status_bar_applet" data-i18n="repo.category.status_bar_applet">Status bar applets</option>
+            <option value="tce_package" data-i18n="repo.category.tce_package">TCE packages</option>
+            <option value="language_pack" data-i18n="repo.category.language_pack">Language packs</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="up-version" data-i18n="repo.up.version">Version</label>
+          <input type="text" id="up-version" required value="1.0" maxlength="32">
+        </div>
+        <div class="field">
+          <label for="up-file" data-i18n="repo.up.file">File</label>
+          <input type="file" id="up-file" required accept=".tca,.tcd,.zip,.7z,.tcepackage"
+                 aria-describedby="up-file-help">
+          <p class="help" id="up-file-help" data-i18n="repo.up.file_help">A .tca or .tcd package, or a .zip / .7z / .tcepackage. Never a bare program.</p>
+        </div>
+        <p>
+          <button type="submit" id="up-submit" data-i18n="repo.up.submit">Upload</button>
+        </p>
+        <!-- A real progress element: the browser reads the percentage out,
+             and the text beside it says the same thing for anybody whose
+             reader does not. -->
+        <div id="up-progress-wrap" hidden>
+          <label for="up-progress" data-i18n="repo.up.progress">Upload progress</label>
+          <progress id="up-progress" max="100" value="0"></progress>
+          <p id="up-progress-text" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </section>
   </main>
 
   <footer class="site-footer" role="contentinfo">
@@ -87,10 +147,13 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
-  <script src="js/api.js?v=20260804a"></script>
-  <script src="js/repository.js?v=20260804a"></script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/repository.js?v=20260825b"></script>
 </body>
 </html>

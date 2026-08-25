@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="account.title">Account — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -17,8 +17,7 @@
           <li><a href="index.html" data-i18n="nav.home">Home</a></li>
           <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
+          <li><a href="groups.html" data-i18n="nav.forum">Forum</a></li>
           <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
@@ -75,6 +74,68 @@
       </div>
       <p><button id="acc-email-save" class="btn" data-i18n="account.email_save">Save and verify</button></p>
     </div>
+
+    <!-- The page other people can follow you to -->
+    <section id="acc-blog-card" class="card" hidden aria-labelledby="acc-blog-heading">
+      <h2 id="acc-blog-heading" data-i18n="account.blog_heading">Your page elsewhere</h2>
+      <p class="muted" data-i18n="account.blog_help">A blog, a site, a profile — whatever you would like people who meet you here to be able to find.</p>
+      <div class="field" style="max-width:520px">
+        <label for="acc-blog-input" data-i18n="account.blog_label">Address</label>
+        <input id="acc-blog-input" type="url" inputmode="url" maxlength="500"
+               autocomplete="url">
+      </div>
+      <p>
+        <button type="button" id="acc-blog-save" data-i18n="common.save">Save</button>
+      </p>
+      <p id="acc-blog-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- People you have blocked -->
+    <section id="acc-blocked-card" class="card" hidden aria-labelledby="acc-blocked-heading">
+      <h2 id="acc-blocked-heading" data-i18n="account.blocked_heading">People you have blocked</h2>
+      <p class="muted" data-i18n="account.blocked_help">A block is complete and works both ways: neither of you sees the other's messages or knows the other is online.</p>
+      <p id="acc-blocked-status" role="status" aria-live="polite"></p>
+      <ul id="acc-blocked-list" class="list-plain"></ul>
+      <form id="acc-block-form" class="flex toolbar-row">
+        <label for="acc-block-name" data-i18n="account.block_who">Block somebody</label>
+        <input type="text" id="acc-block-name" autocomplete="off">
+        <button type="submit" class="btn-secondary" data-i18n="account.block">Block</button>
+      </form>
+    </section>
+
+    <!-- The sounds other people hear for you -->
+    <section id="acc-sounds-card" class="card" hidden aria-labelledby="acc-sounds-heading">
+      <h2 id="acc-sounds-heading" data-i18n="account.sounds_heading">Your own sounds</h2>
+      <p class="muted" data-i18n="account.sounds_help">These are played on other people's machines when you sign in, sign out or send them a message. Up to 5 MB each, as .ogg, .wav or .mp3.</p>
+      <div id="acc-sounds-alert" class="alert" hidden></div>
+      <form id="acc-sound-form">
+        <div class="field">
+          <label for="acc-sound-type" data-i18n="account.sound_which">Which sound</label>
+          <select id="acc-sound-type">
+            <option value="login" data-i18n="account.sound_login">When you sign in</option>
+            <option value="logout" data-i18n="account.sound_logout">When you sign out</option>
+            <option value="new_message" data-i18n="account.sound_message">When you send a message</option>
+            <option value="avatar" data-i18n="account.sound_avatar">Your spoken name</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="acc-sound-file" data-i18n="account.sound_file">Audio file</label>
+          <input type="file" id="acc-sound-file" accept=".ogg,.wav,.mp3,audio/*" required>
+        </div>
+        <p>
+          <button type="submit" id="acc-sound-submit" data-i18n="account.sound_upload">Upload</button>
+          <button type="button" id="acc-sound-play" class="btn-secondary" data-i18n="account.sound_listen">Listen to the one you have</button>
+        </p>
+      </form>
+    </section>
+
+    <!-- Other services this account is connected to -->
+    <section id="acc-oauth-card" class="card" hidden aria-labelledby="acc-oauth-heading">
+      <h2 id="acc-oauth-heading" data-i18n="account.connected_heading">Connected services</h2>
+      <p class="muted" data-i18n="account.connected_help">Titan-Net holds the connection so a Titan add-on can use it without ever seeing your password.</p>
+      <p id="acc-oauth-status" role="status" aria-live="polite"></p>
+      <ul id="acc-oauth-list" class="list-plain"></ul>
+    </section>
   </main>
 
   <footer class="site-footer" role="contentinfo">
@@ -83,69 +144,13 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
-  <script src="js/api.js?v=20260804a"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const user = Titan.getUser();
-      if (!user) {
-        document.getElementById('acc-not-logged-in').hidden = false;
-        return;
-      }
-      document.getElementById('acc-info').hidden = false;
-      document.getElementById('acc-username').textContent = user.username;
-      document.getElementById('acc-titan').textContent = user.titan_number || '—';
-      document.getElementById('acc-role').textContent = '—';
-      try {
-        const r = await Titan.API.getRole();
-        if (r && r.role) document.getElementById('acc-role').textContent = r.role;
-      } catch (e) { /* role lookup may need extra auth — fall back to dash */ }
-      document.getElementById('acc-logout').addEventListener('click', () => {
-        if (window.Titan && Titan.sounds) Titan.sounds.play('logout');
-        Titan.saveSession(null);
-        try { localStorage.removeItem('titan.remember'); } catch (er) {}
-        setTimeout(() => { location.href = 'index.html'; }, 120);
-      });
-
-      // ----- Recovery email -----
-      const t = Titan.t;
-      const emailCard = document.getElementById('acc-email-card');
-      const emailStatus = document.getElementById('acc-email-status');
-      const emailInput = document.getElementById('acc-email-input');
-      const emailAlert = document.getElementById('acc-email-alert');
-      const emailSave = document.getElementById('acc-email-save');
-      emailCard.hidden = false;
-
-      function emailShowAlert(msg, kind) {
-        emailAlert.hidden = false;
-        emailAlert.textContent = msg;
-        emailAlert.className = 'alert ' + (kind === 'ok' ? 'alert-success' : 'alert-error');
-        Titan.announce(msg);
-      }
-      async function loadEmail() {
-        try {
-          const r = await Titan.API.getAccountEmail();
-          if (!r || !r.success) { emailStatus.textContent = t('account.email_load_error'); return; }
-          if (!r.email) { emailStatus.textContent = t('account.email_none'); }
-          else if (r.email_verified) { emailStatus.textContent = t('account.email_verified').replace('{email}', r.email); emailInput.value = r.email; }
-          else { emailStatus.textContent = t('account.email_unverified').replace('{email}', r.email); emailInput.value = r.email; }
-        } catch (e) { emailStatus.textContent = t('account.email_load_error'); }
-      }
-      emailSave.addEventListener('click', async () => {
-        const email = emailInput.value.trim();
-        if (!email) { emailShowAlert(t('err.required')); return; }
-        emailSave.disabled = true;
-        try {
-          const r = await Titan.API.setAccountEmail(email);
-          if (r && r.success) { emailShowAlert(t('account.email_saved'), 'ok'); loadEmail(); }
-          else { emailShowAlert((r && r.error) || t('err.generic')); }
-        } catch (e) { emailShowAlert(e.message || t('err.generic')); }
-        emailSave.disabled = false;
-      });
-      loadEmail();
-    });
-  </script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/account.js?v=20260825b"></script>
 </body>
 </html>

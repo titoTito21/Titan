@@ -174,6 +174,13 @@ class TitanNetClient:
         self.on_game_state_changed: Optional[Callable] = None        # Server pushed new state JSON
         self.on_game_token_warning: Optional[Callable] = None        # Approaching token cap
         self.on_game_menu: Optional[Callable] = None                 # AI presented a list of choices (gamebook / dialogue tree)
+        # Narration. The AI is asked for TEXT and the session HOST's
+        # own Titan TTS speaks it for the whole table, so the host is
+        # asked for a line (game_speak_request) and everybody is told
+        # to say one themselves when no host narration arrives
+        # (game_speak_locally). See src/network/game_narrator.py.
+        self.on_game_speak_request: Optional[Callable] = None         # the server asking THIS machine to narrate a line
+        self.on_game_speak_locally: Optional[Callable] = None         # no host narration for this line - say it yourself
 
         # Remote UI / server sounds
         self.on_remote_screen_push: Optional[Callable] = None         # Server opened a screen on us
@@ -1719,6 +1726,12 @@ class TitanNetClient:
                             elif msg_type == 'game_menu':
                                 if self.on_game_menu:
                                     self.on_game_menu(message)
+                            elif msg_type == 'game_speak_request':
+                                if self.on_game_speak_request:
+                                    self.on_game_speak_request(message)
+                            elif msg_type == 'game_speak_locally':
+                                if self.on_game_speak_locally:
+                                    self.on_game_speak_locally(message)
 
                             # --- Remote UI / server sounds ---
                             elif msg_type == 'remote_screen_push':
@@ -4319,6 +4332,55 @@ class TitanNetClient:
 
             self._run_async(_send())
             return {"success": True, "session_id": session_id, "queued": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def game_speech_capable(self, session_id: int, capable: bool,
+                            voice: str = None) -> Dict:
+        """Tell the server whether this machine can narrate for the table.
+
+        Only the session host is listened to. Saying so explicitly is what
+        lets the server decide per line without waiting to find out by
+        silence - a timeout on every line is exactly the delay this whole
+        arrangement exists to remove.
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            async def _send():
+                message = {
+                    "type": "game_speech_capable",
+                    "session_id": session_id,
+                    "capable": bool(capable),
+                    "voice": voice or "",
+                }
+                return await self._send_and_wait(
+                    message, 'game_speech_capable_response', timeout=10)
+
+            response = self._run_async(_send())
+            return response if response else {"success": False, "error": _('No response from server')}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def game_speech_chunk(self, message: Dict) -> Dict:
+        """Push one slice of narration audio at the server.
+
+        Fire-and-forget for the same reason mic frames are: this is a
+        stream, and turning each sentence into a request that waits for
+        an answer would put a round trip between every two sentences the
+        table hears.
+        """
+        if not self.is_connected or not self.websocket:
+            return {"success": False, "error": _('Not logged in')}
+        try:
+            payload = dict(message or {})
+            payload['type'] = payload.get('type') or 'game_speech_chunk'
+
+            async def _send():
+                await self.websocket.send(json.dumps(payload))
+
+            self._run_async(_send())
+            return {"success": True, "queued": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
 

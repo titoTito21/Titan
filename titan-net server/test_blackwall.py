@@ -463,16 +463,31 @@ class ItOnlySaysWhatIsTrue(unittest.TestCase):
     permanently blocked" as a SECOND warning, to somebody who was not blocked
     at all."""
 
-    def true(self, line, stage, blocked=False):
-        return B.Blackwall._is_true(line, stage, {"already_blocked": blocked})
+    def true(self, line, stage, blocked=False, for_good=False):
+        return B.Blackwall._is_true(
+            line, stage,
+            {"already_blocked": blocked, "blocked_for_good": for_good})
 
     def test_a_block_announced_before_it_happens_is_refused(self):
         line = "Your access is terminated and this address is permanently blocked."
         self.assertFalse(self.true(line, 1))
 
     def test_the_same_line_is_fine_once_it_is_true(self):
+        """It needs BOTH facts now. Bans have terms (2026-08-24), so being
+        blocked no longer makes "permanently" true - most bans run out, and a
+        line calling one permanent is the same lie as announcing a block that
+        has not happened, one level further in."""
         line = "Your access is terminated and this address is permanently blocked."
-        self.assertTrue(self.true(line, 1, blocked=True))
+        self.assertTrue(self.true(line, 1, blocked=True, for_good=True))
+        self.assertTrue(self.true(line, 2, for_good=True))
+
+    def test_permanence_claimed_over_a_ban_that_expires_is_refused(self):
+        line = "Your access is terminated and this address is permanently blocked."
+        self.assertFalse(self.true(line, 1, blocked=True))
+        self.assertFalse(self.true(line, 3, blocked=True))
+
+    def test_a_block_without_a_permanence_claim_still_passes(self):
+        line = "Your address is blocked at the kernel and your behaviour is kept."
         self.assertTrue(self.true(line, 2))
 
     def test_an_honest_warning_passes(self):

@@ -55,6 +55,11 @@
       enabled: true,
       volume: 0.8,
       events: ev,
+      // The desktop client has the same switch (Settings -> Titan-Net ->
+      // "Allow sounds sent by the server"). A moderator can play audio at
+      // one person, a room or everybody, and somebody using a screen
+      // reader must be able to say no to that.
+      allowServer: true,
     };
   }
 
@@ -65,6 +70,7 @@
       const parsed = JSON.parse(raw);
       const d = defaults();
       d.enabled = !!parsed.enabled;
+      if (typeof parsed.allowServer === 'boolean') d.allowServer = parsed.allowServer;
       if (typeof parsed.volume === 'number') d.volume = parsed.volume;
       if (parsed.events && typeof parsed.events === 'object') {
         Object.keys(d.events).forEach((k) => {
@@ -205,6 +211,7 @@
     if (!patch) return;
     if (typeof patch.enabled === 'boolean') prefs.enabled = patch.enabled;
     if (typeof patch.volume === 'number') prefs.volume = patch.volume;
+    if (typeof patch.allowServer === 'boolean') prefs.allowServer = patch.allowServer;
     if (patch.events && typeof patch.events === 'object') {
       Object.keys(patch.events).forEach((k) => {
         if (k in prefs.events) prefs.events[k] = !!patch.events[k];
@@ -222,10 +229,57 @@
     }));
   }
 
+  // ---------- Sounds the SERVER plays at you ----------
+  // A moderator can play a registered sound at one user, a role, a room or
+  // everybody. The message carries the sha256, so a file already fetched is
+  // played straight from the browser's own cache. `listenForServerSounds`
+  // wires a socket up to it; the announcement, if there is one, goes to the
+  // screen reader as well, because a sound alone says nothing to somebody
+  // who cannot hear it that day.
+  const serverAudio = {};
+
+  function playServerSound(message) {
+    if (!message || !message.name) return false;
+    if (!prefs.allowServer) return false;
+    try {
+      let audio = serverAudio[message.name];
+      if (!audio) {
+        audio = new Audio('/api/sounds/' + encodeURIComponent(message.name));
+        audio.preload = 'auto';
+        serverAudio[message.name] = audio;
+      }
+      audio.loop = !!message.loop;
+      const wanted = typeof message.volume === 'number' ? message.volume : 1;
+      audio.volume = Math.max(0, Math.min(1, wanted * prefs.volume));
+      audio.currentTime = 0;
+      const started = audio.play();
+      if (started && started.catch) started.catch(function () {});
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function listenForServerSounds(ws) {
+    if (!ws || ws._titanServerSounds) return;
+    ws._titanServerSounds = true;
+    ws.addEventListener('msg:play_server_sound', function (e) {
+      const message = e.detail || {};
+      const played = playServerSound(message);
+      if (message.announce && window.Titan && Titan.announce) {
+        Titan.announce(message.announce);
+      } else if (!played && message.announce) {
+        Titan.announce(message.announce);
+      }
+    });
+  }
+
   window.Titan = window.Titan || {};
   window.Titan.sounds = {
     play, playFile,
     getPrefs, setPrefs,
     listEvents,
+    playServerSound,
+    listenForServerSounds,
   };
 })();

@@ -55,6 +55,15 @@ except Exception as _e:
     _GENAI_AVAILABLE = False
     logger.warning(f"[GAMES] google-generativeai unavailable: {_e}")
 
+# Who says the narration out loud. Soft-imported for the same reason as
+# the SDK: a server missing this file still runs games, with every line
+# spoken by the players' own voices instead of the host's.
+try:
+    from game_narration import NarrationRelay  # type: ignore
+except Exception as _ne:  # pragma: no cover - only on a partial deploy
+    NarrationRelay = None  # type: ignore
+    logger.warning(f"[GAMES] game_narration unavailable: {_ne}")
+
 
 # ---------------------------------------------------------------------------
 # Tool / function declarations exposed to the AI game master.
@@ -128,6 +137,178 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "type": "object",
             "properties": {"notation": {"type": "string"}},
             "required": ["notation"],
+        },
+    },
+
+    # --- Statistics -------------------------------------------------------
+    # A stat is a NUMBER the rules act on: hit points, strength, gold, a
+    # skill rank. It is kept apart from an arbitrary character field so the
+    # server can do arithmetic on it and clamp it, rather than the model
+    # doing the sum in prose and getting it wrong.
+    {
+        "name": "set_stat",
+        "description": "Set one of a player's numeric statistics outright "
+                       "(hp, strength, gold, a skill rank...). Use "
+                       "change_stat for damage, healing or spending — never "
+                       "read a number and write back the sum yourself.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "stat": {"type": "string"},
+                "value": {"type": "number"},
+                "max": {"type": "number",
+                        "description": "Optional ceiling stored alongside "
+                                       "the stat, e.g. maximum hit points."},
+            },
+            "required": ["target_username", "stat", "value"],
+        },
+    },
+    {
+        "name": "change_stat",
+        "description": "Add to or subtract from a statistic in one step: "
+                       "damage, healing, spending gold, gaining experience. "
+                       "`by` is negative for a loss. The server does the "
+                       "arithmetic and clamps to the stat's floor and "
+                       "ceiling, and tells you the value it ended on.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "stat": {"type": "string"},
+                "by": {"type": "number"},
+                "min": {"type": "number",
+                        "description": "Floor for this change; defaults to 0 "
+                                       "for hit points and gold."},
+                "max": {"type": "number"},
+            },
+            "required": ["target_username", "stat", "by"],
+        },
+    },
+    {
+        "name": "get_stats",
+        "description": "Read every statistic a player has. Call this before "
+                       "narrating anything that depends on a number.",
+        "parameters": {
+            "type": "object",
+            "properties": {"target_username": {"type": "string"}},
+            "required": ["target_username"],
+        },
+    },
+
+    # --- Inventory --------------------------------------------------------
+    {
+        "name": "give_item",
+        "description": "Put an item into a player's pack. Quantities stack, "
+                       "so giving 3 arrows twice leaves them with 6. "
+                       "`properties` is anything the item carries with it "
+                       "(damage, weight, a description) and is kept as it is "
+                       "given.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "item": {"type": "string"},
+                "quantity": {"type": "integer"},
+                "properties": {"type": "object"},
+            },
+            "required": ["target_username", "item"],
+        },
+    },
+    {
+        "name": "take_item",
+        "description": "Take an item out of a player's pack. Refuses if they "
+                       "do not have that many — so a player cannot spend an "
+                       "arrow they have not got, and you find out rather "
+                       "than narrating it wrongly. An equipped item is "
+                       "unequipped first.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "item": {"type": "string"},
+                "quantity": {"type": "integer"},
+            },
+            "required": ["target_username", "item"],
+        },
+    },
+    {
+        "name": "list_inventory",
+        "description": "What a player is carrying, with quantities and each "
+                       "item's properties.",
+        "parameters": {
+            "type": "object",
+            "properties": {"target_username": {"type": "string"}},
+            "required": ["target_username"],
+        },
+    },
+
+    # --- Equipment --------------------------------------------------------
+    {
+        "name": "equip_item",
+        "description": "Move an item from a player's pack into a worn slot "
+                       "(hand, off_hand, body, head, feet, or any slot name "
+                       "the game's rules use). Whatever was in that slot "
+                       "goes back into the pack. Refuses if the item is not "
+                       "carried.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "item": {"type": "string"},
+                "slot": {"type": "string"},
+            },
+            "required": ["target_username", "item"],
+        },
+    },
+    {
+        "name": "unequip_item",
+        "description": "Take whatever is worn in a slot off, back into the "
+                       "player's pack.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "slot": {"type": "string"},
+            },
+            "required": ["target_username", "slot"],
+        },
+    },
+    {
+        "name": "list_equipment",
+        "description": "What a player is wearing or wielding, slot by slot.",
+        "parameters": {
+            "type": "object",
+            "properties": {"target_username": {"type": "string"}},
+            "required": ["target_username"],
+        },
+    },
+
+    # --- Mechanics --------------------------------------------------------
+    {
+        "name": "skill_check",
+        "description": "Roll against a statistic and let the SERVER decide "
+                       "whether it succeeded. The player's stat is added to "
+                       "the roll and compared with `difficulty`. Use this "
+                       "for anything uncertain — picking a lock, spotting an "
+                       "ambush, swinging a sword — and narrate the answer "
+                       "you get back. Never decide a check yourself.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_username": {"type": "string"},
+                "stat": {"type": "string",
+                         "description": "Which statistic modifies the roll. "
+                                        "Omit for a flat roll."},
+                "notation": {"type": "string",
+                             "description": "Dice to roll; 1d20 by default."},
+                "difficulty": {"type": "number",
+                               "description": "What the total must reach."},
+                "modifier": {"type": "number",
+                             "description": "Any further bonus or penalty "
+                                            "from the situation."},
+            },
+            "required": ["target_username"],
         },
     },
     {
@@ -487,9 +668,34 @@ def build_system_prompt(game: Dict[str, Any],
         "perceive in-world.\n"
         "3. Use tools (function calling) for ALL state changes, dice rolls, "
         "turn rotation, NPC voices and sound effects. Never write 'HP: 14' "
-        "in narration without a matching set_character_field call.\n"
-        "4. When a player's action requires a check, call roll_dice — do not "
-        "invent the result.\n"
+        "in narration without a matching change_stat call.\n"
+        "4. When a player's action requires a check, call skill_check — do "
+        "not invent the result, and do not decide it yourself before "
+        "rolling. Use roll_dice only for a bare roll with nothing to beat.\n"
+        "4a. NUMBERS, THINGS AND VARIABLES — each has its own tool, and the "
+        "server is what remembers them, not your narration:\n"
+        "   * A world VARIABLE (the weather, which door is unlocked, how "
+        "many nights are left, a quest's stage) is state_set / state_get. "
+        "Keys may nest: state_set('world.weather', '\"storm\"').\n"
+        "   * A player's NUMBERS (hit points, strength, gold, ammunition, "
+        "experience, a skill rank) are set_stat / change_stat / get_stats. "
+        "For damage, healing, spending or gaining, ALWAYS use change_stat "
+        "with a positive or negative `by` — never read a number, do the sum "
+        "yourself and write it back. The server clamps to the floor and "
+        "ceiling and tells you the value it ended on; narrate THAT.\n"
+        "   * A player's THINGS are give_item / take_item / list_inventory. "
+        "Quantities stack. take_item REFUSES when they do not have that "
+        "many, and a refusal means your narration was about to be wrong — "
+        "say what really happened instead.\n"
+        "   * What a player is WEARING or WIELDING is equip_item / "
+        "unequip_item / list_equipment. A slot holds one thing; equipping "
+        "into a full slot puts the old thing back in the pack.\n"
+        "   * Anything else about a character that is not a number or a "
+        "thing (their name, their class, a mood, a relationship) is "
+        "set_character_field / get_character_field.\n"
+        "4b. Before narrating anything that depends on a number or an item, "
+        "READ it (get_stats, list_inventory, list_equipment). You do not "
+        "remember the sheet between turns; the server does.\n"
         "5. Multiplayer: address the active-turn player by name. When you "
         "have finished resolving an action, call advance_turn so the next "
         "player can act.\n"
@@ -680,6 +886,17 @@ class GeminiGameWorker:
         # and the whole server would stop accepting logins.
         self._games_executor = games_executor
 
+        # Who says the narration out loud. Gemini is asked for TEXT now,
+        # so nothing here synthesises anything: the session host's own
+        # Titan TTS speaks each line and streams it back, and the table
+        # says a line itself when no stream arrives. See game_narration.py.
+        self._narration = None  # type: Any
+        # What we ask Gemini for. TEXT is the fast path; a connect that
+        # cannot be made to work with it drops to AUDIO for the rest of
+        # the session, so a key the text models are not enabled on still
+        # gets a playable game.
+        self._modality = self.MODALITY_TEXT
+
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
         self._inbox: asyncio.Queue = asyncio.Queue()
@@ -688,7 +905,12 @@ class GeminiGameWorker:
         self._game: Optional[Dict[str, Any]] = None
         self._api_key: Optional[str] = None
         self._stub_mode = False
-        self._loop = asyncio.get_event_loop()
+        # Deliberately no `self._loop = asyncio.get_event_loop()` here. It
+        # was never read, and on Python 3.12+ that call RAISES when there
+        # is no running loop on the calling thread — so constructing a
+        # worker anywhere but inside a coroutine (a test, a synchronous
+        # setup path, a repair script) died on a line whose value nothing
+        # used. Everything here takes the running loop where it needs one.
         # Conversation history kept across reconnects so the model
         # remembers prior turns. Native-audio Gemini closes the stream
         # after every turn_complete; without replay the AI greets the
@@ -739,7 +961,104 @@ class GeminiGameWorker:
         """Spawn the background task. Idempotent."""
         if self._task is not None:
             return
+        self._build_narration()
         self._task = asyncio.create_task(self._run())
+
+    def _build_narration(self):
+        """The session's narrator.
+
+        Built even when the host turns out not to be able to speak: the
+        relay is what DECIDES that, and with no relay at all every line
+        would silently fall back to the players' own voices with nothing
+        recording why.
+        """
+        if self._narration is not None or NarrationRelay is None:
+            return
+        host_id = None
+        try:
+            session = self.db.get_game_session(self.session_id)
+            if session:
+                host_id = session.get('host_id')
+        except Exception as e:
+            logger.warning(
+                f"[GAMES] session {self.session_id}: could not read the host: {e}"
+            )
+        try:
+            self._narration = NarrationRelay(
+                session_id=self.session_id,
+                broadcast_cb=self._broadcast,
+                send_to_user_cb=self._send_to_user,
+                host_id=host_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"[GAMES] session {self.session_id}: narration relay failed "
+                f"to build: {e}", exc_info=True
+            )
+            self._narration = None
+
+    # ---- what the server calls when the host answers ----
+
+    def host_can_speak(self, user_id: int, capable: bool,
+                       voice: Optional[str] = None) -> bool:
+        self._build_narration()
+        if self._narration is None:
+            return False
+        return self._narration.host_can_speak(user_id, capable, voice)
+
+    async def on_speech_chunk(self, user_id: int, data: Dict) -> Dict:
+        if self._narration is None:
+            return {'success': False, 'error': 'No narration for this session'}
+        return await self._narration.on_chunk(user_id, data)
+
+    async def on_speech_failed(self, user_id: int, data: Dict) -> Dict:
+        if self._narration is None:
+            return {'success': False, 'error': 'No narration for this session'}
+        return await self._narration.on_failed(user_id, data)
+
+    def host_gone(self, user_id: int):
+        if self._narration is not None:
+            self._narration.host_gone(user_id)
+
+    def narration_status(self) -> Dict[str, Any]:
+        if self._narration is None:
+            return {'narrating': False}
+        return self._narration.status()
+
+    def _host_narrating(self) -> bool:
+        """Is there a host with a voice ready to say the next line?
+
+        Asked before a line exists, which is why it cannot be the answer
+        ``_say`` gives afterwards: the model's audio streams chunk by
+        chunk WHILE the turn is being composed, so the decision to drop
+        it has to be made before ``turn_complete``.
+        """
+        if self._narration is None:
+            return False
+        try:
+            return bool(self._narration.narrating)
+        except Exception:
+            return False
+
+    async def _say(self, text: str, actor: str = 'gm',
+                   interrupt: bool = False) -> bool:
+        """Have a line narrated by the host, and say whether that is
+        happening.
+
+        The answer rides on the text broadcast as ``spoken``, so a client
+        never has to guess whether audio is on its way - guessing is what
+        produces a line said twice, in two voices, half a second apart.
+        """
+        if self._narration is None:
+            return False
+        try:
+            uid = await self._narration.say(text, actor=actor, interrupt=interrupt)
+        except Exception as e:
+            logger.warning(
+                f"[GAMES] session {self.session_id}: narration request failed: {e}"
+            )
+            return False
+        return uid is not None
 
     async def shutdown(self, reason: str = 'shutdown'):
         """Signal the loop to exit cleanly."""
@@ -767,6 +1086,13 @@ class GeminiGameWorker:
                 logger.warning(
                     f"[GAMES] session {self.session_id}: delete_game_session "
                     f"on shutdown failed: {e}"
+                )
+        if self._narration is not None:
+            try:
+                await self._narration.stop()
+            except Exception as e:
+                logger.warning(
+                    f"[GAMES] session {self.session_id}: narration stop: {e}"
                 )
         self._stop_event.set()
         # Push a sentinel so the inbox drain wakes up.
@@ -901,7 +1227,21 @@ class GeminiGameWorker:
                     continue
                 with open(abs_path, 'rb') as fh:
                     raw = fh.read()
-                if path.endswith(self._enc_suffix) and self._fernet_factory is not None:
+                if path.endswith(self._enc_suffix):
+                    # An encrypted file that cannot be decrypted is SKIPPED,
+                    # never passed through. Without this the ciphertext went
+                    # into the system prompt verbatim — a wall of base64
+                    # where the creator's rules should have been, which
+                    # costs tokens, teaches the model nothing, and looks
+                    # like a working game right up until it ignores every
+                    # rule it was given.
+                    if self._fernet_factory is None:
+                        logger.error(
+                            f"[GAMES] rules file {path} is encrypted and this "
+                            f"worker has no key — skipping it rather than "
+                            f"feeding ciphertext to the model"
+                        )
+                        continue
                     try:
                         f = self._fernet_factory()
                         raw = f.decrypt(raw)
@@ -985,6 +1325,19 @@ class GeminiGameWorker:
             rules_text_extra=getattr(self, '_rules_text_extra', ''),
             sound_manifest=sound_manifest,
         )
+        # The rules are the system instruction, which is sent once per
+        # CONNECTION and then held for every turn on it - the model is not
+        # re-reading them between turns. What DOES re-read them is a
+        # reconnect, and the native-audio class closes the socket after
+        # every turn, so on that class a big ruleset is paid for once a
+        # turn. That is invisible unless it is measured, so it is logged:
+        # a game whose rules are long and whose session reconnects often
+        # is the one to move onto a persistent 'live' model.
+        logger.info(
+            f"[GAMES] session {self.session_id}: system prompt "
+            f"{len(self._system_prompt)} chars (~{len(self._system_prompt) // 4} "
+            f"tokens), re-sent on every reconnect"
+        )
 
     def _collect_sound_manifest(self) -> List[Dict[str, Any]]:
         """Return [{id, file_name}] for every uploaded sound attachment.
@@ -1017,13 +1370,52 @@ class GeminiGameWorker:
         "gemini-live-2.5-flash-preview",
     )
 
+    # Which modality this worker is currently asking Gemini for. TEXT is
+    # what it starts as; a connect that TEXT cannot be made to work with
+    # drops to AUDIO for the rest of the session (see _main_loop).
+    MODALITY_TEXT = 'TEXT'
+    MODALITY_AUDIO = 'AUDIO'
+
     @staticmethod
-    def _model_priority(name: str) -> int:
-        """Lower is better. native-audio works on most keys; 'live' often does not."""
+    def _connect_error_is_fatal(msg: str) -> bool:
+        """Is this a reason to stop trying candidates altogether?
+
+        Only an unusable key is, because that is the only failure the
+        next model on the list cannot fix. Everything else - the model
+        does not exist, the model will not take this modality, the
+        handshake fell over - is about THAT candidate, so we move on.
+        """
+        low = (msg or '').lower()
+        return (
+            'api key not valid' in low
+            or 'api_key_invalid' in low
+            or 'permission_denied' in low
+            or 'unauthenticated' in low
+            or 'invalid authentication' in low
+        )
+
+    def _model_priority(self, name: str) -> int:
+        """Lower is better, and which is better depends on what we are
+        asking for.
+
+        Asking for AUDIO, the native-audio class is the one that works on
+        most keys. Asking for TEXT it is the wrong class entirely - those
+        models exist to speak, they close the socket after every turn,
+        and a text turn out of them is the transcript of speech nobody
+        wanted. The persistent 'live' models are the text ones.
+        """
         n = (name or '').lower()
-        if 'native-audio' in n or 'native_audio' in n:
+        native = ('native-audio' in n or 'native_audio' in n)
+        live = ('live' in n)
+        if self._modality == self.MODALITY_TEXT:
+            if live and not native:
+                return 0
+            if native:
+                return 2
+            return 1
+        if native:
             return 0
-        if 'live' in n:
+        if live:
             return 2
         return 1
 
@@ -1096,8 +1488,22 @@ class GeminiGameWorker:
         if genai_types is None:
             return None
 
+        # TEXT, not AUDIO, and this is the whole point of the change.
+        #
+        # Asked for AUDIO, the model wrote the sentence and then SPOKE
+        # it, and nothing reached a player until it had finished doing
+        # both - narration arriving as a PCM stream that a player who
+        # wanted to cut in had to wait out. Asked for TEXT it answers as
+        # fast as text does, and the voice is then Titan's own (the
+        # session host's engine, whatever they have set up), which starts
+        # the moment the line exists and stops the moment somebody
+        # interrupts, because stopping a local voice is instant.
+        #
+        # AUDIO is kept at the bottom of the ladder: a key or a model
+        # that refuses TEXT still gets a game, spoken the old way, rather
+        # than a session that will not start.
         base_kwargs = {
-            "response_modalities": ["AUDIO"],
+            "response_modalities": [self._modality],
             "system_instruction": self._system_prompt,
             "tools": self._tools,
         }
@@ -1193,7 +1599,12 @@ class GeminiGameWorker:
         discovered = await self._discover_live_model()
         if discovered and discovered not in candidates:
             candidates.append(discovered)
-        for fallback in self.LIVE_MODEL_CANDIDATES:
+        # Sorted by what THIS modality wants: asking for TEXT, the
+        # persistent 'live' models come first and the native-audio ones
+        # last, because those exist to speak and close the socket after
+        # every turn. Asking for AUDIO the order is the other way round,
+        # which is what it always was.
+        for fallback in sorted(self.LIVE_MODEL_CANDIDATES, key=self._model_priority):
             if fallback not in candidates:
                 candidates.append(fallback)
         # We try candidates in order and rotate to the next on
@@ -1344,21 +1755,74 @@ class GeminiGameWorker:
             except Exception as e:
                 last_error = e
                 msg = str(e)
-                # 1008 / "is not found for API version" / "not supported for
-                # bidiGenerateContent" — try the next candidate before giving
-                # up. Other errors (auth, network) bail immediately.
-                rotate = (
-                    '1008' in msg
-                    or 'not found' in msg.lower()
-                    or 'not supported for bidi' in msg.lower()
-                )
+                # Rotate to the next candidate on ANYTHING but a bad key.
+                #
+                # This used to rotate only on 1008 / "not found" / "not
+                # supported for bidi", and that is what cost the host their
+                # voice on most keys: a native-audio model handed
+                # ``response_modalities=["TEXT"]`` refuses with a message
+                # about the MODALITY, which matched none of those three, so
+                # the loop gave up at the first candidate and never reached
+                # ``gemini-2.0-flash-live-001`` - the persistent 'live' model
+                # further down the list that would have taken TEXT happily.
+                # The whole session then dropped to Gemini's own voice over a
+                # model that was never asked.
+                #
+                # A candidate costs one handshake, so trying the rest is
+                # cheap; the one error no other candidate can fix is an
+                # unusable key, and that is the only one we still bail on.
+                fatal = self._connect_error_is_fatal(msg)
                 logger.warning(
                     f"[GAMES] session {self.session_id}: connect to {candidate} failed "
                     f"({type(e).__name__}: {msg[:200]}); "
-                    f"{'trying next candidate' if rotate else 'giving up'}"
+                    f"{'giving up (the key itself is refused)' if fatal else 'trying next candidate'}"
                 )
-                if not rotate:
+                if fatal:
                     break
+
+        if not connected and self._modality == self.MODALITY_TEXT:
+            # Nothing would take a TEXT session. That is a property of the
+            # key and the models available on it, not of this game, so the
+            # answer is to play on rather than to refuse: ask for AUDIO,
+            # which every Live model takes, and say so in the room. Once
+            # only - a second failure is a real one.
+            #
+            # Asking for AUDIO is NOT the same as giving the host's voice
+            # up, and it used to be treated as though it were. Every line
+            # still arrives as text - ``output_audio_transcription`` is on
+            # the config, so the model captions its own speech - and the
+            # host narrates that caption exactly as it narrates a TEXT
+            # turn. What changes is only WHEN the line arrives: the model
+            # has to finish composing the speech first, so narration
+            # starts later than it would over a text model. The model's
+            # own PCM is dropped while a host is narrating (see
+            # ``_receive_loop``), because relaying it as well is the same
+            # sentence said twice, in two voices, a beat apart.
+            logger.warning(
+                f"[GAMES] session {self.session_id}: no model would take a "
+                f"TEXT session ({type(last_error).__name__ if last_error else 'unknown'}); "
+                f"asking for AUDIO and captioning it instead"
+            )
+            self._modality = self.MODALITY_AUDIO
+            # Said without naming who will narrate, because at this point
+            # nobody knows: the fallback happens seconds into the session
+            # and the host's client may not have answered yet whether it
+            # can speak. That answer is asked for again on every turn
+            # (``_host_narrating``), so the room is told the one thing
+            # that is true either way - the wait.
+            note = ("[This key has no text-mode Live model, so the AI has to "
+                    "compose speech before it answers. Narration still "
+                    "comes from the host's own voice where one is "
+                    "available; it will just start later.]")
+            await self._broadcast(self.session_id, {
+                "type": "game_ai_text",
+                "session_id": self.session_id,
+                "actor": "system",
+                "text": note,
+                "spoken": False,
+            })
+            await self._main_loop()
+            return
 
         if not connected:
             err_text = (
@@ -1488,8 +1952,10 @@ class GeminiGameWorker:
         """
         if not self._history or not (genai_types and hasattr(live, 'send_client_content')):
             return
-        # Pull only USER turns from history. Skip [voice] markers — those
-        # are mic transcripts that the model already heard live.
+        # Pull only USER turns from history. A ``[voice]`` entry is in there
+        # too and belongs there: a player who SPOKE their action did just as
+        # much as one who typed it, and the reconnected session has lost the
+        # audio as completely as it has lost the text.
         user_turns = [
             (e.get('text') or '').strip()
             for e in self._history
@@ -1655,11 +2121,17 @@ class GeminiGameWorker:
                         self._record_turn('model', full)
                         self._last_broadcast_text = full
                         self._last_broadcast_at = now
+                        # Asked for BEFORE the text goes out, so the text
+                        # can carry the answer: `spoken` true means the
+                        # host's narration is on its way and a client must
+                        # not also say the line with its own voice.
+                        spoken = await self._say(delta, actor='gm')
                         await self._broadcast(self.session_id, {
                             "type": "game_ai_text",
                             "session_id": self.session_id,
                             "actor": "gm",
                             "text": delta,
+                            "spoken": spoken,
                         })
                     return
                 if a.startswith(b) and len(a) > len(b):
@@ -1688,11 +2160,13 @@ class GeminiGameWorker:
             self._record_turn('model', full)
             self._last_broadcast_text = full
             self._last_broadcast_at = now
+            spoken = await self._say(full, actor='gm')
             await self._broadcast(self.session_id, {
                 "type": "game_ai_text",
                 "session_id": self.session_id,
                 "actor": "gm",
                 "text": full,
+                "spoken": spoken,
             })
 
         idle_task = asyncio.create_task(_idle_flush_watch())
@@ -1762,7 +2236,30 @@ class GeminiGameWorker:
                                     logger.warning(f"[GAMES] AI audio encode failed: {_enc_err}")
                                     audio_b64 = None
                                     mime_in = None
-                                if audio_b64:
+                                if (audio_b64
+                                        and self._modality == self.MODALITY_AUDIO
+                                        and not self._host_narrating()):
+                                    # Two conditions, and the second is the
+                                    # one that keeps the host's voice on the
+                                    # fallback path.
+                                    #
+                                    # Asking for TEXT the model ships no
+                                    # audio at all, so anything that did
+                                    # arrive is a stray and is dropped.
+                                    #
+                                    # Asking for AUDIO - the fallback, where
+                                    # the key has no text-mode Live model -
+                                    # the line ALSO arrives as text, because
+                                    # the model captions its own speech into
+                                    # output_transcription. So a session with
+                                    # a host who can speak narrates that
+                                    # caption and the model's PCM is dropped;
+                                    # relaying it as well would put the
+                                    # model's voice on top of the host's and
+                                    # say every line twice, a beat apart.
+                                    # Only a session with NO host voice
+                                    # actually hears Gemini.
+                                    #
                                     # Ship the raw PCM payload + the source
                                     # rate. The client decides how to play
                                     # it — sounddevice OutputStream for
@@ -1930,6 +2427,27 @@ class GeminiGameWorker:
                     self.session_id, 0, 'ai', 'roll_dice', result,
                 )
                 return result
+            # --- the RPG layer -------------------------------------------
+            if name == 'set_stat':
+                return await self._tool_set_stat(args)
+            if name == 'change_stat':
+                return await self._tool_change_stat(args)
+            if name == 'get_stats':
+                return await self._tool_get_stats(args)
+            if name == 'give_item':
+                return await self._tool_give_item(args)
+            if name == 'take_item':
+                return await self._tool_take_item(args)
+            if name == 'list_inventory':
+                return await self._tool_list_inventory(args)
+            if name == 'equip_item':
+                return await self._tool_equip_item(args)
+            if name == 'unequip_item':
+                return await self._tool_unequip_item(args)
+            if name == 'list_equipment':
+                return await self._tool_list_equipment(args)
+            if name == 'skill_check':
+                return await self._tool_skill_check(args)
             if name == 'advance_turn':
                 return await self._tool_advance_turn()
             if name == 'set_turn_order':
@@ -2065,6 +2583,402 @@ class GeminiGameWorker:
                 return {"success": True, "user_id": user_id, "field": field,
                         "value": self._get_in_dict(p.get('character_state') or {}, field)}
         return {"success": False, "error": "user not in session"}
+
+    # ------------------------------------------------------------------
+    # The RPG layer: statistics, inventory, equipment, checks
+    # ------------------------------------------------------------------
+    #
+    # A character sheet is one JSON object per player, with three parts the
+    # server understands:
+    #
+    #   {"stats":     {"hp": {"value": 9, "max": 12}, "gold": {"value": 40}},
+    #    "inventory": [{"item": "arrow", "quantity": 12, "properties": {...}}],
+    #    "equipment": {"hand": "sword", "body": "chain mail"}}
+    #
+    # Anything else the model writes with set_character_field sits beside
+    # them untouched. The reason these are tools rather than prose is that
+    # the model is bad at arithmetic it has to remember: "you have 12
+    # arrows" then "you fire three" then "you have 10" is the failure this
+    # layer exists to make impossible. Every one of them is a single
+    # read-modify-write inside the database's writer lock.
+
+    # Stats that cannot sensibly go below zero unless the game says so.
+    _STAT_FLOORS = {'hp': 0, 'health': 0, 'hitpoints': 0, 'hit_points': 0,
+                    'gold': 0, 'money': 0, 'coins': 0, 'ammo': 0,
+                    'mana': 0, 'stamina': 0, 'xp': 0, 'experience': 0}
+
+    @staticmethod
+    def _stat_entry(sheet: Dict[str, Any], stat: str) -> Dict[str, Any]:
+        """One statistic, in the {'value', 'max'} shape, created if absent.
+
+        A sheet written by an older session (or by set_character_field) may
+        hold a bare number; it is read as the value rather than refused.
+        """
+        stats = sheet.setdefault('stats', {})
+        if not isinstance(stats, dict):
+            stats = {}
+            sheet['stats'] = stats
+        entry = stats.get(stat)
+        if isinstance(entry, (int, float)):
+            entry = {'value': entry}
+            stats[stat] = entry
+        elif not isinstance(entry, dict):
+            entry = {'value': 0}
+            stats[stat] = entry
+        return entry
+
+    @staticmethod
+    def _as_number(value, fallback=0):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return fallback
+        return int(number) if number == int(number) else number
+
+    def _readable_stats(self, sheet: Dict[str, Any]) -> Dict[str, Any]:
+        stats = sheet.get('stats')
+        if not isinstance(stats, dict):
+            return {}
+        out = {}
+        for name, entry in stats.items():
+            if isinstance(entry, dict):
+                out[name] = entry.get('value')
+                if entry.get('max') is not None:
+                    out[name + '_max'] = entry.get('max')
+            else:
+                out[name] = entry
+        return out
+
+    async def _sheet_target(self, args: Dict[str, Any]):
+        """Resolve the player a sheet tool is about, or say why not."""
+        target_username = args.get('target_username') or args.get('username')
+        legacy_uid = args.get('user_id') or args.get('target_user_id')
+        user_id = await self._resolve_user_id(
+            username=target_username if isinstance(target_username, str) else None,
+            user_id=legacy_uid,
+        )
+        if not user_id:
+            return None, {
+                "success": False,
+                "error": "could not resolve player — pass target_username "
+                         "matching the [username] prefix on a player's messages",
+            }
+        return user_id, None
+
+    async def _mutate_sheet(self, user_id: int, mutate) -> Dict[str, Any]:
+        """Change one player's sheet and tell the table it changed."""
+        result = await self.db.run_write_async(
+            self.db.mutate_character_state, self.session_id, user_id, mutate)
+        if result.get('success'):
+            # `game_state_changed` is what every client already refreshes
+            # on, so a client written before any of this still shows the
+            # new numbers. The richer message is for the ones that want to
+            # say what actually changed.
+            await self._broadcast(self.session_id, {
+                "type": "game_state_changed",
+                "session_id": self.session_id,
+            })
+            await self._broadcast(self.session_id, {
+                "type": "game_character_changed",
+                "session_id": self.session_id,
+                "user_id": user_id,
+                "change": result.get('change'),
+            })
+        return result
+
+    async def _read_sheet(self, user_id: int) -> Dict[str, Any]:
+        loop = asyncio.get_event_loop()
+        sess = await loop.run_in_executor(
+            self._games_executor, self.db.get_game_session, self.session_id)
+        for player in (sess or {}).get('players') or []:
+            if player.get('user_id') == user_id:
+                return player.get('character_state') or {}
+        return {}
+
+    async def _tool_set_stat(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        stat = (args.get('stat') or '').strip()
+        if not stat:
+            return {"success": False, "error": "stat required"}
+        value = self._as_number(args.get('value'), None)
+        if value is None:
+            return {"success": False, "error": "value must be a number"}
+        ceiling = args.get('max')
+
+        def mutate(sheet):
+            entry = self._stat_entry(sheet, stat)
+            entry['value'] = value
+            if ceiling is not None:
+                entry['max'] = self._as_number(ceiling, entry.get('max'))
+            return ({"success": True, "stat": stat, "value": value,
+                     "max": entry.get('max'),
+                     "change": {"kind": "stat", "stat": stat, "value": value}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_change_stat(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        stat = (args.get('stat') or '').strip()
+        if not stat:
+            return {"success": False, "error": "stat required"}
+        by = self._as_number(args.get('by'), None)
+        if by is None:
+            return {"success": False, "error": "by must be a number"}
+        floor = args.get('min')
+        ceiling = args.get('max')
+
+        def mutate(sheet):
+            entry = self._stat_entry(sheet, stat)
+            before = self._as_number(entry.get('value'), 0)
+            after = before + by
+            low = self._as_number(floor, None) if floor is not None \
+                else self._STAT_FLOORS.get(stat.lower())
+            high = self._as_number(ceiling, None) if ceiling is not None \
+                else self._as_number(entry.get('max'), None)
+            if low is not None:
+                after = max(low, after)
+            if high is not None:
+                after = min(high, after)
+            entry['value'] = after
+            return ({"success": True, "stat": stat, "before": before,
+                     "after": after, "applied": after - before,
+                     "max": entry.get('max'),
+                     "change": {"kind": "stat", "stat": stat, "value": after,
+                                "by": after - before}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_get_stats(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        sheet = await self._read_sheet(user_id)
+        return {"success": True, "user_id": user_id,
+                "stats": self._readable_stats(sheet)}
+
+    # -- inventory ---------------------------------------------------------
+
+    @staticmethod
+    def _inventory(sheet: Dict[str, Any]) -> List[Dict[str, Any]]:
+        pack = sheet.setdefault('inventory', [])
+        if not isinstance(pack, list):
+            pack = []
+            sheet['inventory'] = pack
+        return pack
+
+    @staticmethod
+    def _find_item(pack: List[Dict[str, Any]], item: str):
+        wanted = item.strip().lower()
+        for entry in pack:
+            if isinstance(entry, dict) and \
+                    str(entry.get('item', '')).strip().lower() == wanted:
+                return entry
+        return None
+
+    async def _tool_give_item(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        item = (args.get('item') or '').strip()
+        if not item:
+            return {"success": False, "error": "item required"}
+        quantity = int(self._as_number(args.get('quantity'), 1) or 1)
+        if quantity < 1:
+            return {"success": False, "error": "quantity must be at least 1"}
+        properties = args.get('properties')
+        if not isinstance(properties, dict):
+            properties = None
+
+        def mutate(sheet):
+            pack = self._inventory(sheet)
+            entry = self._find_item(pack, item)
+            if entry is None:
+                entry = {'item': item, 'quantity': 0}
+                pack.append(entry)
+            entry['quantity'] = int(self._as_number(entry.get('quantity'), 0)) + quantity
+            if properties:
+                merged = dict(entry.get('properties') or {})
+                merged.update(properties)
+                entry['properties'] = merged
+            return ({"success": True, "item": entry['item'],
+                     "quantity": entry['quantity'], "added": quantity,
+                     "change": {"kind": "item", "item": entry['item'],
+                                "quantity": entry['quantity'], "by": quantity}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_take_item(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        item = (args.get('item') or '').strip()
+        if not item:
+            return {"success": False, "error": "item required"}
+        quantity = int(self._as_number(args.get('quantity'), 1) or 1)
+        if quantity < 1:
+            return {"success": False, "error": "quantity must be at least 1"}
+
+        def mutate(sheet):
+            pack = self._inventory(sheet)
+            entry = self._find_item(pack, item)
+            held = int(self._as_number((entry or {}).get('quantity'), 0))
+            if entry is None or held < quantity:
+                # Refused, not silently allowed: the model finds out it was
+                # wrong instead of narrating a spent arrow nobody had.
+                return ({"success": False,
+                         "error": "they are carrying %d, not %d" % (held, quantity),
+                         "item": item, "quantity": held}, False)
+            entry['quantity'] = held - quantity
+            if entry['quantity'] <= 0:
+                pack.remove(entry)
+                # An item nobody carries cannot stay worn.
+                worn = sheet.get('equipment')
+                if isinstance(worn, dict):
+                    for slot, value in list(worn.items()):
+                        if str(value).strip().lower() == item.strip().lower():
+                            worn.pop(slot, None)
+            return ({"success": True, "item": item,
+                     "quantity": entry['quantity'], "removed": quantity,
+                     "change": {"kind": "item", "item": item,
+                                "quantity": entry['quantity'], "by": -quantity}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_list_inventory(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        sheet = await self._read_sheet(user_id)
+        pack = sheet.get('inventory')
+        return {"success": True, "user_id": user_id,
+                "inventory": pack if isinstance(pack, list) else []}
+
+    # -- equipment ---------------------------------------------------------
+
+    async def _tool_equip_item(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        item = (args.get('item') or '').strip()
+        if not item:
+            return {"success": False, "error": "item required"}
+        slot = (args.get('slot') or '').strip() or 'hand'
+
+        def mutate(sheet):
+            pack = self._inventory(sheet)
+            entry = self._find_item(pack, item)
+            if entry is None:
+                return ({"success": False,
+                         "error": "they are not carrying %r" % item}, False)
+            worn = sheet.setdefault('equipment', {})
+            if not isinstance(worn, dict):
+                worn = {}
+                sheet['equipment'] = worn
+            # Whatever was in the slot goes back into the pack — a hand can
+            # hold one thing, and the other has to go somewhere.
+            replaced = worn.get(slot)
+            worn[slot] = entry['item']
+            return ({"success": True, "item": entry['item'], "slot": slot,
+                     "replaced": replaced,
+                     "change": {"kind": "equipment", "slot": slot,
+                                "item": entry['item'], "replaced": replaced}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_unequip_item(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        slot = (args.get('slot') or '').strip()
+        if not slot:
+            return {"success": False, "error": "slot required"}
+
+        def mutate(sheet):
+            worn = sheet.get('equipment')
+            if not isinstance(worn, dict) or slot not in worn:
+                return ({"success": False,
+                         "error": "nothing is worn in %r" % slot}, False)
+            item = worn.pop(slot)
+            return ({"success": True, "slot": slot, "item": item,
+                     "change": {"kind": "equipment", "slot": slot,
+                                "item": None, "removed": item}},
+                    True)
+
+        return await self._mutate_sheet(user_id, mutate)
+
+    async def _tool_list_equipment(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        sheet = await self._read_sheet(user_id)
+        worn = sheet.get('equipment')
+        return {"success": True, "user_id": user_id,
+                "equipment": worn if isinstance(worn, dict) else {}}
+
+    # -- checks ------------------------------------------------------------
+
+    async def _tool_skill_check(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Roll, add the statistic, and say whether it beat the difficulty.
+
+        The whole point is that the SERVER decides. A model asked to roll
+        and judge in one breath will quietly decide the outcome first.
+        """
+        user_id, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
+        notation = (args.get('notation') or '1d20').strip() or '1d20'
+        rolled = roll_dice_notation(notation)
+        if not rolled.get('success'):
+            return rolled
+
+        stat = (args.get('stat') or '').strip()
+        bonus = 0
+        if stat:
+            sheet = await self._read_sheet(user_id)
+            entry = (sheet.get('stats') or {}).get(stat)
+            if isinstance(entry, dict):
+                bonus = self._as_number(entry.get('value'), 0)
+            elif entry is not None:
+                bonus = self._as_number(entry, 0)
+        extra = self._as_number(args.get('modifier'), 0)
+        total = rolled['total'] + bonus + extra
+
+        result = {
+            "success": True,
+            "user_id": user_id,
+            "notation": notation,
+            "rolls": rolled['rolls'],
+            "stat": stat or None,
+            "stat_bonus": bonus,
+            "modifier": extra,
+            "total": total,
+        }
+        difficulty = args.get('difficulty')
+        if difficulty is not None:
+            target = self._as_number(difficulty, None)
+            if target is not None:
+                result['difficulty'] = target
+                result['passed'] = total >= target
+                result['margin'] = total - target
+        # Every check goes into the session log, so a player can ask what
+        # was rolled and the answer is not the model's memory of it.
+        try:
+            await self.db.run_write_async(
+                self.db.log_session_event,
+                self.session_id, 0, 'ai', 'skill_check', result,
+            )
+        except Exception as e:
+            logger.warning(f"[GAMES] could not log skill_check: {e}")
+        return result
 
     async def _tool_advance_turn(self) -> Dict[str, Any]:
         loop = asyncio.get_event_loop()

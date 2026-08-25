@@ -3676,34 +3676,36 @@ class Database:
         return True
 
     def search_forum(self, query: str, category: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Search forum topics - optimized"""
+        """Search forum topics - optimized.
+
+        Every topic lives in a forum inside a group (the flat category is a
+        leftover the backfill migration filled in), so a hit says WHERE it
+        was found: ``forum_name``, ``group_id`` and ``group_name`` ride
+        along with it. Without them a search result is a title with no
+        route back to the thread it belongs to - which is exactly what made
+        the old flat forum page a dead end beside the groups tree. LEFT
+        JOINs, so a topic whose forum was deleted is still findable.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        if category and category != 'all':
-            cursor.execute("""
-                SELECT ft.*, u.username as author_username, u.titan_number as author_titan_number,
-                       COALESCE(COUNT(fr.id), 0) as reply_count
-                FROM forum_topics ft
-                JOIN users u ON ft.author_id = u.id
-                LEFT JOIN forum_replies fr ON fr.topic_id = ft.id
-                WHERE ft.category = ? AND (ft.title LIKE ? OR ft.content LIKE ?)
-                GROUP BY ft.id
-                ORDER BY ft.updated_at DESC
-                LIMIT ?
-            """, (category, f'%{query}%', f'%{query}%', limit))
-        else:
-            cursor.execute("""
-                SELECT ft.*, u.username as author_username, u.titan_number as author_titan_number,
-                       COALESCE(COUNT(fr.id), 0) as reply_count
-                FROM forum_topics ft
-                JOIN users u ON ft.author_id = u.id
-                LEFT JOIN forum_replies fr ON fr.topic_id = ft.id
-                WHERE ft.title LIKE ? OR ft.content LIKE ?
-                GROUP BY ft.id
-                ORDER BY ft.updated_at DESC
-                LIMIT ?
-            """, (f'%{query}%', f'%{query}%', limit))
+        where = "ft.category = ? AND (ft.title LIKE ? OR ft.content LIKE ?)"             if (category and category != 'all') else "(ft.title LIKE ? OR ft.content LIKE ?)"
+        params = ([category] if (category and category != 'all') else []) +             [f'%{query}%', f'%{query}%', limit]
+
+        cursor.execute(f"""
+            SELECT ft.*, u.username as author_username, u.titan_number as author_titan_number,
+                   gf.name as forum_name, gf.group_id as group_id, g.name as group_name,
+                   COALESCE(COUNT(fr.id), 0) as reply_count
+            FROM forum_topics ft
+            JOIN users u ON ft.author_id = u.id
+            LEFT JOIN forum_replies fr ON fr.topic_id = ft.id
+            LEFT JOIN group_forums gf ON gf.id = ft.forum_id
+            LEFT JOIN groups g ON g.id = gf.group_id
+            WHERE {where}
+            GROUP BY ft.id
+            ORDER BY ft.updated_at DESC
+            LIMIT ?
+        """, tuple(params))
 
         topics = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -6667,6 +6669,51 @@ class Database:
         conn.commit()
         conn.close()
         return {"success": True}
+
+    @_serialized_write
+    def mutate_character_state(self, session_id: int, user_id: int,
+                               mutate) -> Dict[str, Any]:
+        """Read a player's sheet, change it, and write it back as ONE step.
+
+        Everything an RPG does to a character — losing 3 hit points, picking
+        up a lantern, equipping a sword — is a read-modify-write, and doing
+        it as a separate read and write is how two things happening in the
+        same turn lose one of them. ``mutate`` is called with the sheet and
+        returns ``(result, changed)``; the write only happens when it says
+        something changed, and the whole thing runs inside the writer lock,
+        so it is atomic against every other write in the process.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT character_state_json FROM game_session_players
+            WHERE session_id = ? AND user_id = ?
+        """, (session_id, user_id))
+        row = cursor.fetchone()
+        if row is None:
+            conn.close()
+            return {"success": False, "error": "That player is not at this table"}
+        try:
+            state = json.loads(row['character_state_json'] or '{}')
+        except Exception:
+            state = {}
+        if not isinstance(state, dict):
+            state = {}
+
+        try:
+            result, changed = mutate(state)
+        except Exception as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+
+        if changed:
+            cursor.execute("""
+                UPDATE game_session_players SET character_state_json = ?
+                WHERE session_id = ? AND user_id = ?
+            """, (json.dumps(state, ensure_ascii=False), session_id, user_id))
+            conn.commit()
+        conn.close()
+        return result
 
     @_serialized_write
     def add_session_tokens(self, session_id: int, tokens: int) -> Dict[str, Any]:

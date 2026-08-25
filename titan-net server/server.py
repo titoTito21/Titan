@@ -7,6 +7,7 @@ import asyncio
 import websockets
 import json
 import logging
+import logging.handlers
 import struct
 import ssl
 import time
@@ -38,11 +39,20 @@ import re
 os.makedirs('logs', exist_ok=True)
 
 # Configure logging
+# server.log is rotated by SIZE, not truncated. A plain FileHandler grew it to
+# 41 MB in a single uptime here, and the only thing that ever shortened it was
+# a manual truncation - which is the worst of both, an unbounded file that
+# occasionally loses everything. Rotation bounds each file and keeps the
+# history: 32 MB x 20 is about 640 MB of ceiling, and the disk this runs on has
+# room for it.
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/server.log'),
+        logging.handlers.RotatingFileHandler(
+            'logs/server.log', maxBytes=32 * 1024 * 1024, backupCount=20,
+            encoding='utf-8',
+        ),
         logging.StreamHandler()
     ]
 )
@@ -1598,7 +1608,7 @@ class TitanNetServer:
     async def handle_get_all_users(self, session_id: str) -> Dict:
         """Get list of all users (admin/moderator only)"""
         if session_id not in self.clients:
-            return {"success": False, "error": "Not authenticated"}
+            return {"type": "all_users", "success": False, "error": "Not authenticated"}
 
         client = self.clients[session_id]
         user_id = client['user_id']
@@ -1606,10 +1616,10 @@ class TitanNetServer:
         # Check if user is moderator/admin
         loop = asyncio.get_event_loop()
         if not await loop.run_in_executor(None, self.db.is_moderator, user_id):
-            return {"success": False, "error": "Permission denied - moderator access required"}
+            return {"type": "all_users", "success": False, "error": "Permission denied - moderator access required"}
 
         users = await loop.run_in_executor(None, self.db.get_all_users, user_id)
-        return {"success": True, "users": users}
+        return {"type": "all_users", "success": True, "users": users}
 
     async def handle_delete_user(self, session_id: str, data: Dict) -> Dict:
         """Delete user (admin/moderator only)"""
@@ -1682,7 +1692,7 @@ class TitanNetServer:
     async def handle_broadcast(self, session_id: str, data: Dict) -> Dict:
         """Send broadcast message to all users (moderator/developer only)"""
         if session_id not in self.clients:
-            return {"success": False, "error": "Not authenticated"}
+            return {"type": "broadcast_response", "success": False, "error": "Not authenticated"}
 
         client = self.clients[session_id]
         moderator_id = client['user_id']
@@ -1691,13 +1701,13 @@ class TitanNetServer:
         # Check if user is moderator or developer
         loop = asyncio.get_event_loop()
         if not await loop.run_in_executor(None, self.db.is_moderator, moderator_id):
-            return {"success": False, "error": "Permission denied - moderator access required"}
+            return {"type": "broadcast_response", "success": False, "error": "Permission denied - moderator access required"}
 
         text_message = data.get('text_message', '').strip()
         voice_data = data.get('voice_data')  # base64 encoded audio
 
         if not text_message and not voice_data:
-            return {"success": False, "error": "Broadcast must contain text or voice message"}
+            return {"type": "broadcast_response", "success": False, "error": "Broadcast must contain text or voice message"}
 
         # Log broadcast
         logger.info(f"Moderator {moderator_username} sending broadcast: text={bool(text_message)}, voice={bool(voice_data)}")
@@ -1872,7 +1882,7 @@ class TitanNetServer:
     async def handle_submit_app(self, session_id: str, data: Dict) -> Dict:
         """Submit new application to repository (waiting room)"""
         if session_id not in self.clients:
-            return {"success": False, "error": "Not authenticated"}
+            return {"type": "submit_app_response", "success": False, "error": "Not authenticated"}
 
         client = self.clients[session_id]
         user_id = client['user_id']
@@ -1888,7 +1898,7 @@ class TitanNetServer:
         metadata = data.get('metadata', {})
 
         if not name or not file_path:
-            return {"success": False, "error": "Name and file path are required"}
+            return {"type": "submit_app_response", "success": False, "error": "Name and file path are required"}
 
         # Whitelist allowed package extensions. The repository accepts ONLY
         # data packages — .tcepackage / .zip / .7z. Executables and other
@@ -1931,12 +1941,12 @@ class TitanNetServer:
             return {"type": "submit_app_response", "success": True, "app_id": app_id}
         except Exception as e:
             logger.error(f"Error submitting app: {e}")
-            return {"success": False, "error": str(e)}
+            return {"type": "submit_app_response", "success": False, "error": str(e)}
 
     async def handle_approve_app(self, session_id: str, data: Dict) -> Dict:
         """Approve application in repository (moderator/developer only)"""
         if session_id not in self.clients:
-            return {"success": False, "error": "Not authenticated"}
+            return {"type": "approve_app_response", "success": False, "error": "Not authenticated"}
 
         client = self.clients[session_id]
         moderator_id = client['user_id']
@@ -1945,18 +1955,18 @@ class TitanNetServer:
         # Check if user is moderator or developer
         loop = asyncio.get_event_loop()
         if not await loop.run_in_executor(None, self.db.is_moderator, moderator_id):
-            return {"success": False, "error": "Permission denied - moderator access required"}
+            return {"type": "approve_app_response", "success": False, "error": "Permission denied - moderator access required"}
 
         app_id = data.get('app_id')
         if not app_id:
-            return {"success": False, "error": "App ID is required"}
+            return {"type": "approve_app_response", "success": False, "error": "App ID is required"}
 
         try:
             # Approve the app
             success = await self.db.run_write_async(self.db.approve_app, app_id, moderator_id)
 
             if not success:
-                return {"success": False, "error": "Failed to approve app"}
+                return {"type": "approve_app_response", "success": False, "error": "Failed to approve app"}
 
             # Get app details for notification
             approved_apps = await loop.run_in_executor(None, self.db.get_approved_apps)
@@ -1982,7 +1992,7 @@ class TitanNetServer:
             return {"type": "approve_app_response", "success": True}
         except Exception as e:
             logger.error(f"Error approving app: {e}")
-            return {"success": False, "error": str(e)}
+            return {"type": "approve_app_response", "success": False, "error": str(e)}
 
     # ================================================================
     # FEEDBACK HUB
@@ -3463,6 +3473,92 @@ class TitanNetServer:
             return {"type": "list_game_sessions_response", "success": False, "error": "Database error"}
         return {"type": "list_game_sessions_response", "success": True, "sessions": items}
 
+    # ---- Narration: the host's own Titan TTS says the AI's lines ----
+    #
+    # Gemini is asked for TEXT (see game_narration.py for why), so the
+    # voice is Titan's: the worker sends the host a game_speak_request,
+    # the host's Titan renders it and streams the audio back through
+    # these handlers, and the server relays it to the table as the
+    # game_ai_audio every client already plays. A table whose host cannot
+    # or will not narrate is told to say the line with its own voices -
+    # the words are never lost, only the shared narrator is.
+
+    def _session_worker(self, gs_id: int):
+        return self._game_session_workers.get(int(gs_id))
+
+    async def handle_game_speech_capable(self, session_id: str, data: Dict) -> Dict:
+        """The host's client saying whether it can narrate.
+
+        Only the HOST is believed, and the worker is what checks that:
+        another player announcing a voice would be offering to narrate a
+        game that is not theirs.
+        """
+        client = self.clients.get(session_id)
+        if not client or not client.get('user_id'):
+            return {"type": "game_speech_capable_response", "success": False,
+                    "error": "Not authenticated"}
+        try:
+            gs_id = int(data.get('session_id') or 0)
+        except (TypeError, ValueError):
+            gs_id = 0
+        worker = self._session_worker(gs_id)
+        if worker is None:
+            return {"type": "game_speech_capable_response", "success": False,
+                    "error": "Session not running"}
+        accepted = False
+        try:
+            accepted = worker.host_can_speak(
+                client['user_id'], bool(data.get('capable')),
+                (data.get('voice') or None),
+            )
+        except Exception as e:
+            logger.error(f"[GAMES] speech_capable failed: {e}", exc_info=True)
+        return {"type": "game_speech_capable_response", "success": bool(accepted),
+                "session_id": gs_id,
+                **({} if accepted else {"error": "Not the session host"})}
+
+    async def handle_game_speech_chunk(self, session_id: str, data: Dict) -> Dict:
+        """A slice of narration audio from the host, relayed to the table."""
+        client = self.clients.get(session_id)
+        if not client or not client.get('user_id'):
+            return {"type": "game_speech_chunk_response", "success": False,
+                    "error": "Not authenticated"}
+        try:
+            gs_id = int(data.get('session_id') or 0)
+        except (TypeError, ValueError):
+            gs_id = 0
+        worker = self._session_worker(gs_id)
+        if worker is None:
+            return {"type": "game_speech_chunk_response", "success": False,
+                    "error": "Session not running"}
+        try:
+            result = await worker.on_speech_chunk(client['user_id'], data)
+        except Exception as e:
+            logger.error(f"[GAMES] speech_chunk failed: {e}", exc_info=True)
+            result = {"success": False, "error": "Relay error"}
+        return {"type": "game_speech_chunk_response", **result}
+
+    async def handle_game_speech_failed(self, session_id: str, data: Dict) -> Dict:
+        """The host could not speak a line - the table says it instead."""
+        client = self.clients.get(session_id)
+        if not client or not client.get('user_id'):
+            return {"type": "game_speech_failed_response", "success": False,
+                    "error": "Not authenticated"}
+        try:
+            gs_id = int(data.get('session_id') or 0)
+        except (TypeError, ValueError):
+            gs_id = 0
+        worker = self._session_worker(gs_id)
+        if worker is None:
+            return {"type": "game_speech_failed_response", "success": False,
+                    "error": "Session not running"}
+        try:
+            result = await worker.on_speech_failed(client['user_id'], data)
+        except Exception as e:
+            logger.error(f"[GAMES] speech_failed failed: {e}", exc_info=True)
+            result = {"success": False, "error": "Relay error"}
+        return {"type": "game_speech_failed_response", **result}
+
     async def handle_game_player_action(self, session_id: str, data: Dict) -> Dict:
         """Player sends a typed action (between turns or replacing voice)."""
         if session_id not in self.clients:
@@ -4289,6 +4385,18 @@ class TitanNetServer:
                             response = await self.handle_game_voice_chunk(session_id, data)
                             await websocket.send(json.dumps(response))
 
+                        elif msg_type == 'game_speech_capable':
+                            response = await self.handle_game_speech_capable(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'game_speech_chunk':
+                            response = await self.handle_game_speech_chunk(session_id, data)
+                            await websocket.send(json.dumps(response))
+
+                        elif msg_type == 'game_speech_failed':
+                            response = await self.handle_game_speech_failed(session_id, data)
+                            await websocket.send(json.dumps(response))
+
                         elif msg_type == 'game_advance_turn':
                             response = await self.handle_game_advance_turn(session_id, data)
                             await websocket.send(json.dumps(response))
@@ -4680,36 +4788,36 @@ class TitanNetServer:
         return ssl_context
 
     async def _cerberus_log_cleanup_loop(self):
-        """Clear Cerberus intrusion logs every 2 days.
+        """Retire expired bans. It no longer deletes any log.
 
-        Also performs a one-off startup clear the very first time the loop
-        runs after a deploy. This is why the server never keeps stale
-        pre-threshold noise around: the new thresholds are stricter, so old
-        entries logged under the old rules are meaningless.
+        This loop used to clear the Cerberus intrusion log every two days, and
+        once more on the first run after each deploy. That threw away the only
+        record of who had attacked this server and when - the exact evidence a
+        threat report needs, deleted on a timer by the system that collected
+        it, so "has this address been here before" became unanswerable and a
+        campaign spanning a week looked like a fresh one every other day.
+        Bounding the SIZE of a log is rotation's job and is now configured on
+        every handler (see ``cerberus._setup_intrusion_logger`` and the
+        ``basicConfig`` at the top of this file); bounding its LIFETIME by
+        deleting it was never the same thing.
+
+        What the loop does instead is the housekeeping that actually needed
+        doing: retiring bans whose term has run out, so a wrong ban is not
+        permanent (see ``BanDatabase.purge_expired``).
         """
-        startup_marker = os.path.join('logs', '.cerberus_cleanup_initialized')
-        try:
-            if not os.path.exists(startup_marker):
-                cleared = self.cerberus.clear_logs()
-                logger.info(
-                    f"[CERBERUS] Startup log cleanup: {cleared} files removed"
-                )
-                os.makedirs(os.path.dirname(startup_marker) or '.', exist_ok=True)
-                with open(startup_marker, 'w', encoding='utf-8') as f:
-                    f.write(str(int(time.time())))
-        except Exception as e:
-            logger.error(f"[CERBERUS] Startup log cleanup failed: {e}")
-
-        interval = 2 * 24 * 60 * 60  # 2 days in seconds
+        interval = 60 * 60  # hourly
         while True:
             try:
                 await asyncio.sleep(interval)
-                cleared = self.cerberus.clear_logs()
-                logger.info(f"[CERBERUS] Scheduled 2-day log cleanup: {cleared} files removed")
+                released = self.cerberus.release_expired_bans()
+                if released:
+                    logger.info(
+                        f"[CERBERUS] {released} ban(s) expired and were lifted"
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.error(f"[CERBERUS] Scheduled log cleanup failed: {e}")
+                logger.error(f"[CERBERUS] ban expiry sweep failed: {e}")
 
     async def _db_heartbeat_loop(self):
         """Self-healing watchdog: kill the process if the DB stops responding.

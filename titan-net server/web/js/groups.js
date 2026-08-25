@@ -9,6 +9,7 @@
     group: document.getElementById('group-view'),
     threads: document.getElementById('threads-view'),
     topic: document.getElementById('topic-view'),
+    search: document.getElementById('search-view'),
   };
 
   // Groups list
@@ -32,6 +33,14 @@
   const $threadsBack = document.getElementById('threads-back');
   const $newThreadBtn = document.getElementById('new-thread-btn');
 
+  // Search across every forum in every group
+  const $searchForm = document.getElementById('forum-search');
+  const $searchQ = document.getElementById('forum-q');
+  const $searchHeading = document.getElementById('search-h1');
+  const $searchStatus = document.getElementById('search-status');
+  const $searchResults = document.getElementById('search-results');
+  const $searchBack = document.getElementById('search-back');
+
   // Topic
   const $topicTitle = document.getElementById('topic-title');
   const $topicMeta = document.getElementById('topic-meta');
@@ -44,6 +53,9 @@
   let currentGroup = null;
   let currentForum = null;
   let currentTopicId = null;
+  // 'forum' (the usual drill-down) or 'search'. A topic reached from the
+  // results list must not send the user back to a forum they never opened.
+  let topicCameFrom = 'forum';
 
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, (c) => ({
@@ -294,8 +306,9 @@
   }
 
   // ---------- Topic ----------
-  async function openTopic(topicId) {
+  async function openTopic(topicId, from) {
     currentTopicId = topicId;
+    topicCameFrom = from || 'forum';
     showView('topic');
     $topicTitle.textContent = '…';
     $topicMeta.textContent = '';
@@ -331,19 +344,279 @@
         const c = document.createElement('div');
         c.innerHTML = escapeHtml(r.content || '').replace(/\n/g, '<br>');
         card.appendChild(c);
+        // A moderator can edit or remove any reply; everyone else sees
+        // the reply and nothing else.
+        if (isStaff()) {
+          const actions = document.createElement('p');
+          actions.className = 'toolbar-row';
+          actions.appendChild(replyButton(t('common.edit'),
+            t('forum.mod.edit_reply_label', idx + 1), 'btn-secondary',
+            () => editReply(r, c)));
+          actions.appendChild(replyButton(t('common.delete'),
+            t('forum.mod.delete_reply_label', idx + 1), 'btn-danger',
+            () => removeReply(r, li)));
+          card.appendChild(actions);
+        }
         li.appendChild(card);
         $topicReplies.appendChild(li);
       });
+      renderTopicModeration(topic);
       $topicTitle.focus();
     } catch (e) {
       $topicBody.textContent = e.message || t('err.generic');
     }
   }
 
+  // ---------- Moderating a topic ----------
+  //
+  // Carried over from the old flat forum page, which was the only place
+  // these existed - so a moderator using the groups tree (which is what
+  // the desktop client has always used) could not pin, lock, move or
+  // delete anything. The buttons are hidden for everybody else AND every
+  // call is refused server-side, so the hiding is a courtesy, not a guard.
+
+  function isStaff() {
+    return !!(Titan.session && Titan.session.isModerator());
+  }
+
+  function replyButton(label, ariaLabel, cls, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = cls;
+    btn.textContent = label;
+    btn.setAttribute('aria-label', ariaLabel);
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  async function editReply(reply, container) {
+    const text = await Titan.ui.promptDialog(t('forum.mod.edit_reply'), {
+      multiline: true,
+      value: reply.content || '',
+      required: true,
+      title: t('common.edit'),
+    });
+    if (text === null) return;
+    try {
+      const resp = await API.editReply(reply.id, text);
+      if (resp && resp.success === false) throw new Error(resp.error);
+      reply.content = text;
+      container.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+      Titan.announce(t('forum.mod.reply_edited'));
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  async function removeReply(reply, node) {
+    const sure = await Titan.ui.confirmDialog(t('forum.mod.delete_reply_confirm'),
+      { danger: true, title: t('common.delete'), confirmLabel: t('common.delete') });
+    if (!sure) return;
+    try {
+      const resp = await API.deleteReply(reply.id);
+      if (resp && resp.success === false) throw new Error(resp.error);
+      node.remove();
+      Titan.announce(t('forum.mod.reply_deleted'));
+      // The focus was on a button that no longer exists.
+      $topicTitle.focus();
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  function renderTopicModeration(topic) {
+    const bar = document.getElementById('topic-mod');
+    if (!bar) return;
+    bar.hidden = !isStaff();
+    if (bar.hidden) return;
+
+    const pin = document.getElementById('topic-pin');
+    const lock = document.getElementById('topic-lock');
+    // aria-pressed carries the state, so a screen reader says "pinned,
+    // pressed" rather than leaving the button meaning two things.
+    pin.setAttribute('aria-pressed', topic.is_pinned ? 'true' : 'false');
+    lock.setAttribute('aria-pressed', topic.is_locked ? 'true' : 'false');
+    pin.textContent = topic.is_pinned ? t('forum.mod.unpin') : t('forum.mod.pin');
+    lock.textContent = topic.is_locked ? t('forum.mod.unlock') : t('forum.mod.lock');
+
+    pin.onclick = async () => {
+      try {
+        const wanted = !topic.is_pinned;
+        const resp = await API.pinTopic(topic.id, wanted);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        topic.is_pinned = wanted;
+        renderTopicModeration(topic);
+        Titan.announce(t(wanted ? 'forum.mod.pinned' : 'forum.mod.unpinned'));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+    lock.onclick = async () => {
+      try {
+        const wanted = !topic.is_locked;
+        const resp = await API.lockTopic(topic.id, wanted);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        topic.is_locked = wanted;
+        renderTopicModeration(topic);
+        Titan.announce(t(wanted ? 'forum.mod.locked' : 'forum.mod.unlocked'));
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+    document.getElementById('topic-move').onclick = () => moveTopic(topic);
+    document.getElementById('topic-delete').onclick = async () => {
+      const sure = await Titan.ui.confirmDialog(
+        t('forum.mod.delete_confirm', topic.title),
+        { danger: true, title: t('common.delete'), confirmLabel: t('common.delete') });
+      if (!sure) return;
+      try {
+        const resp = await API.deleteTopic(topic.id);
+        if (resp && resp.success === false) throw new Error(resp.error);
+        Titan.announce(t('forum.mod.deleted', topic.title));
+        topicBack();
+      } catch (err) {
+        Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+      }
+    };
+  }
+
+  // Moving a thread is part of why the two pages had to become one. On
+  // the old flat forum the destination was typed in as a bare number,
+  // because the forums were only ever listed on the groups page - so a
+  // moderator had to go to the other page, read an id off it and carry it
+  // back. Here the forums are already known, so it is CHOSEN from them.
+  async function moveTopic(topic) {
+    let options = [];
+    try {
+      const groups = (await API.listGroups()).groups || [];
+      const lists = await Promise.all(groups.map(async (g) => {
+        try {
+          const resp = await API.listGroupForums(g.id);
+          return (resp.forums || []).map((f) => ({
+            value: String(f.id),
+            label: t('forum.found_in', f.name, g.name),
+          }));
+        } catch (e) { return []; }
+      }));
+      lists.forEach((l) => { options = options.concat(l); });
+    } catch (e) { options = []; }
+
+    let forumId;
+    if (options.length) {
+      forumId = await Titan.ui.promptDialog(t('forum.mod.move_where'), {
+        title: t('forum.mod.move'),
+        required: true,
+        options: options,
+      });
+    } else {
+      // Nothing could be listed (offline, or a member of no group that
+      // has forums) - ask for the number rather than refuse the action.
+      forumId = await Titan.ui.promptDialog(t('forum.mod.move_where'), {
+        required: true,
+        help: t('forum.mod.move_help'),
+        title: t('forum.mod.move'),
+      });
+    }
+    if (forumId === null || forumId === undefined || forumId === '') return;
+    try {
+      const resp = await API.moveTopicToForum(topic.id, Number(forumId));
+      if (resp && resp.success === false) throw new Error(resp.error);
+      Titan.announce(resp && resp.pending
+        ? t('forum.mod.move_requested') : t('forum.mod.moved'));
+    } catch (err) {
+      Titan.announce((err && err.message) || t('err.generic'), 'assertive');
+    }
+  }
+
+  // ---------- Search across every forum in every group ----------
+  async function runSearch() {
+    const q = ($searchQ.value || '').trim();
+    if (!q) {
+      Titan.announce(t('forum.search_empty_query'), 'assertive');
+      $searchQ.focus();
+      return;
+    }
+    showView('search');
+    $searchResults.innerHTML = '';
+    $searchStatus.textContent = t('groups.loading');
+    if (Titan.ui && Titan.ui.focusHeading) Titan.ui.focusHeading($searchHeading);
+    else $searchHeading.focus();
+    try {
+      const data = await API.searchForum(q);
+      renderResults((data && data.topics) || []);
+    } catch (e) {
+      $searchStatus.textContent = e.message || t('err.generic');
+    }
+  }
+
+  function renderResults(topics) {
+    $searchResults.innerHTML = '';
+    if (!topics.length) {
+      $searchStatus.textContent = t('forum.results_none');
+      return;
+    }
+    // The count goes into the status line, which is a live region, so it
+    // is said once rather than being counted row by row.
+    $searchStatus.textContent = t('forum.results_count', topics.length);
+    const frag = document.createDocumentFragment();
+    topics.forEach((topic) => {
+      const li = document.createElement('li');
+      const card = document.createElement('article');
+      card.className = 'card';
+      const headingId = 'result-' + topic.id;
+      card.setAttribute('aria-labelledby', headingId);
+      const h3 = document.createElement('h3');
+      h3.id = headingId;
+      const a = document.createElement('a');
+      a.href = '#';
+      a.textContent = topic.title;
+      a.addEventListener('click', (e) => { e.preventDefault(); openTopic(topic.id, 'search'); });
+      h3.appendChild(a);
+      card.appendChild(h3);
+      const meta = document.createElement('p');
+      meta.className = 'meta';
+      // Where it was found - the whole point of one merged page. Said
+      // only when the server told us: a server that has not been
+      // restarted since this shipped sends no forum name, and inventing
+      // "in a forum that no longer exists" for every hit would be worse
+      // than saying nothing.
+      const bits = [];
+      if (topic.forum_name) {
+        bits.push(t('forum.found_in', topic.forum_name, topic.group_name || '?'));
+      }
+      if (topic.author_username) bits.push(t('forum.posted_by', topic.author_username));
+      bits.push(t('forum.replies', topic.reply_count || 0));
+      meta.textContent = bits.join(' \u00b7 ');
+      card.appendChild(meta);
+      li.appendChild(card);
+      frag.appendChild(li);
+    });
+    $searchResults.appendChild(frag);
+  }
+
   // ---------- Navigation back links ----------
+  //
+  // Back from a topic goes where the topic was OPENED from: the forum in
+  // the usual drill-down, but the results list when the topic was found
+  // by searching - a search hit can live in a forum the user never
+  // opened, and sending them "back" into it would be a place they have
+  // not been.
+  function topicBack() {
+    if (topicCameFrom === 'search') {
+      showView('search');
+      if (Titan.ui && Titan.ui.focusHeading) Titan.ui.focusHeading($searchHeading);
+      else $searchHeading.focus();
+      return;
+    }
+    if (currentForum) openForum(currentForum);
+    else loadGroups();
+  }
+
   $groupBack.addEventListener('click', (e) => { e.preventDefault(); loadGroups(); });
   $threadsBack.addEventListener('click', (e) => { e.preventDefault(); openGroup(currentGroup); });
-  $topicBack.addEventListener('click', (e) => { e.preventDefault(); openForum(currentForum); });
+  $topicBack.addEventListener('click', (e) => { e.preventDefault(); topicBack(); });
+  $searchBack.addEventListener('click', (e) => { e.preventDefault(); loadGroups(); });
+  $searchForm.addEventListener('submit', (e) => { e.preventDefault(); runSearch(); });
 
   // ---------- New group ----------
   const $ngDialog = document.getElementById('new-group-dialog');
@@ -600,6 +873,8 @@
     if (!views.groups.hidden) loadGroups();
     else if (!views.group.hidden && currentGroup) openGroup(currentGroup);
     else if (!views.threads.hidden && currentForum) loadThreads();
+    else if (!views.search.hidden) runSearch();
+    else if (!views.topic.hidden && currentTopicId) openTopic(currentTopicId, topicCameFrom);
   };
 
   document.addEventListener('DOMContentLoaded', loadGroups);

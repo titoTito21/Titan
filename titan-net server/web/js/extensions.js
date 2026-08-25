@@ -54,6 +54,54 @@
     viewBtn.textContent = t('ext.view_code');
     viewBtn.addEventListener('click', () => viewCode(ext.id));
     actions.appendChild(viewBtn);
+    // An extension's own files — the sounds, voices and language data the
+    // server streams to whoever is running it. Worth being able to see
+    // before deciding whether to approve one.
+    if (ext.slug) {
+      const assetsBtn = document.createElement('button');
+      assetsBtn.className = 'btn btn-secondary';
+      assetsBtn.style.marginLeft = '.5rem';
+      assetsBtn.textContent = t('ext.assets');
+      assetsBtn.setAttribute('aria-label', t('ext.assets_label', ext.name));
+      assetsBtn.setAttribute('aria-expanded', 'false');
+      const assetList = document.createElement('ul');
+      assetList.className = 'list-plain';
+      assetList.hidden = true;
+      assetsBtn.addEventListener('click', async () => {
+        if (!assetList.hidden) {
+          assetList.hidden = true;
+          assetsBtn.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        assetList.textContent = '';
+        assetList.hidden = false;
+        assetsBtn.setAttribute('aria-expanded', 'true');
+        try {
+          const data = await Titan.API.listExtensionAssets(ext.slug);
+          const assets = (data && data.assets) || [];
+          if (!assets.length) {
+            const li2 = document.createElement('li');
+            li2.textContent = t('ext.no_assets');
+            assetList.appendChild(li2);
+          } else {
+            assets.forEach((asset) => {
+              const li2 = document.createElement('li');
+              li2.textContent = [asset.kind, asset.name,
+                asset.size ? Titan.ui.bytes(asset.size) : null]
+                .filter(Boolean).join(' · ');
+              assetList.appendChild(li2);
+            });
+          }
+          Titan.announce(t('ext.assets_count', assets.length));
+        } catch (err) {
+          const li2 = document.createElement('li');
+          li2.textContent = (err && err.message) || t('err.generic');
+          assetList.appendChild(li2);
+        }
+      });
+      actions.appendChild(assetsBtn);
+      card.appendChild(assetList);
+    }
     if (pending && isStaff) {
       const approve = document.createElement('button');
       approve.textContent = t('ext.approve');

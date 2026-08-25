@@ -108,6 +108,7 @@
   const $sndVolume = document.getElementById('snd-volume');
   const $sndVolumeOut = document.getElementById('snd-volume-out');
   const $sndEvents = document.getElementById('snd-events');
+  const $sndServer = document.getElementById('snd-server');
 
   function buildEventCheckboxes() {
     if (!Titan.sounds) return;
@@ -152,6 +153,7 @@
     if (!Titan.sounds) return;
     const p = Titan.sounds.getPrefs();
     $sndEnabled.checked = !!p.enabled;
+    if ($sndServer) $sndServer.checked = p.allowServer !== false;
     $sndVolume.value = p.volume;
     $sndVolumeOut.value = Math.round(p.volume * 100) + '%';
     buildEventCheckboxes();
@@ -167,12 +169,14 @@
       enabled: $sndEnabled.checked,
       volume: parseFloat($sndVolume.value),
       events: eventsPatch,
+      allowServer: $sndServer ? $sndServer.checked : true,
     });
     $sndVolumeOut.value = Math.round(parseFloat($sndVolume.value) * 100) + '%';
     flashSaved();
   }
 
   $sndEnabled.addEventListener('change', applySounds);
+  if ($sndServer) $sndServer.addEventListener('change', applySounds);
   $sndVolume.addEventListener('change', applySounds);
   $sndVolume.addEventListener('input', () => {
     $sndVolumeOut.value = Math.round(parseFloat($sndVolume.value) * 100) + '%';

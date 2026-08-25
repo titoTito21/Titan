@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title data-i18n="brand">Titan-Net</title>
   <meta name="description" content="Titan-Net — accessible community server behind Titanic Computer Environment.">
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -18,8 +18,7 @@
           <li><a href="index.html" data-i18n="nav.home">Home</a></li>
           <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups">Groups</a></li>
+          <li><a href="groups.html" data-i18n="nav.forum">Forum</a></li>
           <li data-auth="in" hidden><a href="mail.html" data-i18n="nav.mail">Mail</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
@@ -55,18 +54,39 @@
       </p>
     </section>
 
-    <section class="grid-2" aria-label="Features">
+    <h2 id="home-features-heading" data-i18n="home.features">What is here</h2>
+    <section class="grid-2" aria-labelledby="home-features-heading">
       <article class="card">
-        <h2 data-i18n="home.feature.chat.title">Real-time chat</h2>
+        <h3><a href="chat.html" data-i18n="home.feature.chat.title">Real-time chat</a></h3>
         <p data-i18n="home.feature.chat.text"></p>
       </article>
       <article class="card">
-        <h2 data-i18n="home.feature.repo.title">App repository</h2>
+        <h3><a href="repository.html" data-i18n="home.feature.repo.title">App repository</a></h3>
         <p data-i18n="home.feature.repo.text"></p>
       </article>
       <article class="card">
-        <h2 data-i18n="home.feature.forum.title">Discussion forum</h2>
+        <h3><a href="groups.html" data-i18n="home.feature.forum.title">Discussion forum</a></h3>
         <p data-i18n="home.feature.forum.text"></p>
+      </article>
+      <article class="card">
+        <h3><a href="mail.html" data-i18n="home.feature.mail.title">Titan Mail</a></h3>
+        <p data-i18n="home.feature.mail.text"></p>
+      </article>
+      <article class="card">
+        <h3><a href="feedback.html" data-i18n="home.feature.feedback.title">Feedback Hub</a></h3>
+        <p data-i18n="home.feature.feedback.text"></p>
+      </article>
+      <article class="card">
+        <h3><a href="games.html" data-i18n="home.feature.games.title">Games</a></h3>
+        <p data-i18n="home.feature.games.text"></p>
+      </article>
+      <article class="card">
+        <h3><a href="services.html" data-i18n="home.feature.services.title">Services</a></h3>
+        <p data-i18n="home.feature.services.text"></p>
+      </article>
+      <article class="card">
+        <h3><a href="extensions.html" data-i18n="home.feature.extensions.title">Extensions</a></h3>
+        <p data-i18n="home.feature.extensions.text"></p>
       </article>
     </section>
   </main>
@@ -77,8 +97,11 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
 </body>
 </html>

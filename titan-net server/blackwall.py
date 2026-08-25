@@ -46,6 +46,7 @@ GUARDRAILS on the deliberating layer, none of them optional:
 
 import json
 import logging
+import logging.handlers
 import os
 import statistics
 import threading
@@ -63,6 +64,11 @@ except ImportError:                                  # pragma: no cover
     from .persona import generate as _generate_text
 
 logger = logging.getLogger('Blackwall')
+
+# The transcript is rolled at this size and kept for this many generations.
+# It is evidence of what was said to whom, so it is rolled, never emptied.
+TRANSCRIPT_MAX_BYTES = 16 * 1024 * 1024
+TRANSCRIPT_BACKUPS = 10
 
 
 # ---------------------------------------------------------------------------
@@ -472,9 +478,17 @@ class Blackwall:
             "There is nothing here for you.",
         ],
         3: [
+            # Deliberately says nothing about how LONG the block lasts. Bans
+            # have terms now, and the written lines are the floor - they are
+            # said without going through _is_true, so a claim of permanence
+            # here could not be caught and was being said, live, to addresses
+            # that were days from being released.
             "You were already refused and you came back anyway. Everything "
             "you send now goes into a wall and into a log, in that order. "
-            "This address is finished here - permanently.",
+            "There is nothing here for you.",
+            "Still you. You are talking to a closed door and a recorder, and "
+            "the only thing your persistence changes is how long the door "
+            "stays closed. Go somewhere else.",
         ],
     }
 
@@ -568,6 +582,7 @@ class Blackwall:
                 "times_already_warned": self._warned.get(ip, 0),
             }
         brief["already_blocked"] = self._safe_banned(ip)
+        brief["blocked_for_good"] = self._safe_permanent(ip)
         brief["what_you_already_said"] = [e.get("said") for e in self.said_to(ip)][-2:]
         return brief
 
@@ -606,12 +621,25 @@ class Blackwall:
            "say what carrying on leads to.",
         2: "They ignored two warnings and are being cut off now. You may say "
            "so, because it is happening.",
-        3: "They were blocked and came back anyway. Final, dismissive, done.",
+        3: "They were blocked and came back anyway. Final, dismissive, done. "
+           "Say how long the block lasts ONLY if 'blocked_for_good' is true - "
+           "most bans run out, so calling one permanent is usually a lie.",
     }
 
     # Words that assert a block. Said before there is one, they are a lie.
     _CLAIMS_BLOCK = ("blocked", "banned", "cut off", "cut you off",
                      "terminated", "shut out", "locked out", "no longer have")
+
+    # Words that assert the block will never be lifted. Bans have TERMS now -
+    # a LOCKDOWN ban runs out after a day and only a repeat offender or a
+    # CERBERUS-level one is kept for good - so "permanently" stopped being
+    # true of most of the addresses it was being said to. It is the same
+    # mistake as claiming a block before there is one, one level further in:
+    # the stage-3 line asserted permanence about every address that reached
+    # it, and was being said, live, to addresses that were about to be
+    # released. A warning that lies is a warning nobody has to believe.
+    _CLAIMS_PERMANENT = ("permanent", "for ever", "forever", "never again",
+                         "for good", "finished here")
 
     def _compose_line(self, ip: str, stage: int) -> str:
         """Write one line for one actor. Runs on Blackwall's own thread."""
@@ -655,9 +683,12 @@ class Blackwall:
         those by default, so a line announcing a block to somebody who is not
         blocked is thrown away rather than said.
         """
+        low = line.lower()
+        if any(claim in low for claim in cls._CLAIMS_PERMANENT) \
+                and not brief.get("blocked_for_good"):
+            return False
         if stage >= 2 or brief.get("already_blocked"):
             return True
-        low = line.lower()
         return not any(claim in low for claim in cls._CLAIMS_BLOCK)
 
 
@@ -753,10 +784,30 @@ class Blackwall:
             pass
         try:
             os.makedirs(os.path.dirname(self.transcript_path) or ".", exist_ok=True)
+            # Rolled over rather than allowed to grow without end - and rolled
+            # OVER, not emptied: what the wall said to an address months ago is
+            # how a returning actor is recognised as returning.
+            if os.path.exists(self.transcript_path) and \
+                    os.path.getsize(self.transcript_path) >= TRANSCRIPT_MAX_BYTES:
+                self._roll_transcript()
             with open(self.transcript_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         except Exception as e:
             logger.error(f"[BLACKWALL] could not write the transcript: {e}")
+
+    def _roll_transcript(self):
+        """Shift the transcript down one slot, keeping TRANSCRIPT_BACKUPS."""
+        try:
+            oldest = f"{self.transcript_path}.{TRANSCRIPT_BACKUPS}"
+            if os.path.exists(oldest):
+                os.remove(oldest)
+            for n in range(TRANSCRIPT_BACKUPS - 1, 0, -1):
+                src = f"{self.transcript_path}.{n}"
+                if os.path.exists(src):
+                    os.replace(src, f"{self.transcript_path}.{n + 1}")
+            os.replace(self.transcript_path, f"{self.transcript_path}.1")
+        except Exception as e:
+            logger.error(f"[BLACKWALL] could not roll the transcript: {e}")
 
     def transcript(self, n: int = 40, ip: str = "") -> List[Dict[str, Any]]:
         """What Blackwall has said - to everyone, or to one address."""
@@ -1341,6 +1392,34 @@ class Blackwall:
     def _safe_banned(self, ip: str) -> bool:
         try:
             return bool(self.cerberus.is_ip_banned(ip))
+        except Exception:
+            return False
+
+    def _safe_permanent(self, ip: str) -> bool:
+        """Is this address blocked FOR GOOD, or only for a term?
+
+        Bans expire now, so "permanently" became a claim that has to be
+        checked like any other. Asked of the ban database rather than assumed,
+        because assuming is what produced the line this whole check exists to
+        stop.
+        """
+        try:
+            if ip in getattr(self.cerberus, "_permanent_banned_ips", ()):
+                return True
+            db = getattr(self.cerberus, "ban_db", None)
+            if db is None:
+                return False
+            import sqlite3
+            conn = sqlite3.connect(db.db_path)
+            try:
+                row = conn.execute(
+                    "SELECT permanent, COALESCE(expires_at, 0) "
+                    "FROM banned_ips WHERE ip = ?", (ip,)).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                return False
+            return bool(row[0]) and not row[1]
         except Exception:
             return False
 

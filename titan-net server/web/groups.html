@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title data-i18n="groups.title">Groups — Titan-Net</title>
-  <link rel="stylesheet" href="css/titan.css?v=20260804a">
+  <title data-i18n="forum.title">Forum &mdash; Titan-Net</title>
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
 </head>
 <body class="page">
   <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
@@ -17,8 +17,7 @@
           <li><a href="index.html" data-i18n="nav.home">Home</a></li>
           <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
           <li><a href="repository.html" data-i18n="nav.repository">Repository</a></li>
-          <li><a href="forum.html" data-i18n="nav.forum">Forum</a></li>
-          <li><a href="groups.html" data-i18n="nav.groups" aria-current="page">Groups</a></li>
+          <li><a href="groups.html" data-i18n="nav.forum" aria-current="page">Forum</a></li>
           <li><a href="extensions.html" data-i18n="nav.extensions">Extensions</a></li>
           <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
           <li data-auth="in" hidden><a href="account.html" data-i18n="nav.account">Account</a></li>
@@ -45,14 +44,36 @@
 
   <main id="main">
     <!-- Groups list view -->
+    <!-- The forum IS the groups: every topic lives in a forum inside a
+         group, so this page is the whole of it - the groups to pick from,
+         and a search that reaches every topic in all of them at once. -->
     <section id="groups-view" aria-labelledby="groups-h1">
       <div class="flex">
-        <h1 id="groups-h1" data-i18n="groups.title">Groups</h1>
+        <h1 id="groups-h1" data-i18n="forum.title">Forum</h1>
         <span class="spacer"></span>
         <button id="new-group-btn" data-auth="in" hidden data-i18n="groups.new">New group</button>
       </div>
+
+      <form id="forum-search" role="search">
+        <div class="field">
+          <label for="forum-q" data-i18n="forum.search_label">Search topics</label>
+          <input id="forum-q" name="q" type="search">
+        </div>
+        <p><button type="submit" data-i18n="forum.search_submit">Search</button></p>
+      </form>
+
+      <h2 data-i18n="groups.title">Groups</h2>
       <p id="groups-status" class="muted" role="status" aria-live="polite"></p>
       <ul id="groups-list" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
+    </section>
+
+    <!-- Search results: topics from every forum in every group the user
+         can see, each saying which forum and group it was found in. -->
+    <section id="search-view" aria-labelledby="search-h1" hidden>
+      <p><a href="#" id="search-back" data-i18n="groups.back">Back to groups</a></p>
+      <h1 id="search-h1" tabindex="-1" data-i18n="forum.results_heading">Search results</h1>
+      <p id="search-status" class="muted" role="status" aria-live="polite"></p>
+      <ul id="search-results" class="list-box" role="list" style="display:grid;gap:.75rem"></ul>
     </section>
 
     <!-- Single group view: its forums -->
@@ -86,10 +107,21 @@
     <section id="topic-view" aria-labelledby="topic-title" hidden>
       <p><a href="#" id="topic-back" data-i18n="groups.forum.back">Back</a></p>
       <article class="card">
-        <h1 id="topic-title"></h1>
+        <h1 id="topic-title" tabindex="-1"></h1>
         <p class="meta" id="topic-meta"></p>
         <div id="topic-body"></div>
       </article>
+
+      <!-- What a moderator can do to this topic. Hidden for everybody
+           else, and refused by the server regardless. -->
+      <div class="flex toolbar-row" id="topic-mod" hidden role="group"
+           aria-label="Topic moderation" data-i18n-attr="aria-label:forum.mod.group">
+        <button type="button" id="topic-pin" class="btn-secondary" aria-pressed="false" data-i18n="forum.mod.pin">Pin</button>
+        <button type="button" id="topic-lock" class="btn-secondary" aria-pressed="false" data-i18n="forum.mod.lock">Lock</button>
+        <button type="button" id="topic-move" class="btn-secondary" data-i18n="forum.mod.move">Move to another forum</button>
+        <button type="button" id="topic-delete" class="btn-danger" data-i18n="forum.mod.delete">Delete the topic</button>
+      </div>
+
       <h2 data-i18n="forum.replies_heading">Replies</h2>
       <ul id="topic-replies" class="list-box" role="list" style="display:grid;gap:.5rem"></ul>
       <form id="reply-form" data-auth="in" hidden style="margin-top:1rem">
@@ -208,10 +240,13 @@
 
   <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="js/i18n.js?v=20260804a"></script>
-  <script src="js/app.js?v=20260804a"></script>
-  <script src="js/sounds.js?v=20260804a"></script>
-  <script src="js/api.js?v=20260804a"></script>
-  <script src="js/groups.js?v=20260804a"></script>
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/api.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/groups.js?v=20260825b"></script>
 </body>
 </html>

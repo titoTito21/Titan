@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title data-i18n="fb.page_title">Feedback Hub — Titan-Net</title>
+  <meta name="description" content="Report a problem or suggest an idea for Titan, and vote on what other people have asked for.">
+  <link rel="stylesheet" href="css/titan.css?v=20260825b">
+</head>
+<body class="page">
+  <a href="#main" class="skip-link" data-i18n="skip">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="row">
+      <a href="index.html" class="brand" data-i18n="brand">Titan-Net</a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-attr="aria-label:nav.menu">
+        <ul>
+          <li><a href="index.html" data-i18n="nav.home">Home</a></li>
+          <li><a href="chat.html" data-i18n="nav.chat">Chat</a></li>
+          <li><a href="feedback.html" data-i18n="nav.feedback">Feedback</a></li>
+          <li><a href="settings.html" data-i18n="nav.settings">Settings</a></li>
+        </ul>
+      </nav>
+      <div class="toolbar" role="group" aria-label="Display preferences" data-i18n-attr="aria-label:toolbar.label">
+        <label for="lang-select" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="lang-select" data-i18n-attr="aria-label:lang.label">
+          <option value="en">English</option>
+          <option value="pl">Polski</option>
+        </select>
+        <label for="theme-select" class="sr-only" data-i18n="theme.label">Color theme</label>
+        <select id="theme-select" data-i18n-attr="aria-label:theme.label">
+          <option value="auto" data-i18n="theme.auto">System</option>
+          <option value="light" data-i18n="theme.light">Light</option>
+          <option value="dark" data-i18n="theme.dark">Dark</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 data-i18n="fb.title">Feedback Hub</h1>
+    <p data-i18n="fb.lead">Report a problem with Titan, or suggest something it should do. Everything here is public, and you can vote for what other people have asked for.</p>
+
+    <div id="fb-alert" class="alert" hidden></div>
+
+    <div class="flex toolbar-row">
+      <button type="button" id="fb-new" data-i18n="fb.new">New entry</button>
+      <button type="button" id="fb-refresh" class="btn-secondary" data-i18n="common.refresh">Refresh</button>
+      <span class="spacer"></span>
+      <label for="fb-sort" data-i18n="fb.sort">Sort by</label>
+      <select id="fb-sort">
+        <option value="recent" data-i18n="fb.sort.recent">Most recent</option>
+        <option value="votes" data-i18n="fb.sort.votes">Most votes</option>
+        <option value="status" data-i18n="fb.sort.status">Status</option>
+      </select>
+    </div>
+
+    <h2 id="fb-tabs-label" class="sr-only" data-i18n="fb.tabs_label">Kind of entry</h2>
+    <div id="fb-tabs" class="tabs" aria-labelledby="fb-tabs-label"></div>
+
+    <section id="fb-panel" role="tabpanel" tabindex="-1" aria-labelledby="fb-tabs-label">
+      <h2 id="fb-list-heading" tabindex="-1" data-i18n="fb.all">All entries</h2>
+      <p id="fb-status" role="status" aria-live="polite"></p>
+      <ul id="fb-list" class="card-list"></ul>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p><span data-i18n="footer.copy">Titan-Net</span></p>
+  </footer>
+
+  <!-- Reading one entry -->
+  <dialog id="fb-read" class="titan-dialog wide" aria-labelledby="fb-read-title">
+    <h2 id="fb-read-title"></h2>
+    <p id="fb-read-meta" class="meta"></p>
+    <div id="fb-read-body" class="prose" tabindex="0" role="region" aria-labelledby="fb-read-title"></div>
+    <div id="fb-read-attachment" class="flex" hidden></div>
+    <div class="flex dialog-actions">
+      <button type="button" id="fb-read-vote" data-i18n="fb.vote">Vote</button>
+      <button type="button" id="fb-read-close" class="btn-secondary" data-i18n="common.close">Close</button>
+    </div>
+  </dialog>
+
+  <!-- Creating an entry -->
+  <dialog id="fb-new-dialog" class="titan-dialog wide" aria-labelledby="fb-new-title">
+    <h2 id="fb-new-title" data-i18n="fb.new">New entry</h2>
+    <form id="fb-new-form" novalidate>
+      <fieldset>
+        <legend data-i18n="fb.kind">What is this?</legend>
+        <div class="field-inline">
+          <input type="radio" id="fb-kind-feedback" name="fb-kind" value="feedback" checked>
+          <label for="fb-kind-feedback" data-i18n="fb.kind.feedback">A problem with Titan</label>
+        </div>
+        <div class="field-inline">
+          <input type="radio" id="fb-kind-idea" name="fb-kind" value="idea">
+          <label for="fb-kind-idea" data-i18n="fb.kind.idea">An idea for Titan</label>
+        </div>
+      </fieldset>
+      <div class="field">
+        <label for="fb-new-title-input" data-i18n="fb.field.title">Title</label>
+        <input type="text" id="fb-new-title-input" required maxlength="200"
+               aria-describedby="fb-new-title-help">
+        <p class="help" id="fb-new-title-help" data-i18n="fb.field.title_help">One line saying what it is.</p>
+      </div>
+      <div class="field">
+        <label for="fb-new-content" data-i18n="fb.field.content">Description</label>
+        <textarea id="fb-new-content" required rows="10" aria-describedby="fb-new-content-help"></textarea>
+        <p class="help" id="fb-new-content-help" data-i18n="fb.field.content_help">For a problem: what you did, what happened, and what you expected instead.</p>
+      </div>
+      <div class="field">
+        <label for="fb-new-file" data-i18n="fb.field.attachment">Attachment (optional)</label>
+        <input type="file" id="fb-new-file" aria-describedby="fb-new-file-help">
+        <p class="help" id="fb-new-file-help" data-i18n="fb.field.attachment_help">A log or a recording, up to 12 MB.</p>
+      </div>
+      <div class="flex dialog-actions">
+        <button type="submit" id="fb-new-submit" data-i18n="fb.submit">Send</button>
+        <button type="button" id="fb-new-cancel" class="btn-secondary" data-i18n="common.cancel">Cancel</button>
+      </div>
+      <p id="fb-new-progress" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <div id="live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="js/i18n.js?v=20260825b"></script>
+  <script src="js/ui.js?v=20260825b"></script>
+  <script src="js/app.js?v=20260825b"></script>
+  <script src="js/sounds.js?v=20260825b"></script>
+  <script src="js/ws.js?v=20260825b"></script>
+  <script src="js/session.js?v=20260825b"></script>
+  <script src="js/feedback.js?v=20260825b"></script>
+</body>
+</html>

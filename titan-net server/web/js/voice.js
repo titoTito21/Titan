@@ -95,7 +95,9 @@
           typeof AudioContext === 'undefined') {
         throw new Error(Titan.t('voice.unsupported'));
       }
-      if (!this.roomId || !this.userId) {
+      // A sink means the frames are going somewhere other than a room
+      // (a game), so there is no room to pick first.
+      if (!this._sink && (!this.roomId || !this.userId)) {
         throw new Error('Pick a room first');
       }
       try {
@@ -117,8 +119,11 @@
         sampleRate: SAMPLE_RATE,
       });
 
-      // Tell server we started voice in this room
-      this.ws.send({ type: 'voice_start', room_id: this.roomId });
+      // Tell server we started voice in this room. A game has no room:
+      // the narrator is listening, not a channel.
+      if (!this._sink) {
+        this.ws.send({ type: 'voice_start', room_id: this.roomId });
+      }
 
       this.sourceNode = this.audioCtx.createMediaStreamSource(this.micStream);
 
@@ -151,7 +156,9 @@
       this.sourceNode = null;
       this.micStream = null;
       this.audioCtx = null;
-      this.ws.send({ type: 'voice_stop', room_id: this.roomId });
+      if (!this._sink) {
+        this.ws.send({ type: 'voice_stop', room_id: this.roomId });
+      }
       Titan.announce(Titan.t('voice.off'));
     }
 
@@ -166,6 +173,17 @@
         if (s > 1) s = 1; else if (s < -1) s = -1;
         pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
+      if (this._sink) {
+        // Base64 rather than a binary frame: the game path is JSON, and a
+        // chunk carries no room or sequence — the session identifies it.
+        try {
+          const bytes = new Uint8Array(pcm.buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          this._sink(btoa(binary));
+        } catch (e) {}
+        return;
+      }
       // Build header
       const buf = new ArrayBuffer(VOICE_HEADER_SIZE + pcm.byteLength);
       const view = new DataView(buf);
@@ -178,6 +196,12 @@
         try { this.ws.ws.send(buf); } catch (e) {}
       }
     }
+
+    // Hand the raw microphone frames somewhere other than a chat room.
+    // Used by the games client, which sends them as `game_voice_chunk`
+    // rather than as a room's binary voice frame — the game's narrator
+    // hears the player rather than the room does.
+    setSink(sink) { this._sink = sink; }
 
     _ensurePlayCtx() {
       if (this.playCtx) return;

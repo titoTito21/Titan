@@ -24,6 +24,7 @@ with ANNIHILATE countermeasures - legitimate users don't attack from cloud VPS.
 
 import asyncio
 import logging
+import logging.handlers
 import os
 import socket
 import ssl
@@ -621,8 +622,10 @@ class InfrastructureCountermeasures:
         self._file_logger = logging.getLogger('CountermeasuresFile')
         self._file_logger.setLevel(logging.INFO)
         if not self._file_logger.handlers:
-            handler = logging.FileHandler(
-                os.path.join(log_dir, "countermeasures.log")
+            # Rotated by size, never truncated - this file is evidence.
+            handler = logging.handlers.RotatingFileHandler(
+                os.path.join(log_dir, "countermeasures.log"),
+                maxBytes=16 * 1024 * 1024, backupCount=10, encoding='utf-8',
             )
             handler.setFormatter(logging.Formatter(
                 '%(asctime)s | %(levelname)s | %(message)s'
@@ -1024,7 +1027,10 @@ class HackBackProtocol:
         self._hb_logger = logging.getLogger('HackBackLog')
         self._hb_logger.setLevel(logging.INFO)
         if not self._hb_logger.handlers:
-            handler = logging.FileHandler(self._hackback_log)
+            handler = logging.handlers.RotatingFileHandler(
+                self._hackback_log,
+                maxBytes=16 * 1024 * 1024, backupCount=10, encoding='utf-8',
+            )
             handler.setFormatter(logging.Formatter(
                 '%(asctime)s | %(levelname)s | %(message)s'
             ))
@@ -1075,6 +1081,24 @@ class HackBackProtocol:
 
     def _on_tar_pit_connection(self, ip: str, port: int):
         """Called when a bot connects to the tar pit (SSH honeypot)"""
+        # Did they come here, or did we send them? A banned SSH offender has a
+        # `nat PREROUTING REDIRECT --to-ports 2223` in front of its port 22 so
+        # Blackwall has somewhere to speak to it. Such a connection is an
+        # ordinary SSH retry that we diverted - not a decision to touch a
+        # honeypot - and everything below treats it as the latter: an instant
+        # PERMANENT ban for a cloud address, and infrastructure countermeasures
+        # launched against the machine at the other end. Firing those on our
+        # own redirect means Titan attacking a host because Titan sent it here.
+        # It is reported to Cerberus either way; Cerberus decides what a
+        # redirected retry is worth (nothing punitive - see
+        # DangerousCerberus.honeypot_triggered).
+        if self._is_answer_channel(ip):
+            self._log("TRAP", ip, "tar_pit_answer_channel",
+                      f"redirected SSH retry, port {port} - delivery, not evidence")
+            if self.cerberus:
+                self.cerberus.honeypot_triggered(ip, "tar_pit_connection")
+            return
+
         provider = identify_cloud_provider(ip)
 
         if provider:
@@ -1110,6 +1134,22 @@ class HackBackProtocol:
         # Report to Cerberus
         if self.cerberus:
             self.cerberus.honeypot_triggered(ip, f"tar_pit_connection")
+
+    def _is_answer_channel(self, ip: str) -> bool:
+        """True if this address's port 22 is being redirected in here by us.
+
+        Asked of Cerberus, which asks the firewall, so there is one answer to
+        the question and it comes from the kernel's own rules.
+        """
+        check = getattr(self.cerberus, "_came_through_answer_channel", None)
+        if check is None:
+            return False
+        try:
+            return bool(check(ip))
+        except Exception:
+            # Same rule as Cerberus': if we cannot tell whether we sent them
+            # here, we must not permaban them and attack their host for it.
+            return True
 
     def _on_tar_pit_trapped(self, ip: str, duration: float):
         """Called when a trapped bot finally disconnects"""

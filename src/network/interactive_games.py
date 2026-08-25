@@ -294,6 +294,22 @@ class NewGameDialog(wx.Dialog):
         rules_hint.Wrap(580)
         vbox.Add(rules_hint, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
+        # What the server remembers FOR the game master, so a creator writes
+        # rules that use it rather than asking the AI to keep numbers in its
+        # head — which is the one thing it reliably gets wrong.
+        rpg_hint = wx.StaticText(panel, label=_(
+            "The server keeps score for you, so you can write rules that rely "
+            "on it: world variables (the weather, a quest stage), each "
+            "player's statistics (hit points, strength, gold, ammunition) with "
+            "the arithmetic and the limits done server-side, what every player "
+            "is carrying and wearing, dice rolls, and skill checks the server "
+            "decides rather than the AI. Just say what your game needs - "
+            "\"everyone starts with 12 hit points and a bow\", \"a locked door "
+            "needs a strength check against 10\" - and the game master will "
+            "use the right one."))
+        rpg_hint.Wrap(580)
+        vbox.Add(rpg_hint, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
+
         # --- Attachments row ---
         att_box = wx.BoxSizer(wx.HORIZONTAL)
         self.attach_btn = wx.Button(panel, label=_("Add attachment (zip / txt / sound)..."))
