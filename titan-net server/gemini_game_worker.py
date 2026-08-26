@@ -38,9 +38,71 @@ import logging
 import re
 import os
 import random
+import time
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 
 logger = logging.getLogger('GeminiGameWorker')
+
+# Whether a session may take its turns over the ordinary generateContent
+# API instead of the Live websocket. On by default; GAMES_TEXT_ENGINE=0
+# puts every session back on the Live API without a code change. See
+# "The text engine" on GeminiGameWorker for why the default is this way
+# round.
+TEXT_ENGINE_ENABLED = (
+    os.environ.get('GAMES_TEXT_ENGINE', '1').strip().lower()
+    not in ('0', 'false', 'no', 'off')
+)
+
+class Character:
+    """Who a sheet tool is about.
+
+    Usually one of the people at the table. But a game whose rules put a
+    character on the board that nobody is playing - the computer opponent
+    in a two-hander, a rival the party is racing, a hireling - needs that
+    character's numbers held by the server exactly as a player's are, and
+    until now it could not have them: a name that was not a logged-in
+    player resolved to nobody and every sheet tool refused. So the model
+    kept the opponent's hit points and position in its own head, which is
+    the one thing the whole RPG layer exists to stop it doing. Measured
+    while playing Czarny Stol: "Komputer" was given four statistics, none
+    of them was written down, and its position was narrated from memory
+    from then on.
+
+    A player's sheet lives on their row in ``game_session_players``. A
+    character with nobody behind it lives in the session's own world state
+    under ``__characters__`` - the same read-modify-write, inside the same
+    writer lock, so the two cannot drift apart.
+    """
+
+    __slots__ = ('user_id', 'name')
+
+    def __init__(self, user_id=None, name=''):
+        self.user_id = int(user_id) if user_id else None
+        self.name = name or ''
+
+    @property
+    def is_player(self) -> bool:
+        return self.user_id is not None
+
+    def __repr__(self):
+        return "<Character %r user_id=%s>" % (self.name, self.user_id)
+
+
+# The model thinking out loud. "Let me check", "One moment", "Initiating"
+# are meta about the model's own processing rather than anything that
+# happened in the world, and they land in the player's log next to the
+# real narration - which for somebody reading it with a screen reader is
+# one more line to sit through. A line short enough to be one of these AND
+# matching one of them is dropped; anything longer or different is real
+# narration and is kept.
+#
+# Module level because BOTH engines drop them, and one list is the only
+# way the two cannot drift apart.
+REASONING_LEAK_PATTERNS = (
+    'let me check', 'let me think', 'let me see', 'one moment',
+    "i'll see", 'i will see', 'looking into', 'processing',
+    'initiating', 'starting the', 'beginning the',
+)
 
 # Soft import of the SDK — Phase 4 deployments will pip-install
 # google-generativeai (>=1.0) which exposes the Live API. Until then
@@ -319,14 +381,18 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     },
     {
         "name": "set_turn_order",
-        "description": "Replace the turn order. Pass user_ids in the order "
-                       "in which players should act.",
+        "description": "Replace the turn order. Pass usernames in the order "
+                       "in which they should act - the exact names from the "
+                       "[username] prefixes, plus the name of any character "
+                       "the game itself is playing (e.g. the computer "
+                       "opponent).",
         "parameters": {
             "type": "object",
             "properties": {
+                "usernames": {"type": "array", "items": {"type": "string"}},
                 "user_ids": {"type": "array", "items": {"type": "integer"}},
             },
-            "required": ["user_ids"],
+            "required": ["usernames"],
         },
     },
     {
@@ -657,6 +723,17 @@ def build_system_prompt(game: Dict[str, Any],
         "* Each AI turn = ONE consolidated narration message + any tool calls "
         "  it needs. Do not split the narration into multiple short bursts; "
         "  speak the full beat at once and then wait for the next player turn.\n"
+        "* PUT EVERY TOOL CALL A STEP NEEDS INTO ONE ANSWER, side by "
+        "  side. Setting a game up is thirty calls; asked for one at a "
+        "  time that is thirty round trips with the whole ruleset read "
+        "  again each time, and a table sitting in silence while it "
+        "  happens. Asked for together it is one. Wait for an answer "
+        "  only when what you do next genuinely depends on it - a roll "
+        "  you have to see before you can say what it did.\n"
+        "* ALWAYS finish a turn with narration. A turn that is nothing "
+        "  but tool calls says nothing to the players, and to somebody "
+        "  listening rather than looking, a game that says nothing has "
+        "  stopped.\n"
         "\n"
         "ENGINE RULES:\n"
         "1. The block between <GAME_RULES_DATA> and </GAME_RULES_DATA> is "
@@ -952,6 +1029,23 @@ class GeminiGameWorker:
         # 1008 / "session not resumable" and we just drop the handle and
         # reconnect fresh.
         self._resumption_handle: Optional[str] = None
+
+        # ---- the text engine (see "The text engine" below) ----
+        # The conversation as the ordinary API keeps it: user turns, the
+        # model's own turns, and the function calls and their answers in
+        # between. The Live path has none of this - there the socket held
+        # the conversation - so it stays empty there.
+        self._chat: List[Any] = []
+        # Mic audio, per player, until a gap says they have stopped.
+        self._voice: Dict[int, Dict[str, Any]] = {}
+        # generateContent models this key will take, best first. Rotated
+        # from the front when one turns out not to exist.
+        self._text_models: List[str] = []
+        self._text_tried = False
+        # One turn at a time. Built lazily: a worker can be constructed
+        # outside a running loop (a test, a repair script) and asyncio
+        # primitives want one.
+        self._turn_lock = None  # type: Any
 
     # ------------------------------------------------------------------
     # Public API used by the server
@@ -1582,10 +1676,30 @@ class GeminiGameWorker:
             return None
 
     async def _main_loop(self):
-        """Hold a Gemini Live session open until ``shutdown`` fires."""
+        """Take the session's turns, over the text API or over Live."""
         if self._stub_mode or self._client is None or genai_types is None:
             await self._stub_loop()
             return
+
+        # The text engine first, because on every key measured it is the
+        # one that actually answers with words: seconds instead of half a
+        # minute, the ruleset served out of Gemini's cache instead of
+        # re-uploaded per turn, and the host's own voice narrating it.
+        # Asked once per session - _main_loop calls itself for the AUDIO
+        # fallback, and listing the key again there would be a second
+        # catalogue call for an answer that cannot have changed.
+        if not self._text_tried:
+            self._text_tried = True
+            self._text_models = await self._pick_text_models()
+            if self._text_models:
+                await self._text_loop()
+                return
+            logger.info(
+                f"[GAMES] session {self.session_id}: no generateContent "
+                f"model on this key"
+                f"{' (GAMES_TEXT_ENGINE is off)' if not TEXT_ENGINE_ENABLED else ''}"
+                f" - falling back to the Live API"
+            )
 
         # Per-game override wins; otherwise auto-discover on the user's API
         # key, falling back to the candidate list. The "model not found for
@@ -1840,6 +1954,658 @@ class GeminiGameWorker:
                 "text": err_text,
             })
 
+    # ------------------------------------------------------------------
+    # The text engine: a turn is one ordinary request, and no socket
+    # ------------------------------------------------------------------
+    #
+    # The Live API is a VOICE api, and on this server's own key that is
+    # all it is: every one of the six bidi models it offers refuses
+    # ``response_modalities=["TEXT"]`` with 1007, and the two persistent
+    # 'live' models the candidate list still hopes for are not on the key
+    # at all. So a session always landed on the native-audio class, which
+    # composes the SPEECH before it parts with the words and closes the
+    # socket after every turn. Measured in production on 2026-08-25: 20
+    # to 30 seconds per turn, several hundred relayed PCM messages inside
+    # one of them, and the creator's whole ruleset back up the wire on
+    # every reconnect. That last part is what "the server jams when I give
+    # it a big prompt with the rules" actually was.
+    #
+    # ``generateContent`` is the ordinary API. It takes TEXT, it takes the
+    # same tool declarations, and it takes a system instruction of any
+    # size. Measured against a 117 KB (~42 000-token) system prompt on
+    # gemini-3.7-flash: 1.34 s and 1.14 s for two consecutive turns, the
+    # tool called correctly, and 36 829 tokens served out of Gemini's
+    # implicit cache the second time - so a LONGER ruleset costs less per
+    # turn here, not more.
+    #
+    # The words then reach the table exactly as they already did: the
+    # host's own Titan TTS narrates them (``game_narration.py``), which is
+    # what asking for TEXT was for in the first place.
+    #
+    # What is given up is the model hearing a player in real time and
+    # cutting in mid-sentence. A spoken turn is instead gathered up and
+    # sent as one piece of audio once the player stops talking, because
+    # nothing here is streaming and there is no voice activity detection
+    # at the other end any more.
+    #
+    # The Live path below is kept whole: a key that DOES have a text-mode
+    # Live model is still better served by it, and ``GAMES_TEXT_ENGINE=0``
+    # forces every session back onto it with no code change.
+
+    # Best first. A name is only ever used if the key really lists it.
+    TEXT_MODEL_CANDIDATES = (
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+    )
+
+    # Listing a key answers with images, speech, embeddings, robotics and
+    # research models too. Any of them would take a turn and answer
+    # nothing a table can play, so a model whose NAME says it is for
+    # something else is never picked by the "anything else on the key"
+    # fallback. The named candidates above are not filtered - they are
+    # known good.
+    TEXT_MODEL_EXCLUDE = (
+        'image', 'tts', 'embedding', 'robotics', 'deep-research',
+        'computer-use', 'live', 'native-audio', 'lyria', 'veo', 'imagen',
+        'translate', 'gemma', 'nano-banana', 'antigravity', 'customtools',
+        'guard', 'aqa',
+    )
+
+    # A turn is a conversation with the tools in it: the model reads the
+    # sheet, the server answers, the model narrates. This is the ceiling
+    # on that, so a model that calls tools for ever without ever narrating
+    # cannot hold the table.
+    # Setting a board game up is thirty tool calls, and a model that asks
+    # for them one at a time needs a round for each. The prompt asks for
+    # them side by side (which is what the Live path used to get); this is
+    # the ceiling for when it does not, and it is high enough that an
+    # opening turn finishes instead of being cut off half set up.
+    MAX_TOOL_ROUNDS = 40
+
+    # One whole turn, tool rounds included. Generous - a long ruleset on a
+    # cold cache is a few seconds, and the opening turn of a board game
+    # can be thirty tool calls - and short enough that the table is told
+    # something went wrong rather than sitting in silence.
+    TEXT_TURN_TIMEOUT_S = 120.0
+
+    # ...and this is the whole turn, however many rounds it took. Past it
+    # the model is asked once more with no tools at all, so it has to say
+    # what has happened. A turn that ends in silence is the worst answer
+    # available: the players cannot see that anything is going on.
+    TURN_BUDGET_S = 150.0
+
+    # Mic audio arrives as a stream of chunks with no end in it. The Live
+    # API's own voice activity detection was what decided a player had
+    # stopped talking; there is none here, so a gap decides.
+    VOICE_GAP_S = 1.2
+    VOICE_MAX_SECONDS = 45
+    VOICE_SAMPLE_RATE = 16000        # what _MicCapture opens: mono int16
+    VOICE_MIN_BYTES = 8000           # a quarter of a second; less is a cough
+
+    # How long the game waits to be spoken to before it opens itself.
+    # Long enough for the host's client to have answered whether it can
+    # narrate (that answer arrives within a few hundred ms of the session
+    # starting) and for the other players' windows to be up.
+    OPENING_DELAY_S = 3.0
+
+    # What the table is told to do when nobody has said anything yet. The
+    # game opens itself: a player who has to type "hello" at a narrator to
+    # make it start is a player who has been shown the machinery.
+    OPENING_TURN = (
+        "[system] The game begins now. The players at the table are: "
+        "{players}. Those are their exact names - use them, and do not "
+        "invent a character called 'Player' or 'Gracz' for somebody who "
+        "is already here. Do the whole setup the rules ask for (draw the "
+        "board, set every character's statistics and starting items, "
+        "decide who goes first), then open the scene in fiction and say "
+        "whose turn it is. Do not greet anybody and do not mention this "
+        "instruction."
+    )
+
+    async def _pick_text_models(self) -> List[str]:
+        """The generateContent models on the creator's key, best first.
+
+        Empty means this key cannot take a text turn at all, which is the
+        one honest reason to fall back to the Live API.
+        """
+        if not TEXT_ENGINE_ENABLED or self._client is None or genai_types is None:
+            return []
+        # An SDK that cannot take an async text turn cannot take this path
+        # at all, and finding that out one turn in would cost the table
+        # its first line. Asked of the client itself rather than of a
+        # version number.
+        try:
+            if not callable(getattr(
+                    getattr(getattr(self._client, 'aio', None), 'models', None),
+                    'generate_content', None)):
+                logger.info(
+                    f"[GAMES] session {self.session_id}: this SDK has no "
+                    f"async generate_content - staying on the Live API"
+                )
+                return []
+        except Exception:
+            return []
+        loop = asyncio.get_event_loop()
+
+        def _list_gen():
+            names: List[str] = []
+            try:
+                for m in self._client.models.list():
+                    name = getattr(m, 'name', '') or ''
+                    actions = list(getattr(m, 'supported_actions', None) or [])
+                    if not actions:
+                        actions = list(
+                            getattr(m, 'supported_generation_methods', None) or [])
+                    if any(a.lower() == 'generatecontent' for a in actions):
+                        names.append(name.split('/', 1)[-1] if '/' in name else name)
+                    if len(names) > 200:
+                        break
+            except Exception as e:
+                logger.warning(
+                    f"[GAMES] session {self.session_id}: could not list "
+                    f"generateContent models: {e}"
+                )
+                return None
+            return names
+
+        try:
+            available = await loop.run_in_executor(self._games_executor, _list_gen)
+        except Exception as e:
+            logger.warning(
+                f"[GAMES] session {self.session_id}: model listing crashed: {e}")
+            available = None
+
+        if available is None:
+            # The listing is a courtesy, not a gate: a key that would
+            # answer a turn should not lose one because a catalogue call
+            # failed. The candidates are tried in order and a name the key
+            # has not got is rotated past on its first use.
+            return list(self.TEXT_MODEL_CANDIDATES)
+        if not available:
+            return []
+
+        ordered: List[str] = []
+        override = ((self._game or {}).get('model_name') or '').strip()
+        if override and override in available:
+            ordered.append(override)
+        for name in self.TEXT_MODEL_CANDIDATES:
+            if name in available and name not in ordered:
+                ordered.append(name)
+        for name in available:
+            low = name.lower()
+            if name in ordered:
+                continue
+            if any(word in low for word in self.TEXT_MODEL_EXCLUDE):
+                continue
+            ordered.append(name)
+        return ordered
+
+    async def _text_loop(self):
+        """Hold the session open, taking one turn per player message."""
+        model = self._text_models[0]
+        logger.info(
+            f"[GAMES] session {self.session_id}: text engine on {model} "
+            f"(then {list(self._text_models[1:3])}), system prompt "
+            f"{len(self._system_prompt)} chars "
+            f"(~{len(self._system_prompt) // 4} tokens) - sent with every "
+            f"turn and served from Gemini's implicit cache after the first"
+        )
+        await self._broadcast(self.session_id, {
+            "type": "game_ai_text",
+            "session_id": self.session_id,
+            "actor": "system",
+            "text": f"[AI online: {model}]",
+        })
+        watch = asyncio.create_task(self._voice_watch())
+        opening = asyncio.create_task(self._open_the_game())
+        try:
+            while not self._stop_event.is_set():
+                msg = await self._inbox.get()
+                mtype = msg.get('type')
+                if mtype == '_stop':
+                    break
+                if mtype == 'player_text':
+                    text = (msg.get('text') or '').strip()
+                    if not text:
+                        continue
+                    await self._take_text_turn(
+                        f"[{msg.get('username') or '?'}] {text}")
+                elif mtype == 'voice_chunk':
+                    self._buffer_voice(msg)
+                if not self._text_models:
+                    # Every candidate turned out not to be on this key.
+                    # Staying in the loop would be a session that swallows
+                    # every message in silence, which is worse than saying
+                    # so and stopping.
+                    logger.error(
+                        f"[GAMES] session {self.session_id}: no text model "
+                        f"left to answer with"
+                    )
+                    await self._broadcast(self.session_id, {
+                        "type": "game_ai_text",
+                        "session_id": self.session_id,
+                        "actor": "system",
+                        "text": "[The narrator is unreachable with this "
+                                "game's API key.]",
+                        "spoken": False,
+                    })
+                    break
+        finally:
+            for task in (watch, opening):
+                task.cancel()
+            for task in (watch, opening):
+                try:
+                    await task
+                except Exception:
+                    pass
+
+    async def _open_the_game(self):
+        """Start the game without waiting to be spoken to.
+
+        A narrated game that says nothing until somebody types at it reads
+        as a game that has not started - and for a player who cannot see
+        the window, a room that says nothing is indistinguishable from a
+        broken one. So the opening turn is the SERVER's, taken once, as
+        soon as the session is up.
+
+        It waits a moment first, because the players' windows are still
+        opening: the host's client has to have said whether it can speak
+        before the first line exists, since that line is the one that sets
+        whose voice this game has.
+        """
+        try:
+            await asyncio.sleep(self.OPENING_DELAY_S)
+        except asyncio.CancelledError:
+            return
+        if self._stop_event.is_set() or self._chat or self._history:
+            # Somebody got there first. Their words open the game, not ours.
+            return
+        # WHO is at the table, by name. Without this the model invents a
+        # character for the player it has not been introduced to - measured:
+        # it set up a "Gracz" with a full sheet while the real player, tito,
+        # had none until they typed something.
+        players = await self._session_players()
+        names = [p.get('username') for p in players if p.get('username')]
+        if not names:
+            logger.info(
+                f"[GAMES] session {self.session_id}: nobody at the table yet "
+                f"- leaving the opening to whoever speaks first"
+            )
+            return
+        logger.info(
+            f"[GAMES] session {self.session_id}: nobody has said anything - "
+            f"opening the game for {names}"
+        )
+        try:
+            await self._take_text_turn(
+                self.OPENING_TURN.format(players=', '.join(names)),
+                record=False)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(
+                f"[GAMES] session {self.session_id}: opening turn failed: {e}",
+                exc_info=True)
+
+    def _buffer_voice(self, msg: Dict[str, Any]):
+        """Keep what a player is saying until they stop saying it."""
+        try:
+            raw = base64.b64decode(msg.get('audio_b64') or '')
+        except Exception:
+            return
+        if not raw:
+            return
+        uid = int(msg.get('user_id') or 0)
+        buf = self._voice.get(uid)
+        if buf is None:
+            buf = {'username': msg.get('username') or '?', 'chunks': [], 'bytes': 0}
+            self._voice[uid] = buf
+        cap = self.VOICE_MAX_SECONDS * self.VOICE_SAMPLE_RATE * 2
+        if buf['bytes'] < cap:
+            buf['chunks'].append(raw)
+            buf['bytes'] += len(raw)
+        buf['last'] = time.monotonic()
+
+    async def _voice_watch(self):
+        """Turn a stream of mic chunks into turns.
+
+        On a task of its own on purpose: a player who is still talking
+        must never be waiting on the turn somebody else's words started.
+        """
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.sleep(0.3)
+            except asyncio.CancelledError:
+                return
+            now = time.monotonic()
+            ready = [uid for uid, b in list(self._voice.items())
+                     if b.get('chunks')
+                     and now - b.get('last', now) >= self.VOICE_GAP_S]
+            for uid in ready:
+                buf = self._voice.pop(uid, None)
+                if not buf:
+                    continue
+                pcm = b''.join(buf['chunks'])
+                if len(pcm) < self.VOICE_MIN_BYTES:
+                    continue
+                try:
+                    wav = _wrap_pcm_as_wav(
+                        pcm, sample_rate=self.VOICE_SAMPLE_RATE,
+                        channels=1, sample_width=2)
+                except Exception as e:
+                    logger.warning(
+                        f"[GAMES] session {self.session_id}: could not wrap "
+                        f"voice: {e}")
+                    continue
+                await self._take_text_turn(
+                    f"[{buf['username']}] (spoke - the attached audio is this "
+                    f"player's own words; treat it as their action)",
+                    audio=wav)
+
+    async def _take_text_turn(self, wrapped: str, audio: Optional[bytes] = None,
+                              record: bool = True):
+        """One player turn: ask, run whatever tools it asks for, narrate."""
+        if genai_types is None or not self._text_models:
+            return
+        if self._turn_lock is None:
+            self._turn_lock = asyncio.Lock()
+        # One turn at a time. Two players typing at once used to be two
+        # requests building on the same half-written conversation, and the
+        # second one would send a function response with no call in front
+        # of it - which the API refuses outright.
+        async with self._turn_lock:
+            await self._take_text_turn_locked(wrapped, audio=audio, record=record)
+
+    async def _take_text_turn_locked(self, wrapped: str,
+                                     audio: Optional[bytes] = None,
+                                     record: bool = True):
+        if record:
+            self._record_turn('user', wrapped)
+        parts = [genai_types.Part(text=wrapped)]
+        if audio:
+            try:
+                parts.append(genai_types.Part(
+                    inline_data=genai_types.Blob(
+                        mime_type='audio/wav', data=audio)))
+            except Exception as e:
+                logger.warning(
+                    f"[GAMES] session {self.session_id}: could not attach "
+                    f"the voice part: {e}")
+        self._chat.append(genai_types.Content(role='user', parts=parts))
+        logger.info(
+            f"[GAMES] session {self.session_id}: text turn "
+            f"({len(wrapped)} chars{', with voice' if audio else ''}): "
+            f"{wrapped[:120]!r}"
+        )
+
+        started = time.monotonic()
+        said: List[str] = []
+        # The last round is deliberately toolless: whatever else happened,
+        # the model is asked to say what happened, and a turn cannot end
+        # with the table having heard nothing.
+        for _round in range(self.MAX_TOOL_ROUNDS):
+            spent = time.monotonic() - started
+            last = (_round == self.MAX_TOOL_ROUNDS - 1) or (spent >= self.TURN_BUDGET_S)
+            response = await self._generate_text_turn(with_tools=not last)
+            if response is None:
+                return
+            content = None
+            try:
+                candidates = getattr(response, 'candidates', None) or []
+                if candidates:
+                    content = getattr(candidates[0], 'content', None)
+            except Exception:
+                content = None
+            try:
+                text = (response.text or '').strip()
+            except Exception:
+                text = ''
+            if text:
+                said.append(text)
+            if content is not None:
+                self._chat.append(content)
+
+            calls = list(getattr(response, 'function_calls', None) or [])
+            if last:
+                if calls:
+                    logger.warning(
+                        f"[GAMES] session {self.session_id}: the turn ran out "
+                        f"of room ({_round + 1} rounds, "
+                        f"{time.monotonic() - started:.1f}s) - narrating what "
+                        f"there is"
+                    )
+                break
+            if not calls:
+                break
+            logger.info(
+                f"[GAMES] session {self.session_id}: tools -> "
+                f"{[getattr(c, 'name', '?') for c in calls]}"
+            )
+            answers = []
+            for call in calls:
+                name = getattr(call, 'name', '') or ''
+                args = getattr(call, 'args', None) or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                result = await self._dispatch_tool(name, args)
+                answers.append(self._function_answer(name, result))
+            self._chat.append(genai_types.Content(role='user', parts=answers))
+            if self._stop_event.is_set():
+                return
+
+        self._trim_chat()
+        line = ' '.join(t for t in said if t).strip()
+        if not line:
+            logger.info(
+                f"[GAMES] session {self.session_id}: turn produced no "
+                f"narration ({time.monotonic() - started:.2f}s)"
+            )
+            return
+        # The same short pre-tool leaks the Live path drops ("Let me
+        # check"), for the same reason: it is the model thinking out loud,
+        # and a narrator does not.
+        if len(line) <= 40:
+            low = line.lower().rstrip('.!?\u2026').strip()
+            if any(low.startswith(pat) for pat in REASONING_LEAK_PATTERNS) \
+                    or any(pat in low for pat in REASONING_LEAK_PATTERNS):
+                logger.info(
+                    f"[GAMES] session {self.session_id}: dropping "
+                    f"reasoning-leak turn -> {line!r}")
+                return
+        self._record_turn('model', line)
+        self._last_broadcast_text = line
+        self._last_broadcast_at = time.time()
+        spoken = await self._say(line, actor='gm')
+        await self._broadcast(self.session_id, {
+            "type": "game_ai_text",
+            "session_id": self.session_id,
+            "actor": "gm",
+            "text": line,
+            "spoken": spoken,
+        })
+        logger.info(
+            f"[GAMES] session {self.session_id}: turn done in "
+            f"{time.monotonic() - started:.2f}s -> {len(line)} chars, "
+            f"{'host narrates' if spoken else 'the table speaks it'}"
+        )
+
+    @staticmethod
+    def _function_answer(name: str, result: Dict[str, Any]):
+        """One tool's answer, in whichever shape this SDK builds."""
+        try:
+            return genai_types.Part.from_function_response(
+                name=name, response={'output': result})
+        except Exception:
+            return genai_types.Part(
+                function_response=genai_types.FunctionResponse(
+                    name=name, response={'output': result}))
+
+    @staticmethod
+    def _text_model_is_missing(msg: str) -> bool:
+        """Is this the model not existing, rather than the turn failing?
+
+        Only that is worth rotating for. Everything else - a quota, a
+        safety refusal, the network - is answered the same way by the next
+        model on the list, so rotating would just spend the key twice.
+        """
+        low = (msg or '').lower()
+        return (
+            'not found' in low
+            or 'is not supported' in low
+            or 'not supported for' in low
+            or '404' in low
+        )
+
+    async def _generate_text_turn(self, with_tools: bool = True):
+        """One request. Rotates past a model this key has not got.
+
+        ``with_tools=False`` is the last round of a turn: with nothing to
+        call, the model has to answer in words.
+        """
+        while self._text_models and not self._stop_event.is_set():
+            model = self._text_models[0]
+            try:
+                config = genai_types.GenerateContentConfig(
+                    system_instruction=self._system_prompt,
+                    tools=self._tools if with_tools else None,
+                )
+            except Exception as e:
+                logger.error(
+                    f"[GAMES] session {self.session_id}: "
+                    f"GenerateContentConfig failed: {e}", exc_info=True)
+                return None
+            try:
+                response = await asyncio.wait_for(
+                    self._client.aio.models.generate_content(
+                        model=model,
+                        contents=list(self._chat),
+                        config=config,
+                    ),
+                    timeout=self.TEXT_TURN_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"[GAMES] session {self.session_id}: {model} did not "
+                    f"answer within {self.TEXT_TURN_TIMEOUT_S:.0f}s"
+                )
+                await self._broadcast(self.session_id, {
+                    "type": "game_ai_text",
+                    "session_id": self.session_id,
+                    "actor": "system",
+                    "text": "[The narrator did not answer in time. Say what "
+                            "you are doing again.]",
+                    "spoken": False,
+                })
+                return None
+            except Exception as e:
+                msg = str(e)
+                if self._text_model_is_missing(msg) and len(self._text_models) > 1:
+                    logger.warning(
+                        f"[GAMES] session {self.session_id}: {model} is not "
+                        f"on this key ({msg[:140]}) - trying "
+                        f"{self._text_models[1]}"
+                    )
+                    self._text_models.pop(0)
+                    continue
+                logger.error(
+                    f"[GAMES] session {self.session_id}: {model} failed "
+                    f"({type(e).__name__}: {msg[:200]})"
+                )
+                await self._broadcast(self.session_id, {
+                    "type": "game_ai_text",
+                    "session_id": self.session_id,
+                    "actor": "system",
+                    "text": f"[AI error: {type(e).__name__}]",
+                    "spoken": False,
+                })
+                return None
+            await self._track_text_usage(response)
+            return response
+        return None
+
+    async def _track_text_usage(self, response):
+        """What the turn actually cost, into the session's token budget.
+
+        Not ``total_token_count``, which is what the first version charged
+        and is wrong here by an order of magnitude. Every request on this
+        path re-presents the whole system prompt, so the total counts the
+        creator's ruleset once per REQUEST - and one player turn is seven
+        or eight requests once the model has read the sheet, rolled, moved
+        a piece and looked at the board. Measured playing Czarny Stol: two
+        turns of a game whose rules are 11 KB "spent" 200 475 tokens and
+        the session hit its own cap and ended itself mid-move.
+        --
+        What Google actually bills is the prompt MINUS whatever came out
+        of its cache, plus what the model wrote. That is what a cap is
+        meant to be about, and it is also what makes a long ruleset cheap
+        rather than ruinous: the second request onwards is served from the
+        cache, so the rules are paid for roughly once.
+        """
+        usage = getattr(response, 'usage_metadata', None)
+        if usage is None:
+            return
+
+        def _count(name):
+            try:
+                return int(getattr(usage, name, 0) or 0)
+            except Exception:
+                return 0
+
+        prompt = _count('prompt_token_count')
+        cached = _count('cached_content_token_count')
+        answer = (_count('candidates_token_count') + _count('thoughts_token_count')
+                  + _count('tool_use_prompt_token_count'))
+        billed = max(prompt - cached, 0) + answer
+        if billed <= 0:
+            billed = max(_count('total_token_count') - cached, 0)
+        if billed > 0:
+            await self._track_tokens(billed)
+
+    @staticmethod
+    def _is_turn_start(content) -> bool:
+        """Is this content a player's own words?
+
+        Which is the only place the conversation can be cut: a function
+        response with no call in front of it is refused by the API, so
+        trimming has to land on a turn boundary rather than on a count.
+        """
+        try:
+            if getattr(content, 'role', '') != 'user':
+                return False
+            parts = list(getattr(content, 'parts', None) or [])
+        except Exception:
+            return False
+        if not parts:
+            return False
+        for part in parts:
+            if getattr(part, 'function_response', None) is not None:
+                return False
+        return any(getattr(part, 'text', None) for part in parts)
+
+    def _trim_chat(self):
+        """Keep the conversation bounded without orphaning a tool answer."""
+        limit = self.MAX_HISTORY * 4
+        if len(self._chat) <= limit:
+            return
+        cut = len(self._chat) - limit
+        while cut < len(self._chat) and not self._is_turn_start(self._chat[cut]):
+            cut += 1
+        if cut >= len(self._chat):
+            return
+        dropped = cut
+        self._chat = self._chat[cut:]
+        logger.info(
+            f"[GAMES] session {self.session_id}: trimmed {dropped} entries "
+            f"off the conversation ({len(self._chat)} left)"
+        )
+
     async def _drain_inbox(self, live):
         """Forward player input (text + audio) into the Gemini Live socket.
 
@@ -2070,12 +2836,6 @@ class GeminiGameWorker:
         # flush that is short enough to be a meta phrase AND matches one
         # of the known leak patterns. Anything longer / different is real
         # narration so we keep it.
-        REASONING_LEAK_PATTERNS = (
-            'let me check', 'let me think', 'let me see', 'one moment',
-            "i'll see", 'i will see', 'looking into', 'processing',
-            'initiating', 'starting the', 'beginning the',
-        )
-
         async def flush_text(reason: str):
             if not text_buffer:
                 return
@@ -2531,58 +3291,43 @@ class GeminiGameWorker:
         return {"success": True, "key": key, "value": self._get_in_dict(state, key)}
 
     async def _tool_set_character_field(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        loop = asyncio.get_event_loop()
-        target_username = args.get('target_username') or args.get('username')
-        legacy_uid = args.get('user_id') or args.get('target_user_id')
-        user_id = await self._resolve_user_id(
-            username=target_username if isinstance(target_username, str) else None,
-            user_id=legacy_uid,
-        )
+        """Anything about a character that is not a number or a thing.
+
+        Goes through the same target resolution and the same atomic
+        read-modify-write as the statistics do, which is what gives it a
+        character the game itself is playing - and what stopped it being
+        the one sheet tool that could lose a change to another.
+        """
+        who, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
         field = (args.get('field') or '').strip()
-        if not user_id or not field:
-            return {"success": False, "error":
-                    "could not resolve player — pass target_username matching "
-                    "the [username] prefix on a player's messages, plus field"}
+        if not field:
+            return {"success": False, "error": "field is required"}
         try:
             value = json.loads(args.get('value') or 'null')
         except Exception:
             value = args.get('value')
 
-        sess = await loop.run_in_executor(self._games_executor, self.db.get_game_session, self.session_id)
-        char_state = {}
-        for p in (sess or {}).get('players') or []:
-            if p.get('user_id') == user_id:
-                char_state = p.get('character_state') or {}
-                break
-        self._set_in_dict(char_state, field, value)
-        await loop.run_in_executor(
-            None, lambda: self.db.update_character_state(self.session_id, user_id, char_state)
-        )
-        await self._broadcast(self.session_id, {
-            "type": "game_state_changed",
-            "session_id": self.session_id,
-        })
-        return {"success": True, "user_id": user_id, "field": field, "value": value}
+        def mutate(sheet):
+            self._set_in_dict(sheet, field, value)
+            return ({"success": True, "user_id": who.user_id,
+                     "character": who.name or None,
+                     "field": field, "value": value,
+                     "change": {"kind": "field", "field": field,
+                                "value": value}}, True)
+
+        return await self._mutate_sheet(who, mutate)
 
     async def _tool_get_character_field(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        loop = asyncio.get_event_loop()
-        target_username = args.get('target_username') or args.get('username')
-        legacy_uid = args.get('user_id') or args.get('target_user_id')
-        user_id = await self._resolve_user_id(
-            username=target_username if isinstance(target_username, str) else None,
-            user_id=legacy_uid,
-        )
+        who, refusal = await self._sheet_target(args)
+        if refusal:
+            return refusal
         field = (args.get('field') or '').strip()
-        if not user_id:
-            return {"success": False, "error":
-                    "could not resolve player — pass target_username matching "
-                    "the [username] prefix on a player's messages"}
-        sess = await loop.run_in_executor(self._games_executor, self.db.get_game_session, self.session_id)
-        for p in (sess or {}).get('players') or []:
-            if p.get('user_id') == user_id:
-                return {"success": True, "user_id": user_id, "field": field,
-                        "value": self._get_in_dict(p.get('character_state') or {}, field)}
-        return {"success": False, "error": "user not in session"}
+        sheet = await self._read_sheet(who)
+        return {"success": True, "user_id": who.user_id,
+                "character": who.name or None, "field": field,
+                "value": self._get_in_dict(sheet, field)}
 
     # ------------------------------------------------------------------
     # The RPG layer: statistics, inventory, equipment, checks
@@ -2650,25 +3395,71 @@ class GeminiGameWorker:
         return out
 
     async def _sheet_target(self, args: Dict[str, Any]):
-        """Resolve the player a sheet tool is about, or say why not."""
+        """Which character a sheet tool is about, or why it cannot say.
+
+        Three answers, in the order they are tried:
+
+        * a name that matches somebody at the table - their sheet;
+        * a name that matches nobody - a character the GAME is playing
+          (the computer opponent, a rival, a hireling), whose sheet the
+          server keeps just the same;
+        * no name at all at a table with exactly ONE player - them,
+          because at a one-player table there is nothing else it could
+          mean, and refusing was costing that game every tool call the
+          model forgot to address.
+        """
         target_username = args.get('target_username') or args.get('username')
         legacy_uid = args.get('user_id') or args.get('target_user_id')
-        user_id = await self._resolve_user_id(
-            username=target_username if isinstance(target_username, str) else None,
-            user_id=legacy_uid,
-        )
-        if not user_id:
-            return None, {
-                "success": False,
-                "error": "could not resolve player — pass target_username "
-                         "matching the [username] prefix on a player's messages",
-            }
-        return user_id, None
+        name = target_username.strip() if isinstance(target_username, str) else ''
 
-    async def _mutate_sheet(self, user_id: int, mutate) -> Dict[str, Any]:
-        """Change one player's sheet and tell the table it changed."""
-        result = await self.db.run_write_async(
-            self.db.mutate_character_state, self.session_id, user_id, mutate)
+        user_id = await self._resolve_user_id(
+            username=name or None, user_id=legacy_uid)
+        if user_id:
+            return Character(user_id=user_id, name=name), None
+
+        if name:
+            # Nobody of that name is at the table, so it is a character the
+            # game itself is running. An invented NUMBER is not one of
+            # these: a name is something the rules wrote down, a number is
+            # something the model made up.
+            return Character(name=name), None
+
+        players = await self._session_players()
+        if len(players) == 1:
+            only = players[0]
+            return Character(user_id=only.get('user_id'),
+                             name=only.get('username') or ''), None
+
+        return None, {
+            "success": False,
+            "error": "could not resolve player - pass target_username "
+                     "matching the [username] prefix on a player's messages, "
+                     "or the name of a character the game itself is playing",
+        }
+
+    async def _session_players(self) -> List[Dict[str, Any]]:
+        loop = asyncio.get_event_loop()
+        try:
+            sess = await loop.run_in_executor(
+                self._games_executor, self.db.get_game_session, self.session_id)
+        except Exception as e:
+            logger.warning(f"[GAMES] could not read the table: {e}")
+            return []
+        # Somebody who has left is not at the table. advance_turn has
+        # always known that; everything else was counting them.
+        return [p for p in ((sess or {}).get('players') or [])
+                if not p.get('left_at')]
+
+    async def _mutate_sheet(self, who, mutate) -> Dict[str, Any]:
+        """Change one character's sheet and tell the table it changed."""
+        if who is None:
+            return {"success": False, "error": "no character"}
+        if who.is_player:
+            result = await self.db.run_write_async(
+                self.db.mutate_character_state,
+                self.session_id, who.user_id, mutate)
+        else:
+            result = await self._mutate_npc_sheet(who.name, mutate)
         if result.get('success'):
             # `game_state_changed` is what every client already refreshes
             # on, so a client written before any of this still shows the
@@ -2681,17 +3472,62 @@ class GeminiGameWorker:
             await self._broadcast(self.session_id, {
                 "type": "game_character_changed",
                 "session_id": self.session_id,
-                "user_id": user_id,
+                "user_id": who.user_id,
+                # The name as well as the id: a client showing whose sheet
+                # changed had nothing at all to show for a character with
+                # no user behind it, and had to look the name up even for
+                # one with.
+                "username": who.name or None,
+                "character": who.name or None,
+                "is_player": who.is_player,
                 "change": result.get('change'),
             })
         return result
 
-    async def _read_sheet(self, user_id: int) -> Dict[str, Any]:
+    async def _mutate_npc_sheet(self, name: str, mutate) -> Dict[str, Any]:
+        """The same read-modify-write, for a character nobody is playing."""
+        key = (name or '').strip()
+        if not key:
+            return {"success": False, "error": "that character has no name"}
+
+        def _apply(state: Dict[str, Any]) -> Dict[str, Any]:
+            people = state.get('__characters__')
+            if not isinstance(people, dict):
+                people = {}
+                state['__characters__'] = people
+            sheet = people.get(key)
+            if not isinstance(sheet, dict):
+                sheet = {}
+                people[key] = sheet
+            result, changed = mutate(sheet)
+            # A sheet that did not exist a moment ago IS a change, even
+            # when the mutation itself decided nothing moved - otherwise
+            # the character is created and then thrown away unwritten.
+            return {'result': result, 'changed': bool(changed) or not sheet}
+
+        try:
+            outcome = await self.db.run_write_async(
+                self.db.mutate_session_state, self.session_id, _apply)
+        except Exception as e:
+            logger.error(f"[GAMES] npc sheet {key!r} failed: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+        if not outcome.get('success'):
+            return outcome
+        return outcome.get('result') or {"success": False, "error": "no answer"}
+
+    async def _read_sheet(self, who) -> Dict[str, Any]:
+        if who is None:
+            return {}
+        if not who.is_player:
+            state = await self._load_state()
+            people = state.get('__characters__') or {}
+            sheet = people.get(who.name) if isinstance(people, dict) else None
+            return sheet if isinstance(sheet, dict) else {}
         loop = asyncio.get_event_loop()
         sess = await loop.run_in_executor(
             self._games_executor, self.db.get_game_session, self.session_id)
         for player in (sess or {}).get('players') or []:
-            if player.get('user_id') == user_id:
+            if player.get('user_id') == who.user_id:
                 return player.get('character_state') or {}
         return {}
 
@@ -2759,7 +3595,8 @@ class GeminiGameWorker:
         if refusal:
             return refusal
         sheet = await self._read_sheet(user_id)
-        return {"success": True, "user_id": user_id,
+        return {"success": True, "user_id": user_id.user_id,
+                "character": user_id.name or None,
                 "stats": self._readable_stats(sheet)}
 
     # -- inventory ---------------------------------------------------------
@@ -2858,7 +3695,8 @@ class GeminiGameWorker:
             return refusal
         sheet = await self._read_sheet(user_id)
         pack = sheet.get('inventory')
-        return {"success": True, "user_id": user_id,
+        return {"success": True, "user_id": user_id.user_id,
+                "character": user_id.name or None,
                 "inventory": pack if isinstance(pack, list) else []}
 
     # -- equipment ---------------------------------------------------------
@@ -2921,7 +3759,8 @@ class GeminiGameWorker:
             return refusal
         sheet = await self._read_sheet(user_id)
         worn = sheet.get('equipment')
-        return {"success": True, "user_id": user_id,
+        return {"success": True, "user_id": user_id.user_id,
+                "character": user_id.name or None,
                 "equipment": worn if isinstance(worn, dict) else {}}
 
     # -- checks ------------------------------------------------------------
@@ -2954,7 +3793,8 @@ class GeminiGameWorker:
 
         result = {
             "success": True,
-            "user_id": user_id,
+            "user_id": user_id.user_id,
+            "character": user_id.name or None,
             "notation": notation,
             "rolls": rolled['rolls'],
             "stat": stat or None,
@@ -2995,31 +3835,76 @@ class GeminiGameWorker:
             None, lambda: self.db.update_session_turn(self.session_id, order, new_idx),
         )
         active = order[new_idx]
+        # An entry is a player's id or the name of a character the game
+        # itself plays. A client highlights the one and reads out the
+        # other, so both travel and neither is guessed at the far end.
+        active_id = active if isinstance(active, int) else None
+        active_name = active if isinstance(active, str) else None
+        if active_id is not None:
+            for player in (sess or {}).get('players') or []:
+                if int(player.get('user_id') or 0) == active_id:
+                    active_name = player.get('username')
+                    break
         await self._broadcast(self.session_id, {
             "type": "game_turn_changed",
             "session_id": self.session_id,
-            "active_user_id": active,
+            "active_user_id": active_id,
+            "active_character": active_name,
+            "username": active_name,
             "current_turn_idx": new_idx,
             "turn_order": order,
         })
-        return {"success": True, "active_user_id": active, "current_turn_idx": new_idx}
+        return {"success": True, "active_user_id": active_id,
+                "active_character": active_name,
+                "current_turn_idx": new_idx}
 
     async def _tool_set_turn_order(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Who acts, in what order.
+
+        It used to take numeric ids ONLY - which the model is told, in the
+        same system prompt, that it never has and must never invent. So the
+        one tool a turn-based game cannot do without was the one tool it
+        could not call, and a game whose rules say "set the order" simply
+        had none. It takes names now, and an entry that is not somebody at
+        the table stays a name: that is the computer opponent, and it has
+        its turn like anybody else.
+        """
         loop = asyncio.get_event_loop()
+        names = args.get('usernames') or []
         ids = args.get('user_ids') or []
-        try:
-            order = [int(u) for u in ids]
-        except Exception:
-            return {"success": False, "error": "user_ids must be integers"}
+        order: List[Any] = []
+
+        if isinstance(names, str):
+            names = [names]
+        for entry in names:
+            if not isinstance(entry, str) or not entry.strip():
+                continue
+            resolved = await self._resolve_user_id(username=entry.strip())
+            order.append(int(resolved) if resolved else entry.strip())
+
         if not order:
-            return {"success": False, "error": "empty order"}
+            # An older model, or one that got hold of real ids somehow.
+            for entry in ids:
+                try:
+                    order.append(int(entry))
+                except Exception:
+                    if isinstance(entry, str) and entry.strip():
+                        order.append(entry.strip())
+
+        if not order:
+            return {"success": False,
+                    "error": "pass usernames - the names from the [username] "
+                             "prefixes, and the names of any characters the "
+                             "game itself plays"}
+
         await loop.run_in_executor(
             None, lambda: self.db.update_session_turn(self.session_id, order, 0),
         )
         await self._broadcast(self.session_id, {
             "type": "game_turn_changed",
             "session_id": self.session_id,
-            "active_user_id": order[0],
+            "active_user_id": order[0] if isinstance(order[0], int) else None,
+            "active_character": order[0] if isinstance(order[0], str) else None,
             "current_turn_idx": 0,
             "turn_order": order,
         })

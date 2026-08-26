@@ -660,10 +660,14 @@ class TestTools(GameTestCase):
                                   {'target_username': 'bob', 'field': 'hp'})
         self.assertEqual(read_back['value'], 9)
 
-    def test_a_character_field_for_an_unknown_player_is_refused(self):
+    def test_a_character_field_for_a_game_run_character_is_kept(self):
         result = self.dispatch('set_character_field', {
-            'target_username': 'nobody', 'field': 'hp', 'value': '1'})
-        self.assertFalse(result.get('success'))
+            'target_username': 'Komputer', 'field': 'nastroj',
+            'value': '"zimny"'})
+        self.assertTrue(result.get('success'), result)
+        read = self.dispatch('get_character_field', {
+            'target_username': 'Komputer', 'field': 'nastroj'})
+        self.assertEqual(read['value'], 'zimny')
 
     # -- turns ------------------------------------------------------------
 
@@ -892,9 +896,66 @@ class TestRPGLayer(GameTestCase):
                                                'stat': 'xp', 'by': 25})
         self.assertEqual(result['after'], 25)
 
-    def test_a_stat_for_a_player_who_is_not_there_is_refused(self):
-        result = self.dispatch('set_stat', {'target_username': 'nobody',
-                                            'stat': 'hp', 'value': 1})
+    def test_a_name_nobody_is_playing_is_a_character_the_game_plays(self):
+        """It used to be refused, and that was the bug.
+
+        A game whose rules put an opponent on the board that no human is
+        playing - Czarny Stol's "Komputer" - could not have its numbers
+        held by the server at all, so the model kept them in its head and
+        lost them between turns. A name that is not at the table is now
+        that character, and its sheet is kept like anybody's.
+        """
+        result = self.dispatch('set_stat', {'target_username': 'Komputer',
+                                            'stat': 'hp', 'value': 100})
+        self.assertTrue(result['success'], result)
+        read = self.dispatch('get_stats', {'target_username': 'Komputer'})
+        self.assertEqual(read['stats']['hp'], 100)
+        self.assertIsNone(read['user_id'])
+        self.assertEqual(read['character'], 'Komputer')
+
+    def test_a_character_the_game_plays_keeps_its_numbers(self):
+        self.dispatch('set_stat', {'target_username': 'Komputer',
+                                   'stat': 'pozycja', 'value': 0})
+        self.dispatch('change_stat', {'target_username': 'Komputer',
+                                      'stat': 'pozycja', 'by': 6})
+        result = self.dispatch('change_stat', {'target_username': 'Komputer',
+                                               'stat': 'pozycja', 'by': 3})
+        self.assertEqual(result['after'], 9)
+
+    def test_a_character_the_game_plays_carries_things(self):
+        self.dispatch('give_item', {'target_username': 'Komputer',
+                                    'item': 'sztylet', 'quantity': 1})
+        pack = self.dispatch('list_inventory', {'target_username': 'Komputer'})
+        self.assertEqual([i['item'] for i in pack['inventory']], ['sztylet'])
+
+    def test_the_game_s_characters_do_not_leak_into_a_player_s_sheet(self):
+        self.dispatch('set_stat', {'target_username': 'Komputer',
+                                   'stat': 'hp', 'value': 100})
+        self.dispatch('set_stat', {'target_username': 'bob',
+                                   'stat': 'hp', 'value': 12})
+        self.assertEqual(
+            self.dispatch('get_stats', {'target_username': 'bob'})['stats']['hp'],
+            12)
+        self.assertEqual(
+            self.dispatch('get_stats',
+                          {'target_username': 'Komputer'})['stats']['hp'],
+            100)
+
+    def test_at_a_one_player_table_a_tool_needs_no_name(self):
+        """The model forgets to address a tool constantly, and at a table
+        with one player there is nothing else it could have meant."""
+        game_id = self.make_game()
+        session_id = self.make_session(game_id)          # the host, alone
+        worker = self.make_worker(session_id, game_id)
+        result = self.run_async(worker._dispatch_tool(
+            'set_stat', {'stat': 'hp', 'value': 7}))
+        self.assertTrue(result['success'], result)
+        session = self.db.get_game_session(session_id)
+        sheet = session['players'][0]['character_state']
+        self.assertEqual(sheet['stats']['hp']['value'], 7)
+
+    def test_at_a_table_with_several_players_a_tool_must_say_who(self):
+        result = self.dispatch('set_stat', {'stat': 'hp', 'value': 7})
         self.assertFalse(result['success'])
 
     def test_a_stat_change_tells_the_clients(self):

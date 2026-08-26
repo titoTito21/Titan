@@ -6194,10 +6194,20 @@ class Database:
     # =====================================================================
     # Providers and per-session caps
     GAME_PROVIDERS = ('gemini', 'openai', 'anthropic')
-    GAME_DEFAULT_MAX_TOKENS = 200000
+    # 200 000 was the figure from when a session was one Live connection
+    # and the creator's ruleset went up the wire once for the whole of it.
+    # A turn is an ordinary request now (gemini_game_worker's text engine),
+    # which means the rules ride on every one of them - cheap, because
+    # Gemini serves the repeat out of its own cache, but counted. Measured
+    # playing Czarny Stol: setting an 11 KB ruleset's board up and taking
+    # two turns came to 158 962. At the old default a game ended itself
+    # three moves in, mid-sentence, which reads to the players as a crash.
+    # The ceiling below is unchanged and the creator still sets their own
+    # figure; this is only what a creator who says nothing gets.
+    GAME_DEFAULT_MAX_TOKENS = 1_500_000
     GAME_DEFAULT_MAX_MINUTES = 60
     GAME_DEFAULT_MAX_PLAYERS = 6
-    GAME_HARD_TOKEN_CEILING = 2_000_000
+    GAME_HARD_TOKEN_CEILING = 20_000_000
     GAME_HARD_MINUTE_CEILING = 240
     GAME_HARD_PLAYER_CEILING = 12
 
@@ -6632,6 +6642,43 @@ class Database:
         conn.commit()
         conn.close()
         return {"success": changed, "session_id": session_id, "user_id": user_id}
+
+    @_serialized_write
+    def mutate_session_state(self, session_id: int, mutate) -> Dict[str, Any]:
+        """Read the session's world state, change it, write it back - once.
+
+        The same shape as :meth:`mutate_character_state`, and for the same
+        reason: two things changing the world inside one turn must not be
+        able to lose one of each other. ``mutate`` is called with the state
+        and answers ``{'result': ..., 'changed': bool}``; the write only
+        happens when it says something changed, and the whole thing runs
+        inside the writer lock.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT state_json FROM game_sessions WHERE id = ?",
+                       (session_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.close()
+            return {"success": False, "error": "No such session"}
+        try:
+            state = json.loads(row['state_json'] or '{}')
+        except Exception:
+            state = {}
+        if not isinstance(state, dict):
+            state = {}
+        try:
+            outcome = mutate(state)
+        except Exception as e:
+            conn.close()
+            return {"success": False, "error": str(e)}
+        if (outcome or {}).get('changed'):
+            cursor.execute("UPDATE game_sessions SET state_json = ? WHERE id = ?",
+                           (json.dumps(state, ensure_ascii=False), session_id))
+            conn.commit()
+        conn.close()
+        return {"success": True, "result": (outcome or {}).get('result')}
 
     @_serialized_write
     def update_session_state(self, session_id: int, state: Dict[str, Any]) -> Dict[str, Any]:

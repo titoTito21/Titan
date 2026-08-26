@@ -269,7 +269,12 @@ class NewGameDialog(wx.Dialog):
         limits = wx.BoxSizer(wx.HORIZONTAL)
         limits.Add(wx.StaticText(panel, label=_("Max tokens:")),
                    flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)
-        self.tokens_ctrl = wx.SpinCtrl(panel, min=10000, max=2_000_000, initial=200000)
+        # A turn is an ordinary request now and the ruleset rides on
+        # every one of them (see the server's text engine), so the old
+        # 200 000 was about three moves of a board game. Same figure as
+        # Database.GAME_DEFAULT_MAX_TOKENS.
+        self.tokens_ctrl = wx.SpinCtrl(panel, min=10000, max=20_000_000,
+                                       initial=1_500_000)
         limits.Add(self.tokens_ctrl, flag=wx.LEFT | wx.RIGHT, border=5)
         limits.Add(wx.StaticText(panel, label=_("Max minutes:")),
                    flag=wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=5)

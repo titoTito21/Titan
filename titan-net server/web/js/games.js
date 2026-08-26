@@ -619,7 +619,7 @@
         rules_text: document.getElementById('gn-rules').value.trim(),
         max_players: Number(document.getElementById('gn-players').value) || 6,
         max_minutes: Number(document.getElementById('gn-minutes').value) || 120,
-        max_tokens: Number(document.getElementById('gn-tokens').value) || 200000,
+        max_tokens: Number(document.getElementById('gn-tokens').value) || 1500000,
         attachments: attachments,
       });
       if (!resp.success) throw new Error(resp.error);

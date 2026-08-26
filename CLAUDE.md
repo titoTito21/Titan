@@ -727,12 +727,62 @@ Cerberus and Blackwall dashboard.
 ### Interactive games: the server is what remembers
 
 A game on Titan-Net is narrated. The creator writes the rules, the server
-holds a Gemini Live session per table (`titan-net server/gemini_game_worker.py`),
-and what the model does reaches the players as messages their client already
-knows: `game_ai_text`, `game_ai_audio`, `game_menu`, `game_play_sound`,
-`game_turn_changed`. The clients are `src/network/interactive_games.py` +
+takes one turn per player message against Gemini
+(`titan-net server/gemini_game_worker.py`), and what the model does reaches
+the players as messages their client already knows: `game_ai_text`,
+`game_ai_audio`, `game_menu`, `game_play_sound`, `game_turn_changed`. The
+clients are `src/network/interactive_games.py` +
 `interactive_game_session.py` (desktop) and `titan-net server/web/games.html`
 (web).
+
+- **A turn is one ordinary request, not a websocket.** The Live API is a
+  VOICE api, and measured on this server's own key that is all it is:
+  every one of its six bidi models refuses `response_modalities=["TEXT"]`
+  with 1007, and the persistent 'live' models the candidate list still
+  hopes for are not on the key at all. So a session always landed on the
+  native-audio class, which composes the SPEECH before it parts with the
+  words and closes the socket after every turn - 20 to 30 seconds a turn,
+  several hundred relayed PCM messages inside one of them, and the
+  creator's whole ruleset back up the wire on every reconnect. That last
+  part is what "the server jams when I give it a big prompt with the
+  rules" was.
+  - `generateContent` takes TEXT, the same tool declarations and a system
+    instruction of any size. Measured against a 117 KB (~42 000-token)
+    prompt on `gemini-3.7-flash`: **1.34 s and 1.14 s** for two turns,
+    the tool called correctly, and 36 829 tokens served out of Gemini's
+    implicit cache the second time - a LONGER ruleset costs less per turn
+    here, not more.
+  - The Live path is kept whole for a key that does have a text-mode Live
+    model, and `GAMES_TEXT_ENGINE=0` forces every session back onto it.
+    `_pick_text_models()` asks the key what it has; an empty answer is the
+    one honest reason to fall back.
+  - What is given up is the model hearing a player mid-sentence. A spoken
+    turn is gathered up and sent as one piece of audio when the player
+    stops talking (`VOICE_GAP_S`), because nothing is streaming any more
+    and there is no voice activity detection at the far end.
+  - **Every call a step needs goes in ONE answer.** Asked one at a time,
+    setting a board game up is thirty round trips with the whole ruleset
+    read again each time - which is also what made a game hit its own
+    token cap in two turns (measured: 200 475 for two turns of Czarny
+    Stol). The prompt asks for them side by side, `MAX_TOOL_ROUNDS` is
+    the ceiling for when it does not, and the **last round is asked with
+    no tools at all** so a turn can never end with the table having heard
+    nothing.
+  - **What a turn is charged is what Google bills**: the prompt minus
+    whatever came out of the cache, plus what the model wrote - not
+    `total_token_count`, which counts the creator's rules once per
+    REQUEST. `Database.GAME_DEFAULT_MAX_TOKENS` is 1 500 000 for the same
+    reason; 200 000 was the figure from when a session was one connection.
+- **The game opens itself.** A narrated game that says nothing until
+  somebody types at it reads as a game that has not started, and to a
+  player who cannot see the window an empty room is indistinguishable
+  from a broken one. `_open_the_game()` takes the first turn
+  `OPENING_DELAY_S` after the session is up - late enough that the host's
+  client has said whether it can narrate, since that first line is what
+  sets whose voice the game has - and stands down the moment anybody
+  speaks first. It names **who is at the table**: without the roster the
+  model invents a character for the player it was never introduced to
+  (measured: a full sheet for a "Gracz" while the real player had none).
 
 - **The prompt is the creator's, sealed as data.** `build_system_prompt`
   puts `rules_text` and every attached `.txt`/`.md`/`.json` inside
@@ -767,6 +817,27 @@ knows: `game_ai_text`, `game_ai_audio`, `game_menu`, `game_play_sound`,
     difficulty and says whether it passed. The *server* decides, because a
     model asked to roll and judge in one breath decides first and rolls
     afterwards. Every check goes into the session log.
+  - **A character the GAME plays gets a sheet too** - the computer
+    opponent in a two-hander, a rival, a hireling. Pass its NAME as
+    `target_username` and the server keeps its numbers exactly as a
+    player's. It used to be refused (a name that was not a logged-in
+    player resolved to nobody), so the model kept the opponent's hit
+    points and position in its head, which is the one thing this layer
+    exists to stop: Czarny Stol's "Komputer" was given four statistics,
+    none was written down, and its position was narrated from memory from
+    then on. A player's sheet lives on their `game_session_players` row;
+    a character with nobody behind it lives in the session's own state
+    under `__characters__`, through `Database.mutate_session_state` - the
+    same read-modify-write inside the same writer lock, so the two cannot
+    drift apart. At a table with exactly ONE player, a tool that names
+    nobody means them.
+  - **`set_turn_order` takes usernames.** It used to take numeric ids
+    only - which the same system prompt tells the model it never has and
+    must never invent - so the one tool a turn-based game cannot do
+    without was the one it could not call. A name that is nobody at the
+    table stays a name, and takes its turn like anybody else;
+    `game_turn_changed` carries `active_character` beside
+    `active_user_id`.
   - A sheet is one JSON object per player -
     `{"stats": {"hp": {"value": 9, "max": 12}}, "inventory": [...],
     "equipment": {...}}` - and every change is one read-modify-write inside
@@ -827,11 +898,18 @@ knows: `game_ai_text`, `game_ai_audio`, `game_menu`, `game_play_sound`,
   *state* is never in the model's context at all: statistics, inventory,
   equipment and world variables live on the server, which is why a
   reconnect loses wording and never loses the game.
-- Tests: `titan-net server/test_interactive_games.py` (run it directly;
-  159 tests, no API key, no network, ~6 s). The model is a scripted
-  stand-in speaking the Live SDK's shape, which is the only way to test the
-  answers a real model gets *wrong* - an invented user id, a menu aimed at
-  nobody, an arrow that was never carried.
+- Tests (run them directly; no API key, no network, no audio device):
+  `titan-net server/test_interactive_games.py` (164) and
+  `test_game_text_engine.py` (38). The model is a scripted stand-in
+  speaking the SDK's own shapes, which is the only way to test the answers
+  a real model gets *wrong* - an invented user id, a menu aimed at nobody,
+  an arrow that was never carried, a model this key has not got, a turn
+  that is nothing but the model thinking out loud, two players typing at
+  the same moment, a conversation trimmed across a tool call.
+  Live-verified by playing Czarny Stol end to end (the real worker, the
+  real tools, a real key): the board persisted, both characters kept their
+  own statistics and inventory, the turn rotated between a player and a
+  character the game plays, and a turn took 8 s.
 
 ### Titan IM: WhatsApp and Messenger (web as backend)
 
