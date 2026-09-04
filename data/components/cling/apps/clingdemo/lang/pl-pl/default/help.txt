@@ -1,0 +1,3 @@
+Strzałki - ruch po planszy.
+Spacja - szukaj na polu, na którym stoisz.
+Enter - powiedz wynik i ile prób zostało.

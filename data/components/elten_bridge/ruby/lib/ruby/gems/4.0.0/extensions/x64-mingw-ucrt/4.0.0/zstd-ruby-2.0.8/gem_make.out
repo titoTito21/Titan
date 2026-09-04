@@ -1,0 +1,8 @@
+current directory: C:/Users/Tito/.local/share/gem/ruby/4.0.0/gems/zstd-ruby-2.0.8/ext/zstdruby
+C:/Users/Tito/OneDrive/projects/gitHub\ projects/Titan/data/components/elten_bridge/ruby/bin/ruby.exe extconf.rb
+mkmf.rb can't find header files for ruby at C:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/ruby/lib/ruby/include/ruby.h
+
+You might have to install separate package for the ruby development
+environment, ruby-dev or ruby-devel for example.
+
+extconf failed, exit code 1

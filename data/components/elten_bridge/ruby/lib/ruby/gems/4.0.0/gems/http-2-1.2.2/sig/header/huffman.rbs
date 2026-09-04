@@ -1,0 +1,27 @@
+module HTTP2
+  module Header
+    module Huffman
+      include Error
+      extend PackingExtensions
+      extend BufferUtils
+
+      BITS_AT_ONCE: Integer
+
+      EOS: Integer
+
+      EOS_PADDING: Array[String]
+
+      CODES: Array[[Integer, Integer]]
+
+      ENCODE_TABLE: Array[String]
+
+      MAX_FINAL_STATE: Integer
+
+      MACHINE: Array[Array[[Integer?, Integer]]]
+
+      def self?.encode: (String str, ?String buffer) -> String
+
+      def self?.decode: (String str) -> String
+    end
+  end
+end

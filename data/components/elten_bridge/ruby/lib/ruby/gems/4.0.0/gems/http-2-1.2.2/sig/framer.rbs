@@ -1,0 +1,64 @@
+module HTTP2
+  class Framer
+    include Error
+    include PackingExtensions
+    include BufferUtils
+
+    DEFAULT_MAX_FRAME_SIZE: Integer
+
+    MAX_STREAM_ID: Integer
+
+    MAX_WINDOWINC: Integer
+
+    FRAME_TYPES: Hash[Symbol, Integer]
+
+    FRAME_TYPES_BY_NAME: Array[Symbol]
+
+    FRAME_TYPES_WITH_PADDING: Array[Symbol]
+
+    FRAME_FLAGS: Hash[Symbol, Hash[Symbol, Integer]]
+
+    DEFINED_SETTINGS: Hash[Symbol, Integer]
+
+    DEFINED_SETTINGS_BY_ID: Hash[Integer, Symbol]
+
+    DEFINED_ERRORS: Array[Symbol]
+
+    RBIT: Integer
+    RBYTE: Integer
+    EBIT: Integer
+    UINT32: String
+    UINT16: String
+    UINT8: String
+    HEADERPACK: String
+    PRIORITYPACK: String
+    ALTSVCPACK: String
+    FRAME_LENGTH_HISHIFT: Integer
+    FRAME_LENGTH_LOMASK: Integer
+
+    @local_max_frame_size: Integer
+    @remote_max_frame_size: Integer
+
+    attr_accessor local_max_frame_size: Integer
+
+    attr_accessor remote_max_frame_size: Integer
+
+    def common_header: (frame, buffer: String) -> String
+
+    def read_common_header: (String buf) -> (common_frame | { length: Integer })
+
+    def read_common_frame: (String) -> frame
+
+    def generate: (frame) -> String
+
+    def parse: (String) -> (frame | { length: Integer })?
+
+    private
+
+    def initialize: (?Integer local_max_frame_size, ?Integer remote_max_frame_size) -> untyped
+
+    def pack_error: (Symbol | Integer error, buffer: String) -> String
+
+    def unpack_error: (Integer) -> (Symbol | Integer)
+  end
+end

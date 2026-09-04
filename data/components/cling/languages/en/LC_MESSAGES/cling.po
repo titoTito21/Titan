@@ -1,0 +1,164 @@
+# Cling - the Klango subsystem for Titan.
+msgid ""
+msgstr ""
+"Project-Id-Version: cling 1.0\\n"
+"MIME-Version: 1.0\\n"
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Content-Transfer-Encoding: 8bit\\n"
+"Language: en\\n"
+
+msgid "Account: %s"
+msgstr "Account: %s"
+
+msgid "All"
+msgstr "All"
+
+msgid "An application called %s is already installed."
+msgstr "An application called %s is already installed."
+
+msgid "Applications are read from: %s"
+msgstr "Applications are read from: %s"
+
+msgid "Category"
+msgstr "Category"
+
+msgid "Choose a Klango application folder, or the folder its applications are in"
+msgstr "Choose a Klango application folder, or the folder its applications are in"
+
+msgid "Cling"
+msgstr "Cling"
+
+msgid "Cling is ready"
+msgstr "Cling is ready"
+
+msgid "Cling:"
+msgstr "Cling:"
+
+msgid "Details"
+msgstr "Details"
+
+msgid "Engine"
+msgstr "Engine"
+
+msgid "Folder"
+msgstr "Folder"
+
+msgid "Games"
+msgstr "Games"
+
+msgid "High scores"
+msgstr "High scores"
+
+msgid "Identifier"
+msgstr "Identifier"
+
+msgid "Install a Klango application..."
+msgstr "Install a Klango application..."
+
+msgid "Installed %s."
+msgstr "Installed %s."
+
+msgid "Installed: %s"
+msgstr "Installed: %s"
+
+msgid "It could not be copied: %s"
+msgstr "It could not be copied: %s"
+
+msgid "Language"
+msgstr "Language"
+
+msgid "Learning"
+msgstr "Learning"
+
+msgid "Left alone: %s"
+msgstr "Left alone: %s"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "No Cling applications are installed"
+msgstr "No Cling applications are installed"
+
+msgid "No Cling applications are installed."
+msgstr "No Cling applications are installed."
+
+msgid "No Klango applications were found there."
+msgstr "No Klango applications were found there."
+
+msgid "No scores yet."
+msgstr "No scores yet."
+
+msgid "Nothing to report."
+msgstr "Nothing to report."
+
+msgid "On Titan-Net:"
+msgstr "On Titan-Net:"
+
+msgid "Online"
+msgstr "Online"
+
+msgid "Open its folder"
+msgstr "Open its folder"
+
+msgid "Other"
+msgstr "Other"
+
+msgid "Problem"
+msgstr "Problem"
+
+msgid "Read out everything an application says"
+msgstr "Read out everything an application says"
+
+msgid "Run"
+msgstr "Run"
+
+msgid "Send high scores to my Titan-Net account"
+msgstr "Send high scores to my Titan-Net account"
+
+msgid "Soundscapes"
+msgstr "Soundscapes"
+
+msgid "That folder has no kni.txt, so it is not a Klango or Cling application."
+msgstr "That folder has no kni.txt, so it is not a Klango or Cling application."
+
+msgid "There is no folder there."
+msgstr "There is no folder there."
+
+msgid "This application ships no help."
+msgstr "This application ships no help."
+
+msgid "This application ships no text."
+msgstr "This application ships no text."
+
+msgid "Tools"
+msgstr "Tools"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "What it says"
+msgstr "What it says"
+
+msgid "What the application has said"
+msgstr "What the application has said"
+
+msgid "application"
+msgstr "application"
+
+msgid "board game"
+msgstr "board game"
+
+msgid "course"
+msgstr "course"
+
+msgid "instrument"
+msgstr "instrument"
+
+msgid "soundscape"
+msgstr "soundscape"
+
+msgid "text"
+msgstr "text"
+
+msgid "{tab}: {n} applications"
+msgstr "{tab}: {n} applications"

@@ -34,6 +34,9 @@ import atexit
 ALC_HRTF_SOFT = 0x1992
 ALC_TRUE = 1
 AL_ROLLOFF_FACTOR = 0x1021
+AL_LOOPING = 0x1007
+AL_VELOCITY = 0x1006
+AL_PAUSED = 0x1013
 
 # EFX (environmental reverb) constants
 AL_EFFECT_TYPE = 0x8001
@@ -317,7 +320,11 @@ def _reap(force=False):
                 done = True
             else:
                 _al.alGetSourcei(src, _al.AL_SOURCE_STATE, ctypes.byref(state))
-                done = state.value != _al.AL_PLAYING
+                # A PAUSED source has not finished - it is being held, which
+                # is what a Klango dialog does to a whole group of sounds -
+                # so only a source that is neither playing nor paused is
+                # really over.
+                done = state.value not in (_al.AL_PLAYING, AL_PAUSED)
             if done:
                 _al.alDeleteSources(1, ctypes.byref(ctypes.c_uint(src)))
                 _al.alDeleteBuffers(1, ctypes.byref(ctypes.c_uint(buf)))
@@ -357,11 +364,16 @@ def _downmix_to_mono16(pcm_bytes, channels, sampwidth):
 # Public playback API
 # ---------------------------------------------------------------------------
 def play_pcm(pcm_bytes, sample_rate, channels, sampwidth,
-             azimuth_deg=0.0, elevation_deg=0.0, gain=1.0):
+             azimuth_deg=0.0, elevation_deg=0.0, gain=1.0, loop=False):
     """Play raw PCM at a 3D position via HRTF (non-blocking).
 
     Audio is downmixed to mono 16-bit so OpenAL spatialises it. Returns the
     source id on success, or None on failure.
+
+    `loop` keeps it going until it is stopped. Nothing needed it while the
+    only 3D sounds were Titan's own one-shot cues; a Klango application's
+    background music, a clay pigeon's flight and a piano key held down are
+    all `replay = -1`, and without this each of them played exactly once.
     """
     if not _init():
         return None
@@ -383,6 +395,8 @@ def play_pcm(pcm_bytes, sample_rate, channels, sampwidth,
             _al.alSourcei(src, _al.AL_SOURCE_RELATIVE, _al.AL_TRUE)
             _al.alSourcef(src, AL_ROLLOFF_FACTOR, 0.0)
             _al.alSourcef(src, _al.AL_GAIN, max(0.0, float(gain)))
+            if loop:
+                _al.alSourcei(src, AL_LOOPING, _al.AL_TRUE)
 
             x, y, z = _angles_to_xyz(azimuth_deg, elevation_deg)
             _al.alSource3f(src, _al.AL_POSITION, x, y, z)
@@ -436,7 +450,7 @@ def _decode_to_mono_pcm(path):
         return None
 
 
-def play_file(path, azimuth_deg=0.0, elevation_deg=0.0, gain=1.0):
+def play_file(path, azimuth_deg=0.0, elevation_deg=0.0, gain=1.0, loop=False):
     """Decode a sound file and play it at a 3D position via HRTF (non-blocking)."""
     if not _init():
         return None
@@ -444,7 +458,70 @@ def play_file(path, azimuth_deg=0.0, elevation_deg=0.0, gain=1.0):
     if not decoded:
         return None
     pcm, rate = decoded
-    return play_pcm(pcm, rate, 1, 2, azimuth_deg, elevation_deg, gain)
+    return play_pcm(pcm, rate, 1, 2, azimuth_deg, elevation_deg, gain, loop)
+
+
+def set_velocity(src_id, x=0.0, y=0.0, z=0.0):
+    """How fast a source is moving, for OpenAL's own Doppler shift.
+
+    A Klango application that throws something past the listener says so -
+    Skeet computes the vector explicitly and hands it over with the flight
+    sound - and OpenAL then does the pitch shift itself, continuously, which
+    nothing else here can do to a sound that is already playing.
+    """
+    if not _init_ok or src_id is None:
+        return False
+    with _lock:
+        try:
+            _al.alSource3f(ctypes.c_uint(src_id), AL_VELOCITY,
+                           float(x), float(y), float(z))
+            return True
+        except Exception:
+            return False
+
+
+def set_gain(src_id, gain=1.0):
+    """How loud an already-playing source is - OpenAL's `AL_GAIN`.
+
+    A source that is playing can be moved (`move_source`) and given a new
+    velocity (`set_velocity`), and until now it could not be made louder or
+    quieter - so every fade Klango asks for was silence. Its whole platform
+    layer works this way: an ambience is started at nothing
+    (`_Snd_Action(gid, {volMul = 0})`) and faded in with
+    `volMulSlide = {0, 1, speed}`, a dialog ducks the game to a fifth while
+    it is up, and a sound that travels is re-gained at every step by the
+    distance model. A source that cannot be re-gained never comes up from the
+    zero it was started at, which is a background sound nobody ever hears.
+    """
+    if not _init_ok or src_id is None:
+        return False
+    with _lock:
+        try:
+            _al.alSourcef(ctypes.c_uint(src_id), _al.AL_GAIN,
+                          max(0.0, float(gain)))
+            return True
+        except Exception:
+            return False
+
+
+def pause_source(src_id, paused=True):
+    """Hold a playing source where it is, or let it go on again.
+
+    OpenAL keeps a paused source's position in its buffer, so this is a real
+    pause rather than a stop: it is what a Klango dialog does to the game's
+    whole group of sounds while it is up.
+    """
+    if not _init_ok or src_id is None:
+        return False
+    with _lock:
+        try:
+            if paused:
+                _al.alSourcePause(src_id)
+            else:
+                _al.alSourcePlay(src_id)
+            return True
+        except Exception:
+            return False
 
 
 def is_playing(src_id):

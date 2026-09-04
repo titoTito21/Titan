@@ -1823,6 +1823,1163 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   the Start menu or the browser outright - see "Shell add-ons" below.
 - Tests: `tests/test_shell.py` (run it directly; 323 tests).
 
+### Cling: Klango applications, running inside Titan
+
+Klango was a whole desktop for blind users, and the applications written for it
+- Mole No More, Klango Piano, the typing course, the Zawisza Czarny soundscape -
+are still on people's disks. They are not Windows programs: an application is a
+folder of texts, sounds, levels and a topology, and it needs a platform
+underneath it that speaks, plays a sound at a PLACE, owns the keyboard and keeps
+a score. `data/components/cling/` is that platform.
+
+- **An application is a folder in `data/cling/`, unedited.** `kni.txt`,
+  `lang/<locale>/default/*.txt`, `skin/<skin>/{levels,themes,events}` - Klango's
+  own layout, read as it stands. Discovery is `platform_utils.discover_data_
+  entries`, so the user's overlay wins over the bundled copy and a packaged
+  `.TCD` is found exactly like a directory. **Settings -> Cling -> Install a
+  Klango application** copies a folder (or a whole `apps/` tree) in; the user's
+  Klango installation is never modified, moved or written to.
+- **The package is `clingkit`, not `cling`.** The component manager registers
+  a component as `sys.modules['<folder name>']` **before** it executes it, so a
+  package sharing the folder's name is shadowed by a half-built module and
+  every `from cling import ...` fails with "cannot import name" - which is a
+  component that does not load at all, and therefore a subsystem that is simply
+  absent from the window. `init.py` re-exports the public names, so another
+  add-on still says `import cling; cling.engines.register(...)`.
+- **The voice is Titan's, and the sound is placed whatever the user's stereo
+  setting says.** `stereo_speech.speak_stereo` for every word. For sound,
+  Titan's `sound_mode` decides whether TITAN's own interface sounds are panned
+  and is off by default - but a Klango board is not drawn, it is heard, and a
+  player aims by where a mole sounds. Panning only when a global preference
+  happens to be on would not make Cling quieter, it would make it unplayable,
+  so Cling places its own sounds itself, always: `spatial_audio` when the user
+  has turned 3D on, an ordinary channel with the pan law otherwise.
+  `sound.play_sound_file` is the last resort, because it drops the pan when
+  `sound_mode` is `none` and has no gain at all. Reading that setting as "make
+  no sound" is the bug this replaced - measured live, Cling was completely
+  silent on a default installation.
+  A topology's `x`/`y`/`z`/`f` are converted **once**, in `topology.py`, into a field that knows its own `pan` (-1..1), `pan01`
+  (`sound.py`'s 0..1 - the two disagree, and handing one to the other is the bug
+  that put the shell's own sounds in the left speaker), `azimuth`, `elevation`,
+  `gain` and `pitch`. A mole on the left of the board is heard on the left, and
+  the far row is quieter and a semitone lower because the level file says so.
+- **The account is Titan-Net's** (`account.py`). Klango applications ask for a
+  Klango account for their scores and their chats; there is no such thing here
+  and the user already has an identity on this desktop, so that is the one they
+  are given. Saves and scores are kept per Titan-Net user name - two people
+  sharing a machine keep their own - the sign-in is the headless one the user
+  already saved, and nobody signed in plays under `local`, which works offline
+  and loses nothing. A score is written locally **first and unconditionally**;
+  the shared table (`extension_data_*`, slug `cling`) is best effort, so a
+  server that is not there costs a sentence and never a score.
+- **The rules come from the data where the data has them.** Five engines, one
+  per genre, each chosen from what the directory really holds:
+  - `grid_hunt` - `skin/*/levels/*.lev`. The level file IS the rules
+    (`hit_target`, `nmole_time`, `max_nmoles`, `smole_time_bonus`), the `.top`
+    is where every field is, the theme is what a mole sounds like. Mole No More
+    plays through all thirteen levels on this.
+  - `soundscape` - `spec.txt`, Klango's own place-description language
+    (`start`, `Location`, `BkgVolume`, `links`, `fx` with `fxangle` /
+    `fxtimestart` / `fxtimedelta` / `fxvol`). An arc written `300, 60` crosses
+    the FRONT of the listener and is taken the short way round; taking it the
+    long way would put the sound exactly where it is not.
+  - `instrument` - a folder of samples whose file NAME is the key that plays
+    them, `_l` marking the ones that loop (a switch, not a note).
+  - `typing` - KTouch lecture files, read into levels and lines. A wrong key
+    says the character that was WANTED: a learner who cannot see the line needs
+    to be told where to go.
+  - `reader` - the floor. An application Cling cannot play still ships every
+    word it says, and a subsystem that answered such an application with
+    nothing would be hiding what is really there.
+- **`.lev`, `.top` and `kni.txt` are Lua, and are parsed as DATA**
+  (`klango_lua.py`). Klango embeds a whole interpreter to read them; Cling must
+  not, because these files come from wherever the user got them and running one
+  as a program would mean a level file can open a socket.
+- **An application may bring its own logic, and needs nothing installed.**
+  `main.lua` runs on the Lua 5.1 interpreter this component CARRIES
+  (`cling/lua/`: lexer, parser, tree-walking interpreter, the standard library
+  and a full port of Lua's pattern matcher from `lstrlib.c`). Closures,
+  metatables, multiple returns, varargs, `pcall`, `string.format`, `gsub` -
+  what real code is written with. A native `lupa` dropped into
+  `data/components/cling/lib/` is preferred and an application cannot tell the
+  difference. There is no `io`, no `loadfile` and no `require` outside the
+  application's own folder.
+- **Cling ships logic for applications whose own code it cannot have**
+  (`logic/<appname>.pag`, matched by `appname` then `appid`). Puzzle, Skeet,
+  Long Jump, Dice Poker and the Wikipedia browser are written from each
+  application's OWN texts - `readme.txt` for Long Jump is a specification of the
+  run-up, `cantroll.txt` gives Dice Poker its three rolls - and run against that
+  application's own sounds, words and skin. The application's folder is never
+  touched: it is the user's copy of somebody else's work, and a file written
+  into it would be gone at the next reinstall.
+- **`.pag`, and the boundary Cling is honest about** (`pag.py`). A Klango
+  installation is not a tree of folders: `apps/simplegames/mole/` holds one
+  file, `km.pag`, two megabytes of it, and that file IS the game. So `.pag` is
+  what a Cling application ships as too - LZMA over a JSON index, its own
+  signature (`CLPG`), written by `src/scripts/pack_cling.py`, discovered in
+  `data/cling/` exactly like a folder, with a folder of the same name winning so
+  that work in progress overrides what was shipped.
+  - **Klango's own are read.** The concealment was recovered by disassembling
+    `bin/klangoplayer.exe` - not `klango.exe`, which is only the launcher -
+    walking MSVC RTTI from `.?AVLuaConcealStream@@` to its vftable, where slots
+    13 and 23 are the read and write halves. It is one line:
+    `plain[i] = cipher[i] ^ ((i + 0xFC) & 0xFF) ^ 0xC6`, an eight-bit counter
+    of the stream position exclusive-or'd with a constant. Under it is a
+    container: a zlib-compressed directory of `(name, md5, offset, size,
+    compressed)` records with the file contents beside it, every offset
+    measured from `plain[4]`. **Each record carries the MD5 of the
+    uncompressed content**, so extraction is checked rather than hoped for -
+    measured across six packages including `llib.pag` (24 784 entries),
+    24 028 files came out with every digest matching and no failures. What
+    made it findable first was that `bytes[0:3] XOR (file size as u24 LE)` is
+    the same three bytes in every package, which proves a fixed keystream
+    before anything is decoded.
+  - **None of that is needed to play an application.** A Klango `.pag` sitting
+    beside its data folder is remembered as that application's original package;
+    one with no folder beside it is still LISTED, and says in one sentence why
+    it will not start. `llib` is not offered at all - it is the runtime.
+- **An application's OWN Klango code is what Cling runs** (`clingkit/klango/`,
+  engine `klango`). The engines above re-create a genre from an application's
+  data - they are Cling's rules, not Klango's - and they are now the FALLBACK,
+  for an application with no code of its own and for a machine where Klango's
+  platform library is not installed. What an application gets by default is
+  emulation: its own Lua, out of its own package, running Klango's own `main()`.
+  Measured: **17 of 21** installed applications are emulated; opening one from
+  Titan's window loads 63 files of Klango's own library and code.
+  - What made it possible is that **Klango is mostly written in Lua**: of the
+    146 Lua files in an installation, 103 are the platform library, and it
+    implements 534 of the 693 `k_*` functions applications call. Cling's parser
+    reads **146 of 146** of them and the 2.3 MB library parses in 0.7 s.
+  - **The native surface is 310 functions, counted rather than guessed**, in
+    families - `_Gfx_` 77 (the screen), `_Sys_` 54, `_Snd_` 19, `_Inp_` 16,
+    `_Voice_` 13, `_Dir_` 7, `_Res_` 3, `_Net_` 1 - plus the 120 the engine
+    exposes with no prefix at all (`k_*`, `urlencode`), which are the ones a
+    reader looking for a family would never think to check. Sound, keys and speech go to the same places
+    everything else in Cling uses, so an emulated application is heard in the
+    user's own voice, through their own sound theme, positioned the way Cling
+    positions everything. The graphics answer and paint nothing - Klango ships
+    its own `klangonogfx.bat`, and the games are entirely in sound.
+  - **The file system is a mount table, not a search path** - `/llib` the
+    library, `/user` writable, `/` the application, and `/apps/cling/<id>`
+    because Klango finds applications by walking `/apps`. A mount appears in
+    its parent's listing or the walk cannot reach it. Resolved by searching
+    instead, the library asks for its own texts and is handed the
+    application's, which is where every application used to stop.
+  - **`lpeg` is Cling's own** (`klango/lpeg.py`): a real PEG engine with the
+    `* + - ^ /` operators as metamethods, grammars that carry their own rules,
+    and a **capture tree** rather than a capture list, because `Ca` has to hand
+    each function capture what the one before it produced. Seven of the
+    library's modules build parsers with it at load time.
+  - **It runs on a thread of its own, and that is not an optimisation.**
+    `app:loop()` does not return - it IS the game - so calling it from the
+    window's thread would freeze Titan for as long as somebody was playing.
+    The window feeds it keys and reads what it has said.
+  - **Klango's network is Titan-Net's.** A KRPC call named `SendHS`/`GetHS`
+    goes to Cling's own Titan-Net scoreboard - the same one its engines use -
+    and everything else answers "finished, nothing", which is what "klango.net
+    has been gone for years" honestly means. What it must never answer is nil:
+    the caller asks the answer whether it is `done()` on the next line.
+  - Klango's own licence and anti-tamper calls (`__PecuniaNonOlet`,
+    `__CPUCacheCrazyKiller`) answer "this is fine": the user already has the
+    application, and a licence server that no longer exists cannot say yes.
+  - `cling.emulate <name>` loads an application's own code and reports how far
+    it got and which primitives it asked for that Cling has not written.
+
+#### The emulated applications really play
+
+Measured before this: of 17 emulated applications **one** said a word, three
+hung, four stopped with a Lua error, and none of them ever reached a menu.
+After: **17 of 17 start, speak, play their sounds and stop cleanly**, and Mole
+No More can be played through - the menu, the level, the moles, the board.
+Every one of these was a platform primitive that answered a constant where
+Klango answers something:
+
+- **klango.net said whether the application could run at all**, and its answer
+  was "no server". `llib_appsession.lua` asks three questions before `main()`
+  reaches a line of its own - who is signed in (`_login`), may this start
+  (`_StartAppSession`), is this still the only session (`pingAppSession`) -
+  and every application did the correct thing with a refusal: `main()`
+  returned before the menu was built. `appsession.py` answers them, as
+  Cling: the account is the Titan-Net one, the session is this process's.
+  (It had been written and never wired to anything.) `__CPUCacheCrazyKiller`
+  goes there too - it is not a licence check despite the name but klango.net's
+  general-purpose call, and answering `True` to all of it handed the caller a
+  boolean where a table belonged.
+- **`k_VoiceIsSpeaking` IS `_Voice_GetStatus(v) == 0`**, and Cling answered 0
+  for ever - a platform that is always speaking, so a sequence never reaches
+  its second element. Every application froze on its welcome. `engine.Speaking`
+  is the one estimator now, shared with `_Snd_IsPlaying`, using the heuristic
+  Titan already uses everywhere else (`0.28 + characters / 16`).
+- **A frame is where the platform yields** (`frames.py`). `_Sys_BeginFrame` /
+  `_Sys_EndFrame` both answered `True`, so a game's own loop ran as fast as
+  the interpreter could go, and `KlangoSession.stopping` was set by the engine
+  and read by nobody. Frames are paced at 60 Hz - the rate `_Sys_GetFPS` has
+  always claimed - and `frames.Stopped` is raised out of `EndFrame`, inside
+  `k_LoopWithRawInput` and outside every `pcall` the library uses (Cling's
+  `pcall` catches `LuaError`, and this deliberately is not one).
+- **The keyboard is four shapes at once and they are different numbers**
+  (`keyboard.py`): a DirectInput *scan* code in the raw buffer and the held
+  set, a Windows *virtual* key in the messages. A queue of key names could
+  never have worked. Three things had to be exactly right: Alt arrives as
+  WM_SYSKEYUP with virtual key 18, which is the only way a menu opens; Escape
+  is scan code 1 in `inp.keyboard` for a menu and virtual key 27 in a message
+  for the shell; and **a released key must be reported as released**, because
+  the library clears its own held-frame count only when told a key is at zero
+  - left to grow, Enter chose a menu item once and then never again.
+- **A sequence is a list of sounds with DELAYS** (`sounds.py`), scheduled by
+  `_Snd_Create(name, spec, {delay = seconds})` and built from
+  `_Snd_GetProperty(name, "sampleTime")`. Ignoring the third argument played a
+  whole menu inside forty milliseconds; a length of zero collapsed the
+  schedule before it was built. A **group** is what `k_SoundPlay` hands back
+  and what `k_SoundIsPlaying` is then asked about, so `_Snd_GroupCreate`
+  answering 1 every time made every sequence in the program the same one. And
+  `play` is a repeat count - 0 once, -1 for ever, n for n+1 times - not a
+  boolean.
+- **`pos3d` and `freq` are where the sound is**, and they were ignored: every
+  sound on Mole No More's board came out of the middle, which for a game aimed
+  at by ear is the game not working. `engine._placement` turns Klango's own
+  listener-relative vector into a pan, an elevation and a distance gain, and
+  `freq` (hundredths of a semitone - `3x3.top` uses 0, -100, -200 for its
+  three ROWS) into a real resample, so a grid is heard as a grid.
+- **A sample is found in the application's own file system**, not in Cling's
+  skin reader. Klango names one `//skin/default/themes/default/t_move`, with
+  the extension left off; every sound Mole No More has was found this way and
+  none of them was played. And **a `.txt` where a sample was asked for is
+  text to speak**: Klango's own `speechexts` is `.wav .ogg .spx .txt .mp3` - a
+  text file among the sound formats - which is how a menu item with no
+  recording gets said. Without it every application's menu played its earcons
+  and said nothing.
+- **`k_Run` is `dofile`, not `require`, and not only for `.lua`.** It runs the
+  file again every time, because that is how an application loads its next
+  level; and appending `.lua` to a name that already had an extension is how
+  `skin/default/levels/std_level_01.lev` came back "is not there". What is
+  guarded against is a file running itself.
+- **A library function ignores arguments it was not expecting.** Lua expands a
+  multi-value call in the last argument position, so
+  `string.lower(name:gsub("_", "-"))` passes two arguments - ordinary Lua that
+  every one of Cling's fixed-arity natives refused. `stdlib._lenient` trims
+  them, and a native handed the wrong number now reports the LUA line that
+  called it rather than a lambda inside a factory function.
+- **Klango's tracing is as cheap as what receives it.** `pr` and `tpr` are
+  `FormatElement(value, name, depth)` handed to `_DBG0` / `_Sys_TransientLog`,
+  and in Cling both of those discard it - but the formatting is a recursive
+  walk written in Lua. `mediaset:speech` calls `tpr(self.usetabs, ..., 33)` on
+  every speech file it cannot find, and a Polish application misses 32 of the
+  library's own: **19.6 seconds** of Dice Poker's startup, building strings
+  nothing reads. The platform now starts in 0.64 s for every application
+  (Mole was 3.1 s, Dice Poker 22.0 s). `CLING_TRACE=1` shows what an
+  application's own `pr(...)` says.
+- **A package is unpacked once, not once per run.** The mount folder's name
+  was `hash()` of the package's path, and Python salts string hashing per
+  PROCESS - so no two runs agreed on the folder, every boot re-extracted the
+  whole of `llib.pag` (23 571 files), and the cache grew a directory per run
+  for ever. A digest of the path is the same number in every process, a stamp
+  file makes the cache survive a restart, and the other copies are pruned.
+  The Cling suite went from 105 s to 8 s on this alone.
+- Refused, and recorded rather than silently absent: `k_DaemonRegHotKey` and
+  the rest of Klango's daemon mode, which takes SYSTEM-WIDE hotkeys each
+  carrying a string of Lua to run when it fires. Titan owns the desktop's
+  shortcuts. `k_NewHttp` and `k_NewIcyStream` answer a real object that has
+  reached nothing, so an application says it is offline instead of stopping on
+  `attempt to call a nil value`.
+
+#### Every Klango application, not just the games
+
+Measured after the round above: 17 of 17 started and spoke. What that did not
+say is whether they could be USED - and several could not, because the parts
+of the platform they reach for once a game or a screen really begins were not
+there. All of these are one gap each:
+
+- **An application is not always in ONE place.** Its code arrives in its
+  `.pag`; the folder beside it in `data/cling/` may be an unpacked copy of
+  the DATA only - which is what the German distribution ships - and may have
+  things the package has not. Typing Lessons keeps its code, texts and skin
+  in `ktypist.pag` and its **lessons** in the folder, so the emulator
+  answered "the collection is empty" and the application had nothing to
+  teach. A mount is now a LIST of real folders, tried in order and listed
+  together: Klango sees one tree and so does Cling.
+- **The library's own mediaset was never registered as THE one.**
+  `_k_GetGlobalMediaSet()` answers a file-local of `llib.lua` that only
+  Klango's shell assigns, and every mediaset made afterwards reads it to
+  decide where to copy `globalsnd` from. Left nil, an application's own
+  mediaset believed it WAS the library, registered nothing, and the first
+  widget to reach for one of the platform's sounds indexed a nil - which is
+  what the Wikipedia browser does the moment a search result is opened. The
+  epilogue sets it, after `_k_suiinit` has filled it and before any
+  application asks.
+- **`_Gfx_TxtEdit_*` is not decoration** (`klango/textedit.py`). Everything
+  else `_Gfx_` does is drawing and rightly answers nothing, but the text
+  control is where a search term, a message or a name is typed: without one,
+  `attempt to call a nil value '_Gfx_TxtEdit_Init'` ends the Wikipedia
+  browser, the chat and every application with a field. Klango's own is a
+  Windows rich edit that has the keyboard and edits itself - the application
+  is only TOLD what was typed - so Cling's is a buffer with a caret and a
+  selection, and `Editors.apply` types into it from `_Inp_KeySys_Refresh`,
+  which is where Windows would have. Two of Klango's details are not
+  negotiable: a line ends with `\r` (the library searches for one), and
+  `GetCurrentPos` answers a PAIR. `SetText2` is the rich one and is handed
+  RTF, so `_rtf_to_text` turns it into words - storing it as it arrived made
+  a text browser read `rtf1 ansi ansicpg1252 colortbl red255` aloud before a
+  word of the article.
+- **The web, for the applications that ARE the web** (`klango/web.py`). The
+  Wikipedia browser is a search box and an article reader; Mastodon, the
+  Twitter client and the translator are the same shape, and an emulator that
+  refuses the network is one on which they cannot work at all. So `k_NewHttp`
+  really fetches: `http`/`https` only, capped at 8 MB, timed out, and on a
+  thread of its own so the game keeps running while it waits - which is what
+  Klango's own client did and what its progress dialog is for.
+  `GetStatusCode` is 0 for a connection that never happened and -1 for one
+  the application cancelled, because that is what `k_GetHTTPResponseError`
+  reads to tell the three apart. It sends a user-agent that says what it is:
+  Wikipedia answers 403 without one, and the application reads that as an
+  article that is not there.
+- **A primitive nobody wrote answers nothing rather than being nil.** A name
+  that is nil is not a function, so `attempt to call a nil value
+  '_Sys_CharIs_'` ends the run wherever it happens - for the Wikipedia
+  browser, the moment somebody typed into its search box. The globals table
+  now has an `__index` that hands back a recording no-op for the six native
+  families (`_Sys_ _Gfx_ _Snd_ _Inp_ _Voice_ _Dir_`), so the application
+  carries on being wrong about one thing instead of stopping, and `report()`
+  names what is missing. Deliberately narrow: an ordinary Lua global that was
+  never assigned is still nil, because Klango's own code tests plenty of
+  those.
+- Written properly rather than caught by that net: `_Sys_CharIs_` /
+  `_Sys_CharTo_` (the C runtime's character classes, which Python's string
+  methods already know for every alphabet) and `urlencode` / `urldecode` -
+  one of Klango's engine functions with no `_Sys_` prefix, which the library
+  itself calls and never defines.
+- **`/common` is mounted.** It is Klango's shared area - `/common/extras/`
+  is where a user's own replacement texts and skins go - and its absence had
+  a second effect: `_k_GetMyKlangoOptions` reads
+  `/common/myklango/myklango.cfg` and then asks `k_TableSize(nil) > 0` about
+  the answer, which ends the application. The file is there and empty, which
+  is what "no branded installer" is.
+- **Two different packages may be called `wiki.pag`** - Cling ships one in
+  `logic/` and the user has another - and the mount cache pruned by NAME, so
+  mounting one deleted the other's folder while it was in use. It prunes by
+  the stamp now: a folder without one was made by the old `hash()` scheme and
+  is the only kind thrown away.
+
+#### Played through, not merely started
+
+Starting and speaking is not working. Each of these was found by playing an
+application from its first word to its last - the menu, the game, the score,
+the way out - and each of them is one line:
+
+- **`math.random(5)` answered 5 every single time.** `llib_math.lua` replaces
+  `math.random` with Klango's own `_Sys_Random`, so `_Sys_Random` takes LUA's
+  arguments: none is a fraction, ONE is `1..m`, two are `a..b`. Reading one as
+  "from m to m" is a generator that never generates. Dice Poker draws until it
+  gets one of the shake sounds it actually has and looped for ever on its
+  first roll; and everything else about every application was as random as
+  this was - where a mole appears, where a clay pigeon flies, how a board is
+  shuffled.
+- **A sound can TRAVEL.** `k_SoundAction(sid, {pos3dSlide = {-20,1,0,
+  20,1,0, t}})` is how Skeet throws a clay pigeon: the disc really crosses
+  the listener, and aiming at where it has got to is the game. Ignoring the
+  slide left every disc hanging where it was thrown from. The journey is
+  stepped by the FRAME - the same clock everything else runs on - so a paused
+  game pauses the flight, and a sound that is still travelling is still
+  playing, whatever the mixer thinks of the clip. Measured: from hard left at
+  gain 0.10, swelling to 0.89 as it passes, away to the right.
+- **`dmin`/`dmax` belong to the SAMPLE**, and are given when it is prepared.
+  Skeet's clay pigeon is `1, 10` and is thrown from twenty units away; the
+  platform's own speech is `1, 3`. One figure for both makes a wide board
+  sound flat and a near sound distant.
+- **Speech is placed, because Klango places it.** `k_VoiceSpeak` renders a
+  line to a stream, loads it as a sample and plays it with
+  `k_SoundPlay(playargs)` - so a spoken line gets the `pos3d`, `freq` and
+  `vol` the caller asked for, and only falls through to `_Voice_Speak` when
+  there is no stream. Cling answered nil to `_Voice_SpeakToStream`, so every
+  spoken line took the second path and came out dead centre: Dice Poker says
+  each of its five dice at its own place on the table (`pos3d = {active - 3,
+  0.5, 0}`) and all five sounded like one. The "stream" is not audio - Titan's
+  engines speak rather than handing back a buffer - it is a note saying what
+  to say, which the sound layer already knows how to place.
+- **The step ceiling is per FRAME.** It exists so an application's own runaway
+  loop cannot take the desktop with it, and counting it over the whole RUN is
+  right for a script and wrong for a game: Dice Poker reached forty million
+  after three thousand frames and stopped in the middle of a hand. A loop that
+  never finishes never reaches `EndFrame`, so it still trips; a game played
+  for an hour never does. And the error now says WHERE.
+- **A path is looked for once.** Klango's mediaset resolves a name by asking
+  whether it exists with each of five extensions in each of two directories,
+  and `_k_Background_Run` does that once a FRAME. The answer is remembered
+  until something is written.
+- **The score is sent under the name the application uses.** `SendHS` is Mole
+  No More's and Long Jump's; Skeet says `save_score` and four spellings of
+  `get_hiscores`. A name that is not recognised answers "finished, nothing",
+  which the game reads out as "Network Error: Score wasn't saved". And the
+  answer to a submission is the player's PLACE on the table, wrapped as
+  `{result = n}` like every other KRPC answer - a bare `true` made Long Jump
+  index a boolean the moment it had a score to send.
+- **`os.date("*t")` answers a TABLE.** Lua's does, and code reads `now.year`
+  straight off it; answering a string made Shopping with Klango stop with
+  "attempt to compare nil with number" while building its request timestamp.
+  `os.time(table)` is the other half.
+- **The other 52 engine functions.** Klango's engine exposes that many more
+  with no `_Sys_` prefix that its library calls and never defines, and every
+  one of them was nil. They are read out of the library itself rather than
+  guessed - `tests/test_cling.py`'s `EveryEnginePrimitive` parses all 104
+  files and fails if a single one would be nil when an application called it.
+  Written properly: `k_Base64Encode`/`Decode`, `k_HexEncode`, `k_HMAC`,
+  `k_SplitString`, `k_FileRemove`/`Rename`, `k_RmDir`, `k_GetWinPath`,
+  `k_MIMEProbe`, `k_GetKniInfo`, `k_GetUnixTimestamp`, `_Sys_CharIs_` /
+  `_Sys_CharTo_`, `urlencode` / `urldecode`, the `S` registry pair. Refused
+  and recorded: running a program, installing one, taking a shortcut or an
+  autostart entry, recording from the microphone, reading the clipboard.
+- **A refusal has to answer ANYTHING that is asked of it.** Naming the
+  methods a refused object might be sent is not enough: the chat calls
+  `k_NewP2PSession()` and then `session:GetState()`, and a name that is not
+  in the list is nil, which is where the application stops. So the object
+  answers every method - the few that must give a number do, the rest give
+  nothing, which is what "there is no network" means.
+- **Every number a game sends with its score is kept.** Klango's server knew
+  each game's own columns and Cling cannot: Skeet sends `(user, score,
+  level)`, Mole No More sends `(user, fails, normal, special, total, level,
+  version)`. So the whole list goes on the row, the largest is the score, and
+  a game reading `j.normal_moles` off the table it gets back finds what it
+  sent.
+
+#### The interface was in the middle, and the piano was silent
+
+Three more, each of them one condition, and each of them heard rather than
+read - the applications reached their menus and played their games with all
+three wrong:
+
+- **`pos3d` is written two ways and Cling read one.** An application says
+  `pos3d = {-20, 2, 0}`; the platform library says
+  `pos3d = {x = -1, y = 0.5, z = 0}`, because `LLib_Math_AngleDist_To_3dPos`
+  returns a NAMED table. Klango's engine takes both; `_placement` read only
+  the array, so everything the library places came out dead centre - and the
+  library places the whole interface. `menu:recalcpositions` lays a menu's
+  items out from **-60 to +60 degrees** at a distance of 1, so moving through
+  a Klango menu moves the sound across the listener and a menu ANNOUNCES its
+  own shape by pinging each item at its place; the help channel is at
+  `{x=-1, y=0.5}` and the information channel at `{x=0.5, y=0.5}`; a forum
+  post is at its author's place; and every ambient sound
+  `k_BackgroundPrepare` scatters is at an angle and distance of its own.
+  Measured after: a five-item menu at -0.87, -0.50, 0.00, +0.50, +0.87, with
+  each item's name spoken from where the item is.
+- **A relative name with no extension is the ordinary case.**
+  `k_DirectoryRead`'s `name` field is the file name with the extension taken
+  OFF (`k_SplitFileName`, `llib_files.lua`), and Klango Piano builds every
+  key's sample out of it - `sounds/<model>/<key>`, no leading slash, no
+  extension, which is also how `_l` (the loop marker) can be the last two
+  characters of the name. Cling asked its own file system only about names
+  beginning with `/`, so every one of the piano's twenty-three keys resolved
+  to nothing: the application started, spoke, took the keys, called
+  `k_SoundPlay` for each one and made no sound at all.
+- **Klango's sound groups are a TREE, and volume and pause run down it.**
+  Every `k_SoundPlay` creates a group and plays the sequence inside it
+  (`s.gid = _Snd_GroupCreate(5)`, `llib_snd.lua`), so `LLib_GID_Otoczenie`
+  holds no sounds of its own - it holds the groups made under it. Cling's
+  groups were flat, and a group action looked only at sounds whose group id
+  IS that group, so it reached nothing and **none of the platform's volume
+  work happened at all**: `k_BackgroundPlay` fades the ambience in with
+  `volMulSlide = {0, 1, speed}`, every dialog ducks it to a fifth and pauses
+  the game's whole group (`{pause = 1, volMul = 0}`), and `k_BackgroundStop`
+  fades it out. What that sounded like is a game still going on at full
+  volume underneath every dialog, over the words. Now: `group_create`
+  remembers the parent, `of_group` is the subtree, `group_factor` is the
+  product along the chain to the master (group 0), a slide is stepped in
+  `pump()`, and a paused sound is held - including its journey, so a clay
+  pigeon paused under a dialog is where it was when the dialog goes.
+  Measured on Skeet: the ambience fades 0 to 0.10 over its second, ducks to
+  0.02 while the menu is open, comes back, and fades out when the game
+  starts.
+
+- **`replay = -1` did not loop where the sound actually goes.**
+  `spatial_audio.play_file` had no looping at all - nothing in Titan had
+  needed it, because the only 3D sounds were Titan's own one-shot cues - and
+  3D is exactly what a Cling user has on. So every Klango loop played once:
+  the background music, Skeet's flight, Zawisza's beds, a piano key held
+  down. `play_pcm` takes `loop` and sets `AL_LOOPING`, `pause_source` holds
+  one where it is (`AL_PAUSED`), and `_reap` stops collecting a source that
+  is paused rather than finished. Cling calls both through a wrapper that
+  drops the argument if it is talking to an older `spatial_audio`, because an
+  application should lose the looping rather than the sound. Measured: a 2 s
+  clip still playing after 3 s, paused, resumed and stopped.
+- **`vel3d` is Klango asking for the Doppler shift, and it was thrown away.**
+  Skeet works the vector out itself (`x_d = 40/tile_f`, with the comment
+  saying what it is for) and hands it over with the clay pigeon. OpenAL
+  computes the shift continuously from `AL_VELOCITY`, which is the one thing
+  that cannot be done to a clip already playing by any other means, so
+  `spatial_audio.set_velocity` gives it to the source and `_placement` reads
+  `vel3d` in either of its two shapes. The stereo path has no Doppler and
+  keeps none. Measured: OpenAL reads back 5.06 on a flight sound still
+  playing.
+- **The pan law is constant power, because in Cling a sound MOVES.** The
+  stereo fallback split a channel linearly, so a sound crossing the listener
+  is 3 dB quieter exactly as it passes the middle - the moment it is closest
+  and the distance model is making it loudest. The two fight, and a clay
+  pigeon dips as it goes by. `cos`/`sin` of a quarter turn keeps
+  `left^2 + right^2` at 1 wherever it is, which is also what a menu spread
+  from -60 to +60 degrees needs: the same loudness for every item. (The 3D
+  path was never affected - OpenAL does its own.)
+- **Every `k_SoundPlay` leaves a group behind.** The library creates one per
+  sequence and destroys none, so a game played for an hour would carry tens
+  of thousands - all of them walked whenever a parent is ducked. The subtree
+  is a walk down `group_children` rather than a sweep of every group there
+  has ever been, and `pump()` sweeps up the empty ones every `TIDY_EVERY`
+  frames.
+
+Played through afterwards, with the real window and the real mixer: Klango
+Piano sounds every key (`c.wav` 2.005 s through OpenAL), Skeet's disc is
+thrown from the left, crosses in 7.9 s and is hit at 4.17 s for 54 points
+with the hit placed to the right because the shot was late, Long Jump's
+run-up alternates hard left and hard right and answers the arrows, and Dice
+Poker says each of five dice at -0.97, -0.89, 0.00, +0.89, +0.97.
+
+#### Not every file Klango ships is UTF-8, and one has no newlines at all
+
+`clingkit/textio.py` is the one place text is read now, and it exists because
+of two things that are invisible until they are not:
+
+- **11 of the platform library's 104 Lua files are Windows-1250**, the Polish
+  code page Klango was written on, and so are texts inside applications.
+  Reading one as UTF-8 with `errors='replace'` puts U+FFFD where every Polish
+  letter was - in a comment that is invisible, in a string literal it is a
+  word with holes in it that the synthesiser then reads out, and in
+  `p_radiopresets.lua` it is a character the lexer refuses outright. Four
+  encodings are tried in turn, ending with `latin-1`, which cannot fail: there
+  is no such thing here as a file that cannot be read.
+- **`llib_s4tb.lua` ends its 1961 lines with a bare `\r`** - Mac line endings,
+  in a file from 2008 - and a lexer that treats `\r` as whitespace lets the
+  first `--` comment swallow the whole file. It loaded without a word of
+  complaint and defined nothing, so `_k_WidgetPrepare_S4TB` was missing from
+  every application that started. Line endings are normalised on the way
+  through.
+
+#### Cling follows Titan's language
+
+`host.texts.locale` is the best locale an application actually SHIPS, which
+is a different question from what language the platform runs in - and reading
+the second off the first made the whole of Klango's own interface English on
+a Polish Titan whenever the application had no Polish (Mole No More has only
+`en-us`). `ClingHost.locale` is Titan's language in Klango's spelling
+(`pl` -> `pl-pl`), and it is what `k_GetWindowsLocale`, `k_GetLangName` and
+the voice list are built from.
+
+**`/user/app/lang` is written on every run, not only the first.** The library
+keeps the language it settled on in that key and reads it back at the next
+start; in Cling's own store that meant an application opened once in one
+language stayed in it for ever, whatever the user later chose in Titan. The
+library still falls back on its own when it has nothing in that language -
+that is `langIsOk`'s job and not Cling's.
+
+**One voice, offered for every language that can be asked for.**
+`k_VoiceEnum(lang, fulllang)` filters by language, and an empty answer is not
+a degraded voice: `setSynth` calls `killklangobecauseoflang()` and the
+application is over. So Titan's voice is offered once for Titan's language,
+once for the application's, and once for English - the library's own fallback
+- each with a `regpath` of its own, because that is what a choice is
+remembered by.
+
+**Cling's own Polish had no Polish letters in it.** Its `.po` said "juz",
+"sa", "ktorym", "Szczegoly", "Pejzaze dzwiekowe"; the demo application's
+texts were the same. Both are written properly now. (The applications' own
+texts were never the problem - every `.txt` in every `.pag` is UTF-8 and
+always was.)
+
+#### Klango's Settings and Help are Titan's
+
+`klango/titan_bridge.py`. An emulated application's menu offered a language
+picker, a voice picker and an audio-theme picker that **changed nothing** - a
+Cling application speaks through Titan's TTS and reads Titan's language and
+theme, so Klango's screens let the user choose and then went on exactly as
+before - plus a knowledge base, a terms-of-service page and a feedback form
+that all talked to klango.net. So the platform's screens are Titan's:
+Settings opens Titan's settings (through whichever settings interface the
+user chose, like every other way in), Help opens Titan's help, and feedback
+goes to the Feedback Hub.
+
+**Settings and Help are ONE entry each.** Redirecting the screens behind
+Klango's submenus was not enough: the user still walked into "Settings" and
+found four items - theme, language, synthesiser, interface - every one of
+which now did the same thing. The submenu is recognised by what is INSIDE it
+(`__!setskin!__`, `__!helpkeys!__`) rather than by its name, because the name
+is in the user's language.
+
+What is deliberately NOT redirected is everything that belongs to the
+APPLICATION: its own help text (F1), its own readme and changelog, its own
+version, its own exit. And a window that did not open is never reported as
+open - Titan's own openers report a failure by answering nothing and printing
+to a console nobody using this can see.
+
+#### The interface sounds are Titan's too
+
+Moving through a menu, choosing something, reaching the end of a list, a
+dialog opening: an emulated application makes exactly the same noises Titan
+makes for exactly the same things, so it makes TITAN's - the user chose a
+sound theme and this is their desktop. `engine.TITAN_CUES` is the map, and it
+is only ever applied to `/llib/skin/` - a mole's hello is the game, not the
+interface, and Titan has nothing to say about it. A name Titan's theme has
+not got falls through to Klango's own file, so nothing is lost by mapping
+one.
+
+#### The window is its title and its keyboard
+
+`ClingSurface` used to carry a multi-line text box holding everything the
+application had said. That is a control a screen reader offers to review,
+arrow through and search: a second interface, in the way of the one the
+application actually has, on top of a program that is already talking. The
+window is now its title - `<application> - Cling` - and a panel that holds
+the keyboard, and nothing else.
+
+**A key is HELD until it comes back up**, and there are three ways it can be
+let go. `k_KeyJustPressed` is "held for exactly one frame" and
+`k_KeyJustReleased` is "the raw buffer said up this frame", and the two only
+mean what they say if a key the user is holding is held here too: Klango
+Piano starts a loop on the way down and stops it on the way up, so a key
+released a frame after it was pressed could never sustain a note. Every key
+used to be a press for one frame, which is why it could not. DirectInput's
+buffer carries no auto-repeat either, so a repeat only says the key is still
+down rather than pressing it again - holding an arrow in a Klango menu moves
+one item, as it does in Klango.
+
+The reason it was a press is real and had to be answered rather than
+reverted: **a release can be lost** - the key comes up wherever the keyboard
+is by then, which after Alt+Tab, a dialog or a focus change is somewhere
+else - and one that never arrives leaves the key held for ever and the
+application answering nothing at all. So a key is let go by its own
+`EVT_KEY_UP`, by this window losing the keyboard (`_let_go`), or by
+`KEY_STALE` (1.5 s, longer than Windows' longest auto-repeat delay) passing
+with no repeat to say it is still down. The modifiers stay a press, because
+Klango watches for Alt coming back UP with nothing pressed in between - that
+is how a menu opens.
+
+Opening the Cling window says **"Cling is ready"** ("Cling gotowy"): it reads
+what is installed, unpacks a package it has not seen and looks for Klango's
+library before the list is a list, so "it is open" and "it is ready" are not
+the same moment - and the second is the one worth saying to somebody who
+cannot see the window.
+
+#### Closing the window closes the application, and its sound
+
+An emulated application runs on a thread of its own and is a frame - or a
+long Lua call - away from noticing that it has been asked to stop, so
+`KlangoEngine.stop()` **closes the host first** and waits for the thread
+afterwards: what is playing stops now, and nothing the application asks for
+later is answered, however late it arrives. Three things were wrong before:
+`Mixer.stop_all` tracked only the LOOPS, so a one-shot still going outlived
+the window; a sound the application had SCHEDULED and not yet started was
+begun after the close by the next frame; and the wait came first, so a game
+kept playing its background music for those two seconds - and a game that
+never reached a frame kept playing it for ever. Measured on Mole No More with
+the board up and six sounds playing: `stop()` returns in **0.02 s**, nothing
+is audible afterwards, and the thread is gone.
+
+#### A sound that has started can still be moved and made louder
+
+Everything Klango's sound layer does after a sound has STARTED goes through
+one call, `Mixer.set_gain` - and it refused a 3D handle outright, which is
+the path a Cling user is on, because a Klango board is aimed at by ear and
+Cling asks for HRTF whenever the user has 3D on. So on the path that
+matters, nothing ever moved and nothing ever changed volume:
+
+- **An ambience is started at NOTHING and faded in.** `k_BackgroundPlay` does
+  `_Snd_Action(bkgGID, {volMul = 0})`, starts the loop, and then
+  `volMulSlide = {0, 1, speed}`. With the slide reaching nothing, Dice
+  Poker's, Long Jump's and Simple Puzzle's backgrounds were started, looped
+  and held at the zero they were started at for the whole run: playing,
+  correct, and completely silent.
+- **Skeet's clay pigeon is thrown and then set moving** -
+  `k_SoundAction(sid, {pos3dSlide = {-20,1,0, 20,1,0, t}})` on a sound that
+  is already playing. `_step_journey` worked out the pan and the gain
+  perfectly, every frame, and handed them to a call that answered False: the
+  disc sat in the middle of the room at full volume for its whole flight.
+  Measured after: pan -1.00 at 13.1 s, -0.09 as it passes at 17.1 s, +1.00 at
+  21.0 s, with the gain swelling 0.10 -> 1.00 -> 0.10.
+- `src/titan_core/spatial_audio.set_gain(src_id, gain)` is the missing half -
+  `AL_GAIN` on a live source, beside the `move_source` and `set_velocity` that
+  were already there - and `Mixer.set_gain` now moves the source as well as
+  re-gaining it, because a `pos3dSlide` is a PLACE, not a volume. It is asked
+  for by name (`getattr`), so a Cling packaged beside an older Titan loses the
+  fade rather than the sound.
+- The height travels too: `_elevation_of` is its own function and
+  `set_gain(handle, pan, gain, elevation)` carries it, because a sound that
+  travels moves in three axes and re-placing two of them is the same mistake
+  one axis smaller.
+
+#### Cling ships Klango's library
+
+`data/components/cling/apps/llib.pag`. Everything else about Cling already
+lived inside the component; the platform library did not, so the emulator -
+**seventeen of the twenty-one** installed applications - worked only on a
+machine that happened to have a Klango installation. A subsystem whose whole
+claim is "your Klango applications run here" cannot depend on the user having
+Klango. `find_library()` looked in the component's own `apps/` all along; it
+is now the last place looked, so the user's own `data/cling/llib.pag` still
+wins for anybody with a newer or a patched copy, and `llib` is never LISTED
+as something to play - it is the runtime.
+
+#### A text field is where an application is actually used
+
+Four faults, each one line, and between them they made the Wikipedia browser
+useless and every multiline field unreadable:
+
+- **The space bar was not a key.** `canonical(' ')` trimmed the name before
+  looking it up, which for a single space leaves nothing at all, so
+  `press(' ')` answered False and typed nothing. Every other letter went in,
+  so a search box read back as what was typed with the spaces missing - and
+  the Wikipedia browser answered "I could not find anything matching your
+  query" to a title that is on the front page. It is the same in every chat,
+  note and name field there is. The trim is now for a name with room around
+  it; a name that IS whitespace keeps itself.
+- **`urlencode` wrote `+` for a space.** That is PHP's, and the far end of
+  every URL Klango itself built was PHP - but what an APPLICATION builds with
+  it is a PATH, and in a path `+` is a literal plus. The Wikipedia browser
+  encodes a title into `/wiki/<title>`, takes it back out and asks for
+  `Special:Export/<title>`, escaping any `+` it finds to `%2B` on the way
+  (`object.lua`'s `downloadPage`) - so every article whose title is more than
+  one word was fetched as a title with a plus sign in it. Measured on
+  `pl.wikipedia.org`: `Kot%2Bdomowy` answers **200 with no `<text>` element at
+  all**, which the browser reads as "the page does not exist" and says so,
+  having just found and offered the article. It is `rawurlencode` (RFC 3986)
+  now, which is right in a query string as well.
+- **A document put in with `\n` was one line.** A rich edit stores a paragraph
+  break as `\r` and normalises what it is given, and `\r` is the only
+  separator the library ever looks for (`_Gfx_TxtEdit_Find(richedit, "\r")`,
+  `GetCurrentLine`, `GetNumberOfLines`, Up and Down). `SetText` / `SetText2`
+  stored what they were handed, so the article view held a whole Wikipedia
+  page as a single line: Up and Down moved nowhere and it buzzed at both ends
+  of it. `TextEdit.set_text` is the one way in now and `as_lines` is what puts
+  the control's own separator in - `LoadFile` and everything typed as well.
+- **`GetCurrentLine` answered one value; the library reads two.** The second
+  is which line the caret is on, from zero, and a textarea reads it on every
+  arrow (`local _, l = ...`) to find out whether it has reached the top or the
+  bottom and buzz. Left nil, a multiline field never said it had stopped.
+- **`_Gfx_TxtEdit_SetFocus(handle, f)`'s flag is not decoration**: 1 takes the
+  keyboard, **0 gives it up**, and the library says 0 the moment a control is
+  built and again when the user leaves it (`llib_suitexted2.lua` does both;
+  `llib_suigfx.lua` remembers `HasFocus` across a dialog to put it back).
+  Reading the handle and ignoring the flag gave the keyboard TO whichever
+  control had most recently been built or left, so the arrows, the letters and
+  the backspace went to a buffer nobody was looking at.
+
+Live-verified end to end on a Polish Titan: "Szukaj - pl.wikipedia.org", a
+two-word title typed with its space, "Kot domowy" found and opened, the
+article read out, and Down and Up moving through its sections with the buzz at
+the ends.
+
+#### Cling is a portable component
+
+Everything Cling ships is inside `data/components/cling/`: its applications in
+`apps/`, Klango's own platform library beside them as `apps/llib.pag`, its
+written-here logic in `logic/`, its Lua in `clingkit/lua/`, its languages in
+`languages/`. `data/cling/` is the USER's - the applications they installed,
+and their own copy of Klango's library if they have one - and is created on
+demand rather than shipped. So the component can be copied to another Titan,
+or packaged as a `.TCD`, and still be whole. The user's own copy of an
+application still wins over the one Cling ships, which is the overlay rule the
+other eleven add-on kinds already follow.
+- **All three faces, like the macro manager**: a view in the main window, a
+  **Cling** category in the Invisible UI, a **Cling** submenu in Klango mode, an
+  entry in the Components menu, a settings category, and seven actions
+  (`cling.list_applications`, `run`, `details`, `scores`, `install`, `account`,
+  `status`).
+- The window is `TabbedListFrame` - the class Titan IM and the Titan-Net
+  services already are - so row 0 is the tab bar, Left/Right cycle the
+  categories and Escape leaves. A running application gets a window that is
+  its TITLE and nothing else - `<application> - Cling` - and a panel that
+  holds the keyboard. A Klango application is heard, not read, so a transcript
+  beside it was a control the user had to leave to play and a second thing for
+  a screen reader to find; what the window is for is owning the keyboard,
+  driving the engine's clock, and being what Alt+F4 closes.
+- Translation domain: **`cling`** (the component's own `languages/`).
+- Guide: `data/docu/programming_guide/cling_guide_{en,pl}.md`.
+- Tests: `tests/test_cling.py` (run it directly; 320 tests). Nothing in them
+  opens a window, plays a sound, speaks or reaches the network - the score
+  publisher is stubbed for the whole file, because a game records a score at the
+  end of every run and a suite that left that alone would sign in to a real
+  server once per test. The engines are given a clock the test moves by hand, so
+  a whole game is played through in a millisecond; that is why an engine never
+  reads the clock and never touches wx.
+- **And a sweep that really plays them.** A test suite proves the parts; what
+  proves the whole is a harness that opens each of the 17 emulated
+  applications in turn, waits for it to settle, presses Alt for its menu,
+  walks it, starts what it finds and plays for a while - then reports the
+  frames, the lines spoken, the sounds heard and anything the application
+  stopped on. Every fault in this section was found that way and by nothing
+  else: they all reach their menu on the first run, and every one of them
+  needed playing before it went wrong. All 17 come back clean.
+
+### The Elten API bridge: EltenLink's applications, running inside Titan
+
+`data/components/elten_bridge/`. EltenLink is a social network for blind
+people with a desktop client of its own, and applications are written FOR
+that client - games, a file manager, a media catalogue, a podcast player -
+each shipped as one signed `.eltenapp`. They are **Ruby**, and they expect a
+platform underneath them that speaks, plays sounds, draws lists and forms,
+keeps their files and translates their strings. This is that platform.
+
+**This component is GPL-3.0** (`data/components/elten_bridge/LICENSE`) and
+the rest of Titan is not. That is deliberate: Elten 3 is GPL-3.0, the bridge
+is built against its documented API and shares its terms, and keeping the
+boundary at one component is what keeps the question answerable.
+
+- **The applications are found where Elten put them.** The user installs
+  through Elten - its repository, its updates, its account, none of which is
+  Titan's to re-do - and runs here. `%APPDATA%/elten/apps/src/*.eltenapp` is
+  read exactly as Elten leaves it (one level into a folder as well, which is
+  where an application that ships a readme beside itself lives), so an
+  application installed five minutes ago is in the list when the window is
+  next opened. Nothing is imported and nothing is copied. Titan's own
+  `data/eltenapps/` and the component's `apps/` are looked in FIRST, which is
+  what makes the user's own installation win a name collision.
+- **Their saved games are the same files.** `data_path` is Elten's own
+  `apps/data/<app>/`. Somebody who plays in Elten and then opens the same
+  application here finds their game where they left it; a bridge that kept a
+  second copy would lose whichever half was written last.
+- **The list is called "Aplikacje Elten API"**, in the main window beside
+  applications and games, in the Components menu, and as four actions
+  (`list_applications`, `details`, `run`, `status`).
+
+#### `.eltenapp`, read from the bytes
+
+The container is not documented anywhere; it was worked out here by reading
+one. `src/scripts` has no packer for it - Titan only ever READS these.
+
+    "EltenPKSignature" u8 major u8 minor u32 cert_len u32 sig_len
+    <DER X.509 certificate>          issuer: Elten / Program Signing
+    <RSA signature>
+    "Elten3AppPackage" u32 manifest_len  <zstd: the manifest, as JSON>
+    records: u8 kind
+      1 source     u16 namelen, name, u32 len, zstd
+      2 asset      u16 namelen, name, u32 len, THE BYTES AS THEY ARE
+      3 catalogue  2 bytes of language code, u32 len, zstd -> a gettext .mo
+
+Three things about it are each a way to get it wrong:
+
+- **An asset is not compressed.** Every asset in every application installed
+  here is an `.ogg` or an `.mp3` - already compressed - so the builder stores
+  them whole. A reader that runs zstd over every record parses the first few
+  source files and throws on the first sound: four of the eleven applications
+  came back with **zero files in them** before this was understood.
+- **A catalogue's name is two bytes with no length in front of it**, and what
+  is inside is a GNU gettext `.mo` - a format Titan already speaks, so `_()`
+  is one lookup and nothing is parsed in Ruby.
+- **The signature is a signature, not encryption.** Nothing is concealed. The
+  certificate is in front of the payload so a reader can say who built the
+  package; Elten's key is not public, so the bridge can verify and never
+  mint, which is the right way round. An **unsigned** package still opens:
+  Elten's own builder makes them (`--unsigned`), the user may well be the
+  author, and refusing over a signature Titan was never going to trust would
+  be theatre.
+
+#### The bridge is a process, and that is the first half of "safe"
+
+The application runs in a Ruby process of its own; everything it asks the
+platform for arrives as one line of JSON on stdout, and events go back on
+stdin. An application that loops for ever, exhausts its stack or segfaults a
+gem takes down a subprocess, not Titan - and closing the window kills it,
+which is a guarantee no in-process interpreter can make.
+
+- **stdout belongs to the protocol and nothing else.** An application WILL
+  `puts` - Elten's own do it constantly - and one stray line corrupts the
+  stream and takes the application down with a parse error that reads like a
+  Titan bug. So the real stdout is taken away at boot, kept privately, and
+  `$stdout` is pointed at stderr, where Titan collects it as the log.
+- **The dispatch table IS the security boundary** (`eltenkit/bridge.py`'s
+  `OPERATIONS`). An operation exists or it does not: there is no way for an
+  application to name a Python attribute, a module, a file outside its roots
+  or a method nobody wrote down. Every call is answered **exactly once**,
+  including the ones that raise and the ones that do not exist - an
+  application written against a newer Elten finds out instead of hanging on a
+  reply that is never coming.
+- **Three roots and no way out of them** (`host.Paths`). `asset` is the
+  unpacked package, `data` is Elten's own, `cache` is losable. `resolve`
+  refuses anything that leaves its root **after `realpath`, not before**,
+  because `..` is only the obvious way out: a symbolic link, a Windows
+  junction or a name that normalises to something else all end up somewhere
+  the application did not name, and checking the string it was given passes
+  every one of them. A name with `..` in it is not written on extraction
+  either.
+- **A handle is a number in a table this side owns.** An invented one
+  answers false; there is one table per running application, so one cannot
+  reach another's sounds. Every list is bounded, every string that reaches a
+  widget goes through `_text`/`_label`, and a line longer than `MAX_LINE`
+  ends the application rather than making Titan buffer without bound.
+
+#### The interface is Titan's, the voice is Titan's, the mixer is Titan's
+
+Elten has no graphical interface at all - it is entirely self-voicing, a
+single-threaded polling loop that reads the keyboard and speaks. That is a
+real design and not Titan's, so the three edges are swapped:
+
+- **UI**: an application's `ListBox`, `EditBox`, `Button`, `CheckBox` and
+  `Form` are real wx widgets in a real Titan window (`eltenkit/ui.py`), which
+  a screen reader already knows how to read. This is the part that matters
+  most for "will an application work": the installed ones build their own
+  screens out of these, 138 call sites across every one of them, and so will
+  anything written later. `Form#wait` blocks the Ruby caller exactly as
+  Elten's does; what fills the time is one event at a time off the bridge
+  instead of a poll per frame, dispatched to whichever control it named.
+- **Speech**: `stereo_speech.speak_stereo` - the user's engine, their rate,
+  positioned - falling back to the messenger, which is `accessible_output3`
+  and therefore their screen reader when one is running. A user who reads
+  this desktop with NVDA hears an Elten application through NVDA, with
+  nothing to configure.
+- **Sound**: Titan's mixer, with the theme volume and the stereo-or-HRTF
+  preference, held sounds and a fire-and-forget pool with a voice ceiling
+  (a game that plays a click per keypress asks for thirty a second on a held
+  arrow, and a mixer given all of them runs out of channels and goes silent).
+
+**`alert` is speech, not a dialog**, and that is the correction worth
+remembering. Elten's own is `alert(text, wait=true)` which calls `speak`;
+Solitaire calls `alert(position_label, false)` after **every arrow key** to
+say where the cursor is. Modelled as a message box - which is what guessing
+from call sites produced - it would put a modal window on the screen on every
+key press and make the board unplayable. The signatures here come from
+Elten's own `src/ui/dialogs.rb` and `src/eapi/speech.rb`, not from what the
+call sites looked like they meant.
+
+#### The rest of the API, and what each installed application needed
+
+All eleven installed applications start and run. Getting from four to eleven
+was not one big piece of work but eleven small named ones, each found by
+running the real application and reading what it stopped on - which is the
+only way this can be done, because the API is 130 KB of `program.rb` plus
+180 KB of controls and no summary of it is trustworthy.
+
+- **`Menu`** (`skeet`) - `Menu.new(header, :returning)`, `option(label) {}`,
+  `open`. The `:returning` type is the whole behaviour and it is Elten's own
+  `close if @type != :returning`: an option runs and the menu **comes back**,
+  and only `menu.close` inside one ends it. That is what "opens the way Elten
+  opens them" means concretely.
+- **`TableBox`** (`klangoarchive`) - a list with columns, so a row reads as
+  "group, forums, threads, posts". A `wx.ListCtrl` in report mode, which is
+  what a screen reader announces column by column.
+- **`FilesTree`** (`filemanager`, `youtube`) - answered with the PLATFORM's
+  own file and folder picker rather than a tree of Titan's, because somebody
+  choosing where to save a download should get the dialog they already know,
+  with their recent places in it.
+- **`display_text`** (`solitaire` and most others) - a page to READ: help,
+  rules, a changelog. A read-only `wx.TextCtrl` and deliberately not a
+  message box, so the reader's own cursor, say-all and Ctrl+C work on it.
+- **`MediaFinders` / `MediaEncoders`** (`youtube`, `ffmpeg`) - these two
+  applications are nothing BUT a registration: ffmpeg registers five audio
+  encoders and returns, youtube registers a finder and an extractor. The
+  registries are real, because an application that registers into nothing
+  has done nothing.
+- **`ChildProc`** (`youtube`, `ffmpeg`) - running `yt-dlp`, `deno`,
+  `ffmpeg.exe`. Worth being plain about: an `.eltenapp` is Ruby in a real
+  interpreter with the user's privileges and can already spawn a process by
+  itself, so this is not a hole being opened - it is Elten's own interface
+  onto something the process can do anyway, and withholding it would only
+  break the applications that ask politely.
+- **`server_app` / `leaderboard` / `server_table`** (`skeet`,
+  `audiomemory`, `MileByMile`) - declared at CLASS level, so an application
+  that calls one will not even load without it. Backed by a real table in the
+  application's own `data_path`: a game's high scores work, survive restarts
+  and are shared with Elten's copy, but they are this machine's scores.
+  `available?` answers honestly, which is the contract Elten's own
+  `Leaderboard` documents for a server it cannot reach.
+- **`EltenLink.*`** (`mcp`, the media catalogue) - **not stubbed**: Titan is
+  already signed in to EltenLink through Titan IM, so this uses
+  `src/eltenlink_client/` with the session the user already has. Three rules
+  make that safe to hand somebody else's code: the application never sees a
+  credential, the reachable calls are an explicit table (`eltenlink.py`'s
+  `CALLS`) and never `getattr` on a name the application supplied, and
+  **nothing that publishes is in it** - an `.eltenapp` cannot post to
+  somebody's forum in their name because it was opened. What is not in the
+  table raises `EltenLink::Error`, which is what these applications already
+  rescue, 24 times over.
+
+Three of the fixes were general rather than per-application, and those are
+the ones worth remembering:
+
+- **Only openable applications are listed.** `ffmpeg` and `mcp` declare
+  `menu: {hidden: true}` in their manifests - they are plug-ins that give
+  every OTHER application something and Elten does not put them in its menu.
+  Listing them offers the user a row that opens, works for a fraction of a
+  second and closes, which reads as an application that is broken.
+- **A control shown on its own has to show itself.** In Elten there is one
+  screen and building a control puts it on it. Here a control usually
+  arrives inside a `Form` - but the file manager builds a `FilesTree`, shows
+  it, and drives it from a `Runner` with no form anywhere, so it came up
+  running and completely invisible. A control with no form now makes itself
+  one the first time `update` asks it to be visible.
+- **Either loop may be the one running.** There are two event loops in this
+  API, `Form#wait` and `Runner#run`, and a click can arrive while either is
+  in charge - the file manager's tree proves it. So an open form is in a
+  registry (`EltenForms`) and both loops route control events through it,
+  rather than each loop knowing only its own controls.
+
+And two bugs that were mine, both worth keeping in mind because neither
+looked like a bug from the outside: overriding **`Class#name`** to answer the
+application's display name made every error message name a class that does
+not exist (`undefined method for class Katalog mediów`), and building the
+lifetime registry in `Program#initialize` meant an application that defines
+its own `initialize` without `super` ran correctly and then died on
+`undefined method 'close_all' for nil` on the way out. Anything the platform
+needs to have must be able to make itself.
+
+#### Playing them, not just starting them
+
+"It started" is not "it works". A second sweep answers each application's
+screens - picks an option, presses a button, activates a row - and walks it,
+which is the only thing that finds the faults below. All nine openable
+applications now run with no errors; `ffmpeg` and `mcp` finish at once
+because they are plug-ins with no screen, which is what they are for.
+
+- **The interface sounds are Titan's** (`eltenkit/cues.py`). Moving onto a
+  row, choosing it, a branch opening, the end of a list, a dialog: Elten
+  names each and Titan already has a sound for it, so `play_sound` maps
+  Elten's name onto the user's own theme. Only the PLATFORM's cues - a card
+  being dealt or a clay pigeon is the application, not the interface, and
+  falls through to the package's own `Audio/` untouched, so a mapping can
+  replace a sound and never lose one. A test asserts every mapping names a
+  file the default theme really has, because a mapping to a missing file is
+  silence.
+- **The windows wear the skin.** Every Titan skin carries `icons/*.png`, and
+  an Elten application's screen is a Titan window: the frame takes the
+  skin's colours and its window icon, a list and a button are passed through
+  `apply_to_listbox` / `apply_to_button`, and a button gets the picture its
+  own label suggests - matched on what it SAYS, in the user's language as
+  well as English, since that is what the label is.
+- **`Tasks.run` yields TWO values.** Elten's shape is
+  `Tasks.run(label) { |progress, token| }` and applications hand that token
+  straight down into their own fetching code. Yielding only the progress
+  made every one of those calls pass nil and stop on `raise_if_cancelled!`
+  for nil. `CancellationToken#sleep` is PUBLIC for the same reason:
+  applications call it with an explicit receiver, and inheriting the private
+  `Kernel#sleep` answers `private method 'sleep' called for ...`.
+- **A keyword this build does not act on must still be accepted.**
+  `Runner.new(frame_interval:)`, `on_action(..., phase:, cooldown:,
+  initially_blocked_for:)` - refusing one is refusing an application for
+  asking precisely. `cooldown:` also takes an already-built `Cooldown`,
+  which is what Skeet passes.
+- **A control answers a property it does not act on.** Elten's controls
+  carry a long tail about how much they say of themselves - `silent=`,
+  `speech=`, `autosayoption=`, `border_sound=`. On Titan's side that is the
+  screen reader's business, so they are remembered and answered rather than
+  acted on. Answering is the point: stopping an application over a property
+  about announcements is the worst possible trade.
+- **A board's events carry where the cursor is.** AudioMemory's `GridBox`
+  binds `:move` and reads `pos[0]`/`pos[1]` off it, so a control says what
+  its events are CALLED (`event_name`) and what they CARRY (`event_args`) -
+  a list's `changed` is a `changed`, a board's is a `move` with `[x, y]`.
+
+Two more of mine, both found by running Titan rather than the bridge:
+**`_on_view_activate` was reading its argument as an index** and Titan's view
+system calls it with a `wx.KeyEvent`, so opening anything raised
+`'<=' not supported between instances of 'int' and 'KeyEvent'`, which the GUI
+swallowed - nothing opened and nothing said why. What is selected is a
+question for the list, and the row now carries the application itself as
+client data rather than being matched by position. And **`TitanApp` IS a
+`wx.Frame`** - it does not have a `.frame` - so asking for one raised inside
+the same handler.
+
+#### An application is constructed with NO arguments
+
+`klass.new(manifest)` looked harmless and was the worst bug in the bridge.
+An Elten application's `initialize` is its OWN - the file manager's is
+`initialize(startpath = false, mode: :files)` - and Elten constructs it with
+nothing, so `startpath` is empty and it opens on the user's home folder.
+Handing it the manifest as its first positional argument made `startpath` a
+JSON document: the file manager opened on a folder called
+`{"id" => "8c8d86ce-...` which does not exist, and showed one row saying
+"Up one level". **Every application that defines its own `initialize` was
+being given the same thing**, and the earlier `close_all for nil` crash was
+the same cause wearing a different hat.
+
+So `Program` has no `initialize` at all, the manifest lives on the class, and
+everything the base class needs makes itself lazily. Anything the platform
+needs to have must be able to make itself, because the application owns its
+own constructor.
+
+#### A game needs a window, because a window is what owns the keyboard
+
+Purrposterous drives a `Runner` and nothing else - hold Left and Right to
+move, Space to feed - and a `Runner` with no form had no window at all, so
+not one key ever reached it. The game ran, ticked and could not be played;
+which is also why it was silent, because nothing in it ever happened.
+
+`Runner#run` now asks for a window (`open_keyboard`), and Titan gives it the
+equivalent of Elten's own screen: a real Titan window whose job is to hold
+the focus and report keys. It is deliberately almost empty - a game is heard,
+not read - but it is a real window with a real accessible name, and the
+control in it is what a reader lands on. Losing the focus releases every held
+key, or a game walks into a wall for ever because Left never came up.
+
+**A letter is two names.** Elten writes `hold: [:key_left, :a]`, so `a` and
+`key_a` are the same key; `key_held?` answers about both, or half a game's
+controls do nothing.
+
+#### Everything is named for a screen reader
+
+`SetName` alone is wx's own name and never reaches a reader for a native
+control - a list view answers with its own IAccessible, whose name comes from
+window text these controls have none of. Titan already learned this building
+the shell, and `a11y.name_control` is the one way in: it names the control
+for wx AND for MSAA. Every list, table, field and game surface goes through
+it. Without it an Elten application's list is an unnamed box, which for the
+people these applications are written for is the whole interface missing.
+
+The file tree puts the folder it is showing in its own header, so the name a
+reader announces follows where the user is, and a folder is announced as one
+("Documents, folder") rather than being a name in a list of names.
+
+#### `FilesTree` is a list of a folder, not a button
+
+The file manager's whole screen is one, so it cannot be a button that opens a
+picker. Ruby reads the directory itself - it has `Dir` and `File`, and the
+application expects exactly their answers (`filetype` is decided by
+extension, `selected` is a real path) - and Titan draws the list. One trap:
+the `rescue` must be **per entry**. A Windows home directory is full of
+things that raise when asked about - the "Application Data" junction loops,
+OneDrive placeholders are not there until fetched - and one rescue around the
+whole loop means the FIRST such entry ends the listing.
+
+#### Sound: the keywords are not optional
+
+`create_sound_from_asset(name, sample:, loop:, effect_buffer:, ...)` -
+Purrposterous asks for its background music with `loop: true` and wraps the
+call in `rescue Exception`, so a signature that did not take `loop:` did not
+raise where anybody could see it: the game logged one line and played in
+complete silence. A keyword this bridge cannot act on (`effect_buffer` is
+Elten's own DSP) is ACCEPTED and ignored, which is the difference between a
+game with no reverb and a game with no sound. `loop` belongs to the SOUND, so
+an application sets it up once and then just calls `play`.
+
+#### The libraries Elten's applications use
+
+Installed into the component's own Ruby, from Elten's `Gemfile`: **nokogiri,
+sqlite3, rubyzip, base62, http-2**, on top of what CRuby 4.0.6 already
+carries (json, openssl, net-http, fiddle, bigdecimal, ostruct, win32ole,
+digest, uri, socket). They live in `ruby/lib/ruby/gems/4.0.0/`, so the
+component stays portable.
+
+Two are NOT working yet and are the honest exceptions: `ruby-xz` and
+`zstd-ruby` are native-extension gems whose compiled artefacts did not
+survive being moved into the component (`gem install --install-dir` cannot
+write to the OneDrive path, so they are installed to the user's gem
+directory and copied). Neither is reached by any installed application -
+Titan reads `.eltenapp` zstd in Python - but an application that needs them
+will find them missing.
+
+#### The Ruby is carried
+
+`ruby/` is CRuby 4.0.6 (RubyInstaller, 46 MB pruned of docs and headers,
+`LICENSE.txt` kept), so the bridge works on a machine that has never had Ruby
+and never had Elten. `ELTEN_BRIDGE_RUBY` points it at another interpreter,
+and one on `PATH` is the last resort. `RUBYOPT` and `RUBYLIB` are cleared for
+an application's process: whatever the machine's own Ruby wants loaded into
+every interpreter is not something an Elten application asked for, and a `-r`
+in there is code running inside somebody else's program.
+
+- Tests: `tests/test_elten_bridge.py` (run it directly; 62 tests). Nothing
+  opens a window, plays a sound, speaks or reaches the network. The Ruby half
+  is exercised with the interpreter the component carries - a program that
+  runs, one that raises, `alert`'s two-argument signature, a `Runner`
+  answering keys, the confinement refused from inside Ruby, an application
+  writing to stdout without corrupting the wire, and `_()` answering out of
+  the package's own `.mo`. The applications under test are BUILT by the
+  tests, byte for byte in the real layout, so they do not need Elten
+  installed; the ones that do read the user's own skip themselves instead.
+
 ### The same menus in all three interfaces
 
 `src/ui/program_menu.py` names what the menu bar can do, once. The graphical

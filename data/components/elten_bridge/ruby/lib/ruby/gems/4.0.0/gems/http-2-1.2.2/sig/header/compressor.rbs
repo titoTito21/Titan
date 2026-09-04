@@ -1,0 +1,30 @@
+module HTTP2
+  module Header
+    class Compressor
+      include PackingExtensions
+      include BufferUtils
+
+      @cc: EncodingContext
+
+      def table_size=: (Integer) -> void
+
+      def integer: (Integer, Integer, buffer: String, ?offset: Integer) -> String
+
+      def string: (String, ?String buffer) -> String
+
+      def header: (header_command, ?String) -> String
+
+      def encode: (Enumerable[header_pair]) -> String
+
+      private
+
+      def initialize: (?connection_opts options) -> void
+
+      def huffman_string: (String str, ?String buffer) -> String
+
+      def plain_string: (String str, ?String buffer) -> String
+
+      def set_huffman_size: (String str, Integer huffman_offset) -> String
+    end
+  end
+end

@@ -1,0 +1,112 @@
+module HTTP2
+  class Connection
+    include FlowBuffer
+    include Emitter
+    include BufferUtils
+
+    REQUEST_MANDATORY_HEADERS: Array[String]
+
+    RESPONSE_MANDATORY_HEADERS: Array[String]
+
+    CONNECTION_FRAME_TYPES: Array[Symbol]
+
+    HEADERS_FRAME_TYPES: Array[Symbol]
+
+    STREAM_OPEN_STATES: Array[Symbol]
+
+    attr_reader state: Symbol
+
+    attr_reader local_window: Integer
+    attr_reader remote_window: Integer
+
+    alias window local_window
+
+    attr_reader remote_settings: settings_hash
+    attr_reader local_settings: settings_hash
+    attr_reader pending_settings: settings_ary
+
+    attr_accessor active_stream_count: Integer
+
+    @stream_id: Integer
+    @active_stream_count: Integer
+    @last_stream_id: Integer
+
+    @streams: Hash[Integer, Stream]
+    @streams_recently_closed: Hash[Integer, Numeric]
+    @oldest_stream_recently_closed: Numeric
+
+    @framer: Framer
+
+    type role_type = :client | :server
+
+    @local_role: role_type
+    @remote_role: role_type
+
+    @local_window_limit: Integer
+    @remote_window_limit: Integer
+
+    @compressor: Header::Compressor
+    @decompressor: Header::Decompressor
+    @error: Symbol?
+
+    @recv_buffer: String
+    @continuation: Array[frame]
+    @continuation_size: Integer
+
+    @h2c_upgrade: Symbol?
+    @closed_since: Float?
+    @received_frame: bool
+
+    def closed?: () -> bool
+
+    def closing?: () -> bool
+
+    def close!: () -> void
+
+    def new_stream: (**untyped) -> Stream
+
+    def ping: (String) -> void
+            | (String) { () -> void } -> void
+
+    def goaway: (?Symbol, ?String) -> void
+
+    def window_update: (Integer increment) -> void
+
+    def settings: (settings_enum payload) -> void
+
+    def receive: (String data) -> void
+    alias << receive
+
+    def initialize: (?connection_opts) -> void
+
+    private
+
+    def send: (connection_frame_props | stream_frame_props frame) -> void
+
+    def encode: (frame frame) -> void
+
+    def connection_frame?: (frame) -> bool
+
+    def connection_management: (connection_frame frame) -> void
+
+    def ping_management: (frame) -> void
+
+    def validate_settings: (role_type, settings_enum) -> void
+
+    def connection_settings: (settings_frame) -> void
+
+    def decode_headers: (headers_frame | push_promise_frame) -> void
+
+    def encode_headers: (headers_frame | push_promise_frame) -> void
+
+    def activate_stream: (id: Integer, ?max_concurrent_streams: Integer, **untyped) -> Stream
+
+    def verify_stream_order: (Integer id) -> void
+
+    def verify_pseudo_headers: (headers_frame | push_promise_frame) -> void
+
+    def _verify_pseudo_headers: (headers_frame | push_promise_frame, Array[String]) -> void
+
+    def connection_error: (?Symbol error, ?msg: String?, ?e: StandardError?) -> void
+  end
+end

@@ -1,0 +1,2 @@
+Cling Demo. Something is hidden on a board of nine.
+Use the arrow keys to move, space to search where you are.

@@ -1,0 +1,23 @@
+module HTTP2
+  module FlowBuffer
+    MAX_WINDOW_SIZE: Integer
+
+    attr_reader send_buffer: FrameBuffer
+
+    def buffered_amount: () -> Integer
+
+    def flush: () -> void
+
+    private
+
+    def update_local_window: (data_frame frame) -> void
+
+    def calculate_window_update: (Integer) -> void
+
+    def send_data: (?data_frame_props? frame, ?bool encode) -> void
+
+    def send_frame: (data_frame_props frame, bool encode) -> void
+
+    def process_window_update: (frame: window_update_frame, ?encode: bool) -> void
+  end
+end

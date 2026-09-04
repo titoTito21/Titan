@@ -1,0 +1,10 @@
+[cling app]
+name = Cling Demo
+name_pl = Demo Clinga
+description = A small audio game, and the shortest complete example of a Cling application.
+description_pl = Mala gra dzwiekowa i najkrotszy kompletny przyklad aplikacji Cling.
+category = games
+engine = script
+entry = main.lua
+version = 1.0
+status = 0

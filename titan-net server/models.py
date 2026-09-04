@@ -1969,6 +1969,8 @@ class Database:
                         f"group '{default_group_name}' across {len(categories)} forum(s)"
                     )
 
+            self._ensure_builtin_extensions(cursor)
+
             conn.commit()
             conn.close()
 
@@ -1982,6 +1984,53 @@ class Database:
             logger = logging.getLogger('TitanNetDB')
             logger.error(f"Database initialization failed: {e}")
             raise RuntimeError(f"Failed to initialize database: {e}")
+
+
+    #: Extensions the server provides itself. They are not somebody's uploaded
+    #: code - there is no `client_code` at all - they exist so that a part of
+    #: Titan that is already shipped has somewhere on the server to keep its
+    #: data. `/api/extensions/<slug>/data/<key>` refuses a slug that is not an
+    #: ACTIVE extension, so without a row here every one of Cling's calls came
+    #: back "Active extension not found": a Klango game's high scores could be
+    #: sent and never arrived, and its leaderboard was always empty.
+    BUILTIN_EXTENSIONS = (
+        ('cling', 'Cling',
+         "Storage for Titan's Klango subsystem: shared high-score tables and "
+         "the per-player records a Klango application keeps."),
+    )
+
+    def _ensure_builtin_extensions(self, cursor):
+        """Make sure the server's own extensions exist and are active.
+
+        Only ever INSERTS: an extension somebody has since edited, renamed or
+        taken out of service is left exactly as they left it.
+        """
+        try:
+            cursor.execute("SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1")
+            row = cursor.fetchone()
+            if not row:
+                cursor.execute("SELECT id FROM users ORDER BY id LIMIT 1")
+                row = cursor.fetchone()
+            if not row:
+                # No accounts yet, so nothing to own them. The next start,
+                # which is the first one that can have used them, will do it.
+                return
+            author_id = row['id'] if not isinstance(row, tuple) else row[0]
+            now = datetime.now().isoformat()
+            for slug, name, description in self.BUILTIN_EXTENSIONS:
+                cursor.execute("SELECT id FROM extensions WHERE slug = ?", (slug,))
+                if cursor.fetchone():
+                    continue
+                cursor.execute(
+                    "INSERT INTO extensions (slug, name, description, author_id, version, "
+                    "client_code, manifest, code_hash, kind, status, created_at, updated_at, "
+                    "approved_by, approved_at) "
+                    "VALUES (?, ?, ?, ?, '1.0', NULL, NULL, '', 'single', 'active', ?, ?, ?, ?)",
+                    (slug, name, description, author_id, now, now, author_id, now),
+                )
+                print(f"Migration: built-in extension '{slug}' created")
+        except sqlite3.Error as error:
+            print(f"Migration: built-in extensions could not be created: {error}")
 
     def generate_unique_titan_number(self) -> int:
         """Generate unique 5-digit Titan number - optimized: fetch all used numbers once"""
@@ -4735,34 +4784,66 @@ class Database:
 
     # ----- Curated server-side KV store for active extensions -----
 
+    #: Marker for a stored value that is not a plain string. SQLite can only
+    #: bind text, numbers and blobs, so a caller that stores a LIST - which is
+    #: exactly what a high-score table is - used to reach the driver as a
+    #: Python list and fail there with an InterfaceError the caller saw as
+    #: HTTP 500. The marker is a control character, which no value written
+    #: before this existed can begin with, so every row already in the
+    #: database still reads back exactly as it was written.
+    _EXT_JSON_PREFIX = '\x00json:'
+
+    @classmethod
+    def _ext_storage_encode(cls, value):
+        if value is None or isinstance(value, str):
+            return value
+        return cls._EXT_JSON_PREFIX + json.dumps(value, ensure_ascii=False)
+
+    @classmethod
+    def _ext_storage_decode(cls, value):
+        if isinstance(value, str) and value.startswith(cls._EXT_JSON_PREFIX):
+            try:
+                return json.loads(value[len(cls._EXT_JSON_PREFIX):])
+            except (ValueError, TypeError):
+                return None
+        return value
+
     @_serialized_write
-    def ext_storage_set(self, extension_id: int, key: str, value: str) -> Dict[str, Any]:
+    def ext_storage_set(self, extension_id: int, key: str, value) -> Dict[str, Any]:
+        """Store one value for an extension. Any JSON-serialisable value.
+
+        It was typed `str` and stored raw, which is true of everything the web
+        UI writes and untrue of the first client to store a structure: Cling's
+        shared high-score table is a list of rows.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
         now = datetime.now().isoformat()
         cursor.execute(
             "INSERT OR REPLACE INTO extension_storage (extension_id, key, value, updated_at) "
             "VALUES (?, ?, ?, ?)",
-            (extension_id, key, value, now),
+            (extension_id, key, self._ext_storage_encode(value), now),
         )
         conn.commit()
         conn.close()
         return {"success": True}
 
-    def ext_storage_get(self, extension_id: int, key: str) -> Optional[str]:
+    def ext_storage_get(self, extension_id: int, key: str):
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM extension_storage WHERE extension_id = ? AND key = ?",
                        (extension_id, key))
         row = cursor.fetchone()
         conn.close()
-        return self._row_get(row, 'value') if row else None
+        return self._ext_storage_decode(self._row_get(row, 'value')) if row else None
 
     def ext_storage_all(self, extension_id: int) -> Dict[str, Any]:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT key, value FROM extension_storage WHERE extension_id = ?", (extension_id,))
-        data = {self._row_get(r, 'key'): self._row_get(r, 'value', 1) for r in cursor.fetchall()}
+        data = {self._row_get(r, 'key'):
+                self._ext_storage_decode(self._row_get(r, 'value', 1))
+                for r in cursor.fetchall()}
         conn.close()
         return data
 

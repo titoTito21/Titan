@@ -1,0 +1,7 @@
+appid=1001
+appname=clingdemo
+summary=Cling Demo - a small audio game that shows what a Cling application is
+version=1.0
+category=games
+engine=script
+platform=any

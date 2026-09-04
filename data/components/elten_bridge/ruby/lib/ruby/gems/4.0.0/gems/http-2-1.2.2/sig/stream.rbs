@@ -1,0 +1,93 @@
+module HTTP2
+  class Stream
+    include FlowBuffer
+    include Emitter
+
+    STREAM_OPEN_STATES: Array[Symbol]
+
+    attr_reader id: Integer
+    attr_reader state: Symbol
+    attr_reader parent: Stream?
+    attr_reader weight: Integer
+    attr_reader dependency: Integer
+    attr_reader remote_window: Integer
+    attr_reader local_window: Integer
+    attr_reader closed: Symbol?
+
+    @connection: Connection
+    @local_window_max_size: Integer
+    @error: bool
+    @_method: String?
+    @_content_length: Integer?
+    @_status_code: Integer?
+    @_waiting_on_trailers: bool
+    @_trailers: Array[String]?
+    @received_data: bool
+    @activated: bool
+
+    alias window local_window
+
+    def closed?: () -> bool
+
+    def receive: (frame frame) -> void
+
+    alias << receive
+
+    def verify_trailers: (headers_frame frame) -> void
+
+    def calculate_content_length: (Integer?) -> void
+
+    def send: (stream_frame_props frame) -> void
+
+    def headers: (Enumerable[header_pair] headers, ?end_headers: bool, ?end_stream: bool) -> void
+
+    def promise: (Enumerable[header_pair] headers, ?end_headers: bool) { (Stream) -> void } -> void
+
+    def reprioritize: (?weight: Integer, ?dependency: Integer, ?exclusive: bool) -> void
+
+    def data: (String payload, ?end_stream: bool) -> void
+
+    def chunk_data: (String payload, Integer max_size) { (String) -> void } -> String
+
+    def close: (Symbol error) -> void
+             | () -> void
+
+    def cancel: () -> void
+
+    def refuse: () -> void
+
+    def window_update: (Integer increment) -> void
+
+    private
+
+    def initialize: (
+      connection: Connection,
+      id: Integer,
+      ?weight: Integer,
+      ?dependency: Integer,
+      ?exclusive: bool,
+      ?parent: Stream?,
+      ?state: Symbol
+    ) -> untyped
+
+    def transition: (stream_frame_props frame, bool sending) -> void
+
+    def event: (Symbol newstate) -> void
+
+    def activate_stream_in_conn: () -> void
+
+    def close_stream_in_conn: (*untyped) -> void
+
+    def complete_transition: (frame) -> void
+
+    def process_priority: (priority_frame_inner_props frame) -> void
+
+    def end_stream?: (stream_frame_props frame) -> boolish
+
+    def stream_error: (?Symbol error, ?msg: String?) -> void
+
+    alias error stream_error
+
+    def manage_state: (stream_frame_props frame) { () -> void } -> void
+  end
+end

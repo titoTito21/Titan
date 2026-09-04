@@ -1,0 +1,84 @@
+# frozen_string_literal: true
+
+module HTTP2
+  module BufferUtils
+    if RUBY_VERSION > "3.4.0"
+      def append_str(str, data)
+        str.append_as_bytes(data)
+      end
+    else
+      def append_str(str, data)
+        enc = data.encoding
+        reset = false
+
+        if enc != Encoding::BINARY
+          reset = true
+          data = data.dup if data.frozen?
+          data.force_encoding(Encoding::BINARY)
+        end
+        str << data
+      ensure
+        data.force_encoding(enc) if reset
+      end
+    end
+
+    if String.method_defined?(:bytesplice)
+      def read_str(str, n)
+        return "".b if n == 0
+
+        enc = str.encoding
+
+        if enc != Encoding::BINARY
+          str = str.dup if str.frozen?
+          str.force_encoding(Encoding::BINARY)
+        end
+
+        chunk = str.byteslice(0, n)
+        str.bytesplice(0, chunk.length, "")
+        chunk.force_encoding(Encoding::BINARY)
+      end
+    else
+      def read_str(str, n)
+        return "".b if n == 0
+
+        chunk = str.byteslice(0, n)
+        remaining = str.byteslice(n, str.size - n)
+        remaining ? str.replace(remaining) : str.clear
+        chunk.force_encoding(Encoding::BINARY)
+      end
+    end
+
+    def read_uint32(str)
+      read_str(str, 4).unpack1("N")
+    end
+  end
+
+  # this mixin handles backwards-compatibility for the new packing options
+  # shipping with ruby 3.3 (see https://docs.ruby-lang.org/en/3.3/packed_data_rdoc.html)
+  module PackingExtensions
+    if RUBY_VERSION < "3.3.0"
+      def pack(array_to_pack, template, buffer:, offset: -1)
+        packed_str = array_to_pack.pack(template)
+        case offset
+        when -1
+          append_str(buffer, packed_str)
+        when 0
+          buffer.prepend(packed_str)
+        else
+          buffer.insert(offset, packed_str)
+        end
+      end
+    else
+      def pack(array_to_pack, template, buffer:, offset: -1)
+        case offset
+        when -1
+          array_to_pack.pack(template, buffer: buffer)
+        when 0
+          buffer.prepend(array_to_pack.pack(template))
+        else
+          buffer.insert(offset, array_to_pack.pack(template))
+        end
+      end
+    end
+  end
+end

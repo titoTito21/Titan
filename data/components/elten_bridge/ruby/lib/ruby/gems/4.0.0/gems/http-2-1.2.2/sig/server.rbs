@@ -1,0 +1,12 @@
+module HTTP2
+  class Server < Connection
+
+    def upgrade: (String settings, Enumerable[header_pair] headers, String body) -> void
+
+    def origin_set=: (Array[_ToS]) -> void
+
+    private
+
+    def promise: (Stream parent, Enumerable[header_pair] headers, frame_control_flags flags) { (Stream) -> void } -> void
+  end
+end

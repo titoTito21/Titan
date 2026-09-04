@@ -1,0 +1,4 @@
+Arrows - move across the board.
+Space - search the place you are standing on.
+Enter - say the score and how many searches are left.
+Escape - leave.

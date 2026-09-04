@@ -1,0 +1,164 @@
+# Cling - the Klango subsystem for Titan.
+msgid ""
+msgstr ""
+"Project-Id-Version: cling 1.0\\n"
+"MIME-Version: 1.0\\n"
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Content-Transfer-Encoding: 8bit\\n"
+"Language: pl\\n"
+
+msgid "Account: %s"
+msgstr "Konto: %s"
+
+msgid "All"
+msgstr "Wszystkie"
+
+msgid "An application called %s is already installed."
+msgstr "Aplikacja o nazwie %s jest już zainstalowana."
+
+msgid "Applications are read from: %s"
+msgstr "Aplikacje są czytane z: %s"
+
+msgid "Category"
+msgstr "Kategoria"
+
+msgid "Choose a Klango application folder, or the folder its applications are in"
+msgstr "Wybierz katalog aplikacji Klango albo katalog, w którym one są"
+
+msgid "Cling"
+msgstr "Cling"
+
+msgid "Cling is ready"
+msgstr "Cling gotowy"
+
+msgid "Cling:"
+msgstr "Cling:"
+
+msgid "Details"
+msgstr "Szczegóły"
+
+msgid "Engine"
+msgstr "Silnik"
+
+msgid "Folder"
+msgstr "Katalog"
+
+msgid "Games"
+msgstr "Gry"
+
+msgid "High scores"
+msgstr "Najlepsze wyniki"
+
+msgid "Identifier"
+msgstr "Identyfikator"
+
+msgid "Install a Klango application..."
+msgstr "Zainstaluj aplikację Klango..."
+
+msgid "Installed %s."
+msgstr "Zainstalowano %s."
+
+msgid "Installed: %s"
+msgstr "Zainstalowane: %s"
+
+msgid "It could not be copied: %s"
+msgstr "Nie udało się skopiować: %s"
+
+msgid "Language"
+msgstr "Język"
+
+msgid "Learning"
+msgstr "Nauka"
+
+msgid "Left alone: %s"
+msgstr "Pominięte: %s"
+
+msgid "Name"
+msgstr "Nazwa"
+
+msgid "No Cling applications are installed"
+msgstr "Nie ma zainstalowanych aplikacji Cling"
+
+msgid "No Cling applications are installed."
+msgstr "Nie ma zainstalowanych aplikacji Cling."
+
+msgid "No Klango applications were found there."
+msgstr "Nie znaleziono tam aplikacji Klango."
+
+msgid "No scores yet."
+msgstr "Nie ma jeszcze wyników."
+
+msgid "Nothing to report."
+msgstr "Nie ma nic do powiedzenia."
+
+msgid "On Titan-Net:"
+msgstr "W Titan-Net:"
+
+msgid "Online"
+msgstr "Sieć"
+
+msgid "Open its folder"
+msgstr "Otwórz jej katalog"
+
+msgid "Other"
+msgstr "Inne"
+
+msgid "Problem"
+msgstr "Problem"
+
+msgid "Read out everything an application says"
+msgstr "Czytaj wszystko, co mówi aplikacja"
+
+msgid "Run"
+msgstr "Uruchom"
+
+msgid "Send high scores to my Titan-Net account"
+msgstr "Wysyłaj najlepsze wyniki na moje konto Titan-Net"
+
+msgid "Soundscapes"
+msgstr "Pejzaże dźwiękowe"
+
+msgid "That folder has no kni.txt, so it is not a Klango or Cling application."
+msgstr "W tym katalogu nie ma kni.txt, więc to nie jest aplikacja Klango ani Cling."
+
+msgid "There is no folder there."
+msgstr "Nie ma tam takiego katalogu."
+
+msgid "This application ships no help."
+msgstr "Ta aplikacja nie ma pomocy."
+
+msgid "This application ships no text."
+msgstr "Ta aplikacja nie ma tekstów."
+
+msgid "Tools"
+msgstr "Narzędzia"
+
+msgid "Version"
+msgstr "Wersja"
+
+msgid "What it says"
+msgstr "Co mówi"
+
+msgid "What the application has said"
+msgstr "Co powiedziała aplikacja"
+
+msgid "application"
+msgstr "aplikacja"
+
+msgid "board game"
+msgstr "gra planszowa"
+
+msgid "course"
+msgstr "kurs"
+
+msgid "instrument"
+msgstr "instrument"
+
+msgid "soundscape"
+msgstr "pejzaż dźwiękowy"
+
+msgid "text"
+msgstr "tekst"
+
+msgid "{tab}: {n} applications"
+msgstr "{tab}: aplikacji: {n}"

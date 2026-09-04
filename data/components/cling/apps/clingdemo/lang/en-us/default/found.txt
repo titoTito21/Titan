@@ -1,0 +1,1 @@
+Found it, in %d searches. Score %d.

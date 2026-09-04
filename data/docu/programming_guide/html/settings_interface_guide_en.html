@@ -258,6 +258,7 @@
 <li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
 <li><a href="shell_addon_guide_en.html">Shell Add-ons</a></li>
 <li><a href="settings_interface_guide_en.html" class="active">Settings Interfaces</a></li>
+<li><a href="cling_guide_en.html">Cling Applications (Klango)</a></li>
 <li><a href="action_api_guide_en.html">Action API</a></li>
                 </ul>
             </nav>
@@ -593,7 +594,7 @@ libs = lib</code></pre>
 <p>Two things follow from how the model is built and are worth knowing:</p>
 
 <li><strong>A control nobody named is not offered.</strong> A <code>wx.Choice</code> is labelled by the static text in front of it — that is how every wx program is built — and a control with no caption is left out rather than shown as a nameless box. It is still reachable in Titan's own window.</li>
-<li><strong>Setting a value fires the control's own event</strong>, because that is where Titan applies things live (the speech rate, the sound theme, the switch that makes the Titan shell category appear). Setting it silently would leave the window and the program disagreeing.</li>
+<li><strong>Setting a value fires the control's own event</strong>, because that is where Titan applies things live (the speech rate, the sound theme, the switch the whole Titan shell hangs off). Setting it silently would leave the window and the program disagreeing.</li>
 
 <h2>Threading</h2>
 

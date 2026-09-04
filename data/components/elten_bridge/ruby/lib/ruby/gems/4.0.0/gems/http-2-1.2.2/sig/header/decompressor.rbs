@@ -1,0 +1,25 @@
+module HTTP2
+  module Header
+    class Decompressor
+      include BufferUtils
+
+      FORBIDDEN_HEADERS: Array[String]
+
+      @cc: EncodingContext
+
+      def table_size=: (Integer) -> void
+
+      def integer: (String, Integer) -> Integer
+
+      def string: (String) -> String
+
+      def header: (String) -> header_command
+
+      def decode: (String, frame?) -> Array[header_pair]
+                | (String) -> Array[header_pair]
+      private
+
+      def initialize: (?connection_opts options) -> void
+    end
+  end
+end

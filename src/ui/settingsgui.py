@@ -916,7 +916,14 @@ class SettingsFrame(wx.Frame):
         vbox.Add(self.launcher_desc_label, flag=wx.LEFT | wx.TOP, border=10)
 
         self.launcher_description = wx.TextCtrl(self.general_panel, style=wx.TE_MULTILINE | wx.TE_READONLY, size=(-1, 80))
-        self.launcher_description.SetLabel(_("Launcher description:"))
+        # SetName, not SetLabel: a wxTextCtrl asserts on SetLabel ("Use
+        # SetValue() or ChangeValue() instead"), and that assertion was raised
+        # while the Settings window was still being built - so the whole window
+        # failed to open, taking every category with it, this one and the
+        # components' alike. The intent here was never to put text IN the box;
+        # it was to give a read-only box a name a screen reader can announce,
+        # which is what SetName does.
+        self.launcher_description.SetName(_("Launcher description"))
         vbox.Add(self.launcher_description, flag=wx.LEFT | wx.EXPAND, border=10)
 
         # Populate launcher list

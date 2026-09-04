@@ -427,6 +427,7 @@ def generate_navigation(files, current_file, language='pl'):
         'gamepad_mode_guide_pl.md': 'Tryby gamepada',
         'shell_addon_guide_pl.md': 'Dodatki powłoki',
         'settings_interface_guide_pl.md': 'Interfejsy ustawień',
+        'cling_guide_pl.md': 'Aplikacje Cling (Klango)',
         'action_api_guide_pl.md': 'Action API',
     }
 
@@ -442,6 +443,7 @@ def generate_navigation(files, current_file, language='pl'):
         'gamepad_mode_guide_en.md': 'Gamepad Modes',
         'shell_addon_guide_en.md': 'Shell Add-ons',
         'settings_interface_guide_en.md': 'Settings Interfaces',
+        'cling_guide_en.md': 'Cling Applications (Klango)',
         'action_api_guide_en.md': 'Action API',
     }
 

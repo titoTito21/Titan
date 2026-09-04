@@ -1,0 +1,30 @@
+module HTTP2
+  module Header
+    type header_key = :type | :name | :value | :index
+    type header_value = Integer | String | :indexed | :changetablesize | :incremental | :noindex | :neverindexed
+
+    type context_hash = {
+     huffman: (:always | :never | :shorter),
+     index: (:all | :static | :never),
+     table_size: Integer
+    }
+
+    type header_type = :indexed | :incremental | :noindex | :neverindexed | :changetablesize
+
+    type header_command = { type: :indexed , name: Integer } |
+                          { type: (:incremental | :noindex | :neverindexed), name: Integer | String, value: String } |
+                          { type: :changetablesize, ?name: Integer, value: Integer }
+
+    HEADREP: Hash[header_type, { prefix: Integer, pattern: Integer }]
+
+    NAIVE: Hash[Symbol, Symbol]
+    LINEAR: Hash[Symbol, Symbol]
+    STATIC: Hash[Symbol, Symbol]
+    SHORTER: Hash[Symbol, Symbol]
+    NAIVEH: Hash[Symbol, Symbol]
+    LINEARH: Hash[Symbol, Symbol]
+    STATICH: Hash[Symbol, Symbol]
+    SHORTERH: Hash[Symbol, Symbol]
+
+  end
+end

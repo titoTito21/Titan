@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing a Cling application - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
+<li><a href="shell_addon_guide_en.html">Shell Add-ons</a></li>
+<li><a href="settings_interface_guide_en.html">Settings Interfaces</a></li>
+<li><a href="cling_guide_en.html" class="active">Cling Applications (Klango)</a></li>
+<li><a href="action_api_guide_en.html">Action API</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Writing a Cling application</h1>
+            </div>
+            <h1>Writing a Cling application</h1>
+
+<p>Cling is Titan's Klango subsystem. A Cling application is a folder - or a single
+<code>.pag</code> file - that Titan speaks, plays and keeps a score for. It is deliberately
+the same folder a Klango application already is, so an application written for
+Klango is a Cling application with nothing changed.</p>
+
+<p>Applications live in <code>data/cling/</code>: bundled beside Titan, or - far more usually -
+in the user's own overlay, which is where **Settings -> Cling -> Install a
+Klango application** puts them.</p>
+
+<h2>The shape of an application</h2>
+
+<pre><code>mole/
+  kni.txt                       what it is
+  __cling__.TCE                 optional: what Titan should call it
+  lang/default                  the locale everything else falls back to
+  lang/en-us/default/*.txt      everything it says
+  skin/default/levels/*.lev     levels, and the topologies they name
+  skin/default/themes/*/*.ogg   its sounds
+  main.lua                      optional: its own logic</code></pre>
+
+<h3><code>kni.txt</code></h3>
+
+<p>Klango's own manifest, read unchanged:</p>
+
+<pre><code>appid=18
+appname=mole
+summary=Mole No More - whack a mole audio game with 13 levels
+version=1.0
+minklango=20260803
+platform=any</code></pre>
+
+<p>Cling also reads <code>category</code> (<code>games</code>, <code>edu</code>, <code>soundscape</code>, <code>network</code>, <code>tools</code>),
+<code>engine</code> and <code>entry</code>. A key that is none of these is reported rather than
+ignored, so a line nobody reads is never mistaken for one that works.</p>
+
+<h3><code>__cling__.TCE</code></h3>
+
+<p>Only for an application written for Titan, and only for what <code>kni.txt</code> cannot
+say - a name in two languages, and being switched off:</p>
+
+<pre><code class="language-ini">[cling app]
+name = Cling Demo
+name_pl = Demo Clinga
+description = A small audio game.
+description_pl = Mala gra dzwiekowa.
+category = games
+engine = script
+entry = main.lua
+status = 0</code></pre>
+
+<h3>What it says</h3>
+
+<p>One file per thing the application can say, under
+<code>lang/&lt;locale&gt;/default/</code>, with <code>%d</code> and <code>%s</code> where a number or a name goes:</p>
+
+<pre><code>welcome.txt           Welcome to Mole No More.
+instructions.txt      Whack as many moles as you can in %d seconds.
+current_status.txt    PTS: %d
+help.txt              &lt;b&gt;Arrows&lt;/b&gt; - move on the gameboard.
+klangomenu.txt        Mole No More</code></pre>
+
+<p><code>klangomenu.txt</code> is what the application is CALLED, in that language, and Cling
+prefers it over any name a manifest repeats in English. Markup (<code>&lt;b&gt;</code>, <code>&lt;u&gt;</code>) is
+for the eye and is never spoken.</p>
+
+<p><code>lang/default</code> holds one line - the locale to fall back to. Cling resolves, in
+order: the user's language, that fallback, <code>en-us</code>, then whatever is there.</p>
+
+<h2>The five engines</h2>
+
+<p>Cling works out which engine drives an application from what its folder really
+holds. Nothing is written and no file is edited.</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Engine</th>
+<th>Chosen when</th>
+<th>What it is</th>
+</tr></thead><tbody>
+<tr>
+<td><code>script</code></td>
+<td><code>main.lua</code>, <code>main.py</code>, or Cling ships logic for it</td>
+<td>the application is a program</td>
+</tr>
+<tr>
+<td><code>grid_hunt</code></td>
+<td><code>skin/<em>/levels/</em>.lev</code></td>
+<td>a board, a cursor, a clock, things that come and go</td>
+</tr>
+<tr>
+<td><code>soundscape</code></td>
+<td><code>spec.txt</code>, or <code>data/*.ogg</code></td>
+<td>a place, walked through</td>
+</tr>
+<tr>
+<td><code>instrument</code></td>
+<td>a folder of samples named after keys</td>
+<td>the keyboard as an instrument</td>
+</tr>
+<tr>
+<td><code>typing</code></td>
+<td>KTouch lesson files under <code>trainings/</code></td>
+<td>a typing course</td>
+</tr>
+<tr>
+<td><code>reader</code></td>
+<td>anything else with words</td>
+<td>everything the application says, as a list</td>
+</tr>
+</tbody></table>
+
+<p>A manifest may name an engine outright; a name Cling does not have is refused
+and reported rather than silently becoming something else.</p>
+
+<h3><code>grid_hunt</code> - the level file is the rules</h3>
+
+<pre><code class="language-lua">Level = {
+  text = &quot;level5_info&quot;,     -- what the level says before it starts
+  topology = &quot;3x3&quot;,         -- which board, and therefore where every field IS
+  fields = 9,
+  hit_target = 30,          -- how many must be hit to finish
+  nmole_time = 3,           -- how long an ordinary one stays up (0 = for ever)
+  smole_time = 2.5,
+  max_nmoles = 2,           -- how many may be up at once
+  max_smoles = 1,
+  smole_time_bonus = 2,     -- seconds a special one adds to the clock
+  time = 60,                -- Cling&#x27;s own: how long a level lasts
+}</code></pre>
+
+<p>A topology gives every field a place in the sound field, and that is what makes
+a board aimable without a screen:</p>
+
+<pre><code class="language-lua">Topology = {
+  size = { x = 3, y = 3, z = 1 },
+  coords = { [1] = { [1] = { [1] = { x=-0.800, y=0.250, z=0.000, f=0 } } } }
+}</code></pre>
+
+<p><code>x</code> is across, <code>y</code> is away, <code>z</code> is up, <code>f</code> is a pitch shift in cents. Cling
+converts them once: a field knows its own <code>pan</code> (-1..1), <code>azimuth</code>, <code>elevation</code>,
+<code>gain</code> and <code>pitch</code>. A level with no <code>.top</code> file gets an even grid.</p>
+
+<h3><code>soundscape</code> - <code>spec.txt</code> is the place</h3>
+
+<pre><code>start : glowny
+Location : glowny
+    BkgVolume : 0.9
+    links : burta, rufa
+    fx : g1
+        fxangle     : 300, 60
+        fxdist      : 1, 1
+        fxtimestart : 1, 120
+        fxtimedelta : 120, 240
+        fxvol       : 0.3, 0.8</code></pre>
+
+<p>A location's background recording is <code>data/&lt;name&gt;_bkg.ogg</code>, its name and
+description are <code>lang/&lt;locale&gt;/default/&lt;name&gt;_name.txt</code> and <code>&lt;name&gt;_comment.txt</code>.</p>
+
+<h3><code>instrument</code> - the file name is the key</h3>
+
+<p><code>sounds/&lt;set&gt;/z.wav</code> is played by <code>z</code>. A name ending <code>_l</code> (<code>q_l.wav</code>) loops, and
+its key is a switch rather than a note. <code>.info.txt</code> beside them is read out as
+the set's description.</p>
+
+<h2>An application with its own logic</h2>
+
+<p>Ship <code>main.lua</code>. Cling carries its own Lua interpreter - inside the component,
+in <code>cling/lua/</code> - so nothing has to be installed; if a native <code>lupa</code> is dropped
+into <code>data/components/cling/lib/</code> it is used instead, and an application cannot
+tell the difference.</p>
+
+<p>Five functions, all optional:</p>
+
+<pre><code class="language-lua">function on_start()        -- opened
+function on_key(key)       -- &#x27;up&#x27; &#x27;down&#x27; &#x27;left&#x27; &#x27;right&#x27; &#x27;space&#x27; &#x27;enter&#x27;
+                           -- &#x27;escape&#x27; &#x27;a&#x27;..&#x27;z&#x27; &#x27;0&#x27;..&#x27;9&#x27; &#x27;f1&#x27;..; true when used
+function on_tick(now)      -- called often; `now` is seconds, monotonic
+function on_stop()         -- being left
+function status()          -- one line for the status bar
+function help()            -- what the keys do</code></pre>
+
+<p><code>main.py</code> works identically, with the same object under the name <code>cling</code>.</p>
+
+<h3>The host</h3>
+
+<pre><code class="language-lua">-- words
+cling.say(text, position, pitch)     position -1 (left) .. 1 (right)
+cling.say_at(text, field)            said from a place on the board
+cling.text(name, ...)                one of the application&#x27;s own texts
+cling.show(text)                     said AND written into the window
+
+-- sound
+cling.play(name, position, gain)     the skin first, then Titan&#x27;s sound theme
+                                     always placed, whatever Titan&#x27;s own
+                                     stereo setting says - a board is aimed
+                                     at by ear
+cling.play_at(name, field, gain)     pan, height and distance at once
+cling.loop(name, position, gain)     returns a handle
+cling.stop_sound(handle)  cling.stop_sounds()
+
+-- the board
+cling.board(topology, columns, rows) build it; returns how many fields
+cling.field(index)                   { index, column, row, pan, elevation,
+                                       gain, pitch }
+-- saving
+cling.get(key, default)  cling.set(key, value)
+cling.record_score(points)  cling.scores()  cling.best()
+
+-- the player
+cling.account()      their Titan-Net name
+cling.signed_in()    whether Titan-Net is really connected
+cling.sign_in()      sign in with what the user already saved; &#x27;&#x27; if they cannot
+cling.publish_score(points, level)   the shared Titan-Net table; best effort
+cling.leaderboard(limit)
+
+-- the world
+cling.fetch(url, timeout)   a GET over http or https, up to 2 MB
+cling.ask(prompt, default)  a line of text from the player
+
+-- the rest
+cling.now()  cling.set_status(text)  cling.close()
+cling.language()  cling.app_name()  cling.log(text)</code></pre>
+
+<p>There is no file system, no way to start a program and no <code>require</code> outside the
+application's own folder: an application came from wherever the user found it.</p>
+
+<h2>The account</h2>
+
+<p>A Klango application that wanted an account for its scores or its chat is given
+the user's <strong>Titan-Net</strong> account, and never asks for one of its own. The saves
+and the scores are kept per Titan-Net user name, so two people sharing a machine
+keep their own. Nobody signed in plays under <code>local</code>, which works offline and
+loses nothing.</p>
+
+<h2>Packaging</h2>
+
+<p>An application ships as one file, the way a Klango application does:</p>
+
+<pre><code class="language-bash">python src/scripts/pack_cling.py &quot;data/components/cling/apps/clingdemo&quot; -o clingdemo.pag
+python src/scripts/pack_cling.py --unpack clingdemo.pag -o /tmp/look</code></pre>
+
+<p>Put the <code>.pag</code> in <code>data/cling/</code> and it is discovered exactly like a folder. A
+folder of the same name wins, so an application being worked on overrides the
+package it shipped as. Titan's own <code>.TCD</code> packaging works too, because discovery
+is Titan's own.</p>
+
+<p>Klango's own <code>.pag</code> packages are read too - concealment and container both -
+and every file is checked against the MD5 the package carries for it. Drop one
+into <code>data/cling/</code> and it is an application.</p>
+
+<h2>Actions</h2>
+
+<p>Cling declares actions like any other add-on, so the AI, a macro or another
+add-on can drive it: <code>cling.list_applications</code>, <code>cling.run</code>, <code>cling.details</code>,
+<code>cling.scores</code>, <code>cling.install</code>, <code>cling.account</code>, <code>cling.status</code>.</p>
+
+<h2>Adding a genre</h2>
+
+<p>An engine is a genre, and the set is open:</p>
+
+<pre><code class="language-python">from cling import engines
+
+class DartsEngine(engines.Engine):
+    def start(self):
+        self.running = True
+        self.host.show(self.host.text(&#x27;welcome&#x27;))
+
+engines.register(&#x27;darts&#x27;, DartsEngine)</code></pre>
+
+<p>An application then names <code>engine = darts</code> in its manifest.</p>
+
+<h2>Tests</h2>
+
+<p><code>tests/test_cling.py</code> - run it directly. Nothing in it opens a window, plays a
+sound, speaks or reaches the network, and the engines are given a clock the test
+moves by hand, so a whole game is played through in a millisecond.</p>
+
+<h2>Running Klango's own applications</h2>
+
+<p><strong>This is what an application gets by default.</strong> Cling loads its OWN Lua, out
+of its own <code>.pag</code>, on the interpreter Cling carries, and runs Klango's own
+<code>main()</code>; the engines above are the fallback, for an application with no code
+of its own and for a machine where Klango's platform library is not installed.
+<code>cling.emulate &lt;name&gt;</code> reports how far one gets and which primitives it asked
+for that Cling has not written.</p>
+
+<p>The native surface underneath is 310 functions - the families (<code>_Sys_</code>,
+<code>_Snd_</code>, <code>_Inp_</code>, <code>_Voice_</code>, <code>_Dir_</code>, <code>_Gfx_</code>, <code>_Res_</code>, <code>_Net_</code>) and the 120
+the engine exposes with no prefix at all (<code>k_*</code>, <code>urlencode</code>) - and sound, keys
+and speech go to the same places everything else in Cling uses, so an emulated
+application is heard in the user's own voice, through their own sound theme,
+positioned the way Cling positions everything.</p>
+
+<p><strong>The sound is Klango's, placed the way Klango places it.</strong> <code>pos3d</code> is where a
+sound is (x across, y depth, z height) and <code>freq</code> is how high it is, in
+hundredths of a semitone; <code>dmin</code> and <code>dmax</code> belong to the SAMPLE and are
+OpenAL's clamped inverse-distance model, so a board really has depth rather
+than everything being at full volume; <code>pos3dSlide</code> is a sound that travels
+while it plays, which is what a clay pigeon crossing in front of you is; a
+sequence carries its own delays, worked out from <code>sampleTime</code>; and speech can
+be placed too, which is how a game says each of five dice where the die is.</p>
+
+<p>Three details of that are worth knowing because they are easy to get wrong:</p>
+
+<p>* <strong>A place is written either way.</strong> <code>pos3d = {-20, 2, 0}</code> and
+  <code>pos3d = {x = -1, y = 0.5, z = 0}</code> are the same thing, and both work. The
+  platform library itself uses the second, which is what puts a menu's items
+  across the listener from -60 to +60 degrees.
+* <strong>A sample name may be relative and may have no extension.</strong>
+  <code>k_DirectoryRead</code> gives you a <code>name</code> with the extension taken off, and a
+  name built from it - <code>sounds/piano/c</code> - is looked for in your own files
+  with each of the sound extensions in turn.
+* <strong>Sound groups are a tree.</strong> <code>k_SoundPlay</code> makes a group of its own inside
+  whichever one is active, so an action on a group - <code>volMul</code>,
+  <code>volMulSlide</code>, <code>pause</code>, <code>resume</code>, <code>stop</code> - reaches everything played under
+  it. That is how the ambience ducks and the game pauses while a dialog is
+  up, and you get it for free by using the platform's own dialogs.</p>
+
+<p>Things worth knowing before you write an application that will be emulated:</p>
+
+<p>* <strong>It runs on a thread of its own.</strong> <code>app:loop()</code> does not return - it IS the
+  game - so the window feeds it keys and reads what it has said. The frames
+  are paced at 60 a second, which is the rate <code>_Sys_GetFPS</code> reports.
+* <strong>The keyboard is Klango's, in all four of its shapes</strong>: the DirectInput
+  scan codes of the raw buffer and the held set, and the Windows virtual keys
+  of the key messages. Left Alt opens the application's menu because it
+  arrives as a real WM_SYSKEYUP; Left and Right move inside that menu, Down
+  enters a submenu and Enter chooses, which is Klango's own interaction and
+  not Titan's.
+* <strong>Klango's Settings and Help are Titan's.</strong> The language, voice and audio
+  theme an emulated application offers are Titan's - so the menu opens Titan's
+  settings rather than a picker that would change nothing - and Help opens
+  Titan's help. What belongs to the APPLICATION is left alone: its own help
+  text, readme, changelog, version and exit.
+* <strong>Closing the window closes the application.</strong> What is playing stops at
+  once, and nothing the application asks for afterwards is answered - it is on
+  its own thread and may be a frame behind.</p>
+
+<p>* <strong>An application may be in two places at once.</strong> Its code is in its <code>.pag</code>;
+  the folder beside it can hold whatever the package does not - lessons, extra
+  skins, the user's own additions. Both are mounted as one tree, the package
+  first.
+<em> <strong>There is a real text control.</strong> <code>_Gfx_TxtEdit_</em></code> is a buffer with a caret
+  and a selection; a line ends with <code>\r</code>, as Klango's does, and <code>SetText2</code> is
+  handed RTF and stores the words.
+* <strong><code>k_NewHttp</code> really fetches</strong> - <code>http</code> and <code>https</code>, capped and timed out,
+  on a thread of its own so the frame loop keeps running. <code>GetStatusCode</code> is
+  0 for a connection that never happened and -1 for one you cancelled.
+* <strong>A primitive Cling has not written answers nothing</strong> rather than being nil,
+  and <code>cling.emulate</code> names it. Your application carries on instead of
+  stopping on <code>attempt to call a nil value</code>.</p>
+
+<p>klango.net has been gone for years, so the calls that went there are answered
+by Cling: the account is the Titan-Net one, the scoreboard is Cling's own
+Titan-Net table, and everything Klango-only answers "finished, nothing" -
+never nil, because the caller asks the answer whether it is <code>done()</code> on the
+next line.</p>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

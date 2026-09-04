@@ -1,0 +1,58 @@
+module HTTP2
+  module Header
+    class EncodingContext
+      STATIC_TABLE: Array[header_pair]
+
+      STATIC_TABLE_BY_FIELD: Hash[String, Array[[Integer, String]]]
+
+      STATIC_TABLE_SIZE: Integer
+
+      STATIC_ALL: Array[Symbol]
+
+      STATIC_NEVER: Array[Symbol]
+
+      DEFAULT_OPTIONS: context_hash
+
+      UPPER: Regexp
+
+
+      attr_reader table: Array[header_pair]
+
+      attr_reader options: context_hash
+
+      attr_reader current_table_size: Integer
+
+      @table_by_field: Hash[string, Array[[string, Integer]]]
+
+      @unshifts: Integer
+
+      @limit: Integer
+
+      @_table_updated: bool
+
+      def dup: () -> EncodingContext
+
+      def dereference: (Integer) -> header_pair
+
+      def process: (header_command cmd) -> header_pair?
+
+      def encode: (_Each[header_pair]) { (header_command) -> void } -> void
+
+      def addcmd: (String name, String value) -> header_command
+
+      def table_size=: (Integer) -> void
+
+      def listen_on_table: { () -> void } -> void
+
+      private
+
+      def initialize: (?connection_opts options) -> void
+
+      def add_to_table: (string name, string value) -> void
+
+      def resize_table: (Integer cmdsize) -> void
+
+      def size_check?: (Integer cmdsize) -> bool
+    end
+  end
+end
