@@ -516,7 +516,30 @@ class WxUI(object):
         form = self._forms.get(form_id)
         if form is None or not (0 <= index < len(form.widgets)):
             return False
-        form.widgets[index].apply(changes)
+        widget = form.widgets[index]
+        # How loud a control is of its own accord is answered in ONE
+        # place, because every kind of control has the question and none
+        # of them should each answer it. A control that says nothing -
+        # AudioMemory's board, which the game already sounds square by
+        # square - must not be cued over.
+        if 'silent' in changes:
+            widget.quiet = bool(changes['silent'])
+        if 'border_sound' in changes:
+            widget.walls = bool(changes['border_sound'])
+        # A control an application has hidden is really gone from the
+        # screen and out of the tab order - the Game Room hides a button
+        # rather than rebuilding a screen every time what you can do with
+        # the row changes, and a hidden button that is still tabbed to is
+        # a control that answers nothing.
+        if 'hidden' in changes:
+            try:
+                widget.window.Show(not changes['hidden'])
+                parent = widget.window.GetParent()
+                if parent is not None:
+                    parent.Layout()
+            except Exception:
+                pass
+        widget.apply(changes)
         return True
 
     def _keep_focus(self):
@@ -899,6 +922,12 @@ class _Widget(object):
     def __init__(self, kind, window):
         self.kind = kind
         self.window = window
+        # Set by the control itself if it knows better; every widget has
+        # them so `set_control` can answer the question in one place.
+        if not hasattr(self, 'quiet'):
+            self.quiet = False
+        if not hasattr(self, 'walls'):
+            self.walls = True
 
     def dress(self, skin=None):
         """Wear the skin the user chose - its colours, and its picture."""
@@ -1060,16 +1089,16 @@ class _ListBoxWidget(_Widget):
             listbox.SetSelection(0)
         box.Add(listbox, flag=wx.EXPAND)
         outer.SetSizer(box)
-        quiet = bool(spec.get('silent'))
+        self.quiet = bool(spec.get('silent'))
 
         def moved(event):
             where = listbox.GetSelection()
-            if not quiet:
+            if not self.quiet:
                 _cue_for('listbox_focus', _spread(where, listbox.GetCount()))
             report('changed', index=where)
 
         def chosen(_event):
-            if not quiet:
+            if not self.quiet:
                 _cue_for('listbox_select')
             report('select', index=listbox.GetSelection())
 
@@ -1086,12 +1115,12 @@ class _ListBoxWidget(_Widget):
             # indistinguishable from one that had stopped responding.
             if code in (wx.WXK_UP, wx.WXK_NUMPAD_UP) \
                     and listbox.GetSelection() <= 0:
-                if not quiet:
+                if not self.quiet:
                     _cue_for('endoflist', -1.0)
                 return
             if code in (wx.WXK_DOWN, wx.WXK_NUMPAD_DOWN) \
                     and listbox.GetSelection() >= listbox.GetCount() - 1:
-                if not quiet:
+                if not self.quiet:
                     _cue_for('endoflist', 1.0)
                 return
             event.Skip()
@@ -1158,16 +1187,16 @@ class _TableBoxWidget(_Widget):
         box.Add(table, proportion=1, flag=wx.EXPAND)
         outer.SetSizer(box)
 
-        quiet = bool(spec.get('silent'))
+        self.quiet = bool(spec.get('silent'))
 
         def row_moved(event):
-            if not quiet:
+            if not self.quiet:
                 _cue_for('table_marker',
                          _spread(event.GetIndex(), table.GetItemCount()))
             report('changed', index=event.GetIndex())
 
         def row_chosen(event):
-            if not quiet:
+            if not self.quiet:
                 _cue_for('listbox_select')
             report('select', index=event.GetIndex())
 
@@ -1369,10 +1398,6 @@ class _GridBoxWidget(_Widget):
                 self.grid.SetCellValue(row, column, str(value or ''))
 
     def apply(self, changes):
-        if 'silent' in changes:
-            self.quiet = bool(changes['silent'])
-        if 'border_sound' in changes:
-            self.walls = bool(changes['border_sound'])
         if 'cells' in changes:
             self._fill(changes['cells'] or [])
         if 'x' in changes or 'y' in changes:

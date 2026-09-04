@@ -2960,6 +2960,179 @@ directory and copied). Neither is reached by any installed application -
 Titan reads `.eltenapp` zstd in Python - but an application that needs them
 will find them missing.
 
+#### It has to sound and behave like Elten, because it is Elten
+
+"It runs" is not "it works", and neither is "it is on the screen". This
+round was driven by using the applications - inside a real Titan, with the
+real mixer and the real speech - and every one of these was found that way.
+
+- **Moving through a list made no sound at all.** Elten's controls are
+  self-voicing and play their own cue as the cursor moves; the controls
+  here are real wx controls that move natively, so nothing in Ruby runs on
+  an arrow key and the whole interface was silent - the one place on this
+  desktop where a list did not answer. The WIDGETS cue now (`ui._cue_for`,
+  `_spread`), through the user's own theme and panned by how far down the
+  list the cursor is: focus, select, end of list, a tick box, a button, a
+  menu opening and closing, a dialog. Measured inside a real Titan:
+  `core/FOCUS.ogg` at 0.33, 0.0, 0.33, 0.67, 1.0 across a menu, then
+  `ui/endoflist.ogg` at the end and `core/SELECT.ogg` on the choice.
+  - **A control that says it is silent is silent.** AudioMemory sets
+    `grid.silent = true` because the game already sounds every square, and
+    cueing over that is two sounds for one move. `silent`, `border_sound`,
+    `speech` and `quiet` travel with the control - in its spec and again
+    once the form is really open (`announce_sound_properties`) - and
+    `set_control` is the ONE place that reads them, because every kind of
+    control has the question and none of them should each answer it.
+  - **A file's KIND is a sound.** Elten's file manager plays one as the
+    cursor moves and it is not decoration: it is how somebody who cannot
+    see the folder knows a folder from a song from a document before the
+    name has been read. Five of Titan's own, panned.
+- **The keyboard was on the window, not on anything in it.** A `wx.Dialog`
+  focuses its first control by itself and a `wx.Frame` does not, so a form
+  built here left the arrows going to a panel - which from the outside is
+  exactly "down and right do not work": the board was on the screen,
+  correct, named, and could not be moved about. A form focuses its first
+  control that will take it, and every widget that holds its control
+  inside a panel focuses the CONTROL (a `wx.grid.Grid` is a wrapper around
+  the window that actually has the keys).
+  - **And a modal dialog never gave it back.** Windows returns the
+    keyboard to the frame when a dialog closes, not to the control inside
+    it, so after any menu, confirmation or page of text the arrows went
+    nowhere again. Everything modal goes through `WxUI._modal`, which
+    remembers and restores, falling back to the open form and then to the
+    keyboard surface, so there is always somewhere for the next key.
+- **A menu has no Ok and no Cancel**, because Elten's has not. Enter
+  chooses and Escape leaves - `wx.Dialog` answers both itself - and two
+  buttons underneath are two more things to tab past on the way to
+  nowhere. `_ChoiceDialog` is Titan's own for this reason and one other:
+  `wx.SingleChoiceDialog`'s list is silent, and that dialog is the front
+  screen of nearly every application.
+- **A game with no form got no keys.** Purrposterous is a `Runner` and
+  nothing else - hold Left and Right, Space to feed - with no control
+  anywhere in it, so there was no window to have the keyboard and not one
+  key reached it: a game that made noises and had no game in it.
+  `open_keyboard` existed and nothing called it; the FRAME calls it now
+  (`EltenLoop.ensure_somewhere_for_keys`), because every loop goes through
+  a frame, and only when no form is open.
+  - **A form's keys have to reach a `Runner` too.** The file manager is a
+    `FilesTree` driven from one, and a Runner asks `key_pressed?`, which
+    is filled by the key stream and not by a control's events. A form
+    reports both now - the control first, so a list still owns its own Up
+    and Down.
+- **The file manager is Elten's, key for key**: Right goes into a folder,
+  Left comes back out, Space plays an audio file or READS a text one,
+  Shift+Left/Right seek in what is playing and Shift+Space pauses it. Copy,
+  paste, rename and delete are real, and the last two ask first - a real
+  change to somebody's disk made by an application they merely opened goes
+  through them.
+- **`bind_context` reached nothing.** An application puts commands on a
+  control with it - the media catalogue's "add to favourites", the file
+  manager's whole file menu - and the block was recorded and never called,
+  so those commands could be reached by nothing at all. It is a real
+  Windows menu now, opened by the Applications key, Shift+F10, the right
+  mouse button and Alt, because a menu is a thing Windows itself knows
+  about: a reader announces it as a menu, counts it, follows the arrows
+  into a submenu and closes on Escape, with none of that written here.
+  Elten's three (`bind_filesmenu`, `bind_createmenu`, `bind_menu`) keep
+  their own headings rather than being poured into one list.
+- **A board is a board and moves like one.** `wx.grid.Grid` reports a real
+  table to MSAA - a row, a column and a cell, so a reader says all three,
+  where a list box said "item 7 of 16" for a square that is row 2, column
+  3. Verified live: up is up, down is down, left is left, right is right;
+  an arrow into the wall reports a `:border` carrying its direction (which
+  is what AudioMemory reads off `pos[2]`); Enter AND Space choose, because
+  Elten binds both.
+- **`ChoiceListBox` rows could be read and never changed.** MileByMile's
+  whole setup screen is three of them - card set, distance, decks - and
+  rendered as a list a row was just a row, so the form could only ever
+  start the game it opened with. Each row is a real `wx.Choice` now, the
+  control Titan's own settings window uses for exactly this: the arrows
+  change the value and the reader announces the new one itself. A row's
+  third element is which choice it STARTS on, and dropping it silently
+  reset every setting the player had made last time.
+- **`readurl` answers through a BLOCK, on a thread.** Mine fetched the page
+  synchronously and returned the body, which looks correct, runs, fetches
+  the right page and never calls the block: the media catalogue pushes into
+  a queue from inside it and polls that queue, so it said "Loading..." and
+  stayed there for ever - every screen behind the first was unreachable. A
+  failure calls the block with `:error`, because a block that is never
+  called is a hang, which is the worst way to report that a page could not
+  be fetched.
+- **`input_text` is Elten's signature or it is nothing.** Elten's
+  `display_text` is BUILT on it (read-only plus multiline), so an
+  application asking to SHOW a page arrives there; a signature taking
+  `default:`/`multiline:` answered `unknown keywords: :escapable, :text`
+  and ended the application on the screen it was trying to put up.
+  `set_text`'s second argument is positional too.
+- **`Player` is a radio station or a podcast episode, on a form.** The
+  media catalogue is nothing else. Elten plays a stream with the BASS
+  stack it ships; Titan's mixer plays files, so what sits between a URL and
+  this desktop's sound is the decoding - `host.Stream` opens the container
+  with PyAV, resamples to whatever format the LIVE mixer is in, and hands
+  Titan's mixer a second at a time on a channel of its own. Doing it that
+  way rather than opening an output device of its own is the point: the
+  user's theme volume, their output device and Titan's own stop all apply,
+  and a radio station is not the one thing on this desktop that is louder
+  than everything else. Elten's keys exactly - Left and Right five
+  seconds, Up and Down the volume, Home and End the ends, Space plays and
+  pauses. What is deliberately NOT there is Elten's tempo and pitch: Titan's
+  mixer plays a sound, it does not resample one, and a key that pretended
+  to change the speed would be worse than a key that is not there.
+  - `sound` answers an object with Elten's own `opened?`, `position`,
+    `length` and `closed?`, because the catalogue asks `@player.sound&.
+    opened?` before it shows a player at all - a nil `sound` meant every
+    station reported "the station could not be played".
+  - A live stream has no length and cannot be sought; a file has both.
+    `duration` answering None is what an application reads to tell them
+    apart, and it is answered honestly rather than guessed.
+- **A place is `[x, y, z]` and crosses the wire unconverted.** Turning it
+  into a pan in Ruby threw the height and the distance away before anything
+  could use them, and divided x by a fixed two - so Skeet, which hands over
+  a pan it has already worked out, could only ever reach half the stereo
+  image. `host._place` does it on Titan's side, which is the only side that
+  knows what Titan's mixer is: an angle, an elevation, and a distance gain.
+- **A sound that has started can still be moved, paused and re-gained.**
+  Skeet's clay target is thrown and then told where it has got to on every
+  frame, and every one of those calls raised `NoMethodError` on a `closed?`
+  that was not there - caught by the game's own `rescue Exception` and
+  answered with `stop_flight`. The disc went silent one frame after every
+  throw, for the whole game. `EltenSound` carries Elten's spatial surface
+  in full (`spatial_position`, `spatial_position_slide`, `closed?`,
+  `pause`, `effects_latency_ms`, `effect_playback_seconds_at`) because an
+  application ASKS before it uses it, and a method that is merely missing
+  does not degrade - it raises.
+- **`Session` and `Configuration` are read directly by applications.** The
+  ELTEN Game Room asks `Session.name` thirty times to know whose table it
+  is looking at, and a constant that is not there is a `NameError` before
+  anything is drawn. `Session` answers with the EltenLink account Titan
+  already has, from the encrypted `titan.IM` and without reaching the
+  network - `whoami` reads the saved NAME, never a token, so it works
+  with no live session at all and costs nothing when it is asked thirty
+  times. `Configuration` answers Titan's own preference where Titan has
+  one and nil where it has not, rather than raising: an application
+  reading a setting it will then default is doing the right thing.
+- **`Form#show` means "unhide that control".** Elten's pair is
+  `hide(index_or_field)` / `show(index_or_field)`, and the Game Room hides
+  a button rather than rebuilding the screen every time what you can do
+  with the row changes. Titan's own "put this window up" is `present`, and
+  a hidden control is really gone from the screen and out of the tab order
+  - a hidden button that can still be tabbed to is a control that answers
+  nothing.
+- **An application may reach its own server storage two ways.**
+  `Program.server_table` was backed already; `EltenLink::Apps.table(client,
+  uuid, name)` was not there at all, and the Game Room uses that one - so
+  it came up saying "the operation failed" before it had listed anything.
+  Both end at the same real table in the application's own data folder,
+  which is the honest limit: an application's data survives restarts and
+  is shared with nothing. A lobby works; the other players are not in it.
+  The alternative - publishing to somebody's EltenLink account because
+  they opened an application - is the one thing this bridge does not do.
+- **`loop_update` is the frame, defined once, on Kernel.** A zero-arity
+  stub of it inside `EltenAPI` shadowed the real one for every class that
+  includes it - which is the Runner, every Program and every control - so a
+  vendored Runner's frame did nothing and anything asking for a frame of a
+  stated length got `wrong number of arguments (given 1, expected 0)`.
+
 #### The Ruby is carried
 
 `ruby/` is CRuby 4.0.6 (RubyInstaller, 46 MB pruned of docs and headers,
@@ -2970,7 +3143,7 @@ an application's process: whatever the machine's own Ruby wants loaded into
 every interpreter is not something an Elten application asked for, and a `-r`
 in there is code running inside somebody else's program.
 
-- Tests: `tests/test_elten_bridge.py` (run it directly; 62 tests). Nothing
+- Tests: `tests/test_elten_bridge.py` (run it directly; 77 tests). Nothing
   opens a window, plays a sound, speaks or reaches the network. The Ruby half
   is exercised with the interpreter the component carries - a program that
   runs, one that raises, `alert`'s two-argument signature, a `Runner`
@@ -2979,6 +3152,12 @@ in there is code running inside somebody else's program.
   the package's own `.mo`. The applications under test are BUILT by the
   tests, byte for byte in the real layout, so they do not need Elten
   installed; the ones that do read the user's own skip themselves instead.
+  The later ones ask the REAL platform on the REAL interpreter what it
+  answers to - a sound asked `closed?` before it is used, `input_text`
+  handed Elten's own keywords, a board asked which wall it walked into, a
+  choice row asked where it starts - because every one of those was an
+  application that stopped, and a signature guessed from call sites is an
+  `ArgumentError` inside somebody else's program.
 
 ### The same menus in all three interfaces
 

@@ -92,8 +92,18 @@ class EltenControl
   # two sounds for one move. So they travel with the control.
   SOUND_PROPERTIES = %w[silent border_sound speech quiet].freeze
 
+  # Tell Titan's side how loud this control is of its own accord. Called
+  # once the form is really open, when `push` can reach the widget.
+  def announce_sound_properties
+    changes = {}
+    SOUND_PROPERTIES.each do |key|
+      changes[key.to_sym] = properties[key] if properties.key?(key)
+    end
+    push(changes) unless changes.empty?
+    self
+  end
+
   def to_spec
-    $stderr.puts("TOSPEC #{@kind} props=#{properties.inspect}") if ENV['ELTEN_SPEC_DEBUG']
     spec = @spec.merge(kind: @kind.to_s)
     SOUND_PROPERTIES.each do |key|
       spec[key.to_sym] = properties[key] if properties.key?(key)
@@ -400,7 +410,7 @@ class EltenControl
     return self if @form
 
     @form = Form.new([self])
-    @form.show
+    @form.present
     self
   end
 
@@ -1912,8 +1922,112 @@ class Form
 
   # Put it on the screen and return - for a control being driven by
   # somebody else's loop.
-  def show
+  def present
     open! if @form_id.nil?
+    self
+  end
+
+  # ---------------------------------------------------- Elten's own form
+  # **`show` means "unhide that control"**, not "put this window up" -
+  # Elten's pair is `hide(index_or_field)` / `show(index_or_field)`, and
+  # the Game Room hides a button rather than rebuilding the screen every
+  # time what you can do with the row changes. Called with nothing it is
+  # Titan's own "put it on the screen", which is what `ensure_shown` and
+  # a control with no form of its own need.
+  def show(which = nil)
+    return present if which.nil?
+
+    _set_hidden(which, false)
+  end
+
+  def hide(which)
+    _set_hidden(which, true)
+  end
+
+  def show_all
+    @hidden = {}
+    @fields.each_with_index { |_field, index| push_change(index, 'hidden' => false) }
+    self
+  end
+
+  def hidden_controls
+    (@hidden ||= {}).select { |_index, value| value }.keys
+  end
+
+  def _set_hidden(which, value)
+    index = which.is_a?(Integer) ? which : @fields.index(which)
+    return self unless index.is_a?(Integer)
+
+    (@hidden ||= {})[index] = value
+    push_change(index, 'hidden' => value)
+    self
+  end
+
+  def controls
+    @fields
+  end
+
+  def append(field)
+    field.form = self
+    @fields.push(field)
+    field
+  end
+
+  def insert(index, field)
+    field.form = self
+    @fields.insert(index.to_i, field)
+    field
+  end
+
+  def insert_before(before, field)
+    insert(@fields.index(before) || 0, field)
+  end
+
+  def insert_after(after, field)
+    insert((@fields.index(after) || -2) + 1, field)
+  end
+
+  def index
+    @index ||= 0
+  end
+
+  def index=(which)
+    which = @fields.index(which) unless which.is_a?(Integer)
+    return unless which.is_a?(Integer)
+
+    @index = which
+    focus_control(which)
+  end
+
+  def focus(which = nil, _count = nil)
+    self.index = which unless which.nil?
+    focus_control(index)
+    self
+  end
+
+  def blur; self; end
+  def key_processed(_key); false; end
+  def add_timer(_timer, _start = true); self; end
+  def delete_timer(_timer); self; end
+  def add_tip(tip); tips.push(tip.to_s); self; end
+  def get_tips; tips; end
+  def tips; @tips ||= []; end
+  def disable_menu; @menu_enabled = false; self; end
+  def menu_enabled?; @menu_enabled != false; end
+  def disable_contextinglobal; @contextinglobal = false; self; end
+  def contextinglobal_enabled?; @contextinglobal != false; end
+
+  # Elten's form is itself something an application attaches handlers to.
+  def on(event, _time = 0, _getparams = false, &block)
+    (@handlers ||= {})[event.to_sym] ||= []
+    @handlers[event.to_sym] << block
+    self
+  end
+
+  def trigger(event, *arguments)
+    Array((@handlers ||= {})[event.to_sym]).each do |block|
+      block.call(arguments)
+    end
     self
   end
 
@@ -1999,6 +2113,11 @@ class Form
 
     @fields.each_with_index { |field, index| field.control_id = index }
     EltenForms.register(@form_id, self)
+    # Say again what each control sounds like. It travels in the spec as
+    # well, but only the control knows for certain, and a board that
+    # cues over a game already sounding every square is two sounds for
+    # one move - worth being sure about rather than nearly sure.
+    @fields.each(&:announce_sound_properties)
   rescue EltenBridge::Closed
     @form_id = nil
   end

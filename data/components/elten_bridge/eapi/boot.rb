@@ -91,7 +91,9 @@ begin
   # The manifest reaches the instance through the class instead, which is
   # where a `Program` looks for everything else about itself.
   Program.manifest = manifest
-  klass.new.run
+  program = klass.new
+  Program.current = program
+  program.run
 rescue EltenBridge::Closed
   status = 'closed'
 rescue SystemExit

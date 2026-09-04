@@ -436,14 +436,55 @@ def _op_speaking(app, args):
     return app.speaker.speaking()
 
 
+#: The bridge's own few words, in the user's language. Cached because
+#: `_()` is called per line by everything.
+_OURS = {}
+
+
+def _our_words(language):
+    """The bridge's own catalogue - the handful of strings Titan builds
+    rather than the application.
+
+    Almost nothing needs this: every label, header and prompt an
+    application shows comes from the application, already translated by
+    its own `.mo`. These are the controls the bridge makes itself - the
+    player's transport, the file tree's own menu, and what it asks before
+    it changes somebody's disk - and without a catalogue of their own they
+    were the only English on a Polish desktop.
+    """
+    if language in _OURS:
+        return _OURS[language]
+    import gettext
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        found = gettext.translation('elten_bridge',
+                                    os.path.join(here, 'languages'),
+                                    languages=[language], fallback=True)
+    except Exception:
+        found = None
+    _OURS[language] = found
+    return found
+
+
 def _op_translate(app, args):
     text = host_module._text(args.get('text'))
-    if app.translator is None:
-        return text
-    try:
-        return app.translator.gettext(text)
-    except Exception:
-        return text
+    # The application's own words first - they are its own and it knows
+    # them best - and the bridge's only for what the application has never
+    # heard of.
+    if app.translator is not None:
+        try:
+            answer = app.translator.gettext(text)
+            if answer != text:
+                return answer
+        except Exception:
+            pass
+    ours = _our_words(app.language)
+    if ours is not None:
+        try:
+            return ours.gettext(text)
+        except Exception:
+            pass
+    return text
 
 
 def _op_translate_plural(app, args):
@@ -960,6 +1001,15 @@ def _op_control_set(app, args):
         lambda: app.ui.set_control(form_id, index, changes), False))
 
 
+def _op_elten_whoami(app, args):
+    """Who the user is on EltenLink - the name only, never a token."""
+    from . import eltenlink as eltenlink_module
+    try:
+        return eltenlink_module.whoami()
+    except Exception:
+        return ''
+
+
 def _op_elten(app, args):
     """`EltenLink.<Namespace>.<method>` - the network, through Titan's own
     client and the user's own session.
@@ -1029,6 +1079,7 @@ OPERATIONS = {
     'popup_menu': _op_popup_menu,
     'stream_open': _op_stream_open,
     'stream_do': _op_stream_do,
+    'elten_whoami': _op_elten_whoami,
     'sound_asset': _op_sound_asset,
     'sound_create': _op_sound_create,
     'sound_play': _op_sound_play,

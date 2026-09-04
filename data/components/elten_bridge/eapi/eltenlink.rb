@@ -152,3 +152,152 @@ module EltenLink
     const_set(shape, Class.new(Record))
   end
 end
+
+
+# `Session` - who is signed in. Elten's own
+# (`src/eapi/structs.rb`), read directly by applications: the Game Room asks
+# `Session.name` thirty times to know whose table it is looking at, and a
+# constant that is not there is a `NameError` before the application has
+# drawn anything.
+#
+# It answers with the account Titan already has - the EltenLink one saved in
+# the encrypted `titan.IM`, the same one `EltenLink.*` uses - so an
+# application sees the person actually using this desktop. **The token is
+# never here.** `logged?` is what an application checks, and it can be true
+# without any application ever having something to sign in WITH.
+module Session
+  class << self
+    attr_writer :name, :gender, :fullname, :moderator, :greeting, :languages
+
+    def name
+      return @name unless @name.nil?
+
+      @name = (EltenBridge.call('elten_whoami') || '').to_s
+    rescue StandardError
+      @name = ''
+    end
+
+    def logged?
+      !name.to_s.empty?
+    end
+
+    # An application must never be handed a credential, whatever it asks.
+    def token
+      ''
+    end
+
+    def gender; @gender.to_s; end
+    def fullname; @fullname.nil? ? name : @fullname.to_s; end
+    def moderator; @moderator == true; end
+    def greeting; @greeting.to_s; end
+    def languages; @languages.to_s; end
+    def feeds; @feeds ||= {}; end
+    def feeds_clear; @feeds = {}; end
+    def feeds_update; nil; end
+    def feeds_updated?; false; end
+    def notifications_update; nil; end
+    def notifications_updated?; false; end
+  end
+end
+
+# `Configuration` - the user's own preferences. Titan's, where Titan has an
+# opinion, and Elten's default where it has not. Applications read these to
+# decide how much to say of their own accord, and the answer here is
+# "Titan's screen reader is doing that": `controlspresentation` is
+# `:sound_and_voice` because a control here really is spoken AND cued.
+module Configuration
+  class << self
+    def usepan; true; end
+    def usebilinearhrtf; true; end
+    def listtype; :list; end
+    def controlspresentation; :sound_and_voice; end
+    def contextmenubar; true; end
+    def typingecho; :characters; end
+    def linewrapping; true; end
+    def roundupforms; true; end
+    def language; (defined?(EltenGettext) ? EltenGettext.language : 'en').to_s; end
+    def soundthemeactivation; true; end
+    def autoplay; false; end
+    def keyboardscheme; :windows; end
+    def volume; 100; end
+    def voicerate; 0; end
+    def voicevolume; 100; end
+    def voicepitch; 0; end
+
+    # Anything else Elten has and Titan has no opinion about answers nil
+    # rather than raising: an application reading a preference it will
+    # then default is doing the right thing, and a `NoMethodError` there
+    # is an application that stops over a setting.
+    def method_missing(name, *arguments)
+      return nil unless name.to_s =~ /\A[a-z_0-9]+=?\z/
+
+      nil
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      name.to_s =~ /\A[a-z_0-9]+=?\z/ ? true : super
+    end
+
+    def to_h; {}; end
+  end
+end
+
+module EltenAPI
+  module Structs
+    Session = ::Session
+    Configuration = ::Configuration
+  end
+  Session = ::Session
+  Configuration = ::Configuration
+end
+
+
+# `EltenLink::Apps` - an application's own storage ON the network.
+#
+# Elten gives a signed application a server-side table of its own
+# (`server_app`, `server_table`) and the ELTEN Game Room is built entirely
+# on them: a lobby, its tables, its invitations. Some applications reach
+# them through `Program.server_table`, which this bridge already backs with
+# a real table in the application's own data folder - and some reach
+# `EltenLink::Apps.table(client, uuid, name)` DIRECTLY, which was not there
+# at all, so the Game Room came up saying "the operation failed" before it
+# had listed anything.
+#
+# Both routes now end at the same local table, which means the honest
+# limit: an application's data is real, survives restarts and is shared
+# with nothing. A lobby works; the other players are not in it. The
+# alternative - publishing to somebody's EltenLink account because they
+# opened an application - is the one thing this bridge does not do.
+module EltenLink
+  module Apps
+    class << self
+      def table(_client, _uuid, name)
+        program = Program.current
+        raise Error.new('this application is not running', 'unavailable') if program.nil?
+
+        (@tables ||= {})[name.to_s] ||= Programs::LocalTable.new(program, name.to_s)
+      end
+
+      def resources(_client, _uuid)
+        []
+      end
+
+      def delete(_client, _uuid)
+        false
+      end
+
+      def register(*_arguments, **_options)
+        true
+      end
+      alias create register
+      alias update register
+    end
+  end
+
+  # `EltenLink.client(program)` - what an application passes about. There
+  # is nothing for it to hold: every call goes through the table above and
+  # through `CALLS`, so this exists to be passed and not to be used.
+  def self.client(_program = nil)
+    @client ||= Object.new
+  end
+end

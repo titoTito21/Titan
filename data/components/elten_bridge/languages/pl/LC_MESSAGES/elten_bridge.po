@@ -1,0 +1,66 @@
+# The Elten API bridge - the few words that are Titan's own.
+#
+# Almost nothing here needs translating: every label, header and prompt an
+# application shows comes from the application, already translated by its
+# own catalogue. These are the handful of controls and questions the bridge
+# builds itself - the player's transport, the file tree's own menu, and
+# what it asks before it changes somebody's disk.
+msgid ""
+msgstr ""
+"Project-Id-Version: elten_bridge\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Play"
+msgstr "Odtwórz"
+
+msgid "Pause"
+msgstr "Wstrzymaj"
+
+msgid "Stop"
+msgstr "Zatrzymaj"
+
+msgid "Context menu"
+msgstr "Menu kontekstowe"
+
+msgid "File"
+msgstr "Plik"
+
+msgid "Edit"
+msgstr "Edycja"
+
+msgid "New"
+msgstr "Nowy"
+
+msgid "Open"
+msgstr "Otwórz"
+
+msgid "Copy"
+msgstr "Kopiuj"
+
+msgid "Paste"
+msgstr "Wklej"
+
+msgid "Rename"
+msgstr "Zmień nazwę"
+
+msgid "Delete"
+msgstr "Usuń"
+
+msgid "Refresh"
+msgstr "Odśwież"
+
+msgid "New name"
+msgstr "Nowa nazwa"
+
+msgid "Delete %s?"
+msgstr "Usunąć %s?"
+
+msgid "This file cannot be played."
+msgstr "Nie można odtworzyć tego pliku."
+
+msgid "This file cannot be previewed."
+msgstr "Nie można wyświetlić podglądu tego pliku."
+

@@ -95,6 +95,23 @@ def client():
         return _client
 
 
+def whoami():
+    """The name the user is signed in to EltenLink as, or ''.
+
+    Deliberately NOT a login: `Session.name` is read by applications
+    constantly - the Game Room asks it thirty times to know whose table
+    it is looking at - and the name is already saved beside the account,
+    so this answers it without reaching the network and without needing a
+    live session at all. The token is never part of the answer.
+    """
+    try:
+        from src.settings.titan_im_config import get_eltenlink_credentials
+        username, _token, _password = get_eltenlink_credentials()
+        return str(username or '')
+    except Exception:
+        return ''
+
+
 def forget():
     """Drop the session - the user signed out, or Titan is closing."""
     global _client

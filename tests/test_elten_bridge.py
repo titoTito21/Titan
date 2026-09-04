@@ -15,10 +15,12 @@ The Ruby half is exercised with the interpreter the component carries, so
 agreed with another double.
 """
 
+import io
 import json
 import os
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -916,6 +918,183 @@ class WhereTheApplicationsAre(unittest.TestCase):
             with self.subTest(app=entry.stem):
                 self.assertTrue(entry.name, entry.path)
                 self.assertTrue(entry.id or entry.stem)
+
+
+class APlaceIsAPlace(unittest.TestCase):
+    """`[x, y, z]` is what Elten writes and what crosses the wire; Titan's
+    side is the only one that knows what Titan's mixer takes."""
+
+    def test_a_bare_number_is_already_a_pan(self):
+        self.assertEqual(host._place(-0.5)[0], -0.5)
+        self.assertEqual(host._place(0.0), (0.0, 0.0, 1.0))
+
+    def test_a_metre_to_the_side_is_hard_over(self):
+        """Skeet hands over a pan it has already worked out. Dividing it
+        by a fixed number - which is what converting in Ruby did - meant
+        the clay target could only ever reach half the stereo image."""
+        self.assertEqual(host._place([-1.0, 0.0, 0.0])[0], -1.0)
+        self.assertEqual(host._place([1.0, 0.0, 0.0])[0], 1.0)
+
+    def test_the_same_metre_ten_metres_away_is_nearly_ahead(self):
+        pan = host._place([1.0, 0.0, -10.0])[0]
+        self.assertLess(abs(pan), 0.2)
+
+    def test_height_becomes_an_elevation_and_distance_a_gain(self):
+        _pan, elevation, gain = host._place([0.0, 1.0, 0.0])
+        self.assertEqual(elevation, 90.0)
+        self.assertEqual(gain, 1.0)
+        far = host._place([0.0, 0.0, -10.0])[2]
+        self.assertLess(far, 0.2)
+
+    def test_nonsense_is_the_middle_rather_than_a_crash(self):
+        for value in (None, 'left', {}, [], object()):
+            self.assertEqual(host._place(value)[0], 0.0)
+
+
+class TheRubySideAnswersEltensOwnShapes(unittest.TestCase):
+    """Signatures read out of Elten's own source, checked against ours.
+
+    Each of these was an application that stopped: a wrong `input_text`
+    ended the media catalogue on the screen it was opening, a missing
+    `closed?` silenced Skeet's clay target one frame after every throw.
+    """
+
+    def setUp(self):
+        try:
+            self.ruby = runtime.find()
+        except runtime.RubyMissing as error:
+            self.skipTest(str(error))
+
+    def ask(self, source):
+        """Run a snippet against the real platform, on the real Ruby."""
+        preamble = """
+$LOAD_PATH.unshift(%s)
+module EltenBridge
+  class Closed < StandardError; end
+  def self.call(*_a); nil; end
+  def self.notify(*_a); nil; end
+  def self.now; Time.now.to_f; end
+  def self.next_event(*_a); :timeout; end
+end
+module Log
+  def self.warning(*_a); end
+  def self.error(*_a); end
+  def self.debug(*_a); end
+end
+require 'loop'
+require 'eapi'
+require 'program'
+require 'controls'
+""" % repr(os.path.join(COMPONENT, 'eapi')).replace("'", '"')
+        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
+        io.open(path, 'w', encoding='utf-8').write(preamble + source)
+        answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                timeout=60, env=self.ruby.environment())
+        self.assertEqual(answer.returncode, 0,
+                         answer.stderr.decode('utf-8', 'replace'))
+        return answer.stdout.decode('utf-8', 'replace').strip()
+
+    def test_a_sound_answers_everything_a_game_asks_before_using_it(self):
+        """Skeet asks `closed?` on every frame of every throw, inside its
+        own `rescue Exception`. A missing method is not a degraded sound,
+        it is `stop_flight`."""
+        wanted = ('closed? spatial_position spatial_position= spatialize '
+                  'spatial_position_slide spatial_position_sliding? '
+                  'cancel_spatial_position_slide despatialize pause resume '
+                  'effects_latency_ms effect_playback_seconds_at pan volume '
+                  'finished? stopped? opened?').split()
+        source = ('s = EltenSound.new(1, "x")\n'
+                  'puts %s.select { |m| !s.respond_to?(m) }.inspect\n'
+                  % repr(wanted).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_input_text_takes_eltens_own_keywords(self):
+        """`display_text` is BUILT on `input_text` (read-only plus
+        multiline), so a signature taking `default:`/`multiline:` answered
+        `unknown keywords: :escapable, :text`."""
+        source = ('begin\n'
+                  '  input_text("Header", flags: 3, text: "hello", '
+                  'escapable: true)\n'
+                  '  puts "accepted"\n'
+                  'rescue ArgumentError => e\n'
+                  '  puts "refused: #{e.message}"\n'
+                  'end\n')
+        self.assertEqual(self.ask(source), 'accepted')
+
+    def test_set_texts_second_argument_is_positional(self):
+        source = ('b = EditBox.new("h")\n'
+                  'b.set_text("one", false)\n'
+                  'puts b.text\n')
+        self.assertEqual(self.ask(source), 'one')
+
+    def test_a_board_reports_which_wall_it_walked_into(self):
+        """AudioMemory reads `pos[2]` off a `:border` to play a sound at
+        the edge that was hit."""
+        source = ('g = GridBox.new(3, 3)\n'
+                  'args = g.event_args(:border, {"direction" => "left", '
+                  '"dx" => -1, "dy" => 0})\n'
+                  'puts args.first[2].inspect\n')
+        self.assertEqual(self.ask(source), ':left')
+
+    def test_a_control_that_says_it_is_silent_says_so_to_titan(self):
+        """AudioMemory's board is silent because the game already sounds
+        every square; cueing over that is two sounds for one move."""
+        source = ('g = GridBox.new(3, 3)\n'
+                  'g.silent = true\n'
+                  'g.border_sound = false\n'
+                  'puts [g.to_spec[:silent], g.to_spec[:border_sound]].inspect\n')
+        self.assertEqual(self.ask(source), '[true, false]')
+
+    def test_a_choice_row_starts_where_it_was_left(self):
+        """MileByMile writes `[label, choices, index]` so its settings
+        form opens on the game the player set up last time. Dropping the
+        third element silently reset every one of them."""
+        source = ('c = ChoiceListBox.new([["", %s, 2]])\n'
+                  'puts [c.value(0), c.choice_rows.first[:index]].inspect\n'
+                  % '["a", "b", "c"]')
+        self.assertEqual(self.ask(source), '["c", 2]')
+
+    def test_hide_means_hide_a_control_not_the_window(self):
+        """Elten's `Form#show(index)` unhides a control. Titan's own "put
+        this window up" had the same name and had to move aside."""
+        source = ('b = Button.new("Ok")\n'
+                  'f = Form.new([b])\n'
+                  'b.control_id = 0\n'
+                  'f.hide(b)\n'
+                  'first = f.hidden_controls\n'
+                  'f.show(b)\n'
+                  'puts [first, f.hidden_controls].inspect\n')
+        self.assertEqual(self.ask(source), '[[0], []]')
+
+    def test_the_frame_is_defined_once(self):
+        """A zero-arity `loop_update` anywhere shadows the real one for
+        the Runner, every Program and every control."""
+        source = ('puts method(:loop_update).arity.inspect\n')
+        self.assertEqual(self.ask(source), '-1')
+
+    def test_a_control_answers_the_platforms_whole_surface(self):
+        """A method that is merely missing does not degrade - it raises,
+        inside somebody else's application."""
+        wanted = ('set_text text_str text_len select_all copy cut paste '
+                  'get_lines').split()
+        source = ('b = EditBox.new("h")\n'
+                  'puts %s.select { |m| !b.respond_to?(m) }.inspect\n'
+                  % repr(wanted).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+
+class TheBridgeSpeaksTheUsersLanguage(unittest.TestCase):
+    """The few words Titan builds rather than the application."""
+
+    def test_its_own_catalogue_is_there_and_compiled(self):
+        import gettext
+        folder = os.path.join(COMPONENT, 'languages')
+        if not os.path.isdir(folder):
+            self.skipTest('no catalogue in this build')
+        polish = gettext.translation('elten_bridge', folder, languages=['pl'],
+                                     fallback=True)
+        self.assertNotEqual(polish.gettext('Play'), 'Play')
+        self.assertNotEqual(polish.gettext('Delete'), 'Delete')
 
 
 if __name__ == '__main__':

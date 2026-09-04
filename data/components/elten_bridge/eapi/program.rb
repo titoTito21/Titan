@@ -184,6 +184,14 @@ class Program
     manifest['build_id']
   end
 
+  # The one that is running. Set by `boot.rb` the moment it is built, so
+  # anything reaching for the application's own storage can find it -
+  # `EltenLink::Apps.table` does, because some applications ask for their
+  # server table through EltenLink rather than through the Program.
+  class << self
+    attr_accessor :current
+  end
+
   def author
     manifest['author'].to_s
   end
